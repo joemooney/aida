@@ -3588,3 +3588,137 @@ fn reconcile_since_merge_parent_reaches_merge_older_than_200_commits() {
         RequirementStatus::Completed
     );
 }
+
+// ── STORY-1430: auto-completion reads the spec's own declared closure criteria ──
+
+/// STORY-1430 red-first replay of #2033: BUG-1480's fix merged with its
+/// `(BUG-1480)` trailer intact would have closed it past STORY-1423's
+/// criterion 1, which cannot be met before the fix runs. With the criterion
+/// declared in a `## Closure` section, the merge holds it at Done with a note
+/// naming WHAT is unmet and WHO resolves it; checking the box releases it on
+/// the next pull.
+// trace:STORY-1430 | ai:claude
+#[test]
+fn auto_bump_holds_bug_1480_until_declared_closure_criterion_met() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-1480", "Done");
+    mutate_spec(&store_path, "BUG-1480", |r| {
+        r.description = "The fix.\n\n## Closure\n\
+                         - [ ] STORY-1423 criterion 1: re-measured after the fix runs\n"
+            .to_string();
+    });
+
+    let (flips, merge_sha) = land_and_bump(&project_root, &store_path, "BUG-1480");
+    assert!(
+        !has_flip(&flips, "BUG-1480"),
+        "an unmet declared criterion must REFUSE completion; flips: {flips:?}"
+    );
+    let storage = Storage::new(&store_path);
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-1480").unwrap();
+    assert_eq!(req.status, RequirementStatus::Done);
+    let note = req
+        .comments
+        .iter()
+        .find(|c| c.content.contains(CLOSURE_HOLD_MARKER))
+        .expect("the hold is recorded on the spec");
+    assert!(note.content.contains(&merge_sha));
+    assert!(
+        note.content.contains("STORY-1423 criterion 1"),
+        "note says WHAT is unmet: {}",
+        note.content
+    );
+    assert!(
+        note.content.contains("owner or the advisor"),
+        "note says WHO resolves it: {}",
+        note.content
+    );
+    let (_, line) = closure_hold_line(req, &store).expect("`aida why` names the hold");
+    assert!(line.contains("STORY-1423 criterion 1"), "{line}");
+
+    // The criterion is met: the next pull releases and completes it.
+    mutate_spec(&store_path, "BUG-1480", |r| {
+        r.description = r.description.replace("- [ ]", "- [x]");
+    });
+    let store = storage.load().unwrap();
+    let released = collect_released_closure_holds(&store);
+    assert!(released.iter().any(|f| f.spec_id == "BUG-1480"));
+}
+
+/// STORY-1430 red-first replay of #1999: BUG-1288's headline criterion is
+/// unmet at 26s. Declared by the `closure:pending` tag, the merge holds it;
+/// removing the tag releases it.
+// trace:STORY-1430 | ai:claude
+#[test]
+fn auto_bump_holds_bug_1288_while_closure_pending_tag_set() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-1288", "In Progress");
+    mutate_spec(&store_path, "BUG-1288", |r| {
+        r.tags.insert("closure:pending".to_string());
+    });
+
+    let (flips, _) = land_and_bump(&project_root, &store_path, "BUG-1288");
+    assert!(!has_flip(&flips, "BUG-1288"));
+    let storage = Storage::new(&store_path);
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-1288").unwrap();
+    assert_eq!(
+        req.status,
+        RequirementStatus::Done,
+        "merged work lands at Done, not Completed"
+    );
+    assert!(collect_released_closure_holds(&store).is_empty());
+
+    mutate_spec(&store_path, "BUG-1288", |r| {
+        r.tags.remove("closure:pending");
+    });
+    let store = storage.load().unwrap();
+    assert!(collect_released_closure_holds(&store)
+        .iter()
+        .any(|f| f.spec_id == "BUG-1288"));
+}
+
+/// STORY-1430 falsify the other direction: a spec with NO declared criterion —
+/// even one whose prose says "does not close until" or carries an unchecked
+/// box outside a Closure section — still auto-completes exactly as today.
+// trace:STORY-1430 | ai:claude
+#[test]
+fn auto_bump_completes_spec_without_declared_criterion() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-9430", "Done");
+    mutate_spec(&store_path, "BUG-9430", |r| {
+        r.description = "This spec does not close until X.\n\nAcceptance:\n- [ ] prose item\n\n\
+                         ## Closure\n- [x] already met\n"
+            .to_string();
+    });
+    let (flips, _) = land_and_bump(&project_root, &store_path, "BUG-9430");
+    assert!(has_flip(&flips, "BUG-9430"));
+    let store = Storage::new(&store_path).load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-9430").unwrap();
+    assert_eq!(req.status, RequirementStatus::Completed);
+    assert!(closure_hold_line(req, &store).is_none());
+}
+
+/// STORY-1430: the `db reconcile-status` replay honours the declared-criteria
+/// gate too (it shares `split_closure_held_flips`).
+// trace:STORY-1430 | ai:claude
+#[test]
+fn reconcile_status_holds_spec_with_unmet_declared_criterion() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "TASK-9431", "Done");
+    mutate_spec(&store_path, "TASK-9431", |r| {
+        r.tags.insert("closure:pending".to_string());
+    });
+    std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+    run_git(&project_root, &["add", "file.txt"]);
+    run_git(&project_root, &["commit", "-m", "fix: land (TASK-9431)"]);
+    handle_db_reconcile_status(&store_path, None, Some("TASK-9431"), false).unwrap();
+    let store = Storage::new(&store_path).load().unwrap();
+    assert_eq!(
+        store
+            .get_requirement_by_spec_id("TASK-9431")
+            .unwrap()
+            .status,
+        RequirementStatus::Done
+    );
+}
