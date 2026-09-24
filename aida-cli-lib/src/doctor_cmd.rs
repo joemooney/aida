@@ -50,16 +50,36 @@ pub(crate) fn handle_doctor_command(
             all: sub_all,
             json,
             fail_on_findings,
-        } => doctor_multi_agent(DoctorRunOptions {
-            heal: false,
-            yes,
-            category: Some(category.clone()),
-            json: *json,
-            force,
-            all: all || *sub_all,
-            since: since.map(str::to_string),
-            fail_on_findings: *fail_on_findings,
-        }),
+        } => {
+            // TASK-1473: `doctor check runaway-seats` is what the
+            // maintenance scheduler dispatches every 15 minutes (the
+            // watchdog job) — and the watchdog rule never touches the AIDA
+            // store. The full path below always pays for loading the whole
+            // store plus `collect_doctor_findings` (parent-tag-drift,
+            // id-collisions, lease listing, live-session probing, …) even
+            // though `--category runaway-seats` filters every one of those
+            // findings back out. Take a lighter entry path straight to the
+            // watchdog scan for exactly this shape (single category, no
+            // `--all`); anything else falls through to the full path
+            // unchanged. trace:TASK-1473 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::runaway_seats::CATEGORY)
+            {
+                return doctor_check_runaway_seats_light(*json, *fail_on_findings);
+            }
+            doctor_multi_agent(DoctorRunOptions {
+                heal: false,
+                yes,
+                category: Some(category.clone()),
+                json: *json,
+                force,
+                all: all || *sub_all,
+                since: since.map(str::to_string),
+                fail_on_findings: *fail_on_findings,
+            })
+        }
         cli::DoctorCommand::Heal {
             category,
             yes,
@@ -612,6 +632,57 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         .count();
     if failed > 0 {
         anyhow::bail!("{failed} finding(s) failed to heal — see the report above");
+    }
+    Ok(())
+}
+
+/// TASK-1473: the light entry path for `aida doctor check runaway-seats`.
+/// Reads `[watchdog]` config off the project root and runs the watchdog scan
+/// directly — no `Storage::load()` of the whole AIDA store, no
+/// `collect_doctor_findings` pass (parent-tag-drift, id-collisions, lease
+/// listing, live-session probing, …), no other opt-in doctor category. The
+/// watchdog itself reads only on-disk transcripts/logs (see
+/// `runaway_seats.rs` module docs), so none of that machinery was ever
+/// needed for this one category; skipping it is what turns the scheduled
+/// tick's ~8s `aida doctor` startup into a sub-second run. Output shape
+/// (report fields, exit-code gating on `--fail-on-findings`) matches the
+/// full path exactly, so a script or the scheduler cannot tell which path
+/// ran.
+// trace:TASK-1473 | ai:claude
+fn doctor_check_runaway_seats_light(json: bool, fail_on_findings: bool) -> Result<()> {
+    let project_root = main_worktree_root_from(&find_project_root()?);
+    let cfg = crate::read_project_config_value(&project_root);
+    let policy = crate::runaway_seats::policy(cfg.as_ref());
+    let label = project_root
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| project_root.display().to_string());
+    let (findings, coverage) = crate::runaway_seats::scan(
+        &label,
+        &crate::runaway_seats::default_sources(&project_root),
+        &policy,
+        chrono::Utc::now(),
+        &crate::runaway_seats::registry_attribution(&project_root),
+    );
+
+    let mut report = DoctorReport::from_findings(findings);
+    report.runaway_seats = Some(coverage);
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        render_doctor_report(&report, false)?;
+        if let Some(coverage) = &report.runaway_seats {
+            print!("{}", crate::runaway_seats::render_coverage(coverage));
+        }
+    }
+
+    // Mirrors the `--fail-on-findings` gate in `doctor_multi_agent`.
+    if fail_on_findings && !report.findings.is_empty() {
+        anyhow::bail!(
+            "{} finding(s) in runaway-seats — failing because --fail-on-findings was requested",
+            report.findings.len()
+        );
     }
     Ok(())
 }
