@@ -17,11 +17,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T16:43:05.320943179Z
-modified_at: 2026-09-24T17:26:05.589820571Z
+modified_at: 2026-09-24T17:41:53.637413430Z
 req_type: Task
 tags:
 - papercut
 - store-locate
+comments:
+- id: 01a0d482-7165-7ee3-a8b7-0c1ca691c610
+  author: joe
+  content: 'Review: APPROVE (fresh strict Opus reviewer). PROXY DECISION (orchestrator for Joe): tracker imports now receive node-scoped IDs (TYPE-<node>-NNN) from the dispenser, where they used to get metadata-counter short IDs. Accepted: this is aida add''s no-block fallback, it cannot collide with short or block IDs (the old path could overwrite without checking), and merge-gate can assign agreed short IDs later. Requested before merge: pin the format with a test, add a docs line, and merge origin/main to clear the trivial conflicts from the 1486 squash.'
+  created_at: 2026-09-24T17:41:53.637413430Z
+  modified_at: 2026-09-24T17:41:53.637413430Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 43649a4222d7611933b2943187d80a6154718587
   branch: main
