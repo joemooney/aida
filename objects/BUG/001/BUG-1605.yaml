@@ -9,12 +9,12 @@ description: |-
   - install-cron (and the aida init offer) recognises a legacy unmarked AIDA tick line for THIS repo and replaces it in place rather than appending. Detection: the line runs '<aida> schedule tick' after 'cd <this repo root>', with or without --format json.
   - Never touch lines for other repos, and never touch unrelated user lines.
   - Tests cover a legacy unmarked line being repaired, a marked line being repaired, another repo's legacy line being untouched, and unrelated lines being preserved byte-for-byte.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T19:45:56.260116055Z
-modified_at: 2026-09-24T21:00:44.150068395Z
+modified_at: 2026-09-24T21:56:22.219993869Z
 req_type: Bug
 tags:
 - papercut
@@ -26,6 +26,20 @@ comments:
   created_at: 2026-09-24T21:00:44.150068395Z
   modified_at: 2026-09-24T21:00:44.150068395Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d56b-6c44-7a02-98d3-6d1a27feed70
+  author: aida-auto-bump
+  timestamp: 2026-09-24T21:56:22.212210717Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d56b-6c4b-77a0-a253-a060e7cd3243
+  timestamp: 2026-09-24T21:56:22.219992249Z
+  agent: aida
+  commit_sha: bccae69c07bb3714b76c5f6cc76d39f5c6ad45d8
+  summary: Completed via merge bccae69c
 filed_at:
   code_sha: 3f9cbfa2567b2f918de853a9452b3a33c4e913ed
   branch: main
@@ -34,3 +48,7 @@ filed_at:
   aida_build_sha: 3f9cbfa256
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T21:56:22.212186429Z
+  completion_sha: bccae69c07bb3714b76c5f6cc76d39f5c6ad45d8
