@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:46:14.802500200Z
-modified_at: 2026-09-24T08:12:50.538314861Z
+modified_at: 2026-09-24T08:12:53.993985193Z
 req_type: Task
 tags:
 - graph substrate-as-bouncer cli migration
@@ -53,3 +53,10 @@ relationships:
   target_id: 01a0c005-bcda-7c91-ad95-710ca43bb888
   created_at: 2026-09-21T22:46:27.833833587Z
   created_by: joe
+comments:
+- id: 01a0d279-836a-7532-ad90-d10cee33512d
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Still valid (140 custom:related edges). Recount before migrating.'
+  created_at: 2026-09-24T08:12:53.993985193Z
+  modified_at: 2026-09-24T08:12:53.993985193Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
