@@ -30,12 +30,12 @@ description: |
   6. Scaffolding question to answer explicitly, not silently: should `aida init` register any of these by default in a downstream project? Hub drift is meaningless without a second hub; disk headroom is universal. State the decision either way.
 
   Filed by the product seat as a proposal; disposition and sequencing against STORY-1218 are the advisor's.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T04:07:54.265428714Z
-modified_at: 2026-09-23T23:23:27.268686529Z
+modified_at: 2026-09-24T01:52:52.280896182Z
 req_type: Story
 tags:
 - batch:night-0920
@@ -209,4 +209,22 @@ comments:
   created_at: 2026-09-20T21:26:02.172213929Z
   modified_at: 2026-09-20T21:26:02.172213929Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0d11d-9630-7b81-a13b-88a48ec2e0ac
+  author: aida-auto-bump
+  timestamp: 2026-09-24T01:52:52.272764331Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d11d-9638-7790-b76c-3fc7de4929a4
+  timestamp: 2026-09-24T01:52:52.280894836Z
+  agent: aida
+  commit_sha: 63334ef653e9a5dabb95b2ccbb2267b9b0178c51
+  summary: Completed via merge 63334ef6
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T01:52:50.686548939Z
+  completion_sha: 63334ef653e9a5dabb95b2ccbb2267b9b0178c51
