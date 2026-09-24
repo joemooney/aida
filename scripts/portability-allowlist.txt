@@ -171,3 +171,31 @@ unattributed	aida-tui/src/intent.rs:"aida && touch /tmp/x",
 unattributed	aida-tui/src/palette.rs:"run aida && touch /tmp/x",
 unattributed	aida-tui/src/redesign/store.rs:let p = focus_marker_path(Path::new("/tmp/proj"));
 unattributed	aida-tui/tests/launcher_intent.rs:&aida_tui::__test_only::Intent::Launch("rm -rf / && touch /tmp/x".to_string()),
+# prose-classification (STORY-1382): production-scoped. Matches 19 lines at 8
+# sites on main (2026-09-23), all reviewed as real classification on message
+# text: 8/8 sites true positive. Baselined, not endorsed; remove rows as fixed.
+# Deliberately NOT caught: string tests on our own data (URLs, tags, membership,
+# content heuristics whose subject is not an error/output), test code and
+# assertions, char/framing tests, `contains_any_case_insensitive` calls and
+# functions carrying `// external-prose-classifier:` (the BUG-1310 inventory),
+# `starts_with`/`==`/regex matches, and a lowered copy whose error-shaped
+# source is more than 12 lines above the match.
+prose-classification	aida-cli-lib/src/contradictions.rs:} else if reason.starts_with("Terminal ") && reason.contains(" plan promises Followups") {
+prose-classification	aida-cli-lib/src/lib.rs:if !reason.is_empty() && !reason.contains("no open PR") {
+prose-classification	aida-cli-lib/src/lib.rs:if msg.contains("ambiguous") {
+prose-classification	aida-cli-lib/src/lib.rs:if stderr.contains("branch not protected") {
+prose-classification	aida-cli-lib/src/maintenance_schedule.rs:if stderr.contains("no crontab") {
+prose-classification	aida-cli-lib/src/mcp.rs:let code = if lower.contains("missing required parameter")
+prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("cannot be empty")
+prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("must be a string")
+prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("must not contain")
+prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("invalid punt category")
+prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("invalid brief path")
+prose-classification	aida-cli-lib/src/mcp.rs:} else if lower.contains("unknown tool")
+prose-classification	aida-cli-lib/src/rule_violation.rs:if m.contains("/// ")
+prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("doc comment")
+prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("doc-comment")
+prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("provenance")
+prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("spec-id leak")
+prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("trace:")
+prose-classification	aida-cli-lib/src/rule_violation.rs:if m.contains("rustfmt")
