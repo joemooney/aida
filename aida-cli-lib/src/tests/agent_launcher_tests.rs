@@ -433,9 +433,12 @@ fn noexec_preview_includes_prompt_source_context_path_env_and_guidance_files() {
         preview.contains("prompt_source: generated (role launch prompt)"),
         "{preview}"
     );
+    // trace:BUG-1599 | ai:claude — Path::display renders `\\` on Windows.
     assert!(
         preview.contains("launch_context_snapshot:")
-            && preview.contains(".aida/agents/context/claude-"),
+            && preview
+                .replace('\\', "/")
+                .contains(".aida/agents/context/claude-"),
         "{preview}"
     );
     assert!(
