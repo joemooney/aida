@@ -7509,6 +7509,7 @@ pub(crate) fn handle_git_backend_command(
             since,
             until,
             status_changes,
+            kind,
             shipped,
             comments,
             oneline,
@@ -7518,6 +7519,17 @@ pub(crate) fn handle_git_backend_command(
             include_meta,
             cmd,
         } => {
+            // STORY-1436: `--kind` reads the local event feed (non-actions
+            // included) rather than the spec git log. trace:STORY-1436 | ai:claude
+            if let Some(kind) = kind {
+                return crate::history_kind_report(
+                    kind,
+                    since.as_deref(),
+                    until.as_deref(),
+                    author.as_deref(),
+                    *limit,
+                );
+            }
             let events = match cmd {
                 Some(HistoryCommand::Events) => true,
                 None => {

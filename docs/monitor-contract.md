@@ -64,6 +64,17 @@ whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude /
 
 ## Migration notes
 
+- `1.3.0` — the new `GateHeld` event kind records a gate that REFUSED or
+  HELD (`gate`, optional `pr`, `reason`, optional `actor`, plus `seat`):
+  the merge-hold clear floor, the `aida pr ship` hold-release refusals, a
+  stale approval, a review in progress, a refused fresh pickup (BlockedBy
+  named distinctly), a closure hold, and an ambiguous-id refusal. A human
+  `aida merge-hold clear` now also emits `MergeHoldChanged { placed: false }`,
+  so floor refusals can be counted against releases
+  (`aida history --kind gate-held`). `GateHeld` is not actionable (absorbed by
+  `aida watch`). Before `1.3.0` no refusal was recorded: any refusal count
+  over an older log is zero by omission, not by measurement. Additive only.
+  (STORY-1436) // trace:STORY-1436 | ai:claude
 - `1.2.0` — `aida review record` now emits `ReviewVerdictRecorded` (spec, PR,
   verdict, reviewed sha); `aida edit --status`/`--mode` now emit
   `DispositionChanged`/`ExecutionModeChanged` with before/after values

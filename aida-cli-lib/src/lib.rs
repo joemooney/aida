@@ -573,6 +573,7 @@ pub fn main_entry() {
     let exit_code: i32 = match run() {
         Ok(()) => 0,
         Err(err) => {
+            record_ambiguous_id_refusal(&err);
             let msg = format!("{:?}", err);
             // TASK-972 (AXI #6): agents read STDOUT. An error printed to stderr
             // with a human `Error:` prefix is invisible to the agent loop,
@@ -5748,6 +5749,24 @@ fn run() -> Result<()> {
         Command::Init { .. } => {
             // Handled before path resolution above; unreachable
             unreachable!("Init command should be handled before path resolution");
+        }
+        Command::History {
+            kind: Some(kind),
+            since,
+            until,
+            author,
+            limit,
+            ..
+        } => {
+            // STORY-1436: the event feed is local runtime state, readable
+            // without the orphan store. trace:STORY-1436 | ai:claude
+            history_kind_report(
+                kind,
+                since.as_deref(),
+                until.as_deref(),
+                author.as_deref(),
+                *limit,
+            )?;
         }
         Command::History { .. } => {
             // History walks the orphan branch; only meaningful in git-canonical
@@ -31734,10 +31753,20 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             // floor, independent of dispatch/disposition roles.
             // trace:STORY-1353 | ai:codex
             if !has_integrity_floor_authority() {
-                anyhow::bail!(
-                    "clearing a merge-hold requires a human at an interactive terminal; \
-                     dispatch or advisor authority cannot override this integrity floor"
+                let refusal = "clearing a merge-hold requires a human at an interactive terminal; \
+                     dispatch or advisor authority cannot override this integrity floor";
+                // STORY-1436: the floor HELD — record it (PR, refused seat,
+                // reason, ts) so floor refusals can be counted against
+                // releases. Best-effort; never changes the refusal.
+                // trace:STORY-1436 | ai:claude
+                events::record_gate_held(
+                    &root,
+                    events::GATE_MERGE_HOLD_CLEAR_FLOOR,
+                    None,
+                    *pr,
+                    refusal,
                 );
+                anyhow::bail!(refusal);
             }
             match (pr, stale) {
                 (Some(_), true) => {
@@ -31876,12 +31905,32 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                     );
                     }
+                    // STORY-1436: a human clear is the floor's complement —
+                    // record the release so floor refusals have a denominator.
+                    // trace:STORY-1436 | ai:claude
+                    let emit_release = |detail: &str| {
+                        let mut ev = events::Event::new(
+                            None,
+                            "",
+                            events::EventKind::MergeHoldChanged {
+                                pr: *pr as u32,
+                                placed: false,
+                                reason: Some(format!("merge-hold clear: {detail}")),
+                            },
+                        );
+                        ev.seat = events::active_seat();
+                        events::emit(&root, &ev);
+                    };
                     if existed {
+                        if let Some((record, _)) = &cleared {
+                            emit_release(&record.detail);
+                        }
                         println!(
                             "Cleared merge-hold on PR #{pr} (marker removed, `aida:merge-hold` label dropped)."
                         );
                     } else if let Some((record, actor)) = &label_only_record {
                         if unlabel.is_ok() {
+                            emit_release(&record.detail);
                             if let Err(err) = merge_hold::record_clearance(&root, record, actor) {
                                 eprintln!(
                                     "  {} could not record who cleared PR #{pr}: {err}",
@@ -31945,6 +31994,84 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             }
         }
     }
+}
+
+/// STORY-1436: `aida history --kind <KIND>` — one event kind from the local
+/// feed (rotated archive included), newest first, with the gate/floor tally
+/// for `gate-held`.
+// trace:STORY-1436 | ai:claude
+pub(crate) fn history_kind_report(
+    kind: &str,
+    since: Option<&str>,
+    until: Option<&str>,
+    author: Option<&str>,
+    limit: usize,
+) -> Result<()> {
+    let want = events::normalize_kind_name(kind);
+    if !events::EventKind::known_names()
+        .iter()
+        .any(|n| events::normalize_kind_name(n) == want)
+    {
+        anyhow::bail!(
+            "unknown event kind `{kind}`; known kinds: {}",
+            events::EventKind::known_names().join(", ")
+        );
+    }
+    let bound = |v: Option<&str>, flag: &str| -> Result<Option<chrono::DateTime<chrono::Utc>>> {
+        v.map(|raw| {
+            events::parse_time_bound(raw).ok_or_else(|| {
+                anyhow::anyhow!("{flag} `{raw}` is not a date (YYYY-MM-DD) or RFC 3339 time")
+            })
+        })
+        .transpose()
+    };
+    let query = events::KindQuery {
+        kind: kind.to_string(),
+        since: bound(since, "--since")?,
+        until: bound(until, "--until")?,
+        who: author.map(str::to_string),
+        limit,
+    };
+    let root = find_main_worktree_root()?;
+    let all = events::read_all_with_archive(&root);
+    events::kind_report(&all, &query, std::io::stdout().lock())?;
+    Ok(())
+}
+
+/// STORY-1436: BUG-1535's ambiguous-id refusal fires from dozens of lookup
+/// sites; it is recorded ONCE, here, where every refusal surfaces. Only when
+/// the error chain carries an `AmbiguousIdError` (no cost otherwise), and
+/// only into a project that already has `.aida/` (never creates one).
+// trace:STORY-1436 | ai:claude
+fn record_ambiguous_id_refusal(err: &anyhow::Error) {
+    let Some(ambiguous) = ambiguous_id_in_chain(err) else {
+        return;
+    };
+    let Ok(root) = find_main_worktree_root() else {
+        return;
+    };
+    if !root.join(".aida").is_dir() {
+        return;
+    }
+    events::record_gate_held(
+        &root,
+        events::GATE_AMBIGUOUS_ID,
+        Some(ambiguous.id.to_ascii_uppercase()),
+        None,
+        &format!(
+            "`{}` resolves to {} requirements; refused to pick one",
+            ambiguous.id.to_ascii_uppercase(),
+            ambiguous.candidates.len()
+        ),
+    );
+}
+
+// trace:STORY-1436 | ai:claude
+fn ambiguous_id_in_chain(
+    err: &anyhow::Error,
+) -> Option<&aida_core::id_collisions::AmbiguousIdError> {
+    err.chain()
+        .find_map(|e| e.downcast_ref::<aida_core::id_collisions::AmbiguousIdError>())
 }
 
 pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
@@ -67934,6 +68061,40 @@ fn apply_closure_hold(
     changed
 }
 
+/// STORY-1436: the closure hold as a [`events::EventKind::GateHeld`] record.
+// trace:STORY-1436 | ai:claude
+fn closure_hold_reason(hold: &ClosureHold) -> String {
+    let mut why = Vec::new();
+    if !hold.blockers.is_empty() {
+        why.push(format!(
+            "blocked by {}",
+            aida_core::pickability::closure_blockers_label(&hold.blockers)
+        ));
+    }
+    if !hold.criteria.is_empty() {
+        why.push(format!(
+            "closure criteria unmet: {}",
+            closure_criteria_label(&hold.criteria)
+        ));
+    }
+    format!(
+        "merged ({}) but completion held at Done — {}",
+        hold.flip.sha.chars().take(7).collect::<String>(),
+        why.join("; ")
+    )
+}
+
+// trace:STORY-1436 | ai:claude
+fn record_closure_hold_event(project_root: &std::path::Path, hold: &ClosureHold) {
+    events::record_gate_held(
+        project_root,
+        events::GATE_CLOSURE_HOLD,
+        Some(hold.flip.spec_id.clone()),
+        None,
+        &closure_hold_reason(hold),
+    );
+}
+
 /// BUG-1551: print one line per held spec, naming the blocker.
 // trace:BUG-1551 | ai:claude
 fn report_closure_holds(holds: &[ClosureHold]) {
@@ -68624,6 +68785,11 @@ fn auto_bump_done_to_completed(
             };
             if apply_closure_hold(&mut r, hold, now) {
                 backend.update_requirement(&r)?;
+                // STORY-1436: first time this merge is held — record the
+                // non-completion (deduped with the audit note, so a re-pull
+                // of the same held merge does not re-count it).
+                // trace:STORY-1436 | ai:claude
+                record_closure_hold_event(project_root, hold);
             }
         }
         // TASK-246 / BUG-219: review stories whose PR merged before the
@@ -84902,6 +85068,78 @@ fn emit_review_verdict_recorded(
     );
     ev.seat = events::active_seat();
     events::emit(project_root, &ev);
+}
+
+/// STORY-1436: refusal recording seams that live in this module.
+// trace:STORY-1436 | ai:claude
+#[cfg(test)]
+mod story_1436_gate_held_tests {
+    use super::*;
+
+    #[test]
+    fn ambiguous_id_is_found_through_context_layers() {
+        let amb = aida_core::id_collisions::AmbiguousIdError {
+            id: "task-7".into(),
+            candidates: vec![],
+        };
+        let err = anyhow::Error::new(amb)
+            .context("loading spec")
+            .context("aida edit");
+        assert_eq!(
+            ambiguous_id_in_chain(&err).map(|a| a.id.as_str()),
+            Some("task-7")
+        );
+        assert!(ambiguous_id_in_chain(&anyhow::anyhow!("other")).is_none());
+    }
+
+    #[test]
+    fn blocked_by_pickup_is_named_distinctly() {
+        use aida_core::pickability::BlockedReason;
+        use queue_cmd::{pickup_refusal_gate, QueueFreshPickup};
+        let blocked = QueueFreshPickup::Blocked(BlockedReason::PermanentlyBlocked {
+            target_spec: "TASK-1".into(),
+        });
+        assert_eq!(
+            pickup_refusal_gate(&blocked),
+            events::GATE_BLOCKED_BY_PICKUP
+        );
+        let human = QueueFreshPickup::Blocked(BlockedReason::HumanOnly);
+        assert_eq!(pickup_refusal_gate(&human), events::GATE_QUEUE_PICKUP);
+        assert_eq!(
+            pickup_refusal_gate(&QueueFreshPickup::AwaitingMerge),
+            events::GATE_QUEUE_PICKUP
+        );
+    }
+
+    #[test]
+    fn merge_hold_clear_floor_refusal_is_recorded_before_the_bail() {
+        let src = include_str!("lib.rs");
+        let clear = src
+            .find(concat!("MergeHoldAction::", "Clear { pr, stale }"))
+            .expect("clear arm");
+        let tail = &src[clear..];
+        let rec = tail
+            .find(concat!("GATE_MERGE_HOLD_", "CLEAR_FLOOR"))
+            .expect("floor refusal recorded");
+        let bail = tail.find("anyhow::bail!(refusal)").expect("bail");
+        assert!(rec < bail);
+    }
+
+    #[test]
+    fn closure_hold_reason_names_blockers_and_criteria() {
+        let hold = ClosureHold {
+            flip: AutoBumpFlip::new(
+                "STORY-9".to_string(),
+                "abcdef1234".to_string(),
+                RequirementStatus::Done,
+            ),
+            blockers: vec![],
+            criteria: vec!["docs updated".to_string()],
+        };
+        let reason = closure_hold_reason(&hold);
+        assert!(reason.contains("abcdef1"), "{reason}");
+        assert!(reason.contains("docs updated"), "{reason}");
+    }
 }
 
 #[cfg(test)]

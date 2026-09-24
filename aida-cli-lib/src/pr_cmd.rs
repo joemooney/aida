@@ -1552,6 +1552,14 @@ pub(crate) fn pr_ship_approval_gate(
             &pr_ship::ShipStep::Merge { delete_branch },
             &pr_ship::StepOutcome::Failed(message.clone()),
         );
+        // STORY-1436: the stale-approval gate HELD. trace:STORY-1436 | ai:claude
+        crate::events::record_gate_held(
+            main_worktree,
+            crate::events::GATE_STALE_APPROVAL,
+            None,
+            Some(pr_number),
+            &message,
+        );
         anyhow::bail!("{message} (To merge anyway, re-run with `--override-stale-approval`.)");
     }
     append_ship_activity_line(
@@ -1994,6 +2002,14 @@ pub(crate) fn pr_ship_handler(
                 &pr_ship::ShipStep::Merge { delete_branch },
                 &pr_ship::StepOutcome::Skipped(refusal.clone()),
             );
+            // STORY-1436: the ship hold-release floor HELD. trace:STORY-1436 | ai:claude
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_SHIP_HOLD_RELEASE,
+                None,
+                Some(pr_number),
+                &refusal,
+            );
             anyhow::bail!(refusal);
         }
     }
@@ -2303,7 +2319,17 @@ pub(crate) fn pr_ship_handler(
             .map(|info| info.head_oid)
         });
         if let crate::review_marker::MergeGate::UnderReview(m) = &gate {
-            anyhow::bail!("{}", crate::review_marker::refusal_message(m));
+            let refusal = crate::review_marker::refusal_message(m);
+            // STORY-1436: the review-in-progress gate HELD.
+            // trace:STORY-1436 | ai:claude
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_REVIEW_IN_PROGRESS,
+                None,
+                Some(pr_number),
+                &refusal,
+            );
+            anyhow::bail!("{}", refusal);
         }
         if let Some(note) = crate::review_marker::proceed_note(&gate) {
             eprintln!(
@@ -2418,6 +2444,14 @@ pub(crate) fn pr_ship_handler(
                 &pr_ship::ShipStep::Merge { delete_branch },
                 &pr_ship::StepOutcome::Skipped(refusal.clone()),
             );
+            // STORY-1436: the ship hold-release floor HELD. trace:STORY-1436 | ai:claude
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_SHIP_HOLD_RELEASE,
+                None,
+                Some(pr_number),
+                &refusal,
+            );
             anyhow::bail!(refusal);
         }
         // BUG-1532 criterion 4, re-checked HERE under the merge lease against
@@ -2445,6 +2479,14 @@ pub(crate) fn pr_ship_handler(
                         &pr_ship::ShipStep::Merge { delete_branch },
                         &pr_ship::StepOutcome::Skipped(refusal.clone()),
                     );
+                    // STORY-1436. trace:STORY-1436 | ai:claude
+                    crate::events::record_gate_held(
+                        &hold_root,
+                        crate::events::GATE_SHIP_HOLD_RELEASE,
+                        None,
+                        Some(pr_number),
+                        &refusal,
+                    );
                     anyhow::bail!(refusal);
                 }
             },
@@ -2467,6 +2509,14 @@ pub(crate) fn pr_ship_handler(
                     Some(pr_number),
                     &pr_ship::ShipStep::Merge { delete_branch },
                     &pr_ship::StepOutcome::Skipped(refusal.clone()),
+                );
+                // STORY-1436. trace:STORY-1436 | ai:claude
+                crate::events::record_gate_held(
+                    &hold_root,
+                    crate::events::GATE_SHIP_HOLD_RELEASE,
+                    None,
+                    Some(pr_number),
+                    &refusal,
                 );
                 anyhow::bail!(refusal);
             }
@@ -4580,6 +4630,25 @@ mod task_1458_pr_ship_approval_gate_tests {
         assert_eq!(log.len(), 1);
         assert_eq!(log[0]["step"], "pr-merge");
         assert_eq!(log[0]["status"], "failed");
+    }
+
+    // STORY-1436: the held gate leaves a counted record; an override does not.
+    // trace:STORY-1436 | ai:claude
+    #[test]
+    fn stale_approval_refusal_records_a_gate_held_event() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _on = crate::test_env::EnvVarGuard::unset(crate::events::EVENTS_DISABLE_ENV);
+        let _ = pr_ship_approval_gate(tmp.path(), 5, &[approval(OLD)], Some(HEAD), false, true);
+        let evs = crate::events::read_all(tmp.path());
+        assert_eq!(evs.len(), 1, "{evs:?}");
+        assert!(matches!(
+            &evs[0].kind,
+            crate::events::EventKind::GateHeld { gate, pr: Some(5), .. }
+                if gate == crate::events::GATE_STALE_APPROVAL
+        ));
+        let other = tempfile::tempdir().unwrap();
+        let _ = pr_ship_approval_gate(other.path(), 5, &[approval(OLD)], Some(HEAD), true, true);
+        assert!(crate::events::read_all(other.path()).is_empty());
     }
 
     #[test]

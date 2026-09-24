@@ -12408,6 +12408,18 @@ pub enum Command {
         #[clap(long, global = true)]
         status_changes: bool,
 
+        /// Read the local event feed (`.aida/events.jsonl`) instead of the
+        /// spec history, showing only events of this kind — e.g.
+        /// `gate-held`: every gate that refused or held (a merge-hold floor,
+        /// a stale approval, a review in progress, a blocked pickup, a
+        /// closure hold, an ambiguous id), with a per-gate count and the
+        /// merge-hold floor's refusals beside its releases for the same
+        /// window. Honors --since/--until/--limit; `--author me` narrows to
+        /// what YOU tried to do and could not.
+        // trace:STORY-1436 | ai:claude
+        #[clap(long, global = true, value_name = "KIND")]
+        kind: Option<String>,
+
         /// Only recent Done→Completed ship transitions — the "did my ship
         /// register?" view. Unlike `--all` (a recency-blind dump of every
         /// terminal-status spec), this shows just what merged-to-default,
