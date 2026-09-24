@@ -7,6 +7,8 @@
 #[cfg(feature = "native")]
 mod cache;
 #[cfg(feature = "native")]
+mod cache_lock;
+#[cfg(feature = "native")]
 mod cached_git_backend;
 #[cfg(feature = "native")]
 mod git_backend;
@@ -26,6 +28,11 @@ pub use cache::{
     fast_fail_cache_enabled, read_cache_lock_info, set_fast_fail_cache, status_divergences,
     ArchiveFilter, Cache, CacheLockInfo, DeferFilter, Degrees, ListFilter, RequirementSummary,
     SortOrder, StatusDivergence,
+};
+#[cfg(feature = "native")]
+pub use cache_lock::{
+    classify_lock_owner, observe_cache_lock, observe_lock_info_file, reclaim_dead_lock_info,
+    CacheLockObservation, LockInfoReclaim, LockOwnerState,
 };
 #[cfg(feature = "native")]
 pub use cached_git_backend::CachedGitBackend;

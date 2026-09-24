@@ -14,6 +14,13 @@ use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
+pub use super::cache_lock::{
+    cache_lock_info_path, foreign_writer_holds_lock, read_cache_lock_info, CacheLockInfo,
+};
+use super::cache_lock::{
+    clear_dead_owner_lock_info, enrich_cache_lock_error, observe_cache_lock,
+    remove_cache_lock_info, touch_own_lock_info, write_cache_lock_info,
+};
 use crate::models::{Relationship, RelationshipType, Requirement, RequirementsStore};
 use std::collections::{HashMap, HashSet};
 
@@ -573,83 +580,6 @@ pub fn fast_fail_cache_enabled() -> bool {
     FAST_FAIL_CACHE.with(|c| c.get())
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
-pub struct CacheLockInfo {
-    pub pid: u32,
-    pub command: String,
-    pub started_at: String,
-    pub user: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
-}
-
-impl CacheLockInfo {
-    fn current() -> Self {
-        let command = std::env::args().collect::<Vec<_>>().join(" ");
-        Self {
-            pid: std::process::id(),
-            command,
-            started_at: chrono::Utc::now().to_rfc3339(),
-            user: current_user(),
-            session_id: std::env::var("AIDA_SESSION_ID")
-                .ok()
-                .filter(|s| !s.is_empty()),
-        }
-    }
-
-    pub fn started_at_utc(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        chrono::DateTime::parse_from_rfc3339(&self.started_at)
-            .ok()
-            .map(|dt| dt.with_timezone(&chrono::Utc))
-    }
-}
-
-pub fn cache_lock_info_path(cache_path: &Path) -> PathBuf {
-    cache_path.with_file_name(format!(
-        "{}.lock-info",
-        cache_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("cache.db")
-    ))
-}
-
-pub fn read_cache_lock_info(cache_path: &Path) -> Result<Option<CacheLockInfo>> {
-    let path = cache_lock_info_path(cache_path);
-    if !path.exists() {
-        return Ok(None);
-    }
-    let body = std::fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read cache lock info at {}", path.display()))?;
-    let info = serde_json::from_str(&body)
-        .with_context(|| format!("Failed to parse cache lock info at {}", path.display()))?;
-    Ok(Some(info))
-}
-
-/// True when the cache write-lock is currently held by a DIFFERENT, still-alive
-/// process (it is mid rebuild/write). Read paths consult this so they serve the
-/// last-good committed snapshot instead of contending for the write lock through
-/// the ~25s retry ladder (BUG-664). A lock-info from THIS process, or from a
-/// dead pid (crashed writer), returns false — so a stale lock never wedges
-/// readers and a single process never defers to itself.
-// trace:BUG-664
-pub fn foreign_writer_holds_lock(cache_path: &Path) -> bool {
-    match read_cache_lock_info(cache_path) {
-        Ok(Some(info)) => info.pid != std::process::id() && pid_is_alive(info.pid),
-        _ => false,
-    }
-}
-
-/// True when `pid` is a live process. Delegates to the one canonical probe
-/// (`liveness::pid_is_alive`: `kill(pid, 0)` on Unix, a single-pid sysinfo
-/// refresh elsewhere). The previous local copy returned `true` for every pid
-/// on non-Unix, so a crashed writer's stale lock file wedged Windows readers
-/// forever (and the dead-pid test asserted the opposite).
-// trace:BUG-664 trace:BUG-1021 | ai:claude
-fn pid_is_alive(pid: u32) -> bool {
-    crate::liveness::pid_is_alive(pid)
-}
-
 fn open_connection_with_retry(path: &Path) -> Result<Connection> {
     match open_connection_inner(path) {
         Ok(conn) => Ok(conn),
@@ -745,17 +675,49 @@ fn remove_corrupt_cache_files(path: &Path) {
     }
 }
 
+/// Run a cache write under the lock-info sidecar.
+///
+/// TASK-1484: the sidecar is claimed before the write (first writer wins, as
+/// before). After the write SUCCEEDS, this process has provably acquired the
+/// SQLite write lock, so a sidecar still naming a DEAD owner (a crashed or
+/// interrupted `aida schedule tick --hook`, say) is orphaned metadata and is
+/// removed with a compare-and-delete. A live or undeterminable owner's sidecar
+/// is never touched.
+// trace:TASK-1484 | ai:claude
 fn with_cache_write<T, F>(cache_path: &Path, action: &str, f: F) -> Result<T>
 where
     F: FnMut() -> Result<T>,
 {
-    write_cache_lock_info(cache_path)?;
-    let result = with_cache_retry(cache_path, action, f);
+    let claimed = write_cache_lock_info(cache_path, action)?;
+    let result = with_cache_retry_observed(cache_path, action, claimed, f);
+    if result.is_ok() {
+        clear_dead_owner_lock_info(cache_path);
+    }
     remove_cache_lock_info(cache_path);
     result
 }
 
-fn with_cache_retry<T, F>(cache_path: &Path, action: &str, mut f: F) -> Result<T>
+fn with_cache_retry<T, F>(cache_path: &Path, action: &str, f: F) -> Result<T>
+where
+    F: FnMut() -> Result<T>,
+{
+    with_cache_retry_observed(cache_path, action, false, f)
+}
+
+/// The bounded retry ladder. On every SQLite busy/locked error the recorded
+/// lock owner is re-observed, so the terminal error can say whether this was
+/// live contention, stale metadata from a dead owner (SQLite held by an
+/// unrecorded process), or no recorded owner at all. A dead owner does NOT
+/// shortcut the ladder: SQLite is still the arbiter, so the probe stays
+/// bounded and identical. When `owns_sidecar`, the sidecar's heartbeat and
+/// phase are refreshed while waiting.
+// trace:TASK-1484 | ai:claude
+fn with_cache_retry_observed<T, F>(
+    cache_path: &Path,
+    action: &str,
+    owns_sidecar: bool,
+    mut f: F,
+) -> Result<T>
 where
     F: FnMut() -> Result<T>,
 {
@@ -765,11 +727,18 @@ where
         match f() {
             Ok(value) => return Ok(value),
             Err(err) if is_sqlite_lock_error(&err) && attempts < delays.len() => {
+                if owns_sidecar {
+                    touch_own_lock_info(
+                        cache_path,
+                        &format!("waiting for sqlite lock: {action} (retry {})", attempts + 1),
+                    );
+                }
                 std::thread::sleep(delays[attempts]);
                 attempts += 1;
             }
             Err(err) if is_sqlite_lock_error(&err) => {
-                return Err(enrich_cache_lock_error(cache_path, action, err));
+                let observation = observe_cache_lock(cache_path).ok().flatten();
+                return Err(enrich_cache_lock_error(action, observation.as_ref(), err));
             }
             Err(err) => return Err(err),
         }
@@ -847,92 +816,6 @@ pub fn is_cache_schema_drift_error(err: &anyhow::Error) -> bool {
             || msg.contains("has no column named")
             || msg.contains("no such table")
     })
-}
-
-fn enrich_cache_lock_error(cache_path: &Path, action: &str, err: anyhow::Error) -> anyhow::Error {
-    match read_cache_lock_info(cache_path) {
-        Ok(Some(info)) if info.pid != std::process::id() => anyhow::anyhow!(
-            "database is locked while trying to {action} by pid={} ({}) held since {} ({} ago). \
-             Try again or check that process. If it's stuck, run `aida doctor heal stale-locks`.\ncaused by: {}",
-            info.pid,
-            if info.command.trim().is_empty() {
-                "unknown command"
-            } else {
-                info.command.as_str()
-            },
-            info.started_at,
-            humanize_cache_lock_age(&info),
-            err
-        ),
-        _ => anyhow::anyhow!(
-            "database is locked while trying to {action}. \
-             Try again. If this persists, run `aida doctor heal stale-locks`.\ncaused by: {}",
-            err
-        ),
-    }
-}
-
-fn humanize_cache_lock_age(info: &CacheLockInfo) -> String {
-    let Some(started_at) = info.started_at_utc() else {
-        return "unknown age".to_string();
-    };
-    let secs = chrono::Utc::now()
-        .signed_duration_since(started_at)
-        .num_seconds()
-        .max(0);
-    if secs < 60 {
-        format!("{secs}s")
-    } else if secs < 3600 {
-        format!("{}m {}s", secs / 60, secs % 60)
-    } else {
-        format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
-    }
-}
-
-fn write_cache_lock_info(cache_path: &Path) -> Result<()> {
-    use std::io::Write;
-
-    let path = cache_lock_info_path(cache_path);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "Failed to create cache lock-info parent {}",
-                parent.display()
-            )
-        })?;
-    }
-    let body = serde_json::to_string_pretty(&CacheLockInfo::current())?;
-    match std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-    {
-        Ok(mut file) => file
-            .write_all(body.as_bytes())
-            .with_context(|| format!("Failed to write cache lock info at {}", path.display())),
-        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
-        Err(err) => Err(err)
-            .with_context(|| format!("Failed to write cache lock info at {}", path.display())),
-    }
-}
-
-fn remove_cache_lock_info(cache_path: &Path) {
-    let path = cache_lock_info_path(cache_path);
-    let Ok(body) = std::fs::read_to_string(&path) else {
-        return;
-    };
-    let Ok(info) = serde_json::from_str::<CacheLockInfo>(&body) else {
-        return;
-    };
-    if info.pid == std::process::id() {
-        let _ = std::fs::remove_file(path);
-    }
-}
-
-fn current_user() -> String {
-    std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "unknown".to_string())
 }
 
 pub struct Cache {
@@ -4749,6 +4632,7 @@ mod tests {
                 started_at: chrono::Utc::now().to_rfc3339(),
                 user: "test".to_string(),
                 session_id: None,
+                ..Default::default()
             };
             std::fs::write(&lock_path, serde_json::to_string(&info).unwrap()).unwrap();
         };
@@ -4921,17 +4805,124 @@ mod tests {
         );
     }
 
+    // TASK-1484: fixtures for the lock-info lifecycle through real cache writes.
+    // trace:TASK-1484 | ai:claude
+    fn write_lock_fixture(cache_path: &Path, pid: u32, identity: Option<&str>) -> PathBuf {
+        let path = cache_lock_info_path(cache_path);
+        let info = CacheLockInfo {
+            pid,
+            command: "aida schedule tick --hook".to_string(),
+            started_at: (chrono::Utc::now() - chrono::Duration::minutes(30)).to_rfc3339(),
+            user: "tester".to_string(),
+            pid_start_identity: identity.map(str::to_string),
+            expected_duration_secs: Some(60),
+            ..Default::default()
+        };
+        std::fs::write(&path, serde_json::to_string(&info).unwrap()).unwrap();
+        path
+    }
+
+    #[test]
+    fn interrupted_tick_dead_owner_metadata_is_cleared_after_acquisition() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let path = write_lock_fixture(&cache_path, 0x7fff_fffe, None);
+        // Fresh cache: open applies the schema under with_cache_write.
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            !path.exists(),
+            "a dead owner's lock-info must be removed after a successful write"
+        );
+        cache.truncate().unwrap();
+        assert!(!path.exists());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn reused_pid_metadata_is_cleared_after_acquisition() {
+        // pid 1 is alive, but this recorded start identity cannot be its own.
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let path = write_lock_fixture(&cache_path, 1, Some("linux-starttime:18446744073709551615"));
+        drop(Cache::open(&cache_path).unwrap());
+        assert!(
+            !path.exists(),
+            "PID reuse must mark the recorded owner dead"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn live_owner_metadata_survives_writes_even_past_deadline() {
+        // pid 1 is always alive; a legacy (identity-less) record is PID-only.
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let path = write_lock_fixture(&cache_path, 1, None);
+        let cache = Cache::open(&cache_path).unwrap();
+        cache.truncate().unwrap();
+        assert!(
+            path.exists(),
+            "a live owner's lock-info must never be deleted"
+        );
+        let obs = observe_cache_lock(&cache_path).unwrap().unwrap();
+        assert!(obs.owner.presumed_alive());
+        assert!(
+            obs.overrun_note().is_some(),
+            "overrun is reported, not acted on"
+        );
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn sqlite_contention_with_dead_owner_metadata_is_reported_then_cleaned() {
+        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
+        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "1");
+        std::env::set_var("AIDA_CACHE_RETRY_MS", "1");
+
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let cache = Cache::open(&cache_path).unwrap();
+        let path = write_lock_fixture(&cache_path, 0x7fff_fffe, None);
+
+        let holder = Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN EXCLUSIVE").unwrap();
+        let err = cache.truncate().expect_err("sqlite lock is held");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("stale metadata"), "{msg}");
+        assert!(msg.contains("no longer running"), "{msg}");
+        assert!(path.exists(), "not cleaned before acquisition");
+        holder.execute_batch("ROLLBACK").unwrap();
+        drop(holder);
+
+        cache.truncate().unwrap();
+        assert!(!path.exists(), "cleaned after the next successful write");
+
+        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+    }
+
     #[test]
     fn cache_lock_info_round_trips_sidecar_path() {
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
-        write_cache_lock_info(&cache_path).unwrap();
+        write_cache_lock_info(&cache_path, "test").unwrap();
 
         let info = read_cache_lock_info(&cache_path)
             .unwrap()
             .expect("lock info should exist");
         assert_eq!(info.pid, std::process::id());
         assert!(!info.started_at.is_empty());
+        // TASK-1484: richer metadata is recorded on write.
+        assert_eq!(info.kind.as_deref(), Some("cache-write"));
+        assert_eq!(info.phase.as_deref(), Some("test"));
+        assert!(info.soft_deadline_utc().is_some());
+        assert!(info.heartbeat_at_utc().is_some());
+        #[cfg(target_os = "linux")]
+        assert!(info.pid_start_identity.is_some());
+        assert_eq!(
+            super::super::cache_lock::classify_lock_owner(&info),
+            super::super::cache_lock::LockOwnerState::Current
+        );
         assert_eq!(
             cache_lock_info_path(&cache_path),
             dir.path().join("cache.db.lock-info")
@@ -4952,6 +4943,7 @@ mod tests {
             started_at: chrono::Utc::now().to_rfc3339(),
             user: "tester".to_string(),
             session_id: None,
+            ..Default::default()
         };
         std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
 
@@ -5005,6 +4997,7 @@ mod tests {
             started_at: chrono::Utc::now().to_rfc3339(),
             user: "tester".to_string(),
             session_id: None,
+            ..Default::default()
         };
         std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
 
@@ -5047,6 +5040,7 @@ mod tests {
             started_at: chrono::Utc::now().to_rfc3339(),
             user: "tester".to_string(),
             session_id: None,
+            ..Default::default()
         };
         std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
 
