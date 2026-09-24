@@ -48,6 +48,7 @@ mod deps_cmd;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
+mod gitlab_mirror_link;
 mod graph_cmd;
 mod protocol_gate;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
@@ -38046,11 +38047,37 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
         Some(_) => return CiProbe::NoSignal("gh json PR number was 0".to_string()),
         None => return CiProbe::NoSignal("gh json missing PR number".to_string()),
     };
-    let rollup = pr.get("statusCheckRollup").and_then(|v| v.as_array());
-    let rollup = match rollup {
+    let raw_rollup = pr.get("statusCheckRollup").and_then(|v| v.as_array());
+    let raw_rollup = match raw_rollup {
         Some(r) if !r.is_empty() => r,
         _ => return CiProbe::PrNoChecks { pr_number },
     };
+    // TASK-1424 safety net: the GitLab-mirror-link status is informational
+    // only (it always posts `success`/`pending` — see
+    // `gitlab_mirror_link::post_github_mirror_status` — so a real
+    // failure/pending mirror entry should be unreachable in practice), but
+    // excluding its context here too means a future change to that
+    // invariant still can't shelve or stall a drain on GitLab-mirror
+    // evidence, which is advisory, not a gate. Filtered out BEFORE the
+    // empty-rollup check below (not skipped mid-loop): a PR carrying only
+    // the mirror status must read as "no checks yet" (`PrNoChecks`), not as
+    // a vacuously passing `Green` from an empty tally. Checked by context
+    // (StatusContext shape) or name (CheckRun shape) — whichever the rollup
+    // entry carries.
+    // trace:TASK-1424 | ai:claude
+    let rollup: Vec<&serde_json::Value> = raw_rollup
+        .iter()
+        .filter(|check| {
+            let check_id = check
+                .get("context")
+                .and_then(|v| v.as_str())
+                .or_else(|| check.get("name").and_then(|v| v.as_str()));
+            check_id != Some(crate::gitlab_mirror_link::MIRROR_STATUS_CONTEXT)
+        })
+        .collect();
+    if rollup.is_empty() {
+        return CiProbe::PrNoChecks { pr_number };
+    }
     // Tally check states. statusCheckRollup entries can be from
     // CheckRun (status=COMPLETED|IN_PROGRESS|QUEUED, conclusion=SUCCESS|FAILURE|...)
     // or StatusContext (state=SUCCESS|FAILURE|PENDING|ERROR). Handle both.
@@ -40423,7 +40450,9 @@ fn kill_process_group(pid: u32) {
 ///   the group) degrades to a partial/empty read instead of wedging this
 ///   function — and the caller — indefinitely.
 // trace:BUG-1288 | ai:claude
-fn command_output_with_timeout(
+// trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link's bounded
+// `git`/`gh` calls reuse this instead of a second timeout implementation.
+pub(crate) fn command_output_with_timeout(
     mut cmd: std::process::Command,
     timeout: std::time::Duration,
 ) -> Option<std::process::Output> {
@@ -66375,6 +66404,11 @@ fn handle_push_command(
                     // STORY-760: fan the code branch out to every mirror hub so
                     // `aida push` can't leave one behind. Best-effort.
                     fan_out_mirror_push(&project_root, &branch, &project_root);
+                    // TASK-1424: best-effort, bounded — if GitHub is the review
+                    // surface and a GitLab mirror pipeline is known for this
+                    // branch, link it onto the GitHub PR head as a non-blocking
+                    // commit status. Never fails or delays this push.
+                    gitlab_mirror_link::sync_mirror_ci_link(&project_root, &branch);
                 }
                 Ok(s) => {
                     eprintln!(
