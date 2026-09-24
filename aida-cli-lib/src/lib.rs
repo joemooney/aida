@@ -40,6 +40,7 @@ mod context_prompt;
 mod coordination;
 mod criteria;
 mod criteria_gate;
+mod criteria_red_run;
 mod db_cmd;
 mod decide_cmd;
 mod deep_link;
@@ -100237,6 +100238,42 @@ mod forge_seam_tests {
 }
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
+    // STORY-1386 (first slice): before the implementer runs, run the spec's
+    // criterion-traced tests on the main worktree and record the red run
+    // once. Best-effort — every failure degrades to "no record".
+    // trace:STORY-1386 | ai:claude
+    fn record_red_run(&mut self) {
+        let Some(budget) = criteria_red_run::budget_from_env() else {
+            return;
+        };
+        let root = main_worktree_root_from(&self.project_root);
+        let Some(store) = load_store_for_lookup(&root) else {
+            return;
+        };
+        let Some(req) = store.requirements.iter().find(|r| {
+            r.spec_id
+                .as_deref()
+                .is_some_and(|id| id.eq_ignore_ascii_case(&self.spec))
+        }) else {
+            return;
+        };
+        let Ok(report) = criteria::build_criteria_report(&root, &self.spec, &req.description)
+        else {
+            return;
+        };
+        let mut runner = criteria_red_run::CommandTestRunner;
+        if let Some(record) =
+            criteria_red_run::record_red_run_once(&root, &report, &mut runner, budget)
+        {
+            if !self.json {
+                eprintln!("  red run (before implementation):");
+                for line in criteria_red_run::summary_lines(&record) {
+                    eprintln!("    {line}");
+                }
+            }
+        }
+    }
+
     fn capture_phase_done_pr(&mut self) {
         self.phase_done_pr = self.pr_number;
     }

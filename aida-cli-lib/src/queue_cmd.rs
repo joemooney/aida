@@ -9198,6 +9198,16 @@ pub(crate) fn append_untraced_criteria_prompt_block(
     if let Some(block) = crate::criteria_gate::reviewer_prompt_block(&reports) {
         prompt.push_str(&block);
     }
+    // STORY-1386: cite the pre-implementation red run recorded at phase 1.
+    // trace:STORY-1386 | ai:claude
+    let red_root = crate::main_worktree_root_from(project_root);
+    let records: Vec<_> = reports
+        .iter()
+        .filter_map(|(display, _)| crate::criteria_red_run::load_record(&red_root, display))
+        .collect();
+    if let Some(block) = crate::criteria_red_run::reviewer_prompt_block(&records) {
+        prompt.push_str(&block);
+    }
 }
 
 // trace:BUG-1063 | ai:codex

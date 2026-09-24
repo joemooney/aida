@@ -1466,6 +1466,10 @@ pub(crate) trait PhaseDriver {
     /// BUG-1213: snapshot any existing rework PR head before phase 1. Drivers
     /// without forge/store access remain no-ops.
     fn begin_rework_guard(&mut self) {}
+    /// STORY-1386: run the spec's criterion-traced tests before the
+    /// implementer and record the red run once. Test drivers stay no-ops.
+    // trace:STORY-1386 | ai:claude
+    fn record_red_run(&mut self) {}
     /// After a successful implementer outcome, fail when a rework round left
     /// the snapshotted PR head unchanged. A punt never reaches this hook.
     fn rework_no_op_failure(&mut self) -> Option<PhaseFailure> {
@@ -3774,6 +3778,8 @@ pub(crate) fn orchestrate_with_resume(
                 );
             }
         }
+        // trace:STORY-1386 | ai:claude
+        driver.record_red_run();
         driver.begin_rework_guard();
         // BUG-1522: the rework no-op guard was consulted on only ONE of the
         // implementer-advance arms below (PrOpened) — but a rework round runs
