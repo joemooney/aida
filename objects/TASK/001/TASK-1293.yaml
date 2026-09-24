@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-21T06:43:33.400682577Z
+modified_at: 2026-09-24T16:30:53.797444220Z
 req_type: Task
 tags:
 - acceptance
@@ -55,11 +55,6 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T21:31:27.046413741Z
-- rel_type:
-    custom: related
-  target_id: 01a0ba81-ec62-7220-9218-08fc9b286023
-  created_at: 2026-09-19T21:31:32.085797012Z
-  created_by: joe
 - rel_type:
     custom: implemented-by
   target_id: 01a0bd5b-68f9-7c02-b4f0-e9a3a39a8686
