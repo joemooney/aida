@@ -26,12 +26,12 @@ description: |
      fork, or the drain loops on it.
   4. Re-entry records why the spec was considered ready, so a wrong return is auditable
      rather than indistinguishable from a correct one.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:39:54.938488038Z
-modified_at: 2026-09-21T05:27:08.418289820Z
+modified_at: 2026-09-24T00:58:45.662089065Z
 req_type: Task
 tags:
 - parent:BUG-1470 lifecycle ownership severity:operational
