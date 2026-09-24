@@ -7168,6 +7168,30 @@ mod queue_progress_tests;
 #[path = "tests/headless_hint_tests.rs"]
 mod headless_hint_tests;
 
+/// TASK-1311: a full-store save deliberately preserves an on-disk
+/// `failure_reason` the caller did not load (BUG-756), so clearing it inside
+/// `update_atomically` does not stick on the git-canonical store. Clear it with
+/// a targeted write instead, the path `aida edit` uses. Best-effort: a spec
+/// still carrying a stale FailureReason is only a display artifact (it is no
+/// longer NeedsAttention, so neither the drain nor `aida findings list` reads
+/// it), never a reason to fail the requeue.
+// trace:TASK-1311 | ai:claude
+pub(crate) fn clear_failure_reason_targeted(storage: &Storage, spec_id: &str) {
+    let store_path = storage.path();
+    if !store_path.is_dir() {
+        return;
+    }
+    let Ok(backend) = advance_backend(store_path) else {
+        return;
+    };
+    if let Ok(Some(mut r)) = backend.get_requirement_by_spec_id(spec_id) {
+        if r.failure_reason.is_some() {
+            r.failure_reason = None;
+            let _ = backend.update_requirement(&r);
+        }
+    }
+}
+
 /// TASK-218: shared implementation backing both `aida queue rework SPEC`
 /// and the top-level `aida rework SPEC` alias. Encapsulates the three-
 /// command rework sequence (status flip + queue add + optional session
@@ -7316,12 +7340,51 @@ pub(crate) fn handle_queue_rework(
         if new_status != &current_status {
             let new_status = new_status.clone();
             let now = chrono::Utc::now();
+            // TASK-1311: leaving NeedsAttention returns the spec to flight the
+            // same way `aida edit --status` does: clear the punt / shelve
+            // metadata and the machine-written `needs-human` parking tag, and
+            // record why it came back. Without this the requeued spec kept a
+            // parking tag and the drain never picked it up again.
+            // trace:TASK-1311 | ai:claude
+            let leaving_attention = current_status == RequirementStatus::NeedsAttention
+                && new_status != RequirementStatus::NeedsAttention;
+            let mut cleared = crate::requeue::ClearedMarkers::default();
             storage.update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
                     r.set_status_from_str(&format!("{:?}", new_status));
                     r.modified_at = now;
+                    if leaving_attention {
+                        // Only a human at a terminal may undo the advisor's
+                        // escalation to a human. trace:TASK-1311 | ai:claude
+                        cleared = crate::requeue::clear_shelve_markers(
+                            r,
+                            crate::requeue::caller_may_clear_escalation(),
+                        );
+                        let note = cleared.audit_note(
+                            "`aida queue rework`",
+                            &new_status.to_string(),
+                            reason,
+                        );
+                        r.add_comment(aida_core::Comment::new(get_default_author(), note));
+                    }
                 }
             })?;
+            if leaving_attention {
+                clear_failure_reason_targeted(storage, &spec_id);
+                if !cleared.removed_tags.is_empty() {
+                    println!(
+                        "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
+                        "·".dimmed(),
+                        cleared.removed_tags.join(", ")
+                    );
+                }
+                if let Some(w) = crate::requeue::kept_escalation_warning(&display_id, &cleared) {
+                    println!(
+                        "  {} {w}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                    );
+                }
+            }
             record_role_activity(&spec_id, "rework");
             update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
             println!(

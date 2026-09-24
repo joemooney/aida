@@ -1018,3 +1018,81 @@ fn metadata_rework_of_a_draft_is_refused_without_advisor_authority() {
         entries.len()
     );
 }
+
+/// TASK-1311: a requeue by a NON-TTY advisor (the test process has no
+/// terminal) flips the status and clears the shelve metadata, but must KEEP
+/// the `needs-human` escalation tag: an escalation to a human is undone only
+/// by a human at a terminal. The spec stays parked and the return is recorded.
+/// The TTY-human half is the pure `requeue::may_clear_escalation` test.
+// trace:TASK-1311 | ai:claude
+#[test]
+fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let mut req = req_for_test("BUG-13110", RequirementStatus::NeedsAttention);
+    req.tags.insert("needs-human".to_string());
+    req.tags.insert("batch:keep".to_string());
+    req.failure_reason = Some(aida_core::FailureReason {
+        phase: "ci".into(),
+        phase_index: 2,
+        kind: "ci-red".into(),
+        detail: "clippy failed".into(),
+        recovery_hint: None,
+        shelved_by: None,
+        shelved_at: chrono::Utc::now(),
+    });
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    handle_queue_rework(
+        &storage,
+        "BUG-13110",
+        false,
+        Some("implementer"),
+        false,
+        None,
+        Some("CI fixed on main"),
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+    .unwrap();
+
+    let updated = storage.load().unwrap();
+    let after = updated.get_requirement_by_spec_id("BUG-13110").unwrap();
+    assert_eq!(after.status, RequirementStatus::Approved);
+    assert!(
+        after.tags.contains("needs-human"),
+        "a non-TTY advisor must not undo an escalation: {:?}",
+        after.tags
+    );
+    assert!(after.tags.contains("batch:keep"), "{:?}", after.tags);
+    assert!(
+        after.failure_reason.is_none(),
+        "the shelve's FailureReason must not survive the requeue"
+    );
+    let tags: Vec<String> = after.tags.iter().cloned().collect();
+    assert!(
+        crate::burndown::parking_tag(&tags).is_some(),
+        "still parked for a human"
+    );
+    assert!(
+        after.comments.iter().any(|c| c
+            .content
+            .contains("Returned from NeedsAttention to Approved via `aida queue rework`")
+            && c.content.contains("ci/ci-red: clippy failed")
+            && c.content.contains("Kept escalation tag(s) needs-human")
+            && c.content.contains("Triage reason: CI fixed on main")),
+        "re-entry must record why the spec came back"
+    );
+    let entries = storage.queue_list("codex", true).unwrap();
+    assert_eq!(entries.len(), 1, "requeued onto the queue");
+}
