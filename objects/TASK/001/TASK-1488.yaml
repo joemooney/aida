@@ -10,12 +10,12 @@ description: |-
   - Alternatively, extend rel_remove_matches' legacy sweep to cover every family; pick one approach and justify it.
   - Run a dry-run census on the live store and record it on this spec. After merge, the orchestrator applies it.
   - Tests cover a legacy Custom depends-on edge being converted and being removable.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T17:35:05.360339938Z
-modified_at: 2026-09-24T18:37:54.913271493Z
+modified_at: 2026-09-24T20:13:15.609924409Z
 req_type: Task
 tags:
 - aida:rel
@@ -66,6 +66,20 @@ comments:
   created_at: 2026-09-24T18:37:54.913271493Z
   modified_at: 2026-09-24T18:37:54.913271493Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d50d-05c9-7590-991f-216413c8267f
+  author: aida-auto-bump
+  timestamp: 2026-09-24T20:13:15.593082240Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d50d-05d9-7f10-86e2-e5caf16ccb75
+  timestamp: 2026-09-24T20:13:15.609922898Z
+  agent: aida
+  commit_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
+  summary: Completed via merge 81c37e2c
 filed_at:
   code_sha: 2ab1b8d9595d61e30904573a1c13b2be45d0194d
   branch: main
@@ -74,3 +88,7 @@ filed_at:
   aida_build_sha: 43649a4222
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T20:13:15.593074275Z
+  completion_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
