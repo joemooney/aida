@@ -39,13 +39,31 @@ description: |-
   The pattern was identified by claude-reviewer-1, who explicitly declined to file it and left the
   determination to this seat. Related: STORY-1430 (auto-completion never reads a spec's own closure
   criteria - the same substrate gap seen from the closing end rather than the carving end).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:27:13.842442950Z
-modified_at: 2026-09-24T03:54:31.422762312Z
+modified_at: 2026-09-24T05:28:39.514504046Z
 req_type: Story
 tags:
 - docs:impacted
 - substrate lifecycle papercut
+history:
+- id: 01a0d1e3-2553-72d0-850b-ed99047b20f9
+  author: aida-auto-bump
+  timestamp: 2026-09-24T05:28:39.507464593Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d1e3-255a-7951-a38d-b4d5ffd71675
+  timestamp: 2026-09-24T05:28:39.514502206Z
+  agent: aida
+  commit_sha: 32fb93f70af6eabad5cbaa1d34e6002d385f33f2
+  summary: Completed via merge 32fb93f7
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T05:28:39.507312567Z
+  completion_sha: 32fb93f70af6eabad5cbaa1d34e6002d385f33f2
