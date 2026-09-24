@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:26:19.871990021Z
-modified_at: 2026-09-24T08:11:59.284803599Z
+modified_at: 2026-09-24T08:12:00.596779445Z
 req_type: Task
 comments:
 - id: 01a0d1d1-7f53-7c32-8b02-c3cab4f290a1
@@ -16,3 +16,9 @@ comments:
   content: 'Scope clarification: date sorting also needs date fields in `aida list --fields`. Expose at least `created_at` (opened), `modified_at`, and `completed_at` when present; consider explicit names such as `opened_at` only if it is a true alias rather than a second stored timestamp. Missing completion dates must render consistently and remain sortable. Keep fields available in human, TOON, and JSON projections, with date formatting documented.'
   created_at: 2026-09-24T05:09:22.899205910Z
   modified_at: 2026-09-24T05:09:22.899205910Z
+- id: 01a0d278-b2d4-7510-b34d-5d4863cddb52
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Add created and completed keys to list --sort.'
+  created_at: 2026-09-24T08:12:00.596779445Z
+  modified_at: 2026-09-24T08:12:00.596779445Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
