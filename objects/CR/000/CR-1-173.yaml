@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T14:19:48.859651743Z
-modified_at: 2026-09-24T09:09:55.500325813Z
+modified_at: 2026-09-24T09:10:05.730350347Z
 req_type: ChangeRequest
 tags:
 - intake:requester
@@ -61,4 +61,10 @@ comments:
   content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Write-once filing provenance struct with clear acceptance criteria.'
   created_at: 2026-09-24T08:12:26.333050611Z
   modified_at: 2026-09-24T08:12:26.333050611Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d2ad-e0a2-7102-a84f-9de3f34269dc
+  author: joe
+  content: 'Implemented on branch claude/cr-8. Field name: filed_at (struct FilingProvenance). Acceptance notes: (4) Branch-name decision = INCLUDE verbatim: a branch name is a code fact that travels with the pushed commits anyway; no hostname, absolute path or email is recorded (session id is an opaque UUID). (6) Drift hint deferred to follow-up TASK-1475, as the spec allows. (7) aida show prints a note when aida_build_sha differs from code_sha, only when run inside the aida source repo. Write-once is enforced in the store (targeted update, full-store save, three-way merge), not only by callers. Legacy SQLite/Postgres backends do not persist it (deprecated paths).'
+  created_at: 2026-09-24T09:10:05.730350347Z
+  modified_at: 2026-09-24T09:10:05.730350347Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
