@@ -4786,7 +4786,12 @@ fn run() -> Result<()> {
         if explicit_path.is_dir()
             || (!explicit_path.exists() && explicit_path.extension().is_none())
         {
-            return run_on_distributed_store(&cli.command, &explicit_path);
+            // The explicit --file directory IS the project root here — there's
+            // no separate project to walk cwd up to, and cwd may not even be
+            // inside it (or may be inside some unrelated git repo). Pass it
+            // through explicitly so `mcp-serve` doesn't derive the wrong
+            // project root from cwd. trace:TASK-1487 | ai:claude
+            return run_on_distributed_store(&cli.command, &explicit_path, Some(&explicit_path));
         }
         // User explicitly specified a file path - use it directly
         explicit_path
@@ -4798,7 +4803,7 @@ fn run() -> Result<()> {
         // legacy resolver and wrongly reported there was no `.aida/config.toml`.
         // trace:TASK-1486 | ai:claude
         if let Some(store_path) = detect_distributed_store() {
-            return run_on_distributed_store(&cli.command, &store_path);
+            return run_on_distributed_store(&cli.command, &store_path, None);
         }
         // Distributed mode is declared in `.aida/config.toml` but the store
         // worktree isn't resolvable here — the hallmark of a freshly-cloned
@@ -4873,7 +4878,7 @@ fn run() -> Result<()> {
                 None
             };
             if let Some(store_path) = store_path_opt {
-                return run_on_distributed_store(&cli.command, &store_path);
+                return run_on_distributed_store(&cli.command, &store_path, None);
             }
             let on_store_ref = branch_exists_anywhere(&project_root, "aida-store");
             let branch_hint = if on_store_ref {
@@ -12776,8 +12781,18 @@ fn detect_distributed_store() -> Option<std::path::PathBuf> {
 /// pointing it at the store directory makes its load/save delegate to
 /// GitBackend, so their reads and writes land in `objects/` like every other
 /// command's. Everything else goes through the git-backend dispatcher.
-// trace:BUG-310 trace:TASK-1486 | ai:claude
-fn run_on_distributed_store(command: &Command, store_path: &std::path::Path) -> Result<()> {
+///
+/// `project_root_hint`, when given, is used as `mcp-serve`'s project root
+/// instead of walking cwd up to a `.git` — the explicit `--file <dir>` caller
+/// passes its own directory, since that directory IS the project root there
+/// (no separate project to find, and cwd may be unrelated to it entirely).
+/// The other callers pass `None` and keep the existing cwd-walk behavior.
+// trace:BUG-310 trace:TASK-1486 trace:TASK-1487 | ai:claude
+fn run_on_distributed_store(
+    command: &Command,
+    store_path: &std::path::Path,
+    project_root_hint: Option<&std::path::Path>,
+) -> Result<()> {
     let storage = Storage::new(store_path);
     match command {
         // MCP server reads/writes through the same canonical git store the CLI
@@ -12785,7 +12800,8 @@ fn run_on_distributed_store(command: &Command, store_path: &std::path::Path) -> 
         // `.aida/mcp-cache.yaml` only — invisible to the CLI and overwritten on
         // every MCP restart. trace:BUG-310 | ai:claude
         Command::McpServe => {
-            let project_root = find_project_root().unwrap_or_else(|_| store_path.to_path_buf());
+            let project_root =
+                mcp_serve_project_root(store_path, project_root_hint, find_project_root().ok());
             mcp::run_mcp_server(&storage, project_root)
         }
         // Tracker imports (`aida jira/github pull`) write new requirements
@@ -12805,6 +12821,25 @@ fn run_on_distributed_store(command: &Command, store_path: &std::path::Path) -> 
         }),
         _ => git_backend_cmd::handle_git_backend_command(store_path, command),
     }
+}
+
+/// Pure decision for `mcp-serve`'s project root: an explicit hint (the
+/// `--file <dir>` caller's own directory) always wins over a cwd-derived git
+/// root, since cwd may be unrelated to — or simply not inside — the
+/// directory the user explicitly pointed at. Falls back to the store path
+/// itself only when neither resolves. Takes the cwd-walk result as a plain
+/// value (rather than calling `find_project_root()` itself) so this decision
+/// stays unit-testable without touching the process's actual cwd.
+// trace:TASK-1487 | ai:claude
+fn mcp_serve_project_root(
+    store_path: &std::path::Path,
+    project_root_hint: Option<&std::path::Path>,
+    cwd_project_root: Option<std::path::PathBuf>,
+) -> std::path::PathBuf {
+    project_root_hint
+        .map(|p| p.to_path_buf())
+        .or(cwd_project_root)
+        .unwrap_or_else(|| store_path.to_path_buf())
 }
 
 /// Run a tracker (jira/github/gitlab) command against the distributed store

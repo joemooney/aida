@@ -5,7 +5,10 @@
 //!   subcommands that actually write the local store (a non-dry-run
 //!   `jira`/`github pull`), and nothing else.
 //! - `bulk_import_via_writer` stamps oplog entries with an attached
-//!   dispenser's node id instead of defaulting to "0".
+//!   dispenser's node id instead of defaulting to "0", which also changes the
+//!   assigned SPEC-ID to a node-scoped `TYPE-<node>-NNN` form.
+//! - `mcp_serve_project_root` prefers an explicit `--file <dir>` hint over a
+//!   cwd-derived git root.
 // trace:TASK-1487 | ai:claude
 
 use super::*;
@@ -149,11 +152,19 @@ fn seed_oplog_at_node_zero(store_dir: &std::path::Path) {
 /// so every tracker-imported requirement's oplog entry was stamped node_id
 /// "0" regardless of this clone's real node id. Attaching the dispenser via
 /// `Storage::with_dispenser` must now reach the oplog.
+///
+/// This also changes the SPEC-ID a tracker import assigns: with a dispenser
+/// attached, `RequirementsStore::generate_requirement_id` formats through the
+/// dispenser (node-scoped `TYPE-<node>-NNN`) instead of a bare metadata-counter
+/// short ID. Pinned here so that behavior change is visible in one place —
+/// accepted per the TASK-1486/1487 review (a tracker-imported spec now needs
+/// `aida db merge-gate` to collapse it to an agreed short ID, same as every
+/// other node-scoped write).
 // trace:TASK-1487 | ai:claude
 #[test]
 fn bulk_import_via_writer_uses_the_storages_dispenser_node_id() {
     use aida_core::models::DispenserHandle;
-    use aida_core::{IdMode, MemoryDispenser};
+    use aida_core::{DatabaseBackend, IdMode, MemoryDispenser};
     use std::sync::Arc;
 
     let tmp = TempDir::new().unwrap();
@@ -166,7 +177,8 @@ fn bulk_import_via_writer_uses_the_storages_dispenser_node_id() {
     }));
     let storage = Storage::new(&store_dir).with_dispenser(DispenserHandle(dispenser));
 
-    let req = Requirement::new("Imported issue".to_string(), "from a tracker".to_string());
+    let mut req = Requirement::new("Imported issue".to_string(), "from a tracker".to_string());
+    req.req_type = RequirementType::Task;
     let n = bulk_import_via_writer(&storage, "feat(jira)", std::iter::once(req)).unwrap();
     assert_eq!(n, 1);
 
@@ -176,6 +188,22 @@ fn bulk_import_via_writer_uses_the_storages_dispenser_node_id() {
         log.node_id, "7",
         "bulk_import_via_writer must stamp the oplog with the attached \
          dispenser's node id, not leave the node_id-\"0\" default in place"
+    );
+
+    let store = aida_core::GitBackend::new(&store_dir)
+        .unwrap()
+        .load()
+        .unwrap();
+    let imported = store
+        .requirements
+        .iter()
+        .find(|r| r.title == "Imported issue")
+        .expect("the imported requirement is in the store");
+    assert_eq!(
+        imported.spec_id.as_deref(),
+        Some("TASK-7-001"),
+        "a dispenser-attached import must assign a node-scoped id \
+         (TYPE-<node>-NNN), not a bare metadata-counter short id"
     );
 }
 
@@ -197,4 +225,43 @@ fn bulk_import_via_writer_leaves_node_zero_unchanged_without_a_dispenser() {
     let oplog_path = store_dir.join("oplog.yaml");
     let log = aida_core::oplog::OpLog::load(&oplog_path).expect("oplog written");
     assert_eq!(log.node_id, "0");
+}
+
+/// Item 3 of the TASK-1487 follow-up review: `--file <dir> mcp-serve` must
+/// derive its project root from the explicit `--file` directory, not from
+/// cwd — cwd may be unrelated to (or simply not inside) the directory the
+/// user explicitly pointed at. An explicit hint always wins over whatever
+/// cwd's git walk found.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn mcp_serve_project_root_prefers_the_explicit_file_hint_over_cwd() {
+    let store_path = std::path::PathBuf::from("/some/store");
+    let hint = std::path::PathBuf::from("/explicit/file/dir");
+    let unrelated_cwd_root = std::path::PathBuf::from("/unrelated/cwd/repo");
+    assert_eq!(
+        mcp_serve_project_root(&store_path, Some(&hint), Some(unrelated_cwd_root)),
+        hint
+    );
+}
+
+/// Without an explicit `--file <dir>` hint (the normal distributed-store
+/// resolution path), the historical cwd-walk result is used unchanged.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn mcp_serve_project_root_falls_back_to_cwd_without_a_hint() {
+    let store_path = std::path::PathBuf::from("/some/store");
+    let cwd_root = std::path::PathBuf::from("/cwd/repo");
+    assert_eq!(
+        mcp_serve_project_root(&store_path, None, Some(cwd_root.clone())),
+        cwd_root
+    );
+}
+
+/// When neither an explicit hint nor a cwd git root resolves, fall back to
+/// the store path itself (the pre-existing last-resort default).
+// trace:TASK-1487 | ai:claude
+#[test]
+fn mcp_serve_project_root_falls_back_to_store_path_when_nothing_resolves() {
+    let store_path = std::path::PathBuf::from("/some/store");
+    assert_eq!(mcp_serve_project_root(&store_path, None, None), store_path);
 }
