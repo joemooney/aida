@@ -32,12 +32,12 @@ description: |
   - Do NOT auto-clear a stale-looking marker. A hold is a deliberate gate and its owner releases it; the defect is that the reader cannot tell the reason is dead, not that the hold is wrong.
 
   Related: BUG-1539 (the same root with the polarity reversed — the artefact destroyed, the subject persisting), BUG-1551 (a merge closing a spec past its own criteria — what the #2033 and #2042 release conditions were written to prevent).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:21:21.696012729Z
-modified_at: 2026-09-24T02:44:44.527614965Z
+modified_at: 2026-09-24T04:11:02.179032210Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -132,3 +132,21 @@ comments:
   created_at: 2026-09-24T02:44:30.767887286Z
   modified_at: 2026-09-24T02:44:30.767887286Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d19c-149c-7542-ae1b-4a49febf70b9
+  author: aida-auto-bump
+  timestamp: 2026-09-24T04:11:02.172240079Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d19c-14a3-7e73-874b-093dfc49f36a
+  timestamp: 2026-09-24T04:11:02.179031059Z
+  agent: aida
+  commit_sha: 968e41932a0e9bd0c733b6462fac3651aa946f68
+  summary: Completed via merge 968e4193
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T04:11:01.386570125Z
+  completion_sha: 968e41932a0e9bd0c733b6462fac3651aa946f68
