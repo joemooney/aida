@@ -1,0 +1,15 @@
+id: 01a0d161-0910-7932-a6be-acda53239158
+spec_id: TASK-1469
+agreed_id: TASK-1469
+title: 'Kinding pass: assign a typed kind (supervision or refusal) to every existing untyped merge-hold marker'
+description: 'Follow-up to BUG-1532 criterion 6. An untyped legacy marker is treated as a REFUSAL (criterion 5). A human must list the markers with ''aida merge-hold list'', decide each one''s kind by reading it, and re-place it with ''aida merge-hold add <PR> --replace --reason-kind supervision|rework [--verdict <KEY>] [--release-condition ...]''. Do NOT infer the kind by regexing the prose. Acceptance: no live marker is legacy/untyped, and every rework marker has a verdict_ref where a verdict exists.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T03:06:32.592974630Z
+modified_at: 2026-09-24T03:06:32.592974630Z
+req_type: Task
+tags:
+- merge-hold
+- parent:EPIC-62
