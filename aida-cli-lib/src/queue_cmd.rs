@@ -11631,6 +11631,13 @@ pub(crate) struct AutoCompleteHeadCandidate {
     pub(crate) deferred: bool,
     pub(crate) execution_mode: Option<aida_core::ExecutionMode>,
     pub(crate) tags: std::collections::HashSet<String>,
+    /// BUG-1608: the STORY-333 pickability verdict, resolved against the
+    /// store at candidate-build time. `Some(label)` (e.g. `blocked-by STORY-52
+    /// (Needs Attention)`) means the head picker must skip it; `None` means
+    /// pickable. Built fresh on every head resolution, so a blocker shelved
+    /// earlier in the same drain is seen.
+    // trace:BUG-1608 | ai:claude
+    pub(crate) blocked: Option<String>,
 }
 
 impl AutoCompleteHeadCandidate {
@@ -11651,6 +11658,9 @@ pub(crate) struct AutoCompleteHeadPick {
     pub(crate) deferred_skipped: Vec<String>,
     pub(crate) guided_or_operator_skipped: Vec<(String, aida_core::ExecutionMode)>,
     pub(crate) release_skipped: Vec<String>,
+    /// BUG-1608: drivable-status candidates skipped because the pickability
+    /// gate refused them — `(id, reason label)`, e.g. an unmet `BlockedBy`.
+    pub(crate) blocked_skipped: Vec<(String, String)>,
 }
 
 /// The auto-complete engine always starts with a phase-1 implementer unless
@@ -11698,6 +11708,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
     let mut deferred_skipped = Vec::new();
     let mut guided_or_operator_skipped = Vec::new();
     let mut release_skipped = Vec::new();
+    let mut blocked_skipped = Vec::new();
     for candidate in candidates {
         if let Some(for_role) = candidate.for_role.as_deref() {
             let routed = canonical_role_name(for_role);
@@ -11725,6 +11736,16 @@ pub(crate) fn pick_auto_complete_head_for_role(
             continue;
         }
         if auto_complete_head_drivable(&candidate.status) {
+            // BUG-1608: an Approved/Planned status is necessary but not
+            // sufficient — a `BlockedBy` dependent stays unpickable until its
+            // prerequisite is Completed (Done, NeedsAttention, a pushed branch
+            // do not count). The queue-wide drain previously checked status
+            // only, so it launched NFR-56 right after its blocker STORY-52
+            // shelved. trace:BUG-1608 | ai:claude
+            if let Some(reason) = &candidate.blocked {
+                blocked_skipped.push((candidate.id.clone(), reason.clone()));
+                continue;
+            }
             return Some(AutoCompleteHeadPick {
                 spec: candidate.id.clone(),
                 status_skipped,
@@ -11732,6 +11753,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 deferred_skipped,
                 guided_or_operator_skipped,
                 release_skipped,
+                blocked_skipped,
             });
         }
         status_skipped.push((candidate.id.clone(), candidate.status.clone()));
@@ -11768,6 +11790,16 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
                     deferred: r.deferred,
                     execution_mode: r.execution_mode,
                     tags: r.tags.clone(),
+                    // BUG-1608: PRIN-5 fail closed — `pickability` treats a
+                    // dangling or non-Completed `BlockedBy` target as blocked,
+                    // so unknown dependency state never reads as pickable.
+                    // trace:BUG-1608 | ai:claude
+                    blocked: match aida_core::pickability::pickability(r, &store) {
+                        aida_core::pickability::Pickability::Pickable => None,
+                        aida_core::pickability::Pickability::Blocked(reason) => {
+                            Some(aida_core::pickability::pickability_reason_label(&reason))
+                        }
+                    },
                 })
         })
         .collect())
@@ -11829,6 +11861,10 @@ pub(crate) fn resolve_auto_complete_head(
         Some(pick) => {
             for (id, routed) in &pick.role_skipped {
                 eprintln!("skipped {id} — routed for {routed}");
+            }
+            // trace:BUG-1608 | ai:claude
+            for (id, reason) in &pick.blocked_skipped {
+                eprintln!("skipped {id} — {reason}");
             }
             for id in &pick.deferred_skipped {
                 eprintln!("skipped {id} — deferred — skipped");
@@ -11951,6 +11987,20 @@ pub(crate) fn resolve_auto_complete_head(
                     "skipped {id} — needs guided/operator session ({mode}); use `aida queue work {id} --guided`, `aida do {id}`, or de-risk it with `aida derisk {id}`"
                 );
             }
+            // BUG-1608: name every drivable-status item the dependency gate
+            // held back, with its blocker, so the refusal is never silent.
+            // trace:BUG-1608 | ai:claude
+            for candidate in candidates.iter().filter(|c| {
+                c.for_role
+                    .as_deref()
+                    .map(|r| canonical_role_name(r) == role_label)
+                    .unwrap_or(true)
+                    && auto_complete_head_drivable(&c.status)
+            }) {
+                if let Some(reason) = &candidate.blocked {
+                    eprintln!("skipped {} — {reason}", candidate.id);
+                }
+            }
             // The queue has items, but every one is in-flight or terminal —
             // name the first few so it's clear *why* there's nothing to
             // drive, without dumping a long stale list.
@@ -11984,7 +12034,7 @@ pub(crate) fn resolve_auto_complete_head(
             } else {
                 anyhow::bail!(
                     "no drivable item in the queue for {role_label}; nothing to drive — \
-                     {} queued item{} in-flight or terminal: {detail}{suffix}",
+                     {} queued item{} in-flight, terminal, or blocked: {detail}{suffix}",
                     skipped.len(),
                     if skipped.len() == 1 { "" } else { "s" },
                 )

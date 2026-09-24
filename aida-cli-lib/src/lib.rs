@@ -93974,26 +93974,57 @@ fn parse_next_count(raw: &str) -> Result<usize> {
 /// drivable head of the active role's queue, or `None` when nothing drivable
 /// remains (the drain is then complete). A store/queue read failure is fatal —
 /// it is not "drained" and would recur on every iteration. trace:TASK-293
+/// Resolve the next `nextN` / queue-wide drain head. Returns the pick plus
+/// the entries skipped to reach it: `role_skipped` as `(id, routed role)` and
+/// (BUG-1608) `blocked_skipped` as `(id, pickability reason)` — dependents
+/// whose `BlockedBy` prerequisite is not Completed. The candidates are
+/// re-read from storage on every call, so a blocker shelved by the previous
+/// member is seen by the very next pick.
+#[allow(clippy::type_complexity)]
 fn resolve_next_n_head(
     storage: &Storage,
     user_id: &str,
     role_override: Option<&str>,
-) -> (Option<AutoCompleteHeadPick>, Vec<(String, String)>) {
+) -> (
+    Option<AutoCompleteHeadPick>,
+    Vec<(String, String)>,
+    Vec<(String, String)>,
+) {
     let effective_role = effective_auto_complete_role(role_override);
     match auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role)) {
         Ok(candidates) => {
             let pick = pick_auto_complete_head_for_role(&candidates, &effective_role);
-            let role_skipped = match &pick {
-                Some(pick) => pick.role_skipped.clone(),
-                None => candidates
-                    .iter()
-                    .filter_map(|candidate| {
-                        let routed = candidate.for_role.as_deref().map(canonical_role_name)?;
-                        (routed != effective_role).then(|| (candidate.id.clone(), routed))
-                    })
-                    .collect(),
+            let (role_skipped, blocked_skipped) = match &pick {
+                Some(pick) => (pick.role_skipped.clone(), pick.blocked_skipped.clone()),
+                None => (
+                    candidates
+                        .iter()
+                        .filter_map(|candidate| {
+                            let routed = candidate.for_role.as_deref().map(canonical_role_name)?;
+                            (routed != effective_role).then(|| (candidate.id.clone(), routed))
+                        })
+                        .collect(),
+                    // trace:BUG-1608 | ai:claude
+                    candidates
+                        .iter()
+                        .filter(|candidate| {
+                            candidate
+                                .for_role
+                                .as_deref()
+                                .map(|r| canonical_role_name(r) == effective_role)
+                                .unwrap_or(true)
+                                && auto_complete_head_drivable(&candidate.status)
+                        })
+                        .filter_map(|candidate| {
+                            candidate
+                                .blocked
+                                .clone()
+                                .map(|reason| (candidate.id.clone(), reason))
+                        })
+                        .collect(),
+                ),
             };
-            (pick, role_skipped)
+            (pick, role_skipped, blocked_skipped)
         }
         Err(e) => {
             eprintln!(
@@ -94364,7 +94395,7 @@ struct RealNextNDriver<'a> {
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
     fn next_head(&mut self) -> Option<String> {
-        let (pick, role_skipped) =
+        let (pick, role_skipped, blocked_skipped) =
             resolve_next_n_head(self.storage, &self.user_id, self.role_override.as_deref());
         for (spec, role) in &role_skipped {
             if self.seen_role_skips.insert(spec.clone()) {
@@ -94373,7 +94404,31 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
                     .push((spec.clone(), format!("routed for {role}")));
             }
         }
-        pick.map(|pick| pick.spec)
+        // BUG-1608: a dependent whose prerequisite is not Completed is
+        // skipped and reported with its blocker. The reason is refreshed when
+        // the blocker's state moves (e.g. In Progress → Needs Attention after
+        // a shelve) so the summary names the blocker's final state.
+        // trace:BUG-1608 | ai:claude
+        for (spec, reason) in &blocked_skipped {
+            match self.role_skipped.iter_mut().find(|(s, _)| s == spec) {
+                Some(entry) if &entry.1 != reason => {
+                    eprintln!("skipped {spec} — {reason}");
+                    entry.1 = reason.clone();
+                }
+                Some(_) => {}
+                None => {
+                    eprintln!("skipped {spec} — {reason}");
+                    self.role_skipped.push((spec.clone(), reason.clone()));
+                }
+            }
+        }
+        let pick = pick.map(|pick| pick.spec);
+        // A dependent skipped earlier whose blocker has since Completed is
+        // picked now — it is no longer "skipped". trace:BUG-1608 | ai:claude
+        if let Some(spec) = &pick {
+            self.role_skipped.retain(|(s, _)| s != spec);
+        }
+        pick
     }
 
     fn run_spec(&mut self, spec: &str) -> auto_complete::OrchestrationResult {

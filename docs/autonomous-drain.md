@@ -1185,15 +1185,24 @@ broke, or every spec depends on something missing). The cap **defaults
 to 5**; pass `--max-failures 0` to fall back to the historical "first
 failure stops the batch" semantics. The cap is **per-batch**, not
 per-chain — a `--batches A,B,C` chain has its own independent budget for
-each batch.
+each batch. The same cap applies to a queue-wide `--drain` with no batch.
+
+The drain stops as soon as the Nth shelve lands, before it starts another
+spec: with `--max-failures 1`, the first shelved failure ends the drain
+(exit `3`) and nothing else is dispatched. A member already running in a
+pipelined drain when the budget runs out is not interrupted.
 
 ### Dependency-aware skip
 
-The skip is **free**: it falls out of the existing pickability gate
-(STORY-333). When B is shelved, B is no longer `Completed`, so any
-member with `BlockedBy → B` is reported as `UnsatisfiedBlocker` by
-`pickability` and silently dropped by `resolve_batch_members` on the next
-head-pickup call. The summary surfaces both the skipped member and why
+The skip falls out of the pickability gate (STORY-333). When B is
+shelved, B is no longer `Completed`, so any member with `BlockedBy → B`
+is reported as `UnsatisfiedBlocker` by `pickability` and dropped on the
+next head pickup. Both the batch resolver and the queue-wide `--drain`
+head resolver apply this gate, and they re-read the store on every pick,
+so a blocker shelved by the previous member is seen immediately. Only
+`Completed` satisfies a `BlockedBy` edge: `Done`, `Needs Attention`, or a
+pushed branch do not. An edge whose target cannot be resolved also counts
+as blocked. The summary surfaces both the skipped member and why
 ("D (blocked-by B (Needs Attention))") so the operator can see the
 cascade at a glance. Today's declaration path is
 `aida rel add D B --type blocked-by`; STORY-1 of EPIC-28 will add an
