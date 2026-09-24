@@ -28,7 +28,8 @@ command -v python3 >/dev/null 2>&1 || exit 0
 # unless a marker directory with at least one marker exists under the main
 # worktree root (markers live in the main clone's .aida/, shared by all
 # worktrees). One git call + a glob; no telemetry line, no process spawn.
-common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
+fast_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+common_dir=$(git -C "$fast_root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
 marker_dir="$(dirname "$common_dir")/.aida/pending-approval"
 [ -d "$marker_dir" ] || exit 0
 set -- "$marker_dir"/*
