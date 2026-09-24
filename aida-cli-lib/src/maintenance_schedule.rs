@@ -559,6 +559,70 @@ fn global_home() -> Option<PathBuf> {
     dirs::home_dir()
 }
 
+/// Cap on `~/.aida/schedule-tick.log`, the machine-global log the installed
+/// cron entry redirects its stdout/stderr into (`>> ~/.aida/schedule-tick.log
+/// 2>&1`). Half a megabyte is generous for a plain-text tick log (a tick
+/// prints at most a few short lines) while bounding the worst case: a
+/// misconfigured entry failing identically every 15 minutes, forever.
+// trace:BUG-1600 | ai:claude
+const GLOBAL_SCHEDULE_LOG_MAX_BYTES: u64 = 512 * 1024;
+
+fn global_schedule_log_path() -> Option<PathBuf> {
+    global_home().map(|h| h.join(".aida").join("schedule-tick.log"))
+}
+
+/// Truncate `~/.aida/schedule-tick.log` in place once it exceeds
+/// [`GLOBAL_SCHEDULE_LOG_MAX_BYTES`], keeping its newest half (from a line
+/// boundary) and dropping the rest. Best-effort: any I/O error is swallowed,
+/// same as the rest of this module's logging — a scheduler tick must never
+/// fail because its own housekeeping couldn't run.
+///
+/// Truncates the SAME inode with `File::set_len` rather than replacing the
+/// path (e.g. `aida_core::write_atomic`'s temp-file-plus-rename). The
+/// installed cron entry has this exact file open for append (`>>`,
+/// `O_APPEND`) for the lifetime of the `aida` process this function runs
+/// inside — its own stdout/stderr ARE that fd. `O_APPEND` recomputes the
+/// write offset from the file's current size on every write, so truncating
+/// the same inode here is safely picked up by that fd's next write. A
+/// rename would instead point the path at a new inode while the inherited
+/// fd kept writing into the old, now-unlinked one — this process's own
+/// output would silently vanish from the path anyone else reads.
+// trace:BUG-1600 | ai:claude
+fn bound_global_schedule_log() {
+    let Some(path) = global_schedule_log_path() else {
+        return;
+    };
+    let Ok(meta) = std::fs::metadata(&path) else {
+        return;
+    };
+    if meta.len() <= GLOBAL_SCHEDULE_LOG_MAX_BYTES {
+        return;
+    }
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let keep_bytes = (GLOBAL_SCHEDULE_LOG_MAX_BYTES / 2) as usize;
+    let keep_from = body.len().saturating_sub(keep_bytes);
+    let tail = match body.as_bytes()[keep_from..]
+        .iter()
+        .position(|&b| b == b'\n')
+    {
+        Some(idx) => &body[keep_from + idx + 1..],
+        None => "",
+    };
+    let dropped = body.len() - tail.len();
+    let new_body = format!(
+        "[{}] --- schedule-tick.log truncated: dropped {dropped} older byte(s), cap is {GLOBAL_SCHEDULE_LOG_MAX_BYTES} bytes (a repeated tick failure may be flooding this file — see `aida schedule status` / `aida doctor`) ---\n{tail}",
+        Utc::now().to_rfc3339(),
+    );
+    if let Ok(mut file) = std::fs::OpenOptions::new().write(true).open(&path) {
+        use std::io::{Seek, SeekFrom, Write};
+        if file.set_len(0).is_ok() && file.seek(SeekFrom::Start(0)).is_ok() {
+            let _ = file.write_all(new_body.as_bytes());
+        }
+    }
+}
+
 /// The merged registry (project + global). `None` when neither layer
 /// declares a `[schedule]`.
 // trace:STORY-1226 | ai:claude
@@ -592,6 +656,18 @@ fn tick(
             "schedule tick: another tick is already running".to_string()
         ]);
     };
+    // BUG-1600: cap the machine-global `~/.aida/schedule-tick.log` before
+    // this process's own stdout/stderr add to it. That file is shared by
+    // every project's installed cron entry, appended via shell `>>`, and
+    // this codebase's only periodic (non-hook) driver — a persistently
+    // failing entry (the `--format json` bug this fix removes, or any
+    // future misconfiguration) would otherwise flood it forever. Skipped
+    // for hook ticks: the hook redirects its own output to `/dev/null` and
+    // is meant to stay minimal/network-free.
+    // trace:BUG-1600 | ai:claude
+    if !hook {
+        bound_global_schedule_log();
+    }
     // BUG-1291: the full scheduler tick owns the bounded orphan-review
     // backstop. Hook ticks stay network-free; explicit/timer ticks inspect the
     // bounded forge list even when no user schedule registry exists.
@@ -1495,8 +1571,20 @@ pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> Result<Strin
         }
     }
     let path_assignment = format!("{bin_dir}:/usr/local/bin:/usr/bin:/bin");
+    // BUG-1600: `schedule tick` has no `--json`/`--format json` projection
+    // (see docs/cli-format-json-audit.md, BUG-1502's capability gate) — it
+    // only ever prints human/TOON lines. A prior version of this builder
+    // added `--format json` believing cron needed a machine-readable log;
+    // nothing ever parsed it, and every tick from an installed entry failed
+    // before dispatch. Plain `schedule tick` is the fix: its own stdout is
+    // already line-oriented and greppable, which is all `schedule-tick.log`
+    // consumers (a human, `aida doctor`) need. `AIDA_SCHEDULE_INVOKER=cron`
+    // tags every event this invocation records so scheduler telemetry can
+    // tell a cron-driven tick apart from the per-turn hook (`--hook`, which
+    // is self-identifying) or a manual run (neither).
+    // trace:BUG-1600 | ai:claude
     Ok(format!(
-        "*/15 * * * * cd {} && PATH={} {} schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1 # {}",
+        "*/15 * * * * cd {} && PATH={} AIDA_SCHEDULE_INVOKER=cron {} schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {}",
         shell_quote(&repo_str),
         shell_quote(&path_assignment),
         shell_quote(&aida_exe_str),
@@ -1508,8 +1596,10 @@ pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> Result<Strin
 /// every 15 minutes: an absolute `aida` path and an explicit `PATH` (cron's
 /// own PATH is minimal), `cd`'d into the repo, logging to
 /// `~/.aida/schedule-tick.log`. This is the reference shape from STORY-1463
-/// (the line an operator had to hand-install before this existed).
+/// (the line an operator had to hand-install before this existed). No
+/// `--format`/`--json` flag — `schedule tick` has no JSON projection.
 // trace:STORY-1463 | ai:claude
+// trace:BUG-1600 | ai:claude
 pub(crate) fn tick_cron_line(project_root: &Path) -> Result<String> {
     let repo = project_root
         .canonicalize()
@@ -1579,13 +1669,29 @@ fn line_has_marker(line: &str, marker: &str) -> bool {
     line.trim_end().ends_with(&format!("# {marker}"))
 }
 
-/// Pure: the new crontab body after installing `line` (marked by `marker`),
-/// or `None` when `marker` is already present (idempotent no-op). Appends —
-/// never rewrites or reorders whatever `crontab -l` already printed.
+/// Pure: the new crontab body after installing `line` (marked by `marker`).
+/// `None` when `marker` is already present with byte-identical content —
+/// true idempotent no-op. When the marker is present but the line's content
+/// has drifted (BUG-1600: an old build installed `schedule tick --format
+/// json`, which fails every tick), the stale line is REPLACED in place
+/// rather than left alone — `aida init`'s offer and `aida schedule
+/// install-cron` are the "run this again to pick up a fix" affordance, so a
+/// previously-installed entry must self-repair the next time either runs.
+/// Never reorders whatever `crontab -l` already printed; a marker absent
+/// entirely is still appended, never inserted elsewhere.
 // trace:STORY-1463 | ai:claude
+// trace:BUG-1600 | ai:claude
 pub(crate) fn crontab_after_install(existing: &str, marker: &str, line: &str) -> Option<String> {
-    if existing.lines().any(|l| line_has_marker(l, marker)) {
-        return None;
+    if let Some(pos) = existing.lines().position(|l| line_has_marker(l, marker)) {
+        let lines: Vec<&str> = existing.lines().collect();
+        if lines[pos] == line {
+            return None;
+        }
+        let mut repaired = lines;
+        repaired[pos] = line;
+        let mut body = repaired.join("\n");
+        body.push('\n');
+        return Some(body);
     }
     let mut body = existing.to_string();
     if !body.is_empty() && !body.ends_with('\n') {
@@ -1614,11 +1720,29 @@ pub(crate) fn crontab_after_uninstall(existing: &str, marker: &str) -> Option<St
     Some(body)
 }
 
-/// Install this repo's tick entry into the user's crontab. Idempotent
-/// (`Ok(false)` when already installed). Windows has no crontab — callers
-/// print `tick_cron_line` and the manual next step instead of calling this.
+/// What [`install_tick_cron`] did. BUG-1600: a plain bool collapsed "wasn't
+/// there, now is" and "was there but stale (e.g. the old `--format json`
+/// flag), now fixed" into the same `Ok(true)` — the CLI printed "Installed"
+/// for a repair too, which reads as a no-op to an operator re-running the
+/// command to pick up a fix. Distinguishing the three lets the caller say so.
+// trace:BUG-1600 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CronInstallOutcome {
+    /// No entry existed for this repo; one was appended.
+    Installed,
+    /// An entry existed and already matched the current reference shape.
+    AlreadyUpToDate,
+    /// An entry existed with stale content (e.g. an old unsupported flag)
+    /// and was rewritten in place.
+    Repaired,
+}
+
+/// Install (or repair) this repo's tick entry in the user's crontab.
+/// Windows has no crontab — callers print `tick_cron_line` and the manual
+/// next step instead of calling this.
 // trace:STORY-1463 | ai:claude
-pub(crate) fn install_tick_cron(project_root: &Path) -> Result<bool> {
+// trace:BUG-1600 | ai:claude
+pub(crate) fn install_tick_cron(project_root: &Path) -> Result<CronInstallOutcome> {
     if cfg!(windows) {
         anyhow::bail!(
             "cron install is not supported on Windows — add this line to Task Scheduler by hand:\n  {}",
@@ -1628,11 +1752,16 @@ pub(crate) fn install_tick_cron(project_root: &Path) -> Result<bool> {
     let marker = tick_cron_marker(project_root);
     let line = tick_cron_line(project_root)?;
     let existing = read_crontab()?.unwrap_or_default();
+    let already_present = existing.lines().any(|l| line_has_marker(l, &marker));
     match crontab_after_install(&existing, &marker, &line) {
-        None => Ok(false),
+        None => Ok(CronInstallOutcome::AlreadyUpToDate),
         Some(body) => {
             write_crontab(&body)?;
-            Ok(true)
+            Ok(if already_present {
+                CronInstallOutcome::Repaired
+            } else {
+                CronInstallOutcome::Installed
+            })
         }
     }
 }
@@ -1848,10 +1977,17 @@ fn install_cron_command(project_root: &Path) -> Result<()> {
         return Ok(());
     }
     match install_tick_cron(project_root) {
-        Ok(true) => println!("Installed the scheduler tick crontab entry for this repo."),
-        Ok(false) => {
+        Ok(CronInstallOutcome::Installed) => {
+            println!("Installed the scheduler tick crontab entry for this repo.")
+        }
+        Ok(CronInstallOutcome::AlreadyUpToDate) => {
             println!("Already installed — this repo's tick entry is already in your crontab.")
         }
+        // trace:BUG-1600 | ai:claude
+        Ok(CronInstallOutcome::Repaired) => println!(
+            "Repaired this repo's scheduler tick crontab entry — it was running an older, \
+             unsupported invocation and has been rewritten."
+        ),
         Err(e) => return Err(e),
     }
     Ok(())
@@ -1909,8 +2045,14 @@ pub(crate) fn maybe_offer_tick_install(project_root: &Path) {
         return;
     }
     match install_tick_cron(project_root) {
-        Ok(true) => println!("  Installed."),
-        Ok(false) => println!("  Already installed."),
+        Ok(CronInstallOutcome::Installed) => println!("  Installed."),
+        Ok(CronInstallOutcome::AlreadyUpToDate) => println!("  Already installed."),
+        // trace:BUG-1600 | ai:claude
+        Ok(CronInstallOutcome::Repaired) => {
+            println!(
+                "  Repaired — the installed entry was running an older, unsupported invocation."
+            )
+        }
         Err(e) => eprintln!("  Note: scheduler tick was not installed: {e}"),
     }
 }
@@ -3092,6 +3234,99 @@ enabled = true
         std::env::remove_var("AIDA_HOME");
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains("suppressed by min-gap"));
+    }
+
+    // BUG-1600: `~/.aida/schedule-tick.log` must never grow without bound —
+    // a stale/misconfigured cron entry that fails identically every 15
+    // minutes must not flood it forever.
+    // trace:BUG-1600 | ai:claude
+    #[test]
+    fn bound_global_schedule_log_leaves_small_file_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::env_lock();
+        std::env::set_var("AIDA_HOME", tmp.path());
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        let log = tmp.path().join(".aida").join("schedule-tick.log");
+        std::fs::write(&log, "small content\n").unwrap();
+
+        bound_global_schedule_log();
+
+        let body = std::fs::read_to_string(&log).unwrap();
+        std::env::remove_var("AIDA_HOME");
+        assert_eq!(body, "small content\n", "well under the cap → untouched");
+    }
+
+    #[test]
+    fn bound_global_schedule_log_truncates_when_over_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::env_lock();
+        std::env::set_var("AIDA_HOME", tmp.path());
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        let log = tmp.path().join(".aida").join("schedule-tick.log");
+        // The exact repeated-failure shape BUG-1600 produced: the same
+        // error line, over and over, forever.
+        let line = "error: `aida schedule tick --format json` is unsupported\n";
+        let repeats = (GLOBAL_SCHEDULE_LOG_MAX_BYTES as usize / line.len()) + 100;
+        let big = line.repeat(repeats);
+        std::fs::write(&log, &big).unwrap();
+        let before_len = std::fs::metadata(&log).unwrap().len();
+        assert!(
+            before_len > GLOBAL_SCHEDULE_LOG_MAX_BYTES,
+            "test setup sanity"
+        );
+
+        bound_global_schedule_log();
+
+        let after = std::fs::read_to_string(&log).unwrap();
+        std::env::remove_var("AIDA_HOME");
+        assert!(
+            (after.len() as u64) <= GLOBAL_SCHEDULE_LOG_MAX_BYTES,
+            "must be at/under the cap after truncation: {} bytes",
+            after.len()
+        );
+        assert!(
+            after.contains("truncated"),
+            "must leave evidence that truncation happened: {after}"
+        );
+        // The newest content (the tail of the repeated line) must survive —
+        // truncation drops the OLDEST bytes, not the newest.
+        assert!(
+            after.trim_end().ends_with(line.trim_end()),
+            "must keep the newest lines: {after}"
+        );
+    }
+
+    #[test]
+    fn tick_bounds_global_schedule_log_for_timer_but_not_hook_invocation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::env_lock();
+        std::env::set_var("AIDA_HOME", tmp.path());
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        let log = tmp.path().join(".aida").join("schedule-tick.log");
+        let line = "error: unsupported\n";
+        let big = line.repeat((GLOBAL_SCHEDULE_LOG_MAX_BYTES as usize / line.len()) + 100);
+        let big_len = big.len() as u64;
+
+        // A HOOK tick (the per-turn invoker) leaves the log alone — it's
+        // meant to stay minimal, and the installed hook script redirects
+        // its own output to /dev/null anyway.
+        std::fs::write(&log, &big).unwrap();
+        let _ = tick(tmp.path(), true, None).unwrap();
+        let after_hook = std::fs::metadata(&log).unwrap().len();
+        assert_eq!(
+            after_hook, big_len,
+            "a hook tick must not touch the global log"
+        );
+
+        // A timer/cron-shaped tick (hook = false — the shape the installed
+        // crontab entry uses) bounds it.
+        let _ = tick(tmp.path(), false, None).unwrap();
+        let after_timer = std::fs::metadata(&log).unwrap().len();
+        std::env::remove_var("AIDA_HOME");
+        assert!(
+            after_timer <= GLOBAL_SCHEDULE_LOG_MAX_BYTES,
+            "a non-hook (timer/cron) tick must bound the log: {after_timer} bytes"
+        );
     }
 
     #[test]

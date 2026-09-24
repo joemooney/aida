@@ -666,6 +666,13 @@ pub fn main_entry() {
             scope: std::env::var("AIDA_SESSION_SCOPE")
                 .ok()
                 .filter(|s| !s.is_empty()),
+            // BUG-1600: for `schedule tick` only, record which driver
+            // invoked it (hook / cron / manual) alongside the exit_code and
+            // duration_ms already captured above — a config error (e.g. an
+            // unsupported flag on an installed cron entry) is now visible
+            // in scheduler telemetry, not just as silent repeated failures.
+            // trace:BUG-1600 | ai:claude
+            schedule_source: usage::schedule_invocation_source(&argv),
         };
         usage::append_event(&ev);
     }

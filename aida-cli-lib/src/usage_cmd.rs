@@ -295,6 +295,7 @@ mod usage_perf_lens_tests {
             binary_sha: None,
             role: None,
             scope: None,
+            schedule_source: None,
         }
     }
 
@@ -1188,6 +1189,7 @@ mod task_872_read_write_audit_tests {
             binary_sha: None,
             role: None,
             scope: None,
+            schedule_source: None,
         }
     }
 

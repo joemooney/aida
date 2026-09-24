@@ -1663,6 +1663,7 @@ mod story_1422_performance_gate_tests {
             binary_sha: None,
             role: None,
             scope: None,
+            schedule_source: None,
         }
     }
 
@@ -2064,6 +2065,7 @@ mod bug_1572_binary_lineage_tests {
             binary_sha: sha.map(|s| s.to_string()),
             role: None,
             scope: None,
+            schedule_source: None,
         }
     }
 
