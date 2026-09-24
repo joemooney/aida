@@ -1669,6 +1669,65 @@ fn line_has_marker(line: &str, marker: &str) -> bool {
     line.trim_end().ends_with(&format!("# {marker}"))
 }
 
+/// The repo path a marker was built for (`tick_cron_marker`'s inverse):
+/// strips the fixed `aida-schedule-tick:` prefix. `None` for a malformed
+/// marker, which a caller treats as "no legacy repair target" — the marker
+/// shape is this module's own invariant, not user input.
+// trace:BUG-1605 | ai:claude
+fn repo_from_marker(marker: &str) -> Option<&str> {
+    marker.strip_prefix("aida-schedule-tick:")
+}
+
+/// Whether `tok` (whitespace-split, optionally `'`/`"`-quoted) looks like an
+/// `aida` binary invocation: the bare name, or a path ending in `/aida`.
+// trace:BUG-1605 | ai:claude
+fn is_aida_binary_token(tok: &str) -> bool {
+    let bare = tok.trim_matches(|c| c == '\'' || c == '"');
+    bare == "aida" || bare.ends_with("/aida")
+}
+
+/// Whether `line` is a legacy, pre-marker AIDA tick line for `repo`: older
+/// installs (before STORY-1463's marker) wrote `cd <repo> && ... aida
+/// schedule tick ...` with no trailing `# <marker>` comment, so
+/// `line_has_marker` never recognised them as this repo's own entry and
+/// `install-cron` appended a second, correctly-marked line instead of
+/// repairing the first — both then ran (BUG-1605).
+///
+/// Requires, in order: `cd <repo>` — unquoted or `'`/`"`-quoted, with a
+/// leading space and a trailing ` &&` so a repo whose path is a strict
+/// PREFIX of another's can never match (same guard `line_has_marker`
+/// documents for the marker itself: `/x/aida` must not match `/x/aida-web`'s
+/// line) — then, anywhere after it, an `aida` binary token immediately
+/// followed by `schedule tick` (further flags, e.g. the old `--format
+/// json`, may follow). Callers check `line_has_marker` first; a line that
+/// already carries this repo's marker is the MARKED case, not legacy.
+// trace:BUG-1605 | ai:claude
+fn line_is_legacy_tick_line(line: &str, repo: &str) -> bool {
+    let rest = ["", "'", "\""].iter().find_map(|q| {
+        let needle = format!(" cd {q}{repo}{q} &&");
+        line.find(&needle).map(|pos| &line[pos + needle.len()..])
+    });
+    let Some(rest) = rest else {
+        return false;
+    };
+    let tokens: Vec<&str> = rest.split_whitespace().collect();
+    tokens
+        .windows(3)
+        .any(|w| is_aida_binary_token(w[0]) && w[1] == "schedule" && w[2] == "tick")
+}
+
+/// Whether `existing` already carries a tick entry for this repo — the
+/// current marked shape or a legacy pre-marker line — so
+/// `crontab_after_install` returning `Some(...)` is a repair rather than a
+/// fresh append.
+// trace:BUG-1605 | ai:claude
+fn crontab_has_repair_target(existing: &str, marker: &str) -> bool {
+    let repo = repo_from_marker(marker);
+    existing
+        .lines()
+        .any(|l| line_has_marker(l, marker) || repo.is_some_and(|r| line_is_legacy_tick_line(l, r)))
+}
+
 /// Pure: the new crontab body after installing `line` (marked by `marker`).
 /// `None` when `marker` is already present with byte-identical content —
 /// true idempotent no-op. When the marker is present but the line's content
@@ -1677,29 +1736,69 @@ fn line_has_marker(line: &str, marker: &str) -> bool {
 /// rather than left alone — `aida init`'s offer and `aida schedule
 /// install-cron` are the "run this again to pick up a fix" affordance, so a
 /// previously-installed entry must self-repair the next time either runs.
-/// Never reorders whatever `crontab -l` already printed; a marker absent
-/// entirely is still appended, never inserted elsewhere.
+///
+/// BUG-1605: a legacy, pre-marker line for this repo (`line_is_legacy_tick_line`)
+/// is repaired the same way — replaced in place with the current marked
+/// `line`, not appended alongside. When BOTH a marked line and a legacy line
+/// are present (a repo that has been through both eras), the marked line is
+/// repaired in place and the legacy line is dropped entirely, so exactly one
+/// correct line remains.
+///
+/// Never reorders whatever `crontab -l` already printed; a repo with neither
+/// a marked nor a legacy line is still appended, never inserted elsewhere.
+/// Every other line — another repo's, or an unrelated user line — passes
+/// through byte-for-byte.
 // trace:STORY-1463 | ai:claude
 // trace:BUG-1600 | ai:claude
+// trace:BUG-1605 | ai:claude
 pub(crate) fn crontab_after_install(existing: &str, marker: &str, line: &str) -> Option<String> {
-    if let Some(pos) = existing.lines().position(|l| line_has_marker(l, marker)) {
-        let lines: Vec<&str> = existing.lines().collect();
-        if lines[pos] == line {
-            return None;
+    let lines: Vec<&str> = existing.lines().collect();
+    let marked_pos = lines.iter().position(|l| line_has_marker(l, marker));
+    let repo = repo_from_marker(marker);
+    let legacy_pos = repo.and_then(|repo| {
+        lines
+            .iter()
+            .position(|l| !line_has_marker(l, marker) && line_is_legacy_tick_line(l, repo))
+    });
+
+    match (marked_pos, legacy_pos) {
+        (Some(pos), None) => {
+            if lines[pos] == line {
+                return None;
+            }
+            let mut repaired = lines;
+            repaired[pos] = line;
+            let mut body = repaired.join("\n");
+            body.push('\n');
+            Some(body)
         }
-        let mut repaired = lines;
-        repaired[pos] = line;
-        let mut body = repaired.join("\n");
-        body.push('\n');
-        return Some(body);
+        (marked_pos, Some(legacy_pos)) => {
+            // A legacy line exists (with or without an already-marked line
+            // too): keep exactly one correct line, in the marked line's slot
+            // when there was one, else the legacy line's own slot; drop the
+            // legacy line. Order of every other line is preserved.
+            let keep_pos = marked_pos.unwrap_or(legacy_pos);
+            let mut repaired = Vec::with_capacity(lines.len());
+            for (i, l) in lines.into_iter().enumerate() {
+                if i == legacy_pos && i != keep_pos {
+                    continue;
+                }
+                repaired.push(if i == keep_pos { line } else { l });
+            }
+            let mut body = repaired.join("\n");
+            body.push('\n');
+            Some(body)
+        }
+        (None, None) => {
+            let mut body = existing.to_string();
+            if !body.is_empty() && !body.ends_with('\n') {
+                body.push('\n');
+            }
+            body.push_str(line);
+            body.push('\n');
+            Some(body)
+        }
     }
-    let mut body = existing.to_string();
-    if !body.is_empty() && !body.ends_with('\n') {
-        body.push('\n');
-    }
-    body.push_str(line);
-    body.push('\n');
-    Some(body)
 }
 
 /// Pure: the new crontab body with every line carrying `marker` removed, or
@@ -1752,7 +1851,10 @@ pub(crate) fn install_tick_cron(project_root: &Path) -> Result<CronInstallOutcom
     let marker = tick_cron_marker(project_root);
     let line = tick_cron_line(project_root)?;
     let existing = read_crontab()?.unwrap_or_default();
-    let already_present = existing.lines().any(|l| line_has_marker(l, &marker));
+    // BUG-1605: a legacy, pre-marker line for this repo is a repair target
+    // too — not just a byte-identical marker match — so a legacy-only
+    // install reports `Repaired`, not `Installed`.
+    let already_present = crontab_has_repair_target(&existing, &marker);
     match crontab_after_install(&existing, &marker, &line) {
         None => Ok(CronInstallOutcome::AlreadyUpToDate),
         Some(body) => {
