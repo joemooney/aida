@@ -162,10 +162,11 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 **Don't reach for it when** — you want the *full* "what's going on here" view — that's `aida status` (Ch.8), which is richer and not prompt-cheap. `statusline` is deliberately terse.
 
 **Key options (rationale only).**
-- `setup --install` — writes the Claude Code `settings.json` entry for you; without `--install` it just prints the config to paste. Reach for `--install` unless you want to review first.
+- `setup --install` — writes the Claude Code `settings.json` entry for you; without `--install` it just prints the config to paste. Reach for `--install` unless you want to review first. `setup --client claude|codex|antigravity|all` picks which client's guidance to print/install.
 - `--color auto|always|never` — defaults to `auto` (color only on a TTY, respecting `NO_COLOR`); set `never` when piping the segment into a tool that mangles ANSI.
+- `--client claude|antigravity` (alias `agy`) — opt in to merging that client's live stdin JSON (model, context-window usage, activity, VCS branch, wherever the client sends them) alongside the AIDA segment. Omitted (the default), `aida statusline` never reads stdin and renders the AIDA-only segment exactly as before — this is purely additive. See `docs/agents/statusline-contract.md` for the field contract and per-client adapter notes.
 
-**Gotchas.** `q:N` (queue depth) is keyed off the *active role's* routed queue and is **omitted when zero** — an absent `q:` segment means an empty queue, not a broken statusline. And the queue is keyed off the shell's `$USER`/`$AIDA_USER`, so a surprising `q:` value usually means the wrong user identity, not a bug.
+**Gotchas.** `q:N` (queue depth) is keyed off the *active role's* routed queue and is **omitted when zero** — an absent `q:` segment means an empty queue, not a broken statusline. And the queue is keyed off the shell's `$USER`/`$AIDA_USER`, so a surprising `q:` value usually means the wrong user identity, not a bug. `--client` reads stdin only when the client actually pipes a payload (checked via a TTY guard, so a manual `aida statusline --client claude` at a bare shell never hangs) — no payload piped means it silently falls back to the AIDA-only segment.
 
 **Chains with** — a setup-time one-shot (`setup --install`); thereafter rendered by your prompt. The fuller counterpart is `aida status`.
 

@@ -292,6 +292,12 @@ mod status_cleanup;
 mod status_display;
 // trace:STORY-715 | ai:claude
 mod statusbar_cmd;
+// trace:TASK-1479 | ai:claude — shared statusline contract (stable AIDA
+// fields vs client-live fields) + one formatter every client adapter calls.
+mod statusline_contract;
+// trace:TASK-1479 | ai:claude — thin client adapters: stdin JSON -> live fields.
+mod statusline_agy_adapter;
+mod statusline_claude_adapter;
 // trace:TASK-1167
 mod statusline_cmd;
 mod store_cmd;
@@ -4398,6 +4404,7 @@ fn run() -> Result<()> {
     if let Command::Statusline {
         color,
         title,
+        client,
         action,
     } = &cli.command
     {
@@ -4407,9 +4414,12 @@ fn run() -> Result<()> {
         // OSC terminal-title escape so the AIDA segment rides the terminal
         // title bar (the in-agent parity surface for clients without a
         // command-backed footer, e.g. Codex CLI).
+        // trace:TASK-1479 — `--client` opts into merging a client's live
+        // stdin JSON payload (model/context/activity/VCS) with the AIDA
+        // segment; omitted, behavior is unchanged (no stdin read).
         match action {
             Some(cli::StatuslineAction::Title) => {
-                return statusline_cmd::handle_statusline_command(color, true);
+                return statusline_cmd::handle_statusline_command(color, true, client.as_deref());
             }
             Some(act) => return statusline_cmd::handle_statusline_setup_command(act),
             None => {
@@ -4419,7 +4429,7 @@ fn run() -> Result<()> {
                         "aida statusline title",
                     );
                 }
-                return statusline_cmd::handle_statusline_command(color, *title);
+                return statusline_cmd::handle_statusline_command(color, *title, client.as_deref());
             }
         }
     }
@@ -47057,6 +47067,11 @@ fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::
 #[cfg(test)]
 #[path = "tests/statusline_tests.rs"]
 mod statusline_tests;
+
+// trace:TASK-1479 | ai:claude
+#[cfg(test)]
+#[path = "tests/statusline_client_adapters_integration_tests.rs"]
+mod statusline_client_adapters_integration_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_88_pr_lookup_parse_tests.rs"]

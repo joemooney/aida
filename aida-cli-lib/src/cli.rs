@@ -11647,6 +11647,19 @@ pub enum Command {
         #[clap(long, hide = true)]
         title: bool,
 
+        /// Merge live fields from a client's stdin JSON payload into the
+        /// AIDA segment: model, context-window usage, activity, and VCS
+        /// branch where the client sends them. `claude` parses Claude
+        /// Code's statusLine JSON; `antigravity` (alias `agy`) parses
+        /// Antigravity's live agent-state JSON. Omit for the default,
+        /// AIDA-only segment — this never reads stdin unless a client is
+        /// named, so plain `aida statusline` is unaffected. When stdin is
+        /// a TTY (no payload piped) this degrades to the AIDA-only segment
+        /// rather than blocking. See docs/agents/statusline-contract.md.
+        // trace:TASK-1479 | ai:claude
+        #[clap(long, value_parser = ["claude", "antigravity", "agy"])]
+        client: Option<String>,
+
         /// Opt-in bootstrap helper. With no subcommand, `aida statusline`
         /// renders the one-liner (the default, quiet behavior); the
         /// `setup` subcommand prints (or installs) client-appropriate
@@ -14780,6 +14793,24 @@ mod tests {
             cli.command,
             Command::Statusline { title: true, .. }
         ));
+
+        // trace:TASK-1479 | ai:claude
+        let cli = Cli::try_parse_from(["aida", "statusline"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Statusline { client: None, .. }
+        ));
+        let cli = Cli::try_parse_from(["aida", "statusline", "--client", "claude"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Statusline { client: Some(ref c), .. } if c == "claude"
+        ));
+        let cli = Cli::try_parse_from(["aida", "statusline", "--client", "agy"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Statusline { client: Some(ref c), .. } if c == "agy"
+        ));
+        assert!(Cli::try_parse_from(["aida", "statusline", "--client", "codex"]).is_err());
 
         let cli = Cli::try_parse_from(["aida", "history", "events"]).unwrap();
         assert!(matches!(
