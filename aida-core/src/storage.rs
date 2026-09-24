@@ -197,6 +197,14 @@ impl SessionInfo {
 pub struct Storage {
     file_path: PathBuf,
     lock_file_path: PathBuf,
+    /// Dispenser to attach to any `GitBackend` this `Storage` constructs for
+    /// a directory (git-canonical) path. `None` keeps the historical default
+    /// (a fresh `GitBackend` with no dispenser, which stamps oplog entries
+    /// with node_id "0"). A caller resolving a real node identity — the CLI's
+    /// distributed-store dispatch — attaches it via [`Storage::with_dispenser`]
+    /// so writes carry the right node id, same as every other write path.
+    // trace:TASK-1487 | ai:claude
+    dispenser: Option<crate::models::DispenserHandle>,
 }
 
 impl Storage {
@@ -207,7 +215,38 @@ impl Storage {
         Self {
             file_path,
             lock_file_path,
+            dispenser: None,
         }
+    }
+
+    /// Attach a dispenser so any `GitBackend` this `Storage` builds internally
+    /// (for a directory/git-canonical path) issues ids and stamps oplog
+    /// entries under its node id, instead of defaulting to node_id "0".
+    // trace:TASK-1487 | ai:claude
+    pub fn with_dispenser(mut self, dispenser: crate::models::DispenserHandle) -> Self {
+        self.dispenser = Some(dispenser);
+        self
+    }
+
+    /// The dispenser this `Storage` was built with, if any. Exposed so a
+    /// caller that constructs its own `GitBackend` from [`Storage::path`]
+    /// (e.g. a bulk-import writer) can attach the same dispenser rather than
+    /// defaulting to node_id "0".
+    // trace:TASK-1487 | ai:claude
+    pub fn dispenser(&self) -> Option<&crate::models::DispenserHandle> {
+        self.dispenser.as_ref()
+    }
+
+    /// Build a `GitBackend` for `path`, attaching this `Storage`'s dispenser
+    /// when one is set. Centralizes the dispenser-attach so every internal
+    /// directory-path branch stays in lockstep.
+    // trace:TASK-1487 | ai:claude
+    fn git_backend_for(&self, path: &Path) -> Result<crate::db::GitBackend> {
+        let backend = crate::db::GitBackend::new(path)?;
+        Ok(match &self.dispenser {
+            Some(d) => backend.with_dispenser(d.clone()),
+            None => backend,
+        })
     }
 
     /// Returns the path to the storage file
@@ -411,7 +450,7 @@ impl Storage {
         // pointing at .aida-store/.
         if self.file_path.is_dir() {
             use crate::db::DatabaseBackend;
-            let backend = crate::db::GitBackend::new(&self.file_path)?;
+            let backend = self.git_backend_for(&self.file_path)?;
             return backend.load();
         }
 
@@ -536,7 +575,7 @@ impl Storage {
         // trace:BUG-310 | ai:claude
         if self.file_path.is_dir() {
             use crate::db::DatabaseBackend;
-            let backend = crate::db::GitBackend::new(&self.file_path)?;
+            let backend = self.git_backend_for(&self.file_path)?;
             return backend.save(store);
         }
 
@@ -573,7 +612,7 @@ impl Storage {
         commit_subject: &str,
     ) -> Result<()> {
         if self.file_path.is_dir() {
-            let backend = crate::db::GitBackend::new(&self.file_path)?;
+            let backend = self.git_backend_for(&self.file_path)?;
             backend.bulk_update(&store.requirements, commit_subject)?;
             return Ok(());
         }
@@ -632,7 +671,7 @@ impl Storage {
         // trace:EPIC-1-001 | ai:claude
         if self.file_path.is_dir() {
             use crate::db::DatabaseBackend;
-            let backend = crate::db::GitBackend::new(&self.file_path)?;
+            let backend = self.git_backend_for(&self.file_path)?;
             let mut store = backend.load()?;
             update_fn(&mut store);
             backend.save(&store)?;
@@ -1530,7 +1569,7 @@ impl Storage {
             return Ok(Box::new(crate::db::SqliteBackend::new(&self.file_path)?));
         }
         if self.file_path.is_dir() {
-            return Ok(Box::new(crate::db::GitBackend::new(&self.file_path)?));
+            return Ok(Box::new(self.git_backend_for(&self.file_path)?));
         }
         anyhow::bail!(
             "Queue is only supported for SQLite or git-canonical (directory) backends — \
@@ -1947,6 +1986,65 @@ mod tests {
                 .any(|r| r.title == "MCP-written req"),
             "GitBackend reload did not see the requirement Storage wrote — \
              Storage::save likely fell through to the YAML path on a directory"
+        );
+    }
+
+    /// TASK-1487: `Storage::with_dispenser` must reach the `GitBackend` it
+    /// builds internally for a directory path, so a caller that attaches a
+    /// real node identity (the CLI's distributed-store dispatch) gets it
+    /// honored on `save_with_commit_subject`, not silently dropped in favor
+    /// of a fresh, dispenser-less `GitBackend::new`.
+    ///
+    /// Uses `save_with_commit_subject` (→ `GitBackend::bulk_update`) rather
+    /// than plain `save()`/`update_atomically()`, which never call
+    /// `record_op` at all for a whole-store save — only a per-field update to
+    /// an *existing* requirement stages an oplog entry, so this seeds one
+    /// first and then changes its title.
+    // trace:TASK-1487 | ai:claude
+    #[test]
+    fn storage_with_dispenser_reaches_the_git_backend_on_save_with_commit_subject() {
+        use crate::db::DatabaseBackend;
+        use crate::dispenser::{IdMode, MemoryDispenser};
+        use crate::models::DispenserHandle;
+        use crate::oplog::OpLog;
+        use std::sync::Arc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let store_dir = temp_dir.path().join("store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+
+        // Seed one existing requirement directly through a plain GitBackend.
+        let mut req = create_test_requirement("Before");
+        req.spec_id = Some("SPEC-001".to_string());
+        let mut seed_store = create_test_store();
+        seed_store.requirements.push(req.clone());
+        crate::db::GitBackend::new(&store_dir)
+            .unwrap()
+            .save(&seed_store)
+            .unwrap();
+        // Seed an existing oplog at the unregistered default node id — the
+        // realistic starting state `record_op` only ever upgrades away from.
+        OpLog::new("0".to_string())
+            .save(&store_dir.join("oplog.yaml"))
+            .unwrap();
+
+        let dispenser = Arc::new(MemoryDispenser::new(IdMode::Distributed {
+            node_id: "9".to_string(),
+        }));
+        let storage = Storage::new(&store_dir).with_dispenser(DispenserHandle(dispenser));
+
+        req.title = "After".to_string();
+        let mut changed_store = seed_store;
+        changed_store.requirements = vec![req];
+        storage
+            .save_with_commit_subject(&changed_store, "test")
+            .unwrap();
+
+        let log = OpLog::load(&store_dir.join("oplog.yaml")).unwrap();
+        assert_eq!(
+            log.node_id, "9",
+            "Storage::with_dispenser must be honored by the directory-path \
+             GitBackend that Storage::save_with_commit_subject builds internally"
         );
     }
 }

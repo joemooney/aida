@@ -2582,6 +2582,10 @@ mod task970_agent_output_tests;
 #[path = "tests/task_1486_store_refusal_tests.rs"]
 mod task_1486_store_refusal_tests;
 
+#[cfg(test)]
+#[path = "tests/task_1487_store_polish_tests.rs"]
+mod task_1487_store_polish_tests;
+
 fn maybe_run_asciinema_wrapper(raw_args: &[String], cli: &Cli) -> Result<Option<i32>> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         eprintln!(
@@ -3519,16 +3523,39 @@ fn run() -> Result<()> {
             );
             let target = match target {
                 RefreshSeedTarget::DistributedUnattached => {
-                    match unattached_distributed_root(&cwd)
-                        .filter(|root| branch_exists_anywhere(root, "aida-store"))
-                        .map(|root| try_attach_store_worktree(&root))
-                    {
-                        Some(Ok(store_path)) => {
-                            eprintln!(
-                                "  {} attached the AIDA store worktree from `aida-store`",
-                                "Note:".dimmed()
-                            );
-                            RefreshSeedTarget::Store(store_path)
+                    match unattached_distributed_root(&cwd) {
+                        // BUG-433 shape: the store is already physically
+                        // attached at `<root>/.aida-store` (no fetch/attach
+                        // needed) — use it directly, matching the main
+                        // resolver's `store_path_opt` computation.
+                        // trace:TASK-1487 | ai:claude
+                        Some(ref root) if attached_store_present(root) => {
+                            RefreshSeedTarget::Store(root.join(".aida-store"))
+                        }
+                        Some(root) if branch_exists_anywhere(&root, "aida-store") => {
+                            match try_attach_store_worktree(&root) {
+                                Ok(store_path) => {
+                                    eprintln!(
+                                        "  {} attached the AIDA store worktree from \
+                                         `aida-store`",
+                                        "Note:".dimmed()
+                                    );
+                                    RefreshSeedTarget::Store(store_path)
+                                }
+                                // Auto-attach failed (offline, diverged/locked
+                                // branch, git too old, …) — print the cause,
+                                // as the main resolver does for the same
+                                // failure, instead of silently dropping it.
+                                // trace:TASK-1487 | ai:claude
+                                Err(e) => {
+                                    eprintln!(
+                                        "  {} couldn't auto-attach the store worktree: {}",
+                                        "Note:".dimmed(),
+                                        e
+                                    );
+                                    RefreshSeedTarget::DistributedUnattached
+                                }
+                            }
                         }
                         _ => RefreshSeedTarget::DistributedUnattached,
                     }
@@ -4749,11 +4776,17 @@ fn run() -> Result<()> {
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
         let explicit_path = std::path::PathBuf::from(explicit_file);
-        // If path is a directory, use GitBackend and route through the backend API
+        // If path is a directory, use GitBackend and route through the backend
+        // API. Goes through `run_on_distributed_store` — not straight to
+        // `handle_git_backend_command` — so an explicit `--file <dir>` gets
+        // the same tracker (jira/github/gitlab) and mcp-serve special-casing
+        // as every other distributed-store resolution path; the git-backend
+        // handler alone has no arms for those commands and used to exit
+        // "not yet supported". trace:TASK-1487 | ai:claude
         if explicit_path.is_dir()
             || (!explicit_path.exists() && explicit_path.extension().is_none())
         {
-            return git_backend_cmd::handle_git_backend_command(&explicit_path, &cli.command);
+            return run_on_distributed_store(&cli.command, &explicit_path);
         }
         // User explicitly specified a file path - use it directly
         explicit_path
@@ -12755,11 +12788,48 @@ fn run_on_distributed_store(command: &Command, store_path: &std::path::Path) -> 
             let project_root = find_project_root().unwrap_or_else(|_| store_path.to_path_buf());
             mcp::run_mcp_server(&storage, project_root)
         }
-        Command::Jira(cmd) => tracker_cmd::handle_jira_command(cmd, &storage),
-        Command::Github(cmd) => tracker_cmd::handle_github_command(cmd, &storage),
-        Command::Gitlab(cmd) => tracker_cmd::handle_gitlab_command(cmd, &storage),
+        // Tracker imports (`aida jira/github pull`) write new requirements
+        // through this `Storage`, same as every other distributed-store
+        // write path — they need the same node id and per-write auto-push
+        // `handle_git_backend_command` gives its own callers, just reached
+        // through a different signature (`&Storage`, not `&GitBackend`).
+        // trace:TASK-1487 | ai:claude
+        Command::Jira(cmd) => run_tracker_command(store_path, command, |storage| {
+            tracker_cmd::handle_jira_command(cmd, storage)
+        }),
+        Command::Github(cmd) => run_tracker_command(store_path, command, |storage| {
+            tracker_cmd::handle_github_command(cmd, storage)
+        }),
+        Command::Gitlab(cmd) => run_tracker_command(store_path, command, |storage| {
+            tracker_cmd::handle_gitlab_command(cmd, storage)
+        }),
         _ => git_backend_cmd::handle_git_backend_command(store_path, command),
     }
+}
+
+/// Run a tracker (jira/github/gitlab) command against the distributed store
+/// with the same two things `handle_git_backend_command` gives every other
+/// distributed-store command — reused here, not reimplemented, since tracker
+/// commands take a `&Storage` and can't go through that dispatcher's match:
+/// - the dispenser's node id, so oplog entries this command writes (a tracker
+///   pull's bulk import) aren't stamped node_id "0";
+/// - the per-write store auto-push, gated the same way
+///   `command_triggers_per_write_auto_push` gates every other write command,
+///   and only fired on success (an error return skips it, same as the
+///   git-backend dispatcher's post-match auto-push never running on an early
+///   `?` return from inside its match).
+// trace:TASK-1487 | ai:claude
+fn run_tracker_command(
+    store_path: &std::path::Path,
+    command: &Command,
+    handler: impl FnOnce(&Storage) -> Result<()>,
+) -> Result<()> {
+    let storage = Storage::new(store_path).with_dispenser(load_dispenser(store_path)?);
+    handler(&storage)?;
+    if command_triggers_per_write_auto_push(command) {
+        maybe_auto_push_store(store_path, StoreAutoPushMode::PerWrite, "per-write");
+    }
+    Ok(())
 }
 
 /// Where `aida init --refresh` seeds missing type protocols.
@@ -12797,14 +12867,22 @@ fn refresh_seed_target(
 }
 
 /// The project root when `start` is inside a distributed AIDA project: one
-/// whose `.aida/config.toml` declares distributed mode, or whose git repo has
-/// an `aida-store` branch. The same signals the main resolver uses to refuse
-/// the legacy fallback when the store isn't attached.
-// trace:TASK-1486 trace:BUG-428 trace:BUG-442 | ai:claude
+/// whose `.aida/config.toml` declares distributed mode, whose git repo has an
+/// `aida-store` branch, or whose store is physically attached at
+/// `<root>/.aida-store` despite neither of those (the BUG-433 shape: a
+/// session worktree forked from a commit that predates the committed
+/// scaffolding, or a symlink into another repo's store). The same signals the
+/// main resolver uses (see the `distributed_root` computation above) to
+/// refuse the legacy fallback when the store isn't resolvable through
+/// `detect_distributed_store`.
+// trace:TASK-1486 trace:BUG-428 trace:BUG-442 trace:BUG-433 trace:TASK-1487 | ai:claude
 fn unattached_distributed_root(start: &std::path::Path) -> Option<std::path::PathBuf> {
     distributed_mode_declared_from(start).or_else(|| {
         let root = start.ancestors().find(|d| d.join(".git").exists())?;
-        branch_exists_anywhere(root, "aida-store").then(|| root.to_path_buf())
+        if branch_exists_anywhere(root, "aida-store") {
+            return Some(root.to_path_buf());
+        }
+        attached_store_present(root).then(|| root.to_path_buf())
     })
 }
 
@@ -14207,6 +14285,14 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
                 | ConfigCommand::Digits { .. }
                 | ConfigCommand::Migrate { .. }
         ),
+        // TASK-1487: `jira/github pull` bulk-import new requirements into the
+        // local store (via `bulk_import_via_writer`) unless `--dry-run`; every
+        // other tracker subcommand (config/test/list/show/push/sync/labels/…)
+        // only reads the store or talks to the remote tracker. GitLab has no
+        // local-write subcommand for a git-canonical store (`refresh`'s sync
+        // state is SQLite-only). trace:TASK-1487 | ai:claude
+        Command::Jira(JiraCommand::Pull { dry_run, .. }) => !dry_run,
+        Command::Github(GitHubCommand::Pull { dry_run, .. }) => !dry_run,
         _ => false,
     }
 }
@@ -79618,7 +79704,13 @@ where
 {
     let path = storage.path();
     if path.is_dir() {
-        let backend = aida_core::GitBackend::new(path)?;
+        // Attach the same dispenser `storage` was built with, when it has
+        // one — otherwise a fresh `GitBackend` defaults to node_id "0" for
+        // every oplog entry this writer commits. trace:TASK-1487 | ai:claude
+        let mut backend = aida_core::GitBackend::new(path)?;
+        if let Some(dispenser) = storage.dispenser() {
+            backend = backend.with_dispenser(dispenser.clone());
+        }
         let mut writer = backend.bulk_writer()?;
         for req in reqs {
             writer.add(req)?;

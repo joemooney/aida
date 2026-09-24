@@ -694,10 +694,20 @@ only project in a one-project registry: either could be an unrelated project,
 so a write would land in the wrong place. The refusal names the configured
 default so you can pass `-p <name>` to target it.
 
-Inside a distributed project whose `.aida-store/` worktree is not set up in
-this working copy, commands also stop rather than falling back to a legacy
-store in the directory. Run `aida init` to attach the store.
+Inside a distributed project, `-p <project>` (and `REQ_DB_NAME`) are ignored —
+step 2 always wins over step 3 there, since the registry names *legacy*
+single-file stores and a distributed project's canonical store is never one of
+those.
+
+When a distributed project's `.aida-store/` worktree is not set up in this
+working copy, a command first tries to auto-attach it from the project's
+`aida-store` branch (the same fetch + worktree-add `aida init` runs on a fresh
+clone) before doing anything else. Auto-attach needs only read access — no
+node id — so a plain read command works right away. If auto-attach fails (for
+example, offline, or the branch is diverged or git is too old) the command
+stops with guidance instead of falling back to a legacy store in the
+directory. Run `aida init` to attach the store explicitly.
 
 ---
 
-*Last updated: December 2025 | AIDA v0.1.0*
+*Last updated: September 2026 | AIDA v0.15.0*
