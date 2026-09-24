@@ -3,12 +3,12 @@ spec_id: TASK-1468
 agreed_id: TASK-1468
 title: Route the remaining unchecked id lookups through the ambiguity-refusing resolver
 description: BUG-1535 made edit, show, del, comment, archive, assign, defer, --parent and the MCP update/comment/relationship tools refuse an ambiguous id. About 171 call sites still use the old unchecked lookup, including MCP tool_post_punt (mcp.rs ~3011), tool_triage_finding (~3288), session_start (lib.rs ~33942) and the pull auto-bump by commit trailer. Route every write-path lookup through the checked resolver, where an ambiguous id refuses. Reads may warn. Also, an unreadable YAML currently drops out of the on-disk ambiguity re-check and lets a write through; treat unreadable as ambiguous for writes (PRIN-5).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:53:20.056319268Z
-modified_at: 2026-09-24T03:37:24.840252790Z
+modified_at: 2026-09-24T04:55:40.052853458Z
 req_type: Task
 tags:
 - data-integrity
@@ -19,3 +19,21 @@ relationships:
 - rel_type: Child
   target_id: 01a0c291-3fd2-7d51-870f-fa39b5a94c26
   created_at: 2026-09-24T02:53:23.313453684Z
+history:
+- id: 01a0d1c4-f10c-7830-b83c-8096b64d9a2e
+  author: aida-auto-bump
+  timestamp: 2026-09-24T04:55:40.044972110Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d1c4-f114-7321-90fb-81f13655c585
+  timestamp: 2026-09-24T04:55:40.052852101Z
+  agent: aida
+  commit_sha: 380cb9d8f3fe9327898323e6095cf74d101d5d6a
+  summary: Completed via merge 380cb9d8
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T04:55:37.492509178Z
+  completion_sha: 380cb9d8f3fe9327898323e6095cf74d101d5d6a
