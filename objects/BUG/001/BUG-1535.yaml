@@ -64,12 +64,12 @@ description: |-
 
   Related: BUG-89 (identity resolution order) is the same family one layer out — an
   identifier whose meaning depends on which resolver you ask.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:04:54.098400831Z
-modified_at: 2026-09-24T03:35:27.314854799Z
+modified_at: 2026-09-24T14:09:54.435683159Z
 req_type: Bug
 tags:
 - aida:show
@@ -271,6 +271,11 @@ comments:
   created_at: 2026-09-24T03:35:27.314854799Z
   modified_at: 2026-09-24T03:35:27.314854799Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d3c0-63cf-74d2-9825-f00c6cb76d40
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit ab644af), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-1535 --description ...` / `aida edit BUG-1535 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-1535 --since ab644af^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-1535 --status completed`. (merge sha: ab644af98099ff56a7b493a96ba1b8d033163512)'
+  created_at: 2026-09-24T14:09:56.175037619Z
+  modified_at: 2026-09-24T14:09:56.175037619Z
 history:
 - id: 01a0d17b-2099-7fa0-bc6c-fef6747a3464
   author: aida-auto-bump
@@ -279,6 +284,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a0d3c0-63cf-74d2-9825-eff399ae5319
+  author: aida-auto-bump
+  timestamp: 2026-09-24T14:09:56.175032846Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 processing_record:
 - id: 01a0d17b-20ac-7c10-b111-becb98b06538
   timestamp: 2026-09-24T03:35:02.572882757Z
