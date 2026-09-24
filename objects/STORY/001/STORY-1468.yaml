@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-09-24T08:14:18.240035090Z
+modified_at: 2026-09-24T08:14:21.375002599Z
 req_type: Story
 comments:
 - id: 01a0d0d5-7dfa-7e41-80d5-f47b293e4316
@@ -16,6 +16,12 @@ comments:
   content: 'Product decision: originating-prompt capture is OFF by default. It becomes configurable opt-in (project/user policy and/or an explicit intake flag), with captured material stored in a separate provenance/artifact location rather than the normal requirement body. Normal requirement views and agent context must not include it; retrieval requires an explicit operator/agent request. The opt-in path must support redaction/secret avoidance and make the storage location and retention behavior clear.'
   created_at: 2026-09-24T00:34:07.482530260Z
   modified_at: 2026-09-24T00:34:07.482530260Z
+- id: 01a0d27a-d8bf-7133-a713-5bb9ea7e1973
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): DEFERRED until: CR-8 completed. Overlaps CR-8; the originating prompt could be one field of CR-8''s provenance struct.'
+  created_at: 2026-09-24T08:14:21.375002599Z
+  modified_at: 2026-09-24T08:14:21.375002599Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 deferred: true
 deferred_at: 2026-09-24T08:14:18.240035090Z
 deferred_until: CR-8 completed
