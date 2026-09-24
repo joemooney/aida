@@ -3,12 +3,12 @@ spec_id: STORY-1470
 agreed_id: STORY-1470
 title: 'aida config menu: open contextual help with ?'
 description: Add a contextual help overlay to `aida config menu`. When a configurable item is selected, pressing `?` opens a modal help panel for that item; the existing explanation panel remains the compact at-a-glance view. Help should explain the setting, default, effective-value precedence/scope, valid values or range, environment/config source, and important operational consequences or related commands when available. `Esc` and `?` close the overlay and return to the same selection without editing the value; navigation and edit keys must not leak through while the overlay is open. Advertise the key in the menu footer/help text and provide a clear fallback when an item has no extended documentation.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:17:28.910831106Z
-modified_at: 2026-09-24T08:12:14.212086271Z
+modified_at: 2026-09-24T09:19:03.025667337Z
 req_type: Story
 comments:
 - id: 01a0d278-e804-7862-b3f8-8078d50fd659
