@@ -7071,7 +7071,12 @@ pub(crate) fn handle_git_backend_command(
                 );
             }
 
-            if *bidirectional {
+            // Mirror `rel add`'s `rel_should_write_inverse` — the parent/child
+            // pair (and any future pair added to that rule) is canonically
+            // bidirectional, so remove drops both reciprocal edges even
+            // without an explicit `--bidirectional`. Every other type keeps
+            // the opt-in flag, matching `rel add`. trace:BUG-1602 | ai:claude
+            if rel_should_write_inverse(&requested, *bidirectional) {
                 let inverse = requested.inverse().unwrap_or_else(|| requested.clone());
                 let mut to_req = backend
                     .get_requirement(&to_req.id)?
