@@ -1273,7 +1273,7 @@ pub(crate) fn premise_stale(
                     "{spec}'s verdict was closed by merge {}",
                     short_sha(merge)
                 ));
-            } else if verdict.kind == VerdictKind::Approved {
+            } else if verdict.kind.approves() {
                 why.push(match verdict.reviewed_sha.as_deref() {
                     Some(sha) => format!("{spec}'s verdict is now APPROVED at {}", short_sha(sha)),
                     None => format!("{spec}'s verdict is now APPROVED"),

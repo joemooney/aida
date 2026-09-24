@@ -42,7 +42,7 @@ fn verdict_words_normalize_to_kinds() {
     for w in ["rejected", "reject", "fail"] {
         assert_eq!(VerdictKind::parse(w), VerdictKind::Rejected, "{w}");
     }
-    assert_eq!(VerdictKind::parse("mostly fine"), VerdictKind::Other);
+    assert_eq!(VerdictKind::parse("mostly fine"), VerdictKind::Unknown);
 }
 
 #[test]
@@ -50,7 +50,7 @@ fn only_request_changes_and_rejected_block_done() {
     assert!(VerdictKind::RequestChanges.blocks_done());
     assert!(VerdictKind::Rejected.blocks_done());
     assert!(!VerdictKind::Approved.blocks_done());
-    assert!(!VerdictKind::Other.blocks_done());
+    assert!(!VerdictKind::Unknown.blocks_done());
 }
 
 // The `/aida-review` skill's file shape must keep parsing, plus the new fields.
@@ -1562,4 +1562,227 @@ fn a_round_with_no_reviewed_sha_is_not_archived() {
     let path = verdict_path(root, "PR-5");
     record_verdict_at_path(root, &path, Some("approved"), None, None, None, &[], "x").unwrap();
     assert!(!verdict_archive_dir(&path).unwrap().exists());
+}
+
+// ---------------------------------------------------------------------------
+// BUG-1505: one canonical verdict vocabulary + one normalizing parser.
+// trace:BUG-1505 | ai:claude
+// ---------------------------------------------------------------------------
+
+/// Every verdict spelling observed in `.aida/review-verdicts/` (surveyed
+/// 2026-09-23, 666 files), with the kind the canonical parser must read it as.
+const OBSERVED_SPELLINGS: &[(&str, VerdictKind)] = &[
+    ("Approved", VerdictKind::Approved),
+    ("APPROVED", VerdictKind::Approved),
+    ("approved", VerdictKind::Approved),
+    ("approve", VerdictKind::Approved),
+    ("Approve", VerdictKind::Approved),
+    ("CHANGES REQUESTED", VerdictKind::RequestChanges),
+    ("RequestChanges", VerdictKind::RequestChanges),
+    ("request-changes", VerdictKind::RequestChanges),
+    // The two qualified values: both contain APPROVED, neither is an approval.
+    (
+        "APPROVED pending cross-platform green",
+        VerdictKind::Unknown,
+    ),
+    (
+        "CONTENT APPROVED — MERGE WITHHELD FOR INDEPENDENCE",
+        VerdictKind::Unknown,
+    ),
+];
+
+#[test]
+fn bug_1505_every_observed_spelling_maps_to_its_canonical_kind() {
+    for (raw, want) in OBSERVED_SPELLINGS {
+        assert_eq!(VerdictKind::parse(raw), *want, "{raw}");
+    }
+}
+
+#[test]
+fn bug_1505_qualified_approvals_never_approve_anywhere() {
+    for raw in [
+        "APPROVED pending cross-platform green",
+        "CONTENT APPROVED — MERGE WITHHELD FOR INDEPENDENCE",
+        "approved, but",
+        "not approved",
+        "",
+    ] {
+        let kind = VerdictKind::parse(raw);
+        assert_eq!(kind, VerdictKind::Unknown, "{raw}");
+        assert!(!kind.approves(), "{raw}");
+        assert_eq!(kind.canonical(), None, "{raw}");
+        // The orchestrator's and the summary's readers agree.
+        assert_eq!(crate::auto_complete::Verdict::parse(raw), None, "{raw}");
+    }
+}
+
+#[test]
+fn bug_1505_canonical_spellings_round_trip() {
+    for kind in [
+        VerdictKind::Approved,
+        VerdictKind::RequestChanges,
+        VerdictKind::Rejected,
+    ] {
+        let c = kind.canonical().unwrap();
+        assert_eq!(VerdictKind::parse(c), kind);
+        assert_eq!(canonical_verdict_word(c), c);
+    }
+    assert_eq!(
+        canonical_verdict_word("CHANGES REQUESTED"),
+        "request-changes"
+    );
+    assert_eq!(canonical_verdict_word(" APPROVED "), "approved");
+    // An unknown word is preserved verbatim, never guessed into a canonical one.
+    assert_eq!(
+        canonical_verdict_word("APPROVED pending cross-platform green"),
+        "APPROVED pending cross-platform green"
+    );
+}
+
+#[test]
+fn bug_1505_queue_done_gate_refuses_a_qualified_approval_at_the_head() {
+    let v = rc(
+        "CONTENT APPROVED — MERGE WITHHELD FOR INDEPENDENCE",
+        Some("3ae8f937"),
+    );
+    assert!(matches!(
+        queue_done_verdict_gate("PR-1979", Some(&v), TipRelation::AtReviewedSha),
+        VerdictGate::Refuse(_)
+    ));
+}
+
+#[test]
+fn bug_1505_reader_resolves_legacy_key_aliases() {
+    let legacy = r#"{"verdict":"APPROVED","summary":"s","head":"c87ac9e4",
+                     "reviewer":"claude advisor","date":"2026-09-19",
+                     "blocking_findings":["f1"]}"#;
+    let v = parse_recorded_verdict(legacy).unwrap();
+    assert_eq!(v.kind, VerdictKind::Approved);
+    assert_eq!(v.reviewed_sha.as_deref(), Some("c87ac9e4"));
+    assert_eq!(v.recorded_by.as_deref(), Some("claude advisor"));
+    assert_eq!(v.recorded_at.as_deref(), Some("2026-09-19"));
+    assert_eq!(v.findings, vec!["f1".to_string()]);
+
+    let head_sha = r#"{"verdict":"approved","summary":"s","head_sha":"abcdef1234"}"#;
+    assert_eq!(
+        parse_recorded_verdict(head_sha)
+            .unwrap()
+            .reviewed_sha
+            .as_deref(),
+        Some("abcdef1234")
+    );
+    // The canonical key wins over an alias.
+    let both =
+        r#"{"verdict":"approved","summary":"s","reviewed_sha":"aaaaaaa1","head":"bbbbbbb2"}"#;
+    assert_eq!(
+        parse_recorded_verdict(both)
+            .unwrap()
+            .reviewed_sha
+            .as_deref(),
+        Some("aaaaaaa1")
+    );
+}
+
+#[test]
+fn bug_1505_unverifiable_marker_drops_the_sha_and_the_gate_refuses() {
+    let body = r#"{"verdict":"APPROVED","summary":"s","unverifiable":true,
+                   "unverifiable_reason":"legacy","head":"c87ac9e4"}"#;
+    let v = parse_recorded_verdict(body).unwrap();
+    assert_eq!(v.reviewed_sha, None);
+    assert!(matches!(
+        queue_done_verdict_gate("PR-1976", Some(&v), TipRelation::Unknown),
+        VerdictGate::Refuse(_)
+    ));
+}
+
+#[test]
+fn bug_1505_writer_persists_the_canonical_spelling() {
+    let tmp = TempDir::new().unwrap();
+    for (raw, want) in [
+        ("APPROVED", "approved"),
+        ("CHANGES REQUESTED", "request-changes"),
+        ("RequestChanges", "request-changes"),
+        ("Rejected", "rejected"),
+    ] {
+        let path = record_verdict(
+            tmp.path(),
+            "TASK-9",
+            Some(raw),
+            None,
+            None,
+            Some("s"),
+            &[],
+            "test",
+        )
+        .unwrap();
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(v["verdict"], want, "{raw}");
+    }
+}
+
+#[test]
+fn bug_1505_verdictless_stamp_canonicalizes_the_word_on_disk() {
+    // The drain reviewer stamps provenance with no verdict of its own; the
+    // reviewer-written spelling must still land canonical.
+    let tmp = TempDir::new().unwrap();
+    let path = verdict_path(tmp.path(), "PR-7");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, r#"{"verdict":"CHANGES REQUESTED","summary":"s"}"#).unwrap();
+    record_verdict(tmp.path(), "PR-7", None, None, None, None, &[], "drain").unwrap();
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(v["verdict"], "request-changes");
+
+    // An unknown word is left verbatim for a human.
+    let odd = r#"{"verdict":"APPROVED pending cross-platform green","summary":"s"}"#;
+    std::fs::write(&path, odd).unwrap();
+    record_verdict(tmp.path(), "PR-7", None, None, None, None, &[], "drain").unwrap();
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(v["verdict"], "APPROVED pending cross-platform green");
+}
+
+#[test]
+fn bug_1505_audit_classifies_every_observed_spelling() {
+    for (raw, kind) in OBSERVED_SPELLINGS {
+        let body = serde_json::json!({
+            "verdict": raw, "summary": "s",
+            "reviewed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "recorded_by": "t",
+        })
+        .to_string();
+        let (got_raw, got_kind, issues) = audit_verdict_body(&body);
+        assert_eq!(got_raw, *raw);
+        assert_eq!(got_kind, *kind);
+        let canonical = kind.canonical() == Some(*raw);
+        assert_eq!(issues.is_empty(), canonical, "{raw}: {issues:?}");
+        if *kind == VerdictKind::Unknown {
+            assert!(issues.iter().any(|i| i.contains("UNKNOWN")), "{issues:?}");
+        }
+    }
+}
+
+#[test]
+fn bug_1505_audit_flags_legacy_keys_and_missing_sha_without_rewriting() {
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let legacy = r#"{"verdict":"Approved","summary":"s","reviewer":"x"}"#;
+    let canonical =
+        r#"{"verdict":"approved","summary":"s","reviewed_sha":"aaaaaaa","recorded_by":"t"}"#;
+    std::fs::write(dir.join("PR-1.json"), legacy).unwrap();
+    std::fs::write(dir.join("PR-2.json"), canonical).unwrap();
+    let rows = audit_verdict_dir(tmp.path());
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].file, "PR-1.json");
+    let joined = rows[0].issues.join("\n");
+    assert!(joined.contains("not canonical"), "{joined}");
+    assert!(joined.contains("legacy key `reviewer`"), "{joined}");
+    assert!(joined.contains("no reviewed sha"), "{joined}");
+    // Report-only: the file is byte-identical afterwards.
+    assert_eq!(
+        std::fs::read_to_string(dir.join("PR-1.json")).unwrap(),
+        legacy
+    );
 }

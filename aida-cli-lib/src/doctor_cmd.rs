@@ -445,6 +445,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // raw system identity already leaked into the store (a leak that landed
     // before redaction was turned on)? Reads store files + commit authors.
     // trace:TASK-1122 | ai:claude
+    // BUG-1505: non-canonical review-verdict files. Report-only — the verdict
+    // store is gitignored, so a bulk rewrite would have no history to undo it.
+    // trace:BUG-1505 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "review-verdicts")? {
+        findings.extend(scan_review_verdicts(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     if doctor_category_selected(opts.category.as_deref(), "store-scrub")? {
         findings.extend(scan_store_scrub(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
@@ -2033,6 +2041,59 @@ mod bug_1572_binary_lineage_tests {
              absent-sha label, so the tie-break is by name, not by insertion order"
         );
     }
+}
+
+/// BUG-1505: surface every review-verdict file that is not in the canonical
+/// shape. An UNKNOWN / ambiguous verdict word (e.g. a qualified approval such
+/// as `APPROVED pending cross-platform green`) gets its OWN finding: every
+/// gate reads it as not-approved, and only a human can say what it meant.
+/// Everything else (a re-spelling, a legacy key, a missing sha) is folded into
+/// one aggregate finding so a large legacy corpus does not drown the report.
+// trace:BUG-1505 | ai:claude
+fn scan_review_verdicts(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    let rows = crate::review_verdict::audit_verdict_dir(project_root);
+    let mut out = Vec::new();
+    let mut drifted = Vec::new();
+    for row in &rows {
+        if row.kind == crate::review_verdict::VerdictKind::Unknown && !row.raw.is_empty() {
+            out.push(DoctorFinding {
+                category: "review-verdicts".to_string(),
+                id: format!("unknown-verdict:{}", row.file),
+                summary: format!(
+                    "{} records verdict `{}`, which is not a recognised verdict — every gate reads it as NOT approved",
+                    row.file, row.raw
+                ),
+                action: format!(
+                    "decide it by hand, then record a fresh verdict: `aida review record <SPEC> --verdict approved|request-changes|rejected --summary \"<why>\"` (file: .aida/review-verdicts/{})",
+                    row.file
+                ),
+                safe_heal: false,
+            });
+        } else {
+            drifted.push(row.file.as_str());
+        }
+    }
+    if !drifted.is_empty() {
+        let shown: Vec<&str> = drifted.iter().take(8).copied().collect();
+        let more = drifted.len().saturating_sub(shown.len());
+        let tail = if more > 0 {
+            format!(" (+{more} more)")
+        } else {
+            String::new()
+        };
+        out.push(DoctorFinding {
+            category: "review-verdicts".to_string(),
+            id: "non-canonical-verdicts".to_string(),
+            summary: format!(
+                "{} review-verdict file(s) are not in the canonical shape (spelling, legacy keys, or no reviewed sha): {}{tail}",
+                drifted.len(),
+                shown.join(", ")
+            ),
+            action: "report only — readers normalize these; a shaless verdict is treated as absent. Re-record a verdict to write the canonical shape".to_string(),
+            safe_heal: false,
+        });
+    }
+    out
 }
 
 /// TASK-1122: store-scrub detection. When identity redaction is configured
@@ -9024,4 +9085,51 @@ pub(crate) fn doctor_contradictions(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod bug_1505_review_verdict_doctor_tests {
+    use super::*;
+
+    // trace:BUG-1505 | ai:claude
+    #[test]
+    fn unknown_verdicts_get_their_own_finding_and_drift_is_aggregated() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let dir = tmp.path().join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("PR-1979-advisor.json"),
+            r#"{"verdict":"CONTENT APPROVED — MERGE WITHHELD FOR INDEPENDENCE","summary":"s","head":"3ae8f937"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("PR-5.json"),
+            r#"{"verdict":"APPROVED","summary":"s"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("PR-6.json"),
+            r#"{"verdict":"approved","summary":"s","reviewed_sha":"aaaaaaa","recorded_by":"t"}"#,
+        )
+        .unwrap();
+        let findings = scan_review_verdicts(tmp.path());
+        assert_eq!(findings.len(), 2, "{findings:?}");
+        assert!(findings
+            .iter()
+            .any(|f| f.id == "unknown-verdict:PR-1979-advisor.json"));
+        let agg = findings
+            .iter()
+            .find(|f| f.id == "non-canonical-verdicts")
+            .unwrap();
+        assert!(
+            agg.summary.starts_with("1 review-verdict file"),
+            "{}",
+            agg.summary
+        );
+        assert!(agg.summary.contains("PR-5.json"));
+        assert_eq!(
+            normalize_doctor_category("verdicts").unwrap(),
+            "review-verdicts"
+        );
+    }
 }

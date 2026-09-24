@@ -503,10 +503,7 @@ pub(crate) fn classify_pr_review(
         .iter()
         .filter(|v| v.kind.blocks_done() && !v.is_closed())
         .collect();
-    let approvals: Vec<_> = candidates
-        .iter()
-        .filter(|v| v.kind == review_verdict::VerdictKind::Approved)
-        .collect();
+    let approvals: Vec<_> = candidates.iter().filter(|v| v.kind.approves()).collect();
 
     let superseded = |r: &review_verdict::RecordedVerdict| -> bool {
         let Some(rt) = recorded_instant(r) else {

@@ -690,21 +690,19 @@ pub(crate) enum Verdict {
 }
 
 impl Verdict {
-    /// Parse the `verdict` field of a verdict file. Tolerant of casing and
-    /// of hyphen/underscore/space spelling so a hand-written file still
-    /// resolves.
+    /// Parse the `verdict` field of a verdict file. Routes through the one
+    /// canonical parser ([`crate::review_verdict::VerdictKind::parse`]) so
+    /// the orchestrator and every other verdict reader agree on every
+    /// spelling. An unrecognised or qualified word (`APPROVED pending …`) is
+    /// `None` — never an approval.
+    // trace:BUG-1505 | ai:claude
     pub(crate) fn parse(s: &str) -> Option<Self> {
-        let norm: String = s
-            .trim()
-            .to_ascii_lowercase()
-            .chars()
-            .filter(|c| c.is_ascii_alphanumeric())
-            .collect();
-        match norm.as_str() {
-            "approved" | "approve" | "lgtm" => Some(Self::Approved),
-            "requestchanges" | "changesrequested" | "changes" => Some(Self::RequestChanges),
-            "rejected" | "reject" => Some(Self::Rejected),
-            _ => None,
+        use crate::review_verdict::VerdictKind;
+        match VerdictKind::parse(s) {
+            VerdictKind::Approved => Some(Self::Approved),
+            VerdictKind::RequestChanges => Some(Self::RequestChanges),
+            VerdictKind::Rejected => Some(Self::Rejected),
+            VerdictKind::Unknown => None,
         }
     }
 
