@@ -1,0 +1,28 @@
+id: 01a0d492-9015-71e3-81e1-8742424145fa
+spec_id: BUG-1604
+agreed_id: BUG-1604
+title: parse_relationship_type does not recognize the duplicate-of spelling (only duplicate)
+description: |-
+  Follow-up from TASK-1488. RelationshipType::parse_relationship_type (BUG-1602, aida-core/src/models.rs) aliases depends-on, verified_by, relates_to/relates-to and replaced_by to their standard types, but does NOT recognize duplicate-of (only the bare word duplicate maps to Duplicate). Verified directly: parse_relationship_type("duplicate-of") returns Custom("duplicate-of"), not Duplicate.
+
+  Consequence: the widened 'aida db migrate-related-edges' (TASK-1488) correctly leaves any Custom(duplicate-of) edge untouched, since its selection predicate is a pure function of parse_relationship_type (deliberately, to avoid a second hand-maintained alias list that can drift). The live store has one such edge -- BUG-1175 holds both a Custom(duplicate-of) edge and a native Duplicate edge to the same target (a genuine twin) -- that will stay unmigrated until this is fixed.
+
+  Fix: add 'duplicate-of' (and probably 'duplicate_of'/'duplicateof' for consistency with the other aliases' _/no-separator variants) to parse_relationship_type's match arms, mapping to RelationshipType::Duplicate. After that lands, a routine re-run of 'aida db migrate-related-edges' picks up BUG-1175's edge automatically -- no migration code changes needed.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T17:59:30.069861681Z
+modified_at: 2026-09-24T17:59:30.069861681Z
+req_type: Bug
+tags:
+- aida:rel
+- papercut
+filed_at:
+  code_sha: 2ab1b8d9595d61e30904573a1c13b2be45d0194d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 43649a4222
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
