@@ -557,6 +557,9 @@ impl GitBackend {
                 comment.session_id = old.session_id.clone();
             }
         }
+        // CR-8: filing provenance is write-once — the on-disk stamp wins.
+        // trace:CR-8 | ai:claude
+        crate::provenance::preserve_from_disk(&mut incoming, disk);
 
         incoming
     }
@@ -575,8 +578,22 @@ impl GitBackend {
             anyhow::anyhow!("Cannot update requirement without spec_id in git backend")
         })?;
 
+        // CR-8: filing provenance is write-once. If the incoming copy's stamp
+        // differs from the on-disk one (dropped by a caller that built the
+        // struct fresh, or rewritten), write the on-disk stamp back instead.
+        // trace:CR-8 | ai:claude
+        let existing = object_store::read_object(&self.objects_root, spec_id).ok();
+        let provenance_fixed: Option<Requirement> = match &existing {
+            Some(old) if old.filed_at != requirement.filed_at => {
+                let mut fixed = requirement.clone();
+                crate::provenance::preserve_from_disk(&mut fixed, old);
+                Some(fixed)
+            }
+            _ => None,
+        };
+
         // Record ops for changed fields (compare with existing if possible).
-        if let Ok(old) = object_store::read_object(&self.objects_root, spec_id) {
+        if let Some(old) = existing {
             if old.title != requirement.title {
                 self.record_op(
                     requirement.id,
@@ -640,7 +657,8 @@ impl GitBackend {
             }
         }
 
-        let wrote = object_store::write_object_if_changed(&self.objects_root, requirement)?;
+        let to_write = provenance_fixed.as_ref().unwrap_or(requirement);
+        let wrote = object_store::write_object_if_changed(&self.objects_root, to_write)?;
         Ok(if wrote { Some(spec_id) } else { None })
     }
 
@@ -724,6 +742,11 @@ impl DatabaseBackend for GitBackend {
         // loaded, not fields it loaded an old value of.
         // trace:TASK-1161 | ai:claude
         let mut stale_skipped: Vec<String> = Vec::new();
+        // CR-8: a spec with no on-disk object is being CREATED by this save
+        // (findings / report / legacy full-store filing paths) — stamp its
+        // filing provenance. Captured lazily, once per save.
+        // trace:CR-8 | ai:claude
+        let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
         for req in &store.requirements {
             if let Some(ref spec_id) = req.spec_id {
                 current_specs.insert(spec_id.clone());
@@ -735,7 +758,15 @@ impl DatabaseBackend for GitBackend {
                         }
                         Self::preserve_full_save_only_fields(req.clone(), &disk)
                     }
-                    Err(_) => req.clone(),
+                    Err(_) => {
+                        let mut created = req.clone();
+                        if created.filed_at.is_none() {
+                            let p =
+                                filing_provenance.get_or_insert_with(crate::provenance::capture);
+                            crate::provenance::stamp_with(&mut created, p);
+                        }
+                        created
+                    }
                 };
                 if object_store::write_object_if_changed(&self.objects_root, &req_to_write)? {
                     written_specs.push(spec_id.clone());
@@ -883,6 +914,9 @@ impl DatabaseBackend for GitBackend {
     fn add_requirement(&self, requirement: Requirement) -> Result<Requirement> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         let mut req = requirement;
+        // CR-8: stamp filing provenance at creation (write-once; a caller that
+        // already stamped keeps its stamp). trace:CR-8 | ai:claude
+        crate::provenance::stamp_if_absent(&mut req);
 
         if req.spec_id.is_none() {
             // Load metadata to get counters, assign ID, save metadata back
@@ -1265,7 +1299,18 @@ impl<'a> BulkWriter<'a> {
         // Persist all object YAMLs first (skipping unchanged just in case the
         // caller is re-running an idempotent import).
         let mut written: Vec<String> = Vec::new();
-        for req in &self.staged {
+        // CR-8: batch-created specs get filing provenance too (one capture
+        // for the whole batch; write-once). trace:CR-8 | ai:claude
+        let provenance = crate::provenance::capture();
+        for staged in &self.staged {
+            let mut stamped = staged.clone();
+            let is_new = stamped.spec_id.as_deref().is_none_or(|sid| {
+                object_store::read_object(&self.backend.objects_root, sid).is_err()
+            });
+            if is_new {
+                crate::provenance::stamp_with(&mut stamped, &provenance);
+            }
+            let req = &stamped;
             if object_store::write_object_if_changed(&self.backend.objects_root, req)? {
                 if let Some(spec) = &req.spec_id {
                     written.push(spec.clone());
@@ -2414,5 +2459,113 @@ mod tests {
         assert!(err.contains("rebase --abort"), "{err}");
         assert_eq!(crate::git_ops::head_sha(&root).unwrap(), before);
         assert!(!root.join("objects/BUG/001/BUG-1229.yaml").exists());
+    }
+
+    // trace:CR-8 | ai:claude — a new spec gets filing provenance, an edit
+    // (targeted or full-store) never changes it, and a pre-CR-8 spec with no
+    // stamp loads and edits fine without acquiring one.
+    #[test]
+    fn cr8_add_stamps_filing_provenance() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let added = backend
+            .add_requirement(Requirement::new("new".into(), "d".into()))
+            .unwrap();
+        let stamped = added.filed_at.clone().expect("new spec must be stamped");
+        assert!(stamped.aida_version.is_some());
+        let on_disk =
+            object_store::read_object(&backend.objects_root, added.spec_id.as_deref().unwrap())
+                .unwrap();
+        assert_eq!(on_disk.filed_at, Some(stamped));
+    }
+
+    #[test]
+    fn cr8_edits_never_change_filing_provenance() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut req = Requirement::new("t".into(), "d".into());
+        req.filed_at = Some(crate::models::FilingProvenance {
+            code_sha: Some("aaa".into()),
+            ..Default::default()
+        });
+        let added = backend.add_requirement(req).unwrap();
+        let spec_id = added.spec_id.clone().unwrap();
+        let original = added.filed_at.clone();
+
+        // Targeted edit that tries to rewrite AND one that drops the stamp.
+        let mut rewrite = added.clone();
+        rewrite.title = "renamed".into();
+        rewrite.filed_at = Some(crate::models::FilingProvenance {
+            code_sha: Some("bbb".into()),
+            ..Default::default()
+        });
+        backend.update_requirement(&rewrite).unwrap();
+        let mut dropped = rewrite.clone();
+        dropped.filed_at = None;
+        backend.update_requirement(&dropped).unwrap();
+        let disk = object_store::read_object(&backend.objects_root, &spec_id).unwrap();
+        assert_eq!(disk.title, "renamed");
+        assert_eq!(disk.filed_at, original);
+
+        // Full-store save carrying a rewritten stamp.
+        let mut store = backend.load().unwrap();
+        for r in &mut store.requirements {
+            r.filed_at = None;
+            r.description = "changed".into();
+        }
+        backend.save(&store).unwrap();
+        let disk = object_store::read_object(&backend.objects_root, &spec_id).unwrap();
+        assert_eq!(disk.description, "changed");
+        assert_eq!(disk.filed_at, original);
+    }
+
+    #[test]
+    fn cr8_legacy_spec_without_provenance_loads_and_stays_unstamped() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut legacy = Requirement::new("legacy".into(), "d".into());
+        legacy.spec_id = Some("TASK-9".into());
+        object_store::write_object_if_changed(&backend.objects_root, &legacy).unwrap();
+        let path = object_store::object_path(&backend.objects_root, "TASK-9").unwrap();
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("filed_at"));
+
+        let loaded = backend.load().unwrap();
+        let mut req = loaded.requirements[0].clone();
+        assert_eq!(req.filed_at, None);
+        req.title = "edited".into();
+        backend.update_requirement(&req).unwrap();
+        let disk = object_store::read_object(&backend.objects_root, "TASK-9").unwrap();
+        assert_eq!(disk.title, "edited");
+        assert_eq!(
+            disk.filed_at, None,
+            "an edit must not stamp a pre-CR-8 spec"
+        );
+    }
+
+    #[test]
+    fn cr8_full_store_save_stamps_only_new_specs() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut legacy = Requirement::new("legacy".into(), "d".into());
+        legacy.spec_id = Some("TASK-1".into());
+        object_store::write_object_if_changed(&backend.objects_root, &legacy).unwrap();
+
+        let mut store = backend.load().unwrap();
+        let mut fresh = Requirement::new("fresh".into(), "d".into());
+        fresh.spec_id = Some("TASK-2".into());
+        store.requirements.push(fresh);
+        backend.save(&store).unwrap();
+
+        let old = object_store::read_object(&backend.objects_root, "TASK-1").unwrap();
+        let new = object_store::read_object(&backend.objects_root, "TASK-2").unwrap();
+        assert_eq!(old.filed_at, None);
+        assert!(
+            new.filed_at.is_some(),
+            "a spec created by a full-store save is stamped"
+        );
     }
 }

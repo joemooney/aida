@@ -97,6 +97,10 @@ pub(crate) fn handle_doc_command(
                 }
             }
 
+            // CR-8: stamp filing provenance up front — the object is written
+            // directly below from this in-memory copy. trace:CR-8 | ai:claude
+            aida_core::provenance::stamp_if_absent(&mut doc);
+
             // Allocate spec_id via the same path `aida add` uses — keeps
             // sharding, dispenser, and id-format policy consistent.
             let store = backend.update_atomically(|store| {
