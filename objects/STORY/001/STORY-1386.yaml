@@ -56,9 +56,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:44:38.754900781Z
-modified_at: 2026-09-24T08:13:25.953443232Z
+modified_at: 2026-09-24T12:08:45.171552459Z
 req_type: Story
 tags:
+- closure:pending
 - drain
 - from:operator-0920
 - parent:EPIC-62
