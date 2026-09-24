@@ -24,12 +24,12 @@ description: |
   - A hold present as a label with no marker is shown as such rather than omitted, since that is a recoverable state a reader may need to act on.
   - The listing's count agrees with the count of open PRs carrying the label plus any marker-only holds; a discrepancy is itself reported rather than silently resolved in favour of the smaller set.
   - Verification: with N labeled PRs and M marker-only holds, the command lists N+M rows. The fixture uses today's shape — some PRs with both, some label-only.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:01:36.886070157Z
-modified_at: 2026-09-24T00:17:36.169310613Z
+modified_at: 2026-09-24T01:21:35.499699097Z
 req_type: Bug
 tags:
 - agent-surface
@@ -42,4 +42,22 @@ relationships:
   target_id: 01a0c006-9a4b-7080-a650-c8117a9803e2
   created_at: 2026-09-20T18:21:38.452487616Z
   created_by: joe
+history:
+- id: 01a0d100-f303-7670-b581-dfe95c543e79
+  author: aida-auto-bump
+  timestamp: 2026-09-24T01:21:35.491056630Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d100-f30b-7e53-8232-b7a5d2580f00
+  timestamp: 2026-09-24T01:21:35.499697093Z
+  agent: aida
+  commit_sha: 004c470cc25480bc79460b51bd1ee4be26cfe961
+  summary: Completed via merge 004c470c
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T01:21:35.490869833Z
+  completion_sha: 004c470cc25480bc79460b51bd1ee4be26cfe961
