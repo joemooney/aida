@@ -5232,6 +5232,7 @@ mod story_462_doctor_tests {
         use aida_core::models::{Requirement, RequirementsStore};
         let mut fixture = Requirement::new("[test] fixture".into(), "d".into());
         fixture.spec_id = Some("BUG-34".into());
+        let fixture_uuid = fixture.id;
         let mut real = Requirement::new("real spec".into(), "d".into());
         real.spec_id = Some("BUG-2-081".into());
         real.agreed_id = Some("BUG-34".into());
@@ -5242,13 +5243,22 @@ mod story_462_doctor_tests {
         store.requirements = vec![real, fixture, clean];
 
         let findings = id_collision_findings(&store);
-        assert_eq!(findings.len(), 1);
-        let f = &findings[0];
+        // One collision finding + the unique-id count check.
+        assert_eq!(findings.len(), 2, "{findings:?}");
+        let count = findings.iter().find(|f| f.id == "store-count").unwrap();
+        assert!(count.summary.contains("3 objects") && count.summary.contains("only 2 unique"));
+        let f = findings.iter().find(|f| f.id == "BUG-34").unwrap();
         assert_eq!(f.category, "id-collisions");
         assert_eq!(f.id, "BUG-34");
         assert!(!f.safe_heal);
         assert!(f.summary.contains("[test] fixture"), "{}", f.summary);
         assert!(f.summary.contains("BUG-2-081"), "{}", f.summary);
+        // The native owner's unambiguous handle is its uuid.
+        assert!(
+            f.summary.contains(&fixture_uuid.to_string()),
+            "{}",
+            f.summary
+        );
         for alias in ["id-collisions", "ambiguous-ids", "duplicate_ids"] {
             assert_eq!(normalize_doctor_category(alias).unwrap(), "id-collisions");
         }

@@ -1746,13 +1746,35 @@ impl Cache {
     /// resolution paths can afford the ambiguity check on every lookup.
     // trace:BUG-1535 | ai:claude
     pub fn id_rows_for(&self, id: &str) -> Result<Vec<crate::id_collisions::IdRow>> {
-        let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
+        self.query_id_rows(
             "SELECT id, spec_id, agreed_id, title, status FROM requirements_cache \
              WHERE spec_id = ?1 COLLATE NOCASE OR agreed_id = ?1 COLLATE NOCASE",
-        )?;
+            Some(id.trim()),
+        )
+    }
+
+    /// Every cached row's id projection, for the store-wide collision scan.
+    // trace:BUG-1535 | ai:claude
+    pub fn id_rows_all(&self) -> Result<Vec<crate::id_collisions::IdRow>> {
+        self.query_id_rows(
+            "SELECT id, spec_id, agreed_id, title, status FROM requirements_cache",
+            None,
+        )
+    }
+
+    fn query_id_rows(
+        &self,
+        sql: &str,
+        id: Option<&str>,
+    ) -> Result<Vec<crate::id_collisions::IdRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> = match &id {
+            Some(id) => vec![id as &dyn rusqlite::ToSql],
+            None => Vec::new(),
+        };
         let rows = stmt
-            .query_map(params![id.trim()], |row| {
+            .query_map(params.as_slice(), |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, Option<String>>(1)?,
@@ -4845,6 +4867,11 @@ mod tests {
         assert_eq!(cands[1].uuid, real.id);
         assert_eq!(cache.id_rows_for("BUG-35").unwrap().len(), 1);
         assert!(cache.id_rows_for("BUG-99").unwrap().is_empty());
+        let all = cache.id_rows_all().unwrap();
+        assert_eq!(all.len(), 3);
+        let collisions = crate::id_collisions::find_id_collisions(all.iter());
+        assert_eq!(collisions.len(), 1);
+        assert_eq!(collisions[0].id, "BUG-34");
     }
 
     // BUG-701: the cache-backed spec_id collision scan that replaces the O(n)

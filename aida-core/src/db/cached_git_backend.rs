@@ -130,6 +130,79 @@ impl CachedGitBackend {
         })
     }
 
+    /// Resolve `id` for a WRITE — or any caller that must not act on a guess.
+    /// A UUID resolves directly. A spec/agreed id naming more than one
+    /// requirement returns an [`AmbiguousIdError`] (downcastable from the
+    /// `anyhow::Error`) listing each candidate's unambiguous handle; exactly
+    /// one candidate resolves as `get_requirement_by_spec_id` would.
+    ///
+    /// If the cache cannot answer, the check falls back to the authoritative
+    /// full scan rather than skipping it: an unchecked write is the bug.
+    ///
+    /// [`AmbiguousIdError`]: crate::id_collisions::AmbiguousIdError
+    // trace:BUG-1535 | ai:claude
+    pub fn get_requirement_unambiguous(&self, id: &str) -> Result<Option<Requirement>> {
+        if let Ok(uuid) = Uuid::parse_str(id.trim()) {
+            return self.get_requirement(&uuid);
+        }
+        let candidates = match self.id_candidates(id) {
+            Ok(c) => c,
+            Err(_) => {
+                let store = self.inner.load()?;
+                let rows: Vec<crate::id_collisions::IdRow> = store
+                    .requirements
+                    .iter()
+                    .map(crate::id_collisions::IdRow::from)
+                    .collect();
+                crate::id_collisions::candidates_for_id(rows.iter(), id)
+            }
+        };
+        if candidates.len() > 1 {
+            // The cache said "ambiguous"; confirm against the canonical
+            // objects before refusing, so a stale cache row (an object
+            // rewritten under a new uuid, a deleted spec) never blocks a
+            // write. One targeted read per candidate. The survivors are
+            // the objects that, on disk, still answer to `id`.
+            let objects_root = self.inner.path().join("objects");
+            let mut seen_files = std::collections::HashSet::new();
+            let mut rows: Vec<crate::id_collisions::IdRow> = Vec::new();
+            for c in &candidates {
+                let Some(file) = c
+                    .spec_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                else {
+                    continue;
+                };
+                if !seen_files.insert(file.to_ascii_uppercase()) {
+                    continue;
+                }
+                if let Ok(req) = crate::object_store::read_object(&objects_root, file) {
+                    rows.push(crate::id_collisions::IdRow::from(&req));
+                }
+            }
+            let confirmed = crate::id_collisions::candidates_for_id(rows.iter(), id);
+            if confirmed.len() > 1 {
+                return Err(crate::id_collisions::resolve_candidates(id, confirmed)
+                    .unwrap_err()
+                    .into());
+            }
+        }
+        self.get_requirement_by_spec_id(id)
+    }
+
+    /// Every ambiguous id in the store, from the cache (one full-table read,
+    /// grouped in Rust — no YAML load). Backs the `aida list` relabel.
+    // trace:BUG-1535 | ai:claude
+    pub fn id_collisions(&self) -> Result<Vec<crate::id_collisions::IdCollision>> {
+        self.with_cache_schema_retry("scan id collisions", || {
+            self.ensure_cache_fresh_for_read()?;
+            let rows = self.cache.id_rows_all()?;
+            Ok(crate::id_collisions::find_id_collisions(rows.iter()))
+        })
+    }
+
     /// Read the current git HEAD on the store branch. Empty string if not in a
     /// git repo (e.g., test fixture); stale check then collapses to "always
     /// fresh" which is fine for non-git scenarios.

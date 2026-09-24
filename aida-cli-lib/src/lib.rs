@@ -22846,29 +22846,57 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
 ];
 
 /// `id-collisions` doctor findings: one per id that resolves to more than one
-/// requirement, naming every candidate and the id that reaches it.
+/// requirement, naming every candidate and the handle that reaches it, plus a
+/// count check comparing UNIQUE ids to store objects. Row count vs file count
+/// is not that check: seven duplicated rows over seven double-claimed ids
+/// made the two equal by coincidence.
 // trace:BUG-1535 | ai:claude
 fn id_collision_findings(store: &aida_core::models::RequirementsStore) -> Vec<DoctorFinding> {
-    aida_core::id_collisions::find_requirement_id_collisions(store.requirements.iter())
-        .into_iter()
-        .map(|collision| {
-            let lines = aida_core::id_collisions::describe_candidates(&collision.candidates);
-            DoctorFinding {
-                category: "id-collisions".to_string(),
-                id: collision.id.clone(),
-                summary: format!(
-                    "{} resolves to {} requirements: {}",
-                    collision.id,
-                    collision.candidates.len(),
-                    lines.join("; ")
-                ),
-                action: "decide which object keeps the id, then give the other a free \
-                         agreed id (not auto-healed: renumbering is a data migration)"
-                    .to_string(),
-                safe_heal: false,
-            }
-        })
-        .collect()
+    let mut out: Vec<DoctorFinding> =
+        aida_core::id_collisions::find_requirement_id_collisions(store.requirements.iter())
+            .into_iter()
+            .map(|collision| {
+                let lines = aida_core::id_collisions::describe_candidates(
+                    &collision.id,
+                    &collision.candidates,
+                );
+                DoctorFinding {
+                    category: "id-collisions".to_string(),
+                    id: collision.id.clone(),
+                    summary: format!(
+                        "{} resolves to {} requirements: {}",
+                        collision.id,
+                        collision.candidates.len(),
+                        lines.join("; ")
+                    ),
+                    action: "decide which object keeps the id, then give the other a free \
+                             agreed id (not auto-healed: renumbering is a data migration)"
+                        .to_string(),
+                    safe_heal: false,
+                }
+            })
+            .collect();
+    let objects = store.requirements.len();
+    let unique: std::collections::HashSet<String> = store
+        .requirements
+        .iter()
+        .map(|r| r.display_id().to_ascii_uppercase())
+        .collect();
+    if unique.len() != objects {
+        out.push(DoctorFinding {
+            category: "id-collisions".to_string(),
+            id: "store-count".to_string(),
+            summary: format!(
+                "{objects} objects in the store but only {} unique displayed ids \
+                 ({} object(s) display an id another object also displays)",
+                unique.len(),
+                objects - unique.len()
+            ),
+            action: "resolve the id collisions listed above".to_string(),
+            safe_heal: false,
+        });
+    }
+    out
 }
 
 fn normalize_doctor_category(raw: &str) -> Result<String> {

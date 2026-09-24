@@ -34,16 +34,83 @@ pub struct IdCandidate {
 }
 
 impl IdCandidate {
-    /// The id to type to reach THIS object. Resolution is deterministic —
-    /// the native owner wins the colliding id — so the native owner keeps the
-    /// colliding id itself, and an agreed-id holder is reached by its native
-    /// `spec_id` (its file name). Falls back to the UUID when there is none.
-    pub fn unambiguous_handle(&self) -> String {
+    /// The handle that reaches THIS object and nothing else, given that
+    /// `colliding_id` is ambiguous: an agreed-id holder is reached by its
+    /// native `spec_id` (its file name); the native owner of the colliding id
+    /// — or an object with no spec_id — only by its UUID.
+    pub fn unambiguous_handle(&self, colliding_id: &str) -> String {
         match non_empty(&self.spec_id) {
-            Some(s) => s.to_string(),
-            None => self.uuid.to_string(),
+            Some(s) if !s.eq_ignore_ascii_case(colliding_id.trim()) => s.to_string(),
+            _ => self.uuid.to_string(),
         }
     }
+}
+
+/// Refusal raised when an id resolves to more than one requirement. Every
+/// write path (and `aida show`) refuses on it rather than acting on a guess;
+/// the message names each candidate's unambiguous handle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AmbiguousIdError {
+    pub id: String,
+    pub candidates: Vec<IdCandidate>,
+}
+
+impl std::fmt::Display for AmbiguousIdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The first line must stand alone: agent-mode error rendering keeps
+        // only it, so it carries every candidate's handle.
+        let handles: Vec<String> = self
+            .candidates
+            .iter()
+            .map(|c| c.unambiguous_handle(&self.id))
+            .collect();
+        writeln!(
+            f,
+            "`{}` is ambiguous: it resolves to {} requirements ({}). Refusing to pick one; \
+             re-run with one of those handles.",
+            self.id.to_ascii_uppercase(),
+            self.candidates.len(),
+            handles.join(", ")
+        )?;
+        for line in describe_candidates(&self.id, &self.candidates) {
+            writeln!(f, "  - {line}")?;
+        }
+        write!(
+            f,
+            "Each line leads with the handle that reaches that requirement alone. \
+             `aida doctor --category id-collisions` lists every ambiguous id."
+        )
+    }
+}
+
+impl std::error::Error for AmbiguousIdError {}
+
+/// Classify a lookup: `Ok(None)` = unknown, `Ok(Some(uuid))` = exactly one
+/// object, `Err` = ambiguous.
+pub fn resolve_candidates(
+    id: &str,
+    candidates: Vec<IdCandidate>,
+) -> Result<Option<Uuid>, AmbiguousIdError> {
+    match candidates.len() {
+        0 => Ok(None),
+        1 => Ok(Some(candidates[0].uuid)),
+        _ => Err(AmbiguousIdError {
+            id: id.trim().to_string(),
+            candidates,
+        }),
+    }
+}
+
+/// UUIDs whose DISPLAYED id (agreed_id when set, else spec_id) is ambiguous
+/// and should instead be displayed by their native spec_id: every candidate
+/// that matches a colliding id only through its agreed_id.
+pub fn relabel_to_native(collisions: &[IdCollision]) -> std::collections::HashSet<Uuid> {
+    collisions
+        .iter()
+        .flat_map(|c| c.candidates.iter())
+        .filter(|c| !c.native && c.spec_id.as_deref().is_some_and(|s| !s.trim().is_empty()))
+        .map(|c| c.uuid)
+        .collect()
 }
 
 /// An id that resolves to two or more distinct objects.
@@ -168,13 +235,17 @@ where
 }
 
 /// A human-readable one-line-per-candidate rendering, used by the ambiguity
-/// warning and the doctor finding.
-pub fn describe_candidates(candidates: &[IdCandidate]) -> Vec<String> {
+/// refusal and the doctor finding. Each line leads with the candidate's
+/// unambiguous handle.
+pub fn describe_candidates(colliding_id: &str, candidates: &[IdCandidate]) -> Vec<String> {
     candidates
         .iter()
         .map(|c| {
             let via = if c.native {
-                "native id, wins resolution".to_string()
+                format!(
+                    "native id {}",
+                    c.spec_id.as_deref().unwrap_or("?").to_ascii_uppercase()
+                )
             } else {
                 format!(
                     "agreed id {}",
@@ -183,7 +254,7 @@ pub fn describe_candidates(candidates: &[IdCandidate]) -> Vec<String> {
             };
             format!(
                 "{} ({}) \u{2014} {} [{}]",
-                c.unambiguous_handle(),
+                c.unambiguous_handle(colliding_id),
                 via,
                 c.title,
                 c.status
@@ -223,8 +294,24 @@ mod tests {
         assert!(found[0].candidates[0].native);
         assert_eq!(found[0].candidates[1].uuid, real.uuid);
         assert!(!found[0].candidates[1].native);
-        assert_eq!(found[0].candidates[1].unambiguous_handle(), "BUG-2-081");
-        assert_eq!(found[0].candidates[0].unambiguous_handle(), "BUG-34");
+        assert_eq!(
+            found[0].candidates[1].unambiguous_handle("BUG-34"),
+            "BUG-2-081"
+        );
+        assert_eq!(
+            found[0].candidates[0].unambiguous_handle("bug-34"),
+            fixture.uuid.to_string()
+        );
+        // Only the agreed-id holder is relabelled for display.
+        let relabel = relabel_to_native(&found);
+        assert!(relabel.contains(&real.uuid) && !relabel.contains(&fixture.uuid));
+        // The refusal names both handles.
+        let err = resolve_candidates("bug-34", found[0].candidates.clone()).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("BUG-2-081") && msg.contains(&fixture.uuid.to_string()),
+            "{msg}"
+        );
     }
 
     #[test]

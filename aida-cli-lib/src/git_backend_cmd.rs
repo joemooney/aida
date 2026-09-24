@@ -158,39 +158,53 @@ impl CacheOnlyReads for aida_core::CachedGitBackend {
     }
 }
 
-/// Warn (stderr) when `id` resolves to more than one requirement — a native
-/// spec_id on one object and a merge-gate agreed_id on another. Resolution
-/// itself is deterministic (the native owner wins), but a silent pick is how a
-/// reader asking about one spec got a different one; this lists every
-/// candidate with the id that reaches it. Best-effort: a cache error never
-/// fails the lookup it guards.
+/// Whether `id` is shaped like a spec id OR is a UUID. A UUID is the only
+/// handle that reaches the native owner of an ambiguous id, so the lookup
+/// paths accept it.
 // trace:BUG-1535 | ai:claude
-pub(crate) fn warn_if_ambiguous_id(
+fn is_spec_id_or_uuid(id: &str) -> bool {
+    aida_core::object_store::valid_spec_id_format(id) || Uuid::parse_str(id.trim()).is_ok()
+}
+
+/// `aida list` must not emit two rows under one id. The display id prefers
+/// `agreed_id`, so a spec whose agreed id collides with another spec's native
+/// id rendered as a duplicate. Such rows drop the ambiguous agreed id for this
+/// view and render under their native spec_id; a stderr note says which.
+/// Best-effort: if the scan fails the rows are left untouched.
+// trace:BUG-1535 | ai:claude
+fn relabel_ambiguous_list_rows(
     backend: &aida_core::CachedGitBackend,
-    id: &str,
-    resolved: &Requirement,
+    rows: &mut [aida_core::RequirementSummary],
 ) {
-    let Ok(candidates) = backend.id_candidates(id) else {
+    let Ok(collisions) = backend.id_collisions() else {
         return;
     };
-    if candidates.len() < 2 {
+    if collisions.is_empty() {
         return;
     }
-    eprintln!(
-        "{} `{}` is ambiguous: it resolves to {} requirements.",
-        "Warning:".yellow().bold(),
-        id.to_ascii_uppercase(),
-        candidates.len()
-    );
-    let lines = aida_core::id_collisions::describe_candidates(&candidates);
-    for (c, line) in candidates.iter().zip(lines) {
-        let marker = if c.uuid == resolved.id { "*" } else { " " };
-        eprintln!("  {marker} {line}");
+    let relabel = aida_core::id_collisions::relabel_to_native(&collisions);
+    let mut moved: Vec<String> = Vec::new();
+    for row in rows.iter_mut() {
+        if !relabel.contains(&row.id) {
+            continue;
+        }
+        if let Some(agreed) = row.agreed_id.take() {
+            moved.push(format!(
+                "{} (agreed id {} is ambiguous)",
+                row.spec_id.as_deref().unwrap_or("?"),
+                agreed.to_ascii_uppercase()
+            ));
+        }
     }
-    eprintln!(
-        "  Using the one marked *. Address another by the id shown first on its line; \
-         `aida doctor --category id-collisions` lists every ambiguous id."
-    );
+    if !moved.is_empty() {
+        eprintln!(
+            "{} {} row(s) shown by native id because their agreed id also names another spec: {}. \
+             `aida doctor --category id-collisions` lists every ambiguous id.",
+            "Note:".yellow().bold(),
+            moved.len(),
+            moved.join(", ")
+        );
+    }
 }
 
 fn show_cached_context(
@@ -533,7 +547,7 @@ fn add_proxy_approval(
 ) -> Result<()> {
     // trace:STORY-1173 | ai:codex
     let mut req = backend
-        .get_requirement_by_spec_id(spec)?
+        .get_requirement_unambiguous(spec)?
         .ok_or_else(|| not_found::requirement_not_found(spec, None))?;
     let decision = required_approval_field("decision", decision)?;
     let verdict = required_approval_field("verdict", verdict)?;
@@ -1969,6 +1983,10 @@ pub(crate) fn handle_git_backend_command(
                 reqs.extend(rework_rows);
                 rework_ids = ids;
             }
+            // BUG-1535: never two rows under one id. A row whose displayed
+            // (agreed) id also names another spec is shown by its native id
+            // instead, with a note. trace:BUG-1535 | ai:claude
+            relabel_ambiguous_list_rows(&backend, &mut reqs);
 
             // STORY-62: --parent <id> restricts to direct children of <id>.
             // We don't materialize a parent->children index in the cache;
@@ -3281,7 +3299,7 @@ pub(crate) fn handle_git_backend_command(
                     let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(parent_str) {
                         backend.get_requirement(&uuid)?
                     } else {
-                        backend.get_requirement_by_spec_id(parent_str)?
+                        backend.get_requirement_unambiguous(parent_str)?
                     };
                     Some(resolved.ok_or_else(|| {
                         anyhow::anyhow!(
@@ -4035,14 +4053,22 @@ pub(crate) fn handle_git_backend_command(
             // TYPE-NODE-SEQ) is a typo, not an on-disk parse failure — give a
             // friendly format hint instead of the version-mismatch/rebuild wall
             // (which `parse_failure_hint` is reserved for below). trace:BUG-599
-            if !aida_core::object_store::valid_spec_id_format(id) {
+            if !is_spec_id_or_uuid(id) {
                 return Err(not_found::invalid_spec_id_format(id));
             }
             // The id is well-formed, so any Err here is a genuine on-disk parse
             // failure (binary/version skew) worth the rebuild hint. A
             // well-formed-but-absent id comes back as Ok(None) and is handled
             // as a plain not-found below. trace:BUG-97 trace:BUG-599
-            let lookup = backend.get_requirement_by_spec_id(id).map_err(|e| {
+            // BUG-1535: an ambiguous id is refused (non-zero exit, every
+            // candidate listed) — never answered with one of them — and that
+            // refusal passes through unwrapped. trace:BUG-1535 | ai:claude
+            let lookup = backend.get_requirement_unambiguous(id).map_err(|e| {
+                if e.downcast_ref::<aida_core::id_collisions::AmbiguousIdError>()
+                    .is_some()
+                {
+                    return e;
+                }
                 anyhow::anyhow!(
                     "Parse failed: {}\n  Detail: {:#}\n{}",
                     id,
@@ -4053,7 +4079,6 @@ pub(crate) fn handle_git_backend_command(
             if *tree {
                 match lookup? {
                     Some(root) => {
-                        warn_if_ambiguous_id(&backend, id, &root);
                         record_role_activity(root.spec_id.as_deref().unwrap_or(id), "show");
                         render_tree(&backend, &root, *depth)?;
                     }
@@ -4068,8 +4093,6 @@ pub(crate) fn handle_git_backend_command(
             }
             match lookup? {
                 Some(req) => {
-                    // BUG-1535: never a silent pick on an ambiguous id.
-                    warn_if_ambiguous_id(&backend, id, &req);
                     record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
                     // STORY-632: deterministic local graph-centrality, read from
                     // the cache (recomputed on rebuild from the relationship
@@ -5146,19 +5169,20 @@ pub(crate) fn handle_git_backend_command(
             // — friendly format hint instead of the bare "Invalid spec_id
             // format" (or, via the lookup, the version-mismatch wall).
             // trace:BUG-599 | ai:claude
-            if !aida_core::object_store::valid_spec_id_format(id) {
+            if !is_spec_id_or_uuid(id) {
                 return Err(not_found::invalid_spec_id_format(id));
             }
             // BUG-68: record activity AFTER successful lookup AND
             // after the TASK-47 terminal-status guard, so a refused
             // re-open doesn't leave a phantom edit entry.
             // trace:BUG-68 | ai:claude
+            // BUG-1535: an ambiguous id REFUSES the edit (non-zero exit,
+            // every candidate + its unambiguous handle listed); `aida list`
+            // shows another spec under the same id, so a guess would silently
+            // modify the wrong one. trace:BUG-1535 | ai:claude
             let mut req = backend
-                .get_requirement_by_spec_id(id)?
+                .get_requirement_unambiguous(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
-            // BUG-1535: an edit through an ambiguous id says which object it
-            // is about to change. trace:BUG-1535 | ai:claude
-            warn_if_ambiguous_id(&backend, id, &req);
 
             // TASK-47: refuse to re-open a Completed/Rejected req
             // without --force. Closing or idempotent re-flips stay
@@ -6037,7 +6061,7 @@ pub(crate) fn handle_git_backend_command(
         }
         Command::Del { id, yes } => {
             let req = backend
-                .get_requirement_by_spec_id(id)?
+                .get_requirement_unambiguous(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
 
             if !yes {
@@ -6383,8 +6407,9 @@ pub(crate) fn handle_git_backend_command(
         }) => {
             // BUG-68: lookup first, record activity after the body
             // sanity check below also passes. trace:BUG-68 | ai:claude
+            // BUG-1535: refuse an ambiguous id. trace:BUG-1535 | ai:claude
             let mut req = backend
-                .get_requirement_by_spec_id(req_id)?
+                .get_requirement_unambiguous(req_id)?
                 .ok_or_else(|| not_found::requirement_not_found(req_id, Some(store_path)))?;
 
             // `aida comment add <REQ> "text"` — the text comes through as
@@ -6457,7 +6482,7 @@ pub(crate) fn handle_git_backend_command(
             // trace:TASK-1-020 | ai:claude
             // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
             let req = backend
-                .get_requirement_by_spec_id(id)?
+                .get_requirement_unambiguous(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
             record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
             println!("{}: {}", "Requirement".cyan(), req.title);
@@ -6485,7 +6510,7 @@ pub(crate) fn handle_git_backend_command(
         }) => {
             // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
             let mut req = backend
-                .get_requirement_by_spec_id(req_id)?
+                .get_requirement_unambiguous(req_id)?
                 .ok_or_else(|| not_found::requirement_not_found(req_id, Some(store_path)))?;
             record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
             let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
@@ -6521,7 +6546,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Comment(CommentCommand::Delete { req_id, comment_id }) => {
             // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
             let mut req = backend
-                .get_requirement_by_spec_id(req_id)?
+                .get_requirement_unambiguous(req_id)?
                 .ok_or_else(|| not_found::requirement_not_found(req_id, Some(store_path)))?;
             record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
             let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
@@ -6645,11 +6670,11 @@ pub(crate) fn handle_git_backend_command(
             reject_cross_store_spec_ref(from)?;
             reject_cross_store_spec_ref(to)?;
             let mut from_req = backend
-                .get_requirement_by_spec_id(from)?
+                .get_requirement_unambiguous(from)?
                 .ok_or_else(|| not_found::requirement_not_found(from, Some(store_path)))?;
 
             let to_req = backend
-                .get_requirement_by_spec_id(to)?
+                .get_requirement_unambiguous(to)?
                 .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
 
             // BUG-1471: normalize the natural `related` spelling to the
@@ -6751,7 +6776,7 @@ pub(crate) fn handle_git_backend_command(
             }
 
             if write_inverse {
-                let mut to_req = backend.get_requirement_by_spec_id(to)?.unwrap();
+                let mut to_req = backend.get_requirement_unambiguous(to)?.unwrap();
                 // STORY-333: use the canonical inverse helper so new typed
                 // variants (BlockedBy ↔ Blocks) compose automatically.
                 // trace:STORY-333 | ai:claude
@@ -6796,12 +6821,12 @@ pub(crate) fn handle_git_backend_command(
                 .or(to_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             let mut from_req = backend
-                .get_requirement_by_spec_id(from)?
+                .get_requirement_unambiguous(from)?
                 .ok_or_else(|| not_found::requirement_not_found(from, Some(store_path)))?;
 
             // Look up target UUID
             let to_req = backend
-                .get_requirement_by_spec_id(to)?
+                .get_requirement_unambiguous(to)?
                 .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
 
             let before = from_req.relationships.len();

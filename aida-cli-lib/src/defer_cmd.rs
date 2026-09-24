@@ -30,7 +30,7 @@ pub(crate) fn defer_single(
     store_path: &std::path::Path,
 ) -> Result<()> {
     let mut req = backend
-        .get_requirement_by_spec_id(id)?
+        .get_requirement_unambiguous(id)? // trace:BUG-1535 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
     let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
 
@@ -136,7 +136,7 @@ pub(crate) fn handle_undefer_command(
     store_path: &std::path::Path,
 ) -> Result<()> {
     let mut req = backend
-        .get_requirement_by_spec_id(id)?
+        .get_requirement_unambiguous(id)? // trace:BUG-1535 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
     let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
     // Honor-both migration: a spec deferred only via a legacy `deferred:*` tag

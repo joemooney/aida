@@ -1947,6 +1947,8 @@ impl<'a> McpServer<'a> {
 
     // trace:STORY-82 | ai:claude
     fn tool_update_requirement(&self, args: &Value) -> Result<String, String> {
+        // BUG-1535: every id lookup here refuses an ambiguous id (the error
+        // lists each candidate's unambiguous handle). trace:BUG-1535 | ai:claude
         // (see mcp_status_gate_message below for the BUG-449 status gate)
         let id = args
             .get("id")
@@ -1960,7 +1962,8 @@ impl<'a> McpServer<'a> {
         // can be applied after the mutable field-edit borrow is dropped
         // (the source and parent are two distinct records).
         let target_id = store
-            .get_requirement_by_spec_id(id)
+            .get_requirement_unambiguous(id)
+            .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Requirement '{}' not found", id))?
             .id;
         let parent_link: Option<(uuid::Uuid, String)> = match args
@@ -1969,7 +1972,8 @@ impl<'a> McpServer<'a> {
         {
             Some(parent_ref) => {
                 let parent = store
-                    .get_requirement_by_spec_id(parent_ref)
+                    .get_requirement_unambiguous(parent_ref)
+                    .map_err(|e| e.to_string())?
                     .ok_or_else(|| format!("parent '{}' not found", parent_ref))?;
                 if crate::is_terminal_status(&parent.status) {
                     return Err(format!(
@@ -1987,7 +1991,8 @@ impl<'a> McpServer<'a> {
         };
 
         let req = store
-            .get_requirement_by_spec_id_mut(id)
+            .get_requirement_unambiguous_mut(id)
+            .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
 
         let mut changes = Vec::new();
@@ -2769,7 +2774,8 @@ impl<'a> McpServer<'a> {
 
         let mut store = self.storage.load().map_err(|e| e.to_string())?;
         let req = store
-            .get_requirement_by_spec_id_mut(id)
+            .get_requirement_unambiguous_mut(id)
+            .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
 
         // trace:TASK-330 | ai:claude — stamp the producing session (best-effort)
@@ -2811,10 +2817,12 @@ impl<'a> McpServer<'a> {
         let rel_type = parse_mcp_relationship_type(relationship_type_raw)?;
         let mut store = self.storage.load().map_err(|e| e.to_string())?;
         let source_req = store
-            .get_requirement_by_spec_id(spec_id)
+            .get_requirement_unambiguous(spec_id)
+            .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Requirement '{}' not found", spec_id))?;
         let target_req = store
-            .get_requirement_by_spec_id(target_spec_id)
+            .get_requirement_unambiguous(target_spec_id)
+            .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Requirement '{}' not found", target_spec_id))?;
 
         let source_id = source_req.id;
