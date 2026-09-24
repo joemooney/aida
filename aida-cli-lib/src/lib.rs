@@ -17676,7 +17676,12 @@ fn apply_calibration_tags(
     }
     // Git-canonical path — direct backend write, exactly like Command::Edit.
     if let Some(store_path) = detect_distributed_store() {
-        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+        // Cache-backed so the checked lookup below does not load the whole
+        // store. trace:TASK-1468 | ai:claude
+        if let Ok(backend) = aida_core::CachedGitBackend::open(
+            &store_path,
+            &aida_core::CachedGitBackend::default_cache_path(&store_path),
+        ) {
             use aida_core::DatabaseBackend;
             // trace:TASK-1468 | ai:claude
             let Ok(Some(mut req)) = backend.get_requirement_unambiguous(spec) else {
@@ -17744,7 +17749,12 @@ fn apply_effort_tag(
         return;
     };
     if let Some(store_path) = detect_distributed_store() {
-        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+        // Cache-backed so the checked lookup below does not load the whole
+        // store. trace:TASK-1468 | ai:claude
+        if let Ok(backend) = aida_core::CachedGitBackend::open(
+            &store_path,
+            &aida_core::CachedGitBackend::default_cache_path(&store_path),
+        ) {
             use aida_core::DatabaseBackend;
             // trace:TASK-1468 | ai:claude
             let Ok(Some(mut req)) = backend.get_requirement_unambiguous(spec) else {
@@ -66547,8 +66557,10 @@ fn apply_draft_to_done_bumps(
         let backend = aida_core::db::GitBackend::new(store_path)?;
         let mut confirmed = Vec::new();
         for (spec_id, sha) in draft_candidates {
+            // Plain lookup: a checked one on a bare GitBackend reloads the whole
+            // store per spec. Trailer ids were vetted by trailer_spec_or_skip.
             // trace:TASK-1468 | ai:claude
-            let Some(mut r) = backend.get_requirement_unambiguous(spec_id)? else {
+            let Some(mut r) = backend.get_requirement_by_spec_id(spec_id)? else {
                 continue;
             };
             if !matches!(r.status, RequirementStatus::Draft) {
@@ -68158,8 +68170,10 @@ fn auto_bump_done_to_completed(
         use aida_core::db::DatabaseBackend;
         let backend = aida_core::db::GitBackend::new(store_path)?;
         for flip in &flips {
+            // Plain lookup: a checked one on a bare GitBackend reloads the whole
+            // store per spec. Trailer ids were vetted by trailer_spec_or_skip.
             // trace:TASK-1468 | ai:claude
-            let Some(mut r) = backend.get_requirement_unambiguous(&flip.spec_id)? else {
+            let Some(mut r) = backend.get_requirement_by_spec_id(&flip.spec_id)? else {
                 continue;
             };
             if apply_auto_bump_flip(&mut r, flip, now, project_root) {
@@ -68168,8 +68182,10 @@ fn auto_bump_done_to_completed(
         }
         // BUG-1551: closure holds — same targeted write, one commit each.
         for hold in &closure_holds {
+            // Plain lookup: a checked one on a bare GitBackend reloads the whole
+            // store per spec. Trailer ids were vetted by trailer_spec_or_skip.
             // trace:TASK-1468 | ai:claude
-            let Some(mut r) = backend.get_requirement_unambiguous(&hold.flip.spec_id)? else {
+            let Some(mut r) = backend.get_requirement_by_spec_id(&hold.flip.spec_id)? else {
                 continue;
             };
             if apply_closure_hold(&mut r, hold, now) {
@@ -68179,8 +68195,10 @@ fn auto_bump_done_to_completed(
         // TASK-246 / BUG-219: review stories whose PR merged before the
         // review lifecycle finished — same targeted write, one commit each.
         for (spec_id, sha, pr_n, _) in &stale_review_flips {
+            // Plain lookup: a checked one on a bare GitBackend reloads the whole
+            // store per spec. These ids come from the loaded store's own rows.
             // trace:TASK-1468 | ai:claude
-            let Some(mut r) = backend.get_requirement_unambiguous(spec_id)? else {
+            let Some(mut r) = backend.get_requirement_by_spec_id(spec_id)? else {
                 continue;
             };
             if apply_stale_review_flip(&mut r, sha, *pr_n, now, project_root) {
@@ -68191,8 +68209,10 @@ fn auto_bump_done_to_completed(
         // whose PR reached a terminal state the git-log scan above couldn't see
         // (closed without merging, or merged outside the scan window).
         for resolution in &stranded_review_pr {
+            // Plain lookup: a checked one on a bare GitBackend reloads the whole
+            // store per spec. These ids come from the loaded store's own rows.
             // trace:TASK-1468 | ai:claude
-            let Some(mut r) = backend.get_requirement_unambiguous(&resolution.spec_id)? else {
+            let Some(mut r) = backend.get_requirement_by_spec_id(&resolution.spec_id)? else {
                 continue;
             };
             if apply_stranded_review_pr_resolution(&mut r, resolution, now) {
@@ -68464,8 +68484,10 @@ fn auto_bump_done_to_completed(
             use aida_core::db::DatabaseBackend;
             let backend = aida_core::db::GitBackend::new(store_path)?;
             for (finding_id, completed_spec, completion_ref) in &auto_resolved_failures {
+                // Plain lookup: a checked one on a bare GitBackend reloads the whole
+                // store per spec. These ids come from the loaded store's own rows.
                 // trace:TASK-1468 | ai:claude
-                let Some(mut r) = backend.get_requirement_unambiguous(finding_id)? else {
+                let Some(mut r) = backend.get_requirement_by_spec_id(finding_id)? else {
                     continue;
                 };
                 if reject_resolved_auto_complete_failure_bug(
