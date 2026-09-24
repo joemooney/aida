@@ -51,12 +51,12 @@ description: |
   STRETCH (per STORY-1385's mechanism, and marked so deliberately): the red-then-green transition per criterion is recorded, so a criterion that was never observed red is distinguishable from one that was. That is the strongest version — it would have caught every instance in the opening section — and I am not certain it is reachable without more instrumentation than it is worth.
 
   NOT IN SCOPE: applying this to every spec regardless of size. A one-line fix does not need a test-writing phase, and a rule that cannot be skipped for trivial work will be skipped for everything.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:44:38.754900781Z
-modified_at: 2026-09-20T12:44:59.968225519Z
+modified_at: 2026-09-24T08:13:22.479808737Z
 req_type: Story
 tags:
 - drain
