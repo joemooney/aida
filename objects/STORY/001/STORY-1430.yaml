@@ -54,22 +54,26 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:22:47.839462128Z
-modified_at: 2026-09-21T20:59:24.939068910Z
+modified_at: 2026-09-24T02:31:35.928209935Z
 req_type: Story
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c408-ccbb-7263-9f8b-5fe834d597aa
   created_at: 2026-09-21T20:23:31.119877879Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c4b7-b38c-7301-89cd-9b7a04a1e703
   created_at: 2026-09-21T20:23:43.949718880Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c581-f3ab-7072-aa1d-1cf98d1108b7
   created_at: 2026-09-21T20:23:54.278394115Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c4a6-f142-7fc1-8ec1-d073af6f4c15
   created_at: 2026-09-21T20:24:06.926318878Z
   created_by: joe
@@ -94,3 +98,9 @@ comments:
   created_at: 2026-09-21T20:59:24.939068910Z
   modified_at: 2026-09-21T20:59:24.939068910Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0d141-0af8-7b03-86a3-7b06eeeb2d33
+  author: joe
+  content: '[aida:implementer] Implemented on claude/story-1430 (e3e70b06df, pushed, no PR yet). REPRESENTATION: two explicit declared forms, read by aida_core::pickability::unmet_declared_closure_criteria: (1) tag closure:pending (whole-spec flag; resolve with aida edit ID --remove-tag closure:pending); (2) unchecked ''- [ ]'' items under a ''## Closure'' heading (or a bare ''Closure:'' / ''Closure criteria:'' label) in the description; ''- [x]'' = met, and each unchecked item''s text is what the refusal names. REJECTED: a new model field (needs schema + cache + MCP + edit-flag plumbing for the same bit a tag carries); a typed relationship (BUG-1551 already covers the spec-to-spec case via BlockedBy; criteria like ''re-measure under 26s'' are not specs); NLP over free-text acceptance (the hand-run grep this replaces, with the same false-negative failure). GATE: the auto-bump and db reconcile-status REFUSE via the ADR-57/BUG-1551 hold: spec lands at Done, a [aida:closure-held] note names the unmet criteria and who resolves them (owner/advisor: check the box or drop the tag; a human can still force aida edit --status completed), aida why shows it (JSON: closure_unmet_criteria), and each aida pull releases it once nothing is unmet. Tests: 4 CLI tests in auto_bump_done_tests.rs (BUG-1480/STORY-1423 and BUG-1288 replays as fixtures, a no-criterion control that must still complete, reconcile path) plus 3 in pickability. Red-first confirmed: with the gate stubbed out, the 3 hold tests FAIL and the control passes. WHAT REMAINS: (a) the red-first replays are fixtures modelled on the real cases, not a replay against the live store, so criterion 4''s ''stronger evidence'' bar is only partly met; (b) existing specs whose prose says ''does not close until X'' are NOT gated until someone migrates them to a Closure section or the tag. Status left unchanged for that reason.'
+  created_at: 2026-09-24T02:31:35.928209935Z
+  modified_at: 2026-09-24T02:31:35.928209935Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
