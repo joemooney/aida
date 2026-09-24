@@ -8,12 +8,12 @@ description: |-
   (2) close_verdict_on_merge (review_verdict.rs ~1260) must also close the archived round, or verdicts_for_sha reports a closed refusal as open.
   (3) The /aida-review skill writes its verdict file directly (lib.rs ~82555). Route it through the same record path so its rounds are archived.
   (4) Migrate the 27 existing sidecar files into the archive layout, idempotently.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T23:19:33.841436622Z
-modified_at: 2026-09-24T00:54:30.009215954Z
+modified_at: 2026-09-24T02:23:12.434747141Z
 req_type: Task
 tags:
 - followup
@@ -23,3 +23,21 @@ relationships:
 - rel_type: Child
   target_id: 01a0c30b-e84e-73f0-af63-39f43c586e2a
   created_at: 2026-09-23T23:19:46.025367475Z
+history:
+- id: 01a0d139-5c2b-7401-b388-5b88d6c18754
+  author: aida-auto-bump
+  timestamp: 2026-09-24T02:23:12.427824008Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d139-5c32-75c1-be2f-d1f85ea3708a
+  timestamp: 2026-09-24T02:23:12.434745626Z
+  agent: aida
+  commit_sha: 08869b53e12eaac4d774ed7938946ca7da4b5235
+  summary: Completed via merge 08869b53
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T02:23:11.486064067Z
+  completion_sha: 08869b53e12eaac4d774ed7938946ca7da4b5235
