@@ -11,9 +11,12 @@ if a reusable question catalog / recorded-judgments store is built.
 Jev is an optional external AI judgment service (TypeSafe AI's "System One")
 that a few AIDA commands can consult for an advisory second opinion. It is
 off by default and never required: every feature that can call it also has a
-deterministic, offline fallback. The single switch is one environment
-variable, `AIDA_JEV_API_KEY` — set it and the call can happen; leave it
-unset and AIDA never reaches the network for this. If a call is slow, errors,
+deterministic, offline fallback. What turns it on depends on the feature.
+`aida explain` reads only `AIDA_JEV_API_KEY`; with that unset it never
+reaches the network. The PR graded review and the contradiction sweep also
+accept `TYPESAFE_API_KEY`, from the environment or from `~/.env`, so a key
+left there by another tool enables those two. To keep all three offline,
+leave both variables unset and keep them out of `~/.env`. If a call is slow, errors,
 or the key is missing, AIDA doesn't guess or wait indefinitely: it falls back
 to the offline behavior and records the fallback as "unavailable," never as
 if the advisory check had passed.
