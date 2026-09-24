@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:17:35.380363150Z
-modified_at: 2026-09-24T03:53:33.031514978Z
+modified_at: 2026-09-24T03:53:34.694815985Z
 req_type: Story
 tags:
 - batch:night-0920 review-gate operator-surface from:session-0920
@@ -45,3 +45,10 @@ relationships:
   target_id: 01a0c1cb-ad94-7010-85d4-c6fff8d3a5b3
   created_at: 2026-09-21T04:18:13.653077004Z
   created_by: joe
+comments:
+- id: 01a0d18c-18e6-7e73-9418-e1e23ee74889
+  author: joe
+  content: 'Implemented on claude/story-1415: aida review mode mass-change on|off|status ([review] mass_change_mode + started_at/by/expires_at, default 7d, --days 1-30, self-expiring, fail-closed when unclocked); bare aida status one-liner with day N of M + open review:deferred-finding count; consumer query mass_change::is_active. Tagged docs:impacted.'
+  created_at: 2026-09-24T03:53:34.694815985Z
+  modified_at: 2026-09-24T03:53:34.694815985Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
