@@ -2,14 +2,20 @@
 //!
 //! When a drain's implementer phase starts, the spec's criterion-traced tests
 //! (found by the same tracer `aida criteria <SPEC>` prints — no second
-//! tracer) are run BEFORE any implementation exists. The run is recorded per
-//! criterion under `.aida/red-runs/<SPEC>.json` in the main worktree:
+//! tracer) are run in the drain lane's OWN fresh worktree, before the
+//! implementer touches it, with a per-lane `CARGO_TARGET_DIR` inside that
+//! worktree. It never runs in the operator's main checkout. The run is
+//! recorded per criterion under `.aida/red-runs/<SPEC>.json` in the main
+//! worktree (written atomically):
 //!
 //! - `red` — at least one traced test fails: the test discriminates.
 //! - `already-satisfied` — every test that ran passed: the test cannot fail,
 //!   or the criterion was already satisfied before implementation. Flagged.
 //! - `not-run` — no traced test could be run (no runner, filter matched
-//!   nothing, budget exhausted).
+//!   nothing, crash/signal, timeout — a timeout is recorded as `timed-out`).
+//!
+//! OPT-IN: off unless `AIDA_RED_RUN_BUDGET_SECS` is a positive number or
+//! `[drain] red_run = true` is set in `.aida/config.toml` (120s budget).
 //!
 //! The record is written ONCE per spec: a later run would observe the
 //! implementation and falsely flag every criterion as already satisfied. It is
@@ -24,18 +30,24 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// Default wall-clock budget for the whole red run. Kept small: this is a
-/// pre-implementation probe, not a test suite.
-const DEFAULT_BUDGET_SECS: u64 = 300;
+/// Budget when `[drain] red_run = true` enables the run without an explicit
+/// `AIDA_RED_RUN_BUDGET_SECS`.
+const CONFIG_BUDGET_SECS: u64 = 120;
+
+/// Bound on the small `git` probes (HEAD, cleanliness).
+const GIT_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "outcome", content = "detail")]
 pub(crate) enum TestOutcome {
-    /// The test ran and failed (or failed to build) — red.
+    /// The test ran and failed (the runner's own failure exit) — red.
     Failed,
     /// The test ran and passed — green before any implementation.
     Passed,
-    /// The test could not be run; the string says why.
+    /// The run hit its time budget and the process group was killed.
+    TimedOut,
+    /// The test could not be run or its result is unknown; the string says
+    /// why. PRIN-5: unknown is never red.
     NotRun(String),
 }
 
@@ -61,6 +73,9 @@ pub(crate) struct CriterionRedRun {
     pub(crate) id: String,
     pub(crate) text: String,
     pub(crate) verdict: CriterionVerdict,
+    /// True when any of this criterion's tests hit the time budget.
+    #[serde(default)]
+    pub(crate) timed_out: bool,
     pub(crate) tests: Vec<TestRun>,
 }
 
@@ -68,6 +83,9 @@ pub(crate) struct CriterionRedRun {
 pub(crate) struct RedRunRecord {
     pub(crate) spec: String,
     pub(crate) recorded_at: String,
+    /// The lane worktree the tests ran in.
+    #[serde(default)]
+    pub(crate) workspace: Option<String>,
     #[serde(default)]
     pub(crate) head_sha: Option<String>,
     pub(crate) criteria: Vec<CriterionRedRun>,
@@ -83,9 +101,10 @@ impl RedRunRecord {
     }
 }
 
-/// Runs one traced test. Injected so unit tests never spawn cargo.
+/// Runs one traced test inside `workspace`. Injected so unit tests never
+/// spawn cargo.
 pub(crate) trait TestRunner {
-    fn run(&mut self, root: &Path, test: &TracedTest, timeout: Duration) -> TestOutcome;
+    fn run(&mut self, workspace: &Path, test: &TracedTest, timeout: Duration) -> TestOutcome;
 }
 
 /// Combine one criterion's test outcomes: any failure is red; otherwise any
@@ -101,10 +120,10 @@ pub(crate) fn verdict_for(tests: &[TestRun]) -> CriterionVerdict {
 }
 
 /// Run every criterion-traced test once (a test traced to two criteria runs
-/// once) within `budget`. Returns `None` when the spec has no traced tests —
-/// the cheap skip.
+/// once) in `workspace` within `budget`. Returns `None` when the spec has no
+/// traced tests — the cheap skip.
 pub(crate) fn run_red_run(
-    root: &Path,
+    workspace: &Path,
     report: &CriteriaReport,
     runner: &mut dyn TestRunner,
     budget: Duration,
@@ -129,9 +148,9 @@ pub(crate) fn run_red_run(
             } else {
                 let remaining = budget.saturating_sub(started.elapsed());
                 let outcome = if remaining.is_zero() {
-                    TestOutcome::NotRun("red-run budget exhausted".to_string())
+                    TestOutcome::TimedOut
                 } else {
-                    runner.run(root, test, remaining)
+                    runner.run(workspace, test, remaining)
                 };
                 cache.insert(key, outcome.clone());
                 outcome
@@ -147,20 +166,35 @@ pub(crate) fn run_red_run(
             id: row.criterion.id.clone(),
             text: row.criterion.text.clone(),
             verdict: verdict_for(&runs),
+            timed_out: runs.iter().any(|t| t.outcome == TestOutcome::TimedOut),
             tests: runs,
         });
     }
     Some(out)
 }
 
-/// `AIDA_RED_RUN_BUDGET_SECS`: total wall-clock budget; `0` disables the red
-/// run. Unset/unparsable → the default.
-pub(crate) fn budget_from_env() -> Option<Duration> {
-    let secs = std::env::var("AIDA_RED_RUN_BUDGET_SECS")
-        .ok()
-        .and_then(|v| v.trim().parse::<u64>().ok())
-        .unwrap_or(DEFAULT_BUDGET_SECS);
-    (secs > 0).then(|| Duration::from_secs(secs))
+/// The red-run budget, or `None` when it is off (the default).
+/// `AIDA_RED_RUN_BUDGET_SECS` wins when set (`0` = off); otherwise
+/// `[drain] red_run = true` enables it with a 120s budget.
+pub(crate) fn budget(project_root: &Path) -> Option<Duration> {
+    budget_from(
+        std::env::var("AIDA_RED_RUN_BUDGET_SECS").ok().as_deref(),
+        project_root,
+    )
+}
+
+fn budget_from(env: Option<&str>, project_root: &Path) -> Option<Duration> {
+    if let Some(secs) = env.and_then(|v| v.trim().parse::<u64>().ok()) {
+        return (secs > 0).then(|| Duration::from_secs(secs));
+    }
+    let enabled = crate::read_project_config_value(project_root)
+        .and_then(|v| {
+            v.get("drain")
+                .and_then(|d| d.get("red_run"))
+                .and_then(|b| b.as_bool())
+        })
+        .unwrap_or(false);
+    enabled.then(|| Duration::from_secs(CONFIG_BUDGET_SECS))
 }
 
 fn safe_file_stem(spec: &str) -> String {
@@ -187,49 +221,75 @@ pub(crate) fn load_record(root: &Path, spec: &str) -> Option<RedRunRecord> {
     serde_json::from_str(&raw).ok()
 }
 
+/// Atomic per-spec write: a temp file in the same directory, then rename.
 pub(crate) fn save_record(root: &Path, record: &RedRunRecord) -> std::io::Result<PathBuf> {
     let path = record_path(root, &record.spec);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("record path has no parent"))?;
+    std::fs::create_dir_all(parent)?;
     let body = serde_json::to_string_pretty(record).map_err(std::io::Error::other)?;
-    std::fs::write(&path, body)?;
+    let tmp = parent.join(format!(
+        ".{}.{}.tmp",
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("record"),
+        std::process::id()
+    ));
+    std::fs::write(&tmp, body)?;
+    std::fs::rename(&tmp, &path)?;
     Ok(path)
 }
 
-/// Drain entry point: run and record once. Returns the record when one was
-/// written now; `None` when skipped (disabled, already recorded, no traced
-/// tests).
+/// Drain entry point: run the traced tests in the lane `workspace` and record
+/// the result once under `record_root` (the main worktree). Returns the
+/// record when one was written now; `None` when skipped (already recorded,
+/// no traced tests, write failure).
 pub(crate) fn record_red_run_once(
-    root: &Path,
+    record_root: &Path,
+    workspace: &Path,
     report: &CriteriaReport,
     runner: &mut dyn TestRunner,
     budget: Duration,
 ) -> Option<RedRunRecord> {
-    if load_record(root, &report.spec).is_some() {
+    if load_record(record_root, &report.spec).is_some() {
         return None;
     }
-    let criteria = run_red_run(root, report, runner, budget)?;
+    let criteria = run_red_run(workspace, report, runner, budget)?;
     let record = RedRunRecord {
         spec: report.spec.clone(),
         recorded_at: chrono::Utc::now().to_rfc3339(),
-        head_sha: git_head(root),
+        workspace: Some(workspace.display().to_string()),
+        head_sha: git_head(workspace),
         criteria,
     };
-    save_record(root, &record).ok()?;
+    save_record(record_root, &record).ok()?;
     Some(record)
 }
 
-fn git_head(root: &Path) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()?;
+fn git_probe(dir: &Path, args: &[&str]) -> Option<String> {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(dir).args(args).stdin(Stdio::null());
+    let out = crate::command_output_with_timeout(cmd, GIT_PROBE_TIMEOUT)?;
     out.status
         .success()
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn git_head(dir: &Path) -> Option<String> {
+    git_probe(dir, &["rev-parse", "HEAD"])
+}
+
+/// A lane worktree the red run may use: it exists, it is not the main
+/// checkout, and it is clean (the implementer has not touched it yet).
+pub(crate) fn lane_is_fresh(main_root: &Path, workspace: &Path) -> bool {
+    let (Ok(main), Ok(lane)) = (main_root.canonicalize(), workspace.canonicalize()) else {
+        return false;
+    };
+    if main == lane {
+        return false;
+    }
+    git_probe(&lane, &["status", "--porcelain"]).is_some_and(|s| s.is_empty())
 }
 
 /// One line per criterion, used by the drain banner and `aida criteria`.
@@ -243,6 +303,7 @@ pub(crate) fn summary_lines(record: &RedRunRecord) -> Vec<String> {
                 CriterionVerdict::AlreadySatisfied => {
                     "test cannot fail / already satisfied".to_string()
                 }
+                CriterionVerdict::NotRun if c.timed_out => "not run (timed out)".to_string(),
                 CriterionVerdict::NotRun => {
                     let why = c
                         .tests
@@ -298,18 +359,20 @@ pub(crate) fn reviewer_prompt_block(records: &[RedRunRecord]) -> Option<String> 
 // single runner convention, so it is reported not-run rather than guessed.
 // ---------------------------------------------------------------------------
 
+/// Runs tests in the lane worktree with `CARGO_TARGET_DIR` pinned inside it,
+/// so the run never shares or clobbers the operator's main `target/`.
 pub(crate) struct CommandTestRunner;
 
 /// The command that runs exactly one traced test, or why none can.
 pub(crate) fn plan_command(
-    root: &Path,
+    workspace: &Path,
     test: &TracedTest,
-) -> Result<(String, Vec<String>, PathBuf), String> {
+) -> Result<(String, Vec<String>), String> {
     let path = Path::new(&test.path);
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     match ext {
         "rs" => {
-            let pkg = cargo_package_for(root, path)
+            let pkg = cargo_package_for(workspace, path)
                 .ok_or_else(|| "no Cargo package found for the test file".to_string())?;
             Ok((
                 "cargo".to_string(),
@@ -320,7 +383,6 @@ pub(crate) fn plan_command(
                     pkg,
                     test.name.clone(),
                 ],
-                root.to_path_buf(),
             ))
         }
         "py" => Ok((
@@ -331,7 +393,6 @@ pub(crate) fn plan_command(
                 "-q".to_string(),
                 format!("{}::{}", test.path, test.name),
             ],
-            root.to_path_buf(),
         )),
         "go" => {
             let dir = path
@@ -351,7 +412,6 @@ pub(crate) fn plan_command(
                     format!("^{}$", test.name),
                     pkg,
                 ],
-                root.to_path_buf(),
             ))
         }
         _ => Err("no runner configured for this test language".to_string()),
@@ -382,16 +442,16 @@ fn cargo_package_for(root: &Path, rel: &Path) -> Option<String> {
     None
 }
 
-/// Classify a finished run. A zero exit that ran no test is `NotRun` — a
-/// filter matching nothing must never read as "already satisfied".
-pub(crate) fn classify_output(
-    program: &str,
-    success: bool,
-    code: Option<i32>,
-    out: &str,
-) -> TestOutcome {
-    match program {
-        "cargo" => {
+/// Classify a finished run. PRIN-5: only the runner's own test-failure exit
+/// is red. A signal kill (`code == None`), an unexpected exit code, pytest
+/// usage/internal errors (2-4), a missing pytest module, or a zero exit that
+/// ran no test are all `NotRun` — unknown is never evidence.
+pub(crate) fn classify_output(program: &str, code: Option<i32>, out: &str) -> TestOutcome {
+    let Some(code) = code else {
+        return TestOutcome::NotRun("killed by a signal".to_string());
+    };
+    match (program, code) {
+        ("cargo", 0) => {
             let passed: u64 = out
                 .lines()
                 .filter_map(|l| l.split("test result:").nth(1))
@@ -402,94 +462,62 @@ pub(crate) fn classify_output(
                         .and_then(|n| n.parse::<u64>().ok())
                 })
                 .sum();
-            if !success {
-                TestOutcome::Failed
-            } else if passed == 0 {
+            if passed == 0 {
                 TestOutcome::NotRun("the test filter matched no test".to_string())
             } else {
                 TestOutcome::Passed
             }
         }
-        "python3" => match code {
-            Some(0) => TestOutcome::Passed,
-            Some(5) => TestOutcome::NotRun("pytest collected no test".to_string()),
-            _ => TestOutcome::Failed,
-        },
-        "go" => {
-            if !success {
-                TestOutcome::Failed
-            } else if out.contains("no tests to run") {
-                TestOutcome::NotRun("the test filter matched no test".to_string())
-            } else {
-                TestOutcome::Passed
-            }
+        ("cargo", 101) => TestOutcome::Failed,
+        ("python3", _) if out.contains("No module named pytest") => {
+            TestOutcome::NotRun("pytest is not installed".to_string())
         }
-        _ => {
-            if success {
-                TestOutcome::Passed
-            } else {
-                TestOutcome::Failed
-            }
+        ("python3", 0) => TestOutcome::Passed,
+        ("python3", 1) => TestOutcome::Failed,
+        ("python3", 5) => TestOutcome::NotRun("pytest collected no test".to_string()),
+        ("go", 0) if out.contains("no tests to run") => {
+            TestOutcome::NotRun("the test filter matched no test".to_string())
         }
+        ("go", 0) => TestOutcome::Passed,
+        ("go", 1) if out.contains("--- FAIL") => TestOutcome::Failed,
+        (_, code) => TestOutcome::NotRun(format!("`{program}` exited {code}")),
+    }
+}
+
+/// Run one planned command in `cwd` with `CARGO_TARGET_DIR` pinned, bounded
+/// by `timeout`. Reuses [`crate::command_output_with_timeout`], which spawns
+/// in its own process group and kills the whole group on timeout.
+pub(crate) fn execute(
+    program: &str,
+    args: &[String],
+    cwd: &Path,
+    timeout: Duration,
+) -> TestOutcome {
+    let mut cmd = Command::new(program);
+    cmd.args(args)
+        .current_dir(cwd)
+        .env("CARGO_TARGET_DIR", cwd.join("target"))
+        .stdin(Stdio::null());
+    let started = Instant::now();
+    match crate::command_output_with_timeout(cmd, timeout) {
+        Some(out) => {
+            let mut text = String::from_utf8_lossy(&out.stdout).to_string();
+            text.push_str(&String::from_utf8_lossy(&out.stderr));
+            classify_output(program, out.status.code(), &text)
+        }
+        // `None` is a timeout (group killed) or a spawn failure; the elapsed
+        // time tells them apart.
+        None if started.elapsed() >= timeout => TestOutcome::TimedOut,
+        None => TestOutcome::NotRun(format!("`{program}` could not start")),
     }
 }
 
 impl TestRunner for CommandTestRunner {
-    fn run(&mut self, root: &Path, test: &TracedTest, timeout: Duration) -> TestOutcome {
-        let (program, args, cwd) = match plan_command(root, test) {
-            Ok(plan) => plan,
-            Err(why) => return TestOutcome::NotRun(why),
-        };
-        let mut child = match Command::new(&program)
-            .args(&args)
-            .current_dir(&cwd)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
-            Ok(child) => child,
-            Err(e) => return TestOutcome::NotRun(format!("`{program}` could not start: {e}")),
-        };
-        // Drain both pipes on threads so a chatty test cannot block on a full
-        // pipe while the deadline loop polls.
-        let drain = |pipe: Option<Box<dyn std::io::Read + Send>>| {
-            std::thread::spawn(move || {
-                let mut buf = String::new();
-                if let Some(mut pipe) = pipe {
-                    let _ = pipe.read_to_string(&mut buf);
-                }
-                buf
-            })
-        };
-        let out_thread = drain(
-            child
-                .stdout
-                .take()
-                .map(|p| Box::new(p) as Box<dyn std::io::Read + Send>),
-        );
-        let err_thread = drain(
-            child
-                .stderr
-                .take()
-                .map(|p| Box::new(p) as Box<dyn std::io::Read + Send>),
-        );
-        let deadline = Instant::now() + timeout;
-        let status = loop {
-            match child.try_wait() {
-                Ok(Some(status)) => break status,
-                Ok(None) if Instant::now() >= deadline => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return TestOutcome::NotRun("red-run budget exhausted".to_string());
-                }
-                Ok(None) => std::thread::sleep(Duration::from_millis(200)),
-                Err(e) => return TestOutcome::NotRun(format!("wait failed: {e}")),
-            }
-        };
-        let mut out = out_thread.join().unwrap_or_default();
-        out.push_str(&err_thread.join().unwrap_or_default());
-        classify_output(&program, status.success(), status.code(), &out)
+    fn run(&mut self, workspace: &Path, test: &TracedTest, timeout: Duration) -> TestOutcome {
+        match plan_command(workspace, test) {
+            Ok((program, args)) => execute(&program, &args, workspace, timeout),
+            Err(why) => TestOutcome::NotRun(why),
+        }
     }
 }
 
@@ -501,11 +529,24 @@ mod tests {
     struct FakeRunner {
         outcomes: BTreeMap<String, TestOutcome>,
         calls: Vec<String>,
+        workspaces: Vec<PathBuf>,
+    }
+
+    fn fake(outcomes: &[(&str, TestOutcome)]) -> FakeRunner {
+        FakeRunner {
+            outcomes: outcomes
+                .iter()
+                .map(|(n, o)| (n.to_string(), o.clone()))
+                .collect(),
+            calls: vec![],
+            workspaces: vec![],
+        }
     }
 
     impl TestRunner for FakeRunner {
-        fn run(&mut self, _root: &Path, test: &TracedTest, _timeout: Duration) -> TestOutcome {
+        fn run(&mut self, workspace: &Path, test: &TracedTest, _timeout: Duration) -> TestOutcome {
             self.calls.push(test.name.clone());
+            self.workspaces.push(workspace.to_path_buf());
             self.outcomes
                 .get(&test.name)
                 .cloned()
@@ -531,15 +572,18 @@ mod tests {
             "// trace:RED-1.AC1 | ai:claude\n#[test]\nfn fails_first() {\n}\n\n\
              // trace:RED-1.AC2 | ai:claude\n#[test]\nfn passes_first() {\n}\n",
         );
-        let mut runner = FakeRunner {
-            outcomes: BTreeMap::from([
-                ("fails_first".into(), TestOutcome::Failed),
-                ("passes_first".into(), TestOutcome::Passed),
-            ]),
-            calls: vec![],
-        };
-        let record = record_red_run_once(dir.path(), &report, &mut runner, Duration::from_secs(60))
-            .expect("traced tests produce a record");
+        let mut runner = fake(&[
+            ("fails_first", TestOutcome::Failed),
+            ("passes_first", TestOutcome::Passed),
+        ]);
+        let record = record_red_run_once(
+            dir.path(),
+            dir.path(),
+            &report,
+            &mut runner,
+            Duration::from_secs(60),
+        )
+        .expect("traced tests produce a record");
         // AC3 is untraced: it is not part of the red run.
         assert_eq!(record.criteria.len(), 2);
         assert_eq!(record.criteria[0].verdict, CriterionVerdict::Red);
@@ -560,20 +604,24 @@ mod tests {
             DESC,
             "// trace:RED-1.AC1 | ai:claude\n#[test]\nfn t() {\n}\n",
         );
-        let mut red = FakeRunner {
-            outcomes: BTreeMap::from([("t".into(), TestOutcome::Failed)]),
-            calls: vec![],
-        };
-        assert!(
-            record_red_run_once(dir.path(), &report, &mut red, Duration::from_secs(9)).is_some()
-        );
-        let mut green = FakeRunner {
-            outcomes: BTreeMap::from([("t".into(), TestOutcome::Passed)]),
-            calls: vec![],
-        };
-        assert!(
-            record_red_run_once(dir.path(), &report, &mut green, Duration::from_secs(9)).is_none()
-        );
+        let mut red = fake(&[("t", TestOutcome::Failed)]);
+        assert!(record_red_run_once(
+            dir.path(),
+            dir.path(),
+            &report,
+            &mut red,
+            Duration::from_secs(9)
+        )
+        .is_some());
+        let mut green = fake(&[("t", TestOutcome::Passed)]);
+        assert!(record_red_run_once(
+            dir.path(),
+            dir.path(),
+            &report,
+            &mut green,
+            Duration::from_secs(9)
+        )
+        .is_none());
         assert!(green.calls.is_empty(), "no re-run once recorded");
         let kept = load_record(dir.path(), "RED-1").unwrap();
         assert_eq!(kept.criteria[0].verdict, CriterionVerdict::Red);
@@ -583,13 +631,15 @@ mod tests {
     #[test]
     fn skips_specs_with_no_criterion_traced_tests() {
         let (dir, report) = fixture(DESC, "#[test]\nfn untraced() {\n}\n");
-        let mut runner = FakeRunner {
-            outcomes: BTreeMap::new(),
-            calls: vec![],
-        };
-        assert!(
-            record_red_run_once(dir.path(), &report, &mut runner, Duration::from_secs(9)).is_none()
-        );
+        let mut runner = fake(&[]);
+        assert!(record_red_run_once(
+            dir.path(),
+            dir.path(),
+            &report,
+            &mut runner,
+            Duration::from_secs(9)
+        )
+        .is_none());
         assert!(runner.calls.is_empty());
         assert!(!record_path(dir.path(), "RED-1").exists());
     }
@@ -601,18 +651,12 @@ mod tests {
             DESC,
             "#[test]\nfn shared() {\n    // trace:RED-1.AC1 | ai:claude\n    // trace:RED-1.AC2 | ai:claude\n}\n",
         );
-        let mut runner = FakeRunner {
-            outcomes: BTreeMap::from([("shared".into(), TestOutcome::Failed)]),
-            calls: vec![],
-        };
+        let mut runner = fake(&[("shared", TestOutcome::Failed)]);
         let rows = run_red_run(dir.path(), &report, &mut runner, Duration::from_secs(9)).unwrap();
         assert_eq!(runner.calls.len(), 1);
         assert!(rows.iter().all(|r| r.verdict == CriterionVerdict::Red));
 
-        let mut none = FakeRunner {
-            outcomes: BTreeMap::new(),
-            calls: vec![],
-        };
+        let mut none = fake(&[]);
         let rows = run_red_run(dir.path(), &report, &mut none, Duration::ZERO).unwrap();
         assert!(none.calls.is_empty());
         assert!(rows.iter().all(|r| r.verdict == CriterionVerdict::NotRun));
@@ -622,35 +666,150 @@ mod tests {
     #[test]
     fn a_filter_matching_nothing_is_not_run_rather_than_green() {
         assert_eq!(
-            classify_output(
-                "cargo",
-                true,
-                Some(0),
-                "test result: ok. 0 passed; 0 failed;"
-            ),
+            classify_output("cargo", Some(0), "test result: ok. 0 passed; 0 failed;"),
             TestOutcome::NotRun("the test filter matched no test".into())
         );
         assert_eq!(
-            classify_output(
-                "cargo",
-                true,
-                Some(0),
-                "test result: ok. 1 passed; 0 failed;"
-            ),
+            classify_output("cargo", Some(0), "test result: ok. 1 passed; 0 failed;"),
             TestOutcome::Passed
         );
+        assert_eq!(classify_output("cargo", Some(101), ""), TestOutcome::Failed);
         assert_eq!(
-            classify_output("cargo", false, Some(101), ""),
+            classify_output("python3", Some(1), "1 failed"),
             TestOutcome::Failed
         );
         assert!(matches!(
-            classify_output("python3", true, Some(5), ""),
+            classify_output("python3", Some(5), ""),
             TestOutcome::NotRun(_)
         ));
         assert!(matches!(
-            classify_output("go", true, Some(0), "testing: warning: no tests to run"),
+            classify_output("go", Some(0), "testing: warning: no tests to run"),
             TestOutcome::NotRun(_)
         ));
+    }
+
+    // PRIN-5: unknown results are never red.
+    // trace:STORY-1386 | ai:claude
+    #[test]
+    fn signals_unexpected_exits_and_missing_pytest_are_not_run() {
+        for program in ["cargo", "python3", "go"] {
+            assert!(matches!(
+                classify_output(program, None, ""),
+                TestOutcome::NotRun(_)
+            ));
+        }
+        for code in 2..=4 {
+            assert!(matches!(
+                classify_output("python3", Some(code), ""),
+                TestOutcome::NotRun(_)
+            ));
+        }
+        assert!(matches!(
+            classify_output(
+                "python3",
+                Some(1),
+                "/usr/bin/python3: No module named pytest"
+            ),
+            TestOutcome::NotRun(_)
+        ));
+        assert!(matches!(
+            classify_output("cargo", Some(1), ""),
+            TestOutcome::NotRun(_)
+        ));
+        assert!(matches!(
+            classify_output("go", Some(2), ""),
+            TestOutcome::NotRun(_)
+        ));
+    }
+
+    // trace:STORY-1386 | ai:claude
+    #[test]
+    fn runs_in_the_lane_worktree_and_records_under_main() {
+        let main = tempfile::tempdir().unwrap();
+        let lane = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(lane.path().join("tests")).unwrap();
+        std::fs::write(
+            lane.path().join("tests/red.rs"),
+            "// trace:RED-1.AC1 | ai:claude\n#[test]\nfn lane_test() {\n}\n",
+        )
+        .unwrap();
+        let report = build_criteria_report(lane.path(), "RED-1", DESC).unwrap();
+        let mut runner = fake(&[("lane_test", TestOutcome::Failed)]);
+        let record = record_red_run_once(
+            main.path(),
+            lane.path(),
+            &report,
+            &mut runner,
+            Duration::from_secs(9),
+        )
+        .unwrap();
+        assert_eq!(runner.workspaces, vec![lane.path().to_path_buf()]);
+        assert_eq!(
+            record.workspace.as_deref(),
+            Some(&*lane.path().display().to_string())
+        );
+        assert!(record_path(main.path(), "RED-1").exists());
+        assert!(!record_path(lane.path(), "RED-1").exists());
+        // The main checkout itself is never an acceptable lane.
+        assert!(!lane_is_fresh(main.path(), main.path()));
+    }
+
+    // trace:STORY-1386 | ai:claude
+    #[test]
+    fn red_run_is_opt_in() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(budget_from(None, dir.path()), None);
+        assert_eq!(budget_from(Some("0"), dir.path()), None);
+        assert_eq!(
+            budget_from(Some("45"), dir.path()),
+            Some(Duration::from_secs(45))
+        );
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[drain]\nred_run = true\n",
+        )
+        .unwrap();
+        assert_eq!(
+            budget_from(None, dir.path()),
+            Some(Duration::from_secs(CONFIG_BUDGET_SECS))
+        );
+        assert_eq!(budget_from(Some("0"), dir.path()), None);
+    }
+
+    // trace:STORY-1386 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn a_timeout_records_timed_out_not_red() {
+        let dir = tempfile::tempdir().unwrap();
+        let outcome = execute(
+            "sleep",
+            &["5".to_string()],
+            dir.path(),
+            Duration::from_millis(300),
+        );
+        assert_eq!(outcome, TestOutcome::TimedOut);
+        let runs = vec![TestRun {
+            name: "t".into(),
+            path: "t.rs".into(),
+            line: 1,
+            outcome,
+        }];
+        assert_eq!(verdict_for(&runs), CriterionVerdict::NotRun);
+    }
+
+    // trace:STORY-1386 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn a_crash_records_not_run_not_red() {
+        let dir = tempfile::tempdir().unwrap();
+        let outcome = execute(
+            "sh",
+            &["-c".to_string(), "kill -9 $$".to_string()],
+            dir.path(),
+            Duration::from_secs(10),
+        );
+        assert!(matches!(outcome, TestOutcome::NotRun(_)), "{outcome:?}");
     }
 
     // trace:STORY-1386 | ai:claude
@@ -669,7 +828,7 @@ mod tests {
             line: 1,
             traces: vec![],
         };
-        let (program, args, _) = plan_command(dir.path(), &test("crate-a/src/lib.rs")).unwrap();
+        let (program, args) = plan_command(dir.path(), &test("crate-a/src/lib.rs")).unwrap();
         assert_eq!(program, "cargo");
         assert_eq!(args, ["test", "-q", "-p", "crate-a", "my_test"]);
         assert!(plan_command(dir.path(), &test("web/a.test.ts")).is_err());
@@ -681,11 +840,13 @@ mod tests {
         let record = RedRunRecord {
             spec: "RED-1".into(),
             recorded_at: "now".into(),
+            workspace: None,
             head_sha: None,
             criteria: vec![CriterionRedRun {
                 id: "RED-1.AC1".into(),
                 text: "first".into(),
                 verdict: CriterionVerdict::AlreadySatisfied,
+                timed_out: false,
                 tests: vec![],
             }],
         };
