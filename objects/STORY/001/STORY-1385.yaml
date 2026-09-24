@@ -86,12 +86,12 @@ description: |-
   11. The stretch-met rate is reportable over a window, per author or seat, as a calibration signal rather than a score.
   12. The stretch-to-required ratio within a spec is visible at grooming time, so a spec that is mostly stretch is caught before it is dispatched rather than after.
   13. The ex-post path from criteria 1-8 remains, for the genuine case where implementation reveals a bar was wrong. It must be distinguishable in the record from an ex-ante stretch, because one is a prediction and the other is a revision.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:34:14.434033357Z
-modified_at: 2026-09-24T03:35:49.444244925Z
+modified_at: 2026-09-24T04:55:37.500338129Z
 req_type: Story
 tags:
 - acceptance
@@ -135,4 +135,22 @@ comments:
   created_at: 2026-09-24T03:35:49.444244925Z
   modified_at: 2026-09-24T03:35:49.444244925Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d1c4-e714-7cd2-a44e-6f6362a8eef4
+  author: aida-auto-bump
+  timestamp: 2026-09-24T04:55:37.492792009Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0d1c4-e71c-7382-8a9b-b3fd85247a65
+  timestamp: 2026-09-24T04:55:37.500336669Z
+  agent: aida
+  commit_sha: 380cb9d8f3fe9327898323e6095cf74d101d5d6a
+  summary: Completed via merge 380cb9d8
 execution_mode: guided
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T04:55:37.492509178Z
+  completion_sha: 380cb9d8f3fe9327898323e6095cf74d101d5d6a
