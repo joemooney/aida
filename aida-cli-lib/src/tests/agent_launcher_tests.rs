@@ -338,11 +338,14 @@ fn noexec_preview_renders_command_and_codex_permission_posture() {
         native_session_id: None,
         resumed_from: None,
     };
+    let prompt = AgentPromptOptions::new(None, false);
     let preview = render_agent_launch_noexec(
         std::path::Path::new("/usr/bin/codex"),
         &config,
         &plan,
+        &prompt,
         &["work TASK-1232".to_string()],
+        true,
         true,
     )
     .unwrap();
@@ -361,6 +364,216 @@ fn noexec_preview_renders_command_and_codex_permission_posture() {
     assert!(
         preview.contains("codex ask-for-approval: never"),
         "{preview}"
+    );
+}
+
+// trace:TASK-1467 | ai:claude
+#[test]
+fn parses_agent_new_no_exec_and_show_prompt_flags() {
+    // `--no-exec` is the canonical spelling; `--noexec` and `--print-command`
+    // remain accepted aliases (TASK-1232 back-compat).
+    for flag in ["--no-exec", "--noexec", "--print-command"] {
+        let cli = Cli::try_parse_from(["aida", "agent", "new", "claude", flag]).unwrap();
+        let Command::Agent(AgentCommand::New {
+            command: Some(AgentNewCommand::Claude { noexec, .. }),
+        }) = cli.command
+        else {
+            panic!("expected agent new claude command");
+        };
+        assert!(noexec, "{flag} should set noexec");
+    }
+
+    let cli = Cli::try_parse_from(["aida", "agent", "new", "codex", "--show-prompt"]).unwrap();
+    let Command::Agent(AgentCommand::New {
+        command: Some(AgentNewCommand::Codex { show_prompt, .. }),
+    }) = cli.command
+    else {
+        panic!("expected agent new codex command");
+    };
+    assert!(show_prompt);
+}
+
+// trace:TASK-1467 | ai:claude
+#[test]
+fn noexec_preview_includes_prompt_source_context_path_env_and_guidance_files() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(project.join("CLAUDE.md"), "# guidance").unwrap();
+    let config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project.clone(),
+        role: Some("implementer".into()),
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: Some("TASK-1467".into()),
+        name: "claude-preview".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let prompt = AgentPromptOptions::new(None, false);
+    let preview = render_agent_launch_noexec(
+        std::path::Path::new("/usr/bin/claude"),
+        &config,
+        &plan,
+        &prompt,
+        &["generated prompt text".to_string()],
+        true,
+        true,
+    )
+    .unwrap();
+
+    assert!(
+        preview.contains("prompt_source: generated (from --spec)"),
+        "{preview}"
+    );
+    assert!(
+        preview.contains("launch_context_snapshot:")
+            && preview.contains(".aida/agents/context/claude-"),
+        "{preview}"
+    );
+    assert!(
+        !project.join(".aida/agents/context").exists(),
+        "the preview must not write the context snapshot to disk"
+    );
+    assert!(preview.contains("env:"), "{preview}");
+    assert!(
+        preview.contains("AIDA_SESSION_ROLE=implementer"),
+        "{preview}"
+    );
+    assert!(
+        preview.contains("AIDA_SESSION_SCOPE=TASK-1467"),
+        "{preview}"
+    );
+    assert!(preview.contains("guidance_files:"), "{preview}");
+    assert!(preview.contains("CLAUDE.md (present)"), "{preview}");
+    assert!(
+        preview.contains(".aida/discipline/README.md (absent)"),
+        "{preview}"
+    );
+}
+
+// trace:TASK-1467 | ai:claude
+#[test]
+fn noexec_preview_notes_context_disabled_when_no_context_is_set() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project,
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "codex-preview".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let prompt = AgentPromptOptions::new(None, false);
+    let preview = render_agent_launch_noexec(
+        std::path::Path::new("/usr/bin/codex"),
+        &config,
+        &plan,
+        &prompt,
+        &[],
+        true,
+        false,
+    )
+    .unwrap();
+
+    assert!(
+        preview.contains("launch_context_snapshot: (disabled — --no-context)"),
+        "{preview}"
+    );
+    assert!(
+        !preview.contains("AIDA_AGENT_CONTEXT_FILE"),
+        "no-context preview must not claim a context file env var: {preview}"
+    );
+    assert!(
+        preview.contains("prompt_source: none (no --prompt, no --spec, or --no-prompt)"),
+        "{preview}"
+    );
+}
+
+// trace:TASK-1467 | ai:claude
+#[test]
+fn show_prompt_distinguishes_explicit_from_generated_and_handles_no_prompt() {
+    let explicit = AgentPromptOptions::new(Some("do the thing".to_string()), false);
+    let rendered = render_agent_show_prompt(&explicit, &["do the thing".to_string()]);
+    assert!(
+        rendered.contains("source: explicit (--prompt)"),
+        "{rendered}"
+    );
+    assert!(rendered.contains("do the thing"), "{rendered}");
+
+    let generated = AgentPromptOptions::new(None, false);
+    let rendered = render_agent_show_prompt(&generated, &["generated text".to_string()]);
+    assert!(
+        rendered.contains("source: generated (from --spec)"),
+        "{rendered}"
+    );
+    assert!(rendered.contains("generated text"), "{rendered}");
+
+    let none = AgentPromptOptions::new(None, true);
+    let rendered = render_agent_show_prompt(&none, &[]);
+    assert!(
+        rendered.contains("source: none (no --prompt, no --spec, or --no-prompt)"),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains("(no initial message would be sent)"),
+        "{rendered}"
+    );
+}
+
+// trace:TASK-1467 | ai:claude
+#[test]
+fn agent_guidance_files_reports_vendor_specific_and_universal_files() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    std::fs::write(project.join("AGENTS.md"), "# codex guidance").unwrap();
+
+    let files = agent_guidance_files("codex", &project);
+    let lookup: std::collections::HashMap<_, _> = files.into_iter().collect();
+    assert_eq!(lookup.get("AGENTS.md"), Some(&true));
+    assert_eq!(lookup.get(".aida/discipline/README.md"), Some(&false));
+
+    let claude_files = agent_guidance_files("claude", &project);
+    assert!(
+        claude_files.iter().any(|(path, _)| path == "CLAUDE.md"),
+        "{claude_files:?}"
+    );
+}
+
+// trace:TASK-1462 | ai:claude
+#[test]
+fn child_role_picker_defaults_to_implementer_without_an_active_role() {
+    assert_eq!(
+        child_role_picker_default_highlight("implementer", true),
+        "implementer"
+    );
+}
+
+// trace:TASK-1462 | ai:claude
+#[test]
+fn child_role_picker_prefers_the_active_role_when_one_is_set() {
+    assert_eq!(
+        child_role_picker_default_highlight("advisor", false),
+        "advisor"
     );
 }
 
