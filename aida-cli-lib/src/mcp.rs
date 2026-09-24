@@ -6263,6 +6263,12 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 weight: r.weight.map(|w| w as f64),
                 // trace:STORY-634 | ai:claude
                 origin: r.origin.as_ref().map(|o| o.to_string()),
+                // trace:TASK-1474 | ai:claude
+                completed_at: r
+                    .implementation_info
+                    .as_ref()
+                    .and_then(|i| i.completed_at)
+                    .map(|t| t.to_rfc3339()),
                 yaml_path: String::new(),
             }
         })

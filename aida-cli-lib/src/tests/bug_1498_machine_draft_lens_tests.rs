@@ -32,6 +32,7 @@ fn row(id: &str, description: &str, tags: &[&str]) -> aida_core::RequirementSumm
         execution_mode: None,
         weight: None,
         origin: None,
+        completed_at: None, // trace:TASK-1474 | ai:claude
         yaml_path: String::new(),
     }
 }
