@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-24T20:35:17.748900412Z
+modified_at: 2026-09-24T20:35:23.914691723Z
 req_type: Story
 tags:
 - closure:pending
@@ -66,6 +66,10 @@ relationships:
 - rel_type: Parent
   target_id: 01a0d520-0142-78a0-8909-4c8879fda022
   created_at: 2026-09-24T20:34:03.799129379Z
+- rel_type: BlockedBy
+  target_id: 01a0d520-0142-78a0-8909-4c8879fda022
+  created_at: 2026-09-24T20:35:23.914681509Z
+  created_by: joe
 comments:
 - id: 01a0c5c9-e4ca-7cb0-ad2e-c070a9b6bc6f
   author: joe
