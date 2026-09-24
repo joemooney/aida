@@ -12,12 +12,12 @@ description: |-
   - The behavior is defined for direct launches, shell-wrapped launches, and supported client types.
   - Launch diagnostics or `--show-context` make any intentional output-mode inheritance visible.
   - Tests cover inherited variables, absent variables, explicit opt-in, and existing agent launch behavior.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:30:56.752568118Z
-modified_at: 2026-09-24T17:15:08.573246559Z
+modified_at: 2026-09-24T17:16:10.516821210Z
 req_type: Task
 comments:
 - id: 01a0d469-f39d-7090-b79b-10161e73e08e
