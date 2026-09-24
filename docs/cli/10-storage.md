@@ -36,7 +36,7 @@ What this means in practice: **a normal user needs almost none of the commands b
 - `merge-gate` — collapses a distributed node-aware id (`<spec-id>-001`) down to its agreed short form (`<spec-id>`) at merge-to-trunk. It runs automatically inside `aida pull` (the merge-gate step); call it by hand only when you've disabled the auto-gate or are reconciling IDs manually.
 - `reconcile-status` — **the recovery tool you'll actually use.** Replays the Done→Completed auto-bump over a wider commit window than the `pull` that missed it. See its own entry below.
 - `check` — store integrity audit (currently `--collisions`: two specs claiming the same short id). The recovery-side counterpart to the gate-time prevention.
-- `migrate-related-edges` — a one-time repair for edges stored under the custom type `related` (or `related-to` / `relates-to`), which graph traversals don't follow. Converts each to a `references` edge, or deletes it when a `references` edge to the same target already exists. See its own entry below.
+- `migrate-related-edges` — a one-time repair for custom-typed edges whose spelling resolves to a standard relationship type (`related`, `depends-on`, `verified_by`, `replaced_by`, and similar), which graph traversals don't follow. Converts each to its standard type, or deletes it when an edge of that type to the same target already exists. See its own entry below.
 - `block` — pre-allocates blocks of agreed IDs to a node so offline `trace:` comments can cite a final id. Distributed-multi-node housekeeping; single-machine projects never need it.
 - `workspace-init` / `retire-legacy-ids` — the rare ones. `workspace-init` sets up multiple code repos sharing one store; `retire-legacy-ids` is a one-time migration collapsing old zero-padded ids onto their short agreed ids. Both are setup/migration events, not daily verbs.
 
@@ -69,18 +69,18 @@ What this means in practice: **a normal user needs almost none of the commands b
 
 ### `aida db migrate-related-edges`
 
-<!-- doc-intent: TASK-1426 -->
+<!-- doc-intent: TASK-1426 TASK-1488 -->
 
-**One line** — repair old custom `related` edges so the graph follows them.
+**One line** — repair old custom edges whose spelling now resolves to a standard relationship type, so the graph follows them.
 
-**Mental model.** Earlier versions stored `aida rel add --type related` as a *custom* edge named `related`. Graph traversals only follow standard edge types, so those links were invisible to `aida graph` even though `rel list` showed them. `rel add --type related` now writes a standard `references` edge, and this command repairs the edges written before that change. It handles three spellings (`related`, `related-to`, `relates-to`) and treats each source/target pair on its own:
+**Mental model.** Earlier versions of the CLI stored several relationship spellings — `related`, `depends-on`, `verified_by`, `replaced_by`, and others — as *custom* edges named after the literal spelling typed in. Graph traversals only follow standard edge types, so those links were invisible to `aida graph` even though `rel list` showed them. `rel add`/`rel remove` now resolve every one of those spellings to its standard type up front, and this command repairs the edges written before that resolution existed. It recognizes any custom spelling that the shared relationship-type parser resolves to a standard type, and treats each source/target/type triple on its own:
 
-- **no `references` edge to that target yet** — the custom edge is converted to `references`, keeping who created it and when;
-- **a `references` edge to that target already exists** — the custom edge is deleted instead, because converting it would create a duplicate.
+- **no edge of that standard type to that target yet** — the custom edge is converted to the standard type in place, keeping who created it and when;
+- **an edge of that standard type to that target already exists** — the custom edge is deleted instead, because converting it would create a duplicate.
 
-Every other custom edge type (for example `implements`) is left alone.
+Every other custom edge type — for example `implements`, `implemented-by`, or a `sprint_*` label — is left alone, because none of those spellings resolve to a standard type. No reciprocal edge is added on the target side even for a paired type like `parent`/`child` or `supersedes`/`superseded_by`: the legacy edge was one-directional data, and this command repairs its type, not its topology. Add the reciprocal explicitly afterward with `aida rel add --type child` (or `-b`) if you want the canonical bidirectional pair.
 
-**Reach for it when** — `rel list` shows `related`, `related-to` or `relates-to` edges, or `aida graph` misses links you know you added.
+**Reach for it when** — `rel list` shows a custom edge whose name looks like a standard relationship (`related`, `depends-on`, `verified_by`, `replaced_by`, and similar), or `aida graph` misses links you know you added.
 
 **Don't reach for it when** — you want to change a single edge. Use `aida rel remove` and `aida rel add` for that.
 
