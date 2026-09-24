@@ -234,7 +234,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-24T00:24:42.653930072Z
+modified_at: 2026-09-24T00:24:48.166076413Z
 req_type: Bug
 tags:
 - parent:EPIC-62 merge-hold pr-ship safety-gate severity:major
@@ -364,3 +364,9 @@ comments:
   created_at: 2026-09-21T13:47:52.203810243Z
   modified_at: 2026-09-21T13:47:52.203810243Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0d0cc-f526-7db1-b852-3dd354163a8d
+  author: joe
+  content: 'PROXY: partial slice on claude/bug-1469 (any marker binds pr ship before CI). Kept open, because criterion 4 (a refusal hold releases only on a fresh verdict at head) and criterion 10 (markers point to the verdict record) are unmet.'
+  created_at: 2026-09-24T00:24:48.166076413Z
+  modified_at: 2026-09-24T00:24:48.166076413Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
