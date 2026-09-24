@@ -1006,7 +1006,8 @@ mod task_1244_drain_merge_lease_tests {
         let wave_start = src
             .find(concat!("fn merge_wave_pr", "(project_root"))
             .expect("wave fn");
-        let wave_body = &src[wave_start..wave_start + 4000];
+        // Window widened for BUG-1562's typed spec on the wave hold.
+        let wave_body = &src[wave_start..wave_start + 5000];
         let acquire = concat!("merge_lock::", "acquire(");
         let merge_call = concat!(".merge_change(", "&change_ref");
         let a = wave_body
@@ -31159,14 +31160,48 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             // (PR head vs the sha it cites; a rework hold's verdict now
             // approved or closed). FLAG only — never auto-clear.
             // trace:BUG-1562 | ai:claude
+            // BUG-1562: "is the spec this hold was placed for still
+            // running?" — one cache-backed local read for every live hold,
+            // never a forge call. trace:BUG-1562 | ai:claude
+            let spec_status: std::collections::HashMap<String, String> = if live.is_empty() {
+                std::collections::HashMap::new()
+            } else {
+                let mut map = std::collections::HashMap::new();
+                for summary in all_requirement_summaries(&root) {
+                    for id in [summary.agreed_id.as_ref(), summary.spec_id.as_ref()]
+                        .into_iter()
+                        .flatten()
+                    {
+                        map.insert(id.to_ascii_uppercase(), summary.status.clone());
+                    }
+                }
+                map
+            };
+            let head_of = |pr: u64| match facts.get(&pr) {
+                Some(Ok(Some(change))) => change.head_sha.clone(),
+                _ => None,
+            };
             let premise_of = |pr: u64| -> Option<String> {
                 let record = merge_hold::read_hold_record(&root, pr)?;
-                let head = match facts.get(&pr) {
-                    Some(Ok(Some(change))) => change.head_sha.clone(),
-                    _ => None,
-                };
-                merge_hold::premise_stale(&record, head.as_deref(), |spec| {
-                    review_verdict::read_recorded_verdict(&root, spec)
+                merge_hold::premise_stale(
+                    &record,
+                    head_of(pr).as_deref(),
+                    |spec| review_verdict::read_recorded_verdict(&root, spec),
+                    |spec| spec_status.get(&spec.to_ascii_uppercase()).cloned(),
+                )
+            };
+            // BUG-1532 criterion 4: for a refusal hold, whether its release
+            // condition (a fresh APPROVED verdict at the current head) is met.
+            // Reported only — the release itself stays behind the human floor.
+            // trace:BUG-1532 | ai:claude
+            let refusal_state_of = |pr: u64| -> Option<merge_hold::RefusalRelease> {
+                let record = merge_hold::read_hold_record(&root, pr)?;
+                record.is_refusal().then(|| {
+                    crate::pr_cmd::ship_refusal_release(
+                        &[root.as_path()],
+                        &record,
+                        head_of(pr).as_deref(),
+                    )
                 })
             };
             let source_of = |pr: u64| {
@@ -31198,6 +31233,8 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         .as_ref()
                         .map(|r| r.recused_principals.clone())
                         .unwrap_or_default();
+                    let condition = record.as_ref().map(|r| r.release_condition_or_default());
+                    let refusal = if is_stale { None } else { refusal_state_of(pr) };
                     serde_json::json!({
                         "pr": pr,
                         "reason": reason,
@@ -31215,6 +31252,15 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         } else {
                             merge_hold::label_diverged(&forge_label)
                         },
+                        "release_condition": condition.as_ref().map(|(c, _)| c.clone()),
+                        "release_condition_default": condition.as_ref().map(|(_, d)| *d),
+                        "verdict_ref": record.as_ref().and_then(|r| r.verdict_ref.clone()),
+                        "spec": record.as_ref().and_then(|r| r.spec.clone()),
+                        "refusal_released": refusal.as_ref().map(|r| matches!(r, merge_hold::RefusalRelease::Released(_))),
+                        "refusal_detail": refusal.as_ref().and_then(|r| match r {
+                            merge_hold::RefusalRelease::Held(why) => Some(why.clone()),
+                            merge_hold::RefusalRelease::Released(_) => None,
+                        }),
                     })
                 };
                 let mut items: Vec<serde_json::Value> = Vec::new();
@@ -31293,6 +31339,45 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     .to_string(),
                 };
                 println!("  PR #{pr}  {reason}  [{rendered} | recorded: {recorded}]");
+                // BUG-1562 / BUG-1532: the release condition (a future check)
+                // and, for a refusal, the verdict it points at and whether a
+                // fresh verdict at the head has met it. The reason above is a
+                // placement-time summary. trace:BUG-1532 trace:BUG-1562 | ai:claude
+                if let Some(record) = merge_hold::read_hold_record(&root, *pr) {
+                    let (cond, is_default) = record.release_condition_or_default();
+                    println!(
+                        "      release when: {cond}{}",
+                        if is_default {
+                            " (default for this hold kind)"
+                        } else {
+                            ""
+                        }
+                    );
+                    if let Some(v) = &record.verdict_ref {
+                        println!(
+                            "      verdict: {} (owner and current state are read from that record, not from the reason)",
+                            v.path()
+                        );
+                    }
+                    match refusal_state_of(*pr) {
+                        Some(merge_hold::RefusalRelease::Released(v)) => println!(
+                            "      {}",
+                            format!(
+                                "release condition MET: APPROVED for {} at {} — a human may now `aida pr ship {pr}`",
+                                v.key,
+                                v.reviewed_sha
+                                    .as_deref()
+                                    .map(review_verdict::short_sha)
+                                    .unwrap_or("?")
+                            )
+                            .green()
+                        ),
+                        Some(merge_hold::RefusalRelease::Held(why)) => {
+                            println!("      release condition not met: {why}")
+                        }
+                        None => {}
+                    }
+                }
                 if let Some(why) = premise_of(*pr) {
                     println!(
                         "      {}",
@@ -31330,6 +31415,9 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             recused_principals,
             routed_to,
             head,
+            release_condition,
+            verdict,
+            replace,
         } => {
             let reason = reason
                 .as_deref()
@@ -31359,21 +31447,60 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             } else {
                 merge_hold::HoldRoutingState::Pending
             };
-            merge_hold::write_typed_hold(
-                &root,
-                &merge_hold::MergeHoldRecord {
-                    schema_version: 2,
-                    pr: *pr,
-                    reason_kind: kind,
-                    detail: reason,
-                    recused_principals,
-                    routed_to,
-                    routing_state,
-                    target_head_sha: head.clone(),
-                    label_state: None,
-                    legacy: false,
-                },
-            )?;
+            // BUG-1532 criterion 10: a rework hold REFERENCES the verdict
+            // record it stands on (key + the sha and seat currently recorded
+            // there) instead of quoting it. trace:BUG-1532 | ai:claude
+            let verdict_ref = match verdict.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+                None => None,
+                Some(_) if kind != merge_hold::HoldReasonKind::Rework => {
+                    anyhow::bail!("--verdict applies to a rework hold (`--reason-kind rework`)");
+                }
+                Some(key) => {
+                    let current = review_verdict::read_recorded_verdict(&root, key);
+                    if current.is_none() {
+                        eprintln!(
+                            "  {} no verdict is recorded under {} yet — the hold references it anyway and releases only once an approving verdict is recorded at the PR's head",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            review_verdict::verdict_path(&root, key).display()
+                        );
+                    }
+                    Some(merge_hold::VerdictRef::new(
+                        key,
+                        Some(*pr),
+                        current.as_ref().and_then(|v| v.reviewed_sha.clone()),
+                        current.as_ref().and_then(|v| v.recorded_by.clone()),
+                    ))
+                }
+            };
+            let release_condition = release_condition
+                .as_deref()
+                .map(str::trim)
+                .filter(|c| !c.is_empty())
+                .map(str::to_string);
+            let record = merge_hold::MergeHoldRecord {
+                schema_version: 2,
+                pr: *pr,
+                reason_kind: kind,
+                detail: reason,
+                recused_principals,
+                routed_to,
+                routing_state,
+                target_head_sha: head.clone(),
+                label_state: None,
+                legacy: false,
+                verdict_ref,
+                release_condition,
+                spec: None,
+            };
+            // BUG-1562: never silently overwrite an existing marker's body.
+            // trace:BUG-1562 | ai:claude
+            merge_hold::place_hand_hold(&root, &record, *replace)
+                .map_err(|e| anyhow::anyhow!(e))?;
+            if record.release_condition.is_none() {
+                println!(
+                    "  hint: state what must be true to release it with `--release-condition \"1. ... 2. ...\"` — a condition is checked when read; a reason goes stale."
+                );
+            }
             match merge_hold::sync_label(&root, *pr, true) {
                 Ok(()) => println!(
                     "Merge-hold placed on PR #{pr} (marker written, `aida:merge-hold` label applied). Release with `aida merge-hold clear {pr}`."
@@ -31462,9 +31589,47 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         }
                         _ => None,
                     };
+                    // BUG-1532 criterion 4: a reviewer REFUSAL is normally
+                    // released by a fresh APPROVED verdict at the head. The
+                    // human at the terminal may still override — this is the
+                    // documented, recorded escape — but is told when the
+                    // condition is not met, and the clearance records which
+                    // verdict (if any) met it. trace:BUG-1532 | ai:claude
+                    let released_by_verdict = match &cleared {
+                        Some((record, _)) if record.is_refusal() => {
+                            let head = merge_hold::fetch_pinned_change(
+                                &root,
+                                forge::resolve_forge_kind(&root),
+                                *pr,
+                            )
+                            .ok()
+                            .flatten()
+                            .and_then(|change| change.head_sha);
+                            match crate::pr_cmd::ship_refusal_release(
+                                &[root.as_path()],
+                                record,
+                                head.as_deref(),
+                            ) {
+                                merge_hold::RefusalRelease::Released(v) => Some(v),
+                                merge_hold::RefusalRelease::Held(why) => {
+                                    eprintln!(
+                                        "  {} PR #{pr} is a reviewer refusal whose release condition is NOT met: {why}. Clearing it anyway as a recorded human override.",
+                                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                                    );
+                                    None
+                                }
+                            }
+                        }
+                        _ => None,
+                    };
                     merge_hold::clear_hold(&root, *pr)?;
                     if let Some((record, actor)) = &cleared {
-                        if let Err(err) = merge_hold::record_clearance(&root, record, actor) {
+                        if let Err(err) = merge_hold::record_clearance_with_verdict(
+                            &root,
+                            record,
+                            actor,
+                            released_by_verdict.clone(),
+                        ) {
                             eprintln!(
                                 "  {} could not record who cleared PR #{pr}: {err}",
                                 crate::glyph(crate::glyphs::Glyph::Warning).yellow()
@@ -53348,7 +53513,8 @@ fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> b
                 crate::merge_hold::HoldReasonKind::Supervision,
                 &label,
                 None,
-            ),
+            )
+            .with_spec(&pr.spec),
         );
         // trace:BUG-1236 | ai:claude
         if let Err(err) = crate::merge_hold::sync_label(project_root, pr.number, true) {
@@ -84087,16 +84253,24 @@ fn handle_review_stranded(json: bool, fix: bool) -> Result<()> {
                     .unwrap_or("unknown"),
             );
             // trace:STORY-1397 | ai:claude — a stranded refusal is rework.
-            merge_hold::write_typed_hold(
-                &project_root,
-                &merge_hold::typed_hold(
-                    row.pr,
-                    merge_hold::HoldReasonKind::Rework,
-                    &reason,
-                    row.reviewed_sha.clone(),
-                ),
-            )
-            .with_context(|| format!("could not protect PR-{} with a merge hold", row.pr))?;
+            // BUG-1532 criterion 10: reference the verdict record, not a quote.
+            // trace:BUG-1532 | ai:claude
+            let mut hold = merge_hold::typed_hold(
+                row.pr,
+                merge_hold::HoldReasonKind::Rework,
+                &reason,
+                row.reviewed_sha.clone(),
+            );
+            let current = review_verdict::read_recorded_verdict(&project_root, &row.spec_id);
+            hold.verdict_ref = Some(merge_hold::VerdictRef::new(
+                &row.spec_id,
+                Some(row.pr),
+                row.reviewed_sha.clone(),
+                current.and_then(|v| v.recorded_by),
+            ));
+            hold.spec = Some(row.spec_id.to_ascii_uppercase());
+            merge_hold::write_typed_hold(&project_root, &hold)
+                .with_context(|| format!("could not protect PR-{} with a merge hold", row.pr))?;
             let detail = row
                 .verdict_summary
                 .clone()
@@ -84834,16 +85008,29 @@ fn handle_review_record_at(
         // label can never target a different tree than the verdict itself.
         // STORY-1397: the hold is typed Rework so it is not mistaken for a
         // recusal or supervision hold. trace:STORY-1397 | ai:codex
-        merge_hold::write_typed_hold(
-            &project_root,
-            &merge_hold::typed_hold(
-                n,
-                merge_hold::HoldReasonKind::Rework,
-                &reason,
-                resolved_sha.clone(),
-            ),
-        )
-        .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
+        // BUG-1532 criterion 10 / BUG-1562: the hold REFERENCES this verdict
+        // record (key, PR, sha, recording seat) and states its release
+        // condition, so a later round of the same verdict is followed rather
+        // than a frozen quote of this one. trace:BUG-1532 trace:BUG-1562 | ai:claude
+        let spec_key = spec.trim().to_ascii_uppercase();
+        let mut hold = merge_hold::typed_hold(
+            n,
+            merge_hold::HoldReasonKind::Rework,
+            &reason,
+            resolved_sha.clone(),
+        );
+        hold.verdict_ref = Some(merge_hold::VerdictRef::new(
+            &spec_key,
+            Some(n),
+            resolved_sha.clone(),
+            Some(recorded_by.clone()),
+        ));
+        hold.spec = Some(spec_key.clone());
+        hold.release_condition = Some(format!(
+            "a fresh APPROVED verdict for {spec_key} recorded at PR #{n}'s current head; then a human ships it"
+        ));
+        merge_hold::write_typed_hold(&project_root, &hold)
+            .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
         if let Err(err) = merge_hold::sync_label(&project_root, n, true) {
             eprintln!(
                 "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
@@ -85249,6 +85436,24 @@ mod bug_1452_refusal_aftermath_tests {
             merge_hold::read_hold(root.path(), 1452).is_some(),
             "a refusing verdict must leave a merge-hold on the PR"
         );
+        // BUG-1532 criterion 10: the hold REFERENCES the verdict record
+        // (key, PR, sha, recording seat) and states its release condition.
+        // trace:BUG-1532 | ai:claude
+        let hold = merge_hold::read_hold_record(root.path(), 1452).unwrap();
+        assert_eq!(hold.reason_kind, merge_hold::HoldReasonKind::Rework);
+        let vref = hold
+            .verdict_ref
+            .as_ref()
+            .expect("marker references the verdict");
+        assert_eq!(vref.key, "BUG-14520");
+        assert_eq!(vref.pr, Some(1452));
+        assert_eq!(vref.reviewed_sha.as_deref(), Some("abc123"));
+        assert!(vref.recorded_by.is_some());
+        assert_eq!(hold.spec.as_deref(), Some("BUG-14520"));
+        assert!(hold
+            .release_condition
+            .as_deref()
+            .is_some_and(|c| c.contains("fresh APPROVED verdict for BUG-14520")));
 
         // 2. the verdict is recorded and blocks done
         let recorded = review_verdict::read_recorded_verdict(root.path(), "PR-1452")
@@ -96167,7 +96372,8 @@ impl RealPhaseDriver {
                     crate::merge_hold::HoldReasonKind::Supervision,
                     &reason,
                     None,
-                ),
+                )
+                .with_spec(&self.spec), // trace:BUG-1562 | ai:claude
             );
             // BUG-1173 deferred the LABEL to merge time because an early red
             // merge-hold-gate read as a CI failure. Since BUG-1180 / ADR-39 the
@@ -100495,7 +100701,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     crate::merge_hold::HoldReasonKind::Supervision,
                     reason,
                     None,
-                ),
+                )
+                .with_spec(&self.spec), // trace:BUG-1562 | ai:claude
             );
             // trace:BUG-1236 | ai:claude
             if let Err(err) = crate::merge_hold::sync_label(&self.project_root, pr, true) {

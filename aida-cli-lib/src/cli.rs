@@ -195,6 +195,9 @@ pub enum MergeHoldAction {
     /// the `aida:merge-hold` label, so a PR you hold outside a drain releases
     /// through the same `aida merge-hold clear <pr>` path (a label applied by
     /// hand alone leaves the required check red with nothing to release).
+    /// Refuses when the PR already has a marker unless `--replace` is given;
+    /// `aida merge-hold list --fix` re-applies a missing label without
+    /// touching the marker.
     // trace:BUG-1236 | ai:claude
     Add {
         /// PR number to hold.
@@ -219,6 +222,25 @@ pub enum MergeHoldAction {
         /// Exact PR head the recusal/review route applies to.
         #[clap(long)]
         head: Option<String>,
+        /// What must be true for this hold to be released — numbered checks
+        /// evaluated when read, rather than a reason describing the past.
+        /// Shown by `aida merge-hold list`.
+        // trace:BUG-1562 | ai:claude
+        #[clap(long, allow_hyphen_values = true)]
+        release_condition: Option<String>,
+        /// For a rework hold: the review verdict it stands on (a spec id or
+        /// `PR-<n>`, as stored under `.aida/review-verdicts/`). The marker
+        /// references that record instead of quoting it, and `aida pr ship`
+        /// releases the hold only once an approving verdict is recorded at
+        /// the PR's current head.
+        // trace:BUG-1532 | ai:claude
+        #[clap(long)]
+        verdict: Option<String>,
+        /// Replace an existing marker for this PR. Without it, `add` refuses
+        /// rather than silently overwrite the marker's body.
+        // trace:BUG-1562 | ai:claude
+        #[clap(long)]
+        replace: bool,
     },
     /// Clear a merge-hold: remove the marker file and drop the
     /// `aida:merge-hold` label, releasing the PR for merge. A hold that exists
