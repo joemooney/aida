@@ -14,12 +14,12 @@ description: |-
   - Existing filters such as `--status-changes`, `--comments`, date bounds, and `--oneline` remain coherent and documented.
   - Human and machine-readable output remain stable enough for their documented use cases.
   - Tests cover the positional alias, multiple status changes, comments/edits, empty history, and invalid or ambiguous IDs.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:10:54.660906553Z
-modified_at: 2026-09-24T16:03:53.384009045Z
+modified_at: 2026-09-24T17:13:52.657922514Z
 req_type: Task
 tags:
 - docs:impacted
@@ -41,3 +41,21 @@ comments:
   created_at: 2026-09-24T16:03:53.384009045Z
   modified_at: 2026-09-24T16:03:53.384009045Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d468-cb0a-7ed3-ae95-48adf14690e1
+  author: aida-auto-bump
+  timestamp: 2026-09-24T17:13:52.650929687Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d468-cb11-76e2-a173-4939693708a8
+  timestamp: 2026-09-24T17:13:52.657920518Z
+  agent: aida
+  commit_sha: 2ab1b8d9595d61e30904573a1c13b2be45d0194d
+  summary: Completed via merge 2ab1b8d9
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T17:13:52.650925986Z
+  completion_sha: 2ab1b8d9595d61e30904573a1c13b2be45d0194d
