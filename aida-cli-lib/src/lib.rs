@@ -241,6 +241,7 @@ mod queue_role_fallback;
 mod rebase_cmd;
 mod record_cmd;
 mod rel_def_cmd;
+mod related_edge_migration;
 mod relationship_cmd;
 // trace:STORY-452 | ai:claude — inferred recent-remote-agent-activity for `aida status`.
 mod remote_activity;
@@ -79564,6 +79565,27 @@ fn cli_relationship_type(input: &str) -> RelationshipType {
     }
 }
 
+/// Does a stored edge match the `--type` given to `rel remove`?
+///
+/// Exact type match, plus: asking to remove `references` (or its `related`
+/// alias) also matches a stored legacy custom `related` / `related-to` /
+/// `relates-to` edge, and asking for one of those legacy spellings matches
+/// the whole family, so the obvious hand repair does not leave a stale edge
+/// behind. Before this, the git-store `rel remove` ignored `--type` and
+/// deleted every edge to the target.
+// trace:TASK-1426 | ai:claude
+pub(crate) fn rel_remove_matches(stored: &RelationshipType, requested: &RelationshipType) -> bool {
+    use crate::related_edge_migration::is_legacy_related;
+    if stored == requested {
+        return true;
+    }
+    let requested_is_references_family =
+        *requested == RelationshipType::References || is_legacy_related(requested);
+    requested_is_references_family
+        && (is_legacy_related(stored)
+            || (is_legacy_related(requested) && *stored == RelationshipType::References))
+}
+
 fn looks_like_cross_store_spec_ref(s: &str) -> bool {
     let Some((project, spec)) = s.split_once('#') else {
         return false;
@@ -79912,6 +79934,13 @@ mod task_679_canonical_rel_tests;
 #[cfg(test)]
 #[path = "tests/task_928_parent_tag_edge_tests.rs"]
 mod task_928_parent_tag_edge_tests;
+
+// TASK-1426: fixture tests for `aida db migrate-related-edges` and for
+// `rel remove` honoring `--type` against stored custom related edges.
+// trace:TASK-1426 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1426_related_edge_migration_tests.rs"]
+mod task_1426_related_edge_migration_tests;
 
 // trace:TASK-1468 | ai:claude
 #[cfg(test)]

@@ -36,10 +36,11 @@ What this means in practice: **a normal user needs almost none of the commands b
 - `merge-gate` — collapses a distributed node-aware id (`<spec-id>-001`) down to its agreed short form (`<spec-id>`) at merge-to-trunk. It runs automatically inside `aida pull` (the merge-gate step); call it by hand only when you've disabled the auto-gate or are reconciling IDs manually.
 - `reconcile-status` — **the recovery tool you'll actually use.** Replays the Done→Completed auto-bump over a wider commit window than the `pull` that missed it. See its own entry below.
 - `check` — store integrity audit (currently `--collisions`: two specs claiming the same short id). The recovery-side counterpart to the gate-time prevention.
+- `migrate-related-edges` — a one-time repair for edges stored under the custom type `related` (or `related-to` / `relates-to`), which graph traversals don't follow. Converts each to a `references` edge, or deletes it when a `references` edge to the same target already exists. See its own entry below.
 - `block` — pre-allocates blocks of agreed IDs to a node so offline `trace:` comments can cite a final id. Distributed-multi-node housekeeping; single-machine projects never need it.
 - `workspace-init` / `retire-legacy-ids` — the rare ones. `workspace-init` sets up multiple code repos sharing one store; `retire-legacy-ids` is a one-time migration collapsing old zero-padded ids onto their short agreed ids. Both are setup/migration events, not daily verbs.
 
-**Gotchas.** `db sync` moves *only the store branch* — it is **not** a substitute for `aida push`/`pull`, which move both legs. Pushing your store but forgetting your code (or vice versa) is exactly the split that two-leg `pull`/`push` exist to prevent; don't reintroduce it by reaching for `db sync` out of habit. And the destructive-shaped maintenance verbs (`retire-legacy-ids`, `check --repair`) take `--dry-run` for a reason — preview first.
+**Gotchas.** `db sync` moves *only the store branch* — it is **not** a substitute for `aida push`/`pull`, which move both legs. Pushing your store but forgetting your code (or vice versa) is exactly the split that two-leg `pull`/`push` exist to prevent; don't reintroduce it by reaching for `db sync` out of habit. And the destructive-shaped maintenance verbs (`retire-legacy-ids`, `check --repair`, `migrate-related-edges`) take `--dry-run` for a reason — preview first.
 
 **Chains with** — `db status` before a push; `db reconcile-status` after a merge whose auto-bump missed; `db merge-gate` is invoked by `aida pull`. For routine two-leg syncing, the wrappers in Chapter 4.
 
@@ -63,6 +64,33 @@ What this means in practice: **a normal user needs almost none of the commands b
 **Gotchas.** It only flips specs that are currently **Done** and whose referencing commit is on the **default branch** — those guards are what make it safe to run broadly. If a spec stays Done after a reconcile, the cause is usually that no commit on the default branch actually carries its `(SPEC-ID)` trailer (check the merge's commit message), not that reconcile failed.
 
 **Chains with** — the natural follow-up to a merge where `aida pull`'s auto-bump didn't promote the spec. Verify with `aida show <ID>` afterward.
+
+---
+
+### `aida db migrate-related-edges`
+
+<!-- doc-intent: TASK-1426 -->
+
+**One line** — repair old custom `related` edges so the graph follows them.
+
+**Mental model.** Earlier versions stored `aida rel add --type related` as a *custom* edge named `related`. Graph traversals only follow standard edge types, so those links were invisible to `aida graph` even though `rel list` showed them. `rel add --type related` now writes a standard `references` edge, and this command repairs the edges written before that change. It handles three spellings (`related`, `related-to`, `relates-to`) and treats each source/target pair on its own:
+
+- **no `references` edge to that target yet** — the custom edge is converted to `references`, keeping who created it and when;
+- **a `references` edge to that target already exists** — the custom edge is deleted instead, because converting it would create a duplicate.
+
+Every other custom edge type (for example `implements`) is left alone.
+
+**Reach for it when** — `rel list` shows `related`, `related-to` or `relates-to` edges, or `aida graph` misses links you know you added.
+
+**Don't reach for it when** — you want to change a single edge. Use `aida rel remove` and `aida rel add` for that.
+
+**Key options (rationale only).**
+- `--dry-run` — prints the counts and the action for every edge on every spec, and writes nothing. Run it first.
+- `--json` — the same report as JSON, for scripts.
+
+**Gotchas.** Each changed spec gets its own store commit; the store is never rewritten wholesale. The command checks the planned result before it writes anything, and it refuses to run if a spec it would change still ends up holding two edges of the same type to one target. It re-reads each spec after writing and checks it again. The plan is measured from the store on every run, so a second run after a successful one finds nothing to do.
+
+**Chains with** — `aida db migrate-related-edges --dry-run` → review → `aida db migrate-related-edges` → `aida push` to publish the store commits.
 
 ---
 
