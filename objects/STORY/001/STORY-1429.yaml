@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:50:20.038947417Z
-modified_at: 2026-09-23T06:22:24.721543939Z
+modified_at: 2026-09-24T00:58:51.456126846Z
 req_type: Story
 tags:
 - aida:queue
@@ -35,7 +35,8 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-21T18:50:48.926884285Z
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c001-1e2d-76b2-95a1-a46f86e24287
   created_at: 2026-09-21T19:10:57.180499073Z
   created_by: joe
@@ -45,4 +46,10 @@ comments:
   content: 'PROXY DECISION (Claude for the operator, 2026-09-22 overnight burn-down; the operator delegated design calls: ''make decisions on my behalf''). The question and the ruling (the recommended option is adopted): Q: should NeedsAttention→re-drive be (a) drain auto-resumes triaged specs, or (b) surface offers one-keystroke human requeue? Recommended: (b), per PRIN-5 fail-closed — keeps resume authority with a human who can see the findings, and PR 2035 already built the claimable-Approved mechanism it needs. Now IMPLEMENT-ready; overrule by commenting.'
   created_at: 2026-09-23T06:22:24.721543939Z
   modified_at: 2026-09-23T06:22:24.721543939Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d0ec-22c0-70d1-bf24-76a5bc59711f
+  author: joe
+  content: 'TASK-1311 (branch claude/task-1311) delivered the option (b) surface: `aida queue rework <ID>` is the one-keystroke requeue for NeedsAttention specs (to Approved, back on the queue, advisor-gated like `aida edit --status approved`). `aida findings list` and `aida awaiting` print it next to each parked spec with the resulting status. Triage via edit, rework or MCP now clears the stale shelve markers, including the escalation `needs-human` parking tag that kept triaged specs out of the burndown ready set, and records an audit comment. A pending DecisionRequest still parks the spec. NOT done: the (a)-vs-(b) decision spec, and drain-side automatic re-drive (option a). Leaving this Draft.'
+  created_at: 2026-09-24T00:58:51.456126846Z
+  modified_at: 2026-09-24T00:58:51.456126846Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
