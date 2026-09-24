@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T14:19:48.859651743Z
-modified_at: 2026-09-24T09:35:23.669927228Z
+modified_at: 2026-09-24T09:35:52.391162470Z
 req_type: ChangeRequest
 tags:
 - intake:requester
@@ -73,4 +73,10 @@ comments:
   content: 'Acceptance note (4), proxy decision: branch names are recorded as-is in filed_at.branch, not hashed or omitted. They are developer-chosen and already public in the git history. No hostname, absolute path or email is recorded.'
   created_at: 2026-09-24T09:35:23.669927228Z
   modified_at: 2026-09-24T09:35:23.669927228Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d2c5-7a47-7c80-81af-2746b97ac2ee
+  author: joe
+  content: 'PROXY DECISION (acceptance note, criterion 4): the provenance record stores the branch name verbatim. Branch names are developer-chosen and already public in this repo''s git history and PR list, so they add no new exposure. No absolute paths, hostnames, emails or env values are recorded (confirmed by the strict review). The session id is a UUID and the vendor comes from a fixed list.'
+  created_at: 2026-09-24T09:35:52.391162470Z
+  modified_at: 2026-09-24T09:35:52.391162470Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
