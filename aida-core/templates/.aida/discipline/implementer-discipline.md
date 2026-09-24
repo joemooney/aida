@@ -73,6 +73,20 @@ Two concrete mechanisms observed 2026-09-21, each caught by a different check, s
 
 <!-- trace:TASK-1418 | ai:claude -->
 
+## Decide on typed fields, never on another component's prose
+
+`if error.to_string().contains("ambiguous")` reads well, is correct the day it is written, and gets approved in review. It breaks months later when someone rewords an unrelated message. Nothing fails visibly: the classification silently takes the other branch, and the tests still pass because they were written against the old wording. A fix for a prose-matching bug is just as likely to match prose itself, so a rule in review is not enough to stop it.
+
+**The rule:** when code branches on what happened (a refusal, a conflict, an ambiguous id, a transient failure), the producer has to return something typed: an enum variant, an error type you can downcast, an exit code, or a structured field. The consumer matches on that. If the producer only emits text, fix the producer before you write the classifier.
+
+**The narrow exception:** some external tools (git, gh, glab, SQLite, the OS) only report failures as text. When you must classify that text, keep it in one small function and mark the function as a declared contract, so it is listed in the inventory and not scattered through the code.
+
+**What doesn't count:** string tests on your own data (URLs, tags, collection membership, content heuristics over a commit subject), and test assertions that pin wording. These are not classification of another component's output.
+
+Where the project has a line ratchet (AIDA uses `scripts/check-portability.sh` with a production-scoped `prose-classification` rule), existing instances are baselined and new ones are refused. Removing a baseline row after fixing the site is how debt shrinks. Never add a row to bless new code. If a flagged line is not really classification, mark it `// prose-ok: <why>` on the line or the line above, and say why.
+
+<!-- trace:STORY-1382 | ai:claude -->
+
 ## The substrate-bouncer principle
 
 These rules are articulated here, but the substrate **enforces** them. That's the [substrate-as-bouncer principle](substrate-as-bouncer.md): when an invariant must hold against a confident LLM, ship a programmatic gate, not a rule in a doc. The doc tells you what's coming; the substrate makes sure you can't shortcut around it.

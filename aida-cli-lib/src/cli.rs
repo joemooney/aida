@@ -1679,6 +1679,24 @@ pub enum SessionCommand {
         /// Print the fresh-session vs compact recommendation.
         #[clap(long)]
         check: bool,
+
+        /// Write a seat handoff note from FILE (`-` reads stdin) under
+        /// `.aida/handoff/<seat>/` and update its `latest.md`. The note is
+        /// capped at ~4k tokens because it seeds the next session.
+        // trace:STORY-1464 | ai:claude
+        #[clap(long, value_name = "FILE", conflicts_with_all = ["check", "show"])]
+        write: Option<String>,
+
+        /// Print the seat's latest handoff note (the seed for a fresh session).
+        // trace:STORY-1464 | ai:claude
+        #[clap(long, conflicts_with = "check")]
+        show: bool,
+
+        /// The seat the handoff belongs to (advisor, reviewer, product, ...).
+        /// Defaults to `$AIDA_SESSION_ROLE`.
+        // trace:STORY-1464 | ai:claude
+        #[clap(long, value_name = "SEAT")]
+        seat: Option<String>,
     },
 
     /// Manage the planned-cluster manifest for the active session

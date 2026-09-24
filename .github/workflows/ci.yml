@@ -383,6 +383,11 @@ jobs:
             scripts/check-portability.sh
           fi
 
+      # STORY-1382: positive/negative fixtures for the production-scoped
+      # prose-classification ratchet rule. trace:STORY-1382 | ai:claude
+      - name: Prose-classification rule fixtures
+        run: python3 -m unittest tests/test_prose_classification_rule.py
+
       - name: Run clippy
         if: steps.changes.outputs.full_ci == 'true'
         # Style/pedantic lints stay warnings; the deny-by-default CORRECTNESS
