@@ -996,17 +996,7 @@ fn collect_diff(project_root: &Path, opts: &HarvestOptions) -> Result<(String, S
         .clone()
         .unwrap_or_else(|| "origin/main".to_string());
     let cwd = std::env::current_dir().unwrap_or_else(|_| project_root.to_path_buf());
-    let out = std::process::Command::new("git")
-        .current_dir(&cwd)
-        .args(["diff", &format!("{base}...HEAD")])
-        .output()
-        .context("could not run `git diff`")?;
-    if !out.status.success() {
-        anyhow::bail!(
-            "`git diff {base}...HEAD` failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
+    let diff = git_diff_base_to_head(&cwd, &base, &[])?;
     let head = std::process::Command::new("git")
         .current_dir(&cwd)
         .args(["rev-parse", "--short", "HEAD"])
@@ -1014,10 +1004,41 @@ fn collect_diff(project_root: &Path, opts: &HarvestOptions) -> Result<(String, S
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_else(|| "HEAD".to_string());
-    Ok((
-        String::from_utf8_lossy(&out.stdout).to_string(),
-        format!("{base}...{head}"),
-    ))
+    Ok((diff, format!("{base}...{head}")))
+}
+
+/// `git diff [extra…] <base>...HEAD` run in `cwd` — the one branch-diff scan
+/// shared by the harvest loop (full patch) and the typed-protocol done-gate
+/// (`--name-only`, to find a deliverable or a test file in the diff).
+// trace:TASK-1277 | ai:claude
+pub(crate) fn git_diff_base_to_head(cwd: &Path, base: &str, extra: &[&str]) -> Result<String> {
+    let range = format!("{base}...HEAD");
+    let out = std::process::Command::new("git")
+        .current_dir(cwd)
+        .arg("diff")
+        .args(extra)
+        .arg(&range)
+        .output()
+        .context("could not run `git diff`")?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "`git diff {range}` failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+/// The file paths a branch changed relative to `base` (`git diff --name-only
+/// <base>...HEAD`), in git's order.
+// trace:TASK-1277 | ai:claude
+pub(crate) fn changed_files_base_to_head(cwd: &Path, base: &str) -> Result<Vec<String>> {
+    Ok(git_diff_base_to_head(cwd, base, &["--name-only"])?
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .collect())
 }
 
 pub(crate) fn handle_harvest_command(
