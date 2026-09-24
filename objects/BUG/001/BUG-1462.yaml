@@ -24,17 +24,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T17:44:06.450584423Z
-modified_at: 2026-09-21T20:50:40.620093656Z
+modified_at: 2026-09-24T16:28:35.624304815Z
 req_type: Bug
 tags:
 - batch:night-0920
 - mailbox tui duplication from:review-pr-1976
 relationships:
-- rel_type:
-    custom: related
-  target_id: 01a0b5c8-f02f-7c22-84d1-8e58b8d59768
-  created_at: 2026-09-20T17:52:25.242869547Z
-  created_by: joe
 - rel_type: References
   target_id: 01a0b5c8-f02f-7c22-84d1-8e58b8d59768
   created_at: 2026-09-20T17:52:56.590237547Z
