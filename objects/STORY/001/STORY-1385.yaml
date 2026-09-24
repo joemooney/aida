@@ -91,7 +91,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:34:14.434033357Z
-modified_at: 2026-09-24T03:35:46.578029296Z
+modified_at: 2026-09-24T03:35:49.444244925Z
 req_type: Story
 tags:
 - acceptance
@@ -128,5 +128,11 @@ comments:
   content: 'Partial slice on branch claude/story-1385 (8b92dc9658, stacked on STORY-1430). Adds criterion 9 (auto-bump half) and criterion 10: a Closure item marked ''(stretch)'' or placed under ''### Stretch'' no longer holds completion, and unmet stretch items are written as an [aida:stretch-debt] comment when the spec completes. Documented in docs/lifecycle.md. Still open: criteria 1-8 (ex-post narrowing convention, tag, deferred-remainder view and queries), the reviewer-prompt change for criterion 9, and 11-13 (met-rate, stretch:required ratio at grooming, ex-post vs ex-ante distinction). Status left at approved.'
   created_at: 2026-09-24T03:28:43.421663300Z
   modified_at: 2026-09-24T03:28:43.421663300Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d17b-d7c4-72d2-9eb2-af3cdcf741ab
+  author: joe
+  content: 'Tagged closure:pending: the stretch-criteria slice (criterion 10 and part of 9) merges soon, but criteria 1-8 are open. The tag keeps the merge from auto-completing the spec.'
+  created_at: 2026-09-24T03:35:49.444244925Z
+  modified_at: 2026-09-24T03:35:49.444244925Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
