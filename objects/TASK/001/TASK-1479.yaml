@@ -1,0 +1,24 @@
+id: 01a0d324-ff32-7880-828f-8a85f50320be
+spec_id: TASK-1479
+agreed_id: TASK-1479
+title: Provide cross-client AIDA statusline adapters for Agy, Claude, and Codex
+description: |-
+  Provide a coherent AIDA statusline experience across supported agent clients.
+
+  Agy/Antigravity CLI supports a custom command receiving live agent-state JSON on stdin; the adapter should combine model, context usage, activity, and VCS data with AIDA role/session, active spec, queue, and worktree fields. Claude Code likewise supports a command-backed statusline and should use the shared AIDA formatter/contract where its payload permits. Codex currently exposes a configurable ordered set of built-in status items, but does not provide the same arbitrary command-backed footer integration; document the supported configuration and use a compatible companion surface or graceful AIDA fallback for Codex.
+
+  ## Acceptance
+  - A shared, documented AIDA statusline contract identifies stable AIDA fields and client-specific live fields.
+  - Agy integration consumes representative live JSON payloads without logging raw sensitive fields.
+  - Claude integration reuses the shared formatter or a thin client adapter and covers model, context, activity, and AIDA fields where available.
+  - Codex guidance documents its built-in status-line configuration, limitations, and the recommended way to display AIDA fields alongside it.
+  - Missing fields, unavailable clients, narrow terminals, and stale/unknown AIDA values produce readable fallback output.
+  - Tests cover representative payloads and formatting behavior for each supported client.
+  - Setup documentation explains installation/configuration for Agy, Claude Code, and Codex.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T11:20:12.338074957Z
+modified_at: 2026-09-24T11:20:53.254809866Z
+req_type: Task
