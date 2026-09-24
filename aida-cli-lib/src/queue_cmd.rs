@@ -110,7 +110,7 @@ pub(crate) fn handle_queue_advance(
         let req = if let Ok(uuid) = uuid::Uuid::parse_str(target) {
             store.requirements.iter().find(|r| r.id == uuid)
         } else {
-            store.get_requirement_by_spec_id(target)
+            store.get_requirement_unambiguous(target)? // trace:TASK-1468 | ai:claude
         }
         .ok_or_else(|| not_found::requirement_not_found(target, Some(storage.path())))?;
         items.push(Item {
@@ -304,7 +304,7 @@ pub(crate) fn advance_dispatch(
                 .unwrap_or(false);
                 if approved {
                     let mut req = backend
-                        .get_requirement_by_spec_id(display)?
+                        .get_requirement_unambiguous(display)? // trace:TASK-1468 | ai:claude
                         .ok_or_else(|| anyhow::anyhow!("could not reload {display}"))?;
                     let before = req.tags.len();
                     req.tags
@@ -371,7 +371,7 @@ pub(crate) fn advance_dispatch(
         AdvanceAction::Approve => {
             let backend = advance_backend(store_path)?;
             let mut req = backend
-                .get_requirement_by_spec_id(display)?
+                .get_requirement_unambiguous(display)? // trace:TASK-1468 | ai:claude
                 .ok_or_else(|| not_found::requirement_not_found(display, Some(store_path)))?;
             // Same advisor-authority gate as `aida edit` / `aida queue add`:
             // approving is an advisor call. Closes the `--yes` side-door where a
@@ -435,7 +435,7 @@ pub(crate) fn advance_dispatch(
             if do_reject {
                 let backend = advance_backend(store_path)?;
                 let mut req = backend
-                    .get_requirement_by_spec_id(display)?
+                    .get_requirement_unambiguous(display)? // trace:TASK-1468 | ai:claude
                     .ok_or_else(|| not_found::requirement_not_found(display, Some(store_path)))?;
                 let new_status = RequirementStatus::Rejected;
                 if status_advance_requires_advisor_authority(&req.status, &new_status)
@@ -508,7 +508,7 @@ pub(crate) fn advance_dispatch(
             }
             let backend = advance_backend(store_path)?;
             let mut req = backend
-                .get_requirement_by_spec_id(display)?
+                .get_requirement_unambiguous(display)? // trace:TASK-1468 | ai:claude
                 .ok_or_else(|| not_found::requirement_not_found(display, Some(store_path)))?;
             // Completing is an advisor-authority act (same gate as approve/
             // reject); an interactive operator clears it via the TTY branch of
@@ -3286,7 +3286,7 @@ pub(crate) fn handle_queue_command(
                     let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                         backend.get_requirement(&uuid)?
                     } else {
-                        backend.get_requirement_by_spec_id(id)?
+                        backend.get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
                     }
                     .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
                     let warn_store = build_queue_warn_subset(backend, &resolved, storage, &user_id);
@@ -3296,7 +3296,7 @@ pub(crate) fn handle_queue_command(
                     let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                         store.requirements.iter().find(|r| r.id == uuid).cloned()
                     } else {
-                        store.get_requirement_by_spec_id(id).cloned()
+                        store.get_requirement_unambiguous(id)?.cloned() // trace:TASK-1468 | ai:claude
                     }
                     .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
                     (resolved, store)
@@ -3634,7 +3634,7 @@ pub(crate) fn handle_queue_command(
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
-                store.get_requirement_by_spec_id(id)
+                store.get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
@@ -3734,7 +3734,7 @@ pub(crate) fn handle_queue_command(
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
-                store.get_requirement_by_spec_id(id)
+                store.get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
@@ -3898,7 +3898,7 @@ pub(crate) fn handle_queue_command(
                 let before_req = if let Ok(uuid) = uuid::Uuid::parse_str(before_id) {
                     store.requirements.iter().find(|r| r.id == uuid)
                 } else {
-                    store.get_requirement_by_spec_id(before_id)
+                    store.get_requirement_unambiguous(before_id)? // trace:TASK-1468 | ai:claude
                 }
                 .ok_or_else(|| not_found::requirement_not_found(before_id, Some(storage.path())))?;
                 if before_req.id == req.id {
@@ -3919,7 +3919,7 @@ pub(crate) fn handle_queue_command(
                 let after_req = if let Ok(uuid) = uuid::Uuid::parse_str(after_id) {
                     store.requirements.iter().find(|r| r.id == uuid)
                 } else {
-                    store.get_requirement_by_spec_id(after_id)
+                    store.get_requirement_unambiguous(after_id)? // trace:TASK-1468 | ai:claude
                 }
                 .ok_or_else(|| not_found::requirement_not_found(after_id, Some(storage.path())))?;
                 if after_req.id == req.id {
@@ -4835,7 +4835,7 @@ pub(crate) fn handle_queue_command(
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
-                store.get_requirement_by_spec_id(id)
+                store.get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
@@ -7229,7 +7229,7 @@ pub(crate) fn handle_queue_rework(
     let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
         store.requirements.iter().find(|r| r.id == uuid)
     } else {
-        store.get_requirement_by_spec_id(id)
+        store.get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
     }
     .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 

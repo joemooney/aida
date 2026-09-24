@@ -146,6 +146,21 @@ impl From<&Requirement> for IdRow {
     }
 }
 
+/// A candidate re-projected as a row, for re-checks that must keep a
+/// candidate whose canonical object could not be read.
+// trace:TASK-1468 | ai:claude
+impl From<&IdCandidate> for IdRow {
+    fn from(c: &IdCandidate) -> Self {
+        IdRow {
+            uuid: c.uuid,
+            spec_id: c.spec_id.clone(),
+            agreed_id: c.agreed_id.clone(),
+            title: c.title.clone(),
+            status: c.status.clone(),
+        }
+    }
+}
+
 fn non_empty(s: &Option<String>) -> Option<&str> {
     s.as_deref().map(str::trim).filter(|s| !s.is_empty())
 }

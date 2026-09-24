@@ -283,6 +283,9 @@ pub const CLOSURE_PENDING_TAG: &str = "closure:pending";
 ///   `Closure:` line) in the description; `- [x]` items are met. The section
 ///   ends only at the next markdown heading; fenced code blocks are ignored.
 ///
+/// STORY-1385: a criterion marked STRETCH never holds closure — see
+/// [`unmet_stretch_closure_criteria`]. Only REQUIRED unmet items appear here.
+///
 /// Empty = nothing declared unmet, and the auto-bump behaves exactly as before.
 /// Each entry is the human text of one unmet criterion.
 // trace:STORY-1430 | ai:claude
@@ -295,9 +298,45 @@ pub fn unmet_declared_closure_criteria(req: &Requirement) -> Vec<String> {
     {
         unmet.push(format!("tag `{CLOSURE_PENDING_TAG}` is set"));
     }
-    let mut in_closure = false;
+    unmet.extend(
+        unchecked_closure_items(&req.description)
+            .into_iter()
+            .filter(|(_, stretch)| !stretch)
+            .map(|(text, _)| text),
+    );
+    unmet
+}
+
+/// STORY-1385: unchecked closure items the author marked STRETCH ahead of
+/// time — "I want this, I am not sure it is reachable, I will not block on
+/// it". They never hold completion; when the spec completes with any still
+/// unchecked, the auto-bump records them as debt on the spec. Marking forms:
+///
+/// - a `(stretch)` suffix on the item: `- [ ] p95 under 1s (stretch)`, or
+/// - any item under a `### Stretch` (or `Stretch criteria`) subheading nested
+///   inside the Closure section, or under a `Stretch:` label line in it.
+///
+/// The returned text has the `(stretch)` suffix stripped.
+// trace:STORY-1385 | ai:claude
+pub fn unmet_stretch_closure_criteria(req: &Requirement) -> Vec<String> {
+    unchecked_closure_items(&req.description)
+        .into_iter()
+        .filter(|(_, stretch)| *stretch)
+        .map(|(text, _)| text)
+        .collect()
+}
+
+/// STORY-1430 / STORY-1385: every unchecked item in the Closure section, with
+/// whether it is marked stretch.
+// trace:STORY-1385 | ai:claude
+fn unchecked_closure_items(description: &str) -> Vec<(String, bool)> {
+    let mut items = Vec::new();
+    // `Some(level)` while inside the Closure section; the bare `Closure:` label
+    // form opens at level 0, so any heading nested under it counts as deeper.
+    let mut closure_level: Option<usize> = None;
+    let mut in_stretch = false;
     let mut in_fence = false;
-    for line in req.description.lines() {
+    for line in description.lines() {
         let trimmed = line.trim();
         // Fenced code is quoted text, never a declaration: `## Closure` or
         // `- [ ]` inside a fence is ignored.
@@ -311,15 +350,37 @@ pub fn unmet_declared_closure_criteria(req: &Requirement) -> Vec<String> {
         // Only a markdown heading ends (or opens) a section; a `Label:` line
         // inside the Closure section is part of it.
         if trimmed.starts_with('#') {
-            in_closure = is_closure_heading(trimmed.trim_start_matches('#'));
+            let level = trimmed.chars().take_while(|c| *c == '#').count();
+            let text = trimmed.trim_start_matches('#');
+            match closure_level {
+                // STORY-1385: a deeper `### Stretch` heading inside the
+                // section is its stretch subsection. Any other heading ends
+                // the section exactly as STORY-1430 always did.
+                Some(cl) if level > cl && is_stretch_heading(text) => in_stretch = true,
+                _ => {
+                    closure_level = is_closure_heading(text).then_some(level);
+                    in_stretch = false;
+                }
+            }
             continue;
         }
         let unindented = !line.starts_with(char::is_whitespace);
-        if !in_closure && unindented && trimmed.ends_with(':') && !is_list_item(trimmed) {
-            in_closure = is_closure_heading(trimmed.trim_end_matches(':'));
-            continue;
+        let is_label = unindented && trimmed.ends_with(':') && !is_list_item(trimmed);
+        if is_label {
+            let label = trimmed.trim_end_matches(':');
+            if closure_level.is_none() {
+                if is_closure_heading(label) {
+                    closure_level = Some(0);
+                    in_stretch = false;
+                }
+                continue;
+            }
+            if is_stretch_heading(label) {
+                in_stretch = true;
+                continue;
+            }
         }
-        if !in_closure {
+        if closure_level.is_none() {
             continue;
         }
         let item = trimmed
@@ -327,15 +388,40 @@ pub fn unmet_declared_closure_criteria(req: &Requirement) -> Vec<String> {
             .or_else(|| trimmed.strip_prefix("* "))
             .map(str::trim_start);
         if let Some(rest) = item.and_then(|i| i.strip_prefix("[ ]")) {
-            let text = rest.trim();
-            unmet.push(if text.is_empty() {
-                "an unchecked closure item".to_string()
-            } else {
-                text.to_string()
-            });
+            let (text, suffix_stretch) = strip_stretch_suffix(rest.trim());
+            items.push((
+                if text.is_empty() {
+                    "an unchecked closure item".to_string()
+                } else {
+                    text.to_string()
+                },
+                in_stretch || suffix_stretch,
+            ));
         }
     }
-    unmet
+    items
+}
+
+/// STORY-1385: `Stretch` / `Stretch criteria` (case-insensitive) names the
+/// stretch subsection of a Closure section.
+fn is_stretch_heading(text: &str) -> bool {
+    let t = text.trim().to_ascii_lowercase();
+    t == "stretch" || t == "stretch criteria"
+}
+
+/// STORY-1385: split a trailing `(stretch)` marker (case-insensitive) off an
+/// item's text. Returns the remaining text and whether the marker was present.
+fn strip_stretch_suffix(text: &str) -> (&str, bool) {
+    const MARK: &str = "(stretch)";
+    let n = text.len();
+    if n >= MARK.len()
+        && text.is_char_boundary(n - MARK.len())
+        && text[n - MARK.len()..].eq_ignore_ascii_case(MARK)
+    {
+        (text[..n - MARK.len()].trim_end(), true)
+    } else {
+        (text, false)
+    }
 }
 
 /// STORY-1430: `Closure` / `Closure criteria` (case-insensitive) opens the
@@ -763,5 +849,63 @@ mod tests {
             unmet_declared_closure_criteria(&r),
             vec!["still open".to_string()]
         );
+    }
+
+    // ── STORY-1385: stretch closure criteria ────────────────────────────
+
+    // trace:STORY-1385 | ai:claude
+    #[test]
+    fn stretch_suffix_item_does_not_hold_closure() {
+        let mut r = make_req("STORY-1", RequirementStatus::Done);
+        r.description = "## Closure\n- [ ] required one\n- [ ] p95 under 1s (Stretch)\n\
+                         - [x] met stretch (stretch)"
+            .to_string();
+        assert_eq!(
+            unmet_declared_closure_criteria(&r),
+            vec!["required one".to_string()]
+        );
+        assert_eq!(
+            unmet_stretch_closure_criteria(&r),
+            vec!["p95 under 1s".to_string()]
+        );
+    }
+
+    // trace:STORY-1385 | ai:claude
+    #[test]
+    fn stretch_subsection_items_do_not_hold_closure() {
+        let mut r = make_req("STORY-1", RequirementStatus::Done);
+        r.description = "## Closure\n- [ ] required\n### Stretch\n- [ ] ambitious\n\
+                         ### Notes\n- [ ] a non-stretch heading ends the section, as before"
+            .to_string();
+        assert_eq!(
+            unmet_declared_closure_criteria(&r),
+            vec!["required".to_string()]
+        );
+        assert_eq!(
+            unmet_stretch_closure_criteria(&r),
+            vec!["ambitious".to_string()]
+        );
+        // A same-level `## Stretch` is NOT nested under Closure: it ends the
+        // section, so its items are neither required nor stretch.
+        r.description = "## Closure\n- [x] done\n## Stretch\n- [ ] outside".to_string();
+        assert!(unmet_declared_closure_criteria(&r).is_empty());
+        assert!(unmet_stretch_closure_criteria(&r).is_empty());
+        // The bare-label forms compose too.
+        r.description = "Closure:\n- [x] done\nStretch:\n- [ ] reach".to_string();
+        assert!(unmet_declared_closure_criteria(&r).is_empty());
+        assert_eq!(
+            unmet_stretch_closure_criteria(&r),
+            vec!["reach".to_string()]
+        );
+    }
+
+    // trace:STORY-1385 | ai:claude
+    #[test]
+    fn stretch_outside_closure_section_is_ignored_and_tag_still_holds() {
+        let mut r = make_req("STORY-1", RequirementStatus::Done);
+        r.description = "### Stretch\n- [ ] not closure\n- [ ] also not (stretch)".to_string();
+        assert!(unmet_stretch_closure_criteria(&r).is_empty());
+        r.tags.insert(CLOSURE_PENDING_TAG.to_string());
+        assert_eq!(unmet_declared_closure_criteria(&r).len(), 1);
     }
 }

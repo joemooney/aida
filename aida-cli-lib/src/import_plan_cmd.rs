@@ -72,7 +72,7 @@ pub(crate) fn handle_import_plan_command(
     })?;
 
     let mut req = backend
-        .get_requirement_by_spec_id(&spec_id)?
+        .get_requirement_unambiguous(&spec_id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(&spec_id, Some(store_path)))?;
     let spec_display = req
         .agreed_id

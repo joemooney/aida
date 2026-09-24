@@ -1844,7 +1844,11 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
         {
             Some(parent_ref) => {
-                let parent = store.get_requirement_by_spec_id(parent_ref).ok_or_else(|| {
+                // TASK-1468: an ambiguous parent id refuses. trace:TASK-1468 | ai:claude
+                let parent = store
+                    .get_requirement_unambiguous(parent_ref)
+                    .map_err(|e| e.to_string())?
+                    .ok_or_else(|| {
                         format!(
                             "parent '{}' not found — refusing to create a child without a valid parent",
                             parent_ref
@@ -2979,6 +2983,14 @@ impl<'a> McpServer<'a> {
             crate::punt::suggest_blocked_by(spec, category, detail, lean.as_deref())
                 .map(|s| s.suggested_command());
 
+        // TASK-1468: refuse an ambiguous spec id BEFORE the ledger write, so
+        // a punt is never recorded against — or flips — a guessed spec.
+        // trace:TASK-1468 | ai:claude
+        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+        store
+            .get_requirement_unambiguous(spec)
+            .map_err(|e| e.to_string())?;
+
         let record = PuntRecord {
             timestamp: Utc::now(),
             spec: spec.to_string(),
@@ -3007,8 +3019,10 @@ impl<'a> McpServer<'a> {
         // guards it), so flip when the transition is legal and record-only
         // otherwise — never erroring, since the punt ledger entry is already
         // written. trace:BUG-334 | ai:claude
-        let mut store = self.storage.load().map_err(|e| e.to_string())?;
-        let flipped = match store.get_requirement_by_spec_id_mut(spec) {
+        let flipped = match store
+            .get_requirement_unambiguous_mut(spec)
+            .map_err(|e| e.to_string())?
+        {
             Some(req)
                 if aida_core::forbidden_attention_transition(
                     &req.status,
@@ -3284,8 +3298,10 @@ impl<'a> McpServer<'a> {
         }
 
         let mut store = self.storage.load().map_err(|e| e.to_string())?;
+        // TASK-1468: refuse an ambiguous finding id. trace:TASK-1468 | ai:claude
         let req = store
-            .get_requirement_by_spec_id_mut(id)
+            .get_requirement_unambiguous_mut(id)
+            .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Finding '{}' not found", id))?;
         let tags: Vec<String> = req.tags.iter().cloned().collect();
         if finding_source(&tags).is_none() {
@@ -3686,7 +3702,24 @@ impl<'a> McpServer<'a> {
 
     /// Resolve a requirement by UUID or SPEC-ID (the CLI's two-step lookup).
     /// trace:EPIC-27
+    ///
+    /// TASK-1468: every write tool resolves through here, so an id naming
+    /// more than one requirement refuses (the error lists each candidate's
+    /// unambiguous handle). Read-only tools use
+    /// [`Self::resolve_requirement_for_read`].
+    // trace:TASK-1468 | ai:claude
     fn resolve_requirement<'s>(
+        store: &'s aida_core::RequirementsStore,
+        id: &str,
+    ) -> Result<&'s Requirement, String> {
+        store
+            .get_requirement_unambiguous(id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Requirement '{}' not found", id))
+    }
+
+    /// Read-only resolution: deterministic native-owner-first pick.
+    fn resolve_requirement_for_read<'s>(
         store: &'s aida_core::RequirementsStore,
         id: &str,
     ) -> Result<&'s Requirement, String> {
@@ -5096,7 +5129,7 @@ impl<'a> McpServer<'a> {
     fn tool_plan_helpers(&self, args: &Value) -> Result<String, String> {
         let spec = required_string(args, "spec")?;
         let store = self.storage.load().map_err(|e| e.to_string())?;
-        let target = Self::resolve_requirement(&store, spec)?;
+        let target = Self::resolve_requirement_for_read(&store, spec)?;
         let display = Self::display_id_of(target);
         match crate::build_reusable_helpers_section(&store, &self.project_root, target) {
             Some(mut md) => {
@@ -5129,7 +5162,7 @@ impl<'a> McpServer<'a> {
             );
         }
         let store = self.storage.load().map_err(|e| e.to_string())?;
-        let target = Self::resolve_requirement(&store, spec)?;
+        let target = Self::resolve_requirement_for_read(&store, spec)?;
         let helpers = crate::build_reusable_helpers_section(&store, &self.project_root, target);
         let (reservations, reservation_warnings) = crate::read_reserved_paths(&self.project_root);
         let (prompt, mut warnings) = crate::assemble_ultraplan_prompt(
@@ -10856,6 +10889,59 @@ mod tests {
             err.contains("adding new children to a closed parent"),
             "{err}"
         );
+    }
+
+    // TASK-1468: MCP write tools refuse an id that names two requirements
+    // (a merge-gate agreed_id colliding with another spec's native id), and
+    // a refused punt leaves no ledger entry. trace:TASK-1468 | ai:claude
+    #[test]
+    fn mcp_write_tools_refuse_an_ambiguous_id() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let a = server
+            .tool_add_requirement(
+                &json!({ "title": "native owner", "description": "d", "type": "task" }),
+            )
+            .unwrap();
+        let a = added_spec_id(&a).to_string();
+        let b = server
+            .tool_add_requirement(
+                &json!({ "title": "agreed holder", "description": "d", "type": "task" }),
+            )
+            .unwrap();
+        let b = added_spec_id(&b).to_string();
+        let mut store = server.storage.load().unwrap();
+        let holder = store.get_requirement_by_spec_id_mut(&b).unwrap();
+        holder.agreed_id = Some(a.clone());
+        holder.tags.insert("from-review".to_string());
+        server.storage.save(&store).unwrap();
+
+        let err = server
+            .tool_post_punt(&json!({ "spec_id": a, "detail": "fork", "category": "design-fork" }))
+            .expect_err("an ambiguous punt target must refuse");
+        assert!(err.contains("ambiguous"), "{err}");
+        let listed = server.tool_list_punts(&json!({})).unwrap();
+        assert!(
+            !listed.contains(&a),
+            "refused punt must not be recorded: {listed}"
+        );
+
+        let err = server
+            .tool_triage_finding(&json!({ "id": a, "action": "dismiss" }))
+            .expect_err("an ambiguous finding id must refuse");
+        assert!(err.contains("ambiguous"), "{err}");
+
+        let err = server
+            .tool_add_requirement(&json!({
+                "title": "child", "description": "d", "type": "task", "parent": a,
+            }))
+            .expect_err("an ambiguous parent must refuse");
+        assert!(err.contains("ambiguous"), "{err}");
+
+        // The unambiguous handle still reaches the agreed-id holder.
+        server
+            .tool_post_punt(&json!({ "spec_id": b, "detail": "fork", "category": "design-fork" }))
+            .unwrap();
     }
 
     #[test]

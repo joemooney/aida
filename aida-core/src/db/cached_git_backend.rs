@@ -178,8 +178,18 @@ impl CachedGitBackend {
                 if !seen_files.insert(file.to_ascii_uppercase()) {
                     continue;
                 }
-                if let Ok(req) = crate::object_store::read_object(&objects_root, file) {
-                    rows.push(crate::id_collisions::IdRow::from(&req));
+                match crate::object_store::read_object(&objects_root, file) {
+                    Ok(req) => rows.push(crate::id_collisions::IdRow::from(&req)),
+                    // A file that is gone is a stale cache row: drop it.
+                    Err(_)
+                        if !crate::object_store::object_exists(&objects_root, file)
+                            .unwrap_or(true) => {}
+                    // PRIN-5: a file that EXISTS but cannot be read or parsed
+                    // is absent evidence, not good evidence. It still counts
+                    // as a candidate, so the write refuses instead of
+                    // slipping through on the one readable object.
+                    // trace:TASK-1468 | ai:claude
+                    Err(_) => rows.push(crate::id_collisions::IdRow::from(c)),
                 }
             }
             let confirmed = crate::id_collisions::candidates_for_id(rows.iter(), id);
@@ -696,6 +706,12 @@ impl DatabaseBackend for CachedGitBackend {
 
     fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
         self.inner.get_requirement_by_spec_id(spec_id)
+    }
+
+    // Route the trait's checked resolver to the cache-backed one above
+    // (no full-store load). trace:TASK-1468 | ai:claude
+    fn get_requirement_unambiguous(&self, id: &str) -> Result<Option<Requirement>> {
+        CachedGitBackend::get_requirement_unambiguous(self, id)
     }
 
     fn list_requirements(&self, include_archived: bool) -> Result<Vec<Requirement>> {
@@ -1640,5 +1656,51 @@ mod tests {
         let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
         // Open triggered ensure_cache_fresh, which detected stale and rebuilt.
         assert_eq!(backend.cache().requirement_count().unwrap(), 2);
+    }
+
+    // TASK-1468 / PRIN-5: during the on-disk re-check of a cache-reported
+    // ambiguity, a candidate whose YAML EXISTS but cannot be parsed is absent
+    // evidence and still counts, so the write refuses. A candidate whose file
+    // is GONE is a stale cache row and drops out. trace:TASK-1468 | ai:claude
+    #[test]
+    fn unreadable_candidate_yaml_keeps_the_id_ambiguous_for_writes() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+
+        let fixture = backend
+            .add_requirement(sample_req("BUG-34", "fixture"))
+            .unwrap();
+        let mut real = sample_req("BUG-2-081", "real");
+        real.agreed_id = Some("BUG-34".into());
+        backend.add_requirement(real).unwrap();
+
+        let err = backend.get_requirement_unambiguous("BUG-34").unwrap_err();
+        assert!(err
+            .downcast_ref::<crate::id_collisions::AmbiguousIdError>()
+            .is_some());
+
+        // Corrupt the agreed-id holder's YAML behind the cache's back.
+        let objects_root = store_root.join("objects");
+        let real_path = crate::object_store::object_path(&objects_root, "BUG-2-081").unwrap();
+        std::fs::write(&real_path, "{{ not: yaml: at all").unwrap();
+        let err = backend
+            .get_requirement_unambiguous("BUG-34")
+            .expect_err("an unreadable candidate must not let the write through");
+        assert!(err
+            .downcast_ref::<crate::id_collisions::AmbiguousIdError>()
+            .is_some());
+        // The trait entry point routes to the same checked resolver.
+        assert!(DatabaseBackend::get_requirement_unambiguous(&backend, "BUG-34").is_err());
+
+        // A candidate whose file is gone is a stale row: the id resolves.
+        std::fs::remove_file(&real_path).unwrap();
+        let only = backend
+            .get_requirement_unambiguous("BUG-34")
+            .unwrap()
+            .unwrap();
+        assert_eq!(only.id, fixture.id);
     }
 }

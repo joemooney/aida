@@ -399,6 +399,10 @@ pub(crate) fn handle_status_command_distributed(
         }
         let drain_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
         print_live_drain_status_line(&drain_root);
+        // STORY-1415: one line, only when mass-change mode is not off — config +
+        // cache reads only, so the fast path stays sub-second.
+        // trace:STORY-1415 | ai:claude
+        crate::mass_change::print_status_line(&drain_root);
         let snap = collect_fast_status_snapshot(&project_root);
         // TASK-964: AGENT-MODE renders the token-efficient TOON snapshot; the
         // human TTY path keeps the byte-identical emoji/rule snapshot.

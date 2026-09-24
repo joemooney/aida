@@ -156,6 +156,18 @@ pub trait DatabaseBackend: Send + Sync {
             .cloned())
     }
 
+    /// Resolve `id` for a WRITE (or any caller that must not act on a
+    /// guess). A UUID resolves directly; an id naming more than one
+    /// requirement returns an [`AmbiguousIdError`] (downcastable from the
+    /// `anyhow::Error`) listing each candidate's unambiguous handle.
+    ///
+    /// [`AmbiguousIdError`]: crate::id_collisions::AmbiguousIdError
+    // trace:TASK-1468 | ai:claude
+    fn get_requirement_unambiguous(&self, id: &str) -> Result<Option<Requirement>> {
+        let store = self.load()?;
+        Ok(store.get_requirement_unambiguous(id)?.cloned())
+    }
+
     /// Lists all requirements (non-archived by default)
     fn list_requirements(&self, include_archived: bool) -> Result<Vec<Requirement>> {
         let store = self.load()?;
