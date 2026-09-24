@@ -276,11 +276,10 @@ impl CachedGitBackend {
     // trace:BUG-1606 | ai:claude
     fn stored_status_targeted(&self, id: &Uuid) -> Option<crate::models::RequirementStatus> {
         let spec_id = self.cache.spec_id_for_uuid(id).ok().flatten()?;
-        let req = self
-            .inner
-            .get_requirement_by_spec_id(&spec_id)
-            .ok()
-            .flatten()?;
+        // Read exactly that object file. Not `get_requirement_by_spec_id`: on
+        // a missing file it falls through to an agreed_id scan of every object.
+        let objects_root = self.inner.path().join("objects");
+        let req = crate::object_store::read_object(&objects_root, &spec_id).ok()?;
         (req.id == *id).then_some(req.status)
     }
 
@@ -470,7 +469,13 @@ impl CachedGitBackend {
                             self.cache.upsert_requirement(&req)?;
                             // BUG-626 parity with the write path: a child's status
                             // / hierarchy change shifts its parent epic's rollup.
-                            self.refresh_parent_epic_status(&req);
+                            // BUG-1606: an ancestor epic the targeted read cannot
+                            // resolve is a cache/store disagreement. Don't guess:
+                            // decline, and the caller does a full rebuild.
+                            // trace:BUG-1606 | ai:claude
+                            if !self.refresh_parent_epic_status(&req) {
+                                return Ok(false);
+                            }
                         }
                         None => {
                             // The diff says present at `to` but the worktree can't
@@ -657,22 +662,46 @@ impl CachedGitBackend {
     /// the epic. That scan ran once per ancestor epic for every changed row the
     /// read-path incremental catch-up replayed, so a plain `aida show` after any
     /// store commit parsed ~2x the whole store; on a busy spinning disk with a
-    /// cold page cache it took minutes. A targeted miss takes the documented
-    /// `Draft` fallback rather than a scan: the rollup is a rebuildable
-    /// projection, authoritative again after the next full rebuild.
+    /// cold page cache it took minutes.
+    ///
+    /// Fail-closed (PRIN-5): a targeted miss means the cache and the store
+    /// disagree about an epic, so nothing is guessed. That epic is left
+    /// unrecomputed and this returns `false`; callers then force a full rebuild
+    /// (the incremental catch-up declines; write paths mark the cache stale).
+    /// `true` means every ancestor epic was re-derived from its stored status.
     // trace:BUG-626 trace:BUG-764 trace:BUG-768 | ai:claude
     // trace:BUG-1606 | ai:claude
-    fn refresh_parent_epic_status(&self, req: &Requirement) {
+    #[must_use]
+    fn refresh_parent_epic_status(&self, req: &Requirement) -> bool {
         let Ok(ancestor_epics) = self.cache.ancestor_epic_ids(&req.id) else {
-            return;
+            return false;
         };
+        let mut all_resolved = true;
         for epic_id in ancestor_epics {
-            let stored = self
-                .stored_status_targeted(&epic_id)
-                .unwrap_or(crate::models::RequirementStatus::Draft);
+            let Some(stored) = self.stored_status_targeted(&epic_id) else {
+                all_resolved = false;
+                continue;
+            };
             let _ = self
                 .cache
                 .recompute_epic_status_from_hierarchy(&epic_id, &stored);
+        }
+        all_resolved
+    }
+
+    /// Write paths: refresh the ancestor epics, then either re-stamp the cache
+    /// HEAD (every epic resolved) or mark the cache stale so the next read does
+    /// an authoritative full rebuild (a targeted epic read missed).
+    // trace:BUG-1606 | ai:claude
+    fn refresh_epics_then_restamp(&self, reqs: &[&Requirement], pre_write_head: &str) {
+        let mut all_resolved = true;
+        for req in reqs {
+            all_resolved &= self.refresh_parent_epic_status(req);
+        }
+        if all_resolved {
+            self.restamp_head(pre_write_head);
+        } else {
+            let _ = self.cache.set_source_head_sha("");
         }
     }
 
@@ -701,10 +730,8 @@ impl CachedGitBackend {
         }
         if cache_ok {
             // BUG-626: refresh each touched child's parent epic rollup status.
-            for req in requirements {
-                self.refresh_parent_epic_status(req);
-            }
-            self.restamp_head(&pre_write_head);
+            let reqs: Vec<&Requirement> = requirements.iter().collect();
+            self.refresh_epics_then_restamp(&reqs, &pre_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -778,8 +805,7 @@ impl DatabaseBackend for CachedGitBackend {
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
             // BUG-626: a new child shifts its parent epic's rollup status.
-            self.refresh_parent_epic_status(&added);
-            self.restamp_head(&pre_write_head);
+            self.refresh_epics_then_restamp(&[&added], &pre_write_head);
         }
         Ok(added)
     }
@@ -794,8 +820,7 @@ impl DatabaseBackend for CachedGitBackend {
         } else {
             // BUG-626: a child's status (or hierarchy edge) change shifts its
             // parent epic's rollup status — refresh the parent epic's row.
-            self.refresh_parent_epic_status(requirement);
-            self.restamp_head(&pre_write_head);
+            self.refresh_epics_then_restamp(&[requirement], &pre_write_head);
         }
         Ok(())
     }
@@ -810,8 +835,7 @@ impl DatabaseBackend for CachedGitBackend {
                 eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
             } else {
                 // BUG-626: refresh the parent epic's rollup status. trace:BUG-626
-                self.refresh_parent_epic_status(requirement);
-                self.restamp_head(&pre_write_head);
+                self.refresh_epics_then_restamp(&[requirement], &pre_write_head);
             }
         }
         Ok(result)
@@ -1302,12 +1326,15 @@ mod tests {
         assert_eq!(cached_status(&backend, epic_id), "Completed");
     }
 
-    /// BUG-1606: when the targeted read of an ancestor epic misses (its cache
-    /// row points at a file that no longer holds it), the refresh takes the
-    /// documented `Draft` fallback and still never scans the store.
+    /// BUG-1606 (fail-closed, PRIN-5): when the targeted read of an ancestor
+    /// epic misses (its cache row points at a file that no longer holds it),
+    /// the incremental catch-up does not guess a status. It declines, so the
+    /// caller does an authoritative full rebuild, and it never scans the store
+    /// to look for the epic.
     // trace:BUG-1606 | ai:claude
     #[test]
-    fn epic_rollup_targeted_miss_falls_back_without_a_scan() {
+    fn epic_targeted_miss_makes_incremental_catch_up_decline() {
+        use crate::models::RequirementStatus;
         use crate::object_store::FULL_SCAN_COUNT;
 
         let dir = tempdir().unwrap();
@@ -1315,22 +1342,50 @@ mod tests {
         let cache_path = dir.path().join(".aida").join("cache.db");
         let (backend, epic_id, child_id) =
             epic_with_open_and_rejected_child(&store_root, &cache_path);
+        let recorded = backend.cache().source_head_sha().unwrap().unwrap();
+
+        // External commit to the child: the catch-up will replay it.
+        {
+            let external = GitBackend::new(&store_root).unwrap();
+            let mut child = external
+                .get_requirement_by_spec_id("STORY-1")
+                .unwrap()
+                .unwrap();
+            child.status = RequirementStatus::Completed;
+            external.update_requirement(&child).unwrap();
+        }
+        let head = crate::git_ops::head_sha(&store_root).unwrap();
 
         // Remove the epic's YAML behind the cache's back: the cache row still
-        // maps its uuid to EPIC-1, but the read now misses.
+        // maps its uuid to EPIC-1, but the targeted read now misses.
         let epic_file =
             store_root.join(crate::object_store::relative_object_path("EPIC-1").unwrap());
         std::fs::remove_file(&epic_file).unwrap();
+        assert_eq!(backend.stored_status_targeted(&epic_id), None);
+        assert!(backend.stored_status_targeted(&child_id).is_some());
 
+        FULL_SCAN_COUNT.with(|c| c.set(0));
+        let applied = backend.try_incremental_update(&recorded, &head).unwrap();
+        assert!(
+            !applied,
+            "a missed epic read must make the catch-up decline (full rebuild), not guess"
+        );
+        assert_eq!(FULL_SCAN_COUNT.with(|c| c.get()), 0);
+        // Declining leaves the recorded HEAD where it was, so the caller's
+        // full rebuild is what brings the cache current.
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap(),
+            Some(recorded),
+            "a declined catch-up must not stamp the new HEAD"
+        );
+
+        // The refresh reports the miss, which is what makes the write paths
+        // mark the cache stale instead of re-stamping it.
         let child = backend
             .get_requirement_by_spec_id("STORY-1")
             .unwrap()
             .unwrap();
-        FULL_SCAN_COUNT.with(|c| c.set(0));
-        backend.refresh_parent_epic_status(&child);
-        assert_eq!(FULL_SCAN_COUNT.with(|c| c.get()), 0);
-        assert_eq!(backend.stored_status_targeted(&epic_id), None);
-        assert!(backend.stored_status_targeted(&child_id).is_some());
+        assert!(!backend.refresh_parent_epic_status(&child));
     }
 
     // ---------------------------------------------------------------- BUG-768

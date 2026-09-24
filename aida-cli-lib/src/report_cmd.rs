@@ -375,20 +375,39 @@ fn is_open_upstream_aida_report(req: &Requirement) -> bool {
 
 /// BUG-1606: the same open-upstream-report rows as
 /// [`open_upstream_report_rows`], computed from the cache's summary rows
-/// instead of a full store load. The status is the cache's projected string
-/// (the stored status's `Debug` name, e.g. `Completed`).
+/// instead of a full store load.
+///
+/// The cache's status column holds `custom_status` when one is set, not the
+/// base status. So a row whose status string is not a canonical
+/// [`RequirementStatus`] name has its base status resolved through
+/// `base_status` (one targeted read, and only for report rows). If that
+/// lookup fails the report counts as open, which errs toward showing the
+/// advisory notice.
 // trace:BUG-1606 | ai:claude
 fn open_upstream_report_rows_from_summaries(
     summaries: &[aida_core::RequirementSummary],
     current_version: &str,
+    base_status: &dyn Fn(&aida_core::RequirementSummary) -> Option<RequirementStatus>,
 ) -> Vec<UpstreamRecheckRow> {
+    let is_closed = |s: &aida_core::RequirementSummary| {
+        let status = serde_yaml::from_str::<RequirementStatus>(&s.status)
+            .ok()
+            .or_else(|| base_status(s));
+        matches!(
+            status,
+            Some(
+                RequirementStatus::Done
+                    | RequirementStatus::Completed
+                    | RequirementStatus::Rejected
+            )
+        )
+    };
     let mut rows: Vec<_> = summaries
         .iter()
         .filter(|s| {
-            let closed = matches!(s.status.as_str(), "Done" | "Completed" | "Rejected");
-            !closed
-                && !s.archived
+            !s.archived
                 && (s.title.starts_with("AIDA:") || s.tags.iter().any(|t| t == UPSTREAM_AIDA_TAG))
+                && !is_closed(s)
         })
         .map(|s| {
             let tags: HashSet<String> = s.tags.iter().cloned().collect();
@@ -467,10 +486,25 @@ pub(crate) fn maybe_print_upstream_recheck_notice(
     // BUG-1594: one cheap `rev-parse` of the store worktree's HEAD. The
     // report scan below runs only when the binary version OR the store HEAD
     // changed since the last check.
-    let head = store_head_sha(storage.path()).or_else(|| store_objects_fingerprint(storage.path()));
+    let git_head = store_head_sha(storage.path());
+    let head = git_head
+        .clone()
+        .or_else(|| store_objects_fingerprint(storage.path()));
     if upstream_notice_is_current(&marker, current, head.as_deref()) {
         return;
     }
+    // BUG-1606: a store that is not a git worktree has no HEAD the cache can
+    // be checked against, so it keeps the authoritative load (these are small
+    // `--file <dir>` stores, not the busy git-canonical store).
+    // trace:BUG-1606 | ai:claude
+    let Some(git_head) = git_head else {
+        let Ok(store) = storage.load() else {
+            return;
+        };
+        print_stale_upstream_notice(&open_upstream_report_rows(&store, current));
+        record_upstream_notice_checked(&marker, current, head.as_deref());
+        return;
+    };
     // BUG-1606: read the report rows from the cache, never a full store load.
     // In a busy store HEAD moves every few minutes, so the first command after
     // each commit (an `aida show`, say) used to parse all ~4,400 objects here;
@@ -485,24 +519,46 @@ pub(crate) fn maybe_print_upstream_recheck_notice(
     }) else {
         return;
     };
-    let stale = open_upstream_report_rows_from_summaries(&summaries, current)
-        .into_iter()
-        .filter(|row| row.older)
-        .count();
-    if stale > 0 {
-        eprintln!("{stale} upstream aida report(s) predate this binary - aida report --recheck");
-    }
+    let objects_root = storage.path().join("objects");
+    let base_status = |s: &aida_core::RequirementSummary| {
+        let spec_id = s.spec_id.as_deref()?;
+        let req = aida_core::object_store::read_object(&objects_root, spec_id).ok()?;
+        (req.id == s.id).then_some(req.status)
+    };
+    print_stale_upstream_notice(&open_upstream_report_rows_from_summaries(
+        &summaries,
+        current,
+        &base_status,
+    ));
     // BUG-1594: record the (version, store HEAD) pair this check covered,
     // whether or not anything was stale. This notice runs before EVERY
     // git-backend command; the marker used to be written only when a stale
     // report was found, so in the common no-stale case every `aida show`,
-    // `aida list`, … paid a full store load (4,400+ YAML parses, 2.5s warm,
-    // far longer under contention). Keying on the store HEAD as well as the
-    // version means a report that arrives later — filed locally or brought
-    // in by `aida pull` — moves the HEAD and re-arms the check. When the
-    // HEAD is unreadable the marker records no SHA, which never matches, so
-    // the check fails toward running. trace:BUG-1594 | ai:claude
-    record_upstream_notice_checked(&marker, current, head.as_deref());
+    // `aida list`, … paid a full store load. Keying on the store HEAD as well
+    // as the version means a report that arrives later (filed locally or
+    // brought in by `aida pull`) moves the HEAD and re-arms the check.
+    //
+    // BUG-1606: the rows came from the cache, and a read serves the last
+    // committed snapshot WITHOUT catching up when another live process holds
+    // the cache write lock (BUG-664). The marker claims "checked at
+    // `git_head`", so it is written only when the snapshot we read is stamped
+    // at exactly that HEAD. Otherwise the rows above are still printed and
+    // the marker stays unwritten, so the next command checks again.
+    // trace:BUG-1594 trace:BUG-1606 | ai:claude
+    let snapshot_head = backend.cache().source_head_sha().ok().flatten();
+    if snapshot_head.as_deref() == Some(git_head.as_str()) {
+        record_upstream_notice_checked(&marker, current, Some(&git_head));
+    }
+}
+
+/// Print the one-line notice when any open upstream report predates this
+/// binary.
+// trace:BUG-1606 | ai:claude
+fn print_stale_upstream_notice(rows: &[UpstreamRecheckRow]) {
+    let stale = rows.iter().filter(|row| row.older).count();
+    if stale > 0 {
+        eprintln!("{stale} upstream aida report(s) predate this binary - aida report --recheck");
+    }
 }
 
 /// Read the requirements store's HEAD commit, or `None` when it is not a
@@ -782,7 +838,7 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-        let from_cache = open_upstream_report_rows_from_summaries(&summaries, "2.0.0");
+        let from_cache = open_upstream_report_rows_from_summaries(&summaries, "2.0.0", &|_| None);
 
         assert_eq!(from_cache, from_load);
         let ids: Vec<&str> = from_cache.iter().map(|r| r.spec_id.as_str()).collect();
@@ -792,6 +848,125 @@ mod tests {
             !from_cache[1].older,
             "an unknown observed version is not older"
         );
+    }
+
+    // BUG-1606: the cache's status column carries `custom_status` when set,
+    // so a closed report with a custom label must be resolved to its base
+    // status, not counted as open. An unresolvable one errs toward noticing.
+    // trace:BUG-1606 | ai:claude
+    #[test]
+    fn bug_1606_custom_status_report_uses_base_status() {
+        use aida_core::DatabaseBackend;
+
+        let tmp = TempDir::new().unwrap();
+        let store_root = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        aida_core::git_ops::init(&store_root).unwrap();
+        aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        let cache_path = tmp.path().join(".aida").join("cache.db");
+        let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let mut shipped = Requirement::new("AIDA: shipped".into(), "body".into());
+        shipped.spec_id = Some("BUG-1".to_string());
+        shipped.status = RequirementStatus::Completed;
+        shipped.custom_status = Some("Shipped".to_string());
+        shipped.tags.insert("observed-version:1.0.0".to_string());
+        backend.add_requirement(shipped).unwrap();
+
+        let summaries = backend
+            .list_summaries(&aida_core::ListFilter::default())
+            .unwrap();
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(
+            summaries[0].status, "Shipped",
+            "fixture: the cache column carries the custom status"
+        );
+
+        let closed = open_upstream_report_rows_from_summaries(&summaries, "2.0.0", &|_| {
+            Some(RequirementStatus::Completed)
+        });
+        assert!(
+            closed.is_empty(),
+            "base status Completed is closed: {closed:?}"
+        );
+
+        let unknown = open_upstream_report_rows_from_summaries(&summaries, "2.0.0", &|_| None);
+        assert_eq!(
+            unknown.len(),
+            1,
+            "an unresolvable custom status counts as open"
+        );
+    }
+
+    // BUG-1606: the per-command notice reads the cache, and a read serves the
+    // last committed snapshot without catching up while another live process
+    // holds the cache write lock (BUG-664). Then the rows are older than the
+    // store HEAD, so the "checked at HEAD" marker must NOT be written. Once
+    // the cache can catch up, the marker is written for that HEAD.
+    // trace:BUG-1606 | ai:claude
+    #[test]
+    fn bug_1606_notice_marker_not_written_from_a_stale_cache_snapshot() {
+        use aida_core::DatabaseBackend;
+
+        let tmp = TempDir::new().unwrap();
+        let store_root = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        aida_core::git_ops::init(&store_root).unwrap();
+        aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        let cache_path = tmp.path().join(".aida").join("cache.db");
+        let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let mut first = Requirement::new("AIDA: first".into(), "body".into());
+        first.spec_id = Some("BUG-1".to_string());
+        backend.add_requirement(first).unwrap();
+
+        // Another agent commits to the store: the cache is now behind HEAD.
+        {
+            let external = aida_core::GitBackend::new(&store_root).unwrap();
+            let mut second = Requirement::new("AIDA: second".into(), "body".into());
+            second.spec_id = Some("BUG-2".to_string());
+            second.tags.insert(UPSTREAM_AIDA_TAG.to_string());
+            second.tags.insert("observed-version:0.0.1".to_string());
+            external.add_requirement(second).unwrap();
+        }
+        let head = store_head_sha(&store_root).unwrap();
+
+        // A live foreign writer (pid 1) holds the cache write lock, so the
+        // read path serves the old snapshot instead of catching up.
+        let lock_info = std::path::PathBuf::from(format!("{}.lock-info", cache_path.display()));
+        let info = aida_core::CacheLockInfo {
+            pid: 1,
+            command: "test-foreign-writer".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            user: "test".to_string(),
+            ..Default::default()
+        };
+        std::fs::write(&lock_info, serde_json::to_string(&info).unwrap()).unwrap();
+
+        let storage = Storage::new(&store_root);
+        let marker = tmp.path().join(NOTICE_MARKER);
+        maybe_print_upstream_recheck_notice(&storage, &backend);
+        assert_ne!(
+            backend.cache().source_head_sha().unwrap().as_deref(),
+            Some(head.as_str()),
+            "fixture: the catch-up must have been skipped"
+        );
+        assert!(
+            !marker.exists(),
+            "a stale snapshot must not record the marker for the new HEAD"
+        );
+
+        // The foreign writer is gone: the read catches up, and the marker is
+        // recorded for exactly this HEAD.
+        std::fs::remove_file(&lock_info).unwrap();
+        maybe_print_upstream_recheck_notice(&storage, &backend);
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap().as_deref(),
+            Some(head.as_str())
+        );
+        assert!(upstream_notice_is_current(
+            &marker,
+            env!("CARGO_PKG_VERSION"),
+            Some(&head)
+        ));
     }
 
     // BUG-1594: the marker re-arms the check when the store HEAD moves (a
