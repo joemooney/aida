@@ -11,12 +11,12 @@ description: |-
   3. `aida show <spec>`'s git-linkage section (TASK-241) learning to resolve and print the matching GitLab MR/pipeline when the project has a `gitlab` remote and the spec's tags/paths suggest GitLab relevance.
 
   Acceptance (draft, needs grooming): a reviewer looking at a GitHub PR that touches GitLab CI config can find the corresponding GitLab pipeline's status for the exact reviewed sha without leaving the review surface they started on, or with at most one obvious link/command.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:35:52.664720290Z
-modified_at: 2026-09-24T09:40:50.847973153Z
+modified_at: 2026-09-24T10:37:15.686871430Z
 req_type: Task
 tags:
 - ci
@@ -40,3 +40,21 @@ comments:
   created_at: 2026-09-24T08:13:03.616900410Z
   modified_at: 2026-09-24T08:13:03.616900410Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d2fd-ae1f-7b43-b427-cc81dc33713b
+  author: aida-auto-bump
+  timestamp: 2026-09-24T10:37:15.679816385Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d2fd-ae26-70c0-bf62-61f636968484
+  timestamp: 2026-09-24T10:37:15.686870283Z
+  agent: aida
+  commit_sha: 0f2b9a882aa6ce80f5a520751032d445eb3ec92b
+  summary: Completed via merge 0f2b9a88
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T10:37:14.723046769Z
+  completion_sha: 0f2b9a882aa6ce80f5a520751032d445eb3ec92b
