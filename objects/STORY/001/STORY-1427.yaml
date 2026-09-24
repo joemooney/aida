@@ -38,10 +38,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:43:06.598853252Z
-modified_at: 2026-09-21T17:43:06.598853252Z
+modified_at: 2026-09-24T08:01:26.002411032Z
 req_type: Story
 tags:
+- closure:pending
 - context-economy
+- docs:impacted
 - epic-66
 - gates
 - intake
