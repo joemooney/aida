@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:57:33.141469956Z
-modified_at: 2026-09-24T23:47:32.721863158Z
+modified_at: 2026-09-24T23:54:05.380199476Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -46,6 +46,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved as written. This is a concrete live reproduction with a stated expectation.'
   created_at: 2026-09-24T23:24:45.674079234Z
   modified_at: 2026-09-24T23:24:45.674079234Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d5d7-32c4-7221-b788-785c7e84b80f
+  author: joe
+  content: 'Review: APPROVE (fresh strict Opus reviewer). The queue-wide path now uses the same pickability() verdict as --batch. The budget means ''stop after N shelves'', as documented, and exit codes are unchanged. The existing test edit was a legitimate correction. Queued for batch 58.'
+  created_at: 2026-09-24T23:54:05.380199476Z
+  modified_at: 2026-09-24T23:54:05.380199476Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
