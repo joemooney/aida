@@ -1,0 +1,12 @@
+id: 01a0d18c-18d0-7472-bf35-1a4dd540bd0f
+spec_id: STORY-1472
+agreed_id: STORY-1472
+title: Expose Jev status, reusable questions, and recorded judgments
+description: 'Add an operator-facing aida jev surface for understanding and safely reusing AIDA''s optional TypeSafe AI Jev integration. Jev questions are versioned, typed prompts over noul/choice/score primitives; recorded judgments preserve provenance and can be consumed by project-specific gates and disciplines without making Jev authoritative. Initial scope: aida jev status; question catalog listing and inspection; explicit execution of a named question against a spec or bounded artifact; listing and inspecting recorded results. Acceptance: (1) status reports configured model/endpoint capability and credential availability without exposing secrets, with network access clearly distinguished from local inspection; (2) question definitions have stable IDs, versions, primitive, allowed answers/levels, context requirements, deterministic evidence expectations, fallback behavior, and advisory/authority policy; (3) existing Jev call sites are mapped to named questions or explicitly documented as legacy inline questions; (4) results record subject/source hash, question ID/version, model, confidence, heuristic marker, payload hash, timestamp, latency, answer, and fallback/error state; (5) raw prompts/context are not persisted by default and any retained evidence is explicitly requested and redacted; (6) gates consume question results through policy rather than redefining the Jev question; (7) Jev remains optional and unavailable/failing paths preserve deterministic or human/conversational fallbacks; (8) JSON output is available for automation and all live network calls are explicit.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T03:53:34.672459865Z
+modified_at: 2026-09-24T03:53:34.672459865Z
+req_type: Story
