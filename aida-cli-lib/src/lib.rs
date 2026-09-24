@@ -196,6 +196,10 @@ mod pane_host;
 // trace:STORY-647 | ai:claude — team RBAC slice 2: gated-op permission map +
 // protected specs + strict mode (guardrail, not security).
 mod permissions;
+// TASK-1454: local runtime marker recording a seat blocked on an unanswered
+// permission prompt — the Notification(permission_prompt) hook writes it,
+// `aida ps` / `aida awaiting` read it.
+mod pending_approval;
 mod plan_cmd;
 mod pr_rebase;
 mod pr_ship;
@@ -23918,6 +23922,30 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         SessionCommand::HarnessWorktreeRelease { agent_id } => {
             session_harness_worktree_release(agent_id)
         }
+        // trace:TASK-1454 | ai:claude
+        SessionCommand::PendingApprovalSet {
+            session,
+            tool,
+            message,
+        } => {
+            let project_root = find_main_worktree_root()?;
+            pending_approval::write_marker(
+                &project_root,
+                session,
+                tool.as_deref(),
+                message.as_deref(),
+                chrono::Utc::now(),
+            )?;
+            println!("recorded pending-approval marker for session {session}");
+            Ok(())
+        }
+        // trace:TASK-1454 | ai:claude
+        SessionCommand::PendingApprovalClear { session } => {
+            let project_root = find_main_worktree_root()?;
+            pending_approval::clear_marker(&project_root, session)?;
+            println!("cleared pending-approval marker for session {session}");
+            Ok(())
+        }
         SessionCommand::End {
             id,
             spec,
@@ -43207,6 +43235,13 @@ mod story_696_ps_tests;
 #[path = "tests/task_1451_mail_identity_ps_tests.rs"]
 mod task_1451_mail_identity_ps_tests;
 
+// The pending-approval marker's priority over the heuristic classifier, plus
+// `aida ps` / `aida awaiting` end-to-end rendering of a Blocked seat.
+// trace:TASK-1454 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1454_pending_approval_tests.rs"]
+mod task_1454_pending_approval_tests;
+
 // The orphaned-In-Progress detection → `aida awaiting` mapping.
 // trace:BUG-1523 | ai:claude
 #[cfg(test)]
@@ -59849,6 +59884,16 @@ enum SeatActivity {
     /// No session transcript could be resolved/read for this pid at all —
     /// honestly "don't know", never guessed as Working.
     Unknown,
+    /// TASK-1454: a REAL `Notification(permission_prompt)` hook marker is
+    /// present (and not stale) for this seat's Claude Code session — ground
+    /// truth from Claude Code itself, not an inference from process/
+    /// transcript state. Unlike `LongToolCall`/`Suspended`, this DOES assert
+    /// "blocked on your approval", because it is sourced from the exact
+    /// signal the 2026-09-23 PROXY DECISION said would justify that claim.
+    /// `tool` names the pending tool when the notification message named
+    /// one; `secs` is how long the marker has stood.
+    // trace:TASK-1454 | ai:claude
+    Blocked { tool: Option<String>, secs: i64 },
 }
 
 impl SeatActivity {
@@ -59858,6 +59903,7 @@ impl SeatActivity {
             SeatActivity::LongToolCall { .. } => "long_tool_call",
             SeatActivity::Suspended => "suspended",
             SeatActivity::Unknown => "unknown",
+            SeatActivity::Blocked { .. } => "blocked",
         }
     }
 }
@@ -59977,6 +60023,28 @@ fn classify_seat_activity(
         },
         _ => SeatActivity::Working,
     }
+}
+
+/// TASK-1454: the marker-first wrapper around [`classify_seat_activity`]. A
+/// present (already-filtered-non-stale) pending-approval marker is ground
+/// truth and ALWAYS wins outright over the transcript/proc-state heuristic —
+/// pure and separated out specifically so that priority is unit-testable
+/// without a lease/session-manifest fixture.
+// trace:TASK-1454 | ai:claude
+fn seat_activity_with_marker(
+    marker: Option<&pending_approval::PendingApprovalMarker>,
+    tail: Option<&[String]>,
+    proc_stopped: bool,
+    now: chrono::DateTime<chrono::Utc>,
+) -> SeatActivity {
+    if let Some(marker) = marker {
+        let secs = now.signed_duration_since(marker.since).num_seconds().max(0);
+        return SeatActivity::Blocked {
+            tool: marker.tool.clone(),
+            secs,
+        };
+    }
+    classify_seat_activity(tail, proc_stopped, now)
 }
 
 /// BUG-1553: read only the TAIL of a transcript file — never the whole
@@ -61069,19 +61137,37 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
         .into_iter()
         .filter_map(|m| m.claude_session_id.map(|csid| (m.session_id, csid)))
         .collect();
-    // BUG-1553: the real (transcript-tail + /proc-reading) seat-activity
-    // probe — injected into `build_running_work` the same way every other
-    // real I/O source here is, so the row-building logic stays testable on
-    // fixtures. Reads only the TAIL of the resolved transcript
-    // (`read_transcript_tail`, capped at `TRANSCRIPT_TAIL_BYTES`), never the
-    // whole file. trace:BUG-1553 | ai:claude
+    // TASK-1454: active (non-stale) pending-approval markers, keyed by the
+    // Claude Code session id they were recorded for. `list_active` is cheap
+    // when nothing is blocked (the overwhelming common case — a single
+    // `read_dir` on a directory that's usually empty), so building this map
+    // up front costs nothing extra on a quiet `aida ps`.
+    // trace:TASK-1454 | ai:claude
+    let pending_approvals: std::collections::HashMap<
+        String,
+        pending_approval::PendingApprovalMarker,
+    > = pending_approval::list_active(project_root, now)
+        .into_iter()
+        .map(|m| (m.session_id.clone(), m))
+        .collect();
+    // BUG-1553 / TASK-1454: the real (marker-first, then transcript-tail +
+    // /proc-reading) seat-activity probe — injected into `build_running_work`
+    // the same way every other real I/O source here is, so the row-building
+    // logic stays testable on fixtures. A recorded pending-approval marker is
+    // ground truth and wins outright; only when none exists does this fall
+    // back to reading the TAIL of the resolved transcript
+    // (`read_transcript_tail`, capped at `TRANSCRIPT_TAIL_BYTES`, never the
+    // whole file). trace:BUG-1553 trace:TASK-1454 | ai:claude
     let seat_activity_probe = |l: &SessionLease, pid: u32| -> SeatActivity {
+        let marker = manifest_claude_session_ids
+            .get(&l.id)
+            .and_then(|csid| pending_approvals.get(csid));
         let tail = manifest_claude_session_ids.get(&l.id).and_then(|csid| {
             aida_core::liveness::claude_projects_dir_for_cwd(&l.worktree_path)
                 .map(|dir| dir.join(format!("{csid}.jsonl")))
         });
         let tail_lines = tail.and_then(|path| read_transcript_tail(&path, TRANSCRIPT_TAIL_BYTES));
-        classify_seat_activity(tail_lines.as_deref(), proc_is_stopped(pid), now)
+        seat_activity_with_marker(marker, tail_lines.as_deref(), proc_is_stopped(pid), now)
     };
 
     // The store gives us (a) the set of known spec ids (so a lease scope can be
@@ -61167,6 +61253,41 @@ fn orphaned_in_progress_items(
             spec_id: o.spec,
             title: o.title,
             abandoned: o.stale_lease,
+        })
+        .collect()
+}
+
+/// TASK-1454: `aida awaiting`'s view of every LIVE seat `aida ps` classifies
+/// `SeatActivity::Blocked` — reuses `gather_running_work` verbatim (the same
+/// marker-first classifier `seat_activity_probe` applies), so there is
+/// exactly ONE place that decides "is this seat blocked," not a second
+/// implementation drifting from the first.
+///
+/// Cheap on EVERY caller, including the per-turn notice-fast path: it starts
+/// with [`pending_approval::list_active`], a single local directory read
+/// that is empty on the overwhelming majority of turns (nothing is ever
+/// blocked most of the time) — that empty case returns immediately with no
+/// lease scan, no `/proc` probe, no store read at all. Only when a marker
+/// genuinely exists does this pay `gather_running_work`'s heavier
+/// lease-resolution cost, and that is exactly the rare, actionable moment
+/// where paying it is worth it.
+// trace:TASK-1454 | ai:claude
+fn collect_blocked_seat_items(
+    project_root: &std::path::Path,
+) -> Vec<awaiting_you::BlockedSeatItem> {
+    if pending_approval::list_active(project_root, chrono::Utc::now()).is_empty() {
+        return Vec::new();
+    }
+    let (rows, _orphans) = gather_running_work(project_root);
+    rows.into_iter()
+        .filter_map(|row| match row.activity {
+            Some(SeatActivity::Blocked { tool, secs }) => Some(awaiting_you::BlockedSeatItem {
+                session_id: row.lease.id.clone(),
+                spec: row.spec.clone().or(Some(row.lease.scope.clone())),
+                tool,
+                since_label: humanize_duration_secs(secs.max(0) as u64),
+            }),
+            _ => None,
         })
         .collect()
 }
@@ -61468,16 +61589,20 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // to probe); otherwise "attributed" / "unattributed" /
                     // "unknown" — never collapsed to a boolean "fine".
                     "mail_identity": row.mail_identity.map(MailIdentityStatus::as_str),
-                    // BUG-1553: "working" / "long_tool_call" / "suspended" /
-                    // "unknown", null when no live pid backs the row
-                    // (nothing to classify).
+                    // BUG-1553 / TASK-1454: "working" / "long_tool_call" /
+                    // "suspended" / "unknown" / "blocked", null when no live
+                    // pid backs the row (nothing to classify). "blocked" is
+                    // the only value sourced from ground truth (the
+                    // Notification hook marker) rather than a heuristic.
                     "activity": row.activity.as_ref().map(SeatActivity::label),
                     "activity_pending_tool": match &row.activity {
-                        Some(SeatActivity::LongToolCall { tool, .. }) => tool.clone(),
+                        Some(SeatActivity::LongToolCall { tool, .. })
+                        | Some(SeatActivity::Blocked { tool, .. }) => tool.clone(),
                         _ => None,
                     },
                     "activity_secs": match &row.activity {
-                        Some(SeatActivity::LongToolCall { secs, .. }) => Some(*secs),
+                        Some(SeatActivity::LongToolCall { secs, .. })
+                        | Some(SeatActivity::Blocked { secs, .. }) => Some(*secs),
                         _ => None,
                     },
                 })
@@ -61800,14 +61925,24 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             // BUG-1553 (2026-09-23 PROXY DECISION): neither `LongToolCall`
             // nor `Suspended` overrides this cell's color/text — a purely
             // time-based or process-state heuristic cannot assert "blocked
-            // on your approval", so the `live` cell always keeps its
-            // ordinary Live/Dormant/Stale coloring; the neutral/warning
+            // on your approval", so the `live` cell keeps its ordinary
+            // Live/Dormant/Stale coloring for those; the neutral/warning
             // activity note prints as an extra line below instead.
-            // trace:BUG-1553 | ai:claude
-            let live_col = match row.state {
-                LeaseState::Live => live_label.green(),
-                LeaseState::Dormant => live_label.cyan(),
-                LeaseState::Stale => live_label.yellow(),
+            // `SeatActivity::Blocked` is different: it is a REAL
+            // Notification-hook marker, not a heuristic, so THIS is the
+            // ground-truth case the proxy decision deferred — it DOES
+            // override the cell, loudly, naming the state "Blocked"
+            // instead of "Live" so it reads as visually distinct, not a
+            // footnote (BUG-1553 AC1). trace:BUG-1553 trace:TASK-1454 | ai:claude
+            let live_col = match &row.activity {
+                Some(SeatActivity::Blocked { .. }) => {
+                    format!("{} Blocked", crate::glyph(crate::glyphs::Glyph::Blocked)).red()
+                }
+                _ => match row.state {
+                    LeaseState::Live => live_label.green(),
+                    LeaseState::Dormant => live_label.cyan(),
+                    LeaseState::Stale => live_label.yellow(),
+                },
             };
             // TASK-1143: the worktree lock owner, blank when unlocked. Plain
             // text (paddable), so it slots into the fixed-width table before the
@@ -61919,6 +62054,19 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         " ".repeat(11),
                         crate::glyph(crate::glyphs::Glyph::Neutral),
                         "activity".dimmed()
+                    );
+                }
+                // TASK-1454: ground truth from the Notification hook — loud
+                // and named, since a human is the only one who can unblock
+                // this seat right now (BUG-1553's whole motivation).
+                Some(SeatActivity::Blocked { tool, secs }) => {
+                    let what = tool.as_deref().unwrap_or("a tool call");
+                    println!(
+                        "{}{} {}: {what} — waiting {}",
+                        " ".repeat(11),
+                        crate::glyph(crate::glyphs::Glyph::Blocked),
+                        "blocked on your approval".red().bold(),
+                        humanize_duration_secs(*secs as u64),
                     );
                 }
                 Some(SeatActivity::Working) | None => {}
@@ -74209,6 +74357,11 @@ fn collect_awaiting_report_inner(
         })
     };
 
+    // TASK-1454: cheap on every path (see doc comment) — computed
+    // unconditionally, including on the notice-fast path, unlike
+    // `orphaned_in_progress` above.
+    let blocked_seats = collect_blocked_seat_items(project_root);
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         recusal_holds,
@@ -74230,6 +74383,7 @@ fn collect_awaiting_report_inner(
         nightly_red,
         pr_attribution_disagreements,
         orphaned_in_progress,
+        blocked_seats,
         // trace:BUG-1530 | ai:claude — the seat this session reads as, so the
         // headline (render) and per-turn compact line can scope themselves
         // to channels this seat can act on.

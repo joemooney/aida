@@ -1364,6 +1364,34 @@ pub enum SessionCommand {
         agent_id: String,
     },
 
+    /// Record that a live seat is blocked on an unanswered permission
+    /// prompt — written by the Notification(permission_prompt) hook.
+    /// Internal; never called by hand.
+    // trace:TASK-1454 | ai:claude
+    #[clap(hide = true)]
+    PendingApprovalSet {
+        /// The Claude Code session id the Notification hook fired for.
+        #[clap(long)]
+        session: String,
+        /// The tool name Claude Code is asking permission for, when known.
+        #[clap(long)]
+        tool: Option<String>,
+        /// The raw notification message, for debugging.
+        #[clap(long)]
+        message: Option<String>,
+    },
+
+    /// Clear a session's pending-approval marker (if any) — written by the
+    /// UserPromptSubmit/PostToolUse hooks once the block has resolved.
+    /// Internal; never called by hand.
+    // trace:TASK-1454 | ai:claude
+    #[clap(hide = true)]
+    PendingApprovalClear {
+        /// The Claude Code session id to clear.
+        #[clap(long)]
+        session: String,
+    },
+
     /// End a scoped session: remove the worktree, delete the lease,
     /// leave the branch alone (merge/discard is up to the user). When
     /// `id` is omitted, ends the session whose lease names this cwd's
