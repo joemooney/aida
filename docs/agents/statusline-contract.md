@@ -149,10 +149,22 @@ no business in a status line or a log file:
 - **Missing client fields** — every `ClientLiveFields` field is optional;
   `format_live_segment` renders only the fields present and returns `None`
   (no segment at all) when every field is absent.
-- **No payload piped** — `read_stdin_payload()` checks `stdin.is_terminal()`
-  first and returns `None` without reading, so a human running
-  `aida statusline --client claude` directly at a shell never hangs waiting
-  for EOF; it just renders the AIDA-only segment.
+- **No payload piped / a stuck writer** — `read_stdin_payload()` checks
+  `stdin.is_terminal()` first and skips the read entirely on a TTY, so a
+  human running `aida statusline --client claude` directly at a shell
+  renders the AIDA-only segment with no read at all. Separately — and this
+  is the actual guarantee for a piped, non-TTY stdin — the read itself runs
+  on a background thread with a bounded wait: `STDIN_READ_DEADLINE` (200ms)
+  on the calling side, and a `MAX_STDIN_PAYLOAD_BYTES` (256KB) cap on the
+  reader thread. An open pipe or FIFO whose write end never sends EOF (a
+  real, reproduced failure mode — a stuck client, or a shell redirect left
+  open) times out and degrades to the AIDA-only segment instead of hanging
+  the prompt; the background thread is not joined on timeout and is simply
+  left to exit with the process. The same bound applies to an oversize
+  payload (truncated read, degrades to no live segment) and to a plain read
+  error. This is a BOUNDED wait, not an unconditional "never blocks" — a
+  well-behaved client's payload (a few KB, written promptly) comfortably
+  clears the 200ms deadline in practice.
 - **Narrow terminals** — below `NARROW_TERMINAL_COLUMNS` (60 columns), the
   live segment sheds its lowest-priority field (activity) before either
   segment is truncated; a pathologically narrow width still falls back to
@@ -246,8 +258,9 @@ lands, prefer the native footer over the tmux workaround.
 # AIDA-only segment (unchanged default; no stdin read)
 aida statusline
 
-# Merge a client's live payload (reads stdin; degrades to AIDA-only when
-# stdin is a TTY or the payload doesn't parse)
+# Merge a client's live payload (reads stdin, bounded to a 200ms deadline;
+# degrades to AIDA-only when stdin is a TTY, the read times out, the
+# payload doesn't parse, or the payload doesn't fit in 256KB)
 echo '{"model": {"display_name": "Sonnet 4.5"}, "context_window": {"remaining_percentage": 62}}' \
   | aida statusline --client claude --color=never
 

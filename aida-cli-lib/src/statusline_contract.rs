@@ -216,24 +216,86 @@ pub fn format_combined(
     out
 }
 
-/// Read the client's live-state JSON from stdin. Returns `None` (never
-/// blocks, never errors) when stdin is a TTY — a human running the command
-/// directly at a shell has no payload to pipe, and reading would hang
-/// waiting for EOF. Callers that get `None` degrade to the AIDA-only
-/// segment. The raw string is handed to the caller's parser and is never
+/// Hard cap on how much stdin `read_stdin_payload` will ever buffer.
+/// Generous for any real client statusline payload (a few KB of JSON);
+/// small enough to bound memory if something pipes far more than that.
+/// An oversize payload degrades to no live segment, same as a timeout.
+pub const MAX_STDIN_PAYLOAD_BYTES: usize = 256 * 1024;
+
+/// How long `read_stdin_payload` waits for a client's stdin payload before
+/// giving up. A command-backed statusline is a hot path on every prompt
+/// render — this bounds the wait so an open pipe/FIFO whose write end
+/// never sends EOF (verified repro: `mkfifo`, hold the write end open,
+/// read with `--client claude`) cannot wedge it. 200ms is generous above
+/// realistic payload-write latency (a client writing a few KB of JSON)
+/// while staying well under human-perceptible prompt lag.
+// trace:TASK-1479 | ai:claude
+const STDIN_READ_DEADLINE: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// Read the client's live-state JSON from stdin, bounded in both time and
+/// size. Returns `None` — degrading callers to the AIDA-only segment,
+/// never a hang — in every one of these cases:
+///   - stdin is a TTY (a human running the command directly has no
+///     payload to pipe; skipped before starting a reader thread at all);
+///   - the read doesn't finish within [`STDIN_READ_DEADLINE`] (an open
+///     pipe/FIFO that never sends EOF — this is the actual guarantee: a
+///     BOUNDED wait, not "never blocks");
+///   - the payload exceeds [`MAX_STDIN_PAYLOAD_BYTES`];
+///   - the underlying read errors, or the bytes aren't valid UTF-8;
+///   - the payload is empty/whitespace-only.
+///
+/// Implementation: the blocking read runs on a background thread; the
+/// caller waits on a channel with `recv_timeout`. On timeout that thread
+/// is deliberately NOT joined — a writer that never closes its end would
+/// otherwise keep it blocked forever, which is exactly the hang this
+/// guards against. One thread outliving a short-lived CLI process (it dies
+/// with the process either way) is the correct trade over wedging the
+/// prompt. The raw payload is handed to the caller's parser and is never
 /// logged or echoed here (privacy contract in the module docs above).
 // trace:TASK-1479 | ai:claude
 pub fn read_stdin_payload() -> Option<String> {
     if std::io::stdin().is_terminal() {
         return None;
     }
+    read_bounded(
+        std::io::stdin(),
+        MAX_STDIN_PAYLOAD_BYTES,
+        STDIN_READ_DEADLINE,
+    )
+}
+
+/// Read up to `max_bytes` from `reader` on a background thread, waiting at
+/// most `deadline` on the calling thread. `reader` is generic (rather than
+/// hardcoded to `Stdin`) so the deadline/cap behavior itself is unit
+/// -testable against a real blocking `Read` (an OS pipe with an open
+/// write end) without needing to touch the test process's own stdin fd.
+// trace:TASK-1479 | ai:claude
+fn read_bounded<R: std::io::Read + Send + 'static>(
+    reader: R,
+    max_bytes: usize,
+    deadline: std::time::Duration,
+) -> Option<String> {
     use std::io::Read;
-    let mut buf = String::new();
-    std::io::stdin().read_to_string(&mut buf).ok()?;
-    if buf.trim().is_empty() {
-        None
-    } else {
-        Some(buf)
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        // Cap the read at `max_bytes + 1` so an oversize payload is
+        // detected (buf.len() > max_bytes below) without ever buffering
+        // an unbounded amount, regardless of how much more the writer
+        // sends after that — we stop reading once we've seen enough to
+        // know it's too big.
+        let mut buf = Vec::new();
+        let result = reader.take((max_bytes as u64) + 1).read_to_end(&mut buf);
+        // The receiver may already have timed out and dropped its end;
+        // a failed send just means nobody's listening anymore, which is
+        // fine — this thread's job is done either way.
+        let _ = tx.send(result.map(|_| buf));
+    });
+    match rx.recv_timeout(deadline) {
+        Ok(Ok(buf)) if buf.len() <= max_bytes => {
+            String::from_utf8(buf).ok().filter(|s| !s.trim().is_empty())
+        }
+        // Oversize, a read error, or a timeout all degrade the same way.
+        Ok(Ok(_)) | Ok(Err(_)) | Err(_) => None,
     }
 }
 
@@ -408,13 +470,89 @@ mod tests {
     }
 
     #[test]
-    fn stdin_read_never_blocks_on_a_tty() {
-        // This test runs under `cargo test`, whose stdin is not a TTY in CI,
-        // but the guard itself (`is_terminal()` check) is what we assert
-        // exists — covered structurally by `read_stdin_payload` compiling
-        // and returning `Option` synchronously. A live TTY check is
-        // exercised manually; this test just pins the non-panicking
-        // contract on non-TTY stdin (empty stdin -> None, not a hang/panic).
+    fn stdin_read_smoke_test_does_not_panic() {
+        // `read_stdin_payload()` itself reads the real process stdin, which
+        // a unit test can't redirect — this just pins "compiles, returns an
+        // Option, doesn't panic" under `cargo test`'s (non-TTY) stdin. The
+        // real bounded-read/deadline/cap guarantee is exercised directly
+        // against `read_bounded` below, against a genuine blocking `Read`
+        // (an OS pipe), which is what actually reproduces the hang bug this
+        // was written to fix. trace:TASK-1479 | ai:claude
         let _ = read_stdin_payload();
+    }
+
+    /// Regression for the reported hang: an open pipe/FIFO whose write end
+    /// never sends EOF must not block `read_stdin_payload` forever. Uses a
+    /// real OS pipe (not a TTY, not a closed reader) with the write end
+    /// kept alive and never written to — the exact shape of the reviewer's
+    /// repro (`mkfifo`; hold the write end open; read with `--client
+    /// claude`). Asserts the bounded read returns `None` within the
+    /// deadline plus a generous margin, not "eventually" or "never".
+    // trace:TASK-1479 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn read_bounded_times_out_on_an_open_pipe_with_no_data() {
+        let (reader, writer) = std::io::pipe().expect("create pipe");
+        // Keep the write end alive for the whole test (never closed, never
+        // written to) — this is what makes the read block on a real OS
+        // pipe instead of hitting EOF immediately.
+        let _keep_writer_open = writer;
+
+        let deadline = std::time::Duration::from_millis(100);
+        let start = std::time::Instant::now();
+        let result = read_bounded(reader, MAX_STDIN_PAYLOAD_BYTES, deadline);
+        let elapsed = start.elapsed();
+
+        assert_eq!(
+            result, None,
+            "an open, silent pipe must degrade to no live segment"
+        );
+        // Generous margin over the deadline for scheduler jitter — this
+        // must be well under "never returns", which is the bug.
+        assert!(
+            elapsed < deadline * 5,
+            "read_bounded took {elapsed:?}, expected to return near the {deadline:?} deadline"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_bounded_returns_data_promptly_when_the_writer_closes() {
+        let (reader, mut writer) = std::io::pipe().expect("create pipe");
+        std::io::Write::write_all(&mut writer, b"hello from a client").unwrap();
+        drop(writer); // EOF
+        let result = read_bounded(
+            reader,
+            MAX_STDIN_PAYLOAD_BYTES,
+            std::time::Duration::from_millis(200),
+        );
+        assert_eq!(result.as_deref(), Some("hello from a client"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_bounded_degrades_on_oversize_payload() {
+        let (reader, mut writer) = std::io::pipe().expect("create pipe");
+        let max_bytes = 16;
+        let oversized = "x".repeat(max_bytes + 1);
+        std::io::Write::write_all(&mut writer, oversized.as_bytes()).unwrap();
+        drop(writer);
+        let result = read_bounded(reader, max_bytes, std::time::Duration::from_millis(200));
+        assert_eq!(
+            result, None,
+            "a payload over the cap must degrade to no live segment"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_bounded_accepts_a_payload_exactly_at_the_cap() {
+        let (reader, mut writer) = std::io::pipe().expect("create pipe");
+        let max_bytes = 16;
+        let exact = "x".repeat(max_bytes);
+        std::io::Write::write_all(&mut writer, exact.as_bytes()).unwrap();
+        drop(writer);
+        let result = read_bounded(reader, max_bytes, std::time::Duration::from_millis(200));
+        assert_eq!(result.as_deref(), Some(exact.as_str()));
     }
 }

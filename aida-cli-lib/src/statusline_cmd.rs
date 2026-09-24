@@ -408,8 +408,10 @@ pub(crate) fn handle_statusline_command(
     // trace:TASK-1479 | ai:claude — opt-in client-live merge. Only reads
     // stdin when a client was named; plain `aida statusline` (client: None)
     // is byte-for-byte unchanged from before this task. `read_stdin_payload`
-    // itself never blocks on a TTY (no payload to pipe → degrades to the
-    // AIDA-only segment) and never logs the raw payload it reads.
+    // skips the read entirely on a TTY, and bounds any piped read to a
+    // ~200ms deadline (STDIN_READ_DEADLINE) so an open pipe/FIFO that never
+    // sends EOF can't wedge this hot path — both cases degrade to the
+    // AIDA-only segment, and the raw payload is never logged.
     let line = match client {
         Some(name) => {
             let live = statusline_contract::read_stdin_payload().map(|raw| match name {

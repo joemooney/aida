@@ -11654,8 +11654,10 @@ pub enum Command {
         /// Antigravity's live agent-state JSON. Omit for the default,
         /// AIDA-only segment — this never reads stdin unless a client is
         /// named, so plain `aida statusline` is unaffected. When stdin is
-        /// a TTY (no payload piped) this degrades to the AIDA-only segment
-        /// rather than blocking. See docs/agents/statusline-contract.md.
+        /// a TTY (no payload piped), or a piped read doesn't finish within
+        /// ~200ms (an open pipe with no data waiting), this degrades to
+        /// the AIDA-only segment rather than blocking. See
+        /// docs/agents/statusline-contract.md.
         // trace:TASK-1479 | ai:claude
         #[clap(long, value_parser = ["claude", "antigravity", "agy"])]
         client: Option<String>,
