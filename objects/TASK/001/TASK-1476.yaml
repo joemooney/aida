@@ -3,12 +3,12 @@ spec_id: TASK-1476
 agreed_id: TASK-1476
 title: 'Completion-seam guard: exclude #[cfg(test)] blocks instead of pinning per-file fixture counts'
 description: 'story_1418_completion_seam_tests pins exact per-file counts that include inline #[cfg(test)] fixtures, so any new test fixture using RequirementStatus::Completed breaks it. TASK-1464 added two to cache.rs and needed an allowlist bump in batch 43. The STORY-1418 reviewer suggested stripping #[cfg(test)] mod blocks before counting; that also stops a production write hiding behind a deleted fixture. Do that and drop the fixture counts.'
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T09:32:47.082624095Z
-modified_at: 2026-09-24T09:32:50.655574025Z
+modified_at: 2026-09-24T10:14:28.595431701Z
 req_type: Task
 tags:
 - followup
