@@ -1,0 +1,28 @@
+id: 01a0d5d7-3639-7d73-afe1-6bad6dcb1729
+spec_id: TASK-1490
+agreed_id: TASK-1490
+title: Drain preview and drain-state member list should apply the same pickability gate as dispatch
+description: |-
+  Follow-up from the BUG-1608 review. auto_complete_head_candidates in queue_cmd.rs is a status-only list. It feeds drain_preview_head_members and the drain-state file's member list, so a preview or state file can still list a BlockedBy dependent that the real drain will skip. This is reporting only; dispatch is already gated.
+
+  ## Acceptance
+  - The drain preview and state-file member list use aida_core::pickability::pickability(), the same verdict as dispatch. Blocked members are shown as skipped, with their blocker.
+  - A test covers a preview that includes a blocked dependent.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T23:54:06.265475487Z
+modified_at: 2026-09-24T23:54:06.265475487Z
+req_type: Task
+tags:
+- drain
+- papercut
+filed_at:
+  code_sha: c7d35baa35b4965c961adec0b1d68a098e3701e9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '1992299315'
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
