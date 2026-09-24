@@ -29,11 +29,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:01:36.886070157Z
-modified_at: 2026-09-20T22:02:52.240939406Z
+modified_at: 2026-09-24T00:14:30.041967328Z
 req_type: Bug
 tags:
 - agent-surface
 - batch:night-0920
+- docs:impacted
 - drain-safe
 - merge-hold
 relationships:
