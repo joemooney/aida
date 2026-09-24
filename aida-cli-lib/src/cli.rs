@@ -9171,6 +9171,40 @@ pub enum Command {
         #[clap(long = "superseded-by", value_name = "SPEC-ID")]
         superseded_by: Option<String>,
 
+        // trace:STORY-1434 | ai:claude — plain `//` keeps the id out of --help.
+        /// Carve a named criterion OUT of this spec's description in one
+        /// step: the exact text is struck from the description (replaced
+        /// with a pointer to the spec that now carries it), a typed
+        /// carved-out-to edge is recorded (plus the inverse carved-from edge
+        /// on the target — walkable by `aida graph`/`query_graph`), and the
+        /// reason is logged as a comment that `aida show`'s DEFAULT view
+        /// surfaces inline. Fixes the trap where a carve-out's correction
+        /// lived only in a comment nobody reads and the description kept
+        /// gating on text that had already moved. Pass the criterion text
+        /// exactly as it appears in the description. Pair with
+        /// --carve-into.
+        #[clap(
+            long = "carve-out",
+            value_name = "TEXT",
+            requires = "carve_into",
+            allow_hyphen_values = true
+        )]
+        carve_out: Option<String>,
+
+        /// The spec that now carries the criterion named by --carve-out.
+        #[clap(long = "carve-into", value_name = "SPEC-ID", requires = "carve_out")]
+        carve_into: Option<String>,
+
+        /// Optional reason recorded in the carve-out comment (why the
+        /// criterion moved). Defaults to a generic note when omitted.
+        #[clap(
+            long = "carve-reason",
+            value_name = "TEXT",
+            requires = "carve_out",
+            allow_hyphen_values = true
+        )]
+        carve_reason: Option<String>,
+
         /// New priority (high, medium, low)
         #[clap(long)]
         priority: Option<String>,
