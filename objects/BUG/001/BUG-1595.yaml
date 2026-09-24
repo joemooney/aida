@@ -3,12 +3,12 @@ spec_id: BUG-1595
 agreed_id: BUG-1595
 title: 'tick_lock_is_nonblocking_and_reusable still flakes under the parallel test run: re-lock after drop fails (BUG-1303 recurrence)'
 description: 'CI run 35955855473 (PR #2147) failed maintenance_schedule::tests::tick_lock_is_nonblocking_and_reusable at maintenance_schedule.rs:2961, where try_tick_lock returned None after the first guard was dropped. The test passes locally, and the change didn''t touch it. This is the parallel-load flake class of BUG-1303 (completed), recurring. Likely cause: the lock fd is briefly inherited by a child forked by a concurrent test. Fix: an OFD or fcntl lock that isn''t inherited, or O_CLOEXEC plus a bounded retry in the test with a comment. Acceptance: 200 consecutive parallel runs pass.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T04:43:20.175462375Z
-modified_at: 2026-09-24T06:11:15.106969908Z
+modified_at: 2026-09-24T07:36:23.280306799Z
 req_type: Bug
 tags:
 - ci
@@ -21,3 +21,21 @@ comments:
   content: 'Investigation 2026-09-23: repeated `aida list` warnings were caused by stale cache-lock metadata, not an active list process. `.aida/cache.db.lock-info` identified dead PID 1643379 from `aida show BUG-1514`, held since 2026-09-22 and reported as 24h+ old; `ps` confirmed the PID no longer existed. Reads continued, but cache refresh/upsert attempts retried against the stale lock and emitted the warning. Operator then ran `aida doctor heal stale-locks` and confirmed the safe removal of `/home/joe/ai/aida/.aida/cache.db.lock-info`; one finding was healed successfully. Doctor also reported bwrap and gh healthy. This appears to be stale lock cleanup behavior after an interrupted or unclean AIDA process; verify subsequent `aida list` runs are warning-free.'
   created_at: 2026-09-24T04:45:41.877763682Z
   modified_at: 2026-09-24T04:45:41.877763682Z
+history:
+- id: 01a0d258-15d9-76d3-a597-acd96b91ce0f
+  author: aida-auto-bump
+  timestamp: 2026-09-24T07:36:23.257465522Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d258-15f0-7d21-bf51-2c4ae11f3f79
+  timestamp: 2026-09-24T07:36:23.280305533Z
+  agent: aida
+  commit_sha: 334cc8e25616a16b0c55abe5d87623373bc6fc20
+  summary: Completed via merge 334cc8e2
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T07:36:23.257317993Z
+  completion_sha: 334cc8e25616a16b0c55abe5d87623373bc6fc20
