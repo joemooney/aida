@@ -2369,6 +2369,7 @@ enabled = true
 # daily_token_budget = 6000000000
 # budget_alert_pct = 90
 # restart_context_tokens = 0   # off; e.g. 300000 to recommend a restart
+# blind_alert_after = 4        # consecutive degraded/unknown runs before a self-alert (~1h at the 15m tick below); 0 = off
 #
 # [[schedule.jobs]]
 # name = "watchdog"

@@ -418,6 +418,8 @@ fn handle_role_add(
         scope_tags: Vec::new(),
         scope_status: None,
         system_prompt: None,
+        launch_prompt: None,
+        launch_prompt_spec: None,
     };
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
@@ -1139,6 +1141,8 @@ mod tests {
             scope_tags: Vec::new(),
             scope_status: None,
             system_prompt: None,
+            launch_prompt: None,
+            launch_prompt_spec: None,
         }
     }
 

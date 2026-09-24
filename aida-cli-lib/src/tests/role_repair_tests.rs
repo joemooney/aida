@@ -13,6 +13,8 @@ fn sample_role() -> RoleState {
         scope_tags: Vec::new(),
         scope_status: None,
         system_prompt: None,
+        launch_prompt: None,
+        launch_prompt_spec: None,
     }
 }
 

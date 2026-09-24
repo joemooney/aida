@@ -5493,6 +5493,8 @@ fn session_aggregation_dedupes_and_promotes() {
         scope_tags: vec![],
         scope_status: None,
         system_prompt: None,
+        launch_prompt: None,
+        launch_prompt_spec: None,
     };
     std::fs::write(&role_path, toml::to_string_pretty(&role).unwrap()).unwrap();
 
