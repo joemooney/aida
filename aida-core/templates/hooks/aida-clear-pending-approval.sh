@@ -24,6 +24,16 @@
 command -v aida >/dev/null 2>&1 || exit 0
 command -v python3 >/dev/null 2>&1 || exit 0
 
+# Fast path: this runs on every tool call, so skip python3 + aida entirely
+# unless a marker directory with at least one marker exists under the main
+# worktree root (markers live in the main clone's .aida/, shared by all
+# worktrees). One git call + a glob; no telemetry line, no process spawn.
+common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
+marker_dir="$(dirname "$common_dir")/.aida/pending-approval"
+[ -d "$marker_dir" ] || exit 0
+set -- "$marker_dir"/*
+[ -e "$1" ] || exit 0
+
 payload=$(cat 2>/dev/null || true)
 session_id=$(printf '%s' "$payload" | python3 -c '
 import json, sys
