@@ -7024,7 +7024,8 @@ pub(crate) fn handle_git_backend_command(
             to_pos,
             from_flag,
             to_flag,
-            ..
+            r#type,
+            bidirectional,
         }) => {
             let from = from_pos
                 .as_deref()
@@ -7043,8 +7044,17 @@ pub(crate) fn handle_git_backend_command(
                 .get_requirement_unambiguous(to)?
                 .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
 
+            // TASK-1426: honor `--type`. This arm used to drop EVERY edge to
+            // the target whatever type was asked for, so removing a stale
+            // custom `related` edge also removed a good `references` edge
+            // beside it. `related` resolves through the same alias as
+            // `rel add`, and the references family also matches stored
+            // legacy custom `related` spellings. trace:TASK-1426 | ai:claude
+            let requested = cli_relationship_type(r#type);
             let before = from_req.relationships.len();
-            from_req.relationships.retain(|r| r.target_id != to_req.id);
+            from_req.relationships.retain(|r| {
+                !(r.target_id == to_req.id && rel_remove_matches(&r.rel_type, &requested))
+            });
             let removed = before - from_req.relationships.len();
 
             if removed > 0 {
@@ -7055,7 +7065,30 @@ pub(crate) fn handle_git_backend_command(
                     removed, from, to
                 );
             } else {
-                println!("No relationship found from {} to {}", from, to);
+                println!(
+                    "No {} relationship found from {} to {}",
+                    requested, from, to
+                );
+            }
+
+            if *bidirectional {
+                let inverse = requested.inverse().unwrap_or_else(|| requested.clone());
+                let mut to_req = backend
+                    .get_requirement(&to_req.id)?
+                    .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
+                let before = to_req.relationships.len();
+                to_req.relationships.retain(|r| {
+                    !(r.target_id == from_req.id && rel_remove_matches(&r.rel_type, &inverse))
+                });
+                let removed_inverse = before - to_req.relationships.len();
+                if removed_inverse > 0 {
+                    to_req.modified_at = chrono::Utc::now();
+                    backend.update_requirement(&to_req)?;
+                    println!(
+                        "Removed {} inverse relationship(s) from {} to {}",
+                        removed_inverse, to, from
+                    );
+                }
             }
         }
         Command::Rel(RelationshipCommand::List {
@@ -7380,6 +7413,19 @@ pub(crate) fn handle_git_backend_command(
                 );
             }
             handle_db_check_collisions(&backend, store_path, *repair)?;
+        }
+
+        // trace:TASK-1426 | ai:claude
+        Command::Db(DbCommand::MigrateRelatedEdges { dry_run, json }) => {
+            let outcome = crate::related_edge_migration::run_migration(&backend, *dry_run)?;
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&outcome)?);
+            } else {
+                print!(
+                    "{}",
+                    crate::related_edge_migration::render_outcome(&outcome)
+                );
+            }
         }
 
         // Phase 3: Export to git backend
