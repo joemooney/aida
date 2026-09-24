@@ -44,13 +44,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T14:19:48.859651743Z
-modified_at: 2026-09-24T08:12:26.333050611Z
+modified_at: 2026-09-24T09:09:55.500325813Z
 req_type: ChangeRequest
 tags:
 - intake:requester
 - provenance
 - spec-model
 - traceability
+relationships:
+- rel_type: Parent
+  target_id: 01a0d2ad-a743-7e62-81ef-27634712e4ff
+  created_at: 2026-09-24T09:09:55.500325813Z
 comments:
 - id: 01a0d279-175d-7193-8f5f-ef60f0c05f50
   author: joe
