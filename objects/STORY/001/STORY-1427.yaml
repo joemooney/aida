@@ -33,12 +33,12 @@ description: |-
   - The well-formedness gate runs the deterministic lint pass first and reports which findings came from which tier.
   - The shipped library has at least one default gate bound to a disposition moment, and that binding is discoverable without reading a catalogue.
   - A gate verdict records the gate name and version alongside its finding.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:43:06.598853252Z
-modified_at: 2026-09-24T08:01:29.420191933Z
+modified_at: 2026-09-24T08:37:52.961182306Z
 req_type: Story
 tags:
 - closure:pending
@@ -59,3 +59,16 @@ comments:
   created_at: 2026-09-24T08:01:29.420191933Z
   modified_at: 2026-09-24T08:01:29.420191933Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d290-6a76-75f1-89e0-58fb92553aa3
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit 1681a98), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit STORY-1427 --description ...` / `aida edit STORY-1427 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec STORY-1427 --since 1681a98^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit STORY-1427 --status completed`. (merge sha: 1681a989a75cae65c8a82951db980411eb3966bb)'
+  created_at: 2026-09-24T08:37:54.934851075Z
+  modified_at: 2026-09-24T08:37:54.934851075Z
+history:
+- id: 01a0d290-6a76-75f1-89e0-58e4c08d7693
+  author: aida-auto-bump
+  timestamp: 2026-09-24T08:37:54.934843628Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
