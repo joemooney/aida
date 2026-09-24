@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:30:47.871943661Z
-modified_at: 2026-09-24T08:14:06.952805466Z
+modified_at: 2026-09-24T08:14:15.107313381Z
 req_type: Task
+comments:
+- id: 01a0d27a-c043-7611-adf2-79495d158d7d
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): DEFERRED until: STORY-1467 completed. Largely superseded by STORY-780 plus STORY-1467; keep only the preflight part.'
+  created_at: 2026-09-24T08:14:15.107313381Z
+  modified_at: 2026-09-24T08:14:15.107313381Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 deferred: true
 deferred_at: 2026-09-24T08:14:06.952805466Z
 deferred_until: STORY-1467 completed
