@@ -35,6 +35,14 @@ pub struct UsageEvent {
     pub role: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
+    /// BUG-1600: which driver invoked `schedule tick` — `"hook"` (the
+    /// per-turn hook, `--hook`), `"cron"` (the installed crontab entry,
+    /// `AIDA_SCHEDULE_INVOKER=cron`), or `"manual"` (neither — a human or
+    /// script ran it directly). `None` for every other command; older
+    /// records predate this field and also read back as `None`.
+    // trace:BUG-1600 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule_source: Option<String>,
 }
 
 /// Resolve `~/.aida/usage.jsonl`. Returns `None` when the home dir
@@ -333,6 +341,30 @@ pub fn count_args(argv: &[String]) -> usize {
     argv.len().saturating_sub(1)
 }
 
+/// BUG-1600: classify which driver invoked this process, for `UsageEvent`'s
+/// `schedule_source`. `None` for anything that isn't `schedule tick` — the
+/// field only has meaning there. Checked in this order:
+///   1. `AIDA_SCHEDULE_INVOKER` env var — set by the generated crontab entry
+///      (`"cron"`); the one explicit, forgeable-by-nobody-else signal.
+///   2. `--hook` on argv — the per-turn hook's own flag, already
+///      self-identifying (see `MaintenanceScheduleCommand::Tick`).
+///   3. neither — `"manual"` (an operator or script ran it directly).
+pub fn schedule_invocation_source(argv: &[String]) -> Option<String> {
+    if derive_cmd_shape(argv) != "schedule tick" {
+        return None;
+    }
+    if let Ok(v) = std::env::var("AIDA_SCHEDULE_INVOKER") {
+        let v = v.trim();
+        if !v.is_empty() {
+            return Some(v.to_string());
+        }
+    }
+    if argv.iter().any(|a| a == "--hook") {
+        return Some("hook".to_string());
+    }
+    Some("manual".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -450,6 +482,51 @@ enabled = true
     fn count_args_excludes_program_name() {
         let argv = vec!["aida".to_string(), "queue".to_string(), "list".to_string()];
         assert_eq!(count_args(&argv), 2);
+    }
+
+    // trace:BUG-1600 | ai:claude
+    #[test]
+    fn schedule_invocation_source_none_for_other_commands() {
+        let _guard = crate::test_env::EnvVarGuard::unset("AIDA_SCHEDULE_INVOKER");
+        let argv = vec!["aida".to_string(), "queue".to_string(), "list".to_string()];
+        assert_eq!(schedule_invocation_source(&argv), None);
+    }
+
+    #[test]
+    fn schedule_invocation_source_hook_flag() {
+        let _guard = crate::test_env::EnvVarGuard::unset("AIDA_SCHEDULE_INVOKER");
+        let argv = vec![
+            "aida".to_string(),
+            "schedule".to_string(),
+            "tick".to_string(),
+            "--hook".to_string(),
+        ];
+        assert_eq!(schedule_invocation_source(&argv), Some("hook".to_string()));
+    }
+
+    #[test]
+    fn schedule_invocation_source_manual_without_hook_or_env() {
+        let _guard = crate::test_env::EnvVarGuard::unset("AIDA_SCHEDULE_INVOKER");
+        let argv = vec![
+            "aida".to_string(),
+            "schedule".to_string(),
+            "tick".to_string(),
+        ];
+        assert_eq!(
+            schedule_invocation_source(&argv),
+            Some("manual".to_string())
+        );
+    }
+
+    #[test]
+    fn schedule_invocation_source_env_wins_and_names_cron() {
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_SCHEDULE_INVOKER", "cron");
+        let argv = vec![
+            "aida".to_string(),
+            "schedule".to_string(),
+            "tick".to_string(),
+        ];
+        assert_eq!(schedule_invocation_source(&argv), Some("cron".to_string()));
     }
 
     #[test]
