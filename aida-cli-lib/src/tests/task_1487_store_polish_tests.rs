@@ -8,7 +8,9 @@
 //!   dispenser's node id instead of defaulting to "0", which also changes the
 //!   assigned SPEC-ID to a node-scoped `TYPE-<node>-NNN` form.
 //! - `mcp_serve_project_root` prefers an explicit `--file <dir>` hint over a
-//!   cwd-derived git root.
+//!   cwd-derived git root, and `project_root_from_store_hint` derives the
+//!   real project root from that hint (a STORE path, per convention) instead
+//!   of treating the hint itself as the project root.
 // trace:TASK-1487 | ai:claude
 
 use super::*;
@@ -231,16 +233,18 @@ fn bulk_import_via_writer_leaves_node_zero_unchanged_without_a_dispenser() {
 /// derive its project root from the explicit `--file` directory, not from
 /// cwd — cwd may be unrelated to (or simply not inside) the directory the
 /// user explicitly pointed at. An explicit hint always wins over whatever
-/// cwd's git walk found.
+/// cwd's git walk found. (The hint itself is a STORE path per the
+/// `--file`/`.aida-store` convention — `.aida-store`'s parent, here — see
+/// the `project_root_from_store_hint*` tests below for that derivation.)
 // trace:TASK-1487 | ai:claude
 #[test]
 fn mcp_serve_project_root_prefers_the_explicit_file_hint_over_cwd() {
     let store_path = std::path::PathBuf::from("/some/store");
-    let hint = std::path::PathBuf::from("/explicit/file/dir");
+    let hint = std::path::PathBuf::from("/explicit/repo/.aida-store");
     let unrelated_cwd_root = std::path::PathBuf::from("/unrelated/cwd/repo");
     assert_eq!(
         mcp_serve_project_root(&store_path, Some(&hint), Some(unrelated_cwd_root)),
-        hint
+        std::path::PathBuf::from("/explicit/repo")
     );
 }
 
@@ -264,4 +268,81 @@ fn mcp_serve_project_root_falls_back_to_cwd_without_a_hint() {
 fn mcp_serve_project_root_falls_back_to_store_path_when_nothing_resolves() {
     let store_path = std::path::PathBuf::from("/some/store");
     assert_eq!(mcp_serve_project_root(&store_path, None, None), store_path);
+}
+
+/// The regression the strict review caught: `--file <dir>`/`AIDA_STORE`
+/// conventionally point at the STORE directory (`<repo>/.aida-store` — the
+/// one `GitBackend::new` expects `objects/` directly under, and the ~20
+/// `project_root.join(".aida-store")` call sites use), not the project root.
+/// The common case — a hint whose final component is literally
+/// `.aida-store` — resolves to its parent.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn project_root_from_store_hint_resolves_aida_store_suffix_to_its_parent() {
+    let hint = std::path::PathBuf::from("/repo/.aida-store");
+    assert_eq!(
+        project_root_from_store_hint(&hint),
+        std::path::PathBuf::from("/repo")
+    );
+}
+
+/// A hint that IS itself a project root (has its own `.git`) is used as-is —
+/// no `.aida-store` suffix to strip, nothing to walk up to.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn project_root_from_store_hint_a_hint_that_is_already_a_project_root_resolves_to_itself() {
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    assert_eq!(project_root_from_store_hint(&repo), repo);
+}
+
+/// A hint nested under an enclosing project (not itself named `.aida-store`,
+/// not itself a project root) walks up and finds it.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn project_root_from_store_hint_walks_up_to_an_enclosing_project_root() {
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    let nested_store = repo.join("some").join("nested-store");
+    std::fs::create_dir_all(&nested_store).unwrap();
+    assert_eq!(project_root_from_store_hint(&nested_store), repo);
+}
+
+/// A bare sandbox store (the `AIDA_STORE` dev-playground path, SPIKE-48)
+/// with no enclosing project resolves to itself — there's nothing else to
+/// point at. Guards the walk-up with a FAKE temp root (the fixture's own
+/// tmp dir) so this doesn't depend on — or risk polluting reasoning about —
+/// the real system `/tmp`.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn project_root_from_store_hint_bare_sandbox_store_resolves_to_itself() {
+    let tmp = TempDir::new().unwrap();
+    let sandbox_store = tmp.path().join("sandbox-store");
+    std::fs::create_dir_all(&sandbox_store).unwrap();
+    let fake_roots = vec![tmp.path().to_path_buf()];
+    assert_eq!(
+        project_root_from_store_hint_with_roots(&sandbox_store, &fake_roots),
+        sandbox_store
+    );
+}
+
+/// BUG-1598 guard: the walk-up must never adopt a (fake, here) temp root as
+/// the project even if it superficially looks like one — proves the guard
+/// actually fires, not just that no marker happened to be there.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn project_root_from_store_hint_never_adopts_a_guarded_temp_root_even_if_it_looks_like_one() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::create_dir_all(tmp.path().join(".git")).unwrap();
+    let sandbox_store = tmp.path().join("sandbox-store");
+    std::fs::create_dir_all(&sandbox_store).unwrap();
+    let fake_roots = vec![tmp.path().to_path_buf()];
+    assert_eq!(
+        project_root_from_store_hint_with_roots(&sandbox_store, &fake_roots),
+        sandbox_store,
+        "the guard must refuse to adopt a temp root as the project even when \
+         it has a .git"
+    );
 }

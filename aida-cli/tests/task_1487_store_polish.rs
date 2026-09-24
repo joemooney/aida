@@ -7,6 +7,7 @@
 //!   the distributed-store dispatch instead of exiting "not yet supported".
 // trace:TASK-1487 | ai:claude
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
@@ -195,5 +196,62 @@ fn explicit_file_dir_routes_mcp_serve_past_not_yet_supported() {
     assert!(
         combined.contains("AIDA MCP server started"),
         "must reach run_mcp_server: {combined}"
+    );
+}
+
+/// The strict review's regression catch: `--file`/`AIDA_STORE` conventionally
+/// point at the STORE directory (`<repo>/.aida-store`), not the project root.
+/// `aida --file <repo>/.aida-store mcp-serve` must resolve its project root
+/// to `<repo>` — observable through the `role_list` tool, whose response
+/// text echoes `self.project_root.display()` verbatim (`"(no roles defined
+/// for <project_root>) — …"` when none exist, which is the case here).
+// trace:TASK-1487 | ai:claude
+#[test]
+fn explicit_file_aida_store_dir_resolves_mcp_serve_project_root_to_its_parent() {
+    let f = fixture();
+    let proj = f.root.join("proj");
+    std::fs::create_dir_all(&proj).unwrap();
+    let store = proj.join(".aida-store");
+
+    let mut child = base_cmd(&f, &f.root)
+        .args(["--file", store.to_str().unwrap(), "mcp-serve"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn aida mcp-serve");
+
+    {
+        let stdin = child.stdin.as_mut().expect("stdin");
+        writeln!(
+            stdin,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"role_list","arguments":{{}}}}}}"#
+        )
+        .unwrap();
+    }
+    // Drop stdin to send EOF right after the one request — the server's
+    // read loop (`for line in stdin.lock().lines()`) exits cleanly on EOF.
+    drop(child.stdin.take());
+
+    let out = child.wait_with_output().expect("wait for aida mcp-serve");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let response: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap_or_else(|e| {
+        panic!("bad JSON-RPC response: {e}\nstdout: {stdout}\nstderr: {stderr}")
+    });
+    let role_list_text = response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no text content in response: {response}\nstderr: {stderr}"));
+
+    let proj_str = proj.to_str().unwrap();
+    let store_str = store.to_str().unwrap();
+    assert!(
+        role_list_text.contains(proj_str),
+        "role_list must report the project root ({proj_str}): {role_list_text}"
+    );
+    assert!(
+        !role_list_text.contains(store_str),
+        "role_list must not report the store dir itself ({store_str}) as the \
+         project root: {role_list_text}"
     );
 }

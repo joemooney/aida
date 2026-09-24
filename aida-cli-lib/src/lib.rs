@@ -12846,6 +12846,14 @@ fn run_on_distributed_store(
 /// itself only when neither resolves. Takes the cwd-walk result as a plain
 /// value (rather than calling `find_project_root()` itself) so this decision
 /// stays unit-testable without touching the process's actual cwd.
+///
+/// The hint is a STORE path (the `--file`/`AIDA_STORE` convention: it points
+/// at `<repo>/.aida-store`, the directory `GitBackend::new` expects
+/// `objects/` directly under — see the ~20 `project_root.join(".aida-store")`
+/// call sites), not the project root itself. Adopting it as-is regressed
+/// leases, roles, mailbox and ledger paths (all keyed off the real project
+/// root) and double-nested the store. `project_root_from_store_hint` derives
+/// the real root from it instead.
 // trace:TASK-1487 | ai:claude
 fn mcp_serve_project_root(
     store_path: &std::path::Path,
@@ -12853,9 +12861,67 @@ fn mcp_serve_project_root(
     cwd_project_root: Option<std::path::PathBuf>,
 ) -> std::path::PathBuf {
     project_root_hint
-        .map(|p| p.to_path_buf())
+        .map(project_root_from_store_hint)
         .or(cwd_project_root)
         .unwrap_or_else(|| store_path.to_path_buf())
+}
+
+/// Derive the project root a `--file <dir>`/`AIDA_STORE` hint implies, per
+/// the store-path convention:
+/// 1. The hint's final component is `.aida-store` → its parent is the root
+///    (the overwhelmingly common case: `--file` pointed straight at the
+///    worktree, the same as every other resolver in this codebase).
+/// 2. Otherwise the hint already looks like a project root itself (it has
+///    its own `.git` or `.aida/config.toml`) → use it as-is.
+/// 3. Otherwise walk up from the hint looking for an enclosing project root,
+///    guarded — like every other `.aida`-seeking walk-up in this codebase —
+///    against ever adopting a shared system temp root (BUG-1598).
+/// 4. Otherwise (a bare sandbox store — e.g. the `AIDA_STORE` dev-playground
+///    path, SPIKE-48 — with no enclosing project) the hint has no project
+///    root to point to; keep it as-is.
+// trace:TASK-1487 | ai:claude
+fn project_root_from_store_hint(hint: &std::path::Path) -> std::path::PathBuf {
+    project_root_from_store_hint_with_roots(hint, &aida_core::store_locate::real_temp_roots())
+}
+
+/// [`project_root_from_store_hint`], parameterized on the temp roots to
+/// guard against, so a test can exercise the guard against a fake root
+/// without touching the real, shared system temp dir.
+// trace:TASK-1487 | ai:claude
+fn project_root_from_store_hint_with_roots(
+    hint: &std::path::Path,
+    temp_roots: &[std::path::PathBuf],
+) -> std::path::PathBuf {
+    if hint.file_name() == Some(std::ffi::OsStr::new(".aida-store")) {
+        if let Some(parent) = hint.parent() {
+            return parent.to_path_buf();
+        }
+    }
+    if looks_like_project_root(hint) {
+        return hint.to_path_buf();
+    }
+    let canonical_roots = aida_core::store_locate::canonicalize_roots(temp_roots);
+    let mut current = hint.parent();
+    while let Some(dir) = current {
+        // BUG-1598: never walk INTO a temp root and adopt it (or whatever's
+        // in it) as the project — same guard every other walk-up here uses.
+        if aida_core::store_locate::is_in_canonical_roots(dir, &canonical_roots) {
+            break;
+        }
+        if looks_like_project_root(dir) {
+            return dir.to_path_buf();
+        }
+        current = dir.parent();
+    }
+    hint.to_path_buf()
+}
+
+/// Does `dir` look like an AIDA/git project root on its own — a `.git`
+/// directory or an `.aida/config.toml` file? Shared by both the direct-hint
+/// check and the walk-up in [`project_root_from_store_hint_with_roots`].
+// trace:TASK-1487 | ai:claude
+fn looks_like_project_root(dir: &std::path::Path) -> bool {
+    dir.join(".git").exists() || dir.join(".aida").join("config.toml").exists()
 }
 
 /// Run a tracker (jira/github/gitlab) command against the distributed store
