@@ -27,7 +27,7 @@ pub(crate) fn handle_decide_command(
     spec: &str,
 ) -> Result<()> {
     let req = backend
-        .get_requirement_by_spec_id(spec)?
+        .get_requirement_unambiguous(spec)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(spec, Some(store_path)))?;
     let display_id = req.display_id();
 

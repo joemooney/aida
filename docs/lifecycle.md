@@ -123,6 +123,34 @@ resolved. To replay by hand, run
 form a cycle, or a human decides to ship without them, run
 `aida edit <SPEC> --status completed`.
 
+<!-- trace:STORY-1430 | ai:claude --> <!-- trace:STORY-1385 | ai:claude -->
+
+**A spec's own declared closure criteria gate closure too.** Put unchecked
+items under a `## Closure` heading (or a bare `Closure:` line) in the
+description, or set the `closure:pending` tag. While any unchecked item or
+the tag remains, the merge holds the spec at Done, as a `BlockedBy` blocker
+does. Check the box or remove the tag to release it. The section ends at the
+next heading, and items inside fenced code blocks are ignored.
+
+**Stretch criteria do not hold closure.** Mark a criterion as stretch when you
+write the spec if you want it but are not sure it can be reached. There are
+two ways to mark one: add a `(stretch)` suffix, or put the item under a nested
+`### Stretch` subheading (or a `Stretch:` line) inside the Closure section.
+
+```markdown
+## Closure
+- [ ] required: the fix is re-measured after it runs
+- [ ] p95 under 1s (stretch)
+### Stretch
+- [ ] zero-copy path
+```
+
+When the spec auto-completes with stretch items still unchecked, the
+auto-bump adds a `[aida:stretch-debt]` comment to the spec. The comment
+lists each unmet criterion, names the commit that shipped instead, and says
+what would close the gap. An unchecked required item still holds, exactly as
+before.
+
 ## Status vs. "workable" — pickability and the queue
 
 <!-- trace:STORY-565 | ai:claude -->

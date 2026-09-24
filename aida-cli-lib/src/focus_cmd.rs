@@ -43,7 +43,8 @@ pub(crate) fn handle_focus_command(
     if let Some(raw) = target {
         // Set: validate the target resolves to a real spec, then persist its
         // canonical display id so later reads resolve unambiguously.
-        let req = backend.get_requirement_by_spec_id(raw)?.ok_or_else(|| {
+        // trace:TASK-1468 | ai:claude
+        let req = backend.get_requirement_unambiguous(raw)?.ok_or_else(|| {
             anyhow::anyhow!(
                 "focus target `{}` not found. Pass an existing epic or spec id (try `aida list`).",
                 raw

@@ -88,8 +88,10 @@ use status_cmd::*;
 use zen_cmd::*;
 // trace:TASK-967 | ai:claude
 mod drain_summary;
+// trace:STORY-1415 | ai:claude
 mod field_study;
 mod field_study_cmd;
+mod mass_change;
 // trace:SPIKE-67 | ai:claude
 mod rule_violation;
 // trace:STORY-656 | ai:claude
@@ -6239,7 +6241,7 @@ fn handle_findings_command(
 
         FindingsCommand::Dismiss { id, reason } => {
             let mut req = backend
-                .get_requirement_by_spec_id(id)?
+                .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
             let tags: Vec<String> = req.tags.iter().cloned().collect();
             if !findings::is_finding(&tags) {
@@ -6288,7 +6290,7 @@ fn handle_findings_command(
             force,
         } => {
             let mut req = backend
-                .get_requirement_by_spec_id(id)?
+                .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
             let tags: Vec<String> = req.tags.iter().cloned().collect();
             if !findings::is_finding(&tags) {
@@ -7833,7 +7835,7 @@ fn handle_research_command(
     artifact_dir: &str,
 ) -> Result<()> {
     let mut req = backend
-        .get_requirement_by_spec_id(id)?
+        .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
     let display_id = req.display_id();
 
@@ -8055,7 +8057,8 @@ fn questions_sweep(
     // trace:TASK-700 | ai:claude
     let mut affected = 0usize;
     for (spec, candidate) in candidates {
-        let Some(mut req) = backend.get_requirement_by_spec_id(&spec)? else {
+        // trace:TASK-1468 | ai:claude
+        let Some(mut req) = backend.get_requirement_unambiguous(&spec)? else {
             continue;
         };
         if has_open_decision_request(&req) {
@@ -8199,7 +8202,8 @@ fn questions_clarify(
         // Explicit specs: drop any that are non-clarifiable, warn loudly.
         let mut kept = Vec::new();
         for raw in specs {
-            match backend.get_requirement_by_spec_id(raw)? {
+            // trace:TASK-1468 | ai:claude
+            match backend.get_requirement_unambiguous(raw)? {
                 Some(req) if is_clarify_excluded(&req) => {
                     println!(
                         "  {} {} skipped — not clarifiable (built/held/non-implementable type)",
@@ -8291,7 +8295,7 @@ fn questions_remedy(
     dry_run: bool,
 ) -> Result<()> {
     let req = backend
-        .get_requirement_by_spec_id(spec)?
+        .get_requirement_unambiguous(spec)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| anyhow::anyhow!("{spec} not found"))?;
     if is_clarify_excluded(&req) {
         anyhow::bail!(
@@ -8663,7 +8667,8 @@ fn ensure_spec_done_after_pr(
         let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
         let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
         let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
-        let Some(mut req) = backend.get_requirement_by_spec_id(spec)? else {
+        // trace:TASK-1468 | ai:claude
+        let Some(mut req) = backend.get_requirement_unambiguous(spec)? else {
             return Ok(false);
         };
         if !matches!(req.status, aida_core::RequirementStatus::InProgress) {
@@ -8831,7 +8836,7 @@ fn questions_ask(
     };
 
     let mut req = backend
-        .get_requirement_by_spec_id(spec)?
+        .get_requirement_unambiguous(spec)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(spec, Some(store_path)))?;
     let display_id = req.display_id();
 
@@ -8879,7 +8884,7 @@ fn questions_answer_one(
     note: Option<&str>,
 ) -> Result<()> {
     let mut req = backend
-        .get_requirement_by_spec_id(spec)?
+        .get_requirement_unambiguous(spec)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(spec, Some(store_path)))?;
     let display_id = req.display_id();
 
@@ -9286,7 +9291,7 @@ fn handle_findings_recur(
     note: Option<&str>,
 ) -> Result<()> {
     let mut req = backend
-        .get_requirement_by_spec_id(id)?
+        .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
     let tags: Vec<String> = req.tags.iter().cloned().collect();
     if !findings::is_finding(&tags) {
@@ -10078,7 +10083,7 @@ fn handle_punt_command(
     let category = punt::parse_punt_category(category).map_err(|e| anyhow::anyhow!(e))?;
 
     let mut req = backend
-        .get_requirement_by_spec_id(id)?
+        .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
     let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
 
@@ -10325,7 +10330,7 @@ fn handle_done_command(
 ) -> Result<()> {
     use aida_core::RequirementStatus;
     let mut req = backend
-        .get_requirement_by_spec_id(id)?
+        .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
     let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
     if matches!(req.status, RequirementStatus::Completed) {
@@ -13169,10 +13174,10 @@ fn add_blocked_by_edge(
     use aida_core::DatabaseBackend;
 
     let mut req = backend
-        .get_requirement_by_spec_id(spec_id)?
+        .get_requirement_unambiguous(spec_id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(spec_id, None))?;
     let blocker = backend
-        .get_requirement_by_spec_id(blocker_id)?
+        .get_requirement_unambiguous(blocker_id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(blocker_id, None))?;
     if blocker.id == req.id {
         anyhow::bail!("a requirement cannot be blocked by itself ({})", spec_id);
@@ -13199,7 +13204,7 @@ fn add_blocked_by_edge(
     }
 
     // Inverse Blocks edge on the blocker (also idempotent).
-    let mut blocker = backend.get_requirement_by_spec_id(blocker_id)?.unwrap();
+    let mut blocker = backend.get_requirement_unambiguous(blocker_id)?.unwrap(); // trace:TASK-1468 | ai:claude
     if !blocker
         .relationships
         .iter()
@@ -13237,10 +13242,10 @@ fn add_superseded_by_edge(
     use aida_core::DatabaseBackend;
 
     let mut req = backend
-        .get_requirement_by_spec_id(spec_id)?
+        .get_requirement_unambiguous(spec_id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(spec_id, None))?;
     let successor = backend
-        .get_requirement_by_spec_id(successor_id)?
+        .get_requirement_unambiguous(successor_id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(successor_id, None))?;
     if successor.id == req.id {
         anyhow::bail!("a requirement cannot supersede itself ({})", spec_id);
@@ -13264,7 +13269,7 @@ fn add_superseded_by_edge(
     }
 
     // Inverse Supersedes edge on the successor (also idempotent).
-    let mut successor = backend.get_requirement_by_spec_id(successor_id)?.unwrap();
+    let mut successor = backend.get_requirement_unambiguous(successor_id)?.unwrap(); // trace:TASK-1468 | ai:claude
     if !successor
         .relationships
         .iter()
@@ -13487,10 +13492,10 @@ fn remove_blocked_by_edge(
     use aida_core::DatabaseBackend;
 
     let mut req = backend
-        .get_requirement_by_spec_id(spec_id)?
+        .get_requirement_unambiguous(spec_id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(spec_id, None))?;
     let blocker = backend
-        .get_requirement_by_spec_id(blocker_id)?
+        .get_requirement_unambiguous(blocker_id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(blocker_id, None))?;
     let blocker_display = blocker
         .spec_id
@@ -13506,7 +13511,7 @@ fn remove_blocked_by_edge(
         backend.update_requirement(&req)?;
     }
 
-    let mut blocker = backend.get_requirement_by_spec_id(blocker_id)?.unwrap();
+    let mut blocker = backend.get_requirement_unambiguous(blocker_id)?.unwrap(); // trace:TASK-1468 | ai:claude
     let inv_before = blocker.relationships.len();
     blocker
         .relationships
@@ -14024,8 +14029,10 @@ fn create_agent_brief(
     authorized_by: Option<&str>,
 ) -> Result<std::path::PathBuf> {
     let agent = validate_brief_agent(agent)?;
+    // TASK-1468: a brief never routes work at a guessed spec.
+    // trace:TASK-1468 | ai:claude
     let req = store
-        .get_requirement_by_spec_id(spec)
+        .get_requirement_unambiguous(spec)?
         .ok_or_else(|| not_found::requirement_not_found(spec, None))?;
     let spec_id = req.spec_id.as_deref().unwrap_or(spec);
     let depends_on = normalize_brief_dependency(store, depends_on)?;
@@ -14696,8 +14703,9 @@ fn normalize_brief_dependency(
     let Some(depends_on) = depends_on.map(str::trim).filter(|s| !s.is_empty()) else {
         return Ok(None);
     };
+    // trace:TASK-1468 | ai:claude
     let req = store
-        .get_requirement_by_spec_id(depends_on)
+        .get_requirement_unambiguous(depends_on)?
         .ok_or_else(|| not_found::requirement_not_found(depends_on, None))?;
     Ok(Some(
         req.spec_id.as_deref().unwrap_or(depends_on).to_string(),
@@ -17877,9 +17885,15 @@ fn apply_calibration_tags(
     }
     // Git-canonical path — direct backend write, exactly like Command::Edit.
     if let Some(store_path) = detect_distributed_store() {
-        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+        // Cache-backed so the checked lookup below does not load the whole
+        // store. trace:TASK-1468 | ai:claude
+        if let Ok(backend) = aida_core::CachedGitBackend::open(
+            &store_path,
+            &aida_core::CachedGitBackend::default_cache_path(&store_path),
+        ) {
             use aida_core::DatabaseBackend;
-            let Ok(Some(mut req)) = backend.get_requirement_by_spec_id(spec) else {
+            // trace:TASK-1468 | ai:claude
+            let Ok(Some(mut req)) = backend.get_requirement_unambiguous(spec) else {
                 return;
             };
             let mut changed = false;
@@ -17944,9 +17958,15 @@ fn apply_effort_tag(
         return;
     };
     if let Some(store_path) = detect_distributed_store() {
-        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+        // Cache-backed so the checked lookup below does not load the whole
+        // store. trace:TASK-1468 | ai:claude
+        if let Ok(backend) = aida_core::CachedGitBackend::open(
+            &store_path,
+            &aida_core::CachedGitBackend::default_cache_path(&store_path),
+        ) {
             use aida_core::DatabaseBackend;
-            let Ok(Some(mut req)) = backend.get_requirement_by_spec_id(spec) else {
+            // trace:TASK-1468 | ai:claude
+            let Ok(Some(mut req)) = backend.get_requirement_unambiguous(spec) else {
                 return;
             };
             if effort_calibration::apply_effort_tag(&mut req.tags, touchpoint, effort) {
@@ -18565,8 +18585,9 @@ fn parse_requirement_id(id_str: &str, store: &RequirementsStore) -> Result<Uuid>
         return Ok(uuid);
     }
 
-    // Try as SPEC-ID
-    if let Some(req) = store.get_requirement_by_spec_id(id_str) {
+    // Try as SPEC-ID. TASK-1468: an ambiguous id refuses (these callers
+    // write comments and relationships). trace:TASK-1468 | ai:claude
+    if let Some(req) = store.get_requirement_unambiguous(id_str)? {
         return Ok(req.id);
     }
 
@@ -29660,7 +29681,8 @@ fn bump_spec_in_progress_at_lease_take(project_root: &std::path::Path, scope: &s
     let result = (|| -> Result<bool> {
         let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_root);
         let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path)?;
-        let Some(mut req) = backend.get_requirement_by_spec_id(&spec_id)? else {
+        // trace:TASK-1468 | ai:claude
+        let Some(mut req) = backend.get_requirement_unambiguous(&spec_id)? else {
             return Ok(false);
         };
         if !matches!(req.status, RequirementStatus::Approved) {
@@ -33595,15 +33617,20 @@ fn session_start(
     // triage). The Approved → InProgress bump itself happens after lease
     // save below, atomic-enough with the lease creation.
     // trace:BUG-379 | ai:claude
-    let preflight_status: Option<RequirementStatus> =
-        Storage::new(project_root.join(".aida-store"))
-            .load()
-            .ok()
-            .and_then(|store| {
-                store
-                    .get_requirement_by_spec_id(owns)
-                    .map(|r| r.status.clone())
-            });
+    let preflight_store = Storage::new(project_root.join(".aida-store")).load().ok();
+    // TASK-1468: a session never claims (and later bumps) a guessed spec — an
+    // `owns` id naming more than one requirement refuses the start.
+    // trace:TASK-1468 | ai:claude
+    if let Some(store) = &preflight_store {
+        if let Err(e) = store.get_requirement_unambiguous(owns) {
+            anyhow::bail!("{e}");
+        }
+    }
+    let preflight_status: Option<RequirementStatus> = preflight_store.and_then(|store| {
+        store
+            .get_requirement_by_spec_id(owns)
+            .map(|r| r.status.clone())
+    });
     // TASK-1-108: when we're a corroborated orchestrator subprocess (the
     // parent --auto-complete process already bumped status to InProgress
     // via prepare_auto_complete_phase1_status before spawning us, per
@@ -34344,7 +34371,8 @@ fn session_start(
         let storage = Storage::new(project_root.join(".aida-store"));
         match storage.load().and_then(|mut store| {
             let mut bumped = false;
-            if let Some(req) = store.get_requirement_by_spec_id_mut(owns) {
+            // trace:TASK-1468 | ai:claude
+            if let Some(req) = store.get_requirement_unambiguous_mut(owns)? {
                 if matches!(req.status, RequirementStatus::Approved) {
                     req.status = RequirementStatus::InProgress;
                     req.modified_at = chrono::Utc::now();
@@ -43886,7 +43914,8 @@ fn shelve_spec_on_failure(
     let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
 
-    let Some(mut req) = backend.get_requirement_by_spec_id(spec)? else {
+    // trace:TASK-1468 | ai:claude
+    let Some(mut req) = backend.get_requirement_unambiguous(spec)? else {
         // Spec not in the store — orchestrator was driving a stale id.
         // Best-effort: log and skip rather than crash the failure path.
         eprintln!(
@@ -44062,7 +44091,8 @@ fn restore_phase1_status_on_lease_failure(
     let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
 
-    let Some(mut req) = backend.get_requirement_by_spec_id(spec)? else {
+    // trace:TASK-1468 | ai:claude
+    let Some(mut req) = backend.get_requirement_unambiguous(spec)? else {
         return Ok(());
     };
     req.status = prior.clone();
@@ -66765,6 +66795,32 @@ fn sha_at_or_before_reopen(
         .unwrap_or(false)
 }
 
+/// Resolve a `(SPEC-ID)` commit-trailer id for the pull auto-bump. An id
+/// that names more than one requirement is SKIPPED with a printed warning
+/// (the rest of the pull proceeds): bumping a guessed spec is how a trailer
+/// for the real spec completed a rejected fixture instead.
+// trace:TASK-1468 | ai:claude
+fn trailer_spec_or_skip<'s>(
+    store: &'s aida_core::RequirementsStore,
+    spec_id: &str,
+    sha: &str,
+) -> Option<&'s Requirement> {
+    match store.get_requirement_unambiguous(spec_id) {
+        Ok(found) => found,
+        Err(e) => {
+            let short = sha.get(..7).unwrap_or(sha);
+            eprintln!(
+                "{} skipping commit trailer `{}` (commit {}): {}",
+                "Warning:".yellow().bold(),
+                spec_id,
+                short,
+                e.to_string().lines().next().unwrap_or_default()
+            );
+            None
+        }
+    }
+}
+
 /// BUG-1506: find Draft specs among `candidates` (spec_id → first-seen commit
 /// sha, the same map both the live pull-time scan and `reconcile-status`
 /// already build from `(SPEC-ID)` trailers) whose commit is already on the
@@ -66793,7 +66849,7 @@ fn collect_draft_landed_candidates(
             None => true,
         })
         .filter_map(|(spec_id, sha)| {
-            let req = store.get_requirement_by_spec_id(spec_id)?;
+            let req = trailer_spec_or_skip(store, spec_id, sha)?;
             if !is_auto_bump_work_type(&req.req_type) {
                 return None;
             }
@@ -66887,6 +66943,9 @@ fn apply_draft_to_done_bumps(
         let backend = aida_core::db::GitBackend::new(store_path)?;
         let mut confirmed = Vec::new();
         for (spec_id, sha) in draft_candidates {
+            // Plain lookup: a checked one on a bare GitBackend reloads the whole
+            // store per spec. Trailer ids were vetted by trailer_spec_or_skip.
+            // trace:TASK-1468 | ai:claude
             let Some(mut r) = backend.get_requirement_by_spec_id(spec_id)? else {
                 continue;
             };
@@ -67637,7 +67696,55 @@ fn apply_auto_bump_flip(
     // completing SHA (re-runs of the bump don't stack duplicates).
     let record = build_processing_record(project_root, &flip.spec_id, &flip.sha);
     r.add_processing_record(record);
+    // STORY-1385: stretch criteria never hold completion, but any still
+    // unchecked when the spec completes are recorded as debt, automatically.
+    // trace:STORY-1385 | ai:claude
+    if let Some(note) = stretch_debt_comment(r, &flip.sha) {
+        r.add_comment(aida_core::Comment::new("aida-auto-bump".to_string(), note));
+    }
     true
+}
+
+/// STORY-1385: marker on the debt note written when a spec completes with
+/// unchecked STRETCH closure criteria. Greppable so the debt population (and
+/// the stretch-met rate) is countable from spec comments.
+const STRETCH_DEBT_MARKER: &str = "[aida:stretch-debt]";
+
+/// STORY-1385: the debt note for `r`'s unmet stretch criteria at completion,
+/// or `None` when every stretch criterion was met (or none were declared) or
+/// the note for this completing commit already exists. Records which
+/// criterion, what was wanted, what shipped instead, and what closes it.
+// trace:STORY-1385 | ai:claude
+fn stretch_debt_comment(r: &aida_core::Requirement, sha: &str) -> Option<String> {
+    let unmet = aida_core::pickability::unmet_stretch_closure_criteria(r);
+    if unmet.is_empty() {
+        return None;
+    }
+    let already = r.comments.iter().any(|c| {
+        c.content.contains(STRETCH_DEBT_MARKER) && (sha.is_empty() || c.content.contains(sha))
+    });
+    if already {
+        return None;
+    }
+    let shipped = if sha.is_empty() {
+        "the merged change".to_string()
+    } else {
+        format!("commit {sha}")
+    };
+    let items = unmet
+        .iter()
+        .enumerate()
+        .map(|(i, c)| format!("\n  {}. wanted: \"{c}\"", i + 1))
+        .collect::<String>();
+    Some(format!(
+        "{STRETCH_DEBT_MARKER} Completed with {} unmet stretch closure criteri{} (marked \
+         stretch ahead of time, so they did not hold completion):{items}\n\
+         Shipped instead: {shipped}, which met every required criterion but not these. \
+         To close the gap: implement the criterion in a follow-up, then check its box in \
+         the spec's Closure section.",
+        unmet.len(),
+        if unmet.len() == 1 { "on" } else { "a" },
+    ))
 }
 
 /// BUG-1551: marker on the audit comment a closure hold writes. Also the
@@ -68315,7 +68422,7 @@ fn auto_bump_done_to_completed(
     // ── Step 4: figure out which candidates are eligible to ship ──
     let mut flips: Vec<AutoBumpFlip> = Vec::new();
     for (spec_id, sha) in &candidates {
-        let Some(req) = store.get_requirement_by_spec_id(spec_id) else {
+        let Some(req) = trailer_spec_or_skip(&store, spec_id, sha) else {
             continue;
         };
         if !auto_bump_eligible_status(&req.status) {
@@ -68497,6 +68604,9 @@ fn auto_bump_done_to_completed(
         use aida_core::db::DatabaseBackend;
         let backend = aida_core::db::GitBackend::new(store_path)?;
         for flip in &flips {
+            // Plain lookup: a checked one on a bare GitBackend reloads the whole
+            // store per spec. Trailer ids were vetted by trailer_spec_or_skip.
+            // trace:TASK-1468 | ai:claude
             let Some(mut r) = backend.get_requirement_by_spec_id(&flip.spec_id)? else {
                 continue;
             };
@@ -68506,6 +68616,9 @@ fn auto_bump_done_to_completed(
         }
         // BUG-1551: closure holds — same targeted write, one commit each.
         for hold in &closure_holds {
+            // Plain lookup: a checked one on a bare GitBackend reloads the whole
+            // store per spec. Trailer ids were vetted by trailer_spec_or_skip.
+            // trace:TASK-1468 | ai:claude
             let Some(mut r) = backend.get_requirement_by_spec_id(&hold.flip.spec_id)? else {
                 continue;
             };
@@ -68516,6 +68629,9 @@ fn auto_bump_done_to_completed(
         // TASK-246 / BUG-219: review stories whose PR merged before the
         // review lifecycle finished — same targeted write, one commit each.
         for (spec_id, sha, pr_n, _) in &stale_review_flips {
+            // Plain lookup: a checked one on a bare GitBackend reloads the whole
+            // store per spec. These ids come from the loaded store's own rows.
+            // trace:TASK-1468 | ai:claude
             let Some(mut r) = backend.get_requirement_by_spec_id(spec_id)? else {
                 continue;
             };
@@ -68527,6 +68643,9 @@ fn auto_bump_done_to_completed(
         // whose PR reached a terminal state the git-log scan above couldn't see
         // (closed without merging, or merged outside the scan window).
         for resolution in &stranded_review_pr {
+            // Plain lookup: a checked one on a bare GitBackend reloads the whole
+            // store per spec. These ids come from the loaded store's own rows.
+            // trace:TASK-1468 | ai:claude
             let Some(mut r) = backend.get_requirement_by_spec_id(&resolution.spec_id)? else {
                 continue;
             };
@@ -68799,6 +68918,9 @@ fn auto_bump_done_to_completed(
             use aida_core::db::DatabaseBackend;
             let backend = aida_core::db::GitBackend::new(store_path)?;
             for (finding_id, completed_spec, completion_ref) in &auto_resolved_failures {
+                // Plain lookup: a checked one on a bare GitBackend reloads the whole
+                // store per spec. These ids come from the loaded store's own rows.
+                // trace:TASK-1468 | ai:claude
                 let Some(mut r) = backend.get_requirement_by_spec_id(finding_id)? else {
                     continue;
                 };
@@ -69184,7 +69306,7 @@ fn handle_db_reconcile_status(
                 continue;
             }
         }
-        let Some(req) = store.get_requirement_by_spec_id(spec_id) else {
+        let Some(req) = trailer_spec_or_skip(&store, spec_id, sha) else {
             continue;
         };
         if !auto_bump_eligible_status(&req.status) {
@@ -78288,7 +78410,8 @@ fn ensure_parent_edge_from_tag(
 ) -> Result<Option<String>> {
     use aida_core::models::{Relationship, RelationshipType};
 
-    let Some(child) = backend.get_requirement_by_spec_id(child_spec_id)? else {
+    // trace:TASK-1468 | ai:claude
+    let Some(child) = backend.get_requirement_unambiguous(child_spec_id)? else {
         return Ok(None);
     };
     // First `parent:<ID>` tag, if any (a spec carrying several is degenerate;
@@ -78302,7 +78425,8 @@ fn ensure_parent_edge_from_tag(
         return Ok(None);
     };
     // Lenient resolve — an unknown target leaves the tag untouched, no error.
-    let Some(parent) = backend.get_requirement_by_spec_id(&target)? else {
+    // trace:TASK-1468 | ai:claude
+    let Some(parent) = backend.get_requirement_unambiguous(&target)? else {
         return Ok(None);
     };
     if parent.id == child.id {
@@ -78566,6 +78690,11 @@ mod task_679_canonical_rel_tests;
 #[cfg(test)]
 #[path = "tests/task_928_parent_tag_edge_tests.rs"]
 mod task_928_parent_tag_edge_tests;
+
+// trace:TASK-1468 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1468_ambiguous_write_ids_tests.rs"]
+mod task_1468_ambiguous_write_ids_tests;
 
 #[cfg(test)]
 #[path = "tests/task_887_888_input_validation_tests.rs"]
@@ -84163,6 +84292,12 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
         // trace:TASK-1307 | ai:claude
         ReviewCommand::Stranded { json, fix } => handle_review_stranded(*json, *fix),
+        // trace:STORY-1415 | ai:claude
+        ReviewCommand::Mode { mode } => match mode {
+            cli::ReviewModeCommand::MassChange { action, days, json } => {
+                mass_change::handle_mass_change_command(action.as_str(), *days, *json)
+            }
+        },
     }
 }
 

@@ -53,7 +53,8 @@ pub(crate) fn handle_doc_command(
                 if id.is_empty() {
                     continue;
                 }
-                let found = backend.get_requirement_by_spec_id(id)?.ok_or_else(|| {
+                // trace:TASK-1468 | ai:claude
+                let found = backend.get_requirement_unambiguous(id)?.ok_or_else(|| {
                     anyhow::anyhow!(
                         "--about target `{}` not found in the store. Refusing to \
                          create a doc entry that references a phantom spec.",
