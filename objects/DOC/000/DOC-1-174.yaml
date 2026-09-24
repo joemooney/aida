@@ -3,47 +3,35 @@ spec_id: DOC-1-174
 agreed_id: DOC-3
 title: 'Human explanation: reusable Jev questions and recorded judgments'
 description: |
-  The proposed `aida jev` surface is a reusable question catalog over Jev's typed judgment primitives.
+  Jev is an optional external AI judgment service (TypeSafe AI's "System One") that a few AIDA commands can consult for an advisory second opinion. It is off by default and never required: every feature that can call it also has a deterministic, offline fallback. The single switch is one environment variable — set it and the call can happen; leave it unset and AIDA never reaches the network for this. If a call is slow, errors, or the key is missing, AIDA does not guess or wait indefinitely: it falls back to the offline behavior and records the fallback as "unavailable," never as if the advisory check had passed.
 
-  AIDA owns a catalog of reusable questions. Jev answers those questions using `noul`, `choice`, or `score`. AIDA records the answer and provenance. Separate gates and disciplines consume those answers according to their own policies.
+  This explains what Jev actually does in AIDA today. Historically each integration was just a one-off prompt buried in the feature that used it, which is exactly why this explanation exists: to name what's really there in plain terms, separate from any future plan.
 
-  A question is not itself a gate. For example:
+  Where Jev is actually wired in today, three places, each with its own hand-written question:
 
-      Question: How complex is this spec?
-      Answers: simple, moderate, complex, architectural
+  - Explaining a requirement in plain language. Turning a spec into a plain-language summary is done first by pattern-matching the spec text — no AI involved in that extraction step. What follows is a quality check on the result. Offline, that check is purely mechanical: does it look jargon-heavy, and did important language like "fail closed" survive the rewrite? When the Jev key is configured, one question is sent instead: does this plain-language version still preserve the original's safety constraints and acceptance requirements? Jev's answer replaces the mechanical score for that one dimension. The readability figure shown next to it stays mechanical either way — it is not a Jev judgment, and, importantly, it is not a measurement of whether an actual person understood the text. Measuring genuine human comprehension of these explanations is a separate effort that has not been built yet.
 
-  One project might use `complex` to require advisor review. Another might use it to route the work to an architect. The question stays reusable; the policy varies.
+  - Reviewing a diff against a spec's acceptance criteria. This runs inside the automated pull-request completion flow, not as a command you invoke directly. Any acceptance criterion that can't be checked by simply running a command is put to Jev on its own: does this diff satisfy this specific criterion? Each criterion gets its own yes/no-leaning answer and a confidence figure, and the overall verdict only settles as pass or fail once the confidence clears a threshold — an answer that isn't confident enough is left open for a person to decide, rather than rounded into a pass or a fail.
 
-  The existing Jev integrations already correspond to questions, although they are currently embedded as inline prompts:
+  - Scanning the whole requirement store for possible contradictions between specs. Ordinary text and reference matching finds candidate pairs first; only then is a pair handed to Jev to classify as compatible, one superseding the other, or genuinely contradicting each other. Jev never discovers a candidate pair on its own — it only classifies pairs the mechanical pass already found.
 
-  - Graded review: Does this diff satisfy this acceptance criterion?
-  - Contradiction scan: Is spec B compatible with, superseding, or contradicting spec A?
-  - Exposition audit: How readable is this explanation, and does it preserve the constraints?
-  - Future routing: Should this go to developer, reviewer, advisor, architect, or research?
+  A fourth kind of question — using a judgment like this to route work to the right kind of reviewer (developer, reviewer, advisor, architect, research) — is a natural extension of the same idea, but it is not implemented. Nothing in the code today asks Jev that question or acts on an answer to it.
 
-  The catalog could eventually contain questions such as:
+  What happens to each answer also differs by feature, because there is no shared place these get recorded yet:
 
-  - `spec.complexity.v1`
-  - `spec.blast_radius.v1`
-  - `spec.human_understandability.v1`
-  - `spec.review_lane.v1`
-  - `spec.security_sensitivity.v1`
-  - `spec.duplicate_relationship.v1`
-  - `spec.change_impact.v1`
-  - `acceptance.criterion_satisfaction.v1`
-  - `spec.relationship.v1`
+  - The plain-language explanation's audit is saved into that spec's own summary file on disk, so the score and any findings are visible again later without re-asking Jev.
+  - The pull-request review verdict, including each criterion's individual score and confidence, is saved to a small file per pull request.
+  - The contradiction scan's answers are not saved anywhere. Each run re-asks Jev from scratch, and only that run's own output shows what it decided.
 
-  Each question should declare a stable ID and version, primitive, allowed answers or score levels, required context, deterministic evidence expectations, fallback behavior, and advisory/authority policy.
+  None of the three keeps the fuller kind of record a shared log would need — a hash of exactly what was asked, which version of the question was used, a redacted copy of the exact payload, timing, and so on. A single reusable catalog of named questions, and one place where every answer from any of them is recorded with that kind of detail, is a real and worthwhile direction, but it does not exist yet. Nothing above should be read as already providing it.
 
-  Recorded results should include the spec source hash, question version, model, confidence, heuristic marker, payload hash, timestamp, latency, and answer. Raw context should not be retained by default; a redacted evidence artifact could be explicitly requested.
-
-  This is a human-authored explanation of STORY-1472, not canonical requirement text and not an AI-generated replacement for the story.
+  In every case Jev only advises; it does not decide by itself. What a feature does with its answer is that feature's own choice: the pull-request flow leaves an unclear answer for a human, the plain-language audit flags "needs revision" past a threshold, and the contradiction scan simply reports what it found for someone to act on. A project could choose to treat the same kind of answer differently — that policy lives with the feature consuming the judgment, not with Jev itself.
 status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T04:23:19.458083645Z
-modified_at: 2026-09-24T23:03:10.032214407Z
+modified_at: 2026-09-24T23:04:25.579244745Z
 req_type: Doc
 tags:
 - example
