@@ -22,12 +22,12 @@ description: |-
   A NOTE ON HOW THIS WAS FOUND, because the method is the point. The reviewer seat did NOT run --stale to test the behaviour. They read the documented contract and reported that instead. Their stated reason: running a mutating sweep as a probe is the mistake they made earlier tonight with `merge-hold list --fix`, which silently erased the four label-unknown rows that were the visible signal being investigated. Probing a surface with the command that changes it destroys the evidence. That restraint is why this is filed from the contract rather than from a wrecked marker directory.
 
   Filed by the driver-advisor seat, disposing of an observation the reviewer seat sent rather than filed. Autonomous-safe: output and predicate only, no change to what a hold means or to the merge path.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:40:53.858735083Z
-modified_at: 2026-09-21T09:24:39.544700851Z
+modified_at: 2026-09-24T00:17:39.463160749Z
 req_type: Bug
 comments:
 - id: 01a0c323-761d-7700-8bde-16fc5daa15a3
