@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   1. `aida show <SPEC>` prints a one-line drift hint when `filed_at.code_sha` is set and resolvable, e.g. `12 commits since filing touched 3 traced files`.
   2. Unresolvable SHA (shallow clone, other repo) prints nothing and never errors.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T09:09:51.043038964Z
-modified_at: 2026-09-24T09:09:55.500325813Z
+modified_at: 2026-09-24T12:29:01.342462055Z
 req_type: Task
 tags:
 - parent:CR-8
