@@ -655,24 +655,48 @@ sqlite3 requirements.db "SELECT * FROM metadata;"
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `AIDA_DB_NAME` | Default project name from registry | (none) |
-| `AIDA_FEATURE` | Default feature for new requirements | "Uncategorized" |
-| `AIDA_REGISTRY_PATH` | Custom registry file location | `~/.aida.config` |
+| `REQ_DB_NAME` | Registry project to use, by name. Read only when set explicitly; it is the environment form of `-p <project>` | (none) |
+| `AIDA_STORE` | Git-canonical store directory to use instead of the one found from the current directory | (none) |
+| `REQ_FEATURE` | Default feature for new requirements | "Uncategorized" |
+| `AIDA_REGISTRY_PATH` | Custom registry file location (legacy `REQ_REGISTRY_PATH` also works) | `~/.aida.config`, else `~/.requirements.config` |
 
 ## Appendix: Registry File Format
 
-The multi-project registry (`~/.aida.config`) uses YAML format:
+The multi-project registry (`~/.aida.config`) maps project names to legacy
+requirements stores, in YAML:
 
 ```yaml
-default: "my-project"
 projects:
-  - name: "my-project"
+  my-project:
     path: "/home/user/projects/myproject/requirements.yaml"
     description: "Main project requirements"
-  - name: "backend"
+  backend:
     path: "/home/user/projects/backend/requirements.db"
     description: "Backend service requirements"
+default_project: "my-project"
 ```
+
+### How a store is chosen (fail closed)
+
+AIDA uses a registry project only when you name it. From the current
+directory, a command uses, in order:
+
+1. The file or directory passed with `--file <path>`.
+2. The store named by `AIDA_STORE`, or the distributed project found from
+   `.aida/config.toml` in this directory or a parent.
+3. The registry project named with `-p <project>`, else the one named by
+   `REQ_DB_NAME` when that variable is set.
+4. A `requirements.db` or `requirements.yaml` in the current directory.
+
+If none of these applies, the command stops with guidance instead of guessing.
+The registry's `default_project` is not used implicitly, and neither is the
+only project in a one-project registry: either could be an unrelated project,
+so a write would land in the wrong place. The refusal names the configured
+default so you can pass `-p <name>` to target it.
+
+Inside a distributed project whose `.aida-store/` worktree is not set up in
+this working copy, commands also stop rather than falling back to a legacy
+store in the directory. Run `aida init` to attach the store.
 
 ---
 

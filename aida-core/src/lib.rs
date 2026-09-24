@@ -309,7 +309,7 @@ pub use node::{
 #[cfg(feature = "native")]
 pub use project::{
     check_migration_status, determine_requirements_path, resolve_requirements_path_in,
-    MigrationCheck,
+    MigrationCheck, NoProjectFound,
 };
 #[cfg(feature = "native")]
 pub use registry::{get_config_dir, get_registry_path, get_templates_dir, Registry};
