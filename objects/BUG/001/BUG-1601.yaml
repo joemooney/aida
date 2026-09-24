@@ -13,10 +13,10 @@ description: |-
   - Logs remain bounded or rate-limited enough that one configuration error does not flood the global scheduler log.
   - Tests cover fresh installation, existing installation upgrade, hook invocation, timer/cron invocation, and output-format compatibility.
   - Document the supported scheduler output contract and migration/repair behavior for previously installed invokers.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:43:08.095866704Z
-modified_at: 2026-09-24T14:43:08.095866704Z
+modified_at: 2026-09-24T17:14:45.475516161Z
 req_type: Bug
