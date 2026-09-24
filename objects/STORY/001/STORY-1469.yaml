@@ -1,0 +1,12 @@
+id: 01a0d132-aa12-7dc0-81fa-a4c5059b4cf8
+spec_id: STORY-1469
+agreed_id: STORY-1469
+title: Add lightweight idea intake with voting and promotion
+description: 'Add a first-class suggestion-box layer for project ideas that are not yet bugs, tasks, stories, or change requests. Ideas should be durable and searchable in the AIDA store without entering the requirement queue until explicitly promoted. Proposed surface: `aida idea add`, `list`, `show`, `vote --up|--down`, `comment`, `promote --type <requirement-type>`, `reject`, and `archive`. Use identity-aware one-active-vote-per-user-or-node semantics; allow changing or removing a vote. Reuse the existing comment/history substrate where practical. Idea lifecycle: open, under-review, accepted, rejected, converted, archived. Promotion creates a normal requirement and preserves a typed provenance relationship from the idea to the new requirement; the promoted requirement becomes authoritative for implementation. Acceptance: ideas do not require acceptance criteria or queue routing, normal requirement views do not treat them as actionable requirements, votes/comments survive clone synchronization, and the CLI clearly separates idea discussion from requirement lifecycle.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T02:15:53.618911294Z
+modified_at: 2026-09-24T02:15:53.618911294Z
+req_type: Story
