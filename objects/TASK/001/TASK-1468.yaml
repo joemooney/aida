@@ -1,0 +1,17 @@
+id: 01a0d154-f138-7303-8041-5a7380459a2a
+spec_id: TASK-1468
+agreed_id: TASK-1468
+title: Route the remaining unchecked id lookups through the ambiguity-refusing resolver
+description: BUG-1535 made edit, show, del, comment, archive, assign, defer, --parent and the MCP update/comment/relationship tools refuse an ambiguous id. About 171 call sites still use the old unchecked lookup, including MCP tool_post_punt (mcp.rs ~3011), tool_triage_finding (~3288), session_start (lib.rs ~33942) and the pull auto-bump by commit trailer. Route every write-path lookup through the checked resolver, where an ambiguous id refuses. Reads may warn. Also, an unreadable YAML currently drops out of the on-disk ambiguity re-check and lets a write through; treat unreadable as ambiguous for writes (PRIN-5).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T02:53:20.056319268Z
+modified_at: 2026-09-24T02:53:20.056319268Z
+req_type: Task
+tags:
+- data-integrity
+- followup
+- ids
+- parent:BUG-1535
