@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:27:17.869346098Z
-modified_at: 2026-09-20T12:41:11.048080749Z
+modified_at: 2026-09-24T06:50:47.900646903Z
 req_type: Story
 tags:
 - ci
@@ -106,4 +106,10 @@ comments:
   created_at: 2026-09-20T12:40:45.538440137Z
   modified_at: 2026-09-20T12:40:45.538440137Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0d22e-58dc-76e2-acec-de7ecf424741
+  author: joe
+  content: 'Implemented on claude/story-1382 (commit 8bc8bbab9c). Rule `prose-classification` in scripts/portability-rules.json (new production scope + context/exempt window in check-portability.sh). Precision: 19 lines at 8 sites on main, all 8 sites reviewed as true positives (mcp.rs classify, rule_violation.rs classify_rule, lib.rs msg.contains("ambiguous") / reason.contains("no open PR") / gh stderr "branch not protected", maintenance_schedule crontab stderr, contradictions.rs finding_category). Baselined; growth check refuses new rows. Not caught (documented in allowlist header + implementer-discipline.md): own-data string tests, test code, char/framing tests, contains_any_case_insensitive and // external-prose-classifier: sites, starts_with/==/regex, and a lowered copy whose error-shaped source is more than 12 lines up. Fixtures: tests/test_prose_classification_rule.py. Criterion 4 GAP: BUG-1316''s pre-fix code had NO prose match; its defect was a missing typed outcome (map_err into a generic PhaseFailure::new). The prose match the record attributes to it is its merged fix, which is BUG-1435''s pre-fix, and that is the fixture. No rule could match 1316''s pre-fix without flagging every map_err. Tagged closure:pending for the advisor to accept this reading or amend criterion 4.'
+  created_at: 2026-09-24T06:50:47.900646903Z
+  modified_at: 2026-09-24T06:50:47.900646903Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
