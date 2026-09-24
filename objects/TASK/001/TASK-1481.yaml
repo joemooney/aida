@@ -1,0 +1,21 @@
+id: 01a0d3ce-dc56-7c40-9fbc-214076b4a536
+spec_id: TASK-1481
+agreed_id: TASK-1481
+title: Add compact recent command timeline to aida usage
+description: |-
+  Add a compact invocation timeline to `aida usage` in addition to the current grouped count/latency summaries. The view should list recent command invocations one per line with only the fields needed to correlate activity and latency, such as relative or local timestamp, elapsed time, command shape, and exit status. It should be easy to scan before and after a slow command; the existing verbose `--events` output remains available for detailed inspection.
+
+  ## Acceptance
+  - A documented usage option provides a compact one-line-per-invocation view, either as a subcommand or a clearly named flag.
+  - Each line includes timestamp, duration, command shape, and failure/exit indication when relevant.
+  - It supports the existing time-window, command, duration, limit, and JSON filtering semantics where applicable.
+  - The default output is compact enough to identify commands immediately preceding a slow invocation.
+  - Grouped usage counts and `--events` detailed output remain unchanged and discoverable.
+  - Tests cover successful and failed commands, long command names, empty windows, and JSON output.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T14:25:44.534269063Z
+modified_at: 2026-09-24T14:25:44.534269063Z
+req_type: Task

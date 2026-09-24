@@ -1,0 +1,21 @@
+id: 01a0d3d3-9ff0-7683-8ec6-7ebacb67f08b
+spec_id: TASK-1482
+agreed_id: TASK-1482
+title: Prevent presentation-only output settings from leaking into spawned agents
+description: |-
+  Ensure `aida agent new` does not unintentionally propagate operator-local presentation preferences into the spawned agent session. Variables such as `AIDA_OUTPUT_FORMAT` and `AIDA_AGENT_OUTPUT` affect rendering/protocol selection and should default to the child session's own TTY or agent-mode context rather than inheriting a parent shell override.
+
+  ## Acceptance
+  - A parent invocation using `AIDA_OUTPUT_FORMAT=human` or `AIDA_AGENT_OUTPUT=0` does not silently force the spawned agent's AIDA output mode.
+  - Command-local presentation flags remain scoped to the current command and do not alter the parent shell or child session.
+  - An explicit, documented opt-in can preserve selected environment variables when inheritance is intentional.
+  - The behavior is defined for direct launches, shell-wrapped launches, and supported client types.
+  - Launch diagnostics or `--show-context` make any intentional output-mode inheritance visible.
+  - Tests cover inherited variables, absent variables, explicit opt-in, and existing agent launch behavior.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T14:30:56.752568118Z
+modified_at: 2026-09-24T14:30:56.752568118Z
+req_type: Task

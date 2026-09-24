@@ -1,0 +1,32 @@
+id: 01a0d3d9-1f66-7781-a80f-b08b783426bc
+spec_id: TASK-1484
+agreed_id: TASK-1484
+title: Add lock duration metadata and safe stale-marker recovery
+description: |-
+  Improve AIDA lock observability and recovery, building on BUG-1595 and repeated stale `.aida/cache.db.lock-info` markers left by interrupted `aida schedule tick --hook` processes.
+
+  Record richer lock metadata where practical: lock kind, resource, PID plus process start identity, acquired time, expected duration or soft deadline, heartbeat/progress time, current phase, command, and session. Expected duration is diagnostic, not an automatic permission to kill a live owner or delete a live lock.
+
+  During normal lock retry handling, check the recorded owner liveness while waiting. If the owner is dead, distinguish orphaned metadata from actual SQLite contention, continue a bounded SQLite probe/retry, and automatically replace or remove stale lock metadata after successful acquisition. Keep `aida doctor heal stale-locks` as an explicit recovery path.
+
+  ## Acceptance
+  - Lock metadata includes enough information to distinguish lock kind/resource, owner identity, age, expected duration or deadline when known, and current phase/progress when available.
+  - Expected-duration overruns produce diagnostic evidence but never cause a live lock to be deleted solely because its estimate expired.
+  - Retry/error handling checks owner liveness and clearly distinguishes live contention, dead-owner metadata, and an available cache.
+  - Successful lock acquisition or orderly release cleans up stale metadata safely, including after a prior owner died.
+  - PID reuse is handled conservatively using process-start identity or an equivalent guard.
+  - Existing lock behavior remains non-destructive and bounded; `aida doctor heal stale-locks` remains available.
+  - Tests cover normal release, dead owner, live owner past deadline, PID reuse, interrupted scheduler tick, and SQLite lock contention.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T14:36:57.062791556Z
+modified_at: 2026-09-24T14:39:27.417573235Z
+req_type: Task
+comments:
+- id: 01a0d3db-6ab9-75b2-835a-39bf61e2703a
+  author: joe
+  content: 'Explicit scope clarification: while a cache operation is retrying after SQLITE_BUSY or SQLITE_LOCKED, inspect the lock-info owner liveness on each bounded retry or at defined retry checkpoints. A dead owner marks the sidecar as orphaned, but SQLite availability must still be probed before proceeding; a live owner past its soft deadline remains contention, not permission to delete the lock.'
+  created_at: 2026-09-24T14:39:27.417573235Z
+  modified_at: 2026-09-24T14:39:27.417573235Z

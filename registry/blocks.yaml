@@ -597,7 +597,7 @@ blocks:
   type_prefix: TASK
   range_start: 1415
   range_end: 1514
-  next: 1480
+  next: 1486
   allocated_at: 2026-09-19T21:01:08.490625158Z
 - node_id: '1'
   owner: redacted@node.invalid
@@ -621,7 +621,7 @@ blocks:
   type_prefix: BUG
   range_start: 1517
   range_end: 1616
-  next: 1600
+  next: 1602
   allocated_at: 2026-09-21T00:30:01.691227335Z
 - node_id: '1'
   owner: redacted@node.invalid

@@ -1,0 +1,22 @@
+id: 01a0d3de-8da0-72b1-86d4-51a6ab830f5d
+spec_id: BUG-1600
+agreed_id: BUG-1600
+title: Scheduler repeatedly invokes unsupported JSON output mode
+description: |-
+  The scheduler is repeatedly invoking `aida schedule tick --format json`, but `schedule tick` has no JSON projection. The global scheduler log contains repeated errors stating that JSON is unsupported, while `~/.aida/usage.jsonl` records recurring `schedule tick` failures with nonzero exit codes. This appears to be a scheduler installer/invoker mismatch and may be contributing to noisy or interrupted scheduler activity around stale cache lock markers.
+
+  ## Acceptance
+  - Identify every supported scheduler invoker (timer, hook, cron, monitor, or generated wrapper) that can add `--format json` to `schedule tick`.
+  - Replace the unsupported format with a supported output mode or implement a deliberate JSON projection if machine-readable scheduler output is required.
+  - Existing scheduler invocations complete without the repeated unsupported-format error.
+  - Scheduler telemetry identifies the invocation mode/source (for example hook versus timer) and records nonzero exit status and duration.
+  - Logs remain bounded or rate-limited enough that one configuration error does not flood the global scheduler log.
+  - Tests cover fresh installation, existing installation upgrade, hook invocation, timer/cron invocation, and output-format compatibility.
+  - Document the supported scheduler output contract and migration/repair behavior for previously installed invokers.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T14:42:52.960095910Z
+modified_at: 2026-09-24T14:42:52.960095910Z
+req_type: Bug

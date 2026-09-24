@@ -1,0 +1,34 @@
+id: 01a0d3f7-0e05-78f1-845b-e1f3df4d9513
+spec_id: TASK-1485
+agreed_id: TASK-1485
+title: Capture correlated failure-learning telemetry and cost
+description: |-
+  Add a durable failure-learning layer across AIDA's CLI, orchestrator, review, PR, and headless-session surfaces. Record meaningful operational failures automatically, correlated to the spec, PR, session, phase, and failure kind, then support a later judgment about avoidability and the lesson to retain.
+
+  Operational records should capture available timing and impact data: wall-clock duration, phase durations, retries/rework, queue or throughput impact, and model/token usage when a client exposes it. The system must distinguish failure observation from avoidability judgment; do not label every failure avoidable automatically. Keep raw prompts, transcripts, and sensitive provider data out of the canonical requirements store by default.
+
+  Provide query/reporting surfaces such as `aida usage failures`, an avoidability filter, and event detail, with links to related BUGs, review findings, PRs, specs, and sessions.
+
+  ## Acceptance
+  - Meaningful CLI, orchestrator, review, PR, and headless-session failures produce correlated local telemetry with timestamp, failure kind, phase, outcome, duration, and related identifiers when available.
+  - Existing `aida usage`, auto-complete, session, and event telemetry remain compatible and can be aggregated without double-counting the same failure.
+  - Reports summarize failure counts, rates, recurring causes, rework/retry burden, wall-clock cost, and token/model cost when available.
+  - Avoidability is represented as a later classification with confidence, rationale/root cause, remediation, reviewer/author, and review state; unknown is valid.
+  - Reports can identify failures that affected throughput or queue time when the required timestamps exist.
+  - Detailed records can link to a Draft BUG, review finding, PR, spec, commit, or session without copying raw prompts or transcripts into canonical YAML.
+  - Privacy controls document what is recorded, support the existing telemetry opt-out, and avoid storing provider secrets or raw model content by default.
+  - Tests cover successful runs, failures, retries, rework, provider-token-unavailable cases, duplicate/correlated events, and avoidability review transitions.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T15:09:38.693878746Z
+modified_at: 2026-09-24T15:09:38.693878746Z
+req_type: Task
+filed_at:
+  code_sha: 64b652e051a639975ced35f04527e83b4bd00d33
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 1c22d30ab1
+  vendor: codex
