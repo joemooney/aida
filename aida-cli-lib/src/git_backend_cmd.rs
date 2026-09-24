@@ -4182,6 +4182,11 @@ pub(crate) fn handle_git_backend_command(
                             // trace:BUG-1594 | ai:claude
                             complete: bool,
                             incomplete: Vec<String>,
+                            // TASK-1475: filing-drift hint (CR-8 acceptance 6
+                            // follow-up), omitted when there's nothing to
+                            // say. trace:TASK-1475 | ai:claude
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            drift_since_filing: Option<String>,
                         }
                         let relationships: Vec<RelJson> = req
                             .relationships
@@ -4217,6 +4222,15 @@ pub(crate) fn handle_git_backend_command(
                                 }
                             }
                             let linkage = crate::collect_git_linkage(&project_root, &ids);
+                            // TASK-1475: compute before `linkage.{files,commits}`
+                            // are moved into the JSON payload below.
+                            // trace:TASK-1475 | ai:claude
+                            let drift_since_filing = crate::filing_drift_hint(
+                                &project_root,
+                                req.filed_at.as_ref(),
+                                &linkage.files,
+                                &linkage.commits,
+                            );
                             // trace:BUG-1594 | ai:claude
                             let mut incomplete = Vec::new();
                             if let Some((scanned, total)) = linkage.branch_scan_truncated {
@@ -4249,6 +4263,7 @@ pub(crate) fn handle_git_backend_command(
                                 worktree: linkage.worktree,
                                 shipped_pr: linkage.shipped_pr,
                                 repo: linkage.repo,
+                                drift_since_filing,
                             })
                         };
                         // BUG-527: carry the human-visible queue membership
@@ -5080,7 +5095,7 @@ pub(crate) fn handle_git_backend_command(
                             .parent()
                             .map(|p| p.to_path_buf())
                             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                        print_git_linkage(&project_root, &ids, *verbose);
+                        print_git_linkage(&project_root, &ids, *verbose, req.filed_at.as_ref());
                     }
                     // TASK-269: `aida show` output runs 50-150 lines, so the
                     // top Status field scrolls off-screen. Reprint it after a

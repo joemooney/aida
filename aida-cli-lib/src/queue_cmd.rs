@@ -9203,6 +9203,16 @@ pub(crate) fn append_untraced_criteria_prompt_block(
     if let Some(block) = crate::criteria_gate::reviewer_prompt_block(&reports) {
         prompt.push_str(&block);
     }
+    // STORY-1386: cite the pre-implementation red run recorded at phase 1.
+    // trace:STORY-1386 | ai:claude
+    let red_root = crate::main_worktree_root_from(project_root);
+    let records: Vec<_> = reports
+        .iter()
+        .filter_map(|(display, _)| crate::criteria_red_run::load_record(&red_root, display))
+        .collect();
+    if let Some(block) = crate::criteria_red_run::reviewer_prompt_block(&records) {
+        prompt.push_str(&block);
+    }
 }
 
 // trace:BUG-1063 | ai:codex
@@ -10865,6 +10875,18 @@ pub(crate) fn handle_queue_work(
                 plan.scope
             )
         })?;
+
+    // STORY-1386: opt-in pre-implementation red run, in this lane's own
+    // freshly created worktree and BEFORE the implementer agent launches.
+    // `lane_is_fresh` skips a lane already carrying commits (retry/rework).
+    // trace:STORY-1386 | ai:claude
+    if role == "implementer" && plan.review_target.is_none() {
+        crate::criteria_red_run::after_lane_created(
+            &project_root,
+            &lease.worktree_path,
+            &plan.anchor_display,
+        );
+    }
 
     // TASK-99: warn (don't auto-pull) when the base the new worktree forked
     // from is behind origin/main. Closes the visibility half of the
