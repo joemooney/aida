@@ -69,10 +69,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:04:54.098400831Z
-modified_at: 2026-09-24T03:35:22.011339741Z
+modified_at: 2026-09-24T03:35:24.796501125Z
 req_type: Bug
 tags:
 - aida:show
+- closure:pending
 - identity
 - severity:major
 - substrate-integrity
