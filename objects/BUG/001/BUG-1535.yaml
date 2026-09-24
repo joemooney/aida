@@ -64,12 +64,12 @@ description: |-
 
   Related: BUG-89 (identity resolution order) is the same family one layer out — an
   identifier whose meaning depends on which resolver you ask.
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:04:54.098400831Z
-modified_at: 2026-09-24T02:05:26.672140859Z
+modified_at: 2026-09-24T02:52:27.225956893Z
 req_type: Bug
 tags:
 - aida:show
