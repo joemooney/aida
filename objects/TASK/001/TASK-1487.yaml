@@ -12,12 +12,12 @@ description: |-
 
   ## Acceptance
   - Each item is fixed, or documented as deliberate, with a test where it changes behaviour.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T16:43:05.320943179Z
-modified_at: 2026-09-24T19:07:47.390228047Z
+modified_at: 2026-09-24T20:13:14.993565173Z
 req_type: Task
 tags:
 - papercut
@@ -35,6 +35,20 @@ comments:
   created_at: 2026-09-24T19:07:47.390228047Z
   modified_at: 2026-09-24T19:07:47.390228047Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d50d-0368-7bc0-8e4a-809d73735ecf
+  author: aida-auto-bump
+  timestamp: 2026-09-24T20:13:14.984133625Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d50d-0371-70e0-bc53-72f2f484ec90
+  timestamp: 2026-09-24T20:13:14.993564279Z
+  agent: aida
+  commit_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
+  summary: Completed via merge 81c37e2c
 filed_at:
   code_sha: 43649a4222d7611933b2943187d80a6154718587
   branch: main
@@ -43,3 +57,7 @@ filed_at:
   aida_build_sha: 43649a4222
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T20:13:14.984129075Z
+  completion_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
