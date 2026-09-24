@@ -52,7 +52,7 @@ The commands you touch on day one and then every day after: `init` once, then `a
 
 ---
 
-### `aida list`
+### `aida list` (alias `aida ls`)
 
 **One line** — the everyday "what's in the graph" view.
 
@@ -69,6 +69,7 @@ The commands you touch on day one and then every day after: `init` once, then `a
 - `--sync` — pull the store from origin before listing. Opt-in because the fast local path is the common case; reach for it when collaborating or when another machine/session may have written.
 - `--parent <ID>` — "what's still open under this EPIC" — composes with the other filters, the everyday rollup query.
 - `--no-scope` — bypass your role's scope filter. Needed when a subsystem-scoped role is hiding specs you actually want to see.
+- `--sort <ORDER>` — `modified` (default, freshest-first), `heft` (most graph-connected first), `weight` (heaviest user-set numeric weight first), `created` (newest-created first), or `completed` (most-recently-completed first — specs that were never `Completed` sort deterministically last).
 
 **Gotchas.** Archived ≠ a status — it's a *view flag* orthogonal to status, so a freshly-Completed spec is still visible (not archived) until someone archives it. If a queued spec is mysteriously absent from `list`, check whether it got archived (it'll still show in `queue list`, which ignores the archive flag — that split surprises people). Also note the default view says **nothing** about how many archived or deferred specs it is hiding — you asked for open work, so you get open work. The tiers are always one flag away (`--archived`, `--deferred`, `--all`, each of which prints its own count); if you want the running hidden-count footer back on every listing, set `[list] show_hidden_hints = true` in `.aida/config.toml`.
 
