@@ -281,7 +281,7 @@ pub const CLOSURE_PENDING_TAG: &str = "closure:pending";
 /// - the tag [`CLOSURE_PENDING_TAG`] (a whole-spec "not ready" flag), and
 /// - unchecked `- [ ]` items under a `## Closure` heading (or a bare
 ///   `Closure:` line) in the description; `- [x]` items are met. The section
-///   ends at the next markdown heading or the next unindented `Label:` line.
+///   ends only at the next markdown heading; fenced code blocks are ignored.
 ///
 /// Empty = nothing declared unmet, and the auto-bump behaves exactly as before.
 /// Each entry is the human text of one unmet criterion.
@@ -296,15 +296,26 @@ pub fn unmet_declared_closure_criteria(req: &Requirement) -> Vec<String> {
         unmet.push(format!("tag `{CLOSURE_PENDING_TAG}` is set"));
     }
     let mut in_closure = false;
+    let mut in_fence = false;
     for line in req.description.lines() {
         let trimmed = line.trim();
-        let hashes = trimmed.trim_start_matches('#');
-        if hashes.len() < trimmed.len() && hashes.starts_with(' ') {
-            in_closure = is_closure_heading(hashes);
+        // Fenced code is quoted text, never a declaration: `## Closure` or
+        // `- [ ]` inside a fence is ignored.
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        // Only a markdown heading ends (or opens) a section; a `Label:` line
+        // inside the Closure section is part of it.
+        if trimmed.starts_with('#') {
+            in_closure = is_closure_heading(trimmed.trim_start_matches('#'));
             continue;
         }
         let unindented = !line.starts_with(char::is_whitespace);
-        if unindented && trimmed.ends_with(':') && !is_list_item(trimmed) {
+        if !in_closure && unindented && trimmed.ends_with(':') && !is_list_item(trimmed) {
             in_closure = is_closure_heading(trimmed.trim_end_matches(':'));
             continue;
         }
@@ -720,5 +731,37 @@ mod tests {
         assert!(unmet_declared_closure_criteria(&r).is_empty());
         r.description = "Closure criteria:\n- [ ] BUG-1288 headline under 26s".to_string();
         assert_eq!(unmet_declared_closure_criteria(&r).len(), 1);
+    }
+
+    // trace:STORY-1430 | ai:claude
+    #[test]
+    fn closure_markers_inside_code_fences_are_ignored() {
+        let mut r = make_req("BUG-1", RequirementStatus::Done);
+        for body in [
+            "```\n## Closure\n- [ ] quoted example\n```",
+            "~~~md\n# Closure\n- [ ] quoted example\n~~~",
+        ] {
+            r.description = body.to_string();
+            assert!(unmet_declared_closure_criteria(&r).is_empty(), "{body}");
+        }
+        // `- [ ]` fenced inside a real Closure section is ignored too.
+        r.description = "## Closure\n```\n- [ ] quoted\n```\n- [ ] real".to_string();
+        assert_eq!(
+            unmet_declared_closure_criteria(&r),
+            vec!["real".to_string()]
+        );
+    }
+
+    // trace:STORY-1430 | ai:claude
+    #[test]
+    fn label_line_inside_closure_section_does_not_end_it() {
+        let mut r = make_req("BUG-1", RequirementStatus::Done);
+        r.description = "## Closure\n- [x] done\nRemaining items:\n- [ ] still open\n\
+                         ## Next\n- [ ] outside"
+            .to_string();
+        assert_eq!(
+            unmet_declared_closure_criteria(&r),
+            vec!["still open".to_string()]
+        );
     }
 }
