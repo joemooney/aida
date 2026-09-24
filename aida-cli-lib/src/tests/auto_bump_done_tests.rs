@@ -3722,3 +3722,80 @@ fn reconcile_status_holds_spec_with_unmet_declared_criterion() {
         RequirementStatus::Done
     );
 }
+
+// ── STORY-1385: stretch closure criteria ────────────────────────────────
+
+/// STORY-1385: an unchecked STRETCH criterion does not hold completion — the
+/// merge completes the spec — and the shortfall is recorded as debt on the
+/// spec automatically. A required unchecked item alongside it still holds.
+// trace:STORY-1385 | ai:claude
+#[test]
+fn auto_bump_completes_with_unmet_stretch_and_records_debt() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "STORY-9385", "Done");
+    mutate_spec(&store_path, "STORY-9385", |r| {
+        r.description = "Work.\n\n## Closure\n- [x] required, met\n\
+                         - [ ] p95 under 1s (stretch)\n### Stretch\n- [ ] zero-copy path\n"
+            .to_string();
+    });
+    let (flips, merge_sha) = land_and_bump(&project_root, &store_path, "STORY-9385");
+    assert!(
+        has_flip(&flips, "STORY-9385"),
+        "unmet stretch must not hold; flips: {flips:?}"
+    );
+    let store = Storage::new(&store_path).load().unwrap();
+    let req = store.get_requirement_by_spec_id("STORY-9385").unwrap();
+    assert_eq!(req.status, RequirementStatus::Completed);
+    let debt: Vec<_> = req
+        .comments
+        .iter()
+        .filter(|c| c.content.contains(STRETCH_DEBT_MARKER))
+        .collect();
+    assert_eq!(debt.len(), 1, "exactly one debt note");
+    let note = &debt[0].content;
+    assert!(
+        note.contains("p95 under 1s") && note.contains("zero-copy path"),
+        "{note}"
+    );
+    assert!(!note.contains("(stretch)"), "{note}");
+    assert!(note.contains(&merge_sha), "{note}");
+    // Idempotent: the same completing commit does not stack a second note.
+    assert!(stretch_debt_comment(req, &merge_sha).is_none());
+    assert!(!note.contains("required, met"), "{note}");
+}
+
+/// STORY-1385: a required unchecked item still holds exactly as before, even
+/// when stretch items sit beside it; and a spec whose stretch items are all
+/// met completes with no debt note.
+// trace:STORY-1385 | ai:claude
+#[test]
+fn auto_bump_required_still_holds_and_met_stretch_writes_no_debt() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "STORY-9386", "Done");
+    mutate_spec(&store_path, "STORY-9386", |r| {
+        r.description = "## Closure\n- [ ] required, open\n- [ ] reach (stretch)\n".to_string();
+    });
+    let (flips, _) = land_and_bump(&project_root, &store_path, "STORY-9386");
+    assert!(!has_flip(&flips, "STORY-9386"));
+    let store = Storage::new(&store_path).load().unwrap();
+    let req = store.get_requirement_by_spec_id("STORY-9386").unwrap();
+    assert_eq!(req.status, RequirementStatus::Done);
+    let (_, line) = closure_hold_line(req, &store).expect("held");
+    assert!(
+        line.contains("required, open") && !line.contains("reach"),
+        "{line}"
+    );
+
+    seed_spec_at(&store_path, "STORY-9387", "Done");
+    mutate_spec(&store_path, "STORY-9387", |r| {
+        r.description = "## Closure\n- [x] required\n- [x] reach (stretch)\n".to_string();
+    });
+    let (flips, _) = land_and_bump(&project_root, &store_path, "STORY-9387");
+    assert!(has_flip(&flips, "STORY-9387"));
+    let store = Storage::new(&store_path).load().unwrap();
+    let req = store.get_requirement_by_spec_id("STORY-9387").unwrap();
+    assert!(!req
+        .comments
+        .iter()
+        .any(|c| c.content.contains(STRETCH_DEBT_MARKER)));
+}

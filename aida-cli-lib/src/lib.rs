@@ -67133,7 +67133,55 @@ fn apply_auto_bump_flip(
     // completing SHA (re-runs of the bump don't stack duplicates).
     let record = build_processing_record(project_root, &flip.spec_id, &flip.sha);
     r.add_processing_record(record);
+    // STORY-1385: stretch criteria never hold completion, but any still
+    // unchecked when the spec completes are recorded as debt, automatically.
+    // trace:STORY-1385 | ai:claude
+    if let Some(note) = stretch_debt_comment(r, &flip.sha) {
+        r.add_comment(aida_core::Comment::new("aida-auto-bump".to_string(), note));
+    }
     true
+}
+
+/// STORY-1385: marker on the debt note written when a spec completes with
+/// unchecked STRETCH closure criteria. Greppable so the debt population (and
+/// the stretch-met rate) is countable from spec comments.
+const STRETCH_DEBT_MARKER: &str = "[aida:stretch-debt]";
+
+/// STORY-1385: the debt note for `r`'s unmet stretch criteria at completion,
+/// or `None` when every stretch criterion was met (or none were declared) or
+/// the note for this completing commit already exists. Records which
+/// criterion, what was wanted, what shipped instead, and what closes it.
+// trace:STORY-1385 | ai:claude
+fn stretch_debt_comment(r: &aida_core::Requirement, sha: &str) -> Option<String> {
+    let unmet = aida_core::pickability::unmet_stretch_closure_criteria(r);
+    if unmet.is_empty() {
+        return None;
+    }
+    let already = r.comments.iter().any(|c| {
+        c.content.contains(STRETCH_DEBT_MARKER) && (sha.is_empty() || c.content.contains(sha))
+    });
+    if already {
+        return None;
+    }
+    let shipped = if sha.is_empty() {
+        "the merged change".to_string()
+    } else {
+        format!("commit {sha}")
+    };
+    let items = unmet
+        .iter()
+        .enumerate()
+        .map(|(i, c)| format!("\n  {}. wanted: \"{c}\"", i + 1))
+        .collect::<String>();
+    Some(format!(
+        "{STRETCH_DEBT_MARKER} Completed with {} unmet stretch closure criteri{} (marked \
+         stretch ahead of time, so they did not hold completion):{items}\n\
+         Shipped instead: {shipped}, which met every required criterion but not these. \
+         To close the gap: implement the criterion in a follow-up, then check its box in \
+         the spec's Closure section.",
+        unmet.len(),
+        if unmet.len() == 1 { "on" } else { "a" },
+    ))
 }
 
 /// BUG-1551: marker on the audit comment a closure hold writes. Also the
