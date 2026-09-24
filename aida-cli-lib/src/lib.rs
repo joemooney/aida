@@ -97856,9 +97856,14 @@ impl RealPhaseDriver {
         self.aida_exe.clone()
     }
 
-    /// TASK-1421: every forge the driver talks to is built here, so an
-    /// injected [`crate::forge::ForgeFactory`] reaches all of them. Without
-    /// one this is exactly `forge_for_kind`.
+    /// TASK-1421: the injection seam. An injected
+    /// [`crate::forge::ForgeFactory`] reaches the forges built through
+    /// `lifecycle_forge()` and `project_forge()`: merge, the phase-1 PR
+    /// lookups in `detect_phase1_pr`, and the refused-preflight retraction.
+    /// Paths that still call `forge_for_kind` directly (`detect_merged_pr`,
+    /// `ci_probe_with_forge`, the PR-opening free functions) bypass it and
+    /// are out of scope for TASK-1421. With no factory this is exactly
+    /// `forge_for_kind`.
     // trace:TASK-1421 | ai:claude
     fn forge_of_kind(&self, kind: crate::forge::ForgeKind) -> Box<dyn crate::forge::Forge> {
         match &self.forge_factory {
