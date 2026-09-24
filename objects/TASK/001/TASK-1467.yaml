@@ -8,5 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:35:15.736670503Z
-modified_at: 2026-09-24T08:12:07.494729025Z
+modified_at: 2026-09-24T08:12:08.798928434Z
 req_type: Task
+comments:
+- id: 01a0d278-d2de-7183-a7d1-7f23614dc45a
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Preview-only launch contract. Do before STORY-1471.'
+  created_at: 2026-09-24T08:12:08.798928434Z
+  modified_at: 2026-09-24T08:12:08.798928434Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
