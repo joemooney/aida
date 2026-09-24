@@ -431,7 +431,7 @@ pub(crate) fn maybe_print_upstream_recheck_notice(storage: &Storage) {
     // BUG-1594: one cheap `rev-parse` of the store worktree's HEAD. The full
     // store load below runs only when the binary version OR the store HEAD
     // changed since the last check.
-    let head = store_head_sha(storage.path());
+    let head = store_head_sha(storage.path()).or_else(|| store_objects_fingerprint(storage.path()));
     if upstream_notice_is_current(&marker, current, head.as_deref()) {
         return;
     }
@@ -499,10 +499,55 @@ fn upstream_notice_is_current(marker: &Path, version: &str, head: Option<&str>) 
     lines.next() == Some(version) && lines.next() == Some(head)
 }
 
+/// A store that is not a git worktree (a plain `--file <dir>` store) has no
+/// HEAD to key on. Fingerprint its object files instead — count plus newest
+/// mtime, from file metadata only (no YAML parsing) — so a changed store
+/// still re-arms the check without paying the full load on every command.
+// trace:BUG-1594 | ai:claude
+fn store_objects_fingerprint(store_path: &Path) -> Option<String> {
+    fn walk(dir: &Path, count: &mut u64, newest: &mut u128) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
+            if meta.is_dir() {
+                walk(&entry.path(), count, newest);
+            } else {
+                *count += 1;
+                if let Some(ns) = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_nanos())
+                {
+                    *newest = (*newest).max(ns);
+                }
+            }
+        }
+    }
+    let objects = store_path.join("objects");
+    if !objects.is_dir() {
+        return None;
+    }
+    let (mut count, mut newest) = (0u64, 0u128);
+    walk(&objects, &mut count, &mut newest);
+    Some(format!("files:{count}:{newest}"))
+}
+
+/// Record the check. Never CREATES the marker's `.aida/` directory: that
+/// directory's presence is how the cache path is resolved
+/// (`CachedGitBackend::default_cache_path` walks up looking for `.aida/`), so
+/// conjuring it here would move the cache between the first command and the
+/// next, stranding every row written before it (a first `aida add` to a fresh
+/// `--file` store then vanished from `aida list`). Without the directory the
+/// check simply runs again next time.
 // trace:BUG-1594 | ai:claude
 fn record_upstream_notice_checked(marker: &Path, version: &str, head: Option<&str>) {
-    if let Some(parent) = marker.parent() {
-        let _ = std::fs::create_dir_all(parent);
+    if !marker.parent().is_some_and(Path::is_dir) {
+        return;
     }
     let _ = std::fs::write(marker, upstream_notice_marker_contents(version, head));
 }
@@ -669,6 +714,11 @@ mod tests {
             .path()
             .join(".aida")
             .join("upstream-report-notice-version");
+        // No `.aida/` yet: recording must not create it (it steers the cache
+        // path), so nothing is written and the check stays armed.
+        record_upstream_notice_checked(&marker, "1.0.0", Some("abc"));
+        assert!(!tmp.path().join(".aida").exists());
+        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
 
         let head1 = store_head_sha(&store).expect("store head");
         assert!(!upstream_notice_is_current(&marker, "1.0.0", Some(&head1)));
@@ -689,5 +739,21 @@ mod tests {
         record_upstream_notice_checked(&marker, "1.0.0", None);
         assert!(!upstream_notice_is_current(&marker, "1.0.0", None));
         assert!(!upstream_notice_is_current(&marker, "1.0.0", Some(&head2)));
+    }
+
+    // BUG-1594: a non-git store still gets a cheap, change-sensitive key.
+    // trace:BUG-1594 | ai:claude
+    #[test]
+    fn bug_1594_non_git_store_fingerprint_moves_when_objects_change() {
+        let tmp = TempDir::new().unwrap();
+        let store = tmp.path().join("store");
+        assert_eq!(store_objects_fingerprint(&store), None);
+        let dir = store.join("objects").join("FR").join("000");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("FR-1.yaml"), "a").unwrap();
+        let one = store_objects_fingerprint(&store).unwrap();
+        assert_eq!(one, store_objects_fingerprint(&store).unwrap());
+        std::fs::write(dir.join("FR-2.yaml"), "b").unwrap();
+        assert_ne!(one, store_objects_fingerprint(&store).unwrap());
     }
 }

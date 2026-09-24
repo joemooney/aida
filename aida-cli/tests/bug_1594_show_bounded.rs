@@ -205,3 +205,72 @@ fn bug_1594_upstream_notice_check_is_recorded_once_per_version() {
     );
     assert!(elapsed < Duration::from_secs(30), "took {elapsed:?}");
 }
+
+// BUG-1594 fix-up: the notice marker used to create `.aida/` beside a fresh
+// `--file <dir>` store. That directory steers the cache path, so the FIRST
+// `aida add` wrote its cache row to one cache and every later command read
+// another — the first requirement was missing from `aida list`
+// (tests/test_distributed.sh: "Expected at least 3 requirements, got 2").
+// trace:BUG-1594 | ai:claude
+#[test]
+fn bug_1594_first_add_to_fresh_file_store_is_visible_to_list() {
+    let tmp = tempfile::tempdir().unwrap();
+    // Nest the store deeper than the cache-path walk-up (6 levels) so a
+    // stray `.aida/` in an ancestor of the temp dir (e.g. on a dev box)
+    // cannot capture the cache — this mirrors CI, where none exists.
+    let root_buf = tmp.path().join("a/b/c/d/e/f/g");
+    let root = root_buf.as_path();
+    let store = root.join("store");
+    let home = root.join("home");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+    let run = |args: &[&str]| -> Output {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
+        cmd.current_dir(root)
+            .env("HOME", &home)
+            .env("AIDA_TELEMETRY", "0");
+        for name in [
+            "AIDA_STORE",
+            "AIDA_PROJECT_ROOT",
+            "AIDA_OUTPUT_FORMAT",
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+        ] {
+            cmd.env_remove(name);
+        }
+        cmd.arg("--file")
+            .arg(&store)
+            .args(args)
+            .stdin(Stdio::null())
+            .output()
+            .expect("run aida")
+    };
+    for title in ["First", "Second"] {
+        let out = run(&[
+            "add",
+            "--title",
+            title,
+            "--type",
+            "functional",
+            "--status",
+            "draft",
+        ]);
+        assert!(
+            out.status.success(),
+            "add {title}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    let list = run(&["list"]);
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    assert!(
+        list.status.success(),
+        "{}",
+        String::from_utf8_lossy(&list.stderr)
+    );
+    assert!(
+        stdout.contains("First"),
+        "first add missing from list: {stdout}"
+    );
+    assert!(stdout.contains("Second"), "{stdout}");
+}
