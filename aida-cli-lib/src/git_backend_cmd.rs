@@ -4953,6 +4953,27 @@ pub(crate) fn handle_git_backend_command(
                     if !req.description.is_empty() {
                         println!("\n{}", req.description);
                     }
+                    // STORY-1434: corrections and carve-outs recorded as
+                    // comments must be visible in the DEFAULT view (no
+                    // `-c`/`--comments`), right after the description — the
+                    // bug this closes is exactly a correction that only
+                    // `-c`, or a scroll hundreds of lines into the YAML,
+                    // would have shown. Runs unconditionally (not gated on
+                    // `*comments`) and duplicates into the full `-c` comment
+                    // list below without harm. trace:STORY-1434 | ai:claude
+                    {
+                        let mut visible_comments: Vec<&aida_core::Comment> = Vec::new();
+                        crate::collect_default_visible_comments(
+                            &req.comments,
+                            &mut visible_comments,
+                        );
+                        if !visible_comments.is_empty() {
+                            println!("\n{}:", "Corrections / carve-outs".yellow().bold());
+                            for c in &visible_comments {
+                                print_comment(c, 0);
+                            }
+                        }
+                    }
                     // TASK-1148: the three optional narrative fields — the
                     // genuinely-new metadata not derivable from git/status/trace.
                     // Each renders its own labelled block only when set; absent
@@ -5115,6 +5136,10 @@ pub(crate) fn handle_git_backend_command(
             remove_blocked_by,
             // trace:TASK-1176 | ai:claude
             superseded_by,
+            // trace:STORY-1434 | ai:claude
+            carve_out,
+            carve_into,
+            carve_reason,
             add_ref,
             remove_ref,
             strict,
@@ -5314,6 +5339,8 @@ pub(crate) fn handle_git_backend_command(
                 && remove_blocked_by.is_empty()
                 // trace:TASK-1176 | ai:claude
                 && superseded_by.is_none()
+                // trace:STORY-1434 | ai:claude
+                && carve_out.is_none()
                 && add_ref.is_empty()
                 && remove_ref.is_empty()
                 && !*human_only
@@ -5366,6 +5393,12 @@ pub(crate) fn handle_git_backend_command(
 
             let mut changed = false;
             let mut force_dropped_structural_tags: Vec<String> = Vec::new();
+            // STORY-1434: (target uuid, target display id) once the
+            // carve-out target has been resolved+validated and the edge +
+            // comment folded into `req` below — carried past the single
+            // save so the inverse edge can be written on the target
+            // afterwards. trace:STORY-1434 | ai:claude
+            let mut carve_target: Option<(uuid::Uuid, String)> = None;
             // TASK-1450: before/after pairs for the seat-tagged coordination
             // events emitted once the edit is durably written — captured here
             // (not reconstructed after the fact) so the recorded values are
@@ -5380,6 +5413,62 @@ pub(crate) fn handle_git_backend_command(
             if let Some(d) = description {
                 req.description = d.clone();
                 changed = true;
+            }
+            // STORY-1434: carve a named criterion out of the description in
+            // the SAME edit that records where it now lives, so the stale
+            // text and its correction can never drift apart the way a
+            // hand-edit + a separate, easy-to-miss comment did. Applied to
+            // whatever description is current at this point, so `--carve-out`
+            // composes with a plain `--description` pass in one invocation.
+            // Refuses (instead of silently no-op'ing) when the text isn't
+            // found verbatim — a criterion carved from the wrong wording is
+            // worse than an explicit error.
+            //
+            // Atomicity: the target is resolved and validated FIRST — via
+            // `get_requirement_unambiguous` (BUG-1535), so a `--carve-into`
+            // id that names two specs refuses instead of guessing — and the
+            // edge + the CARVE-OUT comment are folded into THIS `req` before
+            // the single save below, alongside the struck description. One
+            // write, not a description change plus a separate follow-up
+            // write that could land only half-applied. trace:STORY-1434
+            if let Some(criterion) = carve_out {
+                let target_id_arg = carve_into
+                    .as_deref()
+                    .expect("clap requires --carve-into with --carve-out");
+                let target = backend
+                    .get_requirement_unambiguous(target_id_arg)?
+                    .ok_or_else(|| {
+                        not_found::requirement_not_found(target_id_arg, Some(store_path))
+                    })?;
+                if target.id == req.id {
+                    anyhow::bail!("a spec cannot carve a criterion into itself ({})", id);
+                }
+                let target_display = target
+                    .spec_id
+                    .clone()
+                    .unwrap_or_else(|| target_id_arg.to_string());
+                let source_display = req.spec_id.as_deref().unwrap_or(id).to_string();
+                match carve_out_description(&req.description, criterion, &target_display) {
+                    Some(new_description) => {
+                        req.description = new_description;
+                        apply_carve_out(
+                            &mut req,
+                            target.id,
+                            &source_display,
+                            &target_display,
+                            criterion,
+                            carve_reason.as_deref(),
+                        );
+                        changed = true;
+                        carve_target = Some((target.id, target_display));
+                    }
+                    None => anyhow::bail!(
+                        "--carve-out text not found verbatim in {}'s description — copy the \
+                         exact wording (including case and punctuation) from `aida show {}`.",
+                        source_display,
+                        source_display
+                    ),
+                }
             }
             // TASK-1148: the three optional narrative fields. An empty string
             // clears the field (stores None so it drops out of the YAML); any
@@ -6011,6 +6100,8 @@ pub(crate) fn handle_git_backend_command(
                 && remove_blocked_by.is_empty()
                 // trace:TASK-1176 | ai:claude
                 && superseded_by.is_none()
+                // trace:STORY-1434 | ai:claude
+                && carve_out.is_none()
             {
                 println!("No changes specified. Use --title, --status, --priority, etc.");
             }
@@ -6050,6 +6141,29 @@ pub(crate) fn handle_git_backend_command(
                     )
                     .dimmed()
                 );
+            }
+
+            // STORY-1434: the carved-out-to edge + CARVE-OUT comment already
+            // landed on `req` and were saved atomically above (with the
+            // struck description); only the INVERSE carved-from edge on the
+            // TARGET remains, written after the source's save the same way
+            // the blocked-by/supersede edges below are. `target` is
+            // re-fetched by UUID — never re-resolved from the user-typed
+            // `--carve-into` id — so this cannot rediscover an ambiguity;
+            // a failure here (backend error, target vanished) is a real
+            // error, not a warning: a one-sided carve-out (source struck, no
+            // reciprocal edge) is exactly the half-applied state this spec
+            // exists to prevent. trace:STORY-1434 | ai:claude
+            if let Some((target_id, target_display)) = carve_target {
+                let source_display = req.spec_id.as_deref().unwrap_or(id).to_string();
+                crate::add_carved_from_edge(
+                    &backend,
+                    target_id,
+                    &target_display,
+                    req.id,
+                    &source_display,
+                )?;
+                println!("  Carved out → {}", target_display.cyan());
             }
 
             // STORY-446: apply blocked-by edge add/remove AFTER any scalar edit
