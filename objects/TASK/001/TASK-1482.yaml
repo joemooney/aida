@@ -12,12 +12,12 @@ description: |-
   - The behavior is defined for direct launches, shell-wrapped launches, and supported client types.
   - Launch diagnostics or `--show-context` make any intentional output-mode inheritance visible.
   - Tests cover inherited variables, absent variables, explicit opt-in, and existing agent launch behavior.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:30:56.752568118Z
-modified_at: 2026-09-24T18:17:58.802077193Z
+modified_at: 2026-09-24T19:40:19.980886425Z
 req_type: Task
 comments:
 - id: 01a0d469-f39d-7090-b79b-10161e73e08e
@@ -32,3 +32,21 @@ comments:
   created_at: 2026-09-24T18:17:58.802077193Z
   modified_at: 2026-09-24T18:17:58.802077193Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d4ee-e076-7e21-bde2-d7851fb31ba7
+  author: aida-auto-bump
+  timestamp: 2026-09-24T19:40:19.958244156Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d4ee-e08c-75d1-ad46-0fc7e984e843
+  timestamp: 2026-09-24T19:40:19.980884967Z
+  agent: aida
+  commit_sha: 3f9cbfa2567b2f918de853a9452b3a33c4e913ed
+  summary: Completed via merge 3f9cbfa2
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T19:40:19.958233364Z
+  completion_sha: 3f9cbfa2567b2f918de853a9452b3a33c4e913ed
