@@ -33,11 +33,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:08:04.119482952Z
-modified_at: 2026-09-23T08:10:25.189228496Z
+modified_at: 2026-09-24T16:31:16.931070025Z
 req_type: Task
 relationships:
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0bb84-f45e-7502-a8d3-5fc93152a275
   created_at: 2026-09-21T18:08:23.658003044Z
   created_by: joe
