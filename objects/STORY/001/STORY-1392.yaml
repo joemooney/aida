@@ -79,7 +79,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T15:34:30.040702070Z
-modified_at: 2026-09-20T15:34:32.180530575Z
+modified_at: 2026-09-24T08:14:29.730506296Z
 req_type: Story
 tags:
 - contract
@@ -91,3 +91,6 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-09-20T15:34:32.180530575Z
+deferred: true
+deferred_at: 2026-09-24T08:14:29.730506296Z
+deferred_until: aida-monitor visualisation scheduled under EPIC-26
