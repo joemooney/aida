@@ -25,12 +25,12 @@ description: |-
   - A launch failure cleans up or clearly preserves the prepared lease with a copy-paste Codex recovery command.
 
   Regression context: BUG-705 fixed the analogous phase-1 implementer hardcoded-Claude path; TASK-1279 claimed reviewer seat parity.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:57:13.808572289Z
-modified_at: 2026-09-24T23:25:19.773477788Z
+modified_at: 2026-09-24T23:54:25.130083254Z
 req_type: Bug
 tags:
 - codex
