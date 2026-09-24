@@ -1875,13 +1875,17 @@ impl AwaitingReport {
             if budget == 0 {
                 overflow += 1;
             } else {
+                // TASK-1311: name the one-keystroke requeue next to the
+                // shelved count, with the status it lands in.
+                // trace:TASK-1311 | ai:claude
                 writeln!(
                     w,
-                    "  {} {} shelved item{} in rework — `{}`",
+                    "  {} {} shelved item{} in rework — `{}` · requeue each with `{}` (to Approved)",
                     crate::glyph(crate::glyphs::Glyph::Pause).blue(),
                     self.shelved_total,
                     if self.shelved_total == 1 { "" } else { "s" },
                     "aida findings list".cyan(),
+                    crate::requeue::requeue_command("<ID>").cyan(),
                 )?;
                 budget -= 1;
             }
@@ -1891,7 +1895,14 @@ impl AwaitingReport {
                 overflow += 1;
                 continue;
             }
-            writeln!(w, "  🗣️ escalation: {} — {}", e.spec_id.bold(), e.title,)?;
+            // trace:TASK-1311 | ai:claude
+            writeln!(
+                w,
+                "  🗣️ escalation: {} — {} · once decided: `{}` (to Approved)",
+                e.spec_id.bold(),
+                e.title,
+                crate::requeue::requeue_command(&e.spec_id).cyan(),
+            )?;
             budget -= 1;
         }
         // trace:BUG-1564 | ai:claude
@@ -2062,6 +2073,8 @@ impl AwaitingReport {
             "escalations": self.escalations.iter().map(|e| serde_json::json!({
                 "spec_id": e.spec_id,
                 "title": e.title,
+                // trace:TASK-1311 | ai:claude
+                "requeue": crate::requeue::requeue_command(&e.spec_id),
             })).collect::<Vec<_>>(),
             // trace:TASK-1445 | ai:claude
             "pr_attribution_disagreements": self.pr_attribution_disagreements.iter().map(|d| serde_json::json!({
@@ -3879,6 +3892,30 @@ mod tests {
         assert_eq!(v["mergeable_prs"][0]["number"], 7);
         assert_eq!(v["findings_total"], 4);
         assert_eq!(v["escalations"][0]["spec_id"], "SPIKE-12");
+        // trace:TASK-1311 | ai:claude
+        assert_eq!(v["escalations"][0]["requeue"], "aida queue rework SPIKE-12");
+    }
+
+    /// TASK-1311: the escalation row names the one-keystroke requeue and the
+    /// status it lands in, so returning a triaged spec to flight is not left
+    /// to the operator remembering which flag to pass.
+    // trace:TASK-1311 | ai:claude
+    #[test]
+    fn escalation_row_offers_the_requeue_inline() {
+        let r = AwaitingReport {
+            escalations: vec![EscalationItem {
+                spec_id: "BUG-77".into(),
+                title: "punted".into(),
+            }],
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        r.render(true, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(
+            s.contains("aida queue rework BUG-77") && s.contains("(to Approved)"),
+            "{s}"
+        );
     }
 
     // STORY-741: unread mail is now a first-class channel in the report — the

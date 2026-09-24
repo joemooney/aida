@@ -4207,14 +4207,34 @@ impl<'a> McpServer<'a> {
             if new_status != &current_status {
                 let new_status = new_status.clone();
                 let now = chrono::Utc::now();
+                // TASK-1311: mirror the CLI rework — leaving NeedsAttention
+                // clears the shelve markers so the drain picks the spec up.
+                // trace:TASK-1311 | ai:claude
+                let leaving_attention = current_status == RequirementStatus::NeedsAttention
+                    && new_status != RequirementStatus::NeedsAttention;
                 self.storage
                     .update_atomically(|s| {
                         if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
                             r.set_status_from_str(&format!("{:?}", new_status));
                             r.modified_at = now;
+                            if leaving_attention {
+                                let cleared = crate::requeue::clear_shelve_markers(r);
+                                let note = cleared.audit_note(
+                                    "the `queue_rework` MCP tool",
+                                    &new_status.to_string(),
+                                    reason,
+                                );
+                                r.add_comment(aida_core::Comment::new(
+                                    crate::get_default_author(),
+                                    note,
+                                ));
+                            }
                         }
                     })
                     .map_err(|e| e.to_string())?;
+                if leaving_attention {
+                    crate::queue_cmd::clear_failure_reason_targeted(&self.storage, &spec_id);
+                }
                 crate::record_role_activity(&spec_id, "rework");
                 crate::update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
                 summary.push_str(&format!(

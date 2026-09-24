@@ -217,6 +217,9 @@ mod ship;
 // trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
 mod punt;
 mod queue_recover;
+// NeedsAttention -> back-in-flight: shelve-marker clearing + requeue hint.
+// trace:TASK-1311 | ai:claude
+mod requeue;
 // Read-side fallback so a `--for <role>` routing written into one user's queue
 // file is visible to whoever actually wears that role. trace:BUG-774 | ai:claude
 mod queue_role_fallback;
@@ -6043,6 +6046,8 @@ fn handle_findings_command(
                             "title": r.title,
                             "category": r.attention_reason.as_ref().map(|a| a.category.to_string()),
                             "detail": r.attention_reason.as_ref().map(|a| a.detail.clone()),
+                            // trace:TASK-1311 | ai:claude
+                            "requeue": requeue::requeue_command(&r.display_id()),
                         })
                     })
                     .collect();
@@ -6054,6 +6059,8 @@ fn handle_findings_command(
                             "title": r.title,
                             "phase": r.failure_reason.as_ref().map(|f| f.phase.clone()),
                             "kind": r.failure_reason.as_ref().map(|f| f.kind.clone()),
+                            // trace:TASK-1311 | ai:claude
+                            "requeue": requeue::requeue_command(&r.display_id()),
                         })
                     })
                     .collect();
@@ -6141,6 +6148,7 @@ fn handle_findings_command(
                         // status set by hand rather than via `aida punt`.
                         None => println!("  {:<20} {:<14} {}", "(no reason)", did, r.title),
                     }
+                    print_requeue_hint_row(r, did);
                 }
             }
             // EPIC-28: failures the orchestrator shelved — phase failures the
@@ -6180,6 +6188,7 @@ fn handle_findings_command(
                         }
                         None => println!("  {:<20} {:<14} {}", "(no reason)", did, r.title),
                     }
+                    print_requeue_hint_row(r, did);
                 }
             }
 
@@ -6195,9 +6204,9 @@ fn handle_findings_command(
             if !punts.is_empty() {
                 println!(
                     "{}",
-                    "Punts: `aida show <ID>` for the fork · resume with \
-                     `aida edit <ID> --status in-progress` · drop with \
-                     `--status rejected`"
+                    "Punts: `aida show <ID>` for the fork · decide it, then requeue with \
+                     `aida queue rework <ID>` (to Approved, back on the queue) · drop with \
+                     `aida edit <ID> --status rejected`"
                         .dimmed()
                 );
             }
@@ -6206,8 +6215,8 @@ fn handle_findings_command(
                 println!(
                     "{}",
                     "Failures: read the recovery hint · fix the underlying issue · \
-                     re-queue with `aida edit <ID> --status approved` · drop with \
-                     `--status rejected`"
+                     requeue with `aida queue rework <ID>` (to Approved, back on the queue) · \
+                     drop with `aida edit <ID> --status rejected`"
                         .dimmed()
                 );
             }
@@ -42933,6 +42942,29 @@ fn cleanup_escalated_leases_for_spec(project_root: &std::path::Path, spec_id: &s
             if cleaned == 1 { "" } else { "s" },
         );
     }
+}
+
+/// TASK-1311: the per-row requeue affordance under a NeedsAttention spec in
+/// `aida findings list`. It shows the one command that returns the spec to
+/// flight and the status it lands in, and puts an open decision first.
+// trace:TASK-1311 | ai:claude
+fn print_requeue_hint_row(r: &aida_core::Requirement, did: &str) {
+    let pending = r
+        .decision_request
+        .as_ref()
+        .map(|d| d.is_pending())
+        .unwrap_or(false);
+    println!(
+        "  {:<20} {:<14} {}",
+        "",
+        "",
+        format!(
+            "{} {}",
+            crate::glyph(crate::glyphs::Glyph::SubArrow),
+            requeue::requeue_hint(did, pending)
+        )
+        .dimmed()
+    );
 }
 
 /// EPIC-28: park a spec in `NeedsAttention` with a structured

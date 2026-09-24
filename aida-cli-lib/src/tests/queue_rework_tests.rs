@@ -1018,3 +1018,73 @@ fn metadata_rework_of_a_draft_is_refused_without_advisor_authority() {
         entries.len()
     );
 }
+
+/// TASK-1311: a shelved, advisor-escalated spec returned by the one-keystroke
+/// requeue must re-enter the drain's ready set. Before the fix the status
+/// flipped but the machine-written `needs-human` tag (a burndown parking tag)
+/// and the FailureReason stayed, so the drain never picked the spec up again.
+/// The return is also recorded on the spec, so a wrong return is auditable.
+// trace:TASK-1311 | ai:claude
+#[test]
+fn requeue_of_shelved_escalated_spec_clears_parking_markers() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let mut req = req_for_test("BUG-13110", RequirementStatus::NeedsAttention);
+    req.tags.insert("needs-human".to_string());
+    req.tags.insert("batch:keep".to_string());
+    req.failure_reason = Some(aida_core::FailureReason {
+        phase: "ci".into(),
+        phase_index: 2,
+        kind: "ci-red".into(),
+        detail: "clippy failed".into(),
+        recovery_hint: None,
+        shelved_by: None,
+        shelved_at: chrono::Utc::now(),
+    });
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    handle_queue_rework(
+        &storage,
+        "BUG-13110",
+        false,
+        Some("implementer"),
+        false,
+        None,
+        Some("CI fixed on main"),
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+    .unwrap();
+
+    let updated = storage.load().unwrap();
+    let after = updated.get_requirement_by_spec_id("BUG-13110").unwrap();
+    assert_eq!(after.status, RequirementStatus::Approved);
+    assert!(!after.tags.contains("needs-human"), "{:?}", after.tags);
+    assert!(after.tags.contains("batch:keep"), "{:?}", after.tags);
+    assert!(
+        after.failure_reason.is_none(),
+        "the shelve's FailureReason must not survive the requeue"
+    );
+    let tags: Vec<String> = after.tags.iter().cloned().collect();
+    assert_eq!(crate::burndown::parking_tag(&tags), None);
+    assert!(
+        after.comments.iter().any(|c| c
+            .content
+            .contains("Returned from NeedsAttention to Approved via `aida queue rework`")
+            && c.content.contains("ci/ci-red: clippy failed")
+            && c.content.contains("Triage reason: CI fixed on main")),
+        "re-entry must record why the spec came back"
+    );
+    let entries = storage.queue_list("codex", true).unwrap();
+    assert_eq!(entries.len(), 1, "requeued onto the queue");
+}
