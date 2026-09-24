@@ -6158,7 +6158,7 @@ fn parse_requirement_type(s: &str) -> Option<RequirementType> {
     }
 }
 
-// trace:TASK-551 | ai:codex
+// trace:TASK-551 | ai:codex trace:BUG-1602 | ai:claude
 fn parse_mcp_relationship_type(s: &str) -> Result<RelationshipType, String> {
     let trimmed = s.trim();
     if trimmed.is_empty() {
@@ -6168,26 +6168,10 @@ fn parse_mcp_relationship_type(s: &str) -> Result<RelationshipType, String> {
         );
     }
 
-    let lowered = trimmed.to_ascii_lowercase();
-    Ok(match lowered.as_str() {
-        "parent" => RelationshipType::Parent,
-        "child" => RelationshipType::Child,
-        "duplicate" => RelationshipType::Duplicate,
-        "verifies" => RelationshipType::Verifies,
-        "verified-by" | "verified_by" | "verifiedby" => RelationshipType::VerifiedBy,
-        "references" | "related" | "relates-to" | "relates_to" | "relatesto" => {
-            RelationshipType::References
-        }
-        "blocked-by" | "blocked_by" | "blockedby" | "depends-on" | "depends_on" | "dependson" => {
-            RelationshipType::BlockedBy
-        }
-        "blocks" => RelationshipType::Blocks,
-        // trace:TASK-1176 | ai:claude — the supersede lineage pair.
-        "superseded-by" | "superseded_by" | "supersededby" | "replaced-by" | "replaced_by"
-        | "replacedby" => RelationshipType::SupersededBy,
-        "supersedes" | "replaces" => RelationshipType::Supersedes,
-        custom => RelationshipType::Custom(custom.to_string()),
-    })
+    // BUG-1602: delegate to the same shared parser `rel add` / `rel remove`
+    // use, so a spelling this tool accepts is exactly the same set the CLI
+    // accepts (and vice versa).
+    Ok(RelationshipType::parse_relationship_type(trimmed))
 }
 
 /// Read the current git branch under `project_root`. `None` on detached HEAD

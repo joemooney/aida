@@ -79755,27 +79755,21 @@ fn rel_should_write_inverse(rel_type: &RelationshipType, bidirectional_flag: boo
     bidirectional_flag || matches!(rel_type, RelationshipType::Parent | RelationshipType::Child)
 }
 
-/// Parse the relationship vocabulary accepted by `aida rel add`.
+/// Parse the relationship vocabulary accepted by `aida rel add` / `aida rel
+/// remove`.
 ///
 /// `related` is the natural spelling for a general link, but storing it as a
-/// custom edge makes the link invisible to standard graph traversal. Keep the
-/// core parser lossless for existing `Custom("related")` data and normalize
-/// only the CLI input to the existing `References` taxonomy member.
-// trace:BUG-1471 | ai:codex
+/// custom edge makes the link invisible to standard graph traversal; this
+/// normalizes it (and the other input-only aliases like `depends-on` /
+/// `verified_by` / `replaced_by`) to the matching standard taxonomy member.
+/// Thin wrapper around the shared parser in aida-core
+/// (`RelationshipType::parse_relationship_type`) so `rel add`, `rel remove`
+/// and the MCP `relationship_type` param all resolve the same spelling the
+/// same way — see that function's doc comment for why it's kept separate
+/// from `RelationshipType::from_str`, the core/Deserialize parser.
+// trace:BUG-1471 | ai:codex trace:BUG-1602 | ai:claude
 fn cli_relationship_type(input: &str) -> RelationshipType {
-    match input.to_lowercase().as_str() {
-        "parent" => RelationshipType::Parent,
-        "child" => RelationshipType::Child,
-        "duplicate" => RelationshipType::Duplicate,
-        "verifies" => RelationshipType::Verifies,
-        "verified-by" | "verifiedby" => RelationshipType::VerifiedBy,
-        "references" | "related" => RelationshipType::References,
-        "blocked-by" | "blocked_by" | "blockedby" => RelationshipType::BlockedBy,
-        "blocks" => RelationshipType::Blocks,
-        "superseded-by" | "superseded_by" | "supersededby" => RelationshipType::SupersededBy,
-        "supersedes" => RelationshipType::Supersedes,
-        other => RelationshipType::Custom(other.to_string()),
-    }
+    RelationshipType::parse_relationship_type(input)
 }
 
 /// Does a stored edge match the `--type` given to `rel remove`?
@@ -80154,6 +80148,14 @@ mod task_928_parent_tag_edge_tests;
 #[cfg(test)]
 #[path = "tests/task_1426_related_edge_migration_tests.rs"]
 mod task_1426_related_edge_migration_tests;
+
+// BUG-1602: handler-level tests of `aida rel remove` itself (typed removal,
+// --bidirectional, the parent/child pair, the legacy Custom-related family)
+// through the real Command::Rel dispatch path — task_1426's tests above only
+// cover the pure `rel_remove_matches` helper. trace:BUG-1602 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1602_rel_remove_handler_tests.rs"]
+mod bug_1602_rel_remove_handler_tests;
 
 // trace:TASK-1468 | ai:claude
 #[cfg(test)]
