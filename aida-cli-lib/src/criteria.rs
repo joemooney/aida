@@ -521,7 +521,7 @@ fn item_name(trimmed: &str) -> Option<String> {
     (!name.is_empty()).then(|| format!("{kind} {name}"))
 }
 
-fn collect_rust_files(root: &Path, out: &mut Vec<PathBuf>) {
+pub(crate) fn collect_rust_files(root: &Path, out: &mut Vec<PathBuf>) {
     collect_files(root, out, &["rs"]);
 }
 
