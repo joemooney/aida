@@ -11,12 +11,12 @@ description: |-
   3. `aida show <spec>`'s git-linkage section (TASK-241) learning to resolve and print the matching GitLab MR/pipeline when the project has a `gitlab` remote and the spec's tags/paths suggest GitLab relevance.
 
   Acceptance (draft, needs grooming): a reviewer looking at a GitHub PR that touches GitLab CI config can find the corresponding GitLab pipeline's status for the exact reviewed sha without leaving the review surface they started on, or with at most one obvious link/command.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:35:52.664720290Z
-modified_at: 2026-09-24T08:13:03.616900410Z
+modified_at: 2026-09-24T09:40:50.847973153Z
 req_type: Task
 tags:
 - ci
