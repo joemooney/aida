@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-24T20:18:25.970606451Z
+modified_at: 2026-09-24T20:35:03.634372283Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -268,6 +268,53 @@ comments:
   content: 'CORRECTION: the auto-bump on the #2138 merge set this Completed, but criterion 1 is unmet: BUG-1594''s 23.8s show tail still trips the new ceiling. Reopened to Approved. I will complete it once BUG-1594 merges and aida doctor check performance is quiet.'
   created_at: 2026-09-23T23:18:58.885667862Z
   modified_at: 2026-09-23T23:18:58.885667862Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d520-fb52-7c02-852e-a3dfbbbfd018
+  author: joe
+  content: |
+    [implementer] SESSION 2026-09-24, PICKED UP AFTER BUG-1594 (blocker) COMPLETED. RE-VERIFIED ALL THREE CRITERIA AGAINST A FRESH BUILD AND THIS REPO'S REAL TRAFFIC. TWO CLOSE; THE THIRD DOES NOT, AND IS NOT BEING FAKED CLOSED.
+
+    BUILD: HEAD 81c37e2cba9c8e0e6612240141940fd62063f205 (origin/main), `cargo build -p aida-cli --release`, binary `aida 0.15.0 (built 2026-09-24 13:20:45 -07:00, sha 81c37e2cba)`.
+
+    CRITERION 3, THE TRIGGER — CLOSED, RECONFIRMED, AND NOW REGRESSION-TESTED. This repo's `.aida/config.toml` already carries both `[[schedule.jobs]]` entries (`performance-guard`, substrate, `enabled = true`; `performance-guard-route`, seat, `enabled = true`) and `[performance.budgets] show = { budget_ms = 1000, ceiling_ms = 5000 }` — landed by prior sessions (#2062, #2138) and present on main before this session started; no config change was needed. What WAS missing: nothing enforced that this stays true — every prior confirmation was a point-in-time `aida schedule list` reading. Added a dogfood regression test that parses THIS repo's real config file (via `CARGO_MANIFEST_DIR`, not a fixture) and fails if either job is missing or disabled:
+      `aida-cli-lib/src/maintenance_schedule.rs::tests::this_repo_keeps_the_performance_guard_pair_registered_and_enabled` — PASSES.
+
+    CRITERION 7, POST-FIX RE-MEASUREMENT — CLOSED, RECONFIRMED WITH A FRESH READING.
+
+        ./target/release/aida doctor check performance --json
+
+        {
+          "command": "show", "budget_ms": 1000, "over_budget": 37, "denominator": 588,
+          "proportion_millipercent": 6293, "tolerated_millipercent": 10000,
+          "window_hours": 24, "worst_ms": 329623, "excluded_samples": 41,
+          "lineage_scoped": true, "ceiling_ms": 5000, "ceiling_breached": true
+        }
+
+    6.3% of 588 in-lineage `show` calls over the 1000ms budget, against the 10% tolerance — comfortably under, consistent with the prior readings in this spec's history (2.9%/n=170 on 2026-09-21, 8.37%/n=645 on 2026-09-23, now 6.3%/n=588). The proportion has moved around in that 3-9% band across three independent measurements over three days and never approached the 10% tolerance; nothing here proposes retightening it, per this spec's own rule that the number changes only alongside a measurement.
+
+    CRITERION 1 (ADR-53'S AMENDED "QUIET ON BOTH LIMBS") — NOT CLOSED. THE CEILING LIMB TRIPS, WORSE THAN BEFORE BUG-1594.
+
+    The same JSON above: `"worst_ms": 329623, "ceiling_breached": true` — a single in-lineage `show` call ran 329,623ms (5.5 minutes) against the 5000ms ceiling, from binary_sha `1c22d30ab1`, verified an ancestor of this HEAD, at 2026-09-24T14:47:18Z (`grep '"ts":"2026-09-24T14:47:18' ~/.aida/usage.jsonl`). That is 13.8x BUG-1594's own closed finding (23,840ms) and it is NOT explained by BUG-1594's own bounded regions — `LINKAGE_BRANCH_SCAN_BUDGET` (2s), `LINKAGE_TRACE_SCAN_BUDGET` (3s), `SHOW_FORGE_LOOKUP_BUDGET` (4s) sum to under 9s worst case, nowhere near 330s. And it is not a one-off:
+
+        ./target/release/aida usage --cmd show --slower-than 5000ms events
+
+    shows a recurring tail through 2026-09-24 (11905, 17916, 44994, 35915, 31888ms) on top of the 329,623ms outlier, alongside 551 calls under budget the same window. Filed as BUG-1606 (child of this spec, same pattern BUG-1594 itself was filed under), with the evidence above, the ancestry check, and a recorded-not-established candidate cause (this host's own 20-60-worktree contention, load average 9.70/6 cores at measurement time — plausible given the magnitude versus BUG-1594's bounded regions, but not verified as the mechanism; a 2-4s budgeted subprocess call under contention should time out AT its budget, not run ~80x over it, so what is unbounded is the open question BUG-1606 exists to answer). Added a second dogfood test guarding the CONFIG side of this (that `ceiling_ms` stays declared) so at least the limb itself cannot silently disappear while BUG-1606 is open:
+      `aida-cli-lib/src/doctor_cmd.rs::story_1422_performance_gate_tests::this_repo_configures_a_ceiling_for_the_show_budget` — PASSES.
+
+    DISPOSITION. Criteria 3 and 7 are closed, each reconfirmed today with fresh numbers and (criterion 3) a new regression test. Criterion 1/ADR-53's ceiling limb is NOT closed — the guard is not observed quiet, it is observed correctly tripping on a real, worse-than-before outlier. Tagging `closure:pending` rather than marking this spec Completed, and rather than marking it Done-and-hoping: the auto-bump that flips Done to Completed on a merge carrying this spec's trailer will be held by the tag (STORY-1430's closure-hold mechanism) until BUG-1606 lands and a fresh in-lineage reading comes back quiet on both limbs. BUG-1480's own closure criterion already points at this spec (repointed in the 2026-09-21 session) and needs no further change — it stays open for the same reason.
+
+    COMMANDS RUN THIS SESSION, FOR REPRODUCIBILITY:
+        git -C /home/joe/ai/aida fetch -q origin
+        git -C /home/joe/ai/aida worktree add /home/joe/ai/wt-story-1423 -b claude/story-1423 origin/main
+        cargo build -p aida-cli --release
+        ./target/release/aida doctor check performance
+        ./target/release/aida doctor check performance --json
+        ./target/release/aida doctor check performance --fail-on-findings   # exit 1, ceiling limb
+        ./target/release/aida usage --cmd show --slower-than 5000ms events
+        grep '"ts":"2026-09-24T14:47:18' ~/.aida/usage.jsonl
+        cargo test -p aida-cli-lib --lib this_repo
+  created_at: 2026-09-24T20:35:03.634372283Z
+  modified_at: 2026-09-24T20:35:03.634372283Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0d08f-a355-7422-b04b-a11b42f298cc
