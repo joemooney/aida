@@ -557,6 +557,57 @@ fn transition_to_completed_emits_only_on_a_real_transition() {
     assert_eq!(completed.len(), 1, "exactly one ship record");
 }
 
+/// TASK-1477: a manual completion (this unit test drives `mark_completed`
+/// directly, which is what `aida edit --status completed`, `aida done`,
+/// queue close, and `aida promote` all route through via `transition_to_
+/// completed`) stamps `implementation_info.completed_at` when it's absent —
+/// before this, only the merge-driven auto-bump paths did, so a manual
+/// completion fell back to `modified_at` and a later edit (tag/comment)
+/// reordered it under `aida list --sort completed`.
+// trace:TASK-1477 | ai:claude
+#[test]
+fn mark_completed_stamps_completed_at_when_absent() {
+    let mut req = aida_core::Requirement::new("seam".into(), String::new());
+    req.set_status_from_str("Done");
+    assert!(req.implementation_info.is_none());
+
+    crate::completion::mark_completed(&mut req);
+
+    let stamped = req
+        .implementation_info
+        .as_ref()
+        .and_then(|i| i.completed_at);
+    assert!(
+        stamped.is_some(),
+        "a manual completion should stamp completed_at"
+    );
+}
+
+/// A `completed_at` already on the requirement — e.g. the auto-bump paths'
+/// own `info.completed_at.get_or_insert(now)`, called after `mark_completed`
+/// returns — must never be overwritten by this stamp.
+// trace:TASK-1477 | ai:claude
+#[test]
+fn mark_completed_never_overwrites_an_existing_completed_at() {
+    let mut req = aida_core::Requirement::new("seam".into(), String::new());
+    req.set_status_from_str("Done");
+    let earlier = chrono::Utc::now() - chrono::Duration::days(3);
+    req.implementation_info = Some(aida_core::ImplementationInfo {
+        completed_at: Some(earlier),
+        ..Default::default()
+    });
+
+    crate::completion::mark_completed(&mut req);
+
+    assert_eq!(
+        req.implementation_info
+            .as_ref()
+            .and_then(|i| i.completed_at),
+        Some(earlier),
+        "an existing completed_at stamp must survive mark_completed"
+    );
+}
+
 /// A failed persist must not emit.
 #[test]
 fn a_failed_persist_does_not_emit() {
