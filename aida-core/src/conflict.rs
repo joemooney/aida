@@ -343,6 +343,15 @@ pub fn merge_spec_three_way(
     // by the object-level winner snapshot — same rule as execution_mode.
     merged.origin =
         merge_scalar(&base.origin, &ours.origin, &theirs.origin, ours_is_winner).clone();
+    // CR-8: filing provenance is write-once — the first stamp ever recorded
+    // wins (base, then the deterministic winner, then the other side), so a
+    // divergent sync can never rewrite or drop it. trace:CR-8 | ai:claude
+    let loser: &Requirement = if ours_is_winner { theirs } else { ours };
+    merged.filed_at = base
+        .filed_at
+        .clone()
+        .or_else(|| winner.filed_at.clone())
+        .or_else(|| loser.filed_at.clone());
 
     // History: union by entry id, deterministic order. base contributes
     // nothing new (append-only ⇒ ours+theirs ⊇ base) but we fold it in too so
@@ -2095,5 +2104,26 @@ mod tests {
         let theirs = vec![qe(b, 1000, 5), qe(a, 2000, 0)];
         let merged = merge_queue_three_way(&[], &ours, &theirs);
         assert_eq!(merged, vec![qe(b, 1000, 5), qe(a, 2000, 0)]);
+    }
+
+    // trace:CR-8 | ai:claude — a divergent sync never rewrites or drops the
+    // write-once filing provenance.
+    #[test]
+    fn cr8_three_way_merge_keeps_first_filing_provenance() {
+        let stamp = |sha: &str| {
+            Some(crate::models::FilingProvenance {
+                code_sha: Some(sha.to_string()),
+                ..Default::default()
+            })
+        };
+        let mut base = make_req("t", "draft");
+        base.filed_at = stamp("aaa");
+        let mut ours = base.clone();
+        ours.filed_at = None;
+        ours.modified_at = base.modified_at + chrono::Duration::seconds(5);
+        let mut theirs = base.clone();
+        theirs.filed_at = stamp("bbb");
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        assert_eq!(merged.filed_at, stamp("aaa"));
     }
 }

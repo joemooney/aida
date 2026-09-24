@@ -48,6 +48,7 @@ mod deps_cmd;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
+mod gitlab_mirror_link;
 mod graph_cmd;
 mod protocol_gate;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
@@ -565,6 +566,7 @@ pub fn main_entry() {
     // behind the deferred-shelf wipes); making the coordinating build win
     // PATH resolution closes that seam for every spawn site at once.
     export_coordinating_bin_env();
+    register_filing_identity();
     // STORY-122: per-invocation telemetry. Wraps run() so every CLI
     // entry point gets recorded with cmd shape + duration + exit code.
     // Local-only; opt-out via `[telemetry] enabled = false` or
@@ -669,6 +671,35 @@ pub fn main_entry() {
     if exit_code != 0 {
         std::process::exit(exit_code);
     }
+}
+
+/// Register this binary's identity (version, build SHA, filing agent vendor)
+/// with the core filing-provenance capture, so every spec this process files
+/// is stamped with the tooling that filed it. Uses the existing version /
+/// build-SHA helpers; best-effort — an unknown vendor is simply omitted.
+// trace:CR-8 | ai:claude
+fn register_filing_identity() {
+    let vendor = agent_registry::detect_agent_type();
+    aida_core::provenance::register_tool_identity(aida_core::provenance::ToolIdentity {
+        version: Some(current_version().to_string()),
+        build_sha: build_sha_short(),
+        vendor: (vendor != "other").then_some(vendor),
+    });
+}
+
+/// True when the working directory is inside the aida source repo itself —
+/// the one project where a spec's filing code SHA and the filing binary's
+/// build SHA describe the same code, so a mismatch is meaningful.
+// trace:CR-8 | ai:claude
+pub(crate) fn cwd_is_aida_source_repo() -> bool {
+    std::env::current_dir()
+        .map(|cwd| {
+            cwd.ancestors().any(|dir| {
+                dir.join("aida-cli-lib").join("build.rs").is_file()
+                    && dir.join("aida-core").join("Cargo.toml").is_file()
+            })
+        })
+        .unwrap_or(false)
 }
 
 /// Short build SHA for telemetry tagging. Reads the same banner that
@@ -9327,6 +9358,9 @@ fn handle_findings_add(
 
     // Mirror `aida doc add`'s minimal persistence path — works regardless of
     // id_format policy (node-aware ids drop in when blocks aren't allocated).
+    // CR-8: stamp filing provenance BEFORE the store write — the object is
+    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
         store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
@@ -9651,6 +9685,9 @@ fn promote_finding_to_gate(
     });
     let finding_uuid = finding.id;
     let mut reused: Option<Requirement> = None;
+    // CR-8: stamp filing provenance BEFORE the store write — the object is
+    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    aida_core::provenance::stamp_if_absent(&mut gate);
     let store = backend.update_atomically(|store| {
         let existing = store
             .requirements
@@ -13190,6 +13227,9 @@ fn file_reviewer_verdict_unavailable_finding(
         .insert("kind:ReviewerVerdictUnavailable".to_string());
     req.tags.insert("severity:major".to_string());
 
+    // CR-8: stamp filing provenance BEFORE the store write — the object is
+    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
         store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
@@ -13242,6 +13282,9 @@ fn file_agent_gate_warning_finding(
     req.tags.insert("kind:AgentGateWarning".to_string());
     req.tags.insert("severity:major".to_string());
 
+    // CR-8: stamp filing provenance BEFORE the store write — the object is
+    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
         store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
@@ -38004,11 +38047,37 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
         Some(_) => return CiProbe::NoSignal("gh json PR number was 0".to_string()),
         None => return CiProbe::NoSignal("gh json missing PR number".to_string()),
     };
-    let rollup = pr.get("statusCheckRollup").and_then(|v| v.as_array());
-    let rollup = match rollup {
+    let raw_rollup = pr.get("statusCheckRollup").and_then(|v| v.as_array());
+    let raw_rollup = match raw_rollup {
         Some(r) if !r.is_empty() => r,
         _ => return CiProbe::PrNoChecks { pr_number },
     };
+    // TASK-1424 safety net: the GitLab-mirror-link status is informational
+    // only (it always posts `success` — see
+    // `gitlab_mirror_link::post_github_mirror_status` — so a real
+    // failure/pending mirror entry should be unreachable in practice), but
+    // excluding its context here too means a future change to that
+    // invariant still can't shelve or stall a drain on GitLab-mirror
+    // evidence, which is advisory, not a gate. Filtered out BEFORE the
+    // empty-rollup check below (not skipped mid-loop): a PR carrying only
+    // the mirror status must read as "no checks yet" (`PrNoChecks`), not as
+    // a vacuously passing `Green` from an empty tally. Checked by context
+    // (StatusContext shape) or name (CheckRun shape) — whichever the rollup
+    // entry carries.
+    // trace:TASK-1424 | ai:claude
+    let rollup: Vec<&serde_json::Value> = raw_rollup
+        .iter()
+        .filter(|check| {
+            let check_id = check
+                .get("context")
+                .and_then(|v| v.as_str())
+                .or_else(|| check.get("name").and_then(|v| v.as_str()));
+            check_id != Some(crate::gitlab_mirror_link::MIRROR_STATUS_CONTEXT)
+        })
+        .collect();
+    if rollup.is_empty() {
+        return CiProbe::PrNoChecks { pr_number };
+    }
     // Tally check states. statusCheckRollup entries can be from
     // CheckRun (status=COMPLETED|IN_PROGRESS|QUEUED, conclusion=SUCCESS|FAILURE|...)
     // or StatusContext (state=SUCCESS|FAILURE|PENDING|ERROR). Handle both.
@@ -40381,7 +40450,9 @@ fn kill_process_group(pid: u32) {
 ///   the group) degrades to a partial/empty read instead of wedging this
 ///   function — and the caller — indefinitely.
 // trace:BUG-1288 | ai:claude
-fn command_output_with_timeout(
+// trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link's bounded
+// `git`/`gh` calls reuse this instead of a second timeout implementation.
+pub(crate) fn command_output_with_timeout(
     mut cmd: std::process::Command,
     timeout: std::time::Duration,
 ) -> Option<std::process::Output> {
@@ -47000,6 +47071,9 @@ mod bug_87_queue_filter_tests;
 #[cfg(test)]
 #[path = "tests/bug_231_findings_promote_tests.rs"]
 mod bug_231_findings_promote_tests;
+#[cfg(test)]
+#[path = "tests/cr_8_filing_provenance_tests.rs"]
+mod cr_8_filing_provenance_tests;
 #[cfg(test)]
 #[path = "tests/story_1428_gate_promote_tests.rs"]
 mod story_1428_gate_promote_tests;
@@ -54799,6 +54873,9 @@ fn file_integration_wait_finding(
     req.tags.insert("severity:major".to_string());
     req.tags.insert("aida:burndown".to_string());
 
+    // CR-8: stamp filing provenance BEFORE the store write — the object is
+    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
         store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
@@ -66327,6 +66404,11 @@ fn handle_push_command(
                     // STORY-760: fan the code branch out to every mirror hub so
                     // `aida push` can't leave one behind. Best-effort.
                     fan_out_mirror_push(&project_root, &branch, &project_root);
+                    // TASK-1424: best-effort, bounded — if GitHub is the review
+                    // surface and a GitLab mirror pipeline is known for this
+                    // branch, link it onto the GitHub PR head as a non-blocking
+                    // commit status. Never fails or delays this push.
+                    gitlab_mirror_link::sync_mirror_ci_link(&project_root, &branch);
                 }
                 Ok(s) => {
                     eprintln!(
@@ -97761,6 +97843,11 @@ struct RealPhaseDriver {
     /// reviewer preflights disagree with auto-open on a GitHub-origin repo.
     // trace:BUG-1037 | ai:codex
     lifecycle_forge: crate::forge::ForgeKind,
+    /// TASK-1421: injectable forge constructor. `None` in every production
+    /// path (the driver falls back to `forge_for_kind`); a test sets it to
+    /// observe the forge calls the publication boundary makes.
+    // trace:TASK-1421 | ai:claude
+    forge_factory: Option<crate::forge::ForgeFactory>,
     spec: String,
     /// Queue owner captured when the drain selected this pipeline member. Phase
     /// children keep this identity while their role changes per phase.
@@ -98136,6 +98223,7 @@ impl RealPhaseDriver {
         Self {
             project_root,
             lifecycle_forge,
+            forge_factory: None,
             spec,
             queue_user_id,
             permission_mode,
@@ -98186,8 +98274,74 @@ impl RealPhaseDriver {
         self.aida_exe.clone()
     }
 
+    /// TASK-1421: the injection seam. An injected
+    /// [`crate::forge::ForgeFactory`] reaches the forges built through
+    /// `lifecycle_forge()` and `project_forge()`: merge, the phase-1 PR
+    /// lookups in `detect_phase1_pr`, and the refused-preflight retraction.
+    /// Paths that still call `forge_for_kind` directly (`detect_merged_pr`,
+    /// `ci_probe_with_forge`, the PR-opening free functions) bypass it and
+    /// are out of scope for TASK-1421. With no factory this is exactly
+    /// `forge_for_kind`.
+    // trace:TASK-1421 | ai:claude
+    fn forge_of_kind(&self, kind: crate::forge::ForgeKind) -> Box<dyn crate::forge::Forge> {
+        match &self.forge_factory {
+            Some(factory) => factory(&self.project_root, kind),
+            None => crate::forge::forge_for_kind(&self.project_root, kind),
+        }
+    }
+
+    /// TASK-1289: the publication guards refused, but the implementer may
+    /// already have opened the PR. Retract an OPEN change through the forge so
+    /// "the guards refused" and "nothing is published" are the same state. An
+    /// already-merged change is left alone: closing is meaningless there and
+    /// the drive's AlreadyMerged handling owns it. Best-effort: a failed
+    /// close is reported and the phase still fails. Split out of
+    /// `run_implementer` so a test can drive it with an injected forge.
+    // trace:TASK-1289 trace:TASK-1421 | ai:claude
+    fn retract_refused_publication(&mut self, branch: &str, detail: &str) {
+        if let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(branch) {
+            let change = crate::forge::ChangeRef {
+                id: pr.number,
+                url: pr.url.clone(),
+                branch: pr.head_branch.clone().unwrap_or_else(|| branch.to_string()),
+                base: String::new(),
+                title: Some(pr.title.clone()),
+            };
+            let note = implementer_preflight::retraction_notice(detail);
+            match self.project_forge().close_change(&change, &note) {
+                Ok(()) => {
+                    if !self.json {
+                        eprintln!(
+                            "  {} closed PR-{} — it was opened before the publication \
+                             guards ran, and they refused it",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            pr.number,
+                        );
+                    }
+                }
+                Err(e) => {
+                    if !self.json {
+                        eprintln!(
+                            "  {} PR-{} is OPEN and its publication guards FAILED — \
+                             close it by hand: {e}",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            pr.number,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     fn lifecycle_forge(&self) -> Box<dyn crate::forge::Forge> {
-        crate::forge::forge_for_kind(&self.project_root, self.lifecycle_forge)
+        self.forge_of_kind(self.lifecycle_forge)
+    }
+
+    /// The project's configured forge — the driver-side equivalent of
+    /// `forge_for(&self.project_root)`, routed through the injection seam.
+    // trace:TASK-1421 | ai:claude
+    fn project_forge(&self) -> Box<dyn crate::forge::Forge> {
+        self.forge_of_kind(crate::forge::resolve_forge_kind(&self.project_root))
     }
 
     fn record_auto_rebase(&mut self, pr_number: u64, outcome: impl Into<String>) {
@@ -98610,9 +98764,7 @@ impl RealPhaseDriver {
         if latest_reopen_at.is_none() {
             return true;
         }
-        let metadata = crate::forge::forge_for(&self.project_root)
-            .change_metadata(pr as u64, sink)
-            .ok();
+        let metadata = self.project_forge().change_metadata(pr as u64, sink).ok();
         let merged_at = metadata
             .filter(|m| m.state == crate::forge::ChangeState::Merged)
             .and_then(|m| m.merged_at);
@@ -99066,7 +99218,15 @@ impl RealPhaseDriver {
         // slice — so it stays PrLookup here. The BUG-444/BUG-257 narrowing
         // bodies are unchanged; only the outer variant names move to
         // ChangeLookup. trace:STORY-516 trace:BUG-444 trace:BUG-257 | ai:claude
-        match change_lookup_for_branch(&self.project_root, branch) {
+        // TASK-1421: the lookups go through the driver's forge seam; with no
+        // injected factory this is the same `forge_for` dispatch as
+        // `change_lookup_for_branch`. trace:TASK-1421 | ai:claude
+        let open_for_branch = pr_lookup_from_change_lookup(
+            self.project_forge()
+                .change_for_branch(branch)
+                .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
+        );
+        match change_lookup_from_pr_lookup_for_branch(open_for_branch, branch) {
             crate::forge::ChangeLookup::Found(c) => Phase1PrResolve::Found(OpenPrInfo {
                 number: c.id,
                 title: c.title.unwrap_or_default(),
@@ -99074,7 +99234,14 @@ impl RealPhaseDriver {
                 head_branch: (!c.branch.is_empty()).then_some(c.branch),
             }),
             crate::forge::ChangeLookup::NoChange => {
-                match detect_open_pr_for_spec_via_forge(&self.project_root, &self.spec) {
+                let open_for_spec = pr_lookup_from_change_lookup(
+                    self.project_forge()
+                        .change_for_spec(&self.spec)
+                        .unwrap_or_else(|e| {
+                            crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))
+                        }),
+                );
+                match open_for_spec {
                     PrLookup::Found(pr) => {
                         // Realign the branch so the CI / merge phases probe the
                         // PR's actual head, not the worktree HEAD the branch-keyed
@@ -99110,9 +99277,13 @@ impl RealPhaseDriver {
                         let origin = probe_branch_on_origin(&self.project_root, branch);
                         if empty_phase1_lookup_is_definitive_nopr(&origin) {
                             Phase1PrResolve::NoPr
-                        } else if let PrLookup::Found(merged) =
-                            detect_merged_pr_for_branch_via_forge(&self.project_root, branch)
-                        {
+                        } else if let PrLookup::Found(merged) = pr_lookup_from_change_lookup(
+                            self.project_forge()
+                                .merged_change_for_branch(branch)
+                                .unwrap_or_else(|e| {
+                                    crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))
+                                }),
+                        ) {
                             // BUG-709: no OPEN PR but the branch IS on origin —
                             // before assuming eventual-consistency lag and
                             // retrying, check whether the branch's PR already
@@ -99976,6 +100147,88 @@ fn prepare_graded_review(
     Ok(Some(verdict))
 }
 
+/// TASK-1421: the publication boundary driven end to end through an injected
+/// forge — no env var, no global, just the driver's `forge_factory` field.
+// trace:TASK-1421 | ai:claude
+#[cfg(test)]
+mod forge_seam_tests {
+    use super::*;
+    use crate::forge::fake::RecordingForge;
+    use crate::forge::{ChangeLookup, ChangeRef};
+
+    fn driver_with(root: &std::path::Path, forge: &RecordingForge) -> RealPhaseDriver {
+        let mut driver = RealPhaseDriver::new(
+            root.to_path_buf(),
+            "TASK-1421".into(),
+            "test".into(),
+            None,
+            true,
+            None,
+            AutonomyMode::Default,
+            "test-token".into(),
+            false,
+            false,
+            false,
+            false,
+            auto_complete::LifecycleSkip::none(),
+            auto_complete::AutoCompleteVariant::ThroughCi,
+        );
+        driver.forge_factory = Some(forge.factory());
+        driver
+    }
+
+    fn change(id: u64, branch: &str) -> ChangeRef {
+        ChangeRef {
+            id,
+            url: format!("https://example.invalid/pull/{id}"),
+            branch: branch.into(),
+            base: String::new(),
+            title: Some("feat: work the guards refused".into()),
+        }
+    }
+
+    #[test]
+    fn refused_preflight_closes_the_open_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(42, "claude/task-1421"));
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed:\ndrift");
+
+        let closed = forge.closed();
+        assert_eq!(closed.len(), 1, "exactly one close_change call: {closed:?}");
+        assert_eq!(closed[0].0, 42, "closed the PR the implementer opened");
+        assert!(
+            closed[0].1.contains("guard `fmt` failed"),
+            "the retraction note carries the guard output: {}",
+            closed[0].1
+        );
+    }
+
+    #[test]
+    fn refused_preflight_leaves_an_already_merged_change_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.merged_for_branch = ChangeLookup::Found(change(7, "claude/task-1421"));
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        // The scenario is real only if the lookup resolves to AlreadyMerged
+        // (no open change, the branch's change merged) through the fake.
+        assert!(matches!(
+            driver.detect_phase1_pr("claude/task-1421"),
+            Phase1PrResolve::AlreadyMerged(ref pr) if pr.number == 7
+        ));
+        driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+
+        assert!(
+            forge.closed().is_empty(),
+            "a merged change must never be closed: {:?}",
+            forge.closed()
+        );
+    }
+}
+
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
         self.phase_done_pr = self.pr_number;
@@ -100036,7 +100289,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn begin_rework_guard(&mut self) {
         self.rework_guard = None;
         let Ok(crate::forge::ChangeLookup::Found(change)) =
-            crate::forge::forge_for(&self.project_root).change_for_spec(&self.spec)
+            self.project_forge().change_for_spec(&self.spec)
         else {
             return;
         };
@@ -100763,38 +101016,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // loudly and the phase still fails. The branch is untouched
                 // either way, so no work is lost.
                 // trace:TASK-1289 | ai:claude
-                if let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(&branch) {
-                    let change = crate::forge::ChangeRef {
-                        id: pr.number,
-                        url: pr.url.clone(),
-                        branch: pr.head_branch.clone().unwrap_or_else(|| branch.clone()),
-                        base: String::new(),
-                        title: Some(pr.title.clone()),
-                    };
-                    let note = implementer_preflight::retraction_notice(&detail);
-                    match crate::forge::forge_for(&self.project_root).close_change(&change, &note) {
-                        Ok(()) => {
-                            if !self.json {
-                                eprintln!(
-                                    "  {} closed PR-{} — it was opened before the publication \
-                                     guards ran, and they refused it",
-                                    crate::glyph(crate::glyphs::Glyph::Check).green(),
-                                    pr.number,
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            if !self.json {
-                                eprintln!(
-                                    "  {} PR-{} is OPEN and its publication guards FAILED — \
-                                     close it by hand: {e}",
-                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                                    pr.number,
-                                );
-                            }
-                        }
-                    }
-                }
+                self.retract_refused_publication(&branch, &detail);
                 return Err(auto_complete::PhaseFailure::new(format!(
                     "implementer preflight refused to open the PR:\n{detail}"
                 )));
@@ -101037,7 +101259,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // instead of retrying phase 1, which can collide with the already-Done
         // spec/worktree. This is the in-process counterpart of `--from-pr`.
         // trace:BUG-1145 | ai:codex
-        let pr = match crate::forge::forge_for(&self.project_root).change_for_spec(&self.spec) {
+        let pr = match self.project_forge().change_for_spec(&self.spec) {
             Ok(crate::forge::ChangeLookup::Found(pr)) => pr,
             _ => return None,
         };

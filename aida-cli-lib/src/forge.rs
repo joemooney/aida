@@ -1206,6 +1206,14 @@ pub fn forge_for_kind(project_root: &Path, kind: ForgeKind) -> Box<dyn Forge> {
     }
 }
 
+/// TASK-1421: an injectable forge constructor. The orchestrator driver holds an
+/// optional one so a test can hand it a fake forge whose calls it observes; when
+/// unset (every production path) the driver falls back to [`forge_for_kind`].
+/// Deliberately a plain value on the driver, not an env var or global switch,
+/// so no production build carries a way to swap the forge out.
+// trace:TASK-1421 | ai:claude
+pub type ForgeFactory = std::sync::Arc<dyn Fn(&Path, ForgeKind) -> Box<dyn Forge> + Send + Sync>;
+
 /// The forge provider for opening a real PR/MR/change request.
 pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
     forge_for_kind(project_root, resolve_open_change_forge_kind(project_root))
@@ -3279,7 +3287,9 @@ pub(crate) fn stream_probe_needs_wait(probe: &CiProbeResult) -> bool {
     matches!(probe, CiProbeResult::InProgress { .. })
 }
 
-fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
+// trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link can reuse this
+// mapper for a sha-filtered pipeline query instead of a second implementation.
+pub(crate) fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
     let none = || CiStatus {
         state: CiState::None,
         url: None,
@@ -3509,6 +3519,124 @@ pub(crate) fn default_branch_of(project_root: &Path) -> String {
         }
     }
     "main".to_string()
+}
+
+/// TASK-1421: an in-memory forge for orchestrator tests. Lookups answer from
+/// canned values; `close_change` is recorded so a test can assert the
+/// publication boundary retracted (or did not retract) a change.
+// trace:TASK-1421 | ai:claude
+#[cfg(test)]
+pub(crate) mod fake {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    pub(crate) struct RecordingForge {
+        pub(crate) open_for_branch: ChangeLookup,
+        pub(crate) open_for_spec: ChangeLookup,
+        pub(crate) merged_for_branch: ChangeLookup,
+        /// `(change id, reason)` for every `close_change` call.
+        pub(crate) closed: Arc<Mutex<Vec<(u64, String)>>>,
+    }
+
+    impl RecordingForge {
+        pub(crate) fn new() -> Self {
+            Self {
+                open_for_branch: ChangeLookup::NoChange,
+                open_for_spec: ChangeLookup::NoChange,
+                merged_for_branch: ChangeLookup::NoChange,
+                closed: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        /// A factory handing out clones that share this forge's call log.
+        pub(crate) fn factory(&self) -> ForgeFactory {
+            let me = self.clone();
+            Arc::new(move |_: &Path, _: ForgeKind| Box::new(me.clone()) as Box<dyn Forge>)
+        }
+
+        pub(crate) fn closed(&self) -> Vec<(u64, String)> {
+            self.closed.lock().unwrap().clone()
+        }
+    }
+
+    impl Forge for RecordingForge {
+        fn kind(&self) -> ForgeKind {
+            ForgeKind::GitHub
+        }
+        fn open_change(&self, _: OpenChange) -> Result<ChangeRef> {
+            anyhow::bail!("RecordingForge: open_change not scripted")
+        }
+        fn change_for_branch(&self, _: &str) -> Result<ChangeLookup> {
+            Ok(self.open_for_branch.clone())
+        }
+        fn change_for_spec(&self, _: &str) -> Result<ChangeLookup> {
+            Ok(self.open_for_spec.clone())
+        }
+        fn merged_change_for_branch(&self, _: &str) -> Result<ChangeLookup> {
+            Ok(self.merged_for_branch.clone())
+        }
+        fn change_status(&self, _: &ChangeRef) -> Result<ChangeStatus> {
+            anyhow::bail!("RecordingForge: change_status not scripted")
+        }
+        fn change_metadata(
+            &self,
+            _: u64,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> Result<ChangeMetadata> {
+            anyhow::bail!("RecordingForge: change_metadata not scripted")
+        }
+        fn change_commit_headlines(
+            &self,
+            _: u64,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> Result<Vec<String>> {
+            anyhow::bail!("RecordingForge: change_commit_headlines not scripted")
+        }
+        fn diff_change(&self, _: u64) -> Result<()> {
+            anyhow::bail!("RecordingForge: diff_change not scripted")
+        }
+        fn change_reviews(
+            &self,
+            _: u64,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> Result<ChangeReviews> {
+            anyhow::bail!("RecordingForge: change_reviews not scripted")
+        }
+        fn ci_status(&self, _: CiTarget) -> Result<CiStatus> {
+            anyhow::bail!("RecordingForge: ci_status not scripted")
+        }
+        fn ci_probe_for_branch(&self, _: &str) -> Result<CiProbeResult> {
+            anyhow::bail!("RecordingForge: ci_probe_for_branch not scripted")
+        }
+        fn watch_ci(&self, _: &ChangeRef) -> Result<CiState> {
+            anyhow::bail!("RecordingForge: watch_ci not scripted")
+        }
+        fn stream_ci_for_branch(&self, _: &str, _: bool) -> Result<CiProbeResult> {
+            anyhow::bail!("RecordingForge: stream_ci_for_branch not scripted")
+        }
+        fn merge_change(
+            &self,
+            _: &ChangeRef,
+            _: &MergeOptions,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> Result<MergeResult> {
+            anyhow::bail!("RecordingForge: merge_change not scripted")
+        }
+        fn comment(&self, _: &ChangeRef, _: &str) -> Result<()> {
+            Ok(())
+        }
+        fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()> {
+            self.closed.lock().unwrap().push((c.id, reason.to_string()));
+            Ok(())
+        }
+        fn checkout_change(&self, _: &ChangeRef) -> Result<()> {
+            anyhow::bail!("RecordingForge: checkout_change not scripted")
+        }
+        fn list_changes(&self, _: ChangeFilter) -> Result<Vec<ChangeRef>> {
+            Ok(Vec::new())
+        }
+    }
 }
 
 #[cfg(test)]

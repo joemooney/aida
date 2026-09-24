@@ -2785,6 +2785,7 @@ fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::Conf
         for row in &section.rows {
             let (explanation, default) = config_knob_doc(section.section, row.key);
             let edit = config_knob_edit_kind(section.section, row.key);
+            let read_only_reason = config_knob_readonly_reason(section.section, row.key);
             items.push(aida_tui::ConfigMenuItem {
                 section: section.section.to_string(),
                 name: row.key.to_string(),
@@ -2793,6 +2794,7 @@ fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::Conf
                 scope: row.source.plain_label(),
                 explanation: explanation.to_string(),
                 edit,
+                read_only_reason,
             });
         }
     }
@@ -2829,6 +2831,18 @@ fn config_knob_edit_kind(section: &str, key: &str) -> aida_tui::EditKind {
         }
         Some(EditSafety::Integer { min, max }) => aida_tui::EditKind::Integer { min, max },
         Some(EditSafety::ReadOnly { .. }) | None => aida_tui::EditKind::ReadOnly,
+    }
+}
+
+/// The registry-declared reason a knob is `ReadOnly`, for the `?` help
+/// overlay's operational-consequence line (STORY-1470). `None` for an
+/// editable knob or an undeclared one — the overlay simply omits the line.
+// trace:STORY-1470 | ai:claude
+#[cfg(feature = "tui")]
+fn config_knob_readonly_reason(section: &str, key: &str) -> Option<String> {
+    match config_knob_spec(section, key)?.edit {
+        EditSafety::ReadOnly { reason } => Some(reason.to_string()),
+        EditSafety::Bool { .. } | EditSafety::Enum { .. } | EditSafety::Integer { .. } => None,
     }
 }
 
@@ -4190,6 +4204,24 @@ mod story_671_edit_kind_tests {
         assert!(config_knob_meta("seats", "anything").is_none());
     }
 
+    /// STORY-1470: the `?` help overlay's operational-consequence line comes
+    /// straight from the registry's `ReadOnly { reason }` — no separate
+    /// hand-maintained table. An editable knob has no reason to surface.
+    #[test]
+    fn readonly_reason_derives_from_registry() {
+        assert_eq!(
+            config_knob_readonly_reason("agents", "bypass").as_deref(),
+            Some("security-relevant — edit ~/.aida/agents.toml deliberately")
+        );
+        assert!(config_knob_readonly_reason("contained", "os_wrap").is_some());
+        // Editable knobs carry no read-only reason.
+        assert!(config_knob_readonly_reason("telemetry", "enabled").is_none());
+        assert!(config_knob_readonly_reason("archive", "auto_after_days").is_none());
+        // Undeclared knob: no reason either (falls back to a generic message
+        // in the menu, not a fabricated one here).
+        assert!(config_knob_readonly_reason("no_such", "knob").is_none());
+    }
+
     // trace:STORY-1131 | ai:codex
     #[test]
     fn menu_permission_posture_edit_uses_posture_writer() {
@@ -4202,6 +4234,7 @@ mod story_671_edit_kind_tests {
             scope: "default".to_string(),
             explanation: "".to_string(),
             edit: config_knob_edit_kind("permissions", "codex"),
+            read_only_reason: None,
         };
 
         let outcome = cli_edit_permission_posture(dir.path(), &item, Some("contained"));

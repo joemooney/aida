@@ -637,6 +637,114 @@ impl std::str::FromStr for ExecutionMode {
     }
 }
 
+/// Filing provenance stamped on a requirement at creation (CR-8): which code
+/// state and which tooling a spec was filed against, so "is this still
+/// present?" has a SHA to diff or bisect from, and a spec filed by a stale
+/// binary can be told apart from one filed against current code.
+///
+/// Every field is best-effort and omitted when it cannot be detected (no git
+/// repo, detached HEAD, unknown agent). Public-repo hygiene: no hostname,
+/// absolute path, or email is ever recorded. The branch NAME is recorded
+/// verbatim — it is a code fact that travels with the commits anyway.
+///
+/// Forward-compatible: unknown keys are ignored on read, so later fields (the
+/// originating prompt, STORY-1468) can be added here without breaking older
+/// binaries.
+// trace:CR-8 | ai:claude
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct FilingProvenance {
+    /// HEAD of the CODE repo the spec was filed from (full SHA; not the
+    /// `aida-store` branch).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_sha: Option<String>,
+    /// Checked-out branch; omitted on a detached HEAD.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    /// Whether the working tree had uncommitted changes to tracked files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dirty: Option<bool>,
+    /// Package version of the filing `aida` binary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aida_version: Option<String>,
+    /// Git SHA the filing `aida` binary was built from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aida_build_sha: Option<String>,
+    /// Filing agent vendor (`claude` / `codex` / `antigravity` …), when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendor: Option<String>,
+    /// Filing session id, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+    // Reserved: STORY-1468 (deferred) adds the originating prompt here as
+    // another optional, serde-default field.
+}
+
+impl FilingProvenance {
+    /// True when no field was detected — such a stamp is not worth writing.
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+
+    /// True when the filing binary's build SHA and the code HEAD are both
+    /// known and differ (neither is a prefix of the other): the spec was filed
+    /// by a binary that did not match the checked-out code. Only meaningful in
+    /// the aida repo itself, where the code IS the binary's source.
+    pub fn build_diverges_from_code(&self) -> bool {
+        match (self.aida_build_sha.as_deref(), self.code_sha.as_deref()) {
+            (Some(b), Some(c)) if !b.is_empty() && !c.is_empty() && b != "unknown" => {
+                !(c.starts_with(b) || b.starts_with(c))
+            }
+            _ => false,
+        }
+    }
+
+    /// One-line compact rendering for `aida show`, e.g.
+    /// `abc1234 (feat/x, dirty) · aida 0.9.3 (def5678) · codex`.
+    pub fn summary_line(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(sha) = self.code_sha.as_deref() {
+            let short: String = sha.chars().take(7).collect();
+            let mut qual: Vec<String> = Vec::new();
+            if let Some(b) = self.branch.as_deref() {
+                qual.push(b.to_string());
+            }
+            if self.dirty == Some(true) {
+                qual.push("dirty".to_string());
+            }
+            if qual.is_empty() {
+                parts.push(short);
+            } else {
+                parts.push(format!("{short} ({})", qual.join(", ")));
+            }
+        }
+        match (self.aida_version.as_deref(), self.aida_build_sha.as_deref()) {
+            (Some(v), Some(b)) => {
+                let short: String = b.chars().take(7).collect();
+                parts.push(format!("aida {v} ({short})"));
+            }
+            (Some(v), None) => parts.push(format!("aida {v}")),
+            (None, Some(b)) => {
+                let short: String = b.chars().take(7).collect();
+                parts.push(format!("aida ({short})"));
+            }
+            (None, None) => {}
+        }
+        match (self.vendor.as_deref(), self.session.as_deref()) {
+            (Some(v), Some(s)) => {
+                let short: String = s.chars().take(8).collect();
+                parts.push(format!("{v} session {short}"));
+            }
+            (Some(v), None) => parts.push(v.to_string()),
+            (None, Some(s)) => {
+                let short: String = s.chars().take(8).collect();
+                parts.push(format!("session {short}"));
+            }
+            (None, None) => {}
+        }
+        parts.join(" · ")
+    }
+}
+
 /// Where a requirement's code lives in a multi-repo shared-store workspace
 /// (ADR-12): one hierarchical dimension with two levels — a workspace `repo`
 /// contains optional finer-grained `component`s. The `repo` slug is the single
@@ -4187,6 +4295,16 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<Origin>,
 
+    // trace:CR-8 | ai:claude
+    /// Filing provenance: the code state and tooling this spec was filed
+    /// against (code HEAD SHA, branch, dirty flag, aida version + build SHA,
+    /// filing agent/session). WRITE-ONCE — stamped at creation, never changed
+    /// by edits (the store write paths preserve the on-disk value). Every
+    /// sub-field is best-effort. `None` = filed before provenance existed;
+    /// existing stores round-trip unchanged. Optional, serde-default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filed_at: Option<FilingProvenance>,
+
     /// Custom status string (for types with custom statuses)
     /// If set, this takes precedence over the `status` enum field
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -4448,6 +4566,8 @@ impl Requirement {
             execution_mode: None,
             // trace:STORY-634 | ai:claude
             origin: None,
+            // trace:CR-8 | ai:claude
+            filed_at: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
