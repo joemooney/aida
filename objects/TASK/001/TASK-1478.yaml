@@ -1,0 +1,17 @@
+id: 01a0d301-6d22-74f3-8e2d-7788c12d80ec
+spec_id: TASK-1478
+agreed_id: TASK-1478
+title: Cache schema-version check uses != so a dev build and the installed aida rebuild each other's cache on every alternation
+description: 'From the TASK-1474 review: cache.rs ~987 compares SCHEMA_VERSION with !=, so when a newer dev binary and an older installed aida alternate on one project, each full-rebuilds the cache the other wrote. Older binaries already tolerate extra columns (the drift check only flags missing ones, and INSERTs name their columns). Rebuild only when the stored version is older than ours, or the required columns are missing, and let an older binary run on a newer additive schema.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T10:41:21.186821658Z
+modified_at: 2026-09-24T10:41:21.186821658Z
+req_type: Task
+tags:
+- cache
+- followup
+- parent:TASK-1474
+- performance
