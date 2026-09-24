@@ -1,0 +1,36 @@
+id: 01a0d425-ec9d-7600-9cb2-166016caa713
+spec_id: TASK-1486
+agreed_id: TASK-1486
+title: 'No-project refusal: keep the explicit-store guidance in agent output, fix tracker-command wording, and refresh the admin guide'
+description: |-
+  Follow-ups from the BUG-1603 review.
+  (1) In agent mode (non-TTY stderr) the no-project refusal is shortened to its first line plus 'help: aida init'. That drops the --file / -p / REQ_DB_NAME / AIDA_STORE guidance and the '-p <default>' hint, and a bare 'aida init' could lead an agent to initialise a stray project in a random directory. Agent output must keep the explicit-store alternatives.
+  (2) Jira, GitHub and GitLab tracker commands skip distributed detection. Inside a distributed project with no local db they now say there is no .aida/config.toml, which is false. Route them through distributed detection or give accurate wording.
+  (3) docs/admin-guide.md (around lines 654-675) still documents a registry 'default:' key and describes AIDA_DB_NAME as the 'Default project name'. Update it to the fail-closed behaviour.
+  (4) In a declared-distributed project whose store is not attached, init --refresh falls through to a stale cwd requirements.db. It should refuse or attach instead.
+
+  ## Acceptance
+  - The agent-mode refusal lists the explicit-store options, and does not suggest only 'aida init'.
+  - Tracker commands inside a distributed project resolve the distributed store or refuse with accurate text.
+  - The admin guide matches the behaviour.
+  - init --refresh in declared-but-unattached distributed mode does not seed a stale local db.
+  - Tests cover (1), (2) and (4).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T16:00:50.333680636Z
+modified_at: 2026-09-24T16:00:50.333680636Z
+req_type: Task
+tags:
+- docs
+- papercut
+- store-locate
+filed_at:
+  code_sha: 64b652e051a639975ced35f04527e83b4bd00d33
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 1c22d30ab1
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
