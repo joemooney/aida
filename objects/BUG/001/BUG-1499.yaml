@@ -23,12 +23,12 @@ description: |
   5. Clean up the ten existing instances, or state why not. They are all mine and all still holding.
 
   NOT IN SCOPE: changing which object the required check reads. The gate keying on the label is correct — it is the half the forge can see.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T00:37:35.410903749Z
-modified_at: 2026-09-24T00:17:37.828155134Z
+modified_at: 2026-09-24T01:21:35.979091646Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -162,4 +162,22 @@ comments:
   created_at: 2026-09-21T09:24:40.504989686Z
   modified_at: 2026-09-21T09:24:40.504989686Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0d100-f4e3-7a70-856d-672b6bd34cf2
+  author: aida-auto-bump
+  timestamp: 2026-09-24T01:21:35.971508674Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d100-f4eb-7322-87ac-f78c0bb2a225
+  timestamp: 2026-09-24T01:21:35.979090822Z
+  agent: aida
+  commit_sha: 004c470cc25480bc79460b51bd1ee4be26cfe961
+  summary: Completed via merge 004c470c
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T01:21:35.490869833Z
+  completion_sha: 004c470cc25480bc79460b51bd1ee4be26cfe961
