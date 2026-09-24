@@ -1169,12 +1169,21 @@ pub(crate) fn approval_head_refusal_message(pr: u64, refusal: &ApprovalHeadRefus
 /// read under each of `roots` (the calling worktree and the main clone can
 /// both hold `.aida/review-verdicts/`). A file seen under two roots is read
 /// once. Unreadable/absent files contribute nothing.
+///
+/// TASK-1460: when the PR `head` is known, a key whose current file was
+/// recorded at some OTHER commit also contributes its archived verdict for
+/// `head` (BUG-1539's per-sha archive), so a later round at a different sha
+/// cannot hide the review of the commit about to merge. The current file is
+/// still read first and always counts — the archive only adds evidence.
 // trace:TASK-1448 | ai:claude
+// trace:TASK-1460 | ai:claude
 pub(crate) fn merge_gate_verdict_candidates(
     roots: &[&std::path::Path],
     pr: u64,
     spec_ids: &[String],
+    head: Option<&str>,
 ) -> Vec<crate::review_verdict::RecordedVerdict> {
+    let head = head.map(str::trim).filter(|h| !h.is_empty());
     let mut keys: Vec<String> = vec![format!("PR-{pr}")];
     for id in spec_ids {
         let id = id.trim().to_ascii_uppercase();
@@ -1192,11 +1201,23 @@ pub(crate) fn merge_gate_verdict_candidates(
                 continue;
             }
             seen.push(canon);
-            if let Some(v) = std::fs::read_to_string(&path)
+            let current = std::fs::read_to_string(&path)
                 .ok()
-                .and_then(|body| crate::review_verdict::parse_recorded_verdict(&body))
-            {
+                .and_then(|body| crate::review_verdict::parse_recorded_verdict(&body));
+            let current_at_head = match (&current, head) {
+                (Some(v), Some(h)) => v
+                    .reviewed_sha
+                    .as_deref()
+                    .is_some_and(|r| crate::review_verdict::same_reviewed_sha(r, h)),
+                _ => false,
+            };
+            if let Some(v) = current {
                 out.push(v);
+            }
+            if let (false, Some(h)) = (current_at_head, head) {
+                if let Some(archived) = crate::review_verdict::read_verdict_for_sha(root, key, h) {
+                    out.push(archived);
+                }
             }
         }
     }
@@ -1506,6 +1527,7 @@ mod tests {
                 "TASK-10".to_string(),
                 "TASK-9".to_string(),
             ],
+            None,
         );
         let mut shas: Vec<_> = got.iter().filter_map(|v| v.reviewed_sha.clone()).collect();
         shas.sort();
