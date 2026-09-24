@@ -22,12 +22,12 @@ description: |
   Acceptance: profile the slow path (correlate `aida usage --cmd show --slower-than 5000ms events` timestamps with concurrent host load / lock contention at those moments), find and bound whatever is not already covered by BUG-1594's budgets, and reconfirm `aida doctor check performance` is quiet on BOTH limbs (proportion and ceiling) against a fresh in-lineage window of this repo's real dogfood traffic — not a synthetic low-contention run.
 
   Related: BUG-1594 (fixed the git-linkage/forge tail; this is what's left), STORY-1423 (the performance-guard closure this blocks), BUG-1572 (documented the same 20-60-worktree contention this repo runs under).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T20:33:59.618260056Z
-modified_at: 2026-09-24T20:35:31.983489852Z
+modified_at: 2026-09-24T20:54:29.898264580Z
 req_type: Bug
 tags:
 - followup
