@@ -88,8 +88,10 @@ use status_cmd::*;
 use zen_cmd::*;
 // trace:TASK-967 | ai:claude
 mod drain_summary;
+// trace:STORY-1415 | ai:claude
 mod field_study;
 mod field_study_cmd;
+mod mass_change;
 // trace:SPIKE-67 | ai:claude
 mod rule_violation;
 // trace:STORY-656 | ai:claude
@@ -83849,6 +83851,12 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
         // trace:TASK-1307 | ai:claude
         ReviewCommand::Stranded { json, fix } => handle_review_stranded(*json, *fix),
+        // trace:STORY-1415 | ai:claude
+        ReviewCommand::Mode { mode } => match mode {
+            cli::ReviewModeCommand::MassChange { action, days, json } => {
+                mass_change::handle_mass_change_command(action.as_str(), *days, *json)
+            }
+        },
     }
 }
 

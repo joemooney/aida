@@ -546,6 +546,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "doubles drain cost — set deliberately in .aida/config.toml",
         },
     },
+    // --- [review]. trace:STORY-1415 | ai:claude ---
+    KnobSpec {
+        section: "review",
+        key: "mass_change_mode",
+        doc: "Temporary mass-change review mode: acceptance gaps deferred, not blocking, until its window closes.",
+        default: "off",
+        edit: EditSafety::ReadOnly {
+            reason: "toggle with `aida review mode mass-change on|off` — the on-verb stamps the clock",
+        },
+    },
     // --- [protocol]. trace:TASK-1290 ---
     KnobSpec {
         section: "protocol",
@@ -2169,6 +2179,37 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                 key: "calibration_mode",
                 value,
                 source,
+            }],
+        }
+    });
+
+    // --- Mass-change review mode. trace:STORY-1415 | ai:claude ---
+    sections.push({
+        let now = chrono::Utc::now();
+        let rec = crate::mass_change::read_record(project_root);
+        let st = crate::mass_change::state_at(&rec, now);
+        let configured = config_lookup(cfg.as_ref(), "review", "mass_change_mode").is_some();
+        let value = match st {
+            crate::mass_change::MassChangeState::Off => "off".to_string(),
+            crate::mass_change::MassChangeState::Unclocked => {
+                "on (never clocked: inactive)".to_string()
+            }
+            crate::mass_change::MassChangeState::Expired { .. } => "expired (inactive)".to_string(),
+            crate::mass_change::MassChangeState::Active { expires_at, .. } => {
+                format!("on until {}", expires_at.format("%Y-%m-%d %H:%M UTC"))
+            }
+        };
+        PolicySection {
+            section: "review",
+            header: "[review]".to_string(),
+            rows: vec![PolicyRow {
+                key: "mass_change_mode",
+                value,
+                source: if configured {
+                    PolicySource::ProjectConfig
+                } else {
+                    PolicySource::Default
+                },
             }],
         }
     });
