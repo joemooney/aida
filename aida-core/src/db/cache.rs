@@ -367,6 +367,16 @@ pub enum SortOrder {
     /// modified_at DESC; unweighted rows sort last).
     // trace:FR-283 | ai:claude
     WeightDesc,
+    /// Newest-created first by `created_at` DESC.
+    // trace:TASK-1464 | ai:claude
+    CreatedDesc,
+    /// Most-recently-completed first. A row's "completion date" is its
+    /// `modified_at` when `status = Completed` — the timestamp the terminal
+    /// merge-driven status flip stamped (see `docs/lifecycle.md` on `done` vs
+    /// `completed`) — and NULL otherwise, so specs with no completion date
+    /// sort deterministically last (SQLite orders NULLs last in DESC).
+    // trace:TASK-1464 | ai:claude
+    CompletedDesc,
 }
 
 /// Filter passed to cache list queries. All fields are AND'd together;
@@ -1562,6 +1572,17 @@ impl Cache {
             SortOrder::HeftDesc => sql.push_str(" ORDER BY heft DESC, modified_at DESC"),
             // trace:FR-283 | ai:claude — NULL (unset) weights sort last in DESC.
             SortOrder::WeightDesc => sql.push_str(" ORDER BY weight DESC, modified_at DESC"),
+            // trace:TASK-1464 | ai:claude
+            SortOrder::CreatedDesc => sql.push_str(" ORDER BY created_at DESC"),
+            // trace:TASK-1464 | ai:claude — only `Completed` rows have a
+            // "completion date" (their modified_at); everything else is NULL
+            // and SQLite sorts NULLs last in DESC order, so incomplete specs
+            // deterministically fall to the bottom. Ties broken by modified_at
+            // DESC (a no-op for the Completed rows themselves, but keeps the
+            // NULL group in a stable freshest-first order too).
+            SortOrder::CompletedDesc => sql.push_str(
+                " ORDER BY (CASE WHEN status = 'Completed' THEN modified_at ELSE NULL END) DESC, modified_at DESC",
+            ),
         }
         if let Some(n) = filter.limit {
             sql.push_str(&format!(" LIMIT {}", n));
@@ -2826,6 +2847,88 @@ mod tests {
         // Lonely (heft 0) must be last; the two heft-3 specs lead.
         assert_eq!(rows.last().unwrap().spec_id.as_deref(), Some("LONE-1"));
         assert!(rows[0].heft >= rows[2].heft);
+    }
+
+    /// TASK-1464: `--sort created` orders newest-created first, independent
+    /// of `modified_at`.
+    // trace:TASK-1464 | ai:claude
+    #[test]
+    fn list_summaries_sorts_by_created() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut older = sample_req("FR-1-010", "older");
+        older.created_at = "2025-01-01T00:00:00Z".parse().unwrap();
+        older.modified_at = "2026-06-01T00:00:00Z".parse().unwrap(); // freshest modified, oldest created
+
+        let mut newer = sample_req("FR-1-011", "newer");
+        newer.created_at = "2026-01-01T00:00:00Z".parse().unwrap();
+        newer.modified_at = "2026-01-01T00:00:00Z".parse().unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(older);
+        store.requirements.push(newer);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                sort: SortOrder::CreatedDesc,
+                ..Default::default()
+            })
+            .unwrap();
+        let order: Vec<&str> = rows.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+        assert_eq!(
+            order,
+            ["FR-1-011", "FR-1-010"],
+            "created DESC must order by created_at, not modified_at"
+        );
+    }
+
+    /// TASK-1464: `--sort completed` orders the most-recently-completed spec
+    /// first; specs with no completion date (not `Completed`) sort last,
+    /// deterministically, regardless of their `modified_at`.
+    // trace:TASK-1464 | ai:claude
+    #[test]
+    fn list_summaries_sorts_by_completed_with_missing_dates_last() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut completed_old = sample_req("FR-1-020", "completed old");
+        completed_old.status = RequirementStatus::Completed;
+        completed_old.modified_at = "2026-01-01T00:00:00Z".parse().unwrap();
+
+        let mut completed_new = sample_req("FR-1-021", "completed new");
+        completed_new.status = RequirementStatus::Completed;
+        completed_new.modified_at = "2026-06-01T00:00:00Z".parse().unwrap();
+
+        // In-progress, never completed — but touched MOST recently. Must
+        // still sort after both Completed rows.
+        let mut in_progress = sample_req("FR-1-022", "still open");
+        in_progress.status = RequirementStatus::InProgress;
+        in_progress.modified_at = "2026-09-01T00:00:00Z".parse().unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(completed_old);
+        store.requirements.push(completed_new);
+        store.requirements.push(in_progress);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                sort: SortOrder::CompletedDesc,
+                ..Default::default()
+            })
+            .unwrap();
+        let order: Vec<&str> = rows.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+        assert_eq!(
+            order,
+            ["FR-1-021", "FR-1-020", "FR-1-022"],
+            "most-recently-completed first; the never-completed row sorts last despite being freshest-modified"
+        );
     }
 
     #[test]

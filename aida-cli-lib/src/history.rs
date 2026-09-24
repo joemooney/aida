@@ -398,172 +398,7 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
 /// distinct requirement that surfaces. Sub-second on the AIDA store.
 /// trace:FR-1-037 | ai:claude
 fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
-    let mut log_args: Vec<String> = vec![
-        "log".into(),
-        "--name-status".into(),
-        "--pretty=format:%H%x09%aI%x09%ae%x09%s".into(),
-        format!("-n{}", opts.max_commits),
-    ];
-    if let Some(s) = &opts.since {
-        log_args.push(format!("--since={}", s));
-    }
-    if let Some(u) = &opts.until {
-        log_args.push(format!("--until={}", u));
-    }
-
-    let log_output = run_git(store_path, &log_args)?;
-
-    // Walk the streamed output line-by-line. Commit-metadata lines have
-    // exactly three tabs (sha\tts\tauthor\tsubject); --name-status lines
-    // have one (M\tpath / A\tpath / D\tpath). Blank lines separate commits.
-    use std::collections::BTreeMap;
-    let mut summaries: BTreeMap<String, DigestEntry> = BTreeMap::new();
-    let mut current: Option<CommitInfo> = None;
-
-    for line in log_output.lines() {
-        if line.is_empty() {
-            continue;
-        }
-        let tabs = line.bytes().filter(|b| *b == b'\t').count();
-        if tabs >= 3 {
-            // commit metadata
-            let mut parts = line.splitn(4, '\t');
-            let sha = parts.next().unwrap_or("").to_string();
-            let ts = parts.next().unwrap_or("").to_string();
-            let author = parts.next().unwrap_or("").to_string();
-            let subject = parts.next().unwrap_or("").to_string();
-            current = Some(CommitInfo {
-                sha,
-                ts,
-                author,
-                subject_spec: targeted_spec_id_from_subject(&subject),
-            });
-            continue;
-        }
-
-        // Otherwise treat as a name-status line. Skip non-object paths (the
-        // orphan branch carries oplog.yaml and a few control files we don't
-        // want surfacing here).
-        let mut parts = line.split('\t');
-        let status_letter = parts.next().unwrap_or("").to_string();
-        let path = parts.next().unwrap_or("").to_string();
-        if !path.starts_with("objects/") || !path.ends_with(".yaml") {
-            continue;
-        }
-        let Some(commit) = current.as_ref() else {
-            continue;
-        };
-
-        let spec_id = spec_id_from_path(&path);
-        let req_type = req_type_from_path(&path);
-
-        let entry = summaries
-            .entry(spec_id.clone())
-            .or_insert_with(|| DigestEntry {
-                spec_id: spec_id.clone(),
-                req_type,
-                last_git_ts: commit.ts.clone(),
-                last_author_email: commit.author.clone(),
-                had_add: false,
-                had_delete: false,
-            });
-        // Track whether this YAML was added or deleted somewhere in the
-        // window so we can show "+ / − / ·" markers. Status letter is the
-        // one from `git log --name-status`.
-        match status_letter.chars().next() {
-            Some('A') => entry.had_add = true,
-            Some('D') => entry.had_delete = true,
-            _ => {}
-        }
-    }
-
-    // Read the current state for each surfaced spec_id from the worktree.
-    // YAML's `modified_at` is the canonical timestamp — git commit ts is
-    // only the fallback for deleted requirements (no YAML to read).
-    let mut entries: Vec<DigestRow> = summaries
-        .into_values()
-        .map(|e| {
-            let yaml_path = store_path
-                .join("objects")
-                .join(&e.req_type)
-                .join("000")
-                .join(format!("{}.yaml", e.spec_id));
-            let (status, title, modified_at) = read_current(&yaml_path);
-            // Prefer the YAML's modified_at (canonical), fall back to git ts.
-            let last_ts_iso = modified_at.unwrap_or_else(|| e.last_git_ts.clone());
-            DigestRow {
-                spec_id: e.spec_id,
-                req_type: e.req_type,
-                status,
-                title,
-                last_ts_iso,
-                last_author: pick_author_email(&e.last_author_email),
-                had_add: e.had_add,
-                had_delete: e.had_delete,
-            }
-        })
-        .collect();
-
-    // Apply filters that depend on the resolved row.
-    let id_filter = opts.id_filter.clone();
-    let type_filter = opts.type_filter.clone();
-    let author_filter = opts.author_filter.clone();
-    entries.retain(|e| {
-        if let Some(ref id) = id_filter {
-            if !e.spec_id.eq_ignore_ascii_case(id) {
-                return false;
-            }
-        }
-        if let Some(ref t) = type_filter {
-            // Allow either the path-prefix form ("FR") or the human form
-            // ("functional"). Path prefix is the canonical hit.
-            let want = t.to_uppercase();
-            let path_prefix = e.req_type.to_uppercase();
-            let display = display_type_name(&e.req_type).to_uppercase();
-            if path_prefix != want && display != want {
-                return false;
-            }
-        }
-        if let Some(ref a) = author_filter {
-            if !e.last_author.contains(a) {
-                return false;
-            }
-        }
-        // STORY-737 (delight #4): hide stateless META prompt-template rows from
-        // the default digest. `e.req_type` is the path-prefix form ("META"), so
-        // a case-insensitive compare catches it. trace:STORY-737 | ai:claude
-        if opts.exclude_meta && e.req_type.eq_ignore_ascii_case("meta") {
-            return false;
-        }
-        true
-    });
-
-    // STORY-441: hide archived rows in the default view; count drops so we
-    // can print a "(N archived hidden — pass --all …)" hint that mirrors
-    // `aida list`. With `--archived`, narrow to the archive itself.
-    // trace:STORY-441 | ai:claude
-    let archived_hidden = {
-        let before = entries.len();
-        entries.retain(|e| !opts.archived_specs.contains(&e.spec_id));
-        before - entries.len()
-    };
-    if let Some(only) = &opts.archived_only_specs {
-        entries.retain(|e| only.contains(&e.spec_id));
-    }
-
-    // STORY-584: same shape on the defer axis. trace:STORY-584 | ai:claude
-    let deferred_hidden = {
-        let before = entries.len();
-        entries.retain(|e| !opts.deferred_specs.contains(&e.spec_id));
-        before - entries.len()
-    };
-    if let Some(only) = &opts.deferred_only_specs {
-        entries.retain(|e| only.contains(&e.spec_id));
-    }
-
-    // Sort newest-first by ISO timestamp (string compare works for ISO 8601).
-    entries.sort_by(|a, b| b.last_ts_iso.cmp(&a.last_ts_iso));
-    entries.truncate(opts.limit);
+    let (entries, archived_hidden, deferred_hidden) = build_digest_rows(store_path, opts)?;
 
     if entries.is_empty() {
         eprintln!("{}", "(no recent activity)".dimmed());
@@ -704,6 +539,195 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Builds the sorted, filtered digest rows for `run_digest` (extracted so the
+/// shard-resolution fix — BUG-1596 — can be exercised directly by tests
+/// without capturing stdout). Returns (rows, archived_hidden_count,
+/// deferred_hidden_count).
+// trace:BUG-1596 | ai:claude
+fn build_digest_rows(
+    store_path: &Path,
+    opts: &HistoryOpts,
+) -> Result<(Vec<DigestRow>, usize, usize)> {
+    let mut log_args: Vec<String> = vec![
+        "log".into(),
+        "--name-status".into(),
+        "--pretty=format:%H%x09%aI%x09%ae%x09%s".into(),
+        format!("-n{}", opts.max_commits),
+    ];
+    if let Some(s) = &opts.since {
+        log_args.push(format!("--since={}", s));
+    }
+    if let Some(u) = &opts.until {
+        log_args.push(format!("--until={}", u));
+    }
+
+    let log_output = run_git(store_path, &log_args)?;
+
+    // Walk the streamed output line-by-line. Commit-metadata lines have
+    // exactly three tabs (sha\tts\tauthor\tsubject); --name-status lines
+    // have one (M\tpath / A\tpath / D\tpath). Blank lines separate commits.
+    use std::collections::BTreeMap;
+    let mut summaries: BTreeMap<String, DigestEntry> = BTreeMap::new();
+    let mut current: Option<CommitInfo> = None;
+
+    for line in log_output.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        let tabs = line.bytes().filter(|b| *b == b'\t').count();
+        if tabs >= 3 {
+            // commit metadata
+            let mut parts = line.splitn(4, '\t');
+            let sha = parts.next().unwrap_or("").to_string();
+            let ts = parts.next().unwrap_or("").to_string();
+            let author = parts.next().unwrap_or("").to_string();
+            let subject = parts.next().unwrap_or("").to_string();
+            current = Some(CommitInfo {
+                sha,
+                ts,
+                author,
+                subject_spec: targeted_spec_id_from_subject(&subject),
+            });
+            continue;
+        }
+
+        // Otherwise treat as a name-status line. Skip non-object paths (the
+        // orphan branch carries oplog.yaml and a few control files we don't
+        // want surfacing here).
+        let mut parts = line.split('\t');
+        let status_letter = parts.next().unwrap_or("").to_string();
+        let path = parts.next().unwrap_or("").to_string();
+        if !path.starts_with("objects/") || !path.ends_with(".yaml") {
+            continue;
+        }
+        let Some(commit) = current.as_ref() else {
+            continue;
+        };
+
+        let spec_id = spec_id_from_path(&path);
+        let req_type = req_type_from_path(&path);
+
+        let entry = summaries
+            .entry(spec_id.clone())
+            .or_insert_with(|| DigestEntry {
+                spec_id: spec_id.clone(),
+                req_type,
+                last_git_ts: commit.ts.clone(),
+                last_author_email: commit.author.clone(),
+                had_add: false,
+                had_delete: false,
+            });
+        // Track whether this YAML was added or deleted somewhere in the
+        // window so we can show "+ / − / ·" markers. Status letter is the
+        // one from `git log --name-status`.
+        match status_letter.chars().next() {
+            Some('A') => entry.had_add = true,
+            Some('D') => entry.had_delete = true,
+            _ => {}
+        }
+    }
+
+    // Read the current state for each surfaced spec_id from the worktree.
+    // YAML's `modified_at` is the canonical timestamp — git commit ts is
+    // only the fallback for deleted requirements (no YAML to read).
+    let mut entries: Vec<DigestRow> = summaries
+        .into_values()
+        .map(|e| {
+            // BUG-1596: resolve the canonical object path the same way the
+            // store itself does (shard derived from the id's sequence
+            // number), instead of hard-coding shard 000 — an id whose
+            // sequence lives in shard 001+ was read from a path that never
+            // existed and fell through to `read_current`'s "(deleted)"
+            // fallback even though the YAML was present under its real
+            // shard. trace:BUG-1596 | ai:claude
+            let objects_root = store_path.join("objects");
+            let yaml_path = aida_core::object_store::object_path(&objects_root, &e.spec_id)
+                .unwrap_or_else(|_| {
+                    objects_root
+                        .join(&e.req_type)
+                        .join("000")
+                        .join(format!("{}.yaml", e.spec_id))
+                });
+            let (status, title, modified_at) = read_current(&yaml_path);
+            // Prefer the YAML's modified_at (canonical), fall back to git ts.
+            let last_ts_iso = modified_at.unwrap_or_else(|| e.last_git_ts.clone());
+            DigestRow {
+                spec_id: e.spec_id,
+                req_type: e.req_type,
+                status,
+                title,
+                last_ts_iso,
+                last_author: pick_author_email(&e.last_author_email),
+                had_add: e.had_add,
+                had_delete: e.had_delete,
+            }
+        })
+        .collect();
+
+    // Apply filters that depend on the resolved row.
+    let id_filter = opts.id_filter.clone();
+    let type_filter = opts.type_filter.clone();
+    let author_filter = opts.author_filter.clone();
+    entries.retain(|e| {
+        if let Some(ref id) = id_filter {
+            if !e.spec_id.eq_ignore_ascii_case(id) {
+                return false;
+            }
+        }
+        if let Some(ref t) = type_filter {
+            // Allow either the path-prefix form ("FR") or the human form
+            // ("functional"). Path prefix is the canonical hit.
+            let want = t.to_uppercase();
+            let path_prefix = e.req_type.to_uppercase();
+            let display = display_type_name(&e.req_type).to_uppercase();
+            if path_prefix != want && display != want {
+                return false;
+            }
+        }
+        if let Some(ref a) = author_filter {
+            if !e.last_author.contains(a) {
+                return false;
+            }
+        }
+        // STORY-737 (delight #4): hide stateless META prompt-template rows from
+        // the default digest. `e.req_type` is the path-prefix form ("META"), so
+        // a case-insensitive compare catches it. trace:STORY-737 | ai:claude
+        if opts.exclude_meta && e.req_type.eq_ignore_ascii_case("meta") {
+            return false;
+        }
+        true
+    });
+
+    // STORY-441: hide archived rows in the default view; count drops so we
+    // can print a "(N archived hidden — pass --all …)" hint that mirrors
+    // `aida list`. With `--archived`, narrow to the archive itself.
+    // trace:STORY-441 | ai:claude
+    let archived_hidden = {
+        let before = entries.len();
+        entries.retain(|e| !opts.archived_specs.contains(&e.spec_id));
+        before - entries.len()
+    };
+    if let Some(only) = &opts.archived_only_specs {
+        entries.retain(|e| only.contains(&e.spec_id));
+    }
+
+    // STORY-584: same shape on the defer axis. trace:STORY-584 | ai:claude
+    let deferred_hidden = {
+        let before = entries.len();
+        entries.retain(|e| !opts.deferred_specs.contains(&e.spec_id));
+        before - entries.len()
+    };
+    if let Some(only) = &opts.deferred_only_specs {
+        entries.retain(|e| only.contains(&e.spec_id));
+    }
+
+    // Sort newest-first by ISO timestamp (string compare works for ISO 8601).
+    entries.sort_by(|a, b| b.last_ts_iso.cmp(&a.last_ts_iso));
+    entries.truncate(opts.limit);
+
+    Ok((entries, archived_hidden, deferred_hidden))
 }
 
 /// In-flight commit metadata while parsing `git log --name-status`.
@@ -1520,6 +1544,86 @@ mod tests {
             "META rows must be visible when not excluded, got: {:?}",
             events.iter().map(|e| &e.spec_id).collect::<Vec<_>>()
         );
+    }
+
+    /// BUG-1596: the digest must resolve a requirement's *current* YAML
+    /// under its real shard, not a hard-coded `000`. Builds a store with one
+    /// spec in shard 000 (BUG-1) and one whose sequence number lands in
+    /// shard 001 (BUG-1001, sequence 1001 — the first id past the 1000-per-
+    /// shard boundary), commits both, and asserts the digest reports each
+    /// one's real status/title rather than "(deleted)". A genuinely deleted
+    /// spec (never written) must still render "(deleted)".
+    // trace:BUG-1596 | ai:claude
+    #[test]
+    fn digest_resolves_current_yaml_across_shards() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let git = |args: &[&str]| {
+            let out = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+
+        let write = |rel: &str, body: &str| {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        };
+
+        // Shard 000: sequence 1.
+        let shard0_path = "objects/BUG/000/BUG-1.yaml";
+        write(
+            shard0_path,
+            "spec_id: BUG-1\ntitle: shard zero bug\nstatus: Completed\nmodified_at: \"2026-01-01T00:00:00Z\"\n",
+        );
+        // Shard 001: sequence 1001 (first id past the 1000-per-shard
+        // boundary — object_path()/shard_number() puts seq 1001 in shard
+        // 001). This is the path the hard-coded "000" join used to miss.
+        let shard1_path = "objects/BUG/001/BUG-1001.yaml";
+        write(
+            shard1_path,
+            "spec_id: BUG-1001\ntitle: shard one bug\nstatus: Done\nmodified_at: \"2026-01-02T00:00:00Z\"\n",
+        );
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "add BUG-1 and BUG-1001"]);
+
+        let opts = HistoryOpts {
+            events_mode: false,
+            ..base_opts()
+        };
+        let (rows, _, _) = build_digest_rows(root, &opts).unwrap();
+
+        let by_id = |id: &str| rows.iter().find(|r| r.spec_id == id);
+
+        let shard0 = by_id("BUG-1").expect("BUG-1 (shard 000) must appear");
+        assert_eq!(shard0.status, "Completed");
+        assert_eq!(shard0.title, "shard zero bug");
+
+        let shard1 = by_id("BUG-1001").expect("BUG-1001 (shard 001) must appear");
+        assert_eq!(
+            shard1.status, "Done",
+            "shard-001 spec must resolve its real status, not fall through to (deleted)"
+        );
+        assert_eq!(shard1.title, "shard one bug");
+
+        // A genuinely deleted / never-written id still renders "(deleted)".
+        let (status, title, modified_at) = read_current(&root.join("objects/BUG/000/BUG-999.yaml"));
+        assert_eq!(status, "(deleted)");
+        assert_eq!(title, "");
+        assert_eq!(modified_at, None);
     }
 
     /// A `HistoryOpts` with every filter off — tests override the one field

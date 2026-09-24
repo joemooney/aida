@@ -8791,6 +8791,8 @@ pub enum Command {
     },
 
     /// List all requirements
+    // trace:TASK-1463 | ai:claude — `aida ls` is a short, discoverable alias.
+    #[clap(visible_alias = "ls")]
     List {
         /// Optional positional shortcut (e.g. `aida list approved`).
         ///
@@ -9018,9 +9020,12 @@ pub enum Command {
         /// Order the results. `modified` (default) = freshest first; `heft` =
         /// most graph-connected first (the deterministic in+out-degree weight),
         /// so load-bearing specs surface at the top; `weight` = heaviest
-        /// user-set numeric weight/score first (unweighted specs sort last).
+        /// user-set numeric weight/score first (unweighted specs sort last);
+        /// `created` = newest-created first; `completed` = most-recently-
+        /// completed first (specs with no completion date sort last).
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
         // trace:FR-283 | ai:claude — adds the `weight` order.
+        // trace:TASK-1464 | ai:claude — adds the `created` / `completed` orders.
         #[clap(long, value_name = "ORDER", default_value = "modified")]
         sort: String,
 
