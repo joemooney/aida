@@ -903,6 +903,9 @@ mod tests {
     // store HEAD, so the "checked at HEAD" marker must NOT be written. Once
     // the cache can catch up, the marker is written for that HEAD.
     // trace:BUG-1606 | ai:claude
+    // Unix-only: pid 1 stands in for a live foreign writer, which only holds
+    // on Unix (same convention as the BUG-664 cache test).
+    #[cfg(unix)]
     #[test]
     fn bug_1606_notice_marker_not_written_from_a_stale_cache_snapshot() {
         use aida_core::DatabaseBackend;
