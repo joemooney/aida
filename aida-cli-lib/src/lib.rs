@@ -565,6 +565,7 @@ pub fn main_entry() {
     // behind the deferred-shelf wipes); making the coordinating build win
     // PATH resolution closes that seam for every spawn site at once.
     export_coordinating_bin_env();
+    register_filing_identity();
     // STORY-122: per-invocation telemetry. Wraps run() so every CLI
     // entry point gets recorded with cmd shape + duration + exit code.
     // Local-only; opt-out via `[telemetry] enabled = false` or
@@ -669,6 +670,35 @@ pub fn main_entry() {
     if exit_code != 0 {
         std::process::exit(exit_code);
     }
+}
+
+/// Register this binary's identity (version, build SHA, filing agent vendor)
+/// with the core filing-provenance capture, so every spec this process files
+/// is stamped with the tooling that filed it. Uses the existing version /
+/// build-SHA helpers; best-effort — an unknown vendor is simply omitted.
+// trace:CR-8 | ai:claude
+fn register_filing_identity() {
+    let vendor = agent_registry::detect_agent_type();
+    aida_core::provenance::register_tool_identity(aida_core::provenance::ToolIdentity {
+        version: Some(current_version().to_string()),
+        build_sha: build_sha_short(),
+        vendor: (vendor != "other").then_some(vendor),
+    });
+}
+
+/// True when the working directory is inside the aida source repo itself —
+/// the one project where a spec's filing code SHA and the filing binary's
+/// build SHA describe the same code, so a mismatch is meaningful.
+// trace:CR-8 | ai:claude
+pub(crate) fn cwd_is_aida_source_repo() -> bool {
+    std::env::current_dir()
+        .map(|cwd| {
+            cwd.ancestors().any(|dir| {
+                dir.join("aida-cli-lib").join("build.rs").is_file()
+                    && dir.join("aida-core").join("Cargo.toml").is_file()
+            })
+        })
+        .unwrap_or(false)
 }
 
 /// Short build SHA for telemetry tagging. Reads the same banner that

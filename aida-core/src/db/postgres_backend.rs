@@ -430,6 +430,7 @@ impl PostgresBackend {
             execution_mode: None,
             // trace:STORY-634 | ai:claude — origin not carried by legacy backend
             origin: None,
+            filed_at: None,
             custom_status,
             custom_priority,
             custom_fields,
