@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:53:14.701016287Z
-modified_at: 2026-09-24T08:09:09.541559684Z
+modified_at: 2026-09-24T08:09:12.149447911Z
 req_type: Bug
 tags:
 - closure:pending
@@ -221,6 +221,12 @@ comments:
   content: 'Windows lib-test fixes on branch claude/bug-1556-win (3b271e7d74), from CI run 35966565823: (1) merge_hold explicit_reconciliation_* and statusbar collect_meter_* source-shape tests normalise CRLF before their \n}\n body-end search; (2) real_phase_driver rework_no_op_catches_phase_done_pr_bound_to_another_specs_pr gated #[cfg(unix)] (bash fake gh); (3) 9 story_1424 graded-review tests gated #[cfg(unix)] because executable criteria spawn ''bash -c''. Production already fails closed (spawn error -> Failed -> Rejected, PRIN-5); (4) .gitattributes adds ''*.rs text eol=lf''. Umbrella stays open.'
   created_at: 2026-09-24T07:17:49.470953433Z
   modified_at: 2026-09-24T07:17:49.470953433Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d276-20d5-7451-b922-24ccb4c3158f
+  author: joe
+  content: 'CORRECTION: auto-completed by #2152, which fixed one instance (12 Windows test failures). This is the umbrella for cross-platform defects arriving as fast as they''re fixed; its systemic criteria are open. Reopened and tagged closure:pending.'
+  created_at: 2026-09-24T08:09:12.149447911Z
+  modified_at: 2026-09-24T08:09:12.149447911Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0d07e-6785-7f11-a435-4ea0ce22410d
