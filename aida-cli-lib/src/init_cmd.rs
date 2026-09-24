@@ -2356,6 +2356,33 @@ enabled = true
 # prompt = "Free disk space dropped below the configured floor. Reclaim space (stale worktrees via `aida session reap`, `cargo clean`) or raise [doctor.disk_headroom] min_free_gib deliberately."
 # enabled = false
 #
+# Runaway-seat watchdog: trips on a seat woken far too often, spending far
+# too fast, fed the same injected prompt over and over, or past its context
+# ceiling, and on the project's 24h token spend against a budget. Reads
+# Claude Code transcripts and headless logs on disk; zero model tokens.
+# Commented out because the daily budget is a per-project number this
+# scaffold cannot know. trace:STORY-1462 | ai:claude
+#
+# [watchdog]
+# max_wakes_per_hour = 120
+# max_tokens_per_hour = 100000000
+# daily_token_budget = 2000000000
+# budget_alert_pct = 50
+# restart_context_tokens = 300000
+#
+# [[schedule.jobs]]
+# name = "watchdog"
+# command = "doctor check runaway-seats --fail-on-findings"
+# every = "15m"
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "watchdog-route"
+# seats = ["advisor"]
+# on = ["CronJobFailed"]
+# prompt = "A seat tripped the runaway-seat watchdog. Use the routed trip evidence (session, rule, measured value, threshold) to stop the tick or loop that is waking it, or hand off and restart a seat past its context ceiling. Never answer by adding another poll."
+# enabled = false
+#
 "#
 }
 
@@ -2384,6 +2411,8 @@ mod story_1226_init_schedule_section_tests {
             "stranded-branches-guard-route",
             "disk-headroom-guard",
             "disk-headroom-guard-route",
+            "watchdog",
+            "watchdog-route",
         ] {
             assert!(
                 section.contains(&format!("name = \"{job}\"")),
