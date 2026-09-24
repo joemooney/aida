@@ -15,10 +15,10 @@ description: |-
   - Missing fields, unavailable clients, narrow terminals, and stale/unknown AIDA values produce readable fallback output.
   - Tests cover representative payloads and formatting behavior for each supported client.
   - Setup documentation explains installation/configuration for Agy, Claude Code, and Codex.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T11:20:12.338074957Z
-modified_at: 2026-09-24T11:20:53.254809866Z
+modified_at: 2026-09-24T12:29:09.829087413Z
 req_type: Task
