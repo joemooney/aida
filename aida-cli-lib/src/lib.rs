@@ -27313,6 +27313,14 @@ fn agent_new_bg_dispatch(
             .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
             .env("AIDA_AGENT_REGISTRY_TOKEN", &ctx.token);
     }
+    // TASK-1482: same default strip as the foreground path — a `--bg`
+    // dispatch must not silently hand its detached child the operator's
+    // local output-format/agent-mode/glyph/quiet preferences either.
+    // trace:TASK-1482 | ai:claude
+    apply_presentation_env_policy(
+        &mut command,
+        &resolve_presentation_env_policy(&plan.project_root)?,
+    );
 
     let output = command
         .output()
@@ -27593,6 +27601,156 @@ fn load_agents_contained(project_root: &std::path::Path) -> Result<bool> {
         contained = v;
     }
     Ok(contained)
+}
+
+// trace:TASK-1482 | ai:claude
+/// TASK-1482: known operator-local *presentation* env vars — how output
+/// renders (format pin, agent-mode force, glyph profile, notice quieting) —
+/// that must NOT leak from the launching shell into a spawned agent by
+/// default. The child session decides its own output mode (its own TTY, its
+/// own piping) rather than inheriting the parent's. Keep in sync with the
+/// rows these vars have in `docs/environment-variables.md` and with the
+/// `[agents] inherit_env` doc in `docs/cli/06-roles-sessions.md`.
+const PRESENTATION_ENV_VARS: &[&str] = &[
+    "AIDA_OUTPUT_FORMAT",
+    "AIDA_AGENT_OUTPUT",
+    "AIDA_GLYPHS",
+    "AIDA_QUIET",
+    "AIDA_PUSH_QUIET",
+];
+
+/// TASK-1482: which of `PRESENTATION_ENV_VARS` a launch will strip vs. keep,
+/// computed against a snapshot of the parent environment. Both lists only
+/// ever name a var that was actually PRESENT in the parent — an unset var is
+/// neither stripped nor kept, since there is nothing to propagate either way.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct PresentationEnvPolicy {
+    stripped: Vec<&'static str>,
+    kept: Vec<&'static str>,
+}
+
+/// TASK-1482: pure classification of the presentation env vars against an
+/// INJECTABLE snapshot of the parent environment (never `std::env::vars()`
+/// called from inside this function) and the resolved `[agents] inherit_env`
+/// keep-list. Callers pass `std::env::vars().collect()` for a real launch;
+/// tests pass a synthetic map, so this is exercised without mutating the
+/// process environment or needing the shared env lock.
+// trace:TASK-1482 | ai:claude
+fn classify_presentation_env(
+    parent_env: &std::collections::HashMap<String, String>,
+    keep: &[String],
+) -> PresentationEnvPolicy {
+    let mut policy = PresentationEnvPolicy::default();
+    for var in PRESENTATION_ENV_VARS {
+        if !parent_env.contains_key(*var) {
+            continue;
+        }
+        if keep.iter().any(|k| k == var) {
+            policy.kept.push(var);
+        } else {
+            policy.stripped.push(var);
+        }
+    }
+    policy
+}
+
+/// TASK-1482: apply a computed policy to a `Command` about to spawn the
+/// child. `Command` inherits the FULL parent environment by default, so a
+/// kept var needs no action here — it's already inherited; a stripped var is
+/// explicitly removed with `env_remove`, which overrides that default
+/// inheritance for exactly that one key.
+// trace:TASK-1482 | ai:claude
+fn apply_presentation_env_policy(
+    command: &mut std::process::Command,
+    policy: &PresentationEnvPolicy,
+) {
+    for var in &policy.stripped {
+        command.env_remove(var);
+    }
+}
+
+/// TASK-1482: one-line human summary of a [`PresentationEnvPolicy`] for the
+/// `--no-exec` preview and the `--show-context` launch-context body, so any
+/// intentional output-mode inheritance is visible rather than silent.
+// trace:TASK-1482 | ai:claude
+fn describe_presentation_env(policy: &PresentationEnvPolicy) -> String {
+    if policy.stripped.is_empty() && policy.kept.is_empty() {
+        return "none set in the launching shell".to_string();
+    }
+    let mut parts = Vec::new();
+    if !policy.stripped.is_empty() {
+        parts.push(format!(
+            "{} stripped (child decides its own output mode)",
+            policy.stripped.join(", ")
+        ));
+    }
+    if !policy.kept.is_empty() {
+        parts.push(format!(
+            "{} kept ([agents] inherit_env opt-in)",
+            policy.kept.join(", ")
+        ));
+    }
+    parts.join("; ")
+}
+
+/// TASK-1482: resolve the launch's `PresentationEnvPolicy` against the REAL
+/// process environment — the one production call site `classify_presentation_env`
+/// feeds from; every other caller (tests, the pure classifier) supplies its
+/// own injectable map instead.
+// trace:TASK-1482 | ai:claude
+fn resolve_presentation_env_policy(
+    project_root: &std::path::Path,
+) -> Result<PresentationEnvPolicy> {
+    let keep = load_agents_inherit_env(project_root)?;
+    let parent_env: std::collections::HashMap<String, String> = std::env::vars().collect();
+    Ok(classify_presentation_env(&parent_env, &keep))
+}
+
+/// TASK-1482: resolve `[agents] inherit_env` — the explicit, documented
+/// opt-in that preserves selected presentation env vars (see
+/// `PRESENTATION_ENV_VARS`) from the launching shell into the spawned agent
+/// despite the default strip. Same user-base/project precedence as
+/// `[agents] bypass`/`contained`: when the project `.aida/agents.toml` sets
+/// the key at all, it REPLACES (not merges with) the global
+/// `~/.aida/agents.toml` list — mirroring the existing bool "last one wins"
+/// rule extended to an array. Naming a var here that isn't one of
+/// `PRESENTATION_ENV_VARS` is a harmless no-op: this knob only ever restores
+/// inheritance for vars this task strips, it doesn't grant a new one.
+// trace:TASK-1482 | ai:claude
+fn load_agents_inherit_env(project_root: &std::path::Path) -> Result<Vec<String>> {
+    let mut keep = Vec::new();
+    if let Some(home) = aida_home_dir() {
+        if let Some(v) =
+            read_agents_string_array_from_file(&home.join(".aida/agents.toml"), "inherit_env")?
+        {
+            keep = v;
+        }
+    }
+    if let Some(v) =
+        read_agents_string_array_from_file(&project_root.join(".aida/agents.toml"), "inherit_env")?
+    {
+        keep = v;
+    }
+    Ok(keep)
+}
+
+// trace:TASK-1482 | ai:claude
+fn read_agents_string_array_from_file(
+    path: &std::path::Path,
+    key: &str,
+) -> Result<Option<Vec<String>>> {
+    let Some(value) = parse_agents_toml(path)? else {
+        return Ok(None);
+    };
+    Ok(value
+        .get("agents")
+        .and_then(|agents| agents.get(key))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect()
+        }))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -28924,6 +29082,13 @@ fn render_agent_launch_context(
         "- Working directory: {}\n",
         plan.launch_cwd.display()
     ));
+    // TASK-1482: surface any intentional presentation-env inheritance in the
+    // durable snapshot too, not just the `--no-exec` preview — the operator
+    // reading this file later should see it, not just the launcher's stdout.
+    out.push_str(&format!(
+        "- Presentation env: {}\n",
+        describe_presentation_env(&resolve_presentation_env_policy(&plan.project_root)?)
+    ));
     // STORY-711 slice 2: when a pending brief for this spec/agent carries an
     // `authorized_by` token, carry it into the durable launch-context
     // snapshot — the automatic advisor-lock gate reads this line at commit
@@ -29453,6 +29618,15 @@ fn render_agent_launch_noexec(
         out.push_str(&format!("  {key}={value}\n"));
     }
 
+    // TASK-1482: the operator-local presentation env this launch would strip
+    // (default) or keep (explicit `[agents] inherit_env` opt-in) — distinct
+    // from the `env:` section above, which is AIDA's OWN injected vars, not
+    // ambient ones read from the launching shell.
+    out.push_str(&format!(
+        "presentation_env: {}\n",
+        describe_presentation_env(&resolve_presentation_env_policy(&plan.project_root)?)
+    ));
+
     // TASK-1467: repository guidance files the child is expected to read on
     // startup, with whether each is actually present in this checkout.
     out.push_str("guidance_files:\n");
@@ -29659,6 +29833,18 @@ fn run_tracked_agent(
             .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
             .env("AIDA_AGENT_REGISTRY_TOKEN", &ctx.token);
     }
+    // TASK-1482: strip operator-local presentation env (AIDA_OUTPUT_FORMAT,
+    // AIDA_AGENT_OUTPUT, …) from the child unless `[agents] inherit_env`
+    // explicitly opts it back in. `Command` otherwise inherits the full
+    // parent env, so this is subtractive on top of that default. Covers the
+    // direct foreground launch AND any shell-wrapped (bwrap) launch, since
+    // both go through this one `Command` — bwrap execs the wrapped program
+    // with this same env unless `--clearenv` is passed, which it isn't.
+    // trace:TASK-1482 | ai:claude
+    apply_presentation_env_policy(
+        &mut command,
+        &resolve_presentation_env_policy(&plan.project_root)?,
+    );
 
     let mut child = command
         .spawn()
@@ -30333,6 +30519,11 @@ fn is_executable_file(path: &std::path::Path) -> bool {
 #[cfg(test)]
 #[path = "tests/agent_launcher_tests.rs"]
 mod agent_launcher_tests;
+
+// trace:TASK-1482 | ai:claude
+#[cfg(test)]
+#[path = "tests/presentation_env_tests.rs"]
+mod presentation_env_tests;
 
 // ----------------------------------------------------------------------------
 // EPIC-20 v1 — scoped session leases.
