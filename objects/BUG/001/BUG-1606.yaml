@@ -1,0 +1,43 @@
+id: 01a0d520-0142-78a0-8909-4c8879fda022
+spec_id: BUG-1606
+agreed_id: BUG-1606
+title: aida show still has single calls up to 329s in-lineage on the fixed binary, well past BUG-1594's bounded budgets
+description: |
+  Found while measuring STORY-1423's criterion 1 (ADR-53's "quiet on both limbs" amendment). BUG-1594 bounded the known slow sub-operations in `aida show`'s git-linkage/forge-lookup path (`LINKAGE_BRANCH_SCAN_BUDGET` 2s, `LINKAGE_TRACE_SCAN_BUDGET` 3s, `SHOW_FORGE_LOOKUP_BUDGET` 4s — every bounded region caps at a few seconds, combined worst case well under 5000ms) and closed on the acceptance "no show call over 5000ms in a fresh in-lineage window, and aida doctor check performance is quiet".
+
+  RE-MEASURED 2026-09-24 ~13:27 MST against this repo's real `~/.aida/usage.jsonl`, HEAD 81c37e2cba (BUG-1594's fix is an ancestor):
+
+      aida doctor check performance --json
+
+      "show" exceeded its 1000 ms budget on 6.3% of 588 calls in the last 24h
+      (tolerated 10.0%, worst 329623 ms); CEILING BREACHED — a single call ran
+      329623 ms against a 5000 ms ceiling
+
+  The proportion limb is fine (6.3% < 10% tolerance) but the ceiling limb trips: worst_ms = 329,623ms (5.5 minutes), from binary_sha `1c22d30ab1` — verified in this HEAD's lineage — at 2026-09-24T14:47:18Z. That is far past BUG-1594's own already-fixed 23,840ms finding and far past every bounded sub-operation BUG-1594 added, so this is not that same code path regressing; something else in the `show` path is occasionally unbounded.
+
+  NOT A ONE-OFF. `aida usage --cmd show --slower-than 5000ms events` shows a recurring tail through the same day: 11905, 17916, 44994, 35915, 31888ms (2026-09-24) and more on 2026-09-23 (23840, 19446, 18966ms), alongside hundreds of sub-second calls — still bimodal, now with a worse unbounded tail than BUG-1594 fixed.
+
+  CANDIDATE CAUSE, NOT ESTABLISHED. This dev machine runs 20-60 concurrent worktrees/agent sessions (BUG-1572's own finding) and load average was 9.7 on a 6-core host at measurement time. But BUG-1594's bounded regions cap combined worst case around 9s; a budgeted subprocess call under contention should time out AT its budget, not run ~80x over it — unless the timeout enforcement itself isn't actually bounding wall-clock time under contention (e.g. a lock/flock wait that happens BEFORE a bounded region and has no timeout of its own, or a `Command` wait that isn't reliably interruptible under load). That is the surface to profile, not assumed.
+
+  Acceptance: profile the slow path (correlate `aida usage --cmd show --slower-than 5000ms events` timestamps with concurrent host load / lock contention at those moments), find and bound whatever is not already covered by BUG-1594's budgets, and reconfirm `aida doctor check performance` is quiet on BOTH limbs (proportion and ceiling) against a fresh in-lineage window of this repo's real dogfood traffic — not a synthetic low-contention run.
+
+  Related: BUG-1594 (fixed the git-linkage/forge tail; this is what's left), STORY-1423 (the performance-guard closure this blocks), BUG-1572 (documented the same 20-60-worktree contention this repo runs under).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T20:33:59.618260056Z
+modified_at: 2026-09-24T20:33:59.618260056Z
+req_type: Bug
+tags:
+- followup
+- parent:STORY-1423
+- performance
+filed_at:
+  code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 81c37e2cba
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
