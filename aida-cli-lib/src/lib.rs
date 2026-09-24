@@ -49,6 +49,7 @@ mod dev_cmd;
 mod digest;
 mod digest_cmd;
 mod graph_cmd;
+mod project_capabilities;
 mod protocol_gate;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
 mod dispatch_health_ps;
@@ -3475,6 +3476,11 @@ fn run() -> Result<()> {
         if let Some(plan) = &bootstrap {
             init_bootstrap::finish_remote(plan)?;
         }
+        // STORY-1467: classify forge / CI / local-only capabilities now that
+        // any bootstrap remote exists, record them under
+        // `[project.capabilities]`, and print them so forge-dependent features
+        // degrade explicitly. Best-effort. trace:STORY-1467 | ai:claude
+        project_capabilities::record_and_report(&statusline_project_root());
         // Register the initialized project in the machine-global project
         // registry after bootstrap remote setup, so `repo` reflects the final
         // origin URL when one was configured. Best-effort because this writes
