@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T14:19:48.859651743Z
-modified_at: 2026-09-24T10:37:29.588080415Z
+modified_at: 2026-09-24T10:37:35.629765169Z
 req_type: ChangeRequest
 tags:
 - intake:requester
@@ -79,4 +79,10 @@ comments:
   content: 'PROXY DECISION (acceptance note, criterion 4): the provenance record stores the branch name verbatim. Branch names are developer-chosen and already public in this repo''s git history and PR list, so they add no new exposure. No absolute paths, hostnames, emails or env values are recorded (confirmed by the strict review). The session id is a UUID and the vendor comes from a fixed list.'
   created_at: 2026-09-24T09:35:52.391162470Z
   modified_at: 2026-09-24T09:35:52.391162470Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d2fd-fc0d-73c0-8cab-0215bbb34570
+  author: joe
+  content: 'Merged to main via #2156 (integration batch 44).'
+  created_at: 2026-09-24T10:37:35.629765169Z
+  modified_at: 2026-09-24T10:37:35.629765169Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
