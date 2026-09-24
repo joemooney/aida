@@ -1,0 +1,17 @@
+id: 01a0d1b9-a6ef-7651-9171-71280c17935f
+spec_id: BUG-1595
+agreed_id: BUG-1595
+title: 'tick_lock_is_nonblocking_and_reusable still flakes under the parallel test run: re-lock after drop fails (BUG-1303 recurrence)'
+description: 'CI run 35955855473 (PR #2147) failed maintenance_schedule::tests::tick_lock_is_nonblocking_and_reusable at maintenance_schedule.rs:2961, where try_tick_lock returned None after the first guard was dropped. The test passes locally, and the change didn''t touch it. This is the parallel-load flake class of BUG-1303 (completed), recurring. Likely cause: the lock fd is briefly inherited by a child forked by a concurrent test. Fix: an OFD or fcntl lock that isn''t inherited, or O_CLOEXEC plus a bounded retry in the test with a comment. Acceptance: 200 consecutive parallel runs pass.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T04:43:20.175462375Z
+modified_at: 2026-09-24T04:43:20.175462375Z
+req_type: Bug
+tags:
+- ci
+- flaky-test
+- recurrence
+- scheduler
