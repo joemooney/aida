@@ -1,0 +1,30 @@
+id: 01a0d3fd-f611-79d2-9366-6ad5eedb293c
+spec_id: BUG-1603
+agreed_id: BUG-1603
+title: Outside any AIDA project, write commands fall back to an unrelated project's legacy requirements.db
+description: |-
+  Seen during TASK-1480 implementation. A manual smoke test run from a directory outside any AIDA project wrote a requirement into /home/joe/ai/pacilab/requirements.db, an unrelated project's legacy SQLite store, which was picked up as a fallback default. The agent deleted the row immediately. This is the same class as BUG-1598: stray-state adoption by a store resolver. A write command outside any project must fail closed (PRIN-5) with setup guidance, and must never adopt a legacy store it was not pointed at.
+
+  ## Acceptance
+  - Reproduce and identify the fallback resolver: the default database path, env/config default, or registry lookup that resolves to another project's requirements.db.
+  - Outside any AIDA project, write commands (add/edit/comment/rel) refuse with a clear message instead of writing to a fallback store; read commands likewise do not silently read an unrelated store.
+  - An explicitly configured legacy path (flag or env) still works.
+  - A test covers running from a directory with no AIDA project while a legacy requirements.db exists elsewhere.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T15:17:11.313030554Z
+modified_at: 2026-09-24T15:17:11.313030554Z
+req_type: Bug
+tags:
+- integrity
+- store-locate
+filed_at:
+  code_sha: 64b652e051a639975ced35f04527e83b4bd00d33
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 1c22d30ab1
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
