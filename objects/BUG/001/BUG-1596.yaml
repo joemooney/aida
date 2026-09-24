@@ -3,12 +3,12 @@ spec_id: BUG-1596
 agreed_id: BUG-1596
 title: aida history mislabels non-000 shard requirements as deleted
 description: 'aida history -n reports many existing completed or done requirements as status (deleted), including BUG-1017, BUG-1018, and TASK-1277. The current YAML files exist and aida history --events shows their real terminal statuses. Root cause: history digest resolves the current YAML path with a hard-coded objects/<TYPE>/000/<ID>.yaml; IDs over the first shard live under objects/<TYPE>/001 (or another shard), so read_current fails and returns (deleted). Acceptance: (1) resolve the canonical object path using the same shard/id mapping as store reads; (2) BUG-1017 and BUG-1018 render Completed with their titles; (3) TASK-1277 renders Done with its title; (4) genuinely deleted objects still render (deleted); (5) history default and event modes retain their existing archive/deferred filtering; (6) add regression coverage across at least 000 and 001 shards.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T04:53:20.062858190Z
-modified_at: 2026-09-24T08:55:13.182681015Z
+modified_at: 2026-09-24T09:49:40.890965805Z
 req_type: Bug
 comments:
 - id: 01a0d278-a849-7d01-8b6f-61a9f23c1036
@@ -17,3 +17,21 @@ comments:
   created_at: 2026-09-24T08:11:57.897494201Z
   modified_at: 2026-09-24T08:11:57.897494201Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d2d2-1e93-7bc0-b421-ffbc6e682215
+  author: aida-auto-bump
+  timestamp: 2026-09-24T09:49:40.883958586Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d2d2-1e9a-78e0-8610-9500440063ca
+  timestamp: 2026-09-24T09:49:40.890964759Z
+  agent: aida
+  commit_sha: 8794b550191abc6a4264822f5073e61e99d55869
+  summary: Completed via merge 8794b550
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T09:49:40.883828892Z
+  completion_sha: 8794b550191abc6a4264822f5073e61e99d55869
