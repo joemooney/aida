@@ -8,10 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:53:20.056319268Z
-modified_at: 2026-09-24T02:53:20.056319268Z
+modified_at: 2026-09-24T02:53:23.313453684Z
 req_type: Task
 tags:
 - data-integrity
 - followup
 - ids
 - parent:BUG-1535
+relationships:
+- rel_type: Child
+  target_id: 01a0c291-3fd2-7d51-870f-fa39b5a94c26
+  created_at: 2026-09-24T02:53:23.313453684Z
