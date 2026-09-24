@@ -3,12 +3,12 @@ spec_id: TASK-1463
 agreed_id: TASK-1463
 title: Add aida ls as an alias for aida list
 description: 'Provide a short, discoverable `aida ls` alias for `aida list`. Acceptance: `aida ls` accepts the same arguments and filters as `aida list`, produces identical output for equivalent invocations, and is documented in command help or the CLI command catalog.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:26:16.240515251Z
-modified_at: 2026-09-24T08:55:26.880660565Z
+modified_at: 2026-09-24T09:49:41.854190703Z
 req_type: Task
 tags:
 - docs:impacted
@@ -19,3 +19,21 @@ comments:
   created_at: 2026-09-24T08:12:03.556652560Z
   modified_at: 2026-09-24T08:12:03.556652560Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d2d2-2257-7f71-b92d-04829e6b8f66
+  author: aida-auto-bump
+  timestamp: 2026-09-24T09:49:41.847357450Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d2d2-225e-7eb3-b3a2-c22461ba82d7
+  timestamp: 2026-09-24T09:49:41.854189670Z
+  agent: aida
+  commit_sha: 8794b550191abc6a4264822f5073e61e99d55869
+  summary: Completed via merge 8794b550
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T09:49:40.883828892Z
+  completion_sha: 8794b550191abc6a4264822f5073e61e99d55869
