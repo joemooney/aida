@@ -76,12 +76,12 @@ description: |-
       REQUIRED, and it is the criterion that matters most for anything consuming a verdict: state what a gate does with a verdict that can NEVER be placed. Treating it as ABSENT is the PRIN-5 answer - it costs a re-review and cannot authorise anything. Treating it as CURRENT is the reassuring answer and is exactly the mechanism by which work merges behind a stale verdict. The default must be the first. If any surface wants the second, it argues for it in writing, for that surface only.
 
       SCOPE NOTE ON THE NUMBERS, because two different figures are both true and get confused: 409 of 543 is the corpus-wide count of permanently-unplaceable verdicts. SIX is the count among PRs currently open and therefore currently blocking a decision (1984, 1986, 1998, 2009, 2039, 2040). The first sizes the migration; the second sizes tonight's problem. Three of the six were written tonight on a pre-17:00 binary, so that population is still growing until the rebuild lands.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:28:50.078974800Z
-modified_at: 2026-09-21T03:57:24.433422607Z
+modified_at: 2026-09-24T01:50:11.166894453Z
 req_type: Bug
 tags:
 - batch:night-0920 merge-safety integrity agent-surface from:session-0920
