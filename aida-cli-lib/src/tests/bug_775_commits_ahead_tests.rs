@@ -361,6 +361,7 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
         Some("story-993"),
         Some("looks good"),
         &[],
+        &[],
         Some(1706),
     )
     .unwrap();

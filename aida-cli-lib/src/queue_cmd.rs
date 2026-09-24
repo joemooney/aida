@@ -5064,6 +5064,61 @@ pub(crate) fn handle_queue_command(
                 }
             }
 
+            let mut protocol_ledger: Option<(String, String)> = None;
+            // TASK-1277: typed protocols slice 2 — evaluate the machine-
+            // checkable items of the spec type's protocol (spike deliverable,
+            // ADR accepted + references edge, bug test-file change). Same
+            // `[protocol] enforce` posture as the criteria gate above: warn
+            // (print + ledger + proceed), refuse (block, item named), `--force`
+            // (proceed + ledger naming who forced). Unevaluable items are
+            // reported UNKNOWN, never passed (PRIN-5). Quiet for types with
+            // no machine-checkable item and when every item is met.
+            // trace:TASK-1277 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                let report = crate::protocol_gate::evaluate_for_repo(req, &project_root);
+                let enforce = crate::criteria_gate::read_enforce_mode(&project_root);
+                let outcome = crate::protocol_gate::decide(&report, enforce, *force);
+                let (missing, unknown, refuse, forced) = match outcome {
+                    crate::protocol_gate::GateOutcome::Proceed { unknown } => {
+                        (Vec::new(), unknown, false, false)
+                    }
+                    crate::protocol_gate::GateOutcome::Warn {
+                        missing,
+                        unknown,
+                        forced,
+                    } => (missing, unknown, false, forced),
+                    crate::protocol_gate::GateOutcome::Refuse { missing, unknown } => {
+                        (missing, unknown, true, false)
+                    }
+                };
+                for line in unknown.iter().chain(missing.iter()) {
+                    eprintln!(
+                        "{} {line}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                    );
+                }
+                if refuse {
+                    eprintln!(
+                        "queue done refused: {} is missing protocol items \
+                         ([protocol] enforce = \"refuse\"). Override with `--force` \
+                         (the override is ledgered).",
+                        display_id
+                    );
+                    std::process::exit(1);
+                }
+                if !missing.is_empty() {
+                    let author = get_default_author();
+                    let body = crate::protocol_gate::ledger_comment(
+                        "aida queue done",
+                        display_id,
+                        &missing,
+                        forced.then_some(author.as_str()),
+                    );
+                    // Written only once every later guard passes (below).
+                    protocol_ledger = Some((author, body));
+                }
+            }
+
             // STORY-469 Guard 1: validate trailer spec-IDs before flipping the
             // spec to Done. Catch a hallucinated / typo'd / since-rejected
             // `(SPEC-ID)` trailer on this branch's commits BEFORE the spec is
@@ -5100,6 +5155,22 @@ pub(crate) fn handle_queue_command(
                     eprintln!("Cancelled. Requirement and queue untouched.");
                     return Ok(());
                 }
+            }
+
+            // TASK-1277: the protocol ledger lands only after the trailer
+            // guard and the confirmation pass, and only once — a drain retry
+            // or rework round re-running `queue done` with the identical gap
+            // does not stack duplicate comments.
+            // trace:TASK-1277 | ai:claude
+            if let Some((author, body)) = protocol_ledger.take() {
+                let gate_req_id = req.id;
+                storage.update_atomically(|s| {
+                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == gate_req_id) {
+                        if !crate::protocol_gate::ledger_already_recorded(r, &body) {
+                            r.add_comment(aida_core::Comment::new(author, body));
+                        }
+                    }
+                })?;
             }
 
             // BUG-684: `queue done` promotes ANY status straight to Done — a
@@ -9927,6 +9998,26 @@ pub(crate) fn handle_queue_work(
     // env; bake the absolute anchor into the prompt text as well.
     if role.eq_ignore_ascii_case("reviewer") {
         append_reviewer_prompt_suffixes(&mut prompt);
+        // TASK-1277: every review round carries the type protocol's
+        // machine-checkable checklist verbatim, resolved from the plan's own
+        // spec entries (no forge call), so rounds cite protocol items by name.
+        // trace:TASK-1277 | ai:claude
+        if let Ok(store) = storage.load() {
+            let typed: Vec<(String, aida_core::RequirementType)> = plan
+                .entries
+                .iter()
+                .filter_map(|entry| {
+                    let req = store
+                        .requirements
+                        .iter()
+                        .find(|r| spec_matches(r, &entry.spec_id))?;
+                    Some((req.display_id().to_string(), req.req_type.clone()))
+                })
+                .collect();
+            if let Some(block) = crate::protocol_gate::reviewer_prompt_block(&typed) {
+                prompt.push_str(&block);
+            }
+        }
         // trace:TASK-1290 | ai:claude
         if let Some((forge, pr_n)) = plan.review_target {
             if let Some(root) = project_root_for_config.as_deref() {

@@ -3105,9 +3105,21 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
     }
     let commit_msg = String::from_utf8_lossy(&commit_msg_out.stdout).to_string();
     let title = derive_pr_title_from_commit(&commit_msg);
-    let body = derive_pr_body_from_commit(&commit_msg);
+    let mut body = derive_pr_body_from_commit(&commit_msg);
     if title.is_empty() {
         anyhow::bail!("could not derive a non-empty PR title from the latest commit");
+    }
+
+    // TASK-1277: the typed-protocol check runs at PR creation too; its
+    // per-item report lands in the PR body under a `## Protocol` heading, and
+    // `[protocol] enforce = "refuse"` blocks creation unless the spec carries
+    // the `--force` override ledgered at `aida queue done`.
+    // trace:TASK-1277 | ai:claude
+    if let Some(section) = protocol_section_for_commit(project_root, &commit_msg)? {
+        if !body.trim().is_empty() {
+            body.push_str("\n\n");
+        }
+        body.push_str(&section);
     }
 
     // TASK-1290: report (never block — the blocking/`--force`/ledger contract
@@ -3144,6 +3156,87 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
         );
     }
     Ok(change.id)
+}
+
+/// TASK-1277: evaluate the type protocol's machine-checkable items for every
+/// spec the head commit's `(SPEC-ID)` trailers name. Prints missing/unknown
+/// lines, returns the `## Protocol` PR-body section, and errors (refusing PR
+/// creation) when `[protocol] enforce = "refuse"` and a spec has a missing
+/// item without a `--force` override ledger. Store/resolution failures are a
+/// silent no-op — they never fabricate a pass or a refusal.
+// trace:TASK-1277 | ai:claude
+fn protocol_section_for_commit(
+    project_root: &std::path::Path,
+    commit_msg: &str,
+) -> Result<Option<String>> {
+    let spec_ids = extract_spec_ids_from_commit(commit_msg);
+    if spec_ids.is_empty() {
+        return Ok(None);
+    }
+    // A linked worktree usually has no `.aida-store/` of its own; fall back
+    // to the main worktree's store rather than silently dropping the section.
+    let store = match Storage::new(project_root.join(".aida-store")).load() {
+        Ok(store) => store,
+        Err(_) => {
+            let main_root = main_worktree_root_from(project_root);
+            match Storage::new(main_root.join(".aida-store")).load() {
+                Ok(store) => store,
+                Err(e) => {
+                    eprintln!(
+                        "  protocol: could not load the requirement store ({e:#}); \
+                         protocol items not evaluated"
+                    );
+                    return Ok(None);
+                }
+            }
+        }
+    };
+    let enforce = crate::criteria_gate::read_enforce_mode(project_root);
+    let mut reports = Vec::new();
+    let mut refused: Vec<String> = Vec::new();
+    for id in &spec_ids {
+        let Some(req) = store.requirements.iter().find(|r| spec_matches(r, id)) else {
+            continue;
+        };
+        let display = req.spec_id.as_deref().unwrap_or(id.as_str()).to_string();
+        let report = crate::protocol_gate::evaluate_for_repo(req, project_root);
+        if report.is_empty() {
+            continue;
+        }
+        let forced = crate::protocol_gate::has_force_override(req);
+        match crate::protocol_gate::decide(&report, enforce, forced) {
+            crate::protocol_gate::GateOutcome::Proceed { unknown } => {
+                for line in &unknown {
+                    eprintln!("  {line}");
+                }
+            }
+            crate::protocol_gate::GateOutcome::Warn {
+                missing, unknown, ..
+            } => {
+                for line in unknown.iter().chain(missing.iter()) {
+                    eprintln!(
+                        "  {} {line}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                    );
+                }
+            }
+            crate::protocol_gate::GateOutcome::Refuse { missing, unknown } => {
+                for line in &unknown {
+                    eprintln!("  {line}");
+                }
+                refused.extend(missing);
+            }
+        }
+        reports.push((display, report));
+    }
+    if !refused.is_empty() {
+        anyhow::bail!(
+            "PR creation refused: missing protocol items ([protocol] enforce = \"refuse\"):\n  {}\n\
+             Add the missing items, or override at `aida queue done --force` (ledgered).",
+            refused.join("\n  ")
+        );
+    }
+    Ok(crate::protocol_gate::pr_body_section(&reports))
 }
 
 /// TASK-1290: report-only (no blocking, no `--force`) pass over the spec(s)
