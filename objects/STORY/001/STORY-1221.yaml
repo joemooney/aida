@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-19T00:18:20.557380229Z
+modified_at: 2026-09-24T16:29:51.156515857Z
 req_type: Story
 tags:
 - agent-ux
@@ -39,13 +39,11 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T19:24:10.362741772Z
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0b5ed-3eab-76c2-8f47-a49b9399a824
   created_at: 2026-09-18T19:28:01.668226084Z
   created_by: joe
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
   created_at: 2026-09-18T19:28:02.778718862Z
   created_by: joe
