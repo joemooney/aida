@@ -59,6 +59,7 @@ mod do_dispatch;
 mod doc_cmd;
 mod docs;
 mod doctor_cmd;
+// trace:STORY-1462 | ai:claude — runaway-seat watchdog doctor category.
 mod drain_caps;
 mod drain_cmd;
 mod drain_lock;
@@ -70,6 +71,7 @@ mod orchestrator_cmd;
 mod pr_cmd;
 mod protocol_cmd;
 mod queue_cmd;
+mod runaway_seats;
 mod solo_cmd;
 mod status_cmd;
 mod supervise_cmd;
@@ -23105,6 +23107,21 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "free-space",
         ],
         "disk-headroom",
+    ),
+    // STORY-1462: runaway-seat watchdog — per-session wake-rate, token-rate,
+    // repeated-injected-prompt, idle-ratio, context-ceiling, compaction and
+    // model-side-mail-poll anomalies read from on-disk session transcripts,
+    // plus the project's trailing-24h token spend against `[watchdog]`
+    // thresholds. Zero-token, substrate-only. trace:STORY-1462 | ai:claude
+    (
+        &[
+            "runaway-seats",
+            "runaway-seat",
+            "runaway",
+            "watchdog",
+            "seat-watchdog",
+        ],
+        "runaway-seats",
     ),
 ];
 
