@@ -79,6 +79,17 @@ impl CachedGitBackend {
             None => return git_root.with_extension("cache.db"),
         };
         for _ in 0..6 {
+            // BUG-1598: never adopt the OS temp directory itself as the
+            // project root. A store rooted one or two levels under
+            // `std::env::temp_dir()` (a `mktemp -d`/`tempfile::tempdir()`
+            // fixture with no `.aida` of its own) would otherwise walk
+            // straight into `/tmp` and, if anything else on the machine ever
+            // left a `.aida/` sitting there, silently share/corrupt that
+            // cache instead of falling through to its own sibling file
+            // below. trace:BUG-1598 | ai:claude
+            if crate::store_locate::is_system_temp_dir(&probe) {
+                break;
+            }
             if probe.join(".aida").is_dir() {
                 return probe.join(".aida").join("cache.db");
             }

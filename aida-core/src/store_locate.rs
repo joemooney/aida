@@ -12,6 +12,28 @@
 
 use std::path::{Path, PathBuf};
 
+/// BUG-1598: is `path` the OS system temp directory itself (e.g. `/tmp` on
+/// Linux, or whatever `$TMPDIR` names)?
+///
+/// Any walk-up-looking-for-`.aida` resolver must stop BEFORE treating this
+/// directory as a legitimate project root. The system temp dir is shared by
+/// every process on the machine — a `mktemp -d`/`tempfile::tempdir()`
+/// fixture one or two levels under it has NO ancestor of its own between
+/// itself and `/tmp`, so an unbounded walk-up reaches `/tmp` in a couple of
+/// hops. If anything (a stray manual `aida init` run from `/tmp`, another
+/// test, another concurrent process on a shared dev box) ever left a real
+/// `.aida/` sitting there, every later "isolated" tempdir-rooted test or
+/// command would silently ADOPT that shared `.aida` — sharing its cache,
+/// corrupting it with unrelated data ("duplicate AIDA spec IDs detected"),
+/// and leaving `/tmp/.aida`/`/tmp/.aida-store` behind for the next run to
+/// trip over too. Comparing canonicalized paths (not raw equality) so a
+/// symlinked `/tmp` (macOS: `/tmp` -> `/private/tmp`) is still caught.
+// trace:BUG-1598 | ai:claude
+pub fn is_system_temp_dir(path: &Path) -> bool {
+    let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    canon(path) == canon(&std::env::temp_dir())
+}
+
 /// Classification of a candidate store path: either it resolves to a usable
 /// store, or it's set-but-unusable with a specific reason. Lets the
 /// resolution core stay pure/unit-testable while a caller-side env wrapper
@@ -133,6 +155,11 @@ fn main_worktree_store(current: &Path, rel_store: &str) -> Option<PathBuf> {
 pub fn detect_distributed_store_from(start: &Path) -> Option<PathBuf> {
     let mut current = start;
     loop {
+        // BUG-1598: never walk INTO the system temp dir and adopt whatever
+        // `.aida/config.toml` some unrelated process left sitting there.
+        if is_system_temp_dir(current) {
+            return None;
+        }
         let config_path = current.join(".aida").join("config.toml");
         if let Ok(content) = std::fs::read_to_string(&config_path) {
             // store_path is relative to the directory containing config.toml,
@@ -356,5 +383,90 @@ mod tests {
         assert!(!is_store_attached(root)); // .aida-store but not git-canonical
         std::fs::create_dir_all(root.join(".aida-store/objects")).unwrap();
         assert!(is_store_attached(root)); // objects/ present -> attached
+    }
+
+    // BUG-1598: the system temp dir itself must never be adopted as a
+    // project root, even when a real `.aida/config.toml` happens to be
+    // sitting there (left by a stray manual run, another test, or another
+    // process on a shared dev box).
+    #[test]
+    fn is_system_temp_dir_identifies_the_os_temp_dir() {
+        assert!(is_system_temp_dir(&std::env::temp_dir()));
+
+        let tmp = TempDir::new().unwrap();
+        assert!(!is_system_temp_dir(tmp.path()));
+        assert!(!is_system_temp_dir(Path::new("/definitely/not/temp")));
+    }
+
+    /// RAII guard: redirects `TMPDIR` (and thus `std::env::temp_dir()`) to a
+    /// private fixture dir for the guard's lifetime, restoring the prior
+    /// value on drop. Deliberately does NOT touch the real, shared `/tmp` —
+    /// this is a multi-agent dev box where other processes may legitimately
+    /// be reading/writing real ambient state under `/tmp` at any moment, and
+    /// this test must not race them.
+    // trace:BUG-1598 | ai:claude
+    struct TmpDirRedirect {
+        prev: Option<std::ffi::OsString>,
+    }
+
+    impl TmpDirRedirect {
+        fn to(path: &Path) -> Self {
+            let prev = std::env::var_os("TMPDIR");
+            // SAFETY: test-only, single-purpose env mutation restored on drop.
+            unsafe { std::env::set_var("TMPDIR", path) };
+            TmpDirRedirect { prev }
+        }
+    }
+
+    impl Drop for TmpDirRedirect {
+        fn drop(&mut self) {
+            // SAFETY: test-only, restoring what this guard changed.
+            unsafe {
+                match &self.prev {
+                    Some(v) => std::env::set_var("TMPDIR", v),
+                    None => std::env::remove_var("TMPDIR"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn detect_distributed_store_from_never_adopts_the_system_temp_dir() {
+        // Simulate the exact pollution scenario BUG-1598 describes: a real
+        // `.aida/config.toml` sitting directly in the system temp dir (as a
+        // stray manual `aida init` run, another test, or another process on
+        // a shared dev box might leave), and a `mktemp -d`-style fixture one
+        // level under it with no `.aida` of its own. The walk-up must stop
+        // before reaching the temp dir, never adopting the ambient config.
+        //
+        // `TMPDIR` is redirected to a private fixture for this test instead
+        // of touching the real `/tmp`, so this never races a concurrent
+        // process's genuine use of the shared system temp dir.
+        let fake_system_temp = TempDir::new().unwrap();
+        let _redirect = TmpDirRedirect::to(fake_system_temp.path());
+        let system_temp = std::env::temp_dir();
+        assert_eq!(
+            system_temp.canonicalize().unwrap(),
+            fake_system_temp.path().canonicalize().unwrap(),
+            "TMPDIR redirect must take effect"
+        );
+
+        let planted = system_temp.join(".aida");
+        std::fs::create_dir_all(&planted).unwrap();
+        std::fs::write(
+            planted.join("config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(system_temp.join(".aida-store")).unwrap();
+
+        let nested = system_temp.join("a").join("b");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let resolved = detect_distributed_store_from(&nested);
+        assert!(
+            resolved.is_none(),
+            "must never adopt the system temp dir's ambient .aida, got {resolved:?}"
+        );
     }
 }
