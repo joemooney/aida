@@ -3173,9 +3173,23 @@ fn protocol_section_for_commit(
     if spec_ids.is_empty() {
         return Ok(None);
     }
-    let storage = Storage::new(project_root.join(".aida-store"));
-    let Ok(store) = storage.load() else {
-        return Ok(None);
+    // A linked worktree usually has no `.aida-store/` of its own; fall back
+    // to the main worktree's store rather than silently dropping the section.
+    let store = match Storage::new(project_root.join(".aida-store")).load() {
+        Ok(store) => store,
+        Err(_) => {
+            let main_root = main_worktree_root_from(project_root);
+            match Storage::new(main_root.join(".aida-store")).load() {
+                Ok(store) => store,
+                Err(e) => {
+                    eprintln!(
+                        "  protocol: could not load the requirement store ({e:#}); \
+                         protocol items not evaluated"
+                    );
+                    return Ok(None);
+                }
+            }
+        }
     };
     let enforce = crate::criteria_gate::read_enforce_mode(project_root);
     let mut reports = Vec::new();

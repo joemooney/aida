@@ -5064,6 +5064,7 @@ pub(crate) fn handle_queue_command(
                 }
             }
 
+            let mut protocol_ledger: Option<(String, String)> = None;
             // TASK-1277: typed protocols slice 2 — evaluate the machine-
             // checkable items of the spec type's protocol (spike deliverable,
             // ADR accepted + references edge, bug test-file change). Same
@@ -5113,13 +5114,8 @@ pub(crate) fn handle_queue_command(
                         &missing,
                         forced.then_some(author.as_str()),
                     );
-                    let comment = aida_core::Comment::new(author.clone(), body);
-                    let gate_req_id = req.id;
-                    storage.update_atomically(|s| {
-                        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == gate_req_id) {
-                            r.add_comment(comment);
-                        }
-                    })?;
+                    // Written only once every later guard passes (below).
+                    protocol_ledger = Some((author, body));
                 }
             }
 
@@ -5159,6 +5155,22 @@ pub(crate) fn handle_queue_command(
                     eprintln!("Cancelled. Requirement and queue untouched.");
                     return Ok(());
                 }
+            }
+
+            // TASK-1277: the protocol ledger lands only after the trailer
+            // guard and the confirmation pass, and only once — a drain retry
+            // or rework round re-running `queue done` with the identical gap
+            // does not stack duplicate comments.
+            // trace:TASK-1277 | ai:claude
+            if let Some((author, body)) = protocol_ledger.take() {
+                let gate_req_id = req.id;
+                storage.update_atomically(|s| {
+                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == gate_req_id) {
+                        if !crate::protocol_gate::ledger_already_recorded(r, &body) {
+                            r.add_comment(aida_core::Comment::new(author, body));
+                        }
+                    }
+                })?;
             }
 
             // BUG-684: `queue done` promotes ANY status straight to Done — a
@@ -9113,6 +9125,9 @@ pub(crate) fn append_untraced_criteria_prompt_block(
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(1);
+    if round != 1 {
+        return;
+    }
     let Ok((base, head)) = pr_base_head(project_root, forge, pr_n) else {
         return;
     };
@@ -9129,23 +9144,6 @@ pub(crate) fn append_untraced_criteria_prompt_block(
                 spec_ids.push(id);
             }
         }
-    }
-    // TASK-1277: every round carries the type protocol's machine-checkable
-    // checklist verbatim, so review rounds cite protocol items by name.
-    // trace:TASK-1277 | ai:claude
-    let typed: Vec<(String, aida_core::RequirementType)> = spec_ids
-        .iter()
-        .filter_map(|id| {
-            let req = store.requirements.iter().find(|r| spec_matches(r, id))?;
-            let display = req.spec_id.as_deref().unwrap_or(id.as_str()).to_string();
-            Some((display, req.req_type.clone()))
-        })
-        .collect();
-    if let Some(block) = crate::protocol_gate::reviewer_prompt_block(&typed) {
-        prompt.push_str(&block);
-    }
-    if round != 1 {
-        return;
     }
     let mut reports: Vec<(String, crate::criteria::CriteriaReport)> = Vec::new();
     for id in &spec_ids {
@@ -10000,6 +9998,26 @@ pub(crate) fn handle_queue_work(
     // env; bake the absolute anchor into the prompt text as well.
     if role.eq_ignore_ascii_case("reviewer") {
         append_reviewer_prompt_suffixes(&mut prompt);
+        // TASK-1277: every review round carries the type protocol's
+        // machine-checkable checklist verbatim, resolved from the plan's own
+        // spec entries (no forge call), so rounds cite protocol items by name.
+        // trace:TASK-1277 | ai:claude
+        if let Ok(store) = storage.load() {
+            let typed: Vec<(String, aida_core::RequirementType)> = plan
+                .entries
+                .iter()
+                .filter_map(|entry| {
+                    let req = store
+                        .requirements
+                        .iter()
+                        .find(|r| spec_matches(r, &entry.spec_id))?;
+                    Some((req.display_id().to_string(), req.req_type.clone()))
+                })
+                .collect();
+            if let Some(block) = crate::protocol_gate::reviewer_prompt_block(&typed) {
+                prompt.push_str(&block);
+            }
+        }
         // trace:TASK-1290 | ai:claude
         if let Some((forge, pr_n)) = plan.review_target {
             if let Some(root) = project_root_for_config.as_deref() {
