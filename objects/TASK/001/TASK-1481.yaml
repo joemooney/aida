@@ -12,12 +12,12 @@ description: |-
   - The default output is compact enough to identify commands immediately preceding a slow invocation.
   - Grouped usage counts and `--events` detailed output remain unchanged and discoverable.
   - Tests cover successful and failed commands, long command names, empty windows, and JSON output.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:25:44.534269063Z
-modified_at: 2026-09-24T17:39:59.501407508Z
+modified_at: 2026-09-24T17:47:12.304741228Z
 req_type: Task
 tags:
 - docs:impacted
