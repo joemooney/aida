@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T08:51:32.816783219Z
-modified_at: 2026-09-20T22:34:08.673633950Z
+modified_at: 2026-09-24T16:27:26.861342674Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -50,13 +50,11 @@ tags:
 - observability
 - windows
 relationships:
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0bb79-0a89-7bc2-8209-676c2c237cbc
   created_at: 2026-09-20T08:51:54.783142479Z
   created_by: joe
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
   created_at: 2026-09-20T08:51:55.799603217Z
   created_by: joe
