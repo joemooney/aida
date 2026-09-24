@@ -3,10 +3,10 @@ spec_id: STORY-1467
 agreed_id: STORY-1467
 title: 'aida init: classify forge, CI, and local-only project capabilities'
 description: 'Make `aida init` usable and explicit for repositories with no forge and/or no CI. During init, inspect the configured origin (if any), recognize GitHub/GitLab/unknown/no-remote, detect whether the matching CLI (`gh` or `glab`) is installed, and detect whether project CI configuration is present. When safe and non-mutating, report whether the matching CLI appears authenticated and usable; never require a forge, forge CLI, or CI configuration for local AIDA graph and pure-git workflows. Acceptance: a no-remote repository initializes successfully in pure-git mode; an unknown-host remote does not guess GitHub; missing CLI/auth/CI are reported as capability states with actionable guidance; and the resulting config/status distinguishes available, unavailable, and not-applicable capabilities.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:30:46.229764521Z
-modified_at: 2026-09-24T00:30:46.229764521Z
+modified_at: 2026-09-24T08:12:18.192734568Z
 req_type: Story
