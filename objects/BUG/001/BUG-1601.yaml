@@ -18,5 +18,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:43:08.095866704Z
-modified_at: 2026-09-24T17:14:45.475516161Z
+modified_at: 2026-09-24T17:14:51.837163181Z
 req_type: Bug
+comments:
+- id: 01a0d469-b23d-7300-a8d4-78197e43cab7
+  author: joe
+  content: 'PROXY DECISION (orchestrator acting for Joe): rejected as an exact duplicate of BUG-1600 (identical title and description). The work is tracked there.'
+  created_at: 2026-09-24T17:14:51.837163181Z
+  modified_at: 2026-09-24T17:14:51.837163181Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
