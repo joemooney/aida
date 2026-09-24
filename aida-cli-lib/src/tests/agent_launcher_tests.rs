@@ -1293,6 +1293,11 @@ fn apply_agent_default_flags_no_default_flags_is_native() {
 #[test]
 fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
     let tmp = TempDir::new().unwrap();
+    // STORY-1471: keep a user's `~/.aida/roles/` launch-prompt override out.
+    let home = TempDir::new().unwrap();
+    let home_str = home.path().to_str().unwrap();
+    let _home_guard =
+        crate::test_env::EnvVarsGuard::set(&[("HOME", home_str), ("AIDA_TEST_HOME", home_str)]);
     let plan = AgentLaunchPlan {
         project_root: tmp.path().to_path_buf(),
         launch_cwd: tmp.path().to_path_buf(),
@@ -1364,6 +1369,12 @@ fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
         agent_initial_prompt_args(&codex, &no_spec_plan, &AgentPromptOptions::new(None, false));
     assert_eq!(no_spec.len(), 1);
     assert!(no_spec[0].contains("implementer seat"), "{}", no_spec[0]);
+    assert!(
+        no_spec[0].contains("aida worktree add <ID>"),
+        "{}",
+        no_spec[0]
+    );
+    assert!(!no_spec[0].contains("worktree enter"), "{}", no_spec[0]);
     assert!(!no_spec[0].contains("aida show"), "{}", no_spec[0]);
     let no_spec_opted_out =
         agent_initial_prompt_args(&codex, &no_spec_plan, &AgentPromptOptions::new(None, true));
@@ -1509,6 +1520,12 @@ fn role_file_launch_prompts_override_the_embedded_defaults() {
 #[test]
 fn show_prompt_prints_the_exact_injected_role_prompt() {
     let tmp = TempDir::new().unwrap();
+    // Point the global role dir at an empty tempdir so a user's
+    // `~/.aida/roles/product.toml` override cannot shadow the embedded prompt.
+    let home = TempDir::new().unwrap();
+    let home_str = home.path().to_str().unwrap();
+    let _home_guard =
+        crate::test_env::EnvVarsGuard::set(&[("HOME", home_str), ("AIDA_TEST_HOME", home_str)]);
     let config = AgentLaunchConfig {
         agent_type: "antigravity",
         binary: "agy",

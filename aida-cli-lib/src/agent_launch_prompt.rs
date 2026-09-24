@@ -88,8 +88,9 @@ fn default_body(agent_type: &str, seat: &str, spec: Option<&str>, ship: &str) ->
         ("implementer", None) => "You are the implementer seat: you build one spec at a time, \
              bounded to its acceptance criteria. No spec was assigned at launch. Find work with \
              `aida queue next --for implementer` or a pending brief, then claim it with \
-             `aida worktree enter <ID>` so it gets its own worktree and lease. Do not review or \
-             merge your own work."
+             `aida worktree add <ID>` (it takes the lease and prints the worktree path), cd into \
+             that printed path and work only there, never in the primary checkout. Do not \
+             review or merge your own work."
             .to_string(),
         ("advisor", Some(spec)) => format!(
             "You are the advisor seat: independent judgment and gates, not implementation. \
