@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:15:53.618911294Z
-modified_at: 2026-09-24T08:13:50.256176271Z
+modified_at: 2026-09-24T08:13:53.453707853Z
 req_type: Story
 comments:
 - id: 01a0d1ca-4878-7c12-8f76-2e7745df97b1
@@ -16,6 +16,12 @@ comments:
   content: 'Candidate idea: add optional phase-level performance telemetry for slow CLI commands. Keep the current privacy-floor command-shape and total-duration record, then optionally expose timings such as Git history scan, YAML loading, cache lock wait, and cache rebuild without recording argument values, paths, prompts, or requirement contents. This should remain an idea until prioritized; if accepted, promote it to a concrete CR or TASK.'
   created_at: 2026-09-24T05:01:30.104139686Z
   modified_at: 2026-09-24T05:01:30.104139686Z
+- id: 01a0d27a-6bad-7373-bdb5-6f7d0ef0308d
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): DEFERRED until: draft inbox regularly holds >10 non-actionable ideas. Large new subsystem; conflicts with the bugs-first direction.'
+  created_at: 2026-09-24T08:13:53.453707853Z
+  modified_at: 2026-09-24T08:13:53.453707853Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 deferred: true
 deferred_at: 2026-09-24T08:13:50.256176271Z
 deferred_until: draft inbox regularly holds >10 non-actionable ideas
