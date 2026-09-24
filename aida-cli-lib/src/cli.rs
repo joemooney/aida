@@ -8703,6 +8703,14 @@ pub enum Command {
         // trace:BUG-528 | ai:claude
         #[clap(long = "for", value_name = "ROLE")]
         r#for: Option<String>,
+
+        /// Run named gates from the shipped library over the new spec's text
+        /// before it is filed (comma-separated, e.g. `--gates well-formed`).
+        /// Advisory: findings are printed, the spec is filed regardless.
+        /// Without this flag `aida add` is unchanged. See `aida gate list`.
+        // trace:STORY-1427 | ai:claude
+        #[clap(long, value_name = "NAMES", value_delimiter = ',')]
+        gates: Vec<String>,
     },
 
     /// File a small change into the fasttrack lane in one shot
@@ -12609,6 +12617,15 @@ pub enum Command {
     #[clap(subcommand)]
     Deps(DepsCommand),
 
+    /// Named discipline gates, invoked on demand instead of carried as prose.
+    /// `aida gate list` shows the shipped library and which lifecycle moment
+    /// each gate is a default for; `aida gate show <name>` prints one gate's
+    /// checklist; `aida gate run <name> <SPEC>` runs its deterministic tier
+    /// over a spec and prints the checklist an agent answers for the rest.
+    // trace:STORY-1427 | ai:claude
+    #[clap(subcommand)]
+    Gate(GateCommand),
+
     /// Generate `CHANGELOG.md` mechanically from git tags + the spec
     /// graph. Walks `v*` tags as release boundaries, scans commits
     /// between them for `(SPEC-ID)` references, classifies each spec
@@ -13084,6 +13101,43 @@ pub enum SkillCommand {
         /// the final verdict. Useful for CI logs.
         #[clap(long, short = 'q')]
         quiet: bool,
+    },
+}
+
+/// The shipped gate library. Read-only.
+// trace:STORY-1427 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum GateCommand {
+    /// List the shipped gates, their versions, and the lifecycle moment each
+    /// one is a default for.
+    List {
+        /// Only gates that are a default at this moment (e.g. `groom`).
+        #[clap(long, value_name = "MOMENT")]
+        moment: Option<String>,
+
+        /// Emit JSON for agents / scripts.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Print one gate's checklist for an agent to follow.
+    Show {
+        /// Gate name, e.g. `well-formed`.
+        name: String,
+    },
+
+    /// Run a gate over a spec: the deterministic tier first, then the
+    /// checklist for what it cannot decide. Advisory; never edits the spec.
+    Run {
+        /// Gate name, e.g. `well-formed`.
+        name: String,
+
+        /// SPEC-ID to judge, e.g. `STORY-42`.
+        spec: String,
+
+        /// Emit the verdict as JSON.
+        #[clap(long)]
+        json: bool,
     },
 }
 

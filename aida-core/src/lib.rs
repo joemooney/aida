@@ -81,7 +81,9 @@ pub mod dispenser;
 pub mod docs_review;
 // trace:TASK-0417 | ai:claude
 pub mod ears_lint;
+// trace:STORY-1427 | ai:claude
 pub mod export;
+pub mod gates;
 // trace:STORY-476 | ai:claude
 pub mod external_refs;
 pub mod external_tool_output;
