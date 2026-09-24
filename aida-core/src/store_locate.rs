@@ -33,7 +33,12 @@ use std::path::{Path, PathBuf};
 /// message for it — from the walk-up's point of view it's indistinguishable
 /// from "not an AIDA project yet". A walk-up may still find and adopt a
 /// project BELOW a temp root (e.g. `/tmp/real-project/.aida`); only the temp
-/// root itself is off-limits.
+/// root itself is off-limits. This holds even when `$TMPDIR` is explicitly
+/// pointed at some other directory (a sandboxed session, a CI runner's
+/// `RUNNER_TEMP`) — THAT directory becomes a guarded root too (see
+/// `real_temp_roots`), so it likewise can never be adopted as a project
+/// root, for the same reason: it's shared with whatever else in that
+/// environment also honors `$TMPDIR`.
 ///
 /// The guarded call sites, as of this writing (keep this list current when
 /// adding a new `.aida`-looking-for walk-up — that's the "every walk-up"
@@ -44,7 +49,11 @@ use std::path::{Path, PathBuf};
 ///   `find_aida_project_root_from`, `config_toml_exists_upward` (BUG-1574's
 ///   fail-open carve-out — see its doc comment for why disagreeing with
 ///   `detect_distributed_store_from` here specifically flips a refusal the
-///   wrong way), `parent_project_root_for_session`.
+///   wrong way), `parent_project_root_for_session`, `statusline_project_root`
+///   (backs `aida role` / `aida statusline` and the init tail —
+///   `scaffold_starter_roles`, `refresh_agent_packs`,
+///   `register_project_in_global_registry`; falls back to cwd on a temp
+///   root, same as "nothing found").
 /// - `aida-tui`: `lib.rs::ensure_project_context`,
 ///   `launcher.rs::ensure_project_context`, `dashboard.rs::project_root_of`,
 ///   `redesign/mail.rs::resolve_project_root` (its `.git`/`.aida` fallback;
