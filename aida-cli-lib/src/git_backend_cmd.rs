@@ -1356,18 +1356,27 @@ pub(crate) fn handle_git_backend_command(
             // TASK-266: load the store only for the `--auto-complete` view,
             // which resolves drafted-BUG statuses; plain usage stays cheap.
             // STORY-530: the `--health` catalog also needs the store.
-            let (unused, errors, auto_complete, failures, pattern, health, slowest, events) =
-                normalize_usage_mode(
-                    unused.as_deref(),
-                    *errors,
-                    *auto_complete,
-                    *failures,
-                    *pattern,
-                    *health,
-                    *slowest,
-                    *events,
-                    action.as_ref(),
-                );
+            let (
+                unused,
+                errors,
+                auto_complete,
+                failures,
+                pattern,
+                health,
+                slowest,
+                events,
+                timeline,
+            ) = normalize_usage_mode(
+                unused.as_deref(),
+                *errors,
+                *auto_complete,
+                *failures,
+                *pattern,
+                *health,
+                *slowest,
+                *events,
+                action.as_ref(),
+            );
             let store = if auto_complete || health {
                 backend.load().ok()
             } else {
@@ -1387,6 +1396,7 @@ pub(crate) fn handle_git_backend_command(
                 *read_write,
                 slowest,
                 events,
+                timeline,
                 cmd.as_deref(),
                 *slower_than,
                 store.as_ref(),
@@ -7071,7 +7081,12 @@ pub(crate) fn handle_git_backend_command(
                 );
             }
 
-            if *bidirectional {
+            // Mirror `rel add`'s `rel_should_write_inverse` — the parent/child
+            // pair (and any future pair added to that rule) is canonically
+            // bidirectional, so remove drops both reciprocal edges even
+            // without an explicit `--bidirectional`. Every other type keeps
+            // the opt-in flag, matching `rel add`. trace:BUG-1602 | ai:claude
+            if rel_should_write_inverse(&requested, *bidirectional) {
                 let inverse = requested.inverse().unwrap_or_else(|| requested.clone());
                 let mut to_req = backend
                     .get_requirement(&to_req.id)?

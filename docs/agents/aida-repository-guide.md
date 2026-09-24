@@ -132,6 +132,7 @@ aida integrate [--json]                # Read-only integrator throughput view (n
 aida statusbar [--once|--plain|--restore-title]  # Ambient read-only OSC terminal-title meter: `aida · q:5 · live:2 · STALE:1 · you:3 (…)` refreshed on an interval (default 15s); cache/local-fast, no network, NOT a dispatch surface. `--plain` feeds tmux status-right; `--restore-title` = opt-in gnhf-style title save/restore (STORY-715)
 aida usage --limit N slowest         # Commands ranked by latency (p50/p95/max + count) — perf debugging (STORY-709)
 aida usage --cmd X --slower-than Nms events  # Raw recent command-event stream with durations (STORY-709)
+aida usage --cmd X --slower-than Nms timeline  # Compact one-line-per-invocation feed: local ts, duration, cmd, pass/fail mark — the events stream, denser (TASK-1481)
 aida memories check [--verbose] [--json]   # Drift between local memory pack and binary's embedded master; fix via init --with-memories --refresh (STORY-410)
 aida plan verify <file> [--fix]        # Lint a plan: drifted refs, missing files/sections (--fix rewrites refs) (TASK-93)
 aida skill lint [<skill>] [--json] [-q]  # Lint skills that reference a plan: run plan-verify on each docs/plans/*.md ref + raw-glyph check the skill body; non-zero on drift/missing (TASK-927)

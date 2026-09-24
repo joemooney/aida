@@ -280,6 +280,387 @@ fn handle_usage_events(
     Ok(())
 }
 
+// ----------------------------------------------------------------------------
+// `aida usage timeline` — the compact scan-first companion to `--events`
+// (TASK-1481). Same source, same filter/sort as `filter_events` above; only
+// the rendering differs: one dense line per invocation (local time, compact
+// duration, a width-capped command shape, a pass/fail mark) instead of
+// `--events`'s raw-field table. `--events` stays available, unchanged, for
+// when the exact ts/duration_ms/exit_code fields are needed.
+// ----------------------------------------------------------------------------
+
+/// Command-shape column width for the timeline's human rendering. Long
+/// shapes are ellipsized rather than left to blow out the line — the whole
+/// point of this view is staying scannable.
+// trace:TASK-1481 | ai:claude
+const TIMELINE_CMD_WIDTH: usize = 32;
+
+/// Ellipsize `s` to at most `max` characters (character-count, not bytes, so
+/// multi-byte command args don't panic on a mid-char split).
+// trace:TASK-1481 | ai:claude
+fn truncate_cmd(s: &str, max: usize) -> String {
+    if max == 0 {
+        return String::new();
+    }
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let head: String = s.chars().take(max.saturating_sub(1)).collect();
+    format!("{head}…")
+}
+
+/// Compact human duration: `<1s` as milliseconds, `<1min` as one-decimal
+/// seconds, otherwise `MmSSs`. Kept short and fixed-ish width so the column
+/// stays scannable next to slow (multi-second/minute) outliers.
+// trace:TASK-1481 | ai:claude
+fn compact_duration_ms(ms: u64) -> String {
+    if ms < 1000 {
+        format!("{ms}ms")
+    } else if ms < 60_000 {
+        format!("{:.1}s", ms as f64 / 1000.0)
+    } else {
+        format!("{}m{:02}s", ms / 60_000, (ms % 60_000) / 1000)
+    }
+}
+
+/// Format an RFC3339 UTC timestamp as a compact LOCAL `MM-DD HH:MM:SS`
+/// string (14 chars). Unlike `--events`'s raw UTC `ts`, this view exists to
+/// correlate "what ran just before this" against a human's own wall clock.
+/// An unparseable timestamp falls back to the raw string rather than erroring
+/// — a report is more useful with one odd cell than with none.
+// trace:TASK-1481 | ai:claude
+fn format_timeline_ts(ts: &str) -> String {
+    chrono::DateTime::parse_from_rfc3339(ts)
+        .map(|t| {
+            t.with_timezone(&chrono::Local)
+                .format("%m-%d %H:%M:%S")
+                .to_string()
+        })
+        .unwrap_or_else(|_| ts.to_string())
+}
+
+/// One rendered (but uncolored) timeline row — pure data, no ANSI, no I/O —
+/// so the rendering logic is unit-testable without capturing stdout. The
+/// print loop wraps `cmd`/`when` in `.bold()`/`.dimmed()` and derives the
+/// pass/fail glyph from `exit_code` at print time.
+// trace:TASK-1481 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+struct TimelineRow {
+    when: String,
+    cmd: String,
+    duration: String,
+    exit_code: i32,
+}
+
+/// Build the printable rows for the human timeline view: local timestamp,
+/// duration, and the width-truncated command shape, for at most `limit` of
+/// `matched` (already windowed/filtered/sorted newest-first by
+/// [`filter_events`]). Pure over its inputs.
+// trace:TASK-1481 | ai:claude
+fn build_timeline_rows(matched: &[&usage::UsageEvent], limit: usize) -> Vec<TimelineRow> {
+    matched
+        .iter()
+        .take(limit)
+        .map(|ev| TimelineRow {
+            when: format_timeline_ts(&ev.ts),
+            cmd: truncate_cmd(&ev.cmd, TIMELINE_CMD_WIDTH),
+            duration: compact_duration_ms(ev.duration_ms),
+            exit_code: ev.exit_code,
+        })
+        .collect()
+}
+
+/// Build the `--json` payload for the timeline view — the same schema as
+/// `--events` (this is the same underlying stream; only the human rendering
+/// differs), so a machine consumer gets the raw fields either way. Pure over
+/// its inputs.
+// trace:TASK-1481 | ai:claude
+fn build_timeline_json(matched: &[&usage::UsageEvent], limit: usize) -> Vec<serde_json::Value> {
+    matched
+        .iter()
+        .take(limit)
+        .map(|ev| {
+            serde_json::json!({
+                "ts": ev.ts,
+                "cmd": ev.cmd,
+                "duration_ms": ev.duration_ms,
+                "exit_code": ev.exit_code,
+            })
+        })
+        .collect()
+}
+
+/// `aida usage timeline`: one compact line per invocation, newest-first —
+/// local timestamp, duration, command shape, and a pass/fail mark. Reuses
+/// [`filter_events`] verbatim (same --since/--cmd/--slower-than/--limit
+/// semantics as `--events`); only the rendering is denser.
+// trace:TASK-1481 | ai:claude
+fn handle_usage_timeline(
+    since_raw: &str,
+    json_out: bool,
+    limit: usize,
+    cmd_filter: Option<&str>,
+    slower_than: Option<u64>,
+) -> Result<()> {
+    let now = chrono::Utc::now();
+    let since = now - parse_days_arg(since_raw)?;
+    let events = usage::read_events();
+    let matched = filter_events(&events, since, cmd_filter, slower_than);
+
+    if json_out {
+        let arr = build_timeline_json(&matched, limit);
+        println!("{}", serde_json::to_string_pretty(&arr)?);
+        return Ok(());
+    }
+
+    // Agent-mode TOON: the same compact tabular convention `aida list` uses
+    // (raw field values, not the colored/truncated human cells) so a
+    // non-interactive caller gets a token-cheap table rather than the
+    // colored/ellipsized rendering below. trace:TASK-1481 | ai:claude
+    if crate::agent_output_mode() {
+        let rows: Vec<Vec<String>> = matched
+            .iter()
+            .take(limit)
+            .map(|ev| {
+                vec![
+                    ev.ts.clone(),
+                    ev.cmd.clone(),
+                    ev.duration_ms.to_string(),
+                    ev.exit_code.to_string(),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw(
+                "timeline",
+                &["ts", "cmd", "duration_ms", "exit_code"],
+                &rows
+            )
+        );
+        return Ok(());
+    }
+
+    let mut header = format!(
+        "{} recent invocations in the last {}",
+        "Usage:".bold(),
+        since_raw.cyan()
+    );
+    if let Some(c) = cmd_filter {
+        header.push_str(&format!(" (cmd = {})", c.cyan()));
+    }
+    if let Some(t) = slower_than {
+        header.push_str(&format!(" (slower than {}ms)", t.to_string().cyan()));
+    }
+    println!("{}", header);
+
+    if matched.is_empty() {
+        println!("  (no matching events in the window — widen --since or relax the filters)");
+        return Ok(());
+    }
+
+    println!(
+        "  {:<14} {:<w$} {:>7}  {}",
+        "ts".dimmed(),
+        "cmd".dimmed(),
+        "dur".dimmed(),
+        "exit".dimmed(),
+        w = TIMELINE_CMD_WIDTH
+    );
+    for row in build_timeline_rows(&matched, limit) {
+        let when_cell = format!("{:<14}", row.when);
+        let cmd_cell = format!("{:<w$}", row.cmd, w = TIMELINE_CMD_WIDTH);
+        let status_cell = if row.exit_code == 0 {
+            crate::glyph(crate::glyphs::Glyph::Check)
+                .green()
+                .to_string()
+        } else {
+            format!(
+                "{} exit {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red(),
+                row.exit_code
+            )
+        };
+        println!(
+            "  {} {} {:>7}  {}",
+            when_cell.dimmed(),
+            cmd_cell.bold(),
+            row.duration,
+            status_cell
+        );
+    }
+    if matched.len() > limit {
+        println!(
+            "  {} {} more (pass --limit N to expand)",
+            "…".dimmed(),
+            (matched.len() - limit).to_string().dimmed()
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod usage_timeline_tests {
+    // trace:TASK-1481 | ai:claude
+    use super::*;
+    use tempfile::tempdir;
+
+    fn ev(ts: &str, cmd: &str, duration_ms: u64, exit_code: i32) -> usage::UsageEvent {
+        usage::UsageEvent {
+            ts: ts.to_string(),
+            cmd: cmd.to_string(),
+            args_count: 0,
+            exit_code,
+            duration_ms,
+            binary_sha: None,
+            role: None,
+            scope: None,
+        }
+    }
+
+    #[test]
+    fn truncate_cmd_leaves_short_names_untouched() {
+        assert_eq!(truncate_cmd("queue list", 32), "queue list");
+        assert_eq!(truncate_cmd("", 32), "");
+    }
+
+    #[test]
+    fn truncate_cmd_ellipsizes_long_names() {
+        let long = "a".repeat(50);
+        let out = truncate_cmd(&long, 32);
+        assert_eq!(out.chars().count(), 32);
+        assert!(out.ends_with('…'));
+        assert!(out.starts_with(&"a".repeat(31)));
+    }
+
+    #[test]
+    fn compact_duration_ms_buckets() {
+        assert_eq!(compact_duration_ms(0), "0ms");
+        assert_eq!(compact_duration_ms(245), "245ms");
+        assert_eq!(compact_duration_ms(999), "999ms");
+        assert_eq!(compact_duration_ms(1_000), "1.0s");
+        assert_eq!(compact_duration_ms(26_400), "26.4s");
+        assert_eq!(compact_duration_ms(65_000), "1m05s");
+    }
+
+    #[test]
+    fn format_timeline_ts_falls_back_on_bad_input() {
+        assert_eq!(format_timeline_ts("not-a-timestamp"), "not-a-timestamp");
+    }
+
+    #[test]
+    fn format_timeline_ts_is_compact_and_local() {
+        let out = format_timeline_ts("2026-03-14T09:26:53+00:00");
+        // "MM-DD HH:MM:SS" — always 14 chars, whatever the local offset.
+        assert_eq!(out.chars().count(), 14);
+        assert_eq!(out.chars().nth(2), Some('-'));
+        assert_eq!(out.chars().nth(5), Some(' '));
+    }
+
+    #[test]
+    fn build_timeline_rows_success_row() {
+        let e = ev("2026-03-14T09:26:53+00:00", "queue list", 120, 0);
+        let rows = build_timeline_rows(&[&e], 20);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].cmd, "queue list");
+        assert_eq!(rows[0].duration, "120ms");
+        assert_eq!(rows[0].exit_code, 0);
+    }
+
+    #[test]
+    fn build_timeline_rows_failure_row() {
+        let e = ev("2026-03-14T09:26:53+00:00", "status", 26_400, 1);
+        let rows = build_timeline_rows(&[&e], 20);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].duration, "26.4s");
+        assert_eq!(rows[0].exit_code, 1);
+    }
+
+    #[test]
+    fn build_timeline_rows_truncates_long_command_names() {
+        let long_cmd = "doctor verify-relationships-and-then-some-extra-words-here";
+        let e = ev("2026-03-14T09:26:53+00:00", long_cmd, 5, 0);
+        let rows = build_timeline_rows(&[&e], 20);
+        assert_eq!(rows[0].cmd.chars().count(), TIMELINE_CMD_WIDTH);
+        assert!(rows[0].cmd.ends_with('…'));
+    }
+
+    #[test]
+    fn build_timeline_rows_empty_window_is_empty() {
+        assert!(build_timeline_rows(&[], 20).is_empty());
+    }
+
+    #[test]
+    fn build_timeline_rows_honors_limit() {
+        let events: Vec<usage::UsageEvent> = (0..5)
+            .map(|i| ev("2026-03-14T09:26:53+00:00", "list", i, 0))
+            .collect();
+        let refs: Vec<&usage::UsageEvent> = events.iter().collect();
+        assert_eq!(build_timeline_rows(&refs, 2).len(), 2);
+    }
+
+    #[test]
+    fn build_timeline_json_matches_events_schema() {
+        let e = ev("2026-03-14T09:26:53+00:00", "queue work", 800, 1);
+        let arr = build_timeline_json(&[&e], 20);
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["ts"], "2026-03-14T09:26:53+00:00");
+        assert_eq!(arr[0]["cmd"], "queue work");
+        assert_eq!(arr[0]["duration_ms"], 800);
+        assert_eq!(arr[0]["exit_code"], 1);
+    }
+
+    #[test]
+    fn build_timeline_json_empty_window_is_empty_array() {
+        assert!(build_timeline_json(&[], 20).is_empty());
+    }
+
+    /// End-to-end wiring test: a fixture `usage.jsonl` under a temp `HOME`
+    /// (never the real `~/.aida/usage.jsonl`) round-trips through
+    /// `usage::read_events()` → `filter_events()` → the timeline builders,
+    /// covering a success row, a failure row, and the newest-first order.
+    // trace:TASK-1481 | ai:claude
+    #[test]
+    fn timeline_reads_fixture_usage_log_not_real_home() {
+        let home = tempdir().unwrap();
+        let aida_dir = home.path().join(".aida");
+        std::fs::create_dir_all(&aida_dir).unwrap();
+        let now = chrono::Utc::now();
+        let earlier = (now - chrono::Duration::seconds(30)).to_rfc3339();
+        let later = now.to_rfc3339();
+        let fixture = format!(
+            "{}\n{}\n",
+            serde_json::json!({
+                "ts": earlier, "cmd": "queue list", "args_count": 0,
+                "exit_code": 0, "duration_ms": 120
+            }),
+            serde_json::json!({
+                "ts": later, "cmd": "status", "args_count": 0,
+                "exit_code": 1, "duration_ms": 26_000
+            }),
+        );
+        std::fs::write(aida_dir.join("usage.jsonl"), fixture).unwrap();
+
+        let _env = crate::test_env::EnvVarsGuard::set(&[("HOME", home.path().to_str().unwrap())]);
+        let events = usage::read_events();
+        assert_eq!(events.len(), 2, "must read the fixture, not the real home");
+
+        let since = now - chrono::Duration::days(1);
+        let matched = filter_events(&events, since, None, None);
+        assert_eq!(matched.len(), 2);
+        // Newest-first: the failing "status" row comes before "queue list".
+        assert_eq!(matched[0].cmd, "status");
+        assert_eq!(matched[1].cmd, "queue list");
+
+        let rows = build_timeline_rows(&matched, 20);
+        assert_eq!(rows[0].exit_code, 1);
+        assert_eq!(rows[1].exit_code, 0);
+
+        let json = build_timeline_json(&matched, 20);
+        assert_eq!(json.len(), 2);
+    }
+}
+
 #[cfg(test)]
 mod usage_perf_lens_tests {
     // trace:STORY-709 | ai:claude
@@ -424,6 +805,7 @@ pub(crate) fn handle_usage_command(
     read_write: bool,
     slowest: bool,
     events_lens: bool,
+    timeline: bool,
     cmd_filter: Option<&str>,
     slower_than: Option<u64>,
     store: Option<&RequirementsStore>,
@@ -447,6 +829,15 @@ pub(crate) fn handle_usage_command(
     // --slower-than. The "aida events" raw log, delivered as a usage lens.
     if events_lens {
         return handle_usage_events(since_raw, json_out, limit, cmd_filter, slower_than);
+    }
+
+    // TASK-1481: `timeline` is the scan-first companion to `--events` — same
+    // filtered/sorted event stream, but a denser one-line-per-invocation
+    // rendering (local time, compact duration, truncated command shape, a
+    // pass/fail mark) so a human can eyeball what ran immediately before a
+    // slow command without the raw-field table's width.
+    if timeline {
+        return handle_usage_timeline(since_raw, json_out, limit, cmd_filter, slower_than);
     }
 
     // STORY-530: `--health` renders the deterministic Tier-1 health catalog
