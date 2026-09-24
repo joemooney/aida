@@ -7041,6 +7041,21 @@ pub enum FindingsCommand {
         // trace:TASK-579 | ai:claude
         #[clap(long)]
         force: bool,
+
+        /// Destination: `work` (the default — fix this instance) or `gate`
+        /// (gate the whole class). The gate destination is offered once the
+        /// finding's recurrence count reaches the promote threshold.
+        // trace:STORY-1428 | ai:claude
+        #[clap(long = "to", value_name = "DEST", default_value = "work")]
+        to: String,
+
+        /// Gate screening answer, required with `--to gate`: `mechanical`
+        /// (a violation is recognisable without judgement), `agent` (only an
+        /// agent could recognise it; its verdict is advisory), or `none`
+        /// (stays prose — recorded so the question is not re-opened).
+        // trace:STORY-1428 | ai:claude
+        #[clap(long, value_name = "ANSWER")]
+        detectable: Option<String>,
     },
 
     /// Calibration review surface — list cold-boot vs fork-from-live
