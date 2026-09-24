@@ -428,10 +428,11 @@ pub(crate) fn maybe_print_upstream_recheck_notice(storage: &Storage) {
     let project_root = project_root_for_storage(storage);
     let marker = project_root.join(NOTICE_MARKER);
     let current = env!("CARGO_PKG_VERSION");
-    if std::fs::read_to_string(&marker)
-        .map(|s| s.trim() == current)
-        .unwrap_or(false)
-    {
+    // BUG-1594: one cheap `rev-parse` of the store worktree's HEAD. The full
+    // store load below runs only when the binary version OR the store HEAD
+    // changed since the last check.
+    let head = store_head_sha(storage.path()).or_else(|| store_objects_fingerprint(storage.path()));
+    if upstream_notice_is_current(&marker, current, head.as_deref()) {
         return;
     }
     let Ok(store) = storage.load() else {
@@ -441,14 +442,114 @@ pub(crate) fn maybe_print_upstream_recheck_notice(storage: &Storage) {
         .into_iter()
         .filter(|row| row.older)
         .count();
-    if stale == 0 {
+    if stale > 0 {
+        eprintln!("{stale} upstream aida report(s) predate this binary - aida report --recheck");
+    }
+    // BUG-1594: record the (version, store HEAD) pair this check covered,
+    // whether or not anything was stale. This notice runs before EVERY
+    // git-backend command; the marker used to be written only when a stale
+    // report was found, so in the common no-stale case every `aida show`,
+    // `aida list`, … paid a full store load (4,400+ YAML parses, 2.5s warm,
+    // far longer under contention). Keying on the store HEAD as well as the
+    // version means a report that arrives later — filed locally or brought
+    // in by `aida pull` — moves the HEAD and re-arms the check. When the
+    // HEAD is unreadable the marker records no SHA, which never matches, so
+    // the check fails toward running. trace:BUG-1594 | ai:claude
+    record_upstream_notice_checked(&marker, current, head.as_deref());
+}
+
+/// Read the requirements store's HEAD commit, or `None` when it is not a
+/// readable git worktree.
+// trace:BUG-1594 | ai:claude
+fn store_head_sha(store_path: &Path) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(store_path)
+        .args(["rev-parse", "--verify", "--quiet", "HEAD"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!sha.is_empty()).then_some(sha)
+}
+
+/// The marker's content for a check that covered `version` at store `head`.
+// trace:BUG-1594 | ai:claude
+fn upstream_notice_marker_contents(version: &str, head: Option<&str>) -> String {
+    match head {
+        Some(sha) => format!("{version}\n{sha}\n"),
+        None => format!("{version}\n"),
+    }
+}
+
+/// True only when the marker records BOTH this binary version and a store
+/// HEAD equal to `head`. An unreadable HEAD (`None`) is never current.
+// trace:BUG-1594 | ai:claude
+fn upstream_notice_is_current(marker: &Path, version: &str, head: Option<&str>) -> bool {
+    let Some(head) = head else {
+        return false;
+    };
+    let Ok(contents) = std::fs::read_to_string(marker) else {
+        return false;
+    };
+    let mut lines = contents.lines().map(str::trim);
+    lines.next() == Some(version) && lines.next() == Some(head)
+}
+
+/// A store that is not a git worktree (a plain `--file <dir>` store) has no
+/// HEAD to key on. Fingerprint its object files instead — count plus newest
+/// mtime, from file metadata only (no YAML parsing) — so a changed store
+/// still re-arms the check without paying the full load on every command.
+// trace:BUG-1594 | ai:claude
+fn store_objects_fingerprint(store_path: &Path) -> Option<String> {
+    fn walk(dir: &Path, count: &mut u64, newest: &mut u128) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
+            if meta.is_dir() {
+                walk(&entry.path(), count, newest);
+            } else {
+                *count += 1;
+                if let Some(ns) = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_nanos())
+                {
+                    *newest = (*newest).max(ns);
+                }
+            }
+        }
+    }
+    let objects = store_path.join("objects");
+    if !objects.is_dir() {
+        return None;
+    }
+    let (mut count, mut newest) = (0u64, 0u128);
+    walk(&objects, &mut count, &mut newest);
+    Some(format!("files:{count}:{newest}"))
+}
+
+/// Record the check. Never CREATES the marker's `.aida/` directory: that
+/// directory's presence is how the cache path is resolved
+/// (`CachedGitBackend::default_cache_path` walks up looking for `.aida/`), so
+/// conjuring it here would move the cache between the first command and the
+/// next, stranding every row written before it (a first `aida add` to a fresh
+/// `--file` store then vanished from `aida list`). Without the directory the
+/// check simply runs again next time.
+// trace:BUG-1594 | ai:claude
+fn record_upstream_notice_checked(marker: &Path, version: &str, head: Option<&str>) {
+    if !marker.parent().is_some_and(Path::is_dir) {
         return;
     }
-    eprintln!("{stale} upstream aida report(s) predate this binary - aida report --recheck");
-    if let Some(parent) = marker.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(marker, current);
+    let _ = std::fs::write(marker, upstream_notice_marker_contents(version, head));
 }
 
 #[cfg(test)]
@@ -584,5 +685,75 @@ mod tests {
         assert!(rows[0].older);
         assert_eq!(rows[1].spec_id, "BUG-2");
         assert!(!rows[1].older);
+    }
+
+    // BUG-1594: the marker re-arms the check when the store HEAD moves (a
+    // report pulled in later), stays quiet on an unchanged store, and an
+    // unreadable HEAD always fails toward checking. trace:BUG-1594 | ai:claude
+    #[test]
+    fn bug_1594_notice_marker_rearms_when_store_head_moves() {
+        let tmp = TempDir::new().unwrap();
+        let store = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let git = |args: &[&str]| {
+            let ok = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap()
+                .status
+                .success();
+            assert!(ok, "git {args:?}");
+        };
+        git(&["init", "-q", "-b", "aida-store"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "T"]);
+        git(&["commit", "-q", "--allow-empty", "-m", "add TASK-1"]);
+        let marker = tmp
+            .path()
+            .join(".aida")
+            .join("upstream-report-notice-version");
+        // No `.aida/` yet: recording must not create it (it steers the cache
+        // path), so nothing is written and the check stays armed.
+        record_upstream_notice_checked(&marker, "1.0.0", Some("abc"));
+        assert!(!tmp.path().join(".aida").exists());
+        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+
+        let head1 = store_head_sha(&store).expect("store head");
+        assert!(!upstream_notice_is_current(&marker, "1.0.0", Some(&head1)));
+        record_upstream_notice_checked(&marker, "1.0.0", Some(&head1));
+        assert!(upstream_notice_is_current(&marker, "1.0.0", Some(&head1)));
+        // A new binary version re-arms the check.
+        assert!(!upstream_notice_is_current(&marker, "1.0.1", Some(&head1)));
+
+        // A new store commit (e.g. a report arriving via `aida pull`).
+        git(&["commit", "-q", "--allow-empty", "-m", "add BUG-9"]);
+        let head2 = store_head_sha(&store).expect("store head");
+        assert_ne!(head1, head2);
+        assert!(!upstream_notice_is_current(&marker, "1.0.0", Some(&head2)));
+
+        // Unreadable HEAD: never current, and recording without a SHA does
+        // not make it current either.
+        assert_eq!(store_head_sha(&tmp.path().join("missing")), None);
+        record_upstream_notice_checked(&marker, "1.0.0", None);
+        assert!(!upstream_notice_is_current(&marker, "1.0.0", None));
+        assert!(!upstream_notice_is_current(&marker, "1.0.0", Some(&head2)));
+    }
+
+    // BUG-1594: a non-git store still gets a cheap, change-sensitive key.
+    // trace:BUG-1594 | ai:claude
+    #[test]
+    fn bug_1594_non_git_store_fingerprint_moves_when_objects_change() {
+        let tmp = TempDir::new().unwrap();
+        let store = tmp.path().join("store");
+        assert_eq!(store_objects_fingerprint(&store), None);
+        let dir = store.join("objects").join("FR").join("000");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("FR-1.yaml"), "a").unwrap();
+        let one = store_objects_fingerprint(&store).unwrap();
+        assert_eq!(one, store_objects_fingerprint(&store).unwrap());
+        std::fs::write(dir.join("FR-2.yaml"), "b").unwrap();
+        assert_ne!(one, store_objects_fingerprint(&store).unwrap());
     }
 }
