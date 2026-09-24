@@ -1498,6 +1498,32 @@ fn pr_head_sha_for_merge_gate(
         .filter(|sha| !sha.is_empty())
 }
 
+/// BUG-1532 criterion 4: does a fresh verdict at `head` release this refusal
+/// hold? Verdicts are read under every root (the main clone and the calling
+/// worktree can both hold `.aida/review-verdicts/`); the first root with an
+/// answer wins. Never clears anything.
+// trace:BUG-1532 | ai:claude
+pub(crate) fn ship_refusal_release(
+    roots: &[&std::path::Path],
+    record: &crate::merge_hold::MergeHoldRecord,
+    head: Option<&str>,
+) -> crate::merge_hold::RefusalRelease {
+    crate::merge_hold::refusal_release(
+        record,
+        head,
+        |key| {
+            roots
+                .iter()
+                .find_map(|root| crate::review_verdict::read_recorded_verdict(root, key))
+        },
+        |key, sha| {
+            roots
+                .iter()
+                .find_map(|root| crate::review_verdict::read_verdict_for_sha(root, key, sha))
+        },
+    )
+}
+
 /// TASK-1448 + TASK-1458: `aida pr ship`'s approval-covers-head gate.
 /// `Ok(pin)` = merge, pinned to `pin` (`MergeOptions.match_head`, i.e. gh
 /// `--match-head-commit`) so a push between this check and the merge is
@@ -1951,6 +1977,16 @@ pub(crate) fn pr_ship_handler(
             crate::merge_hold::read_hold_record(&main_worktree, pr_number).as_ref(),
             crate::has_integrity_floor_authority(),
             pr_number,
+            |record| {
+                // BUG-1532 criterion 4: only for a refusal hold with a human
+                // present — read the PR's live head, then the verdict at it.
+                let head = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
+                ship_refusal_release(
+                    &[main_worktree.as_path(), project_root.as_path()],
+                    record,
+                    head.as_deref(),
+                )
+            },
         ) {
             log_ship_activity(
                 &main_worktree,
@@ -2384,14 +2420,75 @@ pub(crate) fn pr_ship_handler(
             );
             anyhow::bail!(refusal);
         }
+        // BUG-1532 criterion 4, re-checked HERE under the merge lease against
+        // the head about to land (`head_sha`, the TASK-1448 read): a refusal
+        // hold is released only by a fresh APPROVED verdict at that head. The
+        // early gate saw the same answer unless the head or the verdict moved
+        // since, and then this refuses rather than release on a stale answer.
+        // trace:BUG-1532 | ai:claude
+        let hold_record = crate::merge_hold::read_hold_record(&hold_root, pr_number);
+        let released_by_verdict = match hold_record.as_ref().filter(|r| r.is_refusal()) {
+            None => None,
+            Some(record) => match ship_refusal_release(
+                &[hold_root.as_path(), project_root.as_path()],
+                record,
+                head_sha.as_deref(),
+            ) {
+                crate::merge_hold::RefusalRelease::Released(verdict) => Some(verdict),
+                crate::merge_hold::RefusalRelease::Held(why) => {
+                    let refusal = format!(
+                        "PR-{pr_number} is under a reviewer-refusal merge-hold and {why}; the hold stays."
+                    );
+                    log_ship_activity(
+                        &main_worktree,
+                        Some(pr_number),
+                        &pr_ship::ShipStep::Merge { delete_branch },
+                        &pr_ship::StepOutcome::Skipped(refusal.clone()),
+                    );
+                    anyhow::bail!(refusal);
+                }
+            },
+        };
         if let Some(reason) = marker_reason.as_deref() {
-            eprintln!(
-                "  {} releasing supervised merge-hold on PR-{} (explicit review-merge) — {}",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                pr_number,
-                reason,
-            );
+            match &released_by_verdict {
+                Some(verdict) => eprintln!(
+                    "  {} releasing reviewer-refusal merge-hold on PR-{} — its condition is met: \
+                     a fresh APPROVED verdict for {} at {} ({})",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    pr_number,
+                    verdict.key,
+                    verdict
+                        .reviewed_sha
+                        .as_deref()
+                        .map(crate::review_verdict::short_sha)
+                        .unwrap_or("?"),
+                    verdict.path(),
+                ),
+                None => eprintln!(
+                    "  {} releasing supervised merge-hold on PR-{} (explicit review-merge) — {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    pr_number,
+                    reason,
+                ),
+            }
             let _ = crate::merge_hold::clear_hold(&hold_root, pr_number);
+            // BUG-1532: a refusal released by a verdict is recorded like a
+            // `merge-hold clear`, naming the verdict that met the condition.
+            if let (Some(record), Some(verdict)) = (&hold_record, &released_by_verdict) {
+                let actor =
+                    crate::merge_hold::PrincipalIdentity::human(crate::current_user_id(None));
+                if let Err(err) = crate::merge_hold::record_clearance_with_verdict(
+                    &hold_root,
+                    record,
+                    &actor,
+                    Some(verdict.clone()),
+                ) {
+                    eprintln!(
+                        "  {} could not record the hold release on PR-{pr_number}: {err}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                }
+            }
             // BUG-1423: this IS the coordination-seat action the missing
             // event taxonomy could not record — an explicit advisor/human
             // `aida pr ship` releasing a supervised merge-hold. Best-effort,

@@ -2475,6 +2475,9 @@ mod tests {
             target_head_sha: Some("abcdef0123456789".into()),
             label_state: Some("synced".into()),
             legacy: false,
+            verdict_ref: None,
+            release_condition: None,
+            spec: None,
         }
     }
 
