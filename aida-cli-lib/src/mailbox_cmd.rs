@@ -129,6 +129,8 @@ pub(crate) fn handle_mailbox_command(
             from,
             urgent,
             intent,
+            relayed_from,
+            allow_second_person,
         } => {
             let recipient = if *broadcast {
                 Recipient::Broadcast
@@ -204,6 +206,42 @@ pub(crate) fn handle_mailbox_command(
                 resolved_reply_id = Some(target.id.clone());
                 reply_target_thread = Some(target.thread_id.clone());
             }
+            // BUG-1534: a second-person body that more than one seat reads
+            // credits each reader with the other's claim. Refuse it at the
+            // send — a prose rule failed on its own adopter within forty
+            // minutes. Checked against this sender's recent mail (local +
+            // canonical) so a body sent twice in two commands is caught.
+            // trace:BUG-1534 | ai:claude
+            // Pronoun check first: a body with no second person never loads
+            // the mailbox, and a canonical-store read error never fails a
+            // plain send (best-effort, as on the MCP path).
+            if !*allow_second_person && !aida_core::mailbox::second_person_terms(&body).is_empty() {
+                let recent = if merged.is_empty() {
+                    let local = mailbox_store::read_local_messages(project_root)?;
+                    let canonical =
+                        mailbox_store::read_canonical_messages(store_root).unwrap_or_default();
+                    merge_dedup(&local, &canonical)
+                } else {
+                    merged.clone()
+                };
+                if let Some(reason) = aida_core::mailbox::second_person_multicast_refusal(
+                    &recent,
+                    &sender,
+                    &recipient,
+                    &body,
+                    chrono::Utc::now().timestamp_millis(),
+                ) {
+                    anyhow::bail!(
+                        "send refused: {reason}.\n  Name the seat whose claim it is (\"claude-reviewer-1's tally\", not \"your tally\"), \
+                         or write one body per recipient.\n  If the reader really is meant as \"you\", pass --allow-second-person."
+                    );
+                }
+            }
+            let relayed_from = relayed_from
+                .as_deref()
+                .map(str::trim)
+                .filter(|r| !r.is_empty())
+                .map(str::to_string);
             let thread_id = if let Some(t) = thread.as_deref() {
                 resolve_mailbox_thread(&merged, t, true)?
             } else if let Some(t) = reply_target_thread {
@@ -227,6 +265,7 @@ pub(crate) fn handle_mailbox_command(
                 archived: false,
                 from_source,
                 from_role,
+                relayed_from,
             };
             mailbox_store::write_message(project_root, &msg)?;
             // STORY-1226: the event fast-path for `on = ["MailReceived"]`
@@ -888,6 +927,7 @@ mod tests {
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Explicit,
             from_role: None,
+            relayed_from: None,
         }
     }
 
@@ -930,6 +970,8 @@ mod tests {
             from: Some("alice".into()),
             urgent: false,
             intent: "fyi".into(),
+            relayed_from: None,
+            allow_second_person: false,
         };
 
         let ambiguous = handle_mailbox_command(&send("0fa629d6"), &store).unwrap_err();
@@ -1091,6 +1133,8 @@ mod tests {
             from: Some("alice".into()),
             urgent: false,
             intent: "fyi".into(),
+            relayed_from: None,
+            allow_second_person: false,
         };
 
         let error = handle_mailbox_command(&command, &store)
@@ -1129,6 +1173,8 @@ mod tests {
             from: Some("alice".into()),
             urgent: false,
             intent: "fyi".into(),
+            relayed_from: None,
+            allow_second_person: false,
         };
 
         let error = handle_mailbox_command(&command, &store)
@@ -1171,6 +1217,8 @@ mod tests {
             from: Some("alice".into()),
             urgent: false,
             intent: "fyi".into(),
+            relayed_from: None,
+            allow_second_person: false,
         };
         handle_mailbox_command(&command, &store).expect("valid reply target must succeed");
 
@@ -1210,6 +1258,8 @@ mod tests {
             from: Some("bob".into()),
             urgent: false,
             intent: "fyi".into(),
+            relayed_from: None,
+            allow_second_person: false,
         };
 
         handle_mailbox_command(&command, &store).unwrap();
@@ -1413,6 +1463,99 @@ mod tests {
         );
     }
 
+    // ── BUG-1534: relayed-claim provenance + second-person multicast guard ──
+
+    fn send_to(to: &str, body: &str, relayed_from: Option<&str>, allow: bool) -> MailboxCommand {
+        let MailboxCommand::Send {
+            broadcast,
+            subject,
+            body_file,
+            stdin,
+            thread,
+            in_reply_to,
+            from,
+            urgent,
+            intent,
+            ..
+        } = send_command(body)
+        else {
+            unreachable!()
+        };
+        MailboxCommand::Send {
+            to: Some(to.into()),
+            broadcast,
+            body: Some(body.into()),
+            subject,
+            body_file,
+            stdin,
+            thread,
+            in_reply_to,
+            from,
+            urgent,
+            intent,
+            relayed_from: relayed_from.map(str::to_string),
+            allow_second_person: allow,
+        }
+    }
+
+    // trace:BUG-1534 | ai:claude
+    #[test]
+    fn second_person_body_to_a_second_recipient_is_refused_at_send() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-product-1")),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+        let body = "YOUR TALLY IS RIGHT";
+        handle_mailbox_command(&send_to("claude-reviewer-1", body, None, false), &store).unwrap();
+        let err = handle_mailbox_command(&send_to("advisor", body, None, false), &store)
+            .expect_err("the second recipient of a second-person body must be refused");
+        assert!(err.to_string().contains("claude-reviewer-1"), "{err}");
+        let sent = mailbox_store::read_local_messages(project.path()).unwrap();
+        assert_eq!(sent.iter().filter(|m| m.body == body).count(), 1);
+
+        // The attributed form goes through, and the explicit override works.
+        handle_mailbox_command(
+            &send_to("advisor", "claude-reviewer-1's tally is right", None, false),
+            &store,
+        )
+        .unwrap();
+        handle_mailbox_command(&send_to("advisor", body, None, true), &store).unwrap();
+    }
+
+    // trace:BUG-1534 | ai:claude
+    #[test]
+    fn relayed_from_is_recorded_on_the_sent_message() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("claude-product-1")),
+            ("AIDA_USER", None),
+            ("AIDA_SESSION_ROLE", None),
+        ]);
+        handle_mailbox_command(
+            &send_to(
+                "advisor",
+                "the tally is 902",
+                Some("claude-reviewer-1"),
+                false,
+            ),
+            &store,
+        )
+        .unwrap();
+        let sent = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .find(|m| m.body == "the tally is 902")
+            .unwrap();
+        assert_eq!(sent.from, "claude-product-1");
+        assert_eq!(sent.relayed_from.as_deref(), Some("claude-reviewer-1"));
+    }
+
     // ── BUG-1533: mail sender identity resolution on the send path ─────────
 
     fn send_command(body: &str) -> MailboxCommand {
@@ -1428,6 +1571,8 @@ mod tests {
             from: None,
             urgent: false,
             intent: "fyi".into(),
+            relayed_from: None,
+            allow_second_person: false,
         }
     }
 

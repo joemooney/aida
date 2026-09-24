@@ -3110,6 +3110,22 @@ pub enum MailboxCommand {
         /// transfer). Default: fyi. Orthogonal to --urgent (loudness vs kind).
         #[clap(long, value_name = "INTENT", default_value = "fyi")]
         intent: String,
+
+        /// The seat whose claim this message relays. Use it when the body
+        /// reproduces another seat's measurement, finding or argument; the
+        /// reader then sees "via <you>, originally <seat>". Omit it for
+        /// claims you verified yourself.
+        // trace:BUG-1534 | ai:claude
+        #[clap(long, value_name = "SEAT")]
+        relayed_from: Option<String>,
+
+        /// Send a body that says "you"/"your" even though another recipient
+        /// already received the same body (or this is a broadcast). By
+        /// default that send is refused, because each reader takes the claim
+        /// as addressed to itself.
+        // trace:BUG-1534 | ai:claude
+        #[clap(long)]
+        allow_second_person: bool,
     },
 
     /// Show an agent's inbox: messages addressed to it + broadcasts, oldest-first.
@@ -4724,6 +4740,14 @@ pub enum CommentCommand {
         #[clap(long)]
         author: Option<String>,
 
+        /// The seat whose claim this comment relays. Use it when recording
+        /// another seat's measurement, finding or argument rather than
+        /// something you verified; it is stored with the comment and shown
+        /// as "via <author>, originally <seat>".
+        // trace:BUG-1534 | ai:claude
+        #[clap(long, value_name = "SEAT")]
+        relayed_from: Option<String>,
+
         /// Parent comment ID (for replies)
         #[clap(long)]
         parent: Option<String>,
@@ -4784,6 +4808,27 @@ pub enum CommentCommand {
 mod task_190_comment_source_parser_tests {
     use super::Cli;
     use clap::Parser;
+
+    // trace:BUG-1534 | ai:claude
+    #[test]
+    fn comment_add_accepts_relayed_from() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
+            "tally is 902",
+            "--relayed-from",
+            "claude-reviewer-1",
+        ])
+        .unwrap();
+        match cli.command {
+            crate::cli::Command::Comment(super::CommentCommand::Add { relayed_from, .. }) => {
+                assert_eq!(relayed_from.as_deref(), Some("claude-reviewer-1"))
+            }
+            other => panic!("unexpected parse: {other:?}"),
+        }
+    }
 
     #[test]
     fn positional_comment_conflicts_with_body_file_and_stdin() {
@@ -9228,6 +9273,40 @@ pub enum Command {
         /// `aida edit ADR-3 --superseded-by ADR-7` is the whole move.
         #[clap(long = "superseded-by", value_name = "SPEC-ID")]
         superseded_by: Option<String>,
+
+        // trace:STORY-1434 | ai:claude — plain `//` keeps the id out of --help.
+        /// Carve a named criterion OUT of this spec's description in one
+        /// step: the exact text is struck from the description (replaced
+        /// with a pointer to the spec that now carries it), a typed
+        /// carved-out-to edge is recorded (plus the inverse carved-from edge
+        /// on the target — walkable by `aida graph`/`query_graph`), and the
+        /// reason is logged as a comment that `aida show`'s DEFAULT view
+        /// surfaces inline. Fixes the trap where a carve-out's correction
+        /// lived only in a comment nobody reads and the description kept
+        /// gating on text that had already moved. Pass the criterion text
+        /// exactly as it appears in the description. Pair with
+        /// --carve-into.
+        #[clap(
+            long = "carve-out",
+            value_name = "TEXT",
+            requires = "carve_into",
+            allow_hyphen_values = true
+        )]
+        carve_out: Option<String>,
+
+        /// The spec that now carries the criterion named by --carve-out.
+        #[clap(long = "carve-into", value_name = "SPEC-ID", requires = "carve_out")]
+        carve_into: Option<String>,
+
+        /// Optional reason recorded in the carve-out comment (why the
+        /// criterion moved). Defaults to a generic note when omitted.
+        #[clap(
+            long = "carve-reason",
+            value_name = "TEXT",
+            requires = "carve_out",
+            allow_hyphen_values = true
+        )]
+        carve_reason: Option<String>,
 
         /// New priority (high, medium, low)
         #[clap(long)]

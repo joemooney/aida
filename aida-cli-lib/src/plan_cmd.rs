@@ -1442,6 +1442,7 @@ fn plan_scan(
             replies: Vec::new(),
             reactions: Vec::new(),
             session_id: resolve_current_session_id(), // trace:TASK-330
+            relayed_from: None,
         });
         req.modified_at = now;
         backend.update_requirement(&req)?;

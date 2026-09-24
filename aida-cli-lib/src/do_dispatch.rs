@@ -272,6 +272,38 @@ pub(crate) fn human_contract(mode: ExecutionMode) -> &'static str {
     }
 }
 
+// ── 4. CARVE-OUT PICKUP WARNING (STORY-1434) ──────────────────────────────
+
+/// `aida do` is the moment a `drain`/`operator` spec's stale text does
+/// damage: nothing else forces a re-read of the description before the
+/// harness acts on it. Build the pickup-time warning from the already-
+/// resolved (display id, title) pairs of every spec this one carved a
+/// criterion into — `None` when there are none, so the caller prints
+/// nothing for the common case. Pure so the banner text is unit-testable
+/// without a store.
+// trace:STORY-1434 | ai:claude
+pub(crate) fn carve_out_pickup_warning(carried_by: &[(String, String)]) -> Option<String> {
+    if carried_by.is_empty() {
+        return None;
+    }
+    let targets: Vec<String> = carried_by
+        .iter()
+        .map(|(id, title)| {
+            if title.is_empty() {
+                id.clone()
+            } else {
+                format!("{id} ({title})")
+            }
+        })
+        .collect();
+    Some(format!(
+        "this spec carved a criterion out to {} — its description no longer gates on that \
+         text; re-read the description (and `aida show` for the carve-out comment) before \
+         treating any prior acceptance wording as still live.",
+        targets.join(", ")
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

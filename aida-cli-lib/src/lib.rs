@@ -5119,6 +5119,11 @@ fn run() -> Result<()> {
             // TASK-1176: the supersede lineage edge is git-canonical only, same
             // rule as blocked-by. trace:TASK-1176 | ai:claude
             superseded_by: _,
+            // STORY-1434: the carve-out edge + comment are git-canonical
+            // only, same rule as superseded_by. trace:STORY-1434 | ai:claude
+            carve_out: _,
+            carve_into: _,
+            carve_reason: _,
             // STORY-476: external refs land on the git-backend path only;
             // the legacy SQLite path ignores them. trace:STORY-476 | ai:claude
             add_ref: _,
@@ -6269,6 +6274,7 @@ fn handle_findings_command(
                 replies: Vec::new(),
                 reactions: Vec::new(),
                 session_id: resolve_current_session_id(), // trace:TASK-330
+                relayed_from: None,
             });
             req.status = RequirementStatus::Rejected;
             req.modified_at = now;
@@ -6342,6 +6348,7 @@ fn handle_findings_command(
                         replies: Vec::new(),
                         reactions: Vec::new(),
                         session_id: resolve_current_session_id(), // trace:TASK-330
+                        relayed_from: None,
                     });
                     if let Some(text) = reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
                         req.comments.push(Comment {
@@ -6357,6 +6364,7 @@ fn handle_findings_command(
                             replies: Vec::new(),
                             reactions: Vec::new(),
                             session_id: resolve_current_session_id(), // trace:TASK-330
+                            relayed_from: None,
                         });
                     }
                     // STORY-1418: route through the into-Completed seam so this
@@ -6420,6 +6428,7 @@ fn handle_findings_command(
                     replies: Vec::new(),
                     reactions: Vec::new(),
                     session_id: resolve_current_session_id(), // trace:TASK-330
+                    relayed_from: None,
                 });
             }
             req.status = RequirementStatus::Approved;
@@ -7367,6 +7376,7 @@ fn push_why_open(req: &mut Requirement, label: &str, consequence: &str) {
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        relayed_from: None,
     });
 }
 
@@ -7946,6 +7956,7 @@ fn handle_research_command(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        relayed_from: None,
     });
 
     // Escalate the decision (if any) — never auto-apply it. A pending decision
@@ -9322,6 +9333,7 @@ fn handle_findings_recur(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        relayed_from: None,
     });
     req.modified_at = now;
     backend.update_requirement(&req)?;
@@ -10240,6 +10252,7 @@ pub(crate) fn send_notification(
         // trace:BUG-1533 | ai:claude
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        relayed_from: None,
     };
     if let Err(e) = mailbox_store::write_message(project_root, &msg) {
         eprintln!(
@@ -13273,6 +13286,199 @@ fn add_superseded_by_edge(
     }
     Ok(successor_display)
 }
+
+// STORY-1434: a carved-out acceptance criterion previously left two halves
+// that could drift apart — stale text staying in the description as the
+// authoritative gate, and the correction landing only in a comment the
+// default `aida show` never surfaced. These names are the shared vocabulary
+// for closing that gap: the relationship names the typed edge (a `Custom`
+// variant, so no enum-wide match site needs updating — walkable today by
+// `aida graph --follow carved-out-to` / `query_graph`), and the comment
+// markers are the prefixes `aida show`'s default view treats as visible
+// corrections rather than buried commentary. trace:STORY-1434 | ai:claude
+/// The typed edge a carve-out writes on the SOURCE spec: "this spec carved a
+/// criterion out, now carried by the target". Stored as
+/// `RelationshipType::Custom(CARVED_OUT_TO_REL)` — see the module doc above
+/// for why a new enum variant isn't needed.
+pub(crate) const CARVED_OUT_TO_REL: &str = "carved-out-to";
+/// The reciprocal edge on the TARGET spec: "this spec now carries a
+/// criterion carved from the source".
+pub(crate) const CARVED_FROM_REL: &str = "carved-from";
+
+/// Comment-body prefixes `aida show`'s DEFAULT view (no `-c`/`--comments`)
+/// surfaces inline right after the description, instead of leaving them
+/// invisible until someone thinks to pass `-c` or scrolls hundreds of lines
+/// into the YAML. Matched case-insensitively against the start of the
+/// (trimmed) comment body. `CARVE-OUT` is what `--carve-out` itself writes;
+/// `CORRECTION` and `PROXY DECISION` are the free-text conventions the
+/// advisor seat was already using by hand for the same kind of "the
+/// description says X but that's stale" note (the STORY-1434 filing cites
+/// three real instances of exactly that shape).
+const DEFAULT_VISIBLE_COMMENT_MARKERS: &[&str] = &["CARVE-OUT", "CORRECTION", "PROXY DECISION"];
+
+/// True when `body` opens with one of [`DEFAULT_VISIBLE_COMMENT_MARKERS`]
+/// (case-insensitive), followed by a non-alphanumeric character (`:`, `-`,
+/// whitespace, end-of-string, …) so `CORRECTIONAL` doesn't false-positive on
+/// the `CORRECTION` marker.
+// trace:STORY-1434 | ai:claude
+pub(crate) fn is_default_visible_comment(body: &str) -> bool {
+    let trimmed = body.trim_start();
+    DEFAULT_VISIBLE_COMMENT_MARKERS.iter().any(|marker| {
+        trimmed.len() >= marker.len()
+            && trimmed[..marker.len()].eq_ignore_ascii_case(marker)
+            && trimmed[marker.len()..]
+                .chars()
+                .next()
+                .map(|c| !c.is_alphanumeric())
+                .unwrap_or(true)
+    })
+}
+
+/// Collect every comment (top-level and nested reply) whose body matches
+/// [`is_default_visible_comment`], in document order.
+// trace:STORY-1434 | ai:claude
+pub(crate) fn collect_default_visible_comments<'a>(
+    comments: &'a [aida_core::Comment],
+    out: &mut Vec<&'a aida_core::Comment>,
+) {
+    for c in comments {
+        if is_default_visible_comment(&c.content) {
+            out.push(c);
+        }
+        collect_default_visible_comments(&c.replies, out);
+    }
+}
+
+/// Strike `criterion` out of `description`, replacing the first verbatim
+/// occurrence with a short pointer at the target that now carries it.
+/// Returns `None` (no-op) when `criterion` isn't found — a carve-out of text
+/// that doesn't match verbatim is refused by the caller rather than silently
+/// doing nothing, so this stays a pure "did it match" signal. Pure and
+/// backend-free so the substring/pointer behavior is unit-testable without a
+/// git store.
+// trace:STORY-1434 | ai:claude
+pub(crate) fn carve_out_description(
+    description: &str,
+    criterion: &str,
+    target_display: &str,
+) -> Option<String> {
+    if criterion.is_empty() || !description.contains(criterion) {
+        return None;
+    }
+    let marker = format!("[carved out \u{2192} {target_display} \u{2014} see carve-out log]");
+    Some(description.replacen(criterion, &marker, 1))
+}
+
+/// The target ids of every `carved-out-to` edge on `req` — i.e. the specs
+/// that now carry a criterion this spec used to gate on. Empty when the spec
+/// carries no carve-out.
+// trace:STORY-1434 | ai:claude
+pub(crate) fn carved_out_targets(req: &aida_core::Requirement) -> Vec<uuid::Uuid> {
+    req.relationships
+        .iter()
+        .filter(|r| {
+            matches!(&r.rel_type, RelationshipType::Custom(name) if name.eq_ignore_ascii_case(CARVED_OUT_TO_REL))
+        })
+        .map(|r| r.target_id)
+        .collect()
+}
+
+/// Apply a carve-out to an ALREADY-RESOLVED-AND-VALIDATED `req`: push the
+/// typed `Custom("carved-out-to")` edge (idempotent) and the `CARVE-OUT:`
+/// comment [`is_default_visible_comment`] recognizes. Pure — no backend I/O —
+/// so the caller can fold this into the SAME `req` mutation the rest of
+/// `aida edit`'s scalar fields go through and save it in the one atomic
+/// write, instead of a separate follow-up write that could land only
+/// half-applied (the description struck but the edge/comment lost, or vice
+/// versa, on a failure in between).
+// trace:STORY-1434 | ai:claude
+pub(crate) fn apply_carve_out(
+    req: &mut aida_core::Requirement,
+    target_id: uuid::Uuid,
+    source_display: &str,
+    target_display: &str,
+    criterion: &str,
+    reason: Option<&str>,
+) {
+    use aida_core::models::{Relationship, RelationshipType};
+
+    if !req.relationships.iter().any(|r| {
+        matches!(&r.rel_type, RelationshipType::Custom(name) if name.eq_ignore_ascii_case(CARVED_OUT_TO_REL))
+            && r.target_id == target_id
+    }) {
+        req.relationships.push(Relationship {
+            rel_type: RelationshipType::Custom(CARVED_OUT_TO_REL.to_string()),
+            target_id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some(get_default_author()),
+        });
+    }
+
+    let reason_line = reason
+        .map(|r| r.trim())
+        .filter(|r| !r.is_empty())
+        .unwrap_or("no reason given");
+    let comment_body = format!(
+        "CARVE-OUT: \"{criterion}\" is no longer carried by {source_display} — it is now \
+         carried by {target_display}.\n\nReason: {reason_line}"
+    );
+    let mut comment = aida_core::Comment::new(get_default_author(), comment_body);
+    // trace:TASK-330 | ai:claude — stamp the producing session, same as
+    // `aida comment add`'s comment.
+    comment.session_id = resolve_current_session_id();
+    req.comments.push(comment);
+}
+
+/// Write the inverse `Custom("carved-from")` edge on the carve-out TARGET,
+/// after the source's atomic save has landed. Idempotent. The target is
+/// re-fetched by UUID (never re-resolved from a user-typed id — the caller
+/// already resolved and validated it once via `get_requirement_unambiguous`),
+/// so this can only fail on a genuine backend error or the target having
+/// disappeared between resolution and this call — either way that is an
+/// error the caller must surface, not swallow as a warning: a one-sided
+/// carve-out (source struck, no inverse edge) is exactly the kind of
+/// half-applied state this spec exists to prevent.
+// trace:STORY-1434 | ai:claude
+fn add_carved_from_edge(
+    backend: &aida_core::CachedGitBackend,
+    target_id: uuid::Uuid,
+    target_display: &str,
+    source_id: uuid::Uuid,
+    source_display: &str,
+) -> Result<()> {
+    use aida_core::models::{Relationship, RelationshipType};
+    use aida_core::DatabaseBackend;
+
+    let mut target = backend.get_requirement(&target_id)?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "carve-out target {} disappeared before the inverse carved-from edge could be \
+             written — the carve-out edge/comment on the source are saved, but the reciprocal \
+             edge on the target is missing; re-run `aida rel add {} {} --type carved-from` \
+             to repair it by hand",
+            target_id,
+            target_display,
+            source_display
+        )
+    })?;
+    if !target.relationships.iter().any(|r| {
+        matches!(&r.rel_type, RelationshipType::Custom(name) if name.eq_ignore_ascii_case(CARVED_FROM_REL))
+            && r.target_id == source_id
+    }) {
+        target.relationships.push(Relationship {
+            rel_type: RelationshipType::Custom(CARVED_FROM_REL.to_string()),
+            target_id: source_id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some(get_default_author()),
+        });
+        target.modified_at = chrono::Utc::now();
+        backend.update_requirement(&target)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "tests/story_1434_carve_out_tests.rs"]
+mod story_1434_carve_out_tests;
 
 /// STORY-446: remove the BlockedBy edge from `spec_id` to `blocker_id` and the
 /// inverse Blocks edge on the blocker. No-op (returns the display id) when the
@@ -20205,11 +20411,23 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
     // case explicitly rather than let it read as a resolved seat identity;
     // a real seat identity (agent name / AIDA_USER / role) needs no tag
     // since `from` already names it distinctly.
-    let from_display = if m.from_source.is_attributed() {
+    let mut from_display = if m.from_source.is_attributed() {
         m.from.cyan().to_string()
     } else {
         format!("{} {}", m.from.cyan(), "[unattributed]".dimmed())
     };
+    // BUG-1534: a relayed claim keeps its original author on the line —
+    // "via <sender>, originally <seat>" — so the reader never has to
+    // remember who first said it. trace:BUG-1534 | ai:claude
+    if let Some(orig) = m.relayed_from.as_deref().filter(|r| !r.trim().is_empty()) {
+        from_display = format!(
+            "{} {}, {} {}",
+            "via".dimmed(),
+            from_display,
+            "originally".dimmed(),
+            orig.magenta()
+        );
+    }
     println!(
         "  {}{}{}{} {} → {}  {}  {}",
         flag,
@@ -79051,6 +79269,15 @@ fn print_comment(comment: &Comment, indent: usize) {
     if let Some(short) = comment.short_session_id() {
         println!("{}  {} {}", indent_str, "Session:".dimmed(), short.dimmed());
     }
+    // trace:BUG-1534 | ai:claude — a relayed claim names its original seat.
+    if let Some(orig) = comment.relayed_from.as_deref() {
+        println!(
+            "{}  {} {}",
+            indent_str,
+            "Relayed:".dimmed(),
+            aida_core::mailbox::provenance_label(&comment.author, Some(orig)).magenta()
+        );
+    }
     println!("{}  {}", indent_str, comment.content);
 
     if !comment.replies.is_empty() {
@@ -92824,6 +93051,26 @@ fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: b
     if std::env::var("AIDA_HEADLESS").ok().as_deref() != Some("1") {
         if let Some(block) = protocol_cmd::pickup_block_for_requirement(&store, req) {
             eprintln!("{}\n", block);
+        }
+    }
+    // STORY-1434: pickup is the moment a carved-out criterion's stale text
+    // does damage — a drain/operator harness has nothing else forcing a
+    // re-read of the description before it acts. Resolve each
+    // `carved-out-to` target's (display id, title) here (this fn already
+    // holds the full store) and hand the pure formatter the plain pairs.
+    // trace:STORY-1434 | ai:claude
+    if matches!(effective, ExecutionMode::Drain | ExecutionMode::Operator) {
+        let carried_by: Vec<(String, String)> = carved_out_targets(req)
+            .iter()
+            .filter_map(|target_id| store.requirements.iter().find(|r| r.id == *target_id))
+            .map(|t| (t.display_id(), t.title.clone()))
+            .collect();
+        if let Some(warning) = do_dispatch::carve_out_pickup_warning(&carried_by) {
+            eprintln!(
+                "  {} {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                warning
+            );
         }
     }
     eprintln!(
