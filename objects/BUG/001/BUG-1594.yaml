@@ -3,12 +3,12 @@ spec_id: BUG-1594
 agreed_id: BUG-1594
 title: aida show has single calls up to 23.8s in the in-lineage telemetry window, over ADR-53's 5000ms ceiling
 description: 'Found by STORY-1423 while measuring the performance guard''s new ceiling_ms limb (ADR-53). The share of slow show calls is under tolerance (8.37% of 645), but the worst single call is 23,840ms, over the 5000ms ceiling set in .aida/config.toml. STORY-1423''s criterion 1 (''quiet on both limbs'') cannot close until the tail is bounded. Likely suspects: the git-linkage section (collect_git_linkage_opts, forge calls) and the full store load. Profile the slow path (aida usage --cmd show --slower-than 5000ms events), bound it (a timeout or deferral on forge calls, as BUG-1288 did for awaiting), and add a regression test. Acceptance: no show call over 5000ms in a fresh in-lineage window, and aida doctor check performance is quiet.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T23:02:11.619324026Z
-modified_at: 2026-09-23T23:24:58.737086650Z
+modified_at: 2026-09-24T01:52:50.694760048Z
 req_type: Bug
 tags:
 - followup
@@ -18,3 +18,21 @@ relationships:
 - rel_type: Child
   target_id: 01a0c4b7-b38c-7301-89cd-9b7a04a1e703
   created_at: 2026-09-23T23:02:15.343566802Z
+history:
+- id: 01a0d11d-8ffe-7aa1-a5ee-48ee709381e8
+  author: aida-auto-bump
+  timestamp: 2026-09-24T01:52:50.686696213Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d11d-9006-7823-81ab-03d3c541dd1a
+  timestamp: 2026-09-24T01:52:50.694757565Z
+  agent: aida
+  commit_sha: 63334ef653e9a5dabb95b2ccbb2267b9b0178c51
+  summary: Completed via merge 63334ef6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T01:52:50.686548939Z
+  completion_sha: 63334ef653e9a5dabb95b2ccbb2267b9b0178c51
