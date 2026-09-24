@@ -950,6 +950,21 @@ impl Cache {
     /// schema. `CREATE TABLE IF NOT EXISTS` doesn't add new columns to an
     /// existing table; dropping forces a clean rebuild from git on the next
     /// stale-check. The cache is rebuildable by definition, so this is safe.
+    ///
+    /// TASK-1478: the version comparison is ORDERED, not `!=`. A dev build and
+    /// an older installed `aida` alternating on one project used to full-rebuild
+    /// the cache the other one just wrote, every single open. An on-disk stamp
+    /// OLDER than this binary's still migrates (unchanged). An on-disk stamp
+    /// NEWER than this binary's is left alone as long as every column THIS
+    /// binary reads/writes is present (the BUG-627 `PRAGMA table_info` drift
+    /// check, reused) — an older binary only ever touches its own columns, so a
+    /// newer-but-additive schema is safe to read/write in place. A newer stamp
+    /// that IS missing a needed column still migrates (drift wins over version
+    /// order). The stamp itself is never downgraded: after any non-dropping
+    /// open the recorded version is the max of what was on disk and this
+    /// binary's own version, so an older binary opening a healthy newer cache
+    /// can't make the newer binary think ITS cache needs rebuilding next.
+    // trace:TASK-1478 | ai:claude
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
@@ -982,10 +997,23 @@ impl Cache {
         // columns, don't trust the meta) makes the cache self-heal: drop +
         // rebuild-from-git on next read, regardless of the version stamp or
         // HEAD-SHA freshness.
-        let version_mismatch = on_disk_version
-            .as_deref()
-            .map(|v| v != SCHEMA_VERSION)
-            .unwrap_or(false);
+        //
+        // TASK-1478: `SCHEMA_VERSION` is a plain integer string ("15"), so
+        // compare numerically and ORDER the mismatch instead of just `!=`.
+        // Only a stamp OLDER than this binary (or an unparsable/bogus stamp,
+        // which is indistinguishable from "needs migration") forces the drop
+        // here; a NEWER stamp is handled below by the drift check alone.
+        let on_disk_version_num: Option<u64> =
+            on_disk_version.as_deref().and_then(|v| v.parse().ok());
+        let current_version_num: u64 = SCHEMA_VERSION
+            .parse()
+            .expect("SCHEMA_VERSION must be a plain integer");
+        let version_older = match on_disk_version_num {
+            Some(v) => v < current_version_num,
+            // A stamp that exists but didn't parse is treated the same as an
+            // old/bogus stamp always was: force the migration path.
+            None => on_disk_version.is_some(),
+        };
         // BUG-757 / TASK-1185: a torn/partial migration can leave one expected
         // cache table present while another is entirely absent (for example
         // `requirements_cache` present but `requirements_fts` absent, or only
@@ -1007,8 +1035,14 @@ impl Cache {
         // create/migrate so the steady-state open is read-only. WAL then lets the
         // reader serve the last-good committed snapshot with zero contention.
         let tables_present = cache_tables_present(&conn);
-        let needs_schema_apply = version_mismatch || schema_drifted || !tables_present;
-        if version_mismatch || schema_drifted {
+        // TASK-1478: a NEWER-but-healthy stamp (version_older false, no drift)
+        // does NOT force a migration drop — that's the whole point of the
+        // fix. Only "this binary is behind" or "the columns don't match what
+        // this binary needs" triggers the drop, regardless of which way the
+        // version numbers point.
+        let needs_migration_drop = version_older || schema_drifted;
+        let needs_schema_apply = needs_migration_drop || !tables_present;
+        if needs_migration_drop {
             // Drop the cache tables — the next stale-check will rebuild
             // from git. `cache_meta` survives so the source HEAD SHA
             // tracking continues to work after the rebuild stamps it.
@@ -1034,18 +1068,36 @@ impl Cache {
             lock_info_path: cache_lock_info_path(&path),
             path,
         };
-        // Only stamp the schema version when it is not already current — an
+        // Only stamp the schema version when it needs to change — an
         // unconditional `INSERT … ON CONFLICT DO UPDATE` always takes the write
-        // lock (BUG-664). A fresh cache (None) or a migrated one (mismatch) needs
-        // the stamp; a current cache must not write here.
-        if on_disk_version.as_deref() != Some(SCHEMA_VERSION) {
-            cache.set_meta(META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
+        // lock (BUG-664). A fresh cache (None) or a migrated one needs the
+        // stamp; a current cache must not write here.
+        //
+        // TASK-1478: never DOWNGRADE the stamp. If we just migration-dropped,
+        // the tables now reflect exactly this binary's schema (any forward
+        // columns a newer binary added are gone with the drop), so the stamp
+        // must be this binary's own version. Otherwise — the steady-state
+        // open, tables left untouched — the stamp is the max of what was on
+        // disk and this binary's version, so an older binary opening a
+        // healthy newer cache leaves the newer binary's higher stamp in
+        // place instead of clobbering it back down (which would make the
+        // newer binary rebuild its own healthy cache on its next open).
+        let target_version: String = if needs_migration_drop {
+            SCHEMA_VERSION.to_string()
+        } else {
+            on_disk_version_num
+                .map(|v| v.max(current_version_num))
+                .unwrap_or(current_version_num)
+                .to_string()
+        };
+        if on_disk_version.as_deref() != Some(target_version.as_str()) {
+            cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version)?;
         }
         // After a schema-version bump (or a structural-drift drop, BUG-485)
         // the head SHA is no longer valid for the (now-empty) cache tables —
         // delete it so `is_stale` returns true (None → stale) and the next
         // read triggers a rebuild.
-        if version_mismatch || schema_drifted {
+        if needs_migration_drop {
             let conn = cache.conn.lock().unwrap();
             conn.execute(
                 "DELETE FROM cache_meta WHERE key = ?1",
@@ -1221,6 +1273,22 @@ impl Cache {
         };
         self.set_source_head_sha(source_head_sha)?;
         self.set_meta(META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
+        // TASK-1478: a full rebuild just regenerated EVERY row via THIS
+        // binary's own `insert_one`, so the projected data now IS exactly
+        // this binary's schema — unlike `Cache::open`'s steady-state path
+        // (which touches no rows), the max-of-two/no-downgrade rule does not
+        // apply here. Stamp unconditionally, even if that LOWERS the
+        // version: an older binary rebuilding a cache a newer binary had
+        // stamped higher must leave behind an OLDER stamp, precisely so the
+        // newer binary's next `open()` sees `version_older = true` and does
+        // its own migration-drop-and-refill — restoring the columns the
+        // older binary's rebuild just left NULL (see the comment on
+        // `insert_one`). Without this, that refill would depend on some
+        // unrelated future version bump instead of firing exactly once,
+        // right after the older binary's rebuild — not on every subsequent
+        // alternating open (a plain open leaves a healthy, non-dropped cache
+        // stamp alone; only an actual rebuild changes it).
+        self.set_meta(META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
         Ok(count)
     }
 
@@ -2217,7 +2285,19 @@ fn tally_status_str(r: &mut crate::graph_walk::StatusRollup, status: &str, req_t
 /// whole-graph-fact pattern as `compute_blocked`) lands in the cache so the
 /// cache-backed `aida list` filters and displays the derived epic status without
 /// re-loading the full store. `None` projects the stored status verbatim.
-// trace:BUG-626 | ai:claude
+///
+/// TASK-1478: this INSERT's column list is fixed at compile time by whichever
+/// binary is running. An OLDER binary — one that predates a column a newer
+/// binary added (e.g. `completed_at`, STORY-86/TASK-1474) — simply doesn't
+/// name that column here, so SQLite defaults it (NULL, since the column has
+/// no `DEFAULT`) for every row it writes, whether via a single-row upsert or a
+/// full `rebuild_from_store`. That's accepted rather than guarded against:
+/// the cache is a rebuildable projection, never canonical, so a stale/NULL
+/// derived column self-heals the next time a binary that knows the column
+/// runs a rebuild (see `rebuild_from_store`'s schema-version re-stamp below,
+/// which is what makes that rebuild actually happen instead of the newer
+/// binary trusting a stamp an older rebuild left behind).
+// trace:BUG-626 trace:TASK-1478 | ai:claude
 fn insert_one(
     conn: &Connection,
     req: &Requirement,
@@ -4033,6 +4113,225 @@ mod tests {
             .expect("list reading the `blocked` column must succeed after self-heal");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].spec_id.as_deref(), Some("BUG-627"));
+    }
+
+    // TASK-1478: a stored version OLDER than this binary's still migrates
+    // (unchanged behavior). Build a fully healthy CURRENT-shaped cache, but
+    // stamp its version one below `SCHEMA_VERSION` — the pre-fix `!=` check
+    // and the new ordered check must agree here: drop + rebuild + re-stamp to
+    // the binary's own (higher) version + invalidate the head SHA.
+    #[test]
+    fn older_stored_version_migrates_and_bumps_stamp_to_current() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let current: u64 = SCHEMA_VERSION.parse().unwrap();
+        let older = (current - 1).to_string();
+
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(SCHEMA_SQL).unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, older],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "oldhead"],
+            )
+            .unwrap();
+        }
+
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            cache.source_head_sha().unwrap().is_none(),
+            "an older stamp must still migration-drop, invalidating the head SHA"
+        );
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(SCHEMA_VERSION),
+            "post-migration stamp must be this binary's own (higher) version"
+        );
+    }
+
+    // TASK-1478: the core fix. A stored version NEWER than this binary's — the
+    // shape a newer dev build already migrated to — must NOT be dropped and
+    // rebuilt by an older binary as long as every column this binary needs is
+    // present. Before the fix this alternated full rebuilds between a dev
+    // binary and an installed one on every open.
+    #[test]
+    fn newer_stored_version_with_no_drift_is_left_alone() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let current: u64 = SCHEMA_VERSION.parse().unwrap();
+        let newer = (current + 1).to_string();
+
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(SCHEMA_SQL).unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, newer],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "futurehead"],
+            )
+            .unwrap();
+        }
+
+        let cache = Cache::open(&cache_path).unwrap();
+        assert_eq!(
+            cache.source_head_sha().unwrap().as_deref(),
+            Some("futurehead"),
+            "a newer, column-complete stamp must not be migration-dropped — the \
+             head SHA (only cleared by a drop) must survive untouched"
+        );
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(newer.as_str()),
+            "an older binary opening a healthy newer cache must NOT downgrade \
+             the stamp — the newer binary would then think its own cache needs \
+             rebuilding on its next open"
+        );
+    }
+
+    // TASK-1478: drift beats version order. A stored version NEWER than this
+    // binary's, but missing a column this binary needs (the `blocked` column,
+    // same drifted shape as BUG-627), must still migrate — and the stamp
+    // written afterward is THIS binary's own version, not the (now-incorrect)
+    // newer one the drop just discarded.
+    #[test]
+    fn newer_stored_version_missing_required_column_still_migrates() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let current: u64 = SCHEMA_VERSION.parse().unwrap();
+        let newer = (current + 1).to_string();
+
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(SCHEMA_SQL).unwrap();
+            // Simulate a newer schema that is nonetheless missing a column this
+            // binary requires (the drift the BUG-627 PRAGMA check exists for).
+            // The index on `blocked` must go first — SQLite refuses to drop a
+            // column an index still references.
+            conn.execute_batch(
+                "DROP INDEX idx_cache_blocked;
+                 ALTER TABLE requirements_cache DROP COLUMN blocked;",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, newer],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "futurehead"],
+            )
+            .unwrap();
+        }
+
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            cache.source_head_sha().unwrap().is_none(),
+            "a newer-but-drifted stamp must still migration-drop, invalidating \
+             the head SHA"
+        );
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(SCHEMA_VERSION),
+            "the drop rebuilds with THIS binary's schema, so the stamp must \
+             reflect that — not the higher number the drop just discarded"
+        );
+        // The rebuilt table must actually have the column back and be usable.
+        assert!(!cache_schema_drifted(&cache.conn.lock().unwrap()));
+    }
+
+    // TASK-1478 (review follow-up): a full rebuild must stamp its OWN version
+    // unconditionally — even DOWNGRADING a higher pre-existing stamp — or an
+    // older binary's rebuild (which writes rows without a column a newer
+    // binary added) leaves the newer stamp in place, and the newer binary's
+    // next `open()` sees "stamp already current" and never re-migrates to
+    // refill the column: the column is then silently wrong across the whole
+    // store. Walks the full scenario: (1) a newer stamp is on disk, (2) an
+    // older binary's rebuild downgrades it to its own version, (3) that
+    // downgrade is what lets a genuinely newer binary detect on its next
+    // open that it must re-migrate — proven by
+    // `older_stored_version_migrates_and_bumps_stamp_to_current`, whose setup
+    // is exactly the post-step-2 state this test produces (a stamp older
+    // than `SCHEMA_VERSION`) — while a SAME-version reopen right after step 2
+    // is confirmed here to be a steady-state no-op, so the fix doesn't loop
+    // on every alternation.
+    #[test]
+    fn rebuild_from_store_downgrades_a_newer_stamp_so_a_later_open_can_remigrate() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let current: u64 = SCHEMA_VERSION.parse().unwrap();
+        let newer = (current + 1).to_string();
+
+        // Step 1: a newer stamp is already on disk, as if a newer binary had
+        // built this cache. Healthy, column-complete schema — the "left
+        // alone" shape from `newer_stored_version_with_no_drift_is_left_alone`.
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(SCHEMA_SQL).unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, newer],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "fromnewerbinary"],
+            )
+            .unwrap();
+        }
+
+        // Opening with this (older, relative to `newer`) binary must leave
+        // the stamp and head SHA untouched.
+        let cache = Cache::open(&cache_path).unwrap();
+        assert_eq!(
+            cache.source_head_sha().unwrap().as_deref(),
+            Some("fromnewerbinary")
+        );
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(newer.as_str())
+        );
+
+        // Step 2: this (older) binary does a full rebuild — the operation
+        // the bug report is about. It must downgrade the stamp to ITS OWN
+        // version rather than leaving `newer` in place.
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .push(sample_req("TASK-1478", "older binary rebuild"));
+        cache.rebuild_from_store(&store, "olderrebuildsha").unwrap();
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(SCHEMA_VERSION),
+            "a full rebuild must always stamp its OWN version, even \
+             downgrading a higher pre-existing stamp — otherwise a newer \
+             binary would trust the stale-but-higher stamp and never \
+             re-migrate to refill the column the older rebuild left NULL"
+        );
+
+        // Step 3: re-opening with the SAME binary right after must be a
+        // steady-state no-op, not another rebuild loop — the stamp now
+        // matches this binary's own version exactly.
+        let head_after_rebuild = cache.source_head_sha().unwrap();
+        let cache2 = Cache::open(&cache_path).unwrap();
+        assert_eq!(cache2.source_head_sha().unwrap(), head_after_rebuild);
+        assert_eq!(
+            cache2.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(SCHEMA_VERSION)
+        );
+        // A genuinely newer binary opening THIS post-step-2 state (a stamp
+        // strictly older than its own SCHEMA_VERSION) is exactly the
+        // scenario `older_stored_version_migrates_and_bumps_stamp_to_current`
+        // proves migrates + re-stamps + invalidates the head SHA.
     }
 
     #[test]
