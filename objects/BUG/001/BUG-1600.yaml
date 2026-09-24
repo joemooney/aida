@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:42:52.960095910Z
-modified_at: 2026-09-24T19:40:19.385247362Z
+modified_at: 2026-09-24T19:46:03.134348420Z
 req_type: Bug
 comments:
 - id: 01a0d469-dd80-7e02-8e94-4d36d79c7a2b
@@ -32,6 +32,12 @@ comments:
   content: 'Review: APPROVE (fresh reviewer). The crontab repair replaces only the marked line, in place. The log bound fails open. schedule_source is backward-compatible. Non-blocking: a hand-customized marked line is rewritten, and the global log bound is not synchronised across repos. Queued for batch 52. Operator step after merge: run `aida schedule install-cron` once to repair the installed crontab line.'
   created_at: 2026-09-24T18:10:32.748458141Z
   modified_at: 2026-09-24T18:10:32.748458141Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d4f4-1d87-73c3-ad3d-d9f7c8fa6915
+  author: joe
+  content: Live repair applied 2026-09-24 12:46. The installed line was a legacy unmarked one, so install-cron appended a second, correct line rather than repairing the old one. The orchestrator removed the broken legacy line by hand (crontab backed up). The follow-up bug covers legacy-line detection. The crontab now has exactly one correct tick line.
+  created_at: 2026-09-24T19:46:03.134348420Z
+  modified_at: 2026-09-24T19:46:03.134348420Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0d4ee-de27-7500-920b-e0d708c0cbf1
