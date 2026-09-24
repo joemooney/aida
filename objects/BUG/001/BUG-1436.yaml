@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:01:03.886041426Z
-modified_at: 2026-09-20T19:10:49.508131006Z
+modified_at: 2026-09-24T16:27:36.299718161Z
 req_type: Bug
 tags:
 - drain-safe
@@ -44,8 +44,7 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T11:01:05.477570768Z
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0bc31-6859-7971-b588-a2814b48e2b2
   created_at: 2026-09-20T11:01:26.537893585Z
   created_by: joe
