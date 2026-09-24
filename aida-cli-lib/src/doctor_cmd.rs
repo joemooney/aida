@@ -5272,25 +5272,35 @@ fn heal_doctor_orphan_queue_entry(
     })
 }
 
+/// Remove a cache lock-info file only when its recorded owner is provably dead
+/// (PID gone, or PID reused by a different process). Re-verified at heal time
+/// with a compare-and-delete, so a finding that went stale between detection
+/// and heal (or a live owner past its expected duration) is never deleted.
+// trace:TASK-1484 | ai:claude
 fn heal_doctor_stale_lock(finding: &DoctorFinding) -> Result<DoctorHealResult> {
     let path = std::path::Path::new(&finding.id);
-    let removed = if path.exists() {
-        std::fs::remove_file(path)
-            .with_context(|| format!("removing stale lock-info file {}", path.display()))?;
-        true
-    } else {
-        false
+    let outcome = aida_core::reclaim_dead_lock_info(path)?;
+    let (status, detail) = match outcome {
+        aida_core::LockInfoReclaim::Removed { .. } => ("healed", None),
+        aida_core::LockInfoReclaim::Absent => (
+            "skipped",
+            Some("lock-info file was already gone".to_string()),
+        ),
+        aida_core::LockInfoReclaim::Kept(Some(owner)) if owner.presumed_alive() => (
+            "skipped",
+            Some("lock owner is still alive (or cannot be verified); left in place".to_string()),
+        ),
+        aida_core::LockInfoReclaim::Kept(_) => (
+            "skipped",
+            Some("lock-info changed or could not be parsed; left in place".to_string()),
+        ),
     };
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
         action: "removed stale cache lock-info file".to_string(),
-        status: if removed { "healed" } else { "skipped" }.to_string(),
-        detail: if removed {
-            None
-        } else {
-            Some("lock-info file was already gone".to_string())
-        },
+        status: status.to_string(),
+        detail,
     })
 }
 
@@ -7397,6 +7407,7 @@ hostname = "localhost"
             started_at: (chrono::Utc::now() - chrono::Duration::minutes(10)).to_rfc3339(),
             user: "tester".to_string(),
             session_id: None,
+            ..Default::default()
         };
         std::fs::write(&lock_info_path, serde_json::to_string(&info).unwrap()).unwrap();
 
@@ -7425,6 +7436,92 @@ hostname = "localhost"
             },
         )
         .unwrap();
+        assert_eq!(result.status, "healed");
+        assert!(!lock_info_path.exists());
+    }
+
+    // TASK-1484: a LIVE owner past its expected duration is reported as
+    // diagnostic evidence but never healed; a reused PID reads as dead.
+    // trace:TASK-1484 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn doctor_reports_live_lock_overrun_without_healing_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let project_root = dir.path();
+        std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+        std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
+        let cache_path =
+            aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
+        let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
+        // pid 1 is always alive; a legacy (identity-less) record is PID-only.
+        let info = aida_core::CacheLockInfo {
+            pid: 1,
+            command: "aida cache rebuild".to_string(),
+            started_at: (chrono::Utc::now() - chrono::Duration::minutes(10)).to_rfc3339(),
+            user: "tester".to_string(),
+            expected_duration_secs: Some(60),
+            phase: Some("rebuild cache".to_string()),
+            ..Default::default()
+        };
+        std::fs::write(&lock_info_path, serde_json::to_string(&info).unwrap()).unwrap();
+
+        let findings = collect_doctor_findings(
+            project_root,
+            &aida_core::models::RequirementsStore::new(),
+            Some("stale-locks"),
+        )
+        .unwrap();
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(!findings[0].safe_heal, "a live lock is never a safe heal");
+        assert!(
+            findings[0].summary.contains("live pid 1"),
+            "{}",
+            findings[0].summary
+        );
+        assert!(
+            findings[0].summary.contains("diagnostic only"),
+            "{}",
+            findings[0].summary
+        );
+
+        let result = heal_doctor_stale_lock(&findings[0]).unwrap();
+        assert_eq!(result.status, "skipped");
+        assert!(
+            lock_info_path.exists(),
+            "live owner's lock-info must remain"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn doctor_treats_reused_pid_lock_info_as_dead() {
+        let dir = tempfile::tempdir().unwrap();
+        let project_root = dir.path();
+        std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+        std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
+        let cache_path =
+            aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
+        let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
+        let info = aida_core::CacheLockInfo {
+            pid: 1,
+            command: "aida schedule tick --hook".to_string(),
+            started_at: (chrono::Utc::now() - chrono::Duration::minutes(10)).to_rfc3339(),
+            user: "tester".to_string(),
+            pid_start_identity: Some("linux-starttime:18446744073709551615".to_string()),
+            ..Default::default()
+        };
+        std::fs::write(&lock_info_path, serde_json::to_string(&info).unwrap()).unwrap();
+
+        let findings = collect_doctor_findings(
+            project_root,
+            &aida_core::models::RequirementsStore::new(),
+            Some("stale-locks"),
+        )
+        .unwrap();
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(findings[0].safe_heal);
+        assert!(findings[0].summary.contains("different process"));
+        let result = heal_doctor_stale_lock(&findings[0]).unwrap();
         assert_eq!(result.status, "healed");
         assert!(!lock_info_path.exists());
     }

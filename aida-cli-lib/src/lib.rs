@@ -23090,32 +23090,60 @@ fn collect_doctor_findings(
     let cache_path =
         aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
     let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
-    if let Some(lock_info) = aida_core::read_cache_lock_info(&cache_path)? {
+    // TASK-1484: owner liveness is PID-reuse aware (process start identity) and
+    // fails closed when the identity cannot be read. A dead owner's record past
+    // the age threshold is a safe heal; a LIVE owner past its expected duration
+    // is diagnostic evidence only (never healed). trace:TASK-1484 | ai:claude
+    if let Some(obs) = aida_core::observe_cache_lock(&cache_path)? {
         let stale_secs = std::env::var("AIDA_CACHE_LOCK_STALE_SECS")
             .ok()
             .and_then(|v| v.parse::<i64>().ok())
             .unwrap_or(300);
-        let age_secs = lock_info
-            .started_at_utc()
-            .map(|started| now.signed_duration_since(started).num_seconds())
-            .unwrap_or(0);
-        if age_secs >= stale_secs && !process_probe::pid_is_alive(lock_info.pid) {
-            push(DoctorFinding {
-                category: "stale-locks".to_string(),
-                id: lock_info_path.display().to_string(),
-                summary: format!(
-                    "cache lock-info from dead pid {} ({}) is {} old",
-                    lock_info.pid,
-                    if lock_info.command.trim().is_empty() {
-                        "unknown command"
-                    } else {
-                        lock_info.command.as_str()
-                    },
-                    humanize_duration_secs(age_secs.max(0) as u64)
-                ),
-                action: format!("remove stale lock-info file {}", lock_info_path.display()),
-                safe_heal: true,
-            });
+        let age_secs = obs.age_secs(now).unwrap_or(0) as i64;
+        let command = if obs.info.command.trim().is_empty() {
+            "unknown command"
+        } else {
+            obs.info.command.as_str()
+        };
+        match obs.owner {
+            aida_core::LockOwnerState::Dead { pid_reused } if age_secs >= stale_secs => {
+                push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!(
+                        "cache lock-info from dead pid {} ({}) is {} old{}",
+                        obs.info.pid,
+                        command,
+                        humanize_duration_secs(age_secs.max(0) as u64),
+                        if pid_reused {
+                            " (the pid now belongs to a different process)"
+                        } else {
+                            ""
+                        }
+                    ),
+                    action: format!("remove stale lock-info file {}", lock_info_path.display()),
+                    safe_heal: true,
+                });
+            }
+            _ if obs.live_overrun().is_some() => {
+                push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!(
+                        "cache lock held by live pid {} ({}) for {}; {}",
+                        obs.info.pid,
+                        command,
+                        humanize_duration_secs(age_secs.max(0) as u64),
+                        obs.overrun_note().unwrap_or_default()
+                    ),
+                    action: format!(
+                        "check pid {}; the lock clears when it finishes (not removed while the owner is alive)",
+                        obs.info.pid
+                    ),
+                    safe_heal: false,
+                });
+            }
+            _ => {}
         }
     }
 
