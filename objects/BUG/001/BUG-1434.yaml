@@ -33,12 +33,12 @@ description: |
   6. Fixtures are the two incidents above: #2009, where the finding was invented, and #2003, where the failure was hidden.
 
   Filed by the product seat; disposition is the advisor's. The pairing is theirs — I had found only the invented-failure half.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T10:27:22.314033401Z
-modified_at: 2026-09-24T08:41:06.785236133Z
+modified_at: 2026-09-24T09:49:52.161509124Z
 req_type: Bug
 tags:
 - ci
