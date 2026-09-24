@@ -86352,61 +86352,70 @@ fn generate_review_prompt(
 
     // Resolve the spec list. Preference order: --specs explicit,
     // --pr range parse, error if neither.
-    let (spec_ids, header_subtitle): (Vec<String>, String) = if let Some(csv) = specs_csv {
-        let ids: Vec<String> = csv
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        if ids.is_empty() {
-            anyhow::bail!("--specs was empty after splitting on commas");
-        }
-        (ids.clone(), format!("Specs: {}", ids.join(", ")))
-    } else if let Some(pr_n) = pr {
-        let project_root = find_project_root()?;
-        let forge = forge_override
-            .and_then(ReviewForge::parse)
-            .or_else(|| detect_forge_from_origin(&project_root))
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "couldn't detect forge from origin URL — pass --forge github|gitlab"
-                )
-            })?;
-        let (base, head) = pr_base_head(&project_root, forge, pr_n)?;
-        let messages = git_log_messages(&project_root, &base, &head)?;
-        let mut ids: Vec<String> = Vec::new();
-        for msg in &messages {
-            for id in extract_spec_ids_from_commit(msg) {
-                if !ids
-                    .iter()
-                    .any(|existing| existing.eq_ignore_ascii_case(&id))
-                {
-                    ids.push(id);
+    // trace:BUG-1434 | ai:claude
+    let (spec_ids, header_subtitle, staleness_note): (Vec<String>, String, Option<String>) =
+        if let Some(csv) = specs_csv {
+            let ids: Vec<String> = csv
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if ids.is_empty() {
+                anyhow::bail!("--specs was empty after splitting on commas");
+            }
+            (ids.clone(), format!("Specs: {}", ids.join(", ")), None)
+        } else if let Some(pr_n) = pr {
+            let project_root = find_project_root()?;
+            let forge = forge_override
+                .and_then(ReviewForge::parse)
+                .or_else(|| detect_forge_from_origin(&project_root))
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "couldn't detect forge from origin URL — pass --forge github|gitlab"
+                    )
+                })?;
+            let (base, head) = pr_base_head(&project_root, forge, pr_n)?;
+            let messages = git_log_messages(&project_root, &base, &head)?;
+            let mut ids: Vec<String> = Vec::new();
+            for msg in &messages {
+                for id in extract_spec_ids_from_commit(msg) {
+                    if !ids
+                        .iter()
+                        .any(|existing| existing.eq_ignore_ascii_case(&id))
+                    {
+                        ids.push(id);
+                    }
                 }
             }
-        }
-        if ids.is_empty() {
-            anyhow::bail!(
-                "no `(REQ-ID)` trailers found in {}..{} ({} commits inspected)",
-                base,
-                head,
-                messages.len()
-            );
-        }
-        let label = match forge {
-            ReviewForge::GitHub => format!("PR #{} — branch `{}`", pr_n, head),
-            ReviewForge::GitLab => format!("MR !{} — branch `{}`", pr_n, head),
+            if ids.is_empty() {
+                anyhow::bail!(
+                    "no `(REQ-ID)` trailers found in {}..{} ({} commits inspected)",
+                    base,
+                    head,
+                    messages.len()
+                );
+            }
+            let label = match forge {
+                ReviewForge::GitHub => format!("PR #{} — branch `{}`", pr_n, head),
+                ReviewForge::GitLab => format!("MR !{} — branch `{}`", pr_n, head),
+            };
+            let note = stale_base_note(&project_root, &head, &base);
+            (ids, label, note)
+        } else {
+            anyhow::bail!("pass --specs <CSV> or --pr <N>");
         };
-        (ids, label)
-    } else {
-        anyhow::bail!("pass --specs <CSV> or --pr <N>");
-    };
 
     // Compose the markdown.
     let mut out = String::new();
     out.push_str("# Review Prompt\n\n");
     out.push_str(&header_subtitle);
-    out.push_str("\n\n## What to verify\n\n");
+    out.push_str("\n\n");
+    if let Some(note) = &staleness_note {
+        out.push_str("## Staleness\n\n");
+        out.push_str(note);
+        out.push('\n');
+    }
+    out.push_str("## What to verify\n\n");
 
     let mut missing: Vec<String> = Vec::new();
     for id in &spec_ids {
@@ -86586,6 +86595,122 @@ fn pr_base_head(
         ReviewForge::GitLab => format!("mr-{}", n),
     };
     Ok(("main".to_string(), head))
+}
+
+/// How many commits `origin/<base>` (the default branch's last-fetched
+/// state) is ahead of `head` — i.e. how far the PR's tree trails the
+/// branch its checks and findings are compared against. Purely local: it
+/// reads whatever `origin/<base>` already points at and never fetches, so
+/// it's cheap enough to run on every prompt generation.
+///
+/// Returns `None` when the count can't be resolved (no such
+/// remote-tracking ref locally, `head` not resolvable, git not on PATH,
+/// …). Callers must render that as "unknown", never as `0` — a `0` reads
+/// as "you're current" while `None` means "we don't know", and conflating
+/// them turns absent evidence into false reassurance.
+// trace:BUG-1434 | ai:claude
+fn commits_behind_default(project_root: &std::path::Path, head: &str, base: &str) -> Option<u64> {
+    let remote_base = format!("origin/{}", base);
+    let range = format!("{}..{}", head, remote_base);
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-list", "--count", &range])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<u64>()
+        .ok()
+}
+
+/// `git diff --name-only <a>...<b>` (triple-dot: files changed on `b`
+/// since its merge-base with `a`). Best-effort — any git failure yields an
+/// empty list rather than an error, since overlap is a nicety layered on
+/// top of the commits-behind count, not load-bearing on its own.
+// trace:BUG-1434 | ai:claude
+fn git_diff_name_only(project_root: &std::path::Path, a: &str, b: &str) -> Vec<String> {
+    let range = format!("{}...{}", a, b);
+    let Ok(out) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["diff", "--name-only", &range])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+/// Files the intervening commits (`head..origin/<base>`) touch that the
+/// PR's own commits (`base..head`) also touch — the overlap where a stale
+/// base is most likely to distort a check or finding (acceptance #2 of
+/// this bug). Best-effort like `git_diff_name_only`: any git failure
+/// yields an empty overlap rather than an error.
+// trace:BUG-1434 | ai:claude
+fn stale_base_file_overlap(project_root: &std::path::Path, head: &str, base: &str) -> Vec<String> {
+    let remote_base = format!("origin/{}", base);
+    let intervening = git_diff_name_only(project_root, head, &remote_base);
+    let pr_own = git_diff_name_only(project_root, base, head);
+    let pr_own_set: std::collections::HashSet<&str> = pr_own.iter().map(|s| s.as_str()).collect();
+    let mut overlap: Vec<String> = intervening
+        .into_iter()
+        .filter(|f| pr_own_set.contains(f.as_str()))
+        .collect();
+    overlap.sort();
+    overlap.dedup();
+    overlap
+}
+
+/// Render the staleness section for `generate_review_prompt`'s `--pr` path.
+/// `None` means "say nothing" — either the head is level with
+/// `origin/<base>` (acceptance #5: no extra output when current) or the
+/// figure legitimately can't be computed and the caller has already fallen
+/// back to a different note. `commits_behind_default` returning `None`
+/// (PRIN-5: absent evidence, not a false `0`) still produces `Some` text
+/// here, stating "unknown" explicitly rather than omitting the section.
+// trace:BUG-1434 | ai:claude
+fn stale_base_note(project_root: &std::path::Path, head: &str, base: &str) -> Option<String> {
+    match commits_behind_default(project_root, head, base) {
+        None => Some(format!(
+            "PR head is an unknown number of commits behind `{base}` — the local \
+             `origin/{base}` ref couldn't be resolved, so staleness could not be computed. \
+             Treat the checks and findings below as unverified against the current default \
+             branch.\n"
+        )),
+        Some(0) => None,
+        Some(n) => {
+            let plural = if n == 1 { "" } else { "s" };
+            let mut note = format!(
+                "PR head is {n} commit{plural} behind `{base}` — the checks and findings below \
+                 were computed against a tree that far behind the default branch.\n"
+            );
+            let overlap = stale_base_file_overlap(project_root, head, base);
+            if !overlap.is_empty() {
+                let files = overlap
+                    .iter()
+                    .map(|f| format!("`{f}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                note.push_str(&format!(
+                    "This PR also touches file{} those {n} intervening commit{plural} touched, \
+                     the case where findings are most likely distorted: {files}\n",
+                    if overlap.len() == 1 { "" } else { "s" }
+                ));
+            }
+            Some(note)
+        }
+    }
 }
 
 /// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
@@ -103762,6 +103887,12 @@ mod bug_800_review_test_command_prompt_tests;
 #[cfg(test)]
 #[path = "tests/story_1350_review_approach_tests.rs"]
 mod story_1350_review_approach_tests;
+
+// BUG-1434: the review prompt states how far a PR's head trails the
+// default branch, computed locally, never rendering "unknown" as 0.
+#[cfg(test)]
+#[path = "tests/bug_1434_stale_base_tests.rs"]
+mod bug_1434_stale_base_tests;
 
 // STORY-790 review findings: drift brief then-vs-now + mail/briefs since exit.
 // trace:STORY-790 | ai:claude
