@@ -32,9 +32,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:46:59.718785414Z
-modified_at: 2026-09-24T07:46:20.733755733Z
+modified_at: 2026-09-24T08:08:12.597324976Z
 req_type: Story
 tags:
+- docs:impacted
 - epic-70
 - measurement
 - north-star
