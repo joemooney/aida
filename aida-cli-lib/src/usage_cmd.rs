@@ -515,6 +515,7 @@ mod usage_timeline_tests {
             binary_sha: None,
             role: None,
             scope: None,
+            schedule_source: None,
         }
     }
 
