@@ -10,12 +10,12 @@ description: |
   A reusable, versioned question catalog and a shared recorded-judgments store with full provenance (source hash, question version, model, confidence, heuristic marker, payload hash, timestamp, latency) — the surface this doc entry is filed against — is a proposed direction, not yet built. Neither is an `aida jev` command of any kind, nor the "route this to developer/reviewer/advisor/architect/research" question. See the comment on this entry for the full gap list against the acceptance criteria above.
 
   This is a human-authored explanation, not canonical requirement text and not an AI-generated replacement for the story.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T04:23:19.458083645Z
-modified_at: 2026-09-24T23:06:52.226857384Z
+modified_at: 2026-09-24T23:07:23.001024490Z
 req_type: Doc
 tags:
 - example
