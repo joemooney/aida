@@ -16,12 +16,12 @@ description: |-
   - Prefer folding it into an existing surface over adding a new one. aida awaiting already collects the you-are-the-gate channels and is the natural home; BUG-1556 records that a guard firing into a place nobody looks is its own defect class.
 
   Related: BUG-1452 covers a refusal leaving no queue entry, which is one of the ways a spec lands in this population. This spec is the surface that makes the population visible regardless of how it got there.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:49:28.980174289Z
-modified_at: 2026-09-24T09:01:38.970194936Z
+modified_at: 2026-09-24T09:01:52.379415467Z
 req_type: Task
 tags:
 - aida:findings
