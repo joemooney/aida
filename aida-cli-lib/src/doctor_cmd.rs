@@ -1980,6 +1980,40 @@ mod story_1422_performance_gate_tests {
             "2.9% clears the 10% tolerance and the 9,900ms worst call clears a 15,000ms ceiling"
         );
     }
+
+    /// STORY-1423 criterion 1 (ADR-53's "quiet on both limbs" amendment): a
+    /// dogfood regression test over this repo's OWN `.aida/config.toml`, not a
+    /// fixture. Every prior confirmation that the `show` budget carries a
+    /// `ceiling_ms` was a point-in-time reading (`aida show --json` on some
+    /// date); nothing stopped a later config edit from quietly dropping the
+    /// table form back to a plain integer and losing the second limb without
+    /// any test failing. Reads the real file via `CARGO_MANIFEST_DIR` so this
+    /// fails the moment the dogfood surface regresses.
+    // trace:STORY-1423 trace:ADR-53 | ai:claude
+    #[test]
+    fn this_repo_configures_a_ceiling_for_the_show_budget() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("aida-cli-lib has a workspace parent");
+        let body = std::fs::read_to_string(repo_root.join(".aida/config.toml"))
+            .expect("this repo's .aida/config.toml must be readable");
+        let cfg: toml::Value = body
+            .parse()
+            .expect("this repo's .aida/config.toml must be valid TOML");
+        let budgets = performance_budgets(Some(&cfg));
+        let show = budgets
+            .iter()
+            .find(|b| b.cmd == "show")
+            .expect("this repo must declare a [performance.budgets] entry for `show`");
+        assert_eq!(
+            show.budget_ms, 1000,
+            "budget_ms must stay the measured value"
+        );
+        assert!(
+            show.ceiling_ms.is_some(),
+            "the `show` budget must keep ADR-53's ceiling_ms limb, not regress to proportion-only"
+        );
+    }
 }
 
 /// STORY-1367: the disk-headroom job. `disk_headroom_finding` is pure so the
