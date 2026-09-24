@@ -158,6 +158,41 @@ impl CacheOnlyReads for aida_core::CachedGitBackend {
     }
 }
 
+/// Warn (stderr) when `id` resolves to more than one requirement — a native
+/// spec_id on one object and a merge-gate agreed_id on another. Resolution
+/// itself is deterministic (the native owner wins), but a silent pick is how a
+/// reader asking about one spec got a different one; this lists every
+/// candidate with the id that reaches it. Best-effort: a cache error never
+/// fails the lookup it guards.
+// trace:BUG-1535 | ai:claude
+pub(crate) fn warn_if_ambiguous_id(
+    backend: &aida_core::CachedGitBackend,
+    id: &str,
+    resolved: &Requirement,
+) {
+    let Ok(candidates) = backend.id_candidates(id) else {
+        return;
+    };
+    if candidates.len() < 2 {
+        return;
+    }
+    eprintln!(
+        "{} `{}` is ambiguous: it resolves to {} requirements.",
+        "Warning:".yellow().bold(),
+        id.to_ascii_uppercase(),
+        candidates.len()
+    );
+    let lines = aida_core::id_collisions::describe_candidates(&candidates);
+    for (c, line) in candidates.iter().zip(lines) {
+        let marker = if c.uuid == resolved.id { "*" } else { " " };
+        eprintln!("  {marker} {line}");
+    }
+    eprintln!(
+        "  Using the one marked *. Address another by the id shown first on its line; \
+         `aida doctor --category id-collisions` lists every ambiguous id."
+    );
+}
+
 fn show_cached_context(
     backend: &impl CacheOnlyReads,
     req: &Requirement,
@@ -4018,6 +4053,7 @@ pub(crate) fn handle_git_backend_command(
             if *tree {
                 match lookup? {
                     Some(root) => {
+                        warn_if_ambiguous_id(&backend, id, &root);
                         record_role_activity(root.spec_id.as_deref().unwrap_or(id), "show");
                         render_tree(&backend, &root, *depth)?;
                     }
@@ -4032,6 +4068,8 @@ pub(crate) fn handle_git_backend_command(
             }
             match lookup? {
                 Some(req) => {
+                    // BUG-1535: never a silent pick on an ambiguous id.
+                    warn_if_ambiguous_id(&backend, id, &req);
                     record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
                     // STORY-632: deterministic local graph-centrality, read from
                     // the cache (recomputed on rebuild from the relationship
@@ -5118,6 +5156,9 @@ pub(crate) fn handle_git_backend_command(
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+            // BUG-1535: an edit through an ambiguous id says which object it
+            // is about to change. trace:BUG-1535 | ai:claude
+            warn_if_ambiguous_id(&backend, id, &req);
 
             // TASK-47: refuse to re-open a Completed/Rejected req
             // without --force. Closing or idempotent re-flips stay

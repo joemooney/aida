@@ -1739,6 +1739,45 @@ impl Cache {
             .collect())
     }
 
+    /// Every cached row that `id` resolves to — native `spec_id` OR merge-gate
+    /// `agreed_id`, case-insensitive. More than one row means the id is
+    /// ambiguous (the merge-gate handed out an agreed_id another object holds
+    /// natively). One indexed-by-scan query, no full-store load, so the
+    /// resolution paths can afford the ambiguity check on every lookup.
+    // trace:BUG-1535 | ai:claude
+    pub fn id_rows_for(&self, id: &str) -> Result<Vec<crate::id_collisions::IdRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, spec_id, agreed_id, title, status FROM requirements_cache \
+             WHERE spec_id = ?1 COLLATE NOCASE OR agreed_id = ?1 COLLATE NOCASE",
+        )?;
+        let rows = stmt
+            .query_map(params![id.trim()], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|(uuid, spec_id, agreed_id, title, status)| {
+                Uuid::parse_str(&uuid)
+                    .ok()
+                    .map(|uuid| crate::id_collisions::IdRow {
+                        uuid,
+                        spec_id,
+                        agreed_id,
+                        title,
+                        status,
+                    })
+            })
+            .collect())
+    }
+
     /// Resolve a stable spec_id back to its UUID using the cached row. Used by
     /// the incremental cache update to turn a DELETED object file's spec_id
     /// (parsed from its path) into the UUID `delete_requirement` keys on.
@@ -4779,6 +4818,33 @@ mod tests {
             "Completed",
             "Decision+Approved must be resolved for epic rollups"
         );
+    }
+
+    // BUG-1535: an agreed_id that equals another object's native spec_id makes
+    // the id resolve to BOTH; the cache lookup must return both rows, native
+    // owner first. trace:BUG-1535 | ai:claude
+    #[test]
+    fn id_rows_for_returns_every_object_an_ambiguous_id_resolves_to() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+        let mut fixture = sample_req("BUG-34", "[test] fixture");
+        fixture.agreed_id = Some("BUG-34".to_string());
+        let mut real = sample_req("BUG-2-081", "real spec");
+        real.agreed_id = Some("BUG-34".to_string());
+        let other = sample_req("BUG-35", "unrelated");
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .extend([real.clone(), fixture.clone(), other]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache.id_rows_for("bug-34").unwrap();
+        let cands = crate::id_collisions::candidates_for_id(rows.iter(), "bug-34");
+        assert_eq!(cands.len(), 2);
+        assert_eq!(cands[0].uuid, fixture.id);
+        assert_eq!(cands[1].uuid, real.id);
+        assert_eq!(cache.id_rows_for("BUG-35").unwrap().len(), 1);
+        assert!(cache.id_rows_for("BUG-99").unwrap().is_empty());
     }
 
     // BUG-701: the cache-backed spec_id collision scan that replaces the O(n)

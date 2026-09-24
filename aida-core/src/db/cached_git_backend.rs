@@ -116,6 +116,20 @@ impl CachedGitBackend {
         })
     }
 
+    /// Every object `id` resolves to (native `spec_id` or `agreed_id`), in the
+    /// deterministic resolution order of `id_collisions::order_candidates`.
+    /// Two or more entries = an ambiguous id; callers warn rather than let a
+    /// silent pick stand. Uses the read-freshness check, so it stays as cheap
+    /// as the lookup it guards.
+    // trace:BUG-1535 | ai:claude
+    pub fn id_candidates(&self, id: &str) -> Result<Vec<crate::id_collisions::IdCandidate>> {
+        self.with_cache_schema_retry("resolve id candidates", || {
+            self.ensure_cache_fresh_for_read()?;
+            let rows = self.cache.id_rows_for(id)?;
+            Ok(crate::id_collisions::candidates_for_id(rows.iter(), id))
+        })
+    }
+
     /// Read the current git HEAD on the store branch. Empty string if not in a
     /// git repo (e.g., test fixture); stale check then collapses to "always
     /// fresh" which is fine for non-git scenarios.

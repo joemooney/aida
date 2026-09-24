@@ -5621,27 +5621,39 @@ impl RequirementsStore {
     /// Gets a requirement by SPEC-ID. Match is case-insensitive on the
     /// spec_id and the agreed short id, so callers may pass user input
     /// (e.g. "fr-1") without canonicalizing first.
+    ///
+    /// Resolution is deterministic when an id is ambiguous (one object holds
+    /// it as its native `spec_id`, another as its merge-gate `agreed_id`): the
+    /// NATIVE owner wins, matching the git backend, which reads the file the
+    /// id names before scanning agreed ids. Previously the first match in load
+    /// order won, so the answer depended on directory iteration.
+    // trace:BUG-1535 | ai:claude
     pub fn get_requirement_by_spec_id(&self, spec_id: &str) -> Option<&Requirement> {
-        self.requirements.iter().find(|r| {
-            r.spec_id
-                .as_deref()
-                .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-                || r.agreed_id
-                    .as_deref()
-                    .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-        })
+        self.spec_id_index(spec_id).map(|i| &self.requirements[i])
     }
 
     /// Gets a mutable reference to a requirement by SPEC-ID. Same matching
-    /// rules as `get_requirement_by_spec_id`.
+    /// and resolution-order rules as `get_requirement_by_spec_id`.
     pub fn get_requirement_by_spec_id_mut(&mut self, spec_id: &str) -> Option<&mut Requirement> {
-        self.requirements.iter_mut().find(|r| {
+        self.spec_id_index(spec_id)
+            .map(move |i| &mut self.requirements[i])
+    }
+
+    /// Index of the requirement `id` resolves to: native `spec_id` match
+    /// first, then `agreed_id`.
+    // trace:BUG-1535 | ai:claude
+    fn spec_id_index(&self, id: &str) -> Option<usize> {
+        let native = self.requirements.iter().position(|r| {
             r.spec_id
                 .as_deref()
-                .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-                || r.agreed_id
+                .is_some_and(|s| s.eq_ignore_ascii_case(id))
+        });
+        native.or_else(|| {
+            self.requirements.iter().position(|r| {
+                r.agreed_id
                     .as_deref()
-                    .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+                    .is_some_and(|s| s.eq_ignore_ascii_case(id))
+            })
         })
     }
 
@@ -7254,6 +7266,44 @@ impl Default for RequirementsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // BUG-1535: an ambiguous id (native spec_id on one object, agreed_id on
+    // another) resolves to the NATIVE owner regardless of load order.
+    // trace:BUG-1535 | ai:claude
+    #[test]
+    fn get_requirement_by_spec_id_prefers_native_owner_in_any_order() {
+        let mut real = Requirement::new("real".into(), "d".into());
+        real.spec_id = Some("BUG-2-081".into());
+        real.agreed_id = Some("BUG-34".into());
+        let mut fixture = Requirement::new("fixture".into(), "d".into());
+        fixture.spec_id = Some("BUG-34".into());
+        for order in [
+            vec![real.clone(), fixture.clone()],
+            vec![fixture.clone(), real.clone()],
+        ] {
+            let mut store = RequirementsStore::new();
+            store.requirements = order;
+            assert_eq!(
+                store.get_requirement_by_spec_id("bug-34").unwrap().id,
+                fixture.id
+            );
+            assert_eq!(
+                store.get_requirement_by_spec_id_mut("BUG-34").unwrap().id,
+                fixture.id
+            );
+            assert_eq!(
+                store.get_requirement_by_spec_id("BUG-2-081").unwrap().id,
+                real.id
+            );
+        }
+        // An agreed-only id still resolves.
+        let mut store = RequirementsStore::new();
+        store.requirements = vec![real.clone()];
+        assert_eq!(
+            store.get_requirement_by_spec_id("BUG-34").unwrap().id,
+            real.id
+        );
+    }
 
     // trace:TASK-330 | ai:claude
     #[test]
