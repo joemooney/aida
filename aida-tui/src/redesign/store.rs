@@ -862,6 +862,13 @@ fn queue_user_id() -> String {
 fn resolve_store_path(project_root: &Path) -> Option<PathBuf> {
     let mut current = Some(project_root);
     while let Some(dir) = current {
+        // BUG-1598: must agree with aida-cli's `detect_distributed_store_from`
+        // on where the walk-up stops — never adopt a temp root itself as the
+        // project root.
+        // trace:BUG-1598 | ai:claude
+        if aida_core::store_locate::is_system_temp_dir(dir) {
+            return None;
+        }
         let config_path = dir.join(".aida").join("config.toml");
         if let Ok(content) = std::fs::read_to_string(&config_path) {
             if let Some(rel) = store_path_value(&content) {

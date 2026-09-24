@@ -742,6 +742,16 @@ fn queue_add_then_list_same_shell_is_consistent() {
 // production `handle_git_backend_command` setup. trace:STORY-639 | ai:claude
 #[cfg(test)]
 fn test_cached_backend(root: &std::path::Path) -> aida_core::CachedGitBackend {
+    // BUG-1598: `root` is typically `<tempdir>/aida-store` — one level under
+    // the tempdir, with no `.aida` of its own. Without a sentinel here,
+    // `default_cache_path`'s walk-up would pass straight through the
+    // tempdir and into the shared system temp dir, adopting (and
+    // corrupting) whatever `.aida/cache.db` some unrelated process left
+    // sitting there. Anchor it to this test's own tempdir instead.
+    // trace:BUG-1598 | ai:claude
+    if let Some(parent) = root.parent() {
+        let _ = std::fs::create_dir_all(parent.join(".aida"));
+    }
     let inner = aida_core::GitBackend::new(root).unwrap();
     let cache_path = aida_core::CachedGitBackend::default_cache_path(root);
     aida_core::CachedGitBackend::with_inner(inner, &cache_path).unwrap()

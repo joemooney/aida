@@ -241,6 +241,7 @@ mod queue_role_fallback;
 mod rebase_cmd;
 mod record_cmd;
 mod rel_def_cmd;
+mod related_edge_migration;
 mod relationship_cmd;
 // trace:STORY-452 | ai:claude — inferred recent-remote-agent-activity for `aida status`.
 mod remote_activity;
@@ -292,6 +293,12 @@ mod status_cleanup;
 mod status_display;
 // trace:STORY-715 | ai:claude
 mod statusbar_cmd;
+// trace:TASK-1479 | ai:claude — shared statusline contract (stable AIDA
+// fields vs client-live fields) + one formatter every client adapter calls.
+mod statusline_contract;
+// trace:TASK-1479 | ai:claude — thin client adapters: stdin JSON -> live fields.
+mod statusline_agy_adapter;
+mod statusline_claude_adapter;
 // trace:TASK-1167
 mod statusline_cmd;
 mod store_cmd;
@@ -4487,6 +4494,7 @@ fn run() -> Result<()> {
     if let Command::Statusline {
         color,
         title,
+        client,
         action,
     } = &cli.command
     {
@@ -4496,9 +4504,12 @@ fn run() -> Result<()> {
         // OSC terminal-title escape so the AIDA segment rides the terminal
         // title bar (the in-agent parity surface for clients without a
         // command-backed footer, e.g. Codex CLI).
+        // trace:TASK-1479 — `--client` opts into merging a client's live
+        // stdin JSON payload (model/context/activity/VCS) with the AIDA
+        // segment; omitted, behavior is unchanged (no stdin read).
         match action {
             Some(cli::StatuslineAction::Title) => {
-                return statusline_cmd::handle_statusline_command(color, true);
+                return statusline_cmd::handle_statusline_command(color, true, client.as_deref());
             }
             Some(act) => return statusline_cmd::handle_statusline_setup_command(act),
             None => {
@@ -4508,7 +4519,7 @@ fn run() -> Result<()> {
                         "aida statusline title",
                     );
                 }
-                return statusline_cmd::handle_statusline_command(color, *title);
+                return statusline_cmd::handle_statusline_command(color, *title, client.as_deref());
             }
         }
     }
@@ -12755,6 +12766,11 @@ fn ensure_discipline_pack_gitignore_allow_list(cwd: &std::path::Path) -> Result<
 #[path = "tests/bug_588_history_id_resolves_uuid_tests.rs"]
 mod bug_588_history_id_resolves_uuid_tests;
 
+// trace:TASK-1480 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1480_history_id_alias_tests.rs"]
+mod task_1480_history_id_alias_tests;
+
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
 ///
@@ -13119,8 +13135,32 @@ fn aida_store_override_from(path: &std::path::Path) -> StoreOverride {
 /// legacy fallback (it would show stale data) and point at `aida init`.
 /// trace:BUG-428 | ai:claude
 fn distributed_mode_declared_from(start: &std::path::Path) -> Option<std::path::PathBuf> {
+    distributed_mode_declared_from_with_roots(start, &aida_core::store_locate::real_temp_roots())
+}
+
+/// [`distributed_mode_declared_from`], parameterized on the temp roots to
+/// guard against. Must agree with `detect_distributed_store_from` on where
+/// the walk-up stops — otherwise a stray `.aida/config.toml` sitting
+/// directly in a temp root (see `aida_core::store_locate` for why that
+/// happens) makes THIS function claim distributed mode where the store
+/// resolver finds nothing, producing a misleading "run aida init" refusal
+/// instead of the correct legacy fallback. Factored out (rather than calling
+/// `is_system_temp_dir` inline) so a test can exercise the guard against a
+/// fake root without mutating `TMPDIR` or touching the real, shared system
+/// temp dir.
+// trace:BUG-1598 | ai:claude
+fn distributed_mode_declared_from_with_roots(
+    start: &std::path::Path,
+    temp_roots: &[std::path::PathBuf],
+) -> Option<std::path::PathBuf> {
+    // Canonicalize the root set ONCE, before the loop — not on every
+    // ancestor level.
+    let canonical_roots = aida_core::store_locate::canonicalize_roots(temp_roots);
     let mut current = start;
     loop {
+        if aida_core::store_locate::is_in_canonical_roots(current, &canonical_roots) {
+            return None;
+        }
         let config_path = current.join(".aida").join("config.toml");
         if let Ok(content) = std::fs::read_to_string(&config_path) {
             // The first `.aida/config.toml` we hit walking up decides the
@@ -14229,25 +14269,42 @@ fn remove_blocked_by_edge(
 }
 
 /// Handle commands routed to the GitBackend (when --file points to a directory).
-/// Resolve an `aida history --id <X>` argument to the canonical spec_id the
-/// orphan-branch event decoder keys on. `aida history` walks the git log and
-/// tags every event with the YAML's `spec_id`, so a UUID (which `aida show`
-/// prints) or an agreed_id never matched the filter and produced an empty
-/// "(no recent activity)" — the symptom BUG-588 reports. When the argument
-/// parses as a UUID we look the spec up and substitute its spec_id; otherwise
-/// we pass the argument through unchanged (it's already a spec_id, or a
-/// not-found value that will simply match nothing). Best-effort: a backend
-/// lookup error falls back to the raw argument rather than failing the command.
+/// Resolve an `aida history --id <X>` / positional `aida history <X>`
+/// argument to the canonical spec_id the orphan-branch event decoder keys
+/// on. `aida history` walks the git log and tags every event with the
+/// YAML's `spec_id`, so a UUID (which `aida show` prints) or an agreed_id
+/// never matched the filter and produced an empty "(no recent activity)" —
+/// the symptom BUG-588 reports. When the argument resolves to exactly one
+/// live requirement (by spec_id, agreed_id, or UUID) we substitute its
+/// canonical spec_id.
+///
+/// TASK-1480: this is also the "invalid or ambiguous IDs get a clear error"
+/// gate. Two cases refuse outright: a string that can't possibly be a spec
+/// id (BUG-599's format hint) and one that resolves to more than one
+/// requirement ([`aida_core::id_collisions::AmbiguousIdError`], which
+/// already names each candidate's unambiguous handle). A well-formed id
+/// that simply isn't *live* right now — deleted, or never assigned — is
+/// passed through unchanged rather than rejected here: a deleted spec can
+/// still have real history to show, so `history::run` is the one that
+/// decides, once it knows whether the id has any recorded events at all.
 /// trace:BUG-588 | ai:claude
-fn resolve_history_id_filter<B: aida_core::db::DatabaseBackend>(backend: &B, raw: &str) -> String {
-    if let Ok(uuid) = uuid::Uuid::parse_str(raw.trim()) {
-        if let Ok(Some(req)) = backend.get_requirement(&uuid) {
-            if let Some(spec_id) = req.spec_id {
-                return spec_id;
-            }
-        }
+// trace:TASK-1480 | ai:claude
+fn resolve_history_id_filter<B: aida_core::db::DatabaseBackend>(
+    backend: &B,
+    raw: &str,
+) -> Result<String> {
+    let trimmed = raw.trim();
+    let looks_like_uuid = uuid::Uuid::parse_str(trimmed).is_ok();
+    if !looks_like_uuid && !aida_core::object_store::valid_spec_id_format(trimmed) {
+        return Err(crate::not_found::invalid_spec_id_format(trimmed));
     }
-    raw.to_string()
+    // `get_requirement_unambiguous` already turns a multi-match into an
+    // `anyhow::Error` (AmbiguousIdError's own Display), so `?` here IS the
+    // "ambiguous id gets a clear error" behavior. trace:TASK-1480 | ai:claude
+    match backend.get_requirement_unambiguous(trimmed)? {
+        Some(req) => Ok(req.spec_id.clone().unwrap_or_else(|| trimmed.to_string())),
+        None => Ok(trimmed.to_string()),
+    }
 }
 
 fn command_triggers_per_write_auto_push(command: &Command) -> bool {
@@ -21341,12 +21398,40 @@ fn render_mailbox_notice(
 }
 
 fn statusline_project_root() -> std::path::PathBuf {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
+    statusline_project_root_from_with_roots(&cwd, &aida_core::store_locate::real_temp_roots())
+}
+
+/// [`statusline_project_root`], parameterized on the starting directory and
+/// the temp roots to guard against.
+///
+/// BUG-1598: `aida role` / `aida statusline` (this function's callers —
+/// `handle_role_command`, `statusline_cmd.rs`, and the init tail:
+/// `scaffold_starter_roles`, `refresh_agent_packs`,
+/// `register_project_in_global_registry`) must not adopt a stray
+/// `.aida/config.toml` sitting directly in a temp root when run from a
+/// `mktemp -d`-rooted cwd. The guard breaks the walk-up at a temp root and
+/// falls through to the SAME `cwd` fallback already used when no marker is
+/// found at all — a temp root is treated exactly like "nothing found up
+/// there", never a special error. Factored out as `_with_roots` so a test
+/// can exercise the guard against a fake root without mutating `TMPDIR` or
+/// touching the real, shared system temp dir.
+// trace:BUG-1598 | ai:claude
+fn statusline_project_root_from_with_roots(
+    cwd: &std::path::Path,
+    temp_roots: &[std::path::PathBuf],
+) -> std::path::PathBuf {
     // Roles + statusline live in the project that is the user's CWD
     // (or any ancestor with `.aida/config.toml`). Falls back to CWD if
-    // no marker is found.
-    let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
-    let mut probe = cwd.clone();
+    // no marker is found — including when the walk-up hits a temp root.
+    // Canonicalize the root set ONCE, before the loop — not on every
+    // ancestor level.
+    let canonical_roots = aida_core::store_locate::canonicalize_roots(temp_roots);
+    let mut probe = cwd.to_path_buf();
     for _ in 0..8 {
+        if aida_core::store_locate::is_in_canonical_roots(&probe, &canonical_roots) {
+            break;
+        }
         if probe.join(".aida").join("config.toml").exists() {
             return probe;
         }
@@ -21355,7 +21440,7 @@ fn statusline_project_root() -> std::path::PathBuf {
             None => break,
         }
     }
-    cwd
+    cwd.to_path_buf()
 }
 
 /// Per-project role storage: <project>/.aida/roles/
@@ -30279,6 +30364,15 @@ fn find_aida_project_root_from(start: &std::path::Path) -> Result<std::path::Pat
         .canonicalize()
         .with_context(|| format!("failed to resolve {}", start.display()))?;
     loop {
+        // BUG-1598: never adopt a temp root itself as the project root —
+        // see `aida_core::store_locate` for the shared rationale.
+        // trace:BUG-1598 | ai:claude
+        if aida_core::store_locate::is_system_temp_dir(&current) {
+            anyhow::bail!(
+                "not inside an AIDA project (no .aida/config.toml found from {})",
+                start.display()
+            );
+        }
         if current.join(".aida").join("config.toml").exists() {
             return Ok(current);
         }
@@ -31391,6 +31485,12 @@ pub(crate) fn parent_project_root_for_session(cwd: &std::path::Path) -> Option<s
     let canon = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
     let mut probe = canon.as_path();
     loop {
+        // BUG-1598: never adopt a temp root itself as the project root —
+        // see `aida_core::store_locate` for the shared rationale.
+        // trace:BUG-1598 | ai:claude
+        if aida_core::store_locate::is_system_temp_dir(probe) {
+            return None;
+        }
         if probe.join(".aida").join("sessions").is_dir() {
             let lease = active_lease_for_cwd(probe, &canon)?;
             return lease.parent_project_root;
@@ -47287,6 +47387,11 @@ fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::
 #[cfg(test)]
 #[path = "tests/statusline_tests.rs"]
 mod statusline_tests;
+
+// trace:TASK-1479 | ai:claude
+#[cfg(test)]
+#[path = "tests/statusline_client_adapters_integration_tests.rs"]
+mod statusline_client_adapters_integration_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_88_pr_lookup_parse_tests.rs"]
@@ -79800,6 +79905,27 @@ fn cli_relationship_type(input: &str) -> RelationshipType {
     }
 }
 
+/// Does a stored edge match the `--type` given to `rel remove`?
+///
+/// Exact type match, plus: asking to remove `references` (or its `related`
+/// alias) also matches a stored legacy custom `related` / `related-to` /
+/// `relates-to` edge, and asking for one of those legacy spellings matches
+/// the whole family, so the obvious hand repair does not leave a stale edge
+/// behind. Before this, the git-store `rel remove` ignored `--type` and
+/// deleted every edge to the target.
+// trace:TASK-1426 | ai:claude
+pub(crate) fn rel_remove_matches(stored: &RelationshipType, requested: &RelationshipType) -> bool {
+    use crate::related_edge_migration::is_legacy_related;
+    if stored == requested {
+        return true;
+    }
+    let requested_is_references_family =
+        *requested == RelationshipType::References || is_legacy_related(requested);
+    requested_is_references_family
+        && (is_legacy_related(stored)
+            || (is_legacy_related(requested) && *stored == RelationshipType::References))
+}
+
 fn looks_like_cross_store_spec_ref(s: &str) -> bool {
     let Some((project, spec)) = s.split_once('#') else {
         return false;
@@ -80148,6 +80274,13 @@ mod task_679_canonical_rel_tests;
 #[cfg(test)]
 #[path = "tests/task_928_parent_tag_edge_tests.rs"]
 mod task_928_parent_tag_edge_tests;
+
+// TASK-1426: fixture tests for `aida db migrate-related-edges` and for
+// `rel remove` honoring `--type` against stored custom related edges.
+// trace:TASK-1426 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1426_related_edge_migration_tests.rs"]
+mod task_1426_related_edge_migration_tests;
 
 // trace:TASK-1468 | ai:claude
 #[cfg(test)]
@@ -89959,8 +90092,37 @@ pub(crate) fn unattended_git_mutation_refusal_for(
 /// the store/spec is a genuine problem, not an absence, and must fail
 /// closed (refuse), never silently read as "nothing to check".
 pub(crate) fn config_toml_exists_upward(project_root: &std::path::Path) -> bool {
+    config_toml_exists_upward_with_roots(project_root, &aida_core::store_locate::real_temp_roots())
+}
+
+/// [`config_toml_exists_upward`], parameterized on the temp roots to guard
+/// against.
+///
+/// BUG-1598: must agree with `detect_distributed_store_from` on where the
+/// walk-up stops. Without this guard, a stray `.aida/config.toml` sitting
+/// directly in a temp root makes this function report `true` (an
+/// AIDA-managed project root exists) while the now-guarded
+/// `detect_distributed_store_from` correctly refuses to resolve a store
+/// from it — `unattended_git_mutation_refusal` then falls through PAST its
+/// only fail-open carve-out (this function returning `false`) and fails
+/// CLOSED (refuses the mutation) for a project that, from
+/// `unattended_git_mutation_refusal`'s point of view, has no AIDA config at
+/// all. Factored out as `_with_roots` so a test can exercise the guard
+/// against a fake root without mutating `TMPDIR` or touching the real,
+/// shared system temp dir.
+// trace:BUG-1598 | ai:claude
+fn config_toml_exists_upward_with_roots(
+    project_root: &std::path::Path,
+    temp_roots: &[std::path::PathBuf],
+) -> bool {
+    // Canonicalize the root set ONCE, before the loop — not on every
+    // ancestor level.
+    let canonical_roots = aida_core::store_locate::canonicalize_roots(temp_roots);
     let mut current = project_root;
     loop {
+        if aida_core::store_locate::is_in_canonical_roots(current, &canonical_roots) {
+            return false;
+        }
         if current.join(".aida").join("config.toml").is_file() {
             return true;
         }
@@ -90298,6 +90460,46 @@ mod bug_1574_unattended_git_mutation_tests {
         // against. The ONLY fail-open case.
         let dir = tempfile::tempdir().unwrap();
         assert!(unattended_git_mutation_refusal(dir.path(), "TASK-1274", "test", None).is_none());
+    }
+
+    /// BUG-1598: `config_toml_exists_upward` must agree with
+    /// `detect_distributed_store_from` on where the walk-up stops — a stray
+    /// `.aida/config.toml` sitting directly in a temp root must NOT make
+    /// this function report `true` (which would push
+    /// `unattended_git_mutation_refusal` past its only fail-open carve-out
+    /// and refuse a mutation for a project that has no real AIDA config at
+    /// all). A FAKE temp root (a plain tempdir, injected — never `TMPDIR`,
+    /// never the real shared `/tmp`) holds a planted `.aida/config.toml`
+    /// directly at its own root; a fixture one level under it must not see
+    /// it.
+    // trace:BUG-1598 | ai:claude
+    #[test]
+    fn config_toml_exists_upward_never_adopts_a_temp_root() {
+        let fake_temp_root = tempfile::tempdir().unwrap();
+        let roots = vec![fake_temp_root.path().to_path_buf()];
+
+        std::fs::create_dir_all(fake_temp_root.path().join(".aida")).unwrap();
+        std::fs::write(
+            fake_temp_root.path().join(".aida").join("config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+
+        let nested = fake_temp_root.path().join("a").join("b");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        assert!(
+            !config_toml_exists_upward_with_roots(&nested, &roots),
+            "must never report a temp root's ambient .aida/config.toml as an AIDA project root"
+        );
+
+        // Sanity check: WITHOUT the guard (empty roots list), the same
+        // fixture DOES report true — proving the guard, not some other
+        // difference, is what suppresses the false positive above.
+        assert!(
+            config_toml_exists_upward_with_roots(&nested, &[]),
+            "fixture must be adoptable when nothing is guarded, or this test proves nothing"
+        );
     }
 
     #[test]

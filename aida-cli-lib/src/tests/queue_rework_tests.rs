@@ -302,6 +302,11 @@ fn rework_inherits_existing_route_and_requeues_at_head() {
     let _guard = crate::test_env::env_lock();
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
@@ -361,6 +366,11 @@ fn rework_for_override_wins_over_existing_route() {
     let _guard = crate::test_env::env_lock();
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
@@ -406,6 +416,11 @@ fn rework_tail_keeps_append_semantics() {
     let _guard = crate::test_env::env_lock();
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
@@ -468,6 +483,11 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
     // guard instead. trace:BUG-1470 trace:STORY-1353 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
@@ -564,6 +584,11 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
 fn work_rework_of_needs_attention_spec_is_refused_without_advisor_authority() {
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
@@ -743,6 +768,11 @@ fn rework_for_implementer_lands_on_role_queue_visible_to_batch_drain() {
     let _guard = crate::test_env::env_lock();
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
@@ -795,6 +825,11 @@ fn rework_moves_existing_entry_from_other_user_instead_of_duplicating() {
     let _guard = crate::test_env::env_lock();
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
@@ -859,6 +894,11 @@ fn rework_moves_existing_entries_from_every_other_identity() {
     let _guard = crate::test_env::env_lock();
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
@@ -925,6 +965,11 @@ fn rework_explicit_user_still_overrides_role_default() {
     let _guard = crate::test_env::env_lock();
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
@@ -975,6 +1020,11 @@ fn metadata_rework_of_a_draft_is_refused_without_advisor_authority() {
     let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
@@ -1029,6 +1079,11 @@ fn metadata_rework_of_a_draft_is_refused_without_advisor_authority() {
 fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
+    // BUG-1598: anchor cache-path resolution to this tempdir so
+    // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
+    // stops here instead of continuing into the shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
