@@ -8,5 +8,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T03:53:34.672459865Z
-modified_at: 2026-09-24T03:53:34.672459865Z
+modified_at: 2026-09-24T08:13:43.342299468Z
 req_type: Story
+deferred: true
+deferred_at: 2026-09-24T08:13:43.342299468Z
+deferred_until: TASK-1470 merged and Jev call sites on main
