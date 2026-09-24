@@ -49,22 +49,27 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **One line** — the audit trail: what's been touched and how it stands now.
 
-**Mental model.** `history` reads the **orphan-store git log** — the source-of-truth record of every status flip, comment, tag edit, owner change. Two modes: the default **digest** mode is a per-requirement view sorted by last-touch ("what was I up to last session?"); `aida history events` switches to a **chronological per-event feed** that decodes each commit's YAML diff into one line per change. Digest is cheap and broad; events is slower (it shells out per file per commit) but precise — the mode for inspecting one spec closely.
+**Mental model.** `history` reads the **orphan-store git log** — the source-of-truth record of every status flip, comment, tag edit, owner change. Three views, from broadest to most detailed:
+- **Digest** (default, no SPEC-ID) — a per-requirement view sorted by last-touch ("what was I up to last session?").
+- **Status progression** (`aida history <SPEC-ID>`, shorthand for `aida history --id <SPEC-ID>`) — that one spec's status transitions in chronological order, oldest first, each with a timestamp and its old→new status. This is the "how did this spec get here?" view.
+- **Full trail** (`aida history events`, or `--full` after a SPEC-ID) — the complete chronological per-event feed, decoding each commit's YAML diff into one line per change (status transitions, comments, tag edits, field edits, …), newest first. Slower than the other two (it shells out per file per commit) — the mode for a forensic read of one spec, or of everything in a time window.
 
-**Reach for it when** — you want the *machine-faithful* record: what changed, when, by whom. "Did my ship register?" (`--shipped`), "what moved this week?" (`--since`), "show me everything that happened to `<spec-id>`" (`aida history events --id`).
+**Reach for it when** — you want the *machine-faithful* record: what changed, when, by whom. "How did this spec get to where it is?" (`aida history <SPEC-ID>`), "did my ship register?" (`--shipped`), "what moved this week?" (`--since`), "show me *everything* that happened to `<spec-id>`" (`aida history <SPEC-ID> --full`, same as `aida history events --id`).
 
-**Don't reach for it when** — you want a *readable narrative* for a person (that's `digest` — same events, editorial prose). And don't reach for `aida history events` as a general overview; it's slow by design. Use default digest mode for breadth, `aida history events` only when you're drilling into one spec or one transition type.
+**Don't reach for it when** — you want a *readable narrative* for a person (that's `digest` — same events, editorial prose). And don't reach for `--full`/`events` as a general overview; it's slow by design. Use default digest mode for breadth, a SPEC-ID for one spec's status story, `--full` only when you need the complete trail.
 
 **Key options (rationale only).**
-- `aida history events` — the chronological decode. It's the slow, precise mode; pair it with `--id` (one spec) or `--status-changes`/`--comments` (one event kind) so you're not decoding the whole log.
+- `aida history <SPEC-ID>` — the positional shorthand for `--id <SPEC-ID>`; either form selects the status-progression view for that one spec instead of the digest's single current-state row.
+- `--full` (or the `events` subcommand) — the complete edit/comment trail, not just status changes. Composes after a SPEC-ID: `aida history <spec-id> --full`.
+- `--status-changes` / `--comments` — narrow to one event kind. Paired with a SPEC-ID and no `--full`, `--comments` swaps the default status-progression view for a comment timeline; paired with `--full`/`events`, either one narrows the complete trail down. Passing both shows either kind (status changes *or* comments), not neither.
 - `--shipped` — the "did my ship register?" view: only recent Done→Completed merges, newest first. Distinct from `--all` (a recency-blind dump of every terminal spec) — `--shipped` answers a question, `--all` widens the net.
 - `--all` vs `--archived`/`--deferred` — `--all` is the everything-escape-hatch (active + archived + deferred, symmetric with `aida list --all`); `--archived`/`--deferred` narrow to *only* that shelf. Default `history` hides archived/deferred but keeps freshly-Completed ships visible.
 - `--kind <KIND>` — reads the local event feed (`.aida/events.jsonl`) instead of the git log, one event kind at a time. `--kind gate-held` is the non-action view: every gate that refused or held (a merge-hold floor, a stale approval, a review in progress, a blocked pickup, a closure hold, an ambiguous id), a count per gate, and the merge-hold floor's refusals beside its releases for the same window, so a rate has its denominator. `--author me` narrows it to what *you* tried and could not, which tells a blocked seat from an idle one.
 - `--max-commits` — bounds how far back it walks the orphan branch. The knob for "this is slow / I only care about recent."
 
-**Gotchas.** The default digest mode is sorted by *last-touch*, not by event time, so it's a "current standing" view, not a timeline — switch to `aida history events` for an actual chronology. The cache does **not** carry history rows; `history` reads the YAML/git log directly, which is why `events` costs real time.
+**Gotchas.** The default digest mode is sorted by *last-touch*, not by event time, so it's a "current standing" view, not a timeline. The status-progression view (a SPEC-ID, no `--full`) reads oldest-first — a progression reads forward in time — while the full trail (`--full`/`events`) reads newest-first, matching `git log`; the two views don't share a reading order. The cache does **not** carry history rows; `history` reads the YAML/git log directly, which is why the full trail costs real time. A spec that's real but simply hasn't changed status yet prints a quiet "nothing in this view" note, not an error; an id that never existed at all (typo, or a format that isn't `TYPE-SEQ`) refuses with a clear "not found" error instead of a silent empty view.
 
-**Chains with** — the audit counterpart to `status` (now) and `digest` (narrative). Feed an `--id` from `list`/`show` to drill into one spec's life.
+**Chains with** — the audit counterpart to `status` (now) and `digest` (narrative). Feed a SPEC-ID straight from `list`/`show` to see one spec's status story.
 
 ---
 

@@ -79,6 +79,23 @@ fn is_ship_event(kind: &EventKind) -> bool {
     )
 }
 
+/// `--status-changes` and `--comments` each narrow to "just this kind of
+/// event." Applied as two independent hard (AND) filters, passing both at
+/// once used to silently produce an always-empty result — no event is ever
+/// both a status change AND a comment — an incoherence TASK-1480's "keep
+/// --status-changes, --comments ... coherent" acceptance bar calls out.
+/// Combine them with OR instead: with both set, either kind passes; with
+/// neither set, everything passes (unchanged from before).
+// trace:TASK-1480 | ai:claude
+fn event_kind_allowed(kind: &EventKind, opts: &HistoryOpts) -> bool {
+    if !opts.status_changes_only && !opts.comments_only {
+        return true;
+    }
+    let is_status = matches!(kind, EventKind::StatusChange { .. });
+    let is_comment = matches!(kind, EventKind::CommentsAdded { .. });
+    (opts.status_changes_only && is_status) || (opts.comments_only && is_comment)
+}
+
 #[derive(Debug, Clone)]
 enum EventKind {
     Added {
@@ -166,6 +183,14 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         );
     }
 
+    // TASK-1480: a single spec (`--id` / the positional SPEC-ID alias)
+    // without `--full`/`events` gets the dedicated status-progression view
+    // — a chronological timeline, not the digest's single current-state
+    // row and not the full commit-grouped events feed. trace:TASK-1480 | ai:claude
+    if opts.id_filter.is_some() && !opts.events_mode {
+        return run_single_spec_progress(store_path, opts);
+    }
+
     if !opts.events_mode {
         return run_digest(store_path, opts);
     }
@@ -211,6 +236,128 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// TASK-1480: the default view for a single spec (`--id` / positional
+/// SPEC-ID) without `--full`/`events` — status transitions (or, with
+/// `--comments`, a comment timeline; the CLI layer already folded
+/// "neither flag given" into `status_changes_only`) in chronological
+/// order, each with a timestamp and old→new status. Reuses the exact same
+/// decoder and filters as the full events feed (`collect_filtered_events`)
+/// so this view can never drift from it — it only narrows *which* event
+/// kinds show and reads oldest-first (a progression reads forward in
+/// time), the opposite of the full trail's git-log-style newest-first.
+// trace:TASK-1480 | ai:claude
+fn run_single_spec_progress(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
+    let id = opts
+        .id_filter
+        .as_deref()
+        .expect("run_single_spec_progress requires opts.id_filter");
+
+    let (mut filtered, _hidden_archived) = collect_filtered_events(store_path, opts)?;
+
+    if filtered.is_empty() {
+        return report_empty_single_spec(store_path, opts, id);
+    }
+
+    // Oldest-first: see the doc comment above.
+    filtered.reverse();
+
+    if opts.oneline {
+        for e in &filtered {
+            println!("{}", format_oneline(e));
+        }
+        return Ok(());
+    }
+
+    let (current_status, title) = current_snapshot(store_path, id);
+    let header_title = if title.is_empty() {
+        String::new()
+    } else {
+        format!(" — {}", title)
+    };
+    let header_status = match current_status {
+        Some(s) => format!("  [current: {}]", s.green()),
+        None => "  [not currently in the store]".dimmed().to_string(),
+    };
+    println!("{}{}{}", id.bold(), header_title, header_status);
+
+    let label = match (opts.status_changes_only, opts.comments_only) {
+        (true, true) => "Status + comment timeline",
+        (_, true) => "Comment timeline",
+        _ => "Status progression",
+    };
+    println!("{} (oldest → newest):\n", label.dimmed());
+
+    for e in &filtered {
+        println!(
+            "  {}  {}  {}",
+            e.timestamp.dimmed(),
+            format_event_body(e),
+            format!("(by {})", e.author).dimmed()
+        );
+    }
+
+    println!(
+        "\n{} event(s) shown. Pass --full for the complete edit/comment trail{}.",
+        filtered.len(),
+        if opts.comments_only {
+            ""
+        } else {
+            ", or --comments for comment history"
+        }
+    );
+
+    Ok(())
+}
+
+/// TASK-1480: the friendly "nothing here" half of `run_single_spec_progress`.
+/// Distinguishes a real spec that's simply quiet in THIS view (fine — a
+/// dimmed hint, not an error) from an id that never had any recorded
+/// history at all (an "invalid ID gets a clear error" case). The re-check
+/// lifts every kind/date narrowing but keeps the id's pathspec scope, so
+/// it's still a cheap, bounded git-log walk — not a full-store scan.
+// trace:TASK-1480 | ai:claude
+fn report_empty_single_spec(store_path: &Path, opts: &HistoryOpts, id: &str) -> Result<()> {
+    let mut probe = opts.clone();
+    probe.status_changes_only = false;
+    probe.comments_only = false;
+    probe.shipped_only = false;
+    probe.since = None;
+    probe.until = None;
+    let (any, _) = collect_filtered_events(store_path, &probe)?;
+    if any.is_empty() {
+        return Err(crate::not_found::requirement_not_found_in_loaded_store(id));
+    }
+
+    eprintln!(
+        "{}",
+        format!("(no matching history for {id} in this view)").dimmed()
+    );
+    eprintln!(
+        "{}",
+        "(this spec has other recorded history — try --full for the complete trail)".dimmed()
+    );
+    Ok(())
+}
+
+/// Best-effort "what does this spec look like right now" read for the
+/// progression view's header — current status + title, straight from the
+/// live YAML. `None`/empty when the spec has since been deleted (its
+/// object file no longer exists); the progression view still renders fine
+/// without it.
+// trace:TASK-1480 | ai:claude
+fn current_snapshot(store_path: &Path, spec_id: &str) -> (Option<String>, String) {
+    let objects_root = store_path.join("objects");
+    let Ok(yaml_path) = aida_core::object_store::object_path(&objects_root, spec_id) else {
+        return (None, String::new());
+    };
+    let (status, title, _modified_at) = read_current(&yaml_path);
+    if status == "(deleted)" {
+        (None, String::new())
+    } else {
+        (Some(status), title)
+    }
 }
 
 /// Collect structured event records using the same filters as
@@ -340,12 +487,7 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
             Some(a) => e.author.contains(a),
             None => true,
         })
-        .filter(|e| {
-            if !opts.status_changes_only {
-                return true;
-            }
-            matches!(e.kind, EventKind::StatusChange { .. })
-        })
+        .filter(|e| event_kind_allowed(&e.kind, opts))
         .filter(|e| {
             // TASK-507: `--shipped` keeps only the Done→Completed transition —
             // the merge-to-default ship event. trace:TASK-507 | ai:claude
@@ -353,12 +495,6 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
                 return true;
             }
             is_ship_event(&e.kind)
-        })
-        .filter(|e| {
-            if !opts.comments_only {
-                return true;
-            }
-            matches!(e.kind, EventKind::CommentsAdded { .. })
         })
         .filter(|e| !opts.archived_specs.contains(&e.spec_id))
         .filter(|e| match &opts.archived_only_specs {
@@ -1854,5 +1990,247 @@ mod tests {
             }
             _ => panic!("expected CommentsAdded"),
         }
+    }
+
+    /// `--status-changes` and `--comments` each narrow to one event kind;
+    /// applied together they used to AND (impossible — always empty).
+    /// TASK-1480 combines them with OR: either kind passes.
+    // trace:TASK-1480 | ai:claude
+    #[test]
+    fn event_kind_allowed_combines_status_and_comments_with_or() {
+        let status = EventKind::StatusChange {
+            from: "Draft".into(),
+            to: "Approved".into(),
+        };
+        let comment = EventKind::CommentsAdded {
+            count: 1,
+            author: Some("joe".into()),
+        };
+        let other = EventKind::TagsChange {
+            added: vec!["x".into()],
+            removed: vec![],
+        };
+
+        let neither = HistoryOpts { ..base_opts() };
+        assert!(event_kind_allowed(&status, &neither));
+        assert!(event_kind_allowed(&comment, &neither));
+        assert!(event_kind_allowed(&other, &neither));
+
+        let status_only = HistoryOpts {
+            status_changes_only: true,
+            ..base_opts()
+        };
+        assert!(event_kind_allowed(&status, &status_only));
+        assert!(!event_kind_allowed(&comment, &status_only));
+        assert!(!event_kind_allowed(&other, &status_only));
+
+        let comments_only = HistoryOpts {
+            comments_only: true,
+            ..base_opts()
+        };
+        assert!(!event_kind_allowed(&status, &comments_only));
+        assert!(event_kind_allowed(&comment, &comments_only));
+
+        // The regression case: both set at once must OR, not AND.
+        let both = HistoryOpts {
+            status_changes_only: true,
+            comments_only: true,
+            ..base_opts()
+        };
+        assert!(event_kind_allowed(&status, &both));
+        assert!(event_kind_allowed(&comment, &both));
+        assert!(!event_kind_allowed(&other, &both));
+    }
+
+    /// TASK-1480: build a small history for one spec — several status
+    /// changes plus a comment on the same commit as one of the transitions
+    /// — and drive it through `collect_filtered_events` the same way
+    /// `aida history <SPEC-ID>` (status-progression, the default single-spec
+    /// view) does: `status_changes_only = true`. Asserts the status changes
+    /// come back (and only them — the comment is excluded), and that
+    /// reversing the git-log order (as `run_single_spec_progress` does)
+    /// produces the true chronological (oldest → newest) progression:
+    /// Draft → Approved → In Progress → Done.
+    #[test]
+    fn status_progression_filters_to_status_changes_in_chronological_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let git = |args: &[&str]| {
+            let out = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {:?} failed", args);
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+        let write = |body: &str| {
+            let path = root.join("objects/TASK/000/TASK-1.yaml");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        };
+
+        write("spec_id: TASK-1\ntitle: t\nstatus: Draft\ncomments: []\n");
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "add TASK-1"]);
+
+        write("spec_id: TASK-1\ntitle: t\nstatus: Approved\ncomments: []\n");
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "approve TASK-1"]);
+
+        // Same commit carries a status change AND a comment.
+        write(
+            "spec_id: TASK-1\ntitle: t\nstatus: In Progress\ncomments:\n  - author: joe\n    content: starting\n",
+        );
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "start TASK-1"]);
+
+        write(
+            "spec_id: TASK-1\ntitle: t\nstatus: Done\ncomments:\n  - author: joe\n    content: starting\n",
+        );
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "finish TASK-1"]);
+
+        let opts = HistoryOpts {
+            id_filter: Some("TASK-1".to_string()),
+            status_changes_only: true,
+            ..base_opts()
+        };
+        let (mut filtered, _) = collect_filtered_events(root, &opts).unwrap();
+        assert_eq!(
+            filtered.len(),
+            3,
+            "expected exactly the 3 status changes, got: {:?}",
+            filtered.iter().map(|e| &e.kind).collect::<Vec<_>>()
+        );
+        assert!(
+            filtered
+                .iter()
+                .all(|e| matches!(e.kind, EventKind::StatusChange { .. })),
+            "the comment event must be filtered out"
+        );
+
+        // git-log order is newest-first; the progression view reverses it.
+        filtered.reverse();
+        let transitions: Vec<(String, String)> = filtered
+            .iter()
+            .map(|e| match &e.kind {
+                EventKind::StatusChange { from, to } => (from.clone(), to.clone()),
+                _ => unreachable!(),
+            })
+            .collect();
+        assert_eq!(
+            transitions,
+            vec![
+                ("Draft".to_string(), "Approved".to_string()),
+                ("Approved".to_string(), "In Progress".to_string()),
+                ("In Progress".to_string(), "Done".to_string()),
+            ]
+        );
+
+        // The comment-only view picks up exactly the one comment event
+        // instead.
+        let comments_opts = HistoryOpts {
+            id_filter: Some("TASK-1".to_string()),
+            comments_only: true,
+            ..base_opts()
+        };
+        let (comment_events, _) = collect_filtered_events(root, &comments_opts).unwrap();
+        assert_eq!(comment_events.len(), 1);
+        assert!(matches!(
+            comment_events[0].kind,
+            EventKind::CommentsAdded { .. }
+        ));
+
+        // Both flags together (the OR-fix): status changes AND the comment.
+        let both_opts = HistoryOpts {
+            id_filter: Some("TASK-1".to_string()),
+            status_changes_only: true,
+            comments_only: true,
+            ..base_opts()
+        };
+        let (both_events, _) = collect_filtered_events(root, &both_opts).unwrap();
+        assert_eq!(both_events.len(), 4);
+    }
+
+    /// TASK-1480: `aida history <SPEC-ID>` on a real spec that simply
+    /// hasn't changed status yet must NOT error — it's a friendly empty
+    /// view, not an invalid id. `run()` routes a single, non-`--full` id
+    /// straight to the status-progression view; assert it returns `Ok`.
+    #[test]
+    fn run_single_spec_with_no_status_changes_yet_is_not_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let git = |args: &[&str]| {
+            let out = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {:?} failed", args);
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+        let path = root.join("objects/TASK/000/TASK-2.yaml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "spec_id: TASK-2\ntitle: quiet spec\nstatus: Draft\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "add TASK-2"]);
+
+        let opts = HistoryOpts {
+            id_filter: Some("TASK-2".to_string()),
+            events_mode: false,
+            status_changes_only: false,
+            ..base_opts()
+        };
+        assert!(
+            run(root, &opts).is_ok(),
+            "a real, quiet spec must not error"
+        );
+    }
+
+    /// TASK-1480: an id that never appears anywhere in the orphan branch's
+    /// history (well-formed shape, but nothing was ever committed under it)
+    /// gets a clear error from the single-spec view, not a silent
+    /// "(no recent activity)."
+    #[test]
+    fn run_single_spec_with_no_history_at_all_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let git = |args: &[&str]| {
+            let out = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {:?} failed", args);
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+        // Some unrelated history must exist so the branch isn't itself
+        // empty (an empty orphan branch is a different, store-level case).
+        let path = root.join("objects/TASK/000/TASK-1.yaml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "spec_id: TASK-1\ntitle: t\nstatus: Draft\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "add TASK-1"]);
+
+        let opts = HistoryOpts {
+            id_filter: Some("TASK-999999".to_string()),
+            events_mode: false,
+            ..base_opts()
+        };
+        let err = run(root, &opts).unwrap_err();
+        assert!(
+            format!("{err:#}").to_lowercase().contains("not found"),
+            "expected a not-found error, got: {err:#}"
+        );
     }
 }
