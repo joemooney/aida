@@ -498,7 +498,35 @@ pub fn intake_skill_prompt(apply: bool) -> String {
     } else {
         "/aida-assess"
     };
-    materialize_skill_invocation(invocation, false)
+    let mut prompt = materialize_skill_invocation(invocation, false);
+    prompt.push_str(&groom_gate_section());
+    prompt
+}
+
+/// The disposition gates bound to `groom` — a POINTER, not the checklists, so
+/// the groom prompt carries only the gate names and the command that fires
+/// each one. The checklist enters context only when the advisor runs it.
+// trace:STORY-1427 | ai:claude
+pub fn groom_gate_section() -> String {
+    let defaults = aida_core::gates::defaults_for("groom");
+    if defaults.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from(
+        "\n\n## Disposition gates (default at groom)\n\n\
+         Before approving a spec, run each gate and record its verdict line \
+         (with the gate name and version) as a spec comment. Tier-1 findings are \
+         deterministic; tier-2 answers are heuristic and advisory.\n\n",
+    );
+    for g in defaults {
+        out.push_str(&format!(
+            "- `aida gate run {} <SPEC>` ({}) — {}\n",
+            g.name,
+            g.label(),
+            g.summary
+        ));
+    }
+    out
 }
 
 /// The legacy slash-command spelling retained only for tests/documentation that
@@ -865,6 +893,19 @@ workflow_hints = true
         let (eligible, fenced) = select_intake_candidates(&specs, &cfg, &filters);
         assert!(eligible.is_empty());
         assert!(matches!(fenced[0].1, FenceReason::Keystone(_)));
+    }
+
+    #[test]
+    fn groom_prompt_binds_default_gates_by_pointer() {
+        // trace:STORY-1427 | ai:claude
+        let prompt = intake_skill_prompt(false);
+        assert!(
+            prompt.contains("aida gate run well-formed <SPEC>"),
+            "{prompt}"
+        );
+        assert!(prompt.contains("well-formed@v1"));
+        // Pointer only: the checklist body stays out of the groom prompt.
+        assert!(!prompt.contains("One reader, one meaning"));
     }
 
     #[test]

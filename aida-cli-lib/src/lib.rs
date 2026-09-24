@@ -125,6 +125,7 @@ mod focus;
 mod focus_cmd;
 mod forge;
 mod forge_profiles;
+mod gate_cmd;
 mod global_queue;
 mod last_drain;
 mod lifecycle_cmd;
@@ -4159,6 +4160,12 @@ fn run() -> Result<()> {
         return lint_cmd::handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
     }
 
+    // `aida gate` reads the embedded gate library (and, for `run`, self-loads
+    // the store) — no shared storage handle. trace:STORY-1427 | ai:claude
+    if let Command::Gate(gate_cmd) = &cli.command {
+        return gate_cmd::handle_gate_command(gate_cmd);
+    }
+
     // `aida lifecycle` (Phase 1, generate-only) is self-contained: it renders a
     // Mermaid diagram from the declared transition model in aida-core and
     // optionally pins it against `docs/lifecycle.md`. No storage handle, no LLM,
@@ -4886,6 +4893,8 @@ fn run() -> Result<()> {
             weight: _,
             // TASK-1267: execution modes are git-canonical only.
             mode: _,
+            // STORY-1427: intake gates run on the git-canonical path only.
+            gates: _,
         } => {
             // TASK-725: positional title (`aida add "do X"`) — --title wins.
             let title = title.clone().or_else(|| title_positional.clone());
@@ -5451,6 +5460,7 @@ fn run() -> Result<()> {
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
+        Command::Gate(_) => unreachable!("gate is dispatched before storage init"),
         Command::Lifecycle { .. } => {
             unreachable!("lifecycle is dispatched before storage init")
         }
