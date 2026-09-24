@@ -199,9 +199,119 @@ pub(crate) struct MergeHoldRecord {
     pub label_state: Option<String>,
     #[serde(default)]
     pub legacy: bool,
+    /// BUG-1532 criterion 10: the verdict record a refusal hold stands on.
+    /// The marker REFERENCES the verdict rather than quoting it, so a reader
+    /// follows the record (which is re-recorded round after round) instead of
+    /// a frozen snapshot of the first refusal. `detail` is a convenience
+    /// summary from placement time and is never treated as current.
+    // trace:BUG-1532 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verdict_ref: Option<VerdictRef>,
+    /// BUG-1562: what must be true for the hold to be released — a FUTURE
+    /// check evaluated when read, not a reason describing the past.
+    // trace:BUG-1562 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_condition: Option<String>,
+    /// BUG-1562: the spec the hold was placed for, when the writer knew it.
+    /// Lets a reader check the premise ("is that spec still running?")
+    /// without parsing prose.
+    // trace:BUG-1562 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spec: Option<String>,
+}
+
+/// BUG-1532 criterion 10: the identity of a recorded review verdict — the
+/// key its file is stored under (`.aida/review-verdicts/<KEY>.json`, a spec
+/// id or `PR-<n>`), the PR, the commit it was recorded against, and the seat
+/// that recorded it. The OWNER of a refusal hold is read from the verdict
+/// this points at, never from the marker's prose.
+// trace:BUG-1532 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct VerdictRef {
+    pub key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pr: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewed_sha: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recorded_by: Option<String>,
+}
+
+impl VerdictRef {
+    pub(crate) fn new(
+        key: &str,
+        pr: Option<u64>,
+        reviewed_sha: Option<String>,
+        recorded_by: Option<String>,
+    ) -> Self {
+        Self {
+            key: key.trim().to_ascii_uppercase(),
+            pr,
+            reviewed_sha: reviewed_sha.filter(|s| !s.trim().is_empty()),
+            recorded_by: recorded_by.filter(|s| !s.trim().is_empty()),
+        }
+    }
+
+    /// The verdict file this reference names, relative to the project root.
+    pub(crate) fn path(&self) -> String {
+        format!(".aida/review-verdicts/{}.json", self.key)
+    }
 }
 
 impl MergeHoldRecord {
+    /// BUG-1532 criterion 5: the hold kinds `aida pr ship` reads as a
+    /// REVIEWER REFUSAL — typed rework, or an untyped legacy marker (unknown
+    /// is not permission). A refusal is released only by a fresh verdict at
+    /// the current head ([`refusal_release`]).
+    // trace:BUG-1532 | ai:claude
+    pub(crate) fn is_refusal(&self) -> bool {
+        self.legacy || self.reason_kind == HoldReasonKind::Rework
+    }
+
+    /// BUG-1562: record the spec the hold was placed for, so a reader can
+    /// check "is it still running?" without parsing prose.
+    // trace:BUG-1562 | ai:claude
+    pub(crate) fn with_spec(mut self, spec: &str) -> Self {
+        let spec = spec.trim();
+        self.spec = (!spec.is_empty()).then(|| spec.to_ascii_uppercase());
+        self
+    }
+
+    /// BUG-1562: the release condition to show — the recorded one, else the
+    /// default this hold kind implies (marked as such by the caller).
+    // trace:BUG-1562 | ai:claude
+    pub(crate) fn release_condition_or_default(&self) -> (String, bool) {
+        if let Some(cond) = self
+            .release_condition
+            .as_deref()
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+        {
+            return (cond.to_string(), false);
+        }
+        let pr = self.pr;
+        let default = if self.is_refusal() {
+            let key = self
+                .verdict_ref
+                .as_ref()
+                .map(|r| r.key.clone())
+                .unwrap_or_else(|| format!("PR-{pr}"));
+            format!(
+                "a fresh APPROVED verdict for {key} recorded at the PR's current head; then a human ships it"
+            )
+        } else {
+            match self.reason_kind {
+                HoldReasonKind::Supervision | HoldReasonKind::Decision => format!(
+                    "a human at a terminal decides: `aida pr ship {pr}` or `aida merge-hold clear {pr}`"
+                ),
+                HoldReasonKind::Recusal => {
+                    "an independent reader reviews the exact head; a human clears it".to_string()
+                }
+                _ => format!("a human inspects it and runs `aida merge-hold clear {pr}`"),
+            }
+        };
+        (default, true)
+    }
     fn legacy(pr: u64, body: &str) -> Self {
         let detail = body.lines().next().unwrap_or("").trim();
         let label_state = body
@@ -224,6 +334,9 @@ impl MergeHoldRecord {
             target_head_sha: None,
             label_state,
             legacy: true,
+            verdict_ref: None,
+            release_condition: None,
+            spec: None,
         }
     }
 }
@@ -288,6 +401,38 @@ pub(crate) fn write_typed_hold(
     let body = serde_json::to_vec_pretty(&normalized)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     aida_core::fs_atomic::write_atomic(&hold_path(project_root, record.pr), &body)
+}
+
+/// BUG-1562: place a hold by hand (`aida merge-hold add`) WITHOUT silently
+/// replacing an existing marker's body. A marker already present — typed,
+/// legacy, hand-written, even unreadable — refuses unless `replace`, and the
+/// refusal quotes what would have been lost. The label half is the caller's.
+// trace:BUG-1562 | ai:claude
+pub(crate) fn place_hand_hold(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    replace: bool,
+) -> Result<(), String> {
+    let path = hold_path(project_root, record.pr);
+    if !replace && std::fs::symlink_metadata(&path).is_ok() {
+        let existing = read_hold_record(project_root, record.pr)
+            .map(|r| r.detail)
+            .unwrap_or_default();
+        let first = existing.lines().next().unwrap_or("").trim();
+        return Err(format!(
+            "PR #{pr} already has a merge-hold marker ({shown}); `aida merge-hold add` will not \
+             overwrite its body. Keep it and re-apply a missing label with \
+             `aida merge-hold list --fix`, or replace it deliberately with \
+             `aida merge-hold add {pr} --replace ...`.",
+            pr = record.pr,
+            shown = if first.is_empty() {
+                path.display().to_string()
+            } else {
+                format!("\"{first}\"")
+            }
+        ));
+    }
+    write_typed_hold(project_root, record).map_err(|e| e.to_string())
 }
 
 /// Refresh a recusal hold from live evidence: adopt a moved PR head (which
@@ -479,6 +624,9 @@ pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHold
                     target_head_sha: None,
                     label_state: None,
                     legacy: false,
+                    verdict_ref: None,
+                    release_condition: None,
+                    spec: None,
                 }),
             }
         }
@@ -495,6 +643,9 @@ pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHold
             target_head_sha: None,
             label_state: None,
             legacy: false,
+            verdict_ref: None,
+            release_condition: None,
+            spec: None,
         }),
     }
 }
@@ -545,6 +696,9 @@ pub(crate) fn typed_hold(
         target_head_sha,
         label_state: None,
         legacy: false,
+        verdict_ref: None,
+        release_condition: None,
+        spec: None,
     }
 }
 
@@ -606,6 +760,11 @@ pub(crate) struct HoldClearance {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_head_sha: Option<String>,
     pub cleared_at: String,
+    /// BUG-1532: the fresh verdict at head that met a refusal hold's release
+    /// condition, when one did. `None` = a human cleared it without one.
+    // trace:BUG-1532 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub released_by_verdict: Option<VerdictRef>,
 }
 
 pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
@@ -620,6 +779,18 @@ pub(crate) fn record_clearance(
     record: &MergeHoldRecord,
     actor: &PrincipalIdentity,
 ) -> std::io::Result<()> {
+    record_clearance_with_verdict(project_root, record, actor, None)
+}
+
+/// [`record_clearance`], naming the fresh verdict that met a refusal hold's
+/// release condition.
+// trace:BUG-1532 | ai:claude
+pub(crate) fn record_clearance_with_verdict(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    actor: &PrincipalIdentity,
+    released_by_verdict: Option<VerdictRef>,
+) -> std::io::Result<()> {
     let path = clearance_path(project_root, record.pr);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -631,6 +802,7 @@ pub(crate) fn record_clearance(
         cleared_by: actor.key(),
         target_head_sha: record.target_head_sha.clone(),
         cleared_at: chrono::Utc::now().to_rfc3339(),
+        released_by_verdict,
     };
     let body = serde_json::to_vec_pretty(&clearance)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
@@ -1252,19 +1424,29 @@ fn cited_shas(text: &str) -> Vec<String> {
 /// Checks, each skipped when its input is unknown (unknown is never stale):
 ///   - the marker cites a commit (its `target_head_sha`, else a sha in its
 ///     prose) and the PR head has moved past every cited commit;
-///   - a REWORK hold names a spec whose recorded verdict is now APPROVED, or
-///     has been closed by a merge — the refusal it quotes is no longer the
-///     reviewer's position.
+///   - a REWORK hold's verdict (the typed `verdict_ref` when present, else a
+///     spec named in its prose) is now APPROVED, or has been closed by a
+///     merge — the refusal it quotes is no longer the reviewer's position;
+///   - the spec the hold was placed for (typed `spec`, else a spec named in
+///     its prose) is no longer running: its local status is terminal
+///     (completed / rejected / superseded). `status_of` is a cheap, local
+///     lookup (the cache), never a forge call.
 // trace:BUG-1562 | ai:claude
 pub(crate) fn premise_stale(
     record: &MergeHoldRecord,
     live_head: Option<&str>,
     verdict_of: impl Fn(&str) -> Option<crate::review_verdict::RecordedVerdict>,
+    status_of: impl Fn(&str) -> Option<String>,
 ) -> Option<String> {
     use crate::review_verdict::{same_reviewed_sha, short_sha, VerdictKind};
     let mut why = Vec::new();
+    let prose_specs = || crate::pr_ship::extract_spec_ids_from_text(&record.detail);
     if record.reason_kind == HoldReasonKind::Rework {
-        for spec in crate::pr_ship::extract_spec_ids_from_text(&record.detail) {
+        let keys: Vec<String> = match &record.verdict_ref {
+            Some(r) => vec![r.key.clone()],
+            None => prose_specs(),
+        };
+        for spec in keys {
             let Some(verdict) = verdict_of(&spec) else {
                 continue;
             };
@@ -1281,6 +1463,19 @@ pub(crate) fn premise_stale(
             }
         }
     }
+    // BUG-1562: "is the spec this hold was placed for still running?"
+    let specs: Vec<String> = match record.spec.as_deref().map(str::trim) {
+        Some(spec) if !spec.is_empty() => vec![spec.to_ascii_uppercase()],
+        _ => prose_specs(),
+    };
+    for spec in specs {
+        if let Some(status) = status_of(&spec).filter(|s| crate::is_terminal_status_str(s)) {
+            why.push(format!(
+                "{spec} is no longer running (status {})",
+                status.trim().to_ascii_lowercase()
+            ));
+        }
+    }
     let cited: Vec<String> = match record.target_head_sha.as_deref().map(str::trim) {
         Some(sha) if !sha.is_empty() => vec![sha.to_ascii_lowercase()],
         _ => cited_shas(&record.detail),
@@ -1295,6 +1490,135 @@ pub(crate) fn premise_stale(
         }
     }
     (!why.is_empty()).then(|| why.join("; "))
+}
+
+/// BUG-1532 criterion 4: whether a REFUSAL hold has been answered by a fresh
+/// verdict at the PR's current head.
+// trace:BUG-1532 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RefusalRelease {
+    /// An APPROVED verdict recorded at exactly the current head, and no newer
+    /// refusal under the same key. The hold's condition is met.
+    Released(VerdictRef),
+    /// Still refused. The text names the verdict on record and the sha it
+    /// was recorded against — or, when the verdict carries no sha, names the
+    /// MISSING PROVENANCE as the reason (criterion 11).
+    Held(String),
+}
+
+/// The verdict keys a refusal hold is answered under: its typed
+/// `verdict_ref` first, then the PR-keyed record (`PR-<n>`). Structural
+/// only — the marker's prose is never parsed for a key (criterion 6).
+// trace:BUG-1532 | ai:claude
+pub(crate) fn refusal_verdict_keys(record: &MergeHoldRecord) -> Vec<String> {
+    let mut keys = Vec::new();
+    if let Some(r) = &record.verdict_ref {
+        keys.push(r.key.clone());
+    }
+    let pr_key = format!("PR-{}", record.pr);
+    if !keys.contains(&pr_key) {
+        keys.push(pr_key);
+    }
+    keys
+}
+
+/// BUG-1532 criteria 4 + 11: a refusal hold is released ONLY by a fresh
+/// verdict at the current head. Pure over its two readers so it is testable:
+/// `current_of(key)` is the latest verdict recorded under `key`;
+/// `at_sha(key, sha)` is the verdict recorded under `key` for commit `sha`
+/// (`review_verdict::read_verdict_for_sha`).
+///
+/// Fails CLOSED: an unknown head, no verdict, a verdict at another sha, a
+/// refusal at the head, or a verdict with NO sha all keep the hold. A
+/// refusal that cannot be tied to a commit stays refused until a verdict
+/// that DOES carry a sha is recorded at the head.
+///
+/// This decides whether the condition is MET. It never clears anything:
+/// the release itself stays behind the human integrity floor (`aida pr
+/// ship` / `aida merge-hold clear` at a terminal).
+// trace:BUG-1532 | ai:claude
+pub(crate) fn refusal_release(
+    record: &MergeHoldRecord,
+    live_head: Option<&str>,
+    current_of: impl Fn(&str) -> Option<crate::review_verdict::RecordedVerdict>,
+    at_sha: impl Fn(&str, &str) -> Option<crate::review_verdict::RecordedVerdict>,
+) -> RefusalRelease {
+    use crate::review_verdict::{same_reviewed_sha, short_sha, VerdictKind};
+    let keys = refusal_verdict_keys(record);
+    let Some(head) = live_head.map(str::trim).filter(|h| !h.is_empty()) else {
+        return RefusalRelease::Held(
+            "the PR's current head could not be read, so no verdict can be shown to cover it"
+                .to_string(),
+        );
+    };
+    for key in &keys {
+        let Some(approval) = at_sha(key, head) else {
+            continue;
+        };
+        let at_head = approval
+            .reviewed_sha
+            .as_deref()
+            .is_some_and(|sha| same_reviewed_sha(sha, head));
+        if approval.kind != VerdictKind::Approved || !at_head {
+            continue;
+        }
+        // A newer refusal under the same key (at another sha) outranks an
+        // older approval at this head.
+        let superseded = current_of(key).is_some_and(|cur| {
+            cur.kind.blocks_done()
+                && !cur
+                    .reviewed_sha
+                    .as_deref()
+                    .is_some_and(|sha| same_reviewed_sha(sha, head))
+                && cur.recorded_at > approval.recorded_at
+        });
+        if superseded {
+            continue;
+        }
+        return RefusalRelease::Released(VerdictRef::new(
+            key,
+            Some(record.pr),
+            approval.reviewed_sha.clone(),
+            approval.recorded_by.clone(),
+        ));
+    }
+    // Held: name the verdict on record (criterion 3) — or its missing sha.
+    let head_short = short_sha(head);
+    let on_record = keys
+        .iter()
+        .find_map(|key| current_of(key).map(|v| (key.clone(), v)));
+    let Some((key, verdict)) = on_record else {
+        return RefusalRelease::Held(format!(
+            "no verdict is recorded under {} — review the current head {head_short} and record a verdict with its sha",
+            keys.join(" or ")
+        ));
+    };
+    let by = verdict
+        .recorded_by
+        .as_deref()
+        .map(|b| format!(", recorded by {b}"))
+        .unwrap_or_default();
+    let path = VerdictRef::new(&key, None, None, None).path();
+    match verdict
+        .reviewed_sha
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        None => RefusalRelease::Held(format!(
+            "the verdict on record ({} for {key}{by}, {path}) carries NO reviewed sha — the missing \
+             provenance, not the refusal itself, is why it cannot release: a verdict that cannot be \
+             tied to a commit is answered only by a fresh verdict that records one. Re-review the \
+             current head {head_short} and record the verdict with `--sha`",
+            verdict.kind.label()
+        )),
+        Some(sha) => RefusalRelease::Held(format!(
+            "the verdict on record is {} for {key} at {}{by} ({path}); no APPROVED verdict is \
+             recorded at the current head {head_short} — re-review that head",
+            verdict.kind.label(),
+            short_sha(sha)
+        )),
+    }
 }
 
 /// BUG-1236: whether the `aida:merge-hold` label on the change mirrors the
@@ -1936,12 +2260,16 @@ mod tests {
         let before = std::fs::read(hold_path(dir.path(), 2049)).unwrap();
         let legacy = read_hold_record(dir.path(), 2049).unwrap();
         let none = |_: &str| None;
+        let ns = |_: &str| -> Option<String> { None };
         // Current: head still at the cited sha → not stale.
-        assert_eq!(premise_stale(&legacy, Some("3acf3671fd7a0000"), none), None);
+        assert_eq!(
+            premise_stale(&legacy, Some("3acf3671fd7a0000"), none, ns),
+            None
+        );
         // Head unknown → unknown is never stale.
-        assert_eq!(premise_stale(&legacy, None, none), None);
+        assert_eq!(premise_stale(&legacy, None, none, ns), None);
         // Advance the head past it → reported.
-        let why = premise_stale(&legacy, Some("cd21a1dc0a9e1111"), none).expect("stale");
+        let why = premise_stale(&legacy, Some("cd21a1dc0a9e1111"), none, ns).expect("stale");
         assert!(
             why.contains("3acf3671fd7a") && why.contains("cd21a1dc0a9e"),
             "{why}"
@@ -1955,7 +2283,7 @@ mod tests {
             "PR 20490123 is marked drive",
             None,
         );
-        assert_eq!(premise_stale(&plain, Some("abcdef1234567"), none), None);
+        assert_eq!(premise_stale(&plain, Some("abcdef1234567"), none, ns), None);
 
         // Typed target_head_sha wins over prose.
         let rework = typed_hold(
@@ -1964,7 +2292,7 @@ mod tests {
             "stranded refusal recovered for BUG-1291 at 64e4e5755b",
             Some("64e4e5755b".into()),
         );
-        assert_eq!(premise_stale(&rework, Some("64e4e5755b99"), none), None);
+        assert_eq!(premise_stale(&rework, Some("64e4e5755b99"), none, ns), None);
         let approved = |spec: &str| {
             (spec == "BUG-1291").then(|| RecordedVerdict {
                 kind: VerdictKind::Approved,
@@ -1973,7 +2301,7 @@ mod tests {
                 ..Default::default()
             })
         };
-        let why = premise_stale(&rework, Some("af49b12b83fc"), approved).expect("stale");
+        let why = premise_stale(&rework, Some("af49b12b83fc"), approved, ns).expect("stale");
         assert!(
             why.contains("BUG-1291's verdict is now APPROVED at af49b12b83fc"),
             "{why}"
@@ -1986,7 +2314,7 @@ mod tests {
                 ..Default::default()
             })
         };
-        let why = premise_stale(&rework, Some("64e4e5755b"), closed).expect("closed");
+        let why = premise_stale(&rework, Some("64e4e5755b"), closed, ns).expect("closed");
         assert!(why.contains("closed by merge deadbeef1234"), "{why}");
         // A supervision hold's premise is not the verdict — an approval does
         // not make "awaiting a human merge" stale.
@@ -1997,9 +2325,280 @@ mod tests {
             None,
         );
         assert_eq!(
-            premise_stale(&supervised, Some("af49b12b83fc"), approved),
+            premise_stale(&supervised, Some("af49b12b83fc"), approved, ns),
             None
         );
+    }
+
+    // BUG-1532 criteria 4 + 3 + 11, red-first against REAL verdict files: a
+    // refusal hold is released only by an APPROVED verdict recorded at the
+    // current head. A verdict at an older head, a refusal at the head, a
+    // newer refusal, a verdict with no sha, or an unknown head all keep it —
+    // and the held message names the verdict + sha (or the missing sha).
+    // trace:BUG-1532 | ai:claude
+    #[test]
+    fn refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head() {
+        use crate::review_verdict::{read_recorded_verdict, read_verdict_for_sha, record_verdict};
+        const OLD: &str = "3acf3671fd7a0000000000000000000000000000";
+        const HEAD: &str = "cd21a1dc0a9e1111111111111111111111111111";
+        const OTHER: &str = "af49b12b83fc2222222222222222222222222222";
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let mut hold = typed_hold(
+            2049,
+            HoldReasonKind::Rework,
+            "CHANGES REQUESTED for STORY-1422 at 3acf3671fd7a",
+            Some(OLD.into()),
+        );
+        hold.verdict_ref = Some(VerdictRef::new(
+            "story-1422",
+            Some(2049),
+            Some(OLD.into()),
+            Some("claude-reviewer-1".into()),
+        ));
+        write_typed_hold(root, &hold).unwrap();
+        let before = std::fs::read(hold_path(root, 2049)).unwrap();
+        let release = |head: Option<&str>| {
+            refusal_release(
+                &hold,
+                head,
+                |k| read_recorded_verdict(root, k),
+                |k, sha| read_verdict_for_sha(root, k, sha),
+            )
+        };
+
+        // No verdict at all → held, naming where it looked.
+        match release(Some(HEAD)) {
+            RefusalRelease::Held(why) => {
+                assert!(why.contains("STORY-1422 or PR-2049"), "{why}")
+            }
+            other => panic!("no verdict must hold: {other:?}"),
+        }
+        // The refusal at the OLD head → held, naming the verdict and its sha.
+        record_verdict(
+            root,
+            "STORY-1422",
+            Some("request-changes"),
+            Some(OLD),
+            None,
+            Some("tests assert source order"),
+            &[],
+            "claude-reviewer-1",
+        )
+        .unwrap();
+        match release(Some(HEAD)) {
+            RefusalRelease::Held(why) => {
+                assert!(
+                    why.contains("CHANGES REQUESTED for STORY-1422 at 3acf3671fd7a"),
+                    "{why}"
+                );
+                assert!(why.contains("claude-reviewer-1"), "{why}");
+                assert!(
+                    why.contains(".aida/review-verdicts/STORY-1422.json"),
+                    "{why}"
+                );
+                assert!(why.contains("cd21a1dc0a9e"), "{why}");
+            }
+            other => panic!("a stale refusal must hold: {other:?}"),
+        }
+        // Unknown head → held (fail closed).
+        assert!(matches!(release(None), RefusalRelease::Held(_)));
+        // An approval at a DIFFERENT sha does not cover the head.
+        record_verdict(
+            root,
+            "STORY-1422",
+            Some("approved"),
+            Some(OTHER),
+            None,
+            None,
+            &[],
+            "claude-reviewer-1",
+        )
+        .unwrap();
+        assert!(matches!(release(Some(HEAD)), RefusalRelease::Held(_)));
+        // A fresh APPROVED verdict at exactly the current head releases it,
+        // referencing the verdict record it rests on.
+        record_verdict(
+            root,
+            "STORY-1422",
+            Some("approved"),
+            Some(HEAD),
+            None,
+            None,
+            &[],
+            "claude-reviewer-1",
+        )
+        .unwrap();
+        match release(Some(HEAD)) {
+            RefusalRelease::Released(r) => {
+                assert_eq!(r.key, "STORY-1422");
+                assert_eq!(r.reviewed_sha.as_deref(), Some(HEAD));
+                assert_eq!(r.recorded_by.as_deref(), Some("claude-reviewer-1"));
+            }
+            other => panic!("a fresh approval at head must release: {other:?}"),
+        }
+        // A refusal re-recorded AT the head after that approval → held again.
+        record_verdict(
+            root,
+            "STORY-1422",
+            Some("request-changes"),
+            Some(HEAD),
+            None,
+            None,
+            &[],
+            "claude-reviewer-1",
+        )
+        .unwrap();
+        assert!(matches!(release(Some(HEAD)), RefusalRelease::Held(_)));
+        // Deciding the condition never touches the marker.
+        assert_eq!(std::fs::read(hold_path(root, 2049)).unwrap(), before);
+    }
+
+    // BUG-1532 criterion 11: a refusal whose verdict has NO sha is released
+    // only by a fresh verdict that records one; the message names the missing
+    // provenance. Untyped legacy markers are refusals (criterion 5) and are
+    // answered under the PR-keyed record — never a key parsed from prose.
+    // trace:BUG-1532 | ai:claude
+    #[test]
+    fn refusal_with_an_unstamped_verdict_names_the_missing_provenance() {
+        use crate::review_verdict::{read_recorded_verdict, read_verdict_for_sha, verdict_path};
+        const HEAD: &str = "35de6d3abb00000000000000000000000000000a";
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_hold(root, 2040, "REVIEWER HOLD: BUG-1 needs work").unwrap();
+        let legacy = read_hold_record(root, 2040).unwrap();
+        assert!(legacy.is_refusal());
+        assert_eq!(refusal_verdict_keys(&legacy), vec!["PR-2040".to_string()]);
+        let path = verdict_path(root, "PR-2040");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, r#"{"verdict":"request-changes"}"#).unwrap();
+        // Even an unstamped approval is not a verdict AT the head.
+        let bug1 = verdict_path(root, "BUG-1");
+        std::fs::write(
+            &bug1,
+            format!(r#"{{"verdict":"approved","reviewed_sha":"{HEAD}"}}"#),
+        )
+        .unwrap();
+        match refusal_release(
+            &legacy,
+            Some(HEAD),
+            |k| read_recorded_verdict(root, k),
+            |k, sha| read_verdict_for_sha(root, k, sha),
+        ) {
+            RefusalRelease::Held(why) => {
+                assert!(why.contains("NO reviewed sha"), "{why}");
+                assert!(why.contains("missing"), "{why}");
+            }
+            other => panic!("unstamped refusal must hold: {other:?}"),
+        }
+        // Supervision is not a refusal; recusal and malformed are not either
+        // (they have their own release paths).
+        assert!(!typed_hold(1, HoldReasonKind::Supervision, "x", None).is_refusal());
+        assert!(typed_hold(1, HoldReasonKind::Rework, "x", None).is_refusal());
+    }
+
+    // BUG-1532 criterion 10 + BUG-1562: a typed marker round-trips its
+    // verdict reference, release condition and spec; an older marker without
+    // them still reads (every new field is optional).
+    // trace:BUG-1532 trace:BUG-1562 | ai:claude
+    #[test]
+    fn marker_references_its_verdict_and_carries_a_release_condition() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut record = typed_hold(7, HoldReasonKind::Rework, "summary", Some("abc1234".into()));
+        record.verdict_ref = Some(VerdictRef::new(
+            "bug-1460",
+            Some(7),
+            Some("abc1234".into()),
+            Some("claude-reviewer-1".into()),
+        ));
+        record.release_condition = Some("1. approved at head 2. squash names BUG-1460".into());
+        record.spec = Some("BUG-1460".into());
+        write_typed_hold(dir.path(), &record).unwrap();
+        let body = std::fs::read_to_string(hold_path(dir.path(), 7)).unwrap();
+        assert!(body.contains("\"verdict_ref\""), "{body}");
+        let back = read_hold_record(dir.path(), 7).unwrap();
+        assert_eq!(back.verdict_ref.as_ref().unwrap().key, "BUG-1460");
+        assert_eq!(
+            back.verdict_ref.as_ref().unwrap().path(),
+            ".aida/review-verdicts/BUG-1460.json"
+        );
+        assert_eq!(back.spec.as_deref(), Some("BUG-1460"));
+        assert_eq!(
+            back.release_condition_or_default(),
+            (
+                "1. approved at head 2. squash names BUG-1460".to_string(),
+                false
+            )
+        );
+        // A pre-BUG-1532 typed marker (no new fields) still parses.
+        let old = r#"{"schema_version":2,"pr":8,"reason_kind":"supervision","detail":"d","routing_state":"pending"}"#;
+        std::fs::write(hold_path(dir.path(), 8), old).unwrap();
+        let back = read_hold_record(dir.path(), 8).unwrap();
+        assert_eq!(back.reason_kind, HoldReasonKind::Supervision);
+        assert!(back.verdict_ref.is_none() && back.release_condition.is_none());
+        let (cond, is_default) = back.release_condition_or_default();
+        assert!(is_default && cond.contains("aida pr ship 8"), "{cond}");
+    }
+
+    // BUG-1562: "spec no longer running" — a hold whose spec is now terminal
+    // in the local store is flagged; a live one is not. Flag only.
+    // trace:BUG-1562 | ai:claude
+    #[test]
+    fn premise_flags_a_hold_whose_spec_is_no_longer_running() {
+        let none = |_: &str| None;
+        let mut hold = typed_hold(9, HoldReasonKind::Supervision, "is marked drive", None);
+        hold.spec = Some("STORY-1".into());
+        let running = |_: &str| Some("In Progress".to_string());
+        assert_eq!(premise_stale(&hold, None, none, running), None);
+        let done_on_branch = |_: &str| Some("Done".to_string());
+        assert_eq!(premise_stale(&hold, None, none, done_on_branch), None);
+        let completed = |s: &str| (s == "STORY-1").then(|| "Completed".to_string());
+        let why = premise_stale(&hold, None, none, completed).expect("stale");
+        assert!(
+            why.contains("STORY-1 is no longer running (status completed)"),
+            "{why}"
+        );
+        // Untyped: the spec named in the prose is checked (flag only).
+        let prose = typed_hold(
+            9,
+            HoldReasonKind::Supervision,
+            "STORY-1 is marked drive",
+            None,
+        );
+        assert!(premise_stale(&prose, None, none, completed).is_some());
+        let unknown = |_: &str| None;
+        assert_eq!(premise_stale(&prose, None, none, unknown), None);
+    }
+
+    // BUG-1562, red-first: a marker carrying a distinctive release condition
+    // SURVIVES `merge-hold add` on the same PR; only `--replace` replaces it.
+    // trace:BUG-1562 | ai:claude
+    #[test]
+    fn hand_add_never_silently_overwrites_an_existing_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        let line = "RELEASE: squash subject must not name BUG-1288";
+        write_hold(dir.path(), 1999, line).unwrap();
+        let fresh = typed_hold(1999, HoldReasonKind::Supervision, "one line", None);
+        let err = place_hand_hold(dir.path(), &fresh, false).unwrap_err();
+        assert!(err.contains(line) && err.contains("--replace"), "{err}");
+        let body = std::fs::read_to_string(hold_path(dir.path(), 1999)).unwrap();
+        assert!(
+            body.contains(line),
+            "the existing body must survive: {body}"
+        );
+        place_hand_hold(dir.path(), &fresh, true).unwrap();
+        assert_eq!(
+            read_hold_record(dir.path(), 1999).unwrap().detail,
+            "one line"
+        );
+        // No marker → placed.
+        place_hand_hold(
+            dir.path(),
+            &typed_hold(2000, HoldReasonKind::Decision, "d", None),
+            false,
+        )
+        .unwrap();
+        assert!(read_hold_record(dir.path(), 2000).is_some());
     }
 
     #[test]
@@ -2143,6 +2742,9 @@ mod tests {
             target_head_sha: Some("abcdef0123456789".into()),
             label_state: None,
             legacy: false,
+            verdict_ref: None,
+            release_condition: None,
+            spec: None,
         };
         write_typed_hold(dir.path(), &record).unwrap();
         record_label_state(dir.path(), 2023, &LabelState::Synced).unwrap();
@@ -2180,6 +2782,9 @@ mod tests {
             target_head_sha: None,
             label_state: None,
             legacy: false,
+            verdict_ref: None,
+            release_condition: None,
+            spec: None,
         };
         assert!(write_typed_hold(dir.path(), &record).is_err());
         std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
