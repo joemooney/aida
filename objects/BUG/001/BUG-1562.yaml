@@ -37,8 +37,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:21:21.696012729Z
-modified_at: 2026-09-24T00:24:45.515274104Z
+modified_at: 2026-09-24T02:43:51.514019173Z
 req_type: Bug
+tags:
+- docs:impacted
 relationships:
 - rel_type:
     custom: related
