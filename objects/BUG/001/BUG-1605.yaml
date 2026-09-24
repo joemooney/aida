@@ -1,0 +1,29 @@
+id: 01a0d4f4-0224-7693-be79-f95d44abbf70
+spec_id: BUG-1605
+agreed_id: BUG-1605
+title: schedule install-cron appends a second line instead of repairing a legacy unmarked 'schedule tick --format json' entry
+description: |-
+  Found while applying BUG-1600's repair live on 2026-09-24. The installed crontab line predated the marker convention: it had no trailing '# <marker>' comment. So crontab_after_install did not recognise it and appended a correct new line. Both then ran every 15 minutes, and the old one kept failing with the unsupported-JSON error. The orchestrator removed the legacy line by hand; a backup is in the session scratchpad.
+
+  ## Acceptance
+  - install-cron (and the aida init offer) recognises a legacy unmarked AIDA tick line for THIS repo and replaces it in place rather than appending. Detection: the line runs '<aida> schedule tick' after 'cd <this repo root>', with or without --format json.
+  - Never touch lines for other repos, and never touch unrelated user lines.
+  - Tests cover a legacy unmarked line being repaired, a marked line being repaired, another repo's legacy line being untouched, and unrelated lines being preserved byte-for-byte.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T19:45:56.260116055Z
+modified_at: 2026-09-24T19:45:56.260116055Z
+req_type: Bug
+tags:
+- papercut
+- schedule
+filed_at:
+  code_sha: 3f9cbfa2567b2f918de853a9452b3a33c4e913ed
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3f9cbfa256
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
