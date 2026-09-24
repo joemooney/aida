@@ -85,7 +85,8 @@ fn build_processing_record_promotes_verdict() {
         )
         .unwrap();
     let rec = build_processing_record(root, "STORY-582", "abcdef1234567890");
-    assert_eq!(rec.review_verdict.as_deref(), Some("Approved"));
+    // BUG-1505: the durable record persists the canonical spelling.
+    assert_eq!(rec.review_verdict.as_deref(), Some("approved"));
     assert_eq!(rec.summary, "clean diff, good tests");
     assert_eq!(rec.pr, Some(811));
 }

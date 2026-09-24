@@ -156,13 +156,13 @@ pub fn parse_verdict_file(json: &str) -> Option<VerdictFile> {
 /// `None` for an unrecognised verdict so the caller can surface the raw
 /// string. trace:BUG-226 | ai:claude
 fn verdict_label(raw: &str) -> Option<&'static str> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "approved" | "approve" | "pass" => Some("PASS"),
-        "requestchanges" | "request_changes" | "request-changes" | "changes" | "partial" => {
-            Some("CHANGES REQUESTED")
-        }
-        "rejected" | "reject" | "fail" => Some("FAIL"),
-        _ => None,
+    // trace:BUG-1505 | ai:claude — the one canonical parser, not a local match.
+    use crate::review_verdict::VerdictKind;
+    match VerdictKind::parse(raw) {
+        VerdictKind::Approved => Some("PASS"),
+        VerdictKind::RequestChanges => Some("CHANGES REQUESTED"),
+        VerdictKind::Rejected => Some("FAIL"),
+        VerdictKind::Unknown => None,
     }
 }
 

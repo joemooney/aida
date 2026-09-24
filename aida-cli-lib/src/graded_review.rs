@@ -544,7 +544,7 @@ pub fn execute_graded_review(
             spec_id: spec_id.to_string(),
             reviewed_sha: reviewed_sha.to_string(),
             overall_verdict: "escalated".to_string(),
-            verdict_kind: format!("{:?}", VerdictKind::Other),
+            verdict_kind: format!("{:?}", VerdictKind::Unknown),
             machine_verified_count,
             machine_passed_count,
             prose_count,
