@@ -10,12 +10,12 @@ description: |-
   - Outside any AIDA project, write commands (add/edit/comment/rel) refuse with a clear message instead of writing to a fallback store; read commands likewise do not silently read an unrelated store.
   - An explicitly configured legacy path (flag or env) still works.
   - A test covers running from a directory with no AIDA project while a legacy requirements.db exists elsewhere.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:17:11.313030554Z
-modified_at: 2026-09-24T15:17:11.313030554Z
+modified_at: 2026-09-24T15:17:44.440429044Z
 req_type: Bug
 tags:
 - integrity
