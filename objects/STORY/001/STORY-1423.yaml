@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-24T21:56:22.212032865Z
+modified_at: 2026-09-24T22:38:13.026029011Z
 req_type: Story
 tags:
 - closure:pending
@@ -333,6 +333,11 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit bccae69), but completion is held at Done: unresolved BlockedBy BUG-1606 (Done). BlockedBy gates completion as well as pickup; it releases once every blocker is Completed, Rejected or Superseded (an epic by its child rollup, an ADR once accepted); and the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit STORY-1423 --description ...` / `aida edit STORY-1423 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec STORY-1423 --since bccae69^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit STORY-1423 --status completed`. (merge sha: bccae69c07bb3714b76c5f6cc76d39f5c6ad45d8)'
   created_at: 2026-09-24T21:56:22.879939439Z
   modified_at: 2026-09-24T21:56:22.879939439Z
+- id: 01a0d591-bd6e-7f80-9fd1-4edda8e501dd
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit bccae69), but completion is held at Done: unresolved BlockedBy BUG-1606 (InProgress). BlockedBy gates completion as well as pickup; it releases once every blocker is Completed, Rejected or Superseded (an epic by its child rollup, an ADR once accepted); and the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit STORY-1423 --description ...` / `aida edit STORY-1423 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec STORY-1423 --since bccae69^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit STORY-1423 --status completed`. (merge sha: bccae69c07bb3714b76c5f6cc76d39f5c6ad45d8)'
+  created_at: 2026-09-24T22:38:13.358096802Z
+  modified_at: 2026-09-24T22:38:13.358096802Z
 history:
 - id: 01a0d08f-a355-7422-b04b-a11b42f298cc
   author: aida-auto-bump
