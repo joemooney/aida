@@ -1030,8 +1030,18 @@ pub enum ReviewCommand {
         /// Explicit opt-in remediation: hold the PR and park the spec in
         /// Needs Attention. Idempotent — a spec already protected is left
         /// alone, so a second run changes nothing.
-        #[clap(long)]
+        #[clap(long, conflicts_with = "age")]
         fix: bool,
+
+        /// Offline staleness report instead of the (forge-backed) sweep
+        /// above: every spec whose last review verdict still blocks done and
+        /// whose branch — checked against LOCAL git only, no network call —
+        /// shows no newer commit since the reviewed commit. Sorted oldest
+        /// refusal first, each row carrying the measured stall time (or
+        /// "unknown" when it can't be established).
+        // trace:TASK-1423 | ai:claude
+        #[clap(long, conflicts_with = "fix")]
+        age: bool,
     },
 
     /// Turn a temporary review mode on or off, or show its state.
@@ -15072,14 +15082,44 @@ mod tests {
         let cli = Cli::try_parse_from(["aida", "review", "stranded", "--json", "--fix"]).unwrap();
         match cli.command {
             Command::Review {
-                cmd: Some(ReviewCommand::Stranded { json, fix }),
+                cmd: Some(ReviewCommand::Stranded { json, fix, age }),
                 ..
             } => {
                 assert!(json);
                 assert!(fix);
+                assert!(!age);
             }
             other => panic!("expected review stranded command, got {other:?}"),
         }
+    }
+
+    // trace:TASK-1423 | ai:claude
+    #[test]
+    fn review_stranded_parses_age_flag() {
+        let cli = Cli::try_parse_from(["aida", "review", "stranded", "--age", "--json"]).unwrap();
+        match cli.command {
+            Command::Review {
+                cmd: Some(ReviewCommand::Stranded { json, fix, age }),
+                ..
+            } => {
+                assert!(json);
+                assert!(!fix);
+                assert!(age);
+            }
+            other => panic!("expected review stranded command, got {other:?}"),
+        }
+    }
+
+    // trace:TASK-1423 | ai:claude
+    #[test]
+    fn review_stranded_age_and_fix_are_mutually_exclusive() {
+        let err =
+            Cli::try_parse_from(["aida", "review", "stranded", "--age", "--fix"]).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("cannot be used with") || msg.contains("conflicts"),
+            "expected a clear conflict error, got: {msg}"
+        );
     }
 
     // trace:STORY-1415 | ai:claude
@@ -15111,11 +15151,12 @@ mod tests {
         let cli = Cli::try_parse_from(["aida", "review", "stranded"]).unwrap();
         match cli.command {
             Command::Review {
-                cmd: Some(ReviewCommand::Stranded { json, fix }),
+                cmd: Some(ReviewCommand::Stranded { json, fix, age }),
                 ..
             } => {
                 assert!(!json);
                 assert!(!fix, "the sweep must default to read-only");
+                assert!(!age, "the offline staleness report is opt-in");
             }
             other => panic!("expected review stranded command, got {other:?}"),
         }
