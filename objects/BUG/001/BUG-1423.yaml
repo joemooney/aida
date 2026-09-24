@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T06:32:41.950727879Z
-modified_at: 2026-09-23T09:23:49.761296269Z
+modified_at: 2026-09-24T16:26:57.116508400Z
 req_type: Bug
 tags:
 - diagnostic-decay
@@ -50,23 +50,19 @@ tags:
 - seat-parity
 - telemetry
 relationships:
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0bd7b-8bba-7e82-af95-a51245647e33
   created_at: 2026-09-20T06:32:49.865211071Z
   created_by: joe
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0bb7d-1b68-7741-a94c-ef572887bc65
   created_at: 2026-09-20T06:32:51.239495043Z
   created_by: joe
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0ba8e-4480-7991-a292-0ef0ad057b31
   created_at: 2026-09-20T06:32:52.534846479Z
   created_by: joe
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
   created_at: 2026-09-20T06:32:53.897872313Z
   created_by: joe
