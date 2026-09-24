@@ -142,7 +142,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:33:47.079434853Z
-modified_at: 2026-09-24T04:09:53.877834617Z
+modified_at: 2026-09-24T04:10:10.612462204Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -152,3 +152,10 @@ relationships:
   target_id: 01a0c26d-62d3-7d32-8cd8-dc80bc6bfff7
   created_at: 2026-09-21T05:34:16.360097653Z
   created_by: joe
+comments:
+- id: 01a0d19b-4b34-7ef0-9109-42a4a7059576
+  author: joe
+  content: 'Branch claude/bug-1534 (926d7fe531) ships part of the fix. (1) The send refuses a second-person body (you/your) when it is a broadcast, or when the same sender already sent the identical body to a different recipient within the last 10 minutes. The CLI and MCP share the check, and --allow-second-person overrides it. This covers the mechanism behind instances 1-4 and does not depend on BUG-1533 (criteria 2, 3, 6). (2) A new relayed_from field on mail and on comments, set with --relayed-from on ''mailbox send'' and ''comment add'' and through MCP, shows as ''via X, originally Y'' in the CLI, MCP and TUI (criterion 1, part of criterion 4). Old records carry no mark (criterion 5). STILL OPEN: (a) ''aida edit'' has no relayed/verified marker, so a spec description edited on a relayed measurement does not record it (criterion 4). (b) A single-recipient relay that omits --relayed-from is not detected; that would need claim-matching against other seats'' mail, which is not cheap. (c) Second-person text in spec comments is not checked. Leaving the spec open.'
+  created_at: 2026-09-24T04:10:10.612462204Z
+  modified_at: 2026-09-24T04:10:10.612462204Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
