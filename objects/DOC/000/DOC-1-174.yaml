@@ -10,12 +10,12 @@ description: |
   A reusable, versioned question catalog and a shared recorded-judgments store with full provenance (source hash, question version, model, confidence, heuristic marker, payload hash, timestamp, latency) — the surface this doc entry is filed against — is a proposed direction, not yet built. Neither is an `aida jev` command of any kind, nor the "route this to developer/reviewer/advisor/architect/research" question. See the comment on this entry for the full gap list against the acceptance criteria above.
 
   This is a human-authored explanation, not canonical requirement text and not an AI-generated replacement for the story.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T04:23:19.458083645Z
-modified_at: 2026-09-24T23:11:51.603982683Z
+modified_at: 2026-09-24T23:24:26.838702832Z
 req_type: Doc
 tags:
 - example
@@ -59,6 +59,24 @@ comments:
   created_at: 2026-09-24T23:11:51.603982683Z
   modified_at: 2026-09-24T23:11:51.603982683Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d5bc-0f50-7a13-988b-d56606b14732
+  author: aida-auto-bump
+  timestamp: 2026-09-24T23:24:26.832165419Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d5bc-0f56-7c63-8917-dca21a6445c4
+  timestamp: 2026-09-24T23:24:26.838702233Z
+  agent: aida
+  commit_sha: c7d35baa35b4965c961adec0b1d68a098e3701e9
+  summary: Completed via merge c7d35baa
 custom_fields:
   audience: user
   scenario: human orientation
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T23:24:26.832141079Z
+  completion_sha: c7d35baa35b4965c961adec0b1d68a098e3701e9
