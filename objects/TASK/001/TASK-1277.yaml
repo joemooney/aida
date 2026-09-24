@@ -15,12 +15,12 @@ description: |-
   - A bug PR with no test-file change is reported the same way (warn/refuse per config).
   - The reviewer prompt for a headless review includes the type's checklist items verbatim.
   - Unit tests: one per machine-checkable item kind, plus the warn/refuse/force matrix; integrity floors (CI gate, merge lease, single drain) are untouched.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:27:26.797150984Z
-modified_at: 2026-09-24T04:50:17.785917242Z
+modified_at: 2026-09-24T06:27:26.524782741Z
 req_type: Task
 tags:
 - agent-ux
@@ -41,10 +41,26 @@ relationships:
   target_id: 01a0ba81-ec62-7220-9218-08fc9b286023
   created_at: 2026-09-19T16:37:54.727954121Z
   created_by: joe
+history:
+- id: 01a0d218-f6b5-76c1-b1ee-7c021fc42dfc
+  author: aida-auto-bump
+  timestamp: 2026-09-24T06:27:26.517999200Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d218-f6bc-7e72-b8be-3c2864ca11a0
+  timestamp: 2026-09-24T06:27:26.524781779Z
+  agent: aida
+  commit_sha: acf13ff920e7716a2e46b53ae0958f027e5bb649
+  summary: Completed via merge acf13ff9
 execution_mode: guided
 implementation_info:
   implemented: true
   test_coverage_notes: cargo test -p aida-cli-lib --lib (5941 pass)
   implemented_at: 2026-09-24T04:49:53.051725651Z
   implemented_by: joe
+  completed_at: 2026-09-24T06:27:25.651806382Z
+  completion_sha: acf13ff920e7716a2e46b53ae0958f027e5bb649
 interface_changes: {}
