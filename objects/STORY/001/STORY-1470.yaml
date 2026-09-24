@@ -3,12 +3,12 @@ spec_id: STORY-1470
 agreed_id: STORY-1470
 title: 'aida config menu: open contextual help with ?'
 description: Add a contextual help overlay to `aida config menu`. When a configurable item is selected, pressing `?` opens a modal help panel for that item; the existing explanation panel remains the compact at-a-glance view. Help should explain the setting, default, effective-value precedence/scope, valid values or range, environment/config source, and important operational consequences or related commands when available. `Esc` and `?` close the overlay and return to the same selection without editing the value; navigation and edit keys must not leak through while the overlay is open. Advertise the key in the menu footer/help text and provide a clear fallback when an item has no extended documentation.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:17:28.910831106Z
-modified_at: 2026-09-24T09:19:03.025667337Z
+modified_at: 2026-09-24T10:37:14.730301140Z
 req_type: Story
 comments:
 - id: 01a0d278-e804-7862-b3f8-8078d50fd659
@@ -17,3 +17,21 @@ comments:
   created_at: 2026-09-24T08:12:14.212086271Z
   modified_at: 2026-09-24T08:12:14.212086271Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d2fd-aa63-7b12-8258-964d162e1440
+  author: aida-auto-bump
+  timestamp: 2026-09-24T10:37:14.723224472Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d2fd-aa6a-7ce2-ab64-7cc9a764162c
+  timestamp: 2026-09-24T10:37:14.730300103Z
+  agent: aida
+  commit_sha: 0f2b9a882aa6ce80f5a520751032d445eb3ec92b
+  summary: Completed via merge 0f2b9a88
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T10:37:14.723046769Z
+  completion_sha: 0f2b9a882aa6ce80f5a520751032d445eb3ec92b
