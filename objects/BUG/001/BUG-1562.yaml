@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:21:21.696012729Z
-modified_at: 2026-09-24T02:43:51.514019173Z
+modified_at: 2026-09-24T02:44:30.767887286Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -125,4 +125,10 @@ comments:
   content: 'PROXY: partial slice on claude/bug-1469 (list flags ''premise stale''). Kept open, because criterion 2 (a release-condition field or the discipline doc) and the ''spec no longer running'' check are unmet.'
   created_at: 2026-09-24T00:24:45.515274104Z
   modified_at: 2026-09-24T00:24:45.515274104Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d14c-ddaf-7ed1-8fb8-99fc1717b595
+  author: joe
+  content: 'PROXY (claude/bug-1532, 3fd9c90004): criterion 2 is done. merge-hold add refuses when a marker already exists (typed, legacy, hand-written or unreadable) and quotes the body it would have lost. --replace is the deliberate override, and list --fix re-applies a missing label without touching the marker. A red-first test writes a distinctive line, runs add, and shows the line survives. Markers now carry release_condition (add --release-condition). merge-hold list prints ''release when: ...'' and falls back to a per-kind default, marked as the default. review record writes the fresh-verdict condition. The ''spec no longer running'' premise check is also done: markers carry a typed spec (set by the drive/wave supervision writers and by review record), and list flags the hold when that spec''s status in the local cache is terminal. It uses one cache read per list and no forge call. Done counts as still running. The check is a flag only and never clears the hold.'
+  created_at: 2026-09-24T02:44:30.767887286Z
+  modified_at: 2026-09-24T02:44:30.767887286Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
