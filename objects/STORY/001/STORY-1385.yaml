@@ -91,7 +91,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:34:14.434033357Z
-modified_at: 2026-09-24T04:55:54.954939577Z
+modified_at: 2026-09-24T04:56:03.831359821Z
 req_type: Story
 tags:
 - acceptance
@@ -134,6 +134,12 @@ comments:
   content: 'Tagged closure:pending: the stretch-criteria slice (criterion 10 and part of 9) merges soon, but criteria 1-8 are open. The tag keeps the merge from auto-completing the spec.'
   created_at: 2026-09-24T03:35:49.444244925Z
   modified_at: 2026-09-24T03:35:49.444244925Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d1c5-4df7-7ba0-b0c5-ceee43af82ed
+  author: joe
+  content: 'CORRECTION: auto-completed by the pull after #2147 because the aida binary running the pull predates STORY-1430''s closure:pending gate (#2145). Reopened. Criteria 1-8 are still open.'
+  created_at: 2026-09-24T04:56:03.831359821Z
+  modified_at: 2026-09-24T04:56:03.831359821Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0d1c4-e714-7cd2-a44e-6f6362a8eef4
