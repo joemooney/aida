@@ -20,6 +20,34 @@ pub(crate) fn set_kv(path: &Path, section: &str, key: &str, value: Value) -> Res
     save_doc(path, &doc)
 }
 
+/// Set several `[section] key = value` pairs in ONE write, preserving the rest
+/// of the file.
+// trace:STORY-1415 | ai:claude
+pub(crate) fn set_kvs(path: &Path, section: &str, pairs: &[(&str, Value)]) -> Result<()> {
+    let mut doc = load_doc(path)?;
+    let tbl = table_mut(&mut doc, section);
+    for (key, value) in pairs {
+        tbl.insert(key, Item::Value(value.clone()));
+    }
+    save_doc(path, &doc)
+}
+
+/// Remove keys from `[section]`, preserving the rest of the file. A missing
+/// file, section or key is a no-op.
+// trace:STORY-1415 | ai:claude
+pub(crate) fn remove_keys(path: &Path, section: &str, keys: &[&str]) -> Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let mut doc = load_doc(path)?;
+    if let Some(tbl) = doc.get_mut(section).and_then(|i| i.as_table_mut()) {
+        for key in keys {
+            tbl.remove(key);
+        }
+    }
+    save_doc(path, &doc)
+}
+
 /// Load a `config.toml` into an editable document, or a fresh empty one if the
 /// file is absent. Parse errors surface — never clobber a malformed file.
 fn load_doc(path: &Path) -> Result<DocumentMut> {

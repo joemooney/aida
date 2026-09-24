@@ -986,6 +986,64 @@ pub enum ReviewCommand {
         #[clap(long)]
         fix: bool,
     },
+
+    /// Turn a temporary review mode on or off, or show its state.
+    ///
+    /// `aida review mode mass-change on` lets reviewers defer acceptance
+    /// gaps instead of blocking on them, for a fixed window (one week by
+    /// default). Turning it on records when and by whom; it turns itself off
+    /// when the window closes, and `aida status` shows it while it is on.
+    // trace:STORY-1415 | ai:claude
+    Mode {
+        #[clap(subcommand)]
+        mode: ReviewModeCommand,
+    },
+}
+
+/// The temporary review modes `aida review mode` switches.
+// trace:STORY-1415 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum ReviewModeCommand {
+    /// Mass-change mode: acceptance gaps are deferred as tracked findings
+    /// instead of blocking, for a fixed window. `on` starts the clock,
+    /// `off` ends it early and reports the deferred findings left open,
+    /// `status` shows the state, day and deferred-finding count.
+    MassChange {
+        /// on, off, or status.
+        #[clap(value_enum)]
+        action: MassChangeAction,
+
+        /// Window length in days when turning the mode on (1-30).
+        /// Defaults to 7.
+        #[clap(long, value_name = "N")]
+        days: Option<i64>,
+
+        /// Emit the state as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
+/// What `aida review mode mass-change` does.
+// trace:STORY-1415 | ai:claude
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MassChangeAction {
+    /// Turn the mode on and start its clock.
+    On,
+    /// Turn the mode off now.
+    Off,
+    /// Show whether the mode is on and how long is left.
+    Status,
+}
+
+impl MassChangeAction {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            MassChangeAction::On => "on",
+            MassChangeAction::Off => "off",
+            MassChangeAction::Status => "status",
+        }
+    }
 }
 
 /// Per-scope disposition / triage lease commands (the intake gate).
@@ -14729,6 +14787,29 @@ mod tests {
             }
             other => panic!("expected review stranded command, got {other:?}"),
         }
+    }
+
+    // trace:STORY-1415 | ai:claude
+    #[test]
+    fn review_mode_mass_change_parses() {
+        let cli =
+            Cli::try_parse_from(["aida", "review", "mode", "mass-change", "on", "--days", "5"])
+                .unwrap();
+        match cli.command {
+            Command::Review {
+                cmd:
+                    Some(ReviewCommand::Mode {
+                        mode: ReviewModeCommand::MassChange { action, days, json },
+                    }),
+                ..
+            } => {
+                assert_eq!(action, MassChangeAction::On);
+                assert_eq!(days, Some(5));
+                assert!(!json);
+            }
+            other => panic!("expected review mode mass-change, got {other:?}"),
+        }
+        assert!(Cli::try_parse_from(["aida", "review", "mode", "mass-change", "maybe"]).is_err());
     }
 
     // trace:TASK-1307 | ai:claude
