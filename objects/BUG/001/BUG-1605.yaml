@@ -9,12 +9,12 @@ description: |-
   - install-cron (and the aida init offer) recognises a legacy unmarked AIDA tick line for THIS repo and replaces it in place rather than appending. Detection: the line runs '<aida> schedule tick' after 'cd <this repo root>', with or without --format json.
   - Never touch lines for other repos, and never touch unrelated user lines.
   - Tests cover a legacy unmarked line being repaired, a marked line being repaired, another repo's legacy line being untouched, and unrelated lines being preserved byte-for-byte.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T19:45:56.260116055Z
-modified_at: 2026-09-24T19:45:56.260116055Z
+modified_at: 2026-09-24T19:46:25.953881221Z
 req_type: Bug
 tags:
 - papercut
