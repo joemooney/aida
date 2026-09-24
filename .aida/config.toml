@@ -221,3 +221,39 @@ seats = ["advisor"]
 on = ["CronJobFailed"]
 prompt = "Free disk space dropped below the configured floor. Reclaim space (stale worktrees via `aida session reap`, `cargo clean`) or raise [doctor.disk_headroom] min_free_gib deliberately."
 enabled = true
+
+# STORY-1462: the runaway-seat watchdog. BUG-1589 (2026-09-21): two seats
+# answered a mail tick every ~7-10s (~460 wakes and ~700M tokens an hour
+# each) and nobody noticed for ~24h. This job reads new bytes of this
+# project's Claude Code transcripts (every worktree's slug) and headless logs
+# into per-minute aggregates under .aida/watchdog/, and trips on the storm's
+# SHAPE — wake rate, one injected prompt repeated, mostly no-op replies,
+# model-side mailbox polls — plus token rate, compactions and the 24h spend
+# at a wide margin above an ordinary day. Each rule reports once per
+# crossing. A budget-cut or unreadable run is shown as degraded/unknown
+# evidence and does not page. Zero model tokens.
+#
+# No [watchdog] section: the built-in defaults were calibrated against this
+# repo's own transcripts (2026-09-17..23 backtest; the numbers are in the
+# runaway_seats.rs module doc). On 2026-09-23 an ordinary lead seat peaked at
+# 229M tokens/h, 34 wakes/h and 19 repeats/h, 7 of 9 sessions passed 300k
+# context and the day spent 2.25B. The defaults (500M tokens/h, 120 wakes/h,
+# 60 repeats/h, a 6B daily budget alerting at 90%) are silent on that day and
+# trip on the storm. The restart-at-context-ceiling rule is OFF by default
+# because every long ordinary session here reaches the ~967k compaction
+# point; enable `restart_context_tokens` only to trade one alert per session
+# crossing for cheaper calls. Re-derive from a backtest, not by tuning until
+# the gate goes quiet.
+# trace:STORY-1462 | ai:claude
+[[schedule.jobs]]
+name = "watchdog"
+command = "doctor check runaway-seats --fail-on-findings"
+every = "15m"
+enabled = true
+
+[[schedule.jobs]]
+name = "watchdog-route"
+seats = ["advisor"]
+on = ["CronJobFailed"]
+prompt = "A seat tripped the runaway-seat watchdog. Use the routed trip evidence (session, rule, measured value, threshold) to stop the tick or loop that is waking it, or hand off and restart a seat past its context ceiling. Never answer by adding another poll."
+enabled = true

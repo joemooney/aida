@@ -2183,6 +2183,22 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // STORY-1462: the runaway-seat watchdog, same gating shape.
+        // trace:STORY-1462 | ai:claude
+        (
+            &["doctor check runaway-seats --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check runaway-seats --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "runaway-seats",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
         (
             &["doctor check disk-headroom --fail-on-findings"],
             ScheduledCommand {
@@ -3320,6 +3336,7 @@ enabled = true
             "doctor check remote-drift --fail-on-findings",
             "doctor check stale-remote-branches --fail-on-findings",
             "doctor check disk-headroom --fail-on-findings",
+            "doctor check runaway-seats --fail-on-findings",
         ] {
             let tmp = tempfile::tempdir().unwrap();
             let job_name = "guard";
