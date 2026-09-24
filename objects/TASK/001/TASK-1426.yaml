@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:46:14.802500200Z
-modified_at: 2026-09-24T14:57:54.291350388Z
+modified_at: 2026-09-24T15:13:33.801578388Z
 req_type: Task
 tags:
 - cli
@@ -75,4 +75,10 @@ comments:
   content: 'Dry-run census against the live store, 2026-09-24, from ''aida db migrate-related-edges --dry-run'' on branch claude/task-1426. Nothing was written and the store HEAD did not move. Found 158 legacy custom related edges on 100 specs (related: 140, related-to: 17, relates-to: 1) out of 4404 specs scanned. Plan: convert 144 to References (orphans), delete 14 where a References edge to the same target already exists (twins), and delete 0 repeats of a converted edge. The 14 twins are on the same 11 specs the spec names: BUG-1443, BUG-1445, BUG-1450, BUG-1452, BUG-1453, BUG-1454, BUG-1461, BUG-1462, BUG-1465, STORY-1133 and TASK-1293. Out of scope and untouched: implements/implemented-by (681/680), sprint_assignment/sprint_contains (13/13), depends-on (1), duplicate-of (1). There is one pre-existing duplicate edge in the store, a doubled Child edge on STORY-511. It is not on any spec this migration touches, so it does not block the run. The migration refuses before writing if a spec it would touch holds a duplicate of any edge type.'
   created_at: 2026-09-24T14:23:01.108684640Z
   modified_at: 2026-09-24T14:23:01.108684640Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d3fa-a469-7731-8f86-927946dfbc27
+  author: joe
+  content: 'Review: APPROVE (fresh strict Opus reviewer). The reviewer ran the migration end to end on a clone of the store: 100 per-spec commits, 144 edges converted, 14 twins deleted, a second run did nothing, and the cache stayed FRESH. After merge, the orchestrator runs the real migration during a low-lease window.'
+  created_at: 2026-09-24T15:13:33.801578388Z
+  modified_at: 2026-09-24T15:13:33.801578388Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
