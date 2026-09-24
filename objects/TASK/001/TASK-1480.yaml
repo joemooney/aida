@@ -14,12 +14,12 @@ description: |-
   - Existing filters such as `--status-changes`, `--comments`, date bounds, and `--oneline` remain coherent and documented.
   - Human and machine-readable output remain stable enough for their documented use cases.
   - Tests cover the positional alias, multiple status changes, comments/edits, empty history, and invalid or ambiguous IDs.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:10:54.660906553Z
-modified_at: 2026-09-24T14:11:54.148034377Z
+modified_at: 2026-09-24T14:12:12.670615909Z
 req_type: Task
 comments:
 - id: 01a0d3c2-30a4-7921-b8c3-abe8ea7e2378
