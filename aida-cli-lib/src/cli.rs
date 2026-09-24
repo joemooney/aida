@@ -9261,9 +9261,15 @@ pub enum Command {
         #[clap(long)]
         json: bool,
 
-        /// Print the probe brief and exit without launching anything.
+        /// Print the probe briefs and exit without launching anything.
         #[clap(long)]
         dry_run: bool,
+
+        /// Confirm launching the headless agent runs when stdin is not a
+        /// terminal (unattended runs refuse without it).
+        // trace:STORY-1425 | ai:claude
+        #[clap(long)]
+        yes: bool,
     },
 
     /// Mark a spec done — the simple "I finished it". e.g. `aida done <SPEC>`.

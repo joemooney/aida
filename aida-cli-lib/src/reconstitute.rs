@@ -36,6 +36,8 @@ const SCRATCH_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 pub(crate) struct ReconstituteOptions {
     pub(crate) json: bool,
     pub(crate) dry_run: bool,
+    // trace:STORY-1425 | ai:claude
+    pub(crate) yes: bool,
 }
 
 /// One regenerated test as the probe reports it.
@@ -442,19 +444,62 @@ pub(crate) struct BaselineInputs {
     pub(crate) readme_text: String,
 }
 
+fn spec_id_regex() -> &'static regex::Regex {
+    use std::sync::OnceLock;
+    static IDS: OnceLock<regex::Regex> = OnceLock::new();
+    IDS.get_or_init(|| {
+        regex::Regex::new(
+            r"\b(?:FR|NFR|SR|UR|CR|BUG|EPIC|STORY|TASK|SPIKE|SPRINT|FOLDER|META|PRIN|VIS|CON|ADR|TERM|DOC)-\d+(?:-\d+)?(?:\.[A-Za-z0-9]+)?\b",
+        ).expect("valid regex")
+    })
+}
+
+/// Strip AIDA-only residue from a README before arm A sees it: whole lines
+/// that are trace comments, inline `trace:` markers (with their `| ai:` tail),
+/// `[aida:…]` markers, SPEC-IDs and `.aida` paths. Without this the baseline
+/// would receive exactly what `BASELINE_WITHHELD` says it is denied.
+// trace:STORY-1425 | ai:claude
+pub(crate) fn sanitize_readme(text: &str) -> String {
+    use std::sync::OnceLock;
+    static TRACE: OnceLock<regex::Regex> = OnceLock::new();
+    static MARK: OnceLock<regex::Regex> = OnceLock::new();
+    static DOT_AIDA: OnceLock<regex::Regex> = OnceLock::new();
+    let trace = TRACE.get_or_init(|| {
+        regex::Regex::new(r"(?i)trace:\s*[A-Za-z0-9._-]*(?:\s*\|\s*ai:[A-Za-z0-9:+_-]*)?")
+            .expect("valid regex")
+    });
+    let mark = MARK.get_or_init(|| regex::Regex::new(r"(?i)\[aida:[^\]]*\]").expect("valid regex"));
+    let dot_aida = DOT_AIDA.get_or_init(|| {
+        regex::Regex::new(r"[^\s`'\x22()]*\.aida[^\s`'\x22()]*").expect("valid regex")
+    });
+    let mut out = String::new();
+    for line in text.lines() {
+        // A line that is nothing but a trace comment (`// trace:…`,
+        // `# trace:…`, `<!-- trace:… -->`) is dropped whole.
+        let body = line.trim_start_matches(|c: char| {
+            c.is_whitespace() || matches!(c, '/' | '#' | '-' | '<' | '!' | '*' | '`')
+        });
+        if body.to_ascii_lowercase().starts_with("trace:") {
+            continue;
+        }
+        let l = trace.replace_all(line, "");
+        let l = mark.replace_all(&l, "");
+        let l = spec_id_regex().replace_all(&l, "");
+        let l = dot_aida.replace_all(&l, "");
+        out.push_str(l.trim_end());
+        out.push('\n');
+    }
+    out
+}
+
 /// Strip AIDA-only residue from a commit subject — the `[AI:tool]` prefix and
 /// any SPEC-ID — so the baseline sees what a non-AIDA log would carry.
 pub(crate) fn sanitize_subject(subject: &str) -> String {
     use std::sync::OnceLock;
     static AI: OnceLock<regex::Regex> = OnceLock::new();
-    static IDS: OnceLock<regex::Regex> = OnceLock::new();
     static EMPTY: OnceLock<regex::Regex> = OnceLock::new();
     let ai = AI.get_or_init(|| regex::Regex::new(r"\[AI:[^\]]*\]\s*").expect("valid regex"));
-    let ids = IDS.get_or_init(|| {
-        regex::Regex::new(
-            r"\b(?:FR|NFR|SR|UR|CR|BUG|EPIC|STORY|TASK|SPIKE|SPRINT|FOLDER|META|PRIN|VIS|CON|ADR|TERM|DOC)-\d+(?:-\d+)?(?:\.[A-Za-z0-9]+)?\b",
-        ).expect("valid regex")
-    });
+    let ids = spec_id_regex();
     let empty =
         EMPTY.get_or_init(|| regex::Regex::new(r"\(\s*[,\s]*\)|\s{2,}").expect("valid regex"));
     let s = ai.replace_all(subject, "");
@@ -751,7 +796,10 @@ fn gather_baseline_inputs(
                 .map(|t| (n.to_string(), t))
         })
         .map(|(n, t)| {
-            let cut: String = t.chars().take(BASELINE_README_CHARS).collect();
+            let cut: String = sanitize_readme(&t)
+                .chars()
+                .take(BASELINE_README_CHARS)
+                .collect();
             (Some(n), cut)
         })
         .unwrap_or((None, String::new()));
@@ -898,7 +946,7 @@ struct Report {
     baseline_matches: Vec<TestMatch>,
     coverage: Coverage,
     validation_subject: ValidationSubject,
-    score_matched: usize,
+    score_matched: Option<usize>,
     score_total: usize,
     score_label: &'static str,
     regenerated: usize,
@@ -907,6 +955,116 @@ struct Report {
     unanchored_tests: Vec<String>,
     candidates_file: Option<String>,
     scratch_dir: String,
+}
+
+/// Upper bound on headless agent runs for one probe: with no real traced
+/// tests only the store probe runs; otherwise probe + matcher for each arm.
+// trace:STORY-1425 | ai:claude
+pub(crate) fn planned_agent_runs(real_traced_tests: usize) -> usize {
+    if real_traced_tests == 0 {
+        1
+    } else {
+        4
+    }
+}
+
+/// Unattended (non-TTY) runs must opt in with --yes before spending agents.
+// trace:STORY-1425 | ai:claude
+pub(crate) fn cost_guard(yes: bool, stdin_is_tty: bool, planned: usize) -> Result<()> {
+    if yes || stdin_is_tty {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "refusing to launch {planned} headless agent run(s) without a terminal; pass --yes to confirm, or --dry-run to inspect the briefs"
+    )
+}
+
+/// Per criterion: real traced tests (name, source) vs the regenerated tests
+/// labelled with that criterion.
+fn criterion_pairs(
+    project_root: &Path,
+    report: &CriteriaReport,
+    regenerated: &[RegeneratedTest],
+) -> Vec<CriterionPair> {
+    report
+        .criteria
+        .iter()
+        .map(|row| {
+            let real = row
+                .tests
+                .iter()
+                .map(|t| {
+                    (
+                        t.name.clone(),
+                        crate::criteria::extract_fn_source(&project_root.join(&t.path), t.line),
+                    )
+                })
+                .collect();
+            let regen = regenerated
+                .iter()
+                .filter(|r| r.criterion.eq_ignore_ascii_case(&row.criterion.id))
+                .cloned()
+                .collect();
+            (row.criterion.id.clone(), real, regen)
+        })
+        .collect()
+}
+
+/// Run arm B: the store-only probe, then the matcher. Returns
+/// `(regenerated, pairs, matches)`.
+#[allow(clippy::too_many_arguments)]
+fn run_store_arm(
+    project_root: &Path,
+    scratch: &Path,
+    prompt: &str,
+    probe_out: &Path,
+    display: &str,
+    report: &CriteriaReport,
+    real_tests: &[TracedTest],
+    logs: &Path,
+    stamp: &str,
+) -> Result<(Vec<RegeneratedTest>, Vec<CriterionPair>, Vec<TestMatch>)> {
+    let lower = display.to_ascii_lowercase();
+    eprintln!(
+        "  {} probing {} from the store alone (empty scratch dir, no source)…",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+        display
+    );
+    run_headless(
+        project_root,
+        scratch,
+        prompt,
+        &format!("probe-{lower}"),
+        &logs.join(format!("probe-{lower}-{stamp}.jsonl")),
+    )?;
+    let regenerated = parse_regenerated(
+        &std::fs::read_to_string(probe_out)
+            .with_context(|| format!("the probe wrote no output at {}", probe_out.display()))?,
+    )?;
+    let pairs = criterion_pairs(project_root, report, &regenerated);
+    let match_out = scratch.join("matches.json");
+    let matches =
+        if real_tests.is_empty() {
+            Vec::new()
+        } else {
+            eprintln!(
+                "  {} judging {} real traced test(s) against {} regenerated…",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                real_tests.len(),
+                regenerated.len()
+            );
+            run_headless(
+                project_root,
+                scratch,
+                &build_match_prompt(display, &pairs, &match_out),
+                &format!("match-{lower}"),
+                &logs.join(format!("match-{lower}-{stamp}.jsonl")),
+            )?;
+            parse_matches(&std::fs::read_to_string(&match_out).with_context(|| {
+                format!("the matcher wrote no output at {}", match_out.display())
+            })?)?
+        };
+    Ok((regenerated, pairs, matches))
 }
 
 /// Run arm A: the baseline probe in its own empty dir, then the matcher (in
@@ -1033,10 +1191,9 @@ pub(crate) fn handle_reconstitute_command(
     // scratch dir so it cannot see arm B's output (and vice versa).
     // trace:STORY-1425 | ai:claude
     let baseline = gather_baseline_inputs(project_root, &display, &real_tests, &symbols);
-    let baseline_scratch = scratch_root.join(format!(
-        "{}-{run_id}-baseline",
-        display.to_ascii_lowercase()
-    ));
+    // No spec id in arm A's path: the brief names its output file, and the
+    // id is part of what the baseline is denied.
+    let baseline_scratch = scratch_root.join(format!("baseline-{run_id}"));
     std::fs::create_dir_all(&baseline_scratch)?;
     let baseline_out = baseline_scratch.join("regenerated.json");
     let baseline_prompt = build_baseline_prompt(&baseline, &baseline_out);
@@ -1053,86 +1210,55 @@ pub(crate) fn handle_reconstitute_command(
         );
         return Ok(());
     }
+    // STORY-1425: cost guard — say how many headless agents will run, and
+    // refuse to spend them unattended without an explicit --yes.
+    // trace:STORY-1425 | ai:claude
+    let planned = planned_agent_runs(real_tests.len());
+    eprintln!(
+        "  {} this probe will launch up to {planned} headless agent run(s) (store probe + matcher, baseline probe + matcher)",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+    );
+    {
+        use std::io::IsTerminal;
+        cost_guard(opts.yes, std::io::stdin().is_terminal(), planned)?;
+    }
     let logs = project_root.join(".aida").join("headless-logs");
     std::fs::create_dir_all(&logs)?;
-    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-    eprintln!(
-        "  {} probing {} from the store alone (empty scratch dir, no source)…",
-        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-        display
-    );
-    run_headless(
+    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
+    // Arm B never aborts the report either: a failed store probe or matcher is
+    // reported as unknown (PRIN-5), and so is the delta.
+    let arm_b_run = run_store_arm(
         project_root,
         &scratch,
         &prompt,
-        &format!("probe-{}", display.to_ascii_lowercase()),
-        &logs.join(format!(
-            "probe-{}-{stamp}.jsonl",
-            display.to_ascii_lowercase()
-        )),
-    )?;
-    let regenerated = parse_regenerated(
-        &std::fs::read_to_string(&probe_out)
-            .with_context(|| format!("the probe wrote no output at {}", probe_out.display()))?,
-    )?;
+        &probe_out,
+        &display,
+        &report,
+        &real_tests,
+        &logs,
+        &stamp,
+    );
+    let (regenerated, pairs, matches, arm_b_error) = match arm_b_run {
+        Ok((regen, pairs, ms)) => (regen, pairs, ms, None),
+        Err(e) => (
+            Vec::new(),
+            criterion_pairs(project_root, &report, &[]),
+            Vec::new(),
+            Some(format!("{e:#}")),
+        ),
+    };
 
-    // Matching pass: per criterion, real (name, source) vs regenerated.
-    let pairs: Vec<CriterionPair> = report
-        .criteria
-        .iter()
-        .map(|row| {
-            let real = row
-                .tests
-                .iter()
-                .map(|t| {
-                    (
-                        t.name.clone(),
-                        crate::criteria::extract_fn_source(&project_root.join(&t.path), t.line),
-                    )
-                })
-                .collect();
-            let regen = regenerated
-                .iter()
-                .filter(|r| r.criterion.eq_ignore_ascii_case(&row.criterion.id))
-                .cloned()
-                .collect();
-            (row.criterion.id.clone(), real, regen)
-        })
-        .collect();
-    let match_out = scratch.join("matches.json");
-    let matches =
-        if real_tests.is_empty() {
-            Vec::new()
-        } else {
-            eprintln!(
-                "  {} judging {} real traced test(s) against {} regenerated…",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                real_tests.len(),
-                regenerated.len()
-            );
-            run_headless(
-                project_root,
-                &scratch,
-                &build_match_prompt(&display, &pairs, &match_out),
-                &format!("match-{}", display.to_ascii_lowercase()),
-                &logs.join(format!(
-                    "match-{}-{stamp}.jsonl",
-                    display.to_ascii_lowercase()
-                )),
-            )?;
-            parse_matches(&std::fs::read_to_string(&match_out).with_context(|| {
-                format!("the matcher wrote no output at {}", match_out.display())
-            })?)?
-        };
-
-    let (matched, total) = score(&matches, real_tests.len());
-    let arm_b = if real_tests.is_empty() {
-        ArmScore::unknown("B", "store", 0, "no real traced tests to recall")
-    } else {
-        ArmScore::known("B", "store", &matches, total, regenerated.len())
+    let (_, total) = score(&matches, real_tests.len());
+    let arm_b = match &arm_b_error {
+        _ if real_tests.is_empty() => {
+            ArmScore::unknown("B", "store", 0, "no real traced tests to recall")
+        }
+        Some(e) => ArmScore::unknown("B", "store", real_tests.len(), e.clone()),
+        None => ArmScore::known("B", "store", &matches, total, regenerated.len()),
     };
     // Arm A never blocks the report: a failed baseline run is reported as
-    // unknown (PRIN-5), and so is the delta.
+    // unknown (PRIN-5), and so is the delta. It is skipped when arm B failed,
+    // because the delta is unknown either way and the runs cost money.
     let (arm_a, baseline_matches) = if real_tests.is_empty() {
         (
             ArmScore::unknown(
@@ -1140,6 +1266,16 @@ pub(crate) fn handle_reconstitute_command(
                 "baseline (no store)",
                 0,
                 "no real traced tests to recall",
+            ),
+            Vec::new(),
+        )
+    } else if arm_b_error.is_some() {
+        (
+            ArmScore::unknown(
+                "A",
+                "baseline (no store)",
+                total,
+                "not run: arm B failed, so the delta is unknown",
             ),
             Vec::new(),
         )
@@ -1153,7 +1289,7 @@ pub(crate) fn handle_reconstitute_command(
             &display,
             &pairs,
             &logs,
-            &stamp.to_string(),
+            &stamp,
         ) {
             Ok((ms, regen)) => (
                 ArmScore::known("A", "baseline (no store)", &ms, total, regen),
@@ -1197,7 +1333,7 @@ pub(crate) fn handle_reconstitute_command(
         baseline_matches: baseline_matches.clone(),
         coverage: coverage.clone(),
         validation_subject: subject.clone(),
-        score_matched: matched,
+        score_matched: arm_b.matched,
         score_total: total,
         score_label: "heuristic",
         regenerated: regenerated.len(),
@@ -1314,14 +1450,18 @@ pub(crate) fn handle_reconstitute_command(
             display,
             f.display()
         ),
-        None if total > 0 => println!(
+        None if arm_b.matched.is_some() => println!(
             "\n  {} every real traced test was reproducible — nothing to harvest",
             crate::glyph(crate::glyphs::Glyph::Check).green()
         ),
-        None => println!(
+        None if real_tests.is_empty() => println!(
             "\n  {} no real traced tests yet — run `aida criteria {}` and trace tests to criteria first",
             crate::glyph(crate::glyphs::Glyph::Info).cyan(),
             display
+        ),
+        None => println!(
+            "\n  {} the store arm could not be computed, so there is nothing to harvest",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
         ),
     }
     println!("  scratch: {}", scratch.display());
@@ -1773,5 +1913,71 @@ mod tests {
         let aida = validation_subject(dir.path());
         assert!(aida.lower_bound && aida.label.contains("lower bound"));
         assert!(!aida.name.is_empty());
+    }
+
+    // The coordinator's BLOCK: a README carrying trace comments and SPEC-IDs
+    // must not reach arm A.
+    // trace:STORY-1425 | ai:claude
+    #[test]
+    fn baseline_readme_is_stripped_of_traces_spec_ids_and_aida_paths() {
+        let readme = "# Tool\n\nIt drains the queue.\n\n```rust\n// trace:STORY-1 | ai:claude\nfn drain() {}\n```\n\n# trace:TASK-9\n<!-- trace:BUG-3 -->\nSee specs/STORY-118.md; this exists because of STORY-118 (trace:FR-1-042 | ai:codex).\nConfig lives in .aida/config.toml and the store in `.aida-store/`.\nMarker [aida:sem] kept out.\n";
+        let clean = sanitize_readme(readme);
+        for leaked in [
+            "trace:",
+            "STORY-",
+            "TASK-",
+            "BUG-",
+            "FR-1",
+            ".aida",
+            "[aida:",
+            "ai:claude",
+            "ai:codex",
+        ] {
+            assert!(!clean.contains(leaked), "README leaked {leaked}:\n{clean}");
+        }
+        assert!(clean.contains("It drains the queue."));
+        assert!(clean.contains("fn drain() {}"));
+        assert!(clean.contains("Config lives in"));
+        // End to end: the arm-A brief built from it carries none either.
+        let inputs = BaselineInputs {
+            readme: Some("README.md".into()),
+            readme_text: clean,
+            ..Default::default()
+        };
+        let p = build_baseline_prompt(&inputs, Path::new("regenerated.json"));
+        assert!(!p.contains("trace:") && !p.contains("STORY-118") && !p.contains(".aida"));
+    }
+
+    // trace:STORY-1425 | ai:claude
+    #[test]
+    fn cost_guard_requires_yes_without_a_terminal() {
+        assert_eq!(planned_agent_runs(0), 1);
+        assert_eq!(planned_agent_runs(3), 4);
+        assert!(cost_guard(false, true, 4).is_ok(), "a TTY proceeds");
+        assert!(
+            cost_guard(true, false, 4).is_ok(),
+            "--yes proceeds headless"
+        );
+        let err = cost_guard(false, false, 4).unwrap_err().to_string();
+        assert!(err.contains("--yes") && err.contains('4'), "{err}");
+    }
+
+    // A failed store arm is unknown with an unknown delta — never an abort, never zero.
+    // trace:STORY-1425 | ai:claude
+    #[test]
+    fn failed_store_arm_is_unknown_and_delta_unknown() {
+        let arm_b = ArmScore::unknown("B", "store", 3, "the probe agent exited with 1");
+        let arm_a = ArmScore::known(
+            "A",
+            "baseline (no store)",
+            &[m("S.AC1", "a", MatchVerdict::Matched, "")],
+            3,
+            1,
+        );
+        assert_eq!(arm_b.matched, None);
+        assert_eq!(delta_points(&arm_a, &arm_b), None);
+        assert!(delta_unknown_reason(&arm_a, &arm_b)
+            .unwrap()
+            .contains("arm B unknown"));
     }
 }

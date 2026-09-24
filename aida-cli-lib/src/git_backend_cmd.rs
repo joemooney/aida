@@ -3947,6 +3947,7 @@ pub(crate) fn handle_git_backend_command(
             spec,
             json,
             dry_run,
+            yes,
         } => {
             let store = backend.load()?;
             let project_root = find_project_root()?;
@@ -3957,6 +3958,7 @@ pub(crate) fn handle_git_backend_command(
                 crate::reconstitute::ReconstituteOptions {
                     json: *json,
                     dry_run: *dry_run,
+                    yes: *yes,
                 },
             )?;
         }
