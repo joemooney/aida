@@ -14,11 +14,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:13:39.410585449Z
-modified_at: 2026-09-24T17:19:57.792292417Z
+modified_at: 2026-09-24T17:34:57.480550537Z
 req_type: Bug
 tags:
 - aida:rel
 - papercut
+comments:
+- id: 01a0d47c-17c8-74f2-8de8-c0ca87654ba0
+  author: joe
+  content: 'Review: APPROVE (fresh reviewer). The parser change is additive only: no CLI or MCP spelling changes variant, and Deserialize still uses from_str. Queued for the next batch.'
+  created_at: 2026-09-24T17:34:57.480550537Z
+  modified_at: 2026-09-24T17:34:57.480550537Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 64b652e051a639975ced35f04527e83b4bd00d33
   branch: main
