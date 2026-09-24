@@ -63,12 +63,18 @@ pub fn mail_items(unread: &[&Message]) -> Vec<TargetItem> {
 /// the same signal `aida mailbox inbox` surfaces on its message lines.
 // trace:STORY-701 | ai:claude
 fn mail_status(m: &Message) -> String {
-    let mut flags = Vec::new();
+    let mut flags: Vec<String> = Vec::new();
+    // trace:BUG-1534 | ai:claude — a relayed claim names its original seat
+    // ("from X · originally Y"); kept after the sender so `mail_sender`
+    // still resolves the reply target to the relaying seat.
+    if let Some(orig) = m.relayed_from.as_deref().filter(|r| !r.trim().is_empty()) {
+        flags.push(format!("originally {orig}"));
+    }
     if m.urgent {
-        flags.push("urgent");
+        flags.push("urgent".to_string());
     }
     if m.intent.is_actionable() {
-        flags.push(m.intent.as_str());
+        flags.push(m.intent.as_str().to_string());
     }
     if flags.is_empty() {
         format!("from {}", m.from)
@@ -209,6 +215,7 @@ mod tests {
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Legacy,
             from_role: None,
+            relayed_from: None,
         }
     }
 
@@ -271,6 +278,20 @@ mod tests {
     #[test]
     fn mail_items_empty_input_is_empty() {
         assert!(mail_items(&[]).is_empty());
+    }
+
+    #[test]
+    fn relayed_mail_names_the_original_seat_and_replies_to_the_relayer() {
+        // trace:BUG-1534 | ai:claude
+        let mut m = mail_msg("m1", "claude-product-1", "tally is right", false, 10);
+        m.relayed_from = Some("claude-reviewer-1".to_string());
+        let unread: Vec<&Message> = vec![&m];
+        let rows = mail_items(&unread);
+        assert_eq!(
+            rows[0].status,
+            "from claude-product-1 · originally claude-reviewer-1"
+        );
+        assert_eq!(mail_sender(&rows[0]), Some("claude-product-1"));
     }
 
     #[test]

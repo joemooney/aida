@@ -590,6 +590,7 @@ fn add_proxy_approval(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: Some(session.clone()),
+        relayed_from: None,
     };
     req.comments.push(comment);
     req.modified_at = now;
@@ -6437,6 +6438,7 @@ pub(crate) fn handle_git_backend_command(
             body_file,
             stdin,
             author,
+            relayed_from,
             ..
         }) => {
             // BUG-68: lookup first, record activity after the body
@@ -6481,7 +6483,10 @@ pub(crate) fn handle_git_backend_command(
                 reactions: Vec::new(),
                 // trace:TASK-330 | ai:claude — stamp the producing session
                 session_id: resolve_current_session_id(),
-            };
+                relayed_from: None,
+            }
+            // trace:BUG-1534 | ai:claude — record whose claim this relays.
+            .with_relayed_from(relayed_from.as_deref());
 
             req.comments.push(comment);
             req.modified_at = now;

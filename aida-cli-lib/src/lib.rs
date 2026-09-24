@@ -6266,6 +6266,7 @@ fn handle_findings_command(
                 replies: Vec::new(),
                 reactions: Vec::new(),
                 session_id: resolve_current_session_id(), // trace:TASK-330
+                relayed_from: None,
             });
             req.status = RequirementStatus::Rejected;
             req.modified_at = now;
@@ -6339,6 +6340,7 @@ fn handle_findings_command(
                         replies: Vec::new(),
                         reactions: Vec::new(),
                         session_id: resolve_current_session_id(), // trace:TASK-330
+                        relayed_from: None,
                     });
                     if let Some(text) = reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
                         req.comments.push(Comment {
@@ -6354,6 +6356,7 @@ fn handle_findings_command(
                             replies: Vec::new(),
                             reactions: Vec::new(),
                             session_id: resolve_current_session_id(), // trace:TASK-330
+                            relayed_from: None,
                         });
                     }
                     // STORY-1418: route through the into-Completed seam so this
@@ -6417,6 +6420,7 @@ fn handle_findings_command(
                     replies: Vec::new(),
                     reactions: Vec::new(),
                     session_id: resolve_current_session_id(), // trace:TASK-330
+                    relayed_from: None,
                 });
             }
             req.status = RequirementStatus::Approved;
@@ -7364,6 +7368,7 @@ fn push_why_open(req: &mut Requirement, label: &str, consequence: &str) {
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        relayed_from: None,
     });
 }
 
@@ -7943,6 +7948,7 @@ fn handle_research_command(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        relayed_from: None,
     });
 
     // Escalate the decision (if any) — never auto-apply it. A pending decision
@@ -9316,6 +9322,7 @@ fn handle_findings_recur(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        relayed_from: None,
     });
     req.modified_at = now;
     backend.update_requirement(&req)?;
@@ -10234,6 +10241,7 @@ pub(crate) fn send_notification(
         // trace:BUG-1533 | ai:claude
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        relayed_from: None,
     };
     if let Err(e) = mailbox_store::write_message(project_root, &msg) {
         eprintln!(
@@ -20183,11 +20191,23 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
     // case explicitly rather than let it read as a resolved seat identity;
     // a real seat identity (agent name / AIDA_USER / role) needs no tag
     // since `from` already names it distinctly.
-    let from_display = if m.from_source.is_attributed() {
+    let mut from_display = if m.from_source.is_attributed() {
         m.from.cyan().to_string()
     } else {
         format!("{} {}", m.from.cyan(), "[unattributed]".dimmed())
     };
+    // BUG-1534: a relayed claim keeps its original author on the line —
+    // "via <sender>, originally <seat>" — so the reader never has to
+    // remember who first said it. trace:BUG-1534 | ai:claude
+    if let Some(orig) = m.relayed_from.as_deref().filter(|r| !r.trim().is_empty()) {
+        from_display = format!(
+            "{} {}, {} {}",
+            "via".dimmed(),
+            from_display,
+            "originally".dimmed(),
+            orig.magenta()
+        );
+    }
     println!(
         "  {}{}{}{} {} → {}  {}  {}",
         flag,
@@ -78755,6 +78775,15 @@ fn print_comment(comment: &Comment, indent: usize) {
     // can correlate the comment back to a session (`aida session list`).
     if let Some(short) = comment.short_session_id() {
         println!("{}  {} {}", indent_str, "Session:".dimmed(), short.dimmed());
+    }
+    // trace:BUG-1534 | ai:claude — a relayed claim names its original seat.
+    if let Some(orig) = comment.relayed_from.as_deref() {
+        println!(
+            "{}  {} {}",
+            indent_str,
+            "Relayed:".dimmed(),
+            aida_core::mailbox::provenance_label(&comment.author, Some(orig)).magenta()
+        );
     }
     println!("{}  {}", indent_str, comment.content);
 

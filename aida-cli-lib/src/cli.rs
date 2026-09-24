@@ -3030,6 +3030,22 @@ pub enum MailboxCommand {
         /// transfer). Default: fyi. Orthogonal to --urgent (loudness vs kind).
         #[clap(long, value_name = "INTENT", default_value = "fyi")]
         intent: String,
+
+        /// The seat whose claim this message relays. Use it when the body
+        /// reproduces another seat's measurement, finding or argument; the
+        /// reader then sees "via <you>, originally <seat>". Omit it for
+        /// claims you verified yourself.
+        // trace:BUG-1534 | ai:claude
+        #[clap(long, value_name = "SEAT")]
+        relayed_from: Option<String>,
+
+        /// Send a body that says "you"/"your" even though another recipient
+        /// already received the same body (or this is a broadcast). By
+        /// default that send is refused, because each reader takes the claim
+        /// as addressed to itself.
+        // trace:BUG-1534 | ai:claude
+        #[clap(long)]
+        allow_second_person: bool,
     },
 
     /// Show an agent's inbox: messages addressed to it + broadcasts, oldest-first.
@@ -4644,6 +4660,14 @@ pub enum CommentCommand {
         #[clap(long)]
         author: Option<String>,
 
+        /// The seat whose claim this comment relays. Use it when recording
+        /// another seat's measurement, finding or argument rather than
+        /// something you verified; it is stored with the comment and shown
+        /// as "via <author>, originally <seat>".
+        // trace:BUG-1534 | ai:claude
+        #[clap(long, value_name = "SEAT")]
+        relayed_from: Option<String>,
+
         /// Parent comment ID (for replies)
         #[clap(long)]
         parent: Option<String>,
@@ -4704,6 +4728,27 @@ pub enum CommentCommand {
 mod task_190_comment_source_parser_tests {
     use super::Cli;
     use clap::Parser;
+
+    // trace:BUG-1534 | ai:claude
+    #[test]
+    fn comment_add_accepts_relayed_from() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
+            "tally is 902",
+            "--relayed-from",
+            "claude-reviewer-1",
+        ])
+        .unwrap();
+        match cli.command {
+            crate::cli::Command::Comment(super::CommentCommand::Add { relayed_from, .. }) => {
+                assert_eq!(relayed_from.as_deref(), Some("claude-reviewer-1"))
+            }
+            other => panic!("unexpected parse: {other:?}"),
+        }
+    }
 
     #[test]
     fn positional_comment_conflicts_with_body_file_and_stdin() {
