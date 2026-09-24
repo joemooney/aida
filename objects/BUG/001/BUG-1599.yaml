@@ -3,12 +3,12 @@ spec_id: BUG-1599
 agreed_id: BUG-1599
 title: 'Nightly Windows: noexec preview test asserts forward-slash context path'
 description: 'Cross-platform nightly (run 35993546117) is red on windows-latest: agent_launcher_tests::noexec_preview_includes_prompt_source_context_path_env_and_guidance_files asserts preview.contains(".aida/agents/context/claude-") but Path::display on Windows renders backslashes. Fix: normalize separators in the test assertion. Acceptance: test passes on Windows and Linux; nightly green.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T13:08:37.006868783Z
-modified_at: 2026-09-24T13:08:37.006868783Z
+modified_at: 2026-09-24T13:09:35.641991217Z
 req_type: Bug
 tags:
 - ci
