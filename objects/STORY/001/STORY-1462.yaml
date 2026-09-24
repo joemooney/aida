@@ -28,12 +28,12 @@ description: |
   6. The watchdog's own cost is bounded: incremental reads via per-file watermark, runtime under a few seconds on a 300MB transcript set, zero model calls - enforced by a test.
   7. docs/environment-variables.md / config docs updated for any new knobs.
   8. Restart recommendation at a configured context ceiling, default 300k tokens ([watchdog] restart_context_tokens): when a seat session's per-call context exceeds it, the watchdog surfaces a restart-this-seat item (aida awaiting + notice) naming the session, its current context, and the handoff path (/aida-handoff then a fresh session). Rationale (BUG-1589): auto-compaction on 1M models fires near ~967k, so a seat averages ~580k per call; a post-compaction or fresh session is ~85k, and capping at 300k keeps the average near ~150-190k, about 3-4x cheaper per call. The recommendation fires once per session per crossing, not every tick.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T01:51:28.894424654Z
-modified_at: 2026-09-24T05:54:41.321292068Z
+modified_at: 2026-09-24T07:08:37.235003247Z
 req_type: Story
 tags:
 - closure:pending
@@ -46,3 +46,17 @@ relationships:
 - rel_type: Parent
   target_id: 01a0d1fa-eb21-76f3-be09-834d7c5a6243
   created_at: 2026-09-24T05:54:41.321292068Z
+comments:
+- id: 01a0d23e-abc5-7370-a49d-f089c173ae9b
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit 27a2a39), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit STORY-1462 --description ...` / `aida edit STORY-1462 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec STORY-1462 --since 27a2a39^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit STORY-1462 --status completed`. (merge sha: 27a2a394ead4c7aae3ff6fe370a23ca5b93e513e)'
+  created_at: 2026-09-24T07:08:37.701318198Z
+  modified_at: 2026-09-24T07:08:37.701318198Z
+history:
+- id: 01a0d23e-abc5-7370-a49d-f07da3a56217
+  author: aida-auto-bump
+  timestamp: 2026-09-24T07:08:37.701310964Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
