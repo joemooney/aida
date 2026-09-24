@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:01:47.445199182Z
-modified_at: 2026-09-20T08:31:47.326419920Z
+modified_at: 2026-09-24T16:30:58.943044947Z
 req_type: Task
 tags:
 - drain
@@ -31,8 +31,7 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T21:01:49.576358997Z
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0b963-50a1-73f1-87dd-de8bdc6a0d4d
   created_at: 2026-09-19T21:01:55.053764026Z
   created_by: joe
