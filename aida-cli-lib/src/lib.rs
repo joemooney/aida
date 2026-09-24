@@ -6631,6 +6631,8 @@ fn handle_findings_command(
         FindingsCommand::Recur { id, note } => {
             handle_findings_recur(backend, store_path, id, note.as_deref())?
         }
+        // trace:STORY-1417 | ai:claude
+        FindingsCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json)?,
     }
     Ok(())
 }
@@ -13380,9 +13382,12 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
                 | TraceCommand::Scan { update: true, .. }
         ),
         // STORY-732: bare `aida findings` (None) defaults to list — read-only.
-        Command::Findings { cmd } => cmd
-            .as_ref()
-            .is_some_and(|c| !matches!(c, FindingsCommand::List { .. })),
+        Command::Findings { cmd } => cmd.as_ref().is_some_and(|c| {
+            !matches!(
+                c,
+                FindingsCommand::List { .. } | FindingsCommand::Classes { .. }
+            )
+        }),
         // STORY-522: `aida questions ask` / `answer` write the
         // decision_request field; bare list / `list` are read-only.
         // trace:STORY-522 | ai:claude
@@ -13729,7 +13734,7 @@ fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
                 ..
             }
             | Command::Findings {
-                cmd: None | Some(FindingsCommand::List { .. }),
+                cmd: None | Some(FindingsCommand::List { .. } | FindingsCommand::Classes { .. }),
             }
             | Command::Punts(PuntsCommand::List { .. } | PuntsCommand::Read { .. })
             | Command::Worker(WorkerCommand::Directives { .. })
