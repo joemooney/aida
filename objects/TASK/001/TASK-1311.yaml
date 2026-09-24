@@ -26,12 +26,12 @@ description: |
      fork, or the drain loops on it.
   4. Re-entry records why the spec was considered ready, so a wrong return is auditable
      rather than indistinguishable from a correct one.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:39:54.938488038Z
-modified_at: 2026-09-24T00:58:45.662089065Z
+modified_at: 2026-09-24T02:23:11.493220162Z
 req_type: Task
 tags:
 - parent:BUG-1470 lifecycle ownership severity:operational
@@ -82,3 +82,21 @@ comments:
   created_at: 2026-09-21T05:27:08.418289820Z
   modified_at: 2026-09-21T05:27:08.418289820Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0d139-587e-71d3-9d6f-bc1f006b5a37
+  author: aida-auto-bump
+  timestamp: 2026-09-24T02:23:11.486239649Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d139-5885-7640-b775-af51923ab9ae
+  timestamp: 2026-09-24T02:23:11.493217486Z
+  agent: aida
+  commit_sha: 08869b53e12eaac4d774ed7938946ca7da4b5235
+  summary: Completed via merge 08869b53
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T02:23:11.486064067Z
+  completion_sha: 08869b53e12eaac4d774ed7938946ca7da4b5235
