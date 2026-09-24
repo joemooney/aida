@@ -1033,7 +1033,7 @@ pub(crate) fn handle_git_backend_command(
     }
     if !notice_fast_fail && !matches!(command, Command::Report { recheck: true, .. }) {
         let storage = Storage::new(store_path);
-        report_cmd::maybe_print_upstream_recheck_notice(&storage);
+        report_cmd::maybe_print_upstream_recheck_notice(&storage, &backend);
     }
 
     // STORY-640: team identity hygiene. In a TEAM context (a roster with >1

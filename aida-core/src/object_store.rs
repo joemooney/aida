@@ -369,10 +369,21 @@ pub fn load_all_objects(objects_root: &Path) -> Result<Vec<Requirement>> {
     Ok(requirements)
 }
 
+// BUG-1606: test-only probe counting `find_by_uuid` calls on this thread. The
+// by-uuid lookup parses every object until it finds a match, so tests use this
+// to prove a hot path never falls back to it.
+// trace:BUG-1606 | ai:claude
+#[cfg(test)]
+thread_local! {
+    pub(crate) static FULL_SCAN_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Look up a requirement by UUID across all object files.
 /// This is O(n) — for frequent lookups, use the SQLite read model instead.
 #[cfg(feature = "native")]
 pub fn find_by_uuid(objects_root: &Path, uuid: &Uuid) -> Result<Option<Requirement>> {
+    #[cfg(test)]
+    FULL_SCAN_COUNT.with(|c| c.set(c.get() + 1));
     let files = list_objects(objects_root)?;
     for (_spec_id, path) in &files {
         if let Ok(req) = read_object_from_path(path) {
