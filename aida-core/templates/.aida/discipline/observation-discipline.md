@@ -87,12 +87,17 @@ aida findings promote <ID> --to gate --detectable mechanical|agent|none
 The screening answer is recorded on the finding as `gate-decision:<answer>`:
 
 - **`mechanical`**: a violation can be recognised without judgement. This
-  files a gate TASK (rung 1-3) for the class and queues it.
+  files a gate TASK (rung 1-3) for the class.
 - **`agent`**: only an agent could recognise it. This files a gate TASK
   (rung 4). The gate's verdict is heuristic and must not silently block.
 - **`none`**: the class stays prose, and its recurrence is accepted as a
   known cost. No task is filed. Later recurrences report this decision
   instead of asking the question again.
+
+The gate TASK is filed Approved and queued only when you have advisor and
+dispatch authority. Otherwise it is filed as a draft for the advisor to
+approve and queue. Re-running with `--force` reuses the existing gate TASK
+rather than filing a second one.
 
 A gated finding carries `gated-by:<ID>`, so a later `aida findings recur`
 reports that the gate did not stop the class. Answering "no gate" is a

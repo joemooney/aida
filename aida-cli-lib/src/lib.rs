@@ -9403,20 +9403,120 @@ fn handle_findings_recur(
 /// `aida findings promote <ID> --to gate` — the gate-candidate destination
 /// (STORY-1428). Records the screening answer on the finding. A `mechanical`
 /// or `agent` answer files a gate TASK for the class, linked both ways
-/// (`References` edges plus a `gated-by:<ID>` tag) and queued; a `none`
-/// answer records "stays prose" so later recurrences do not re-open it.
+/// (`References` edges plus a `gated-by:<ID>` tag); a `none` answer records
+/// "stays prose" so later recurrences do not re-open it.
+///
+/// Authority follows `aida add --queue`: without advisor authority the gate
+/// task is filed as Draft, and it is queued only with dispatch authority.
 // trace:STORY-1428 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn handle_findings_promote_gate(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
-    mut finding: Requirement,
+    finding: Requirement,
     id: &str,
     detectable: Option<&str>,
     reason: Option<&str>,
     for_role: Option<&str>,
     force: bool,
 ) -> Result<()> {
+    let raw = detectable.ok_or_else(|| {
+        anyhow::anyhow!(
+            "--to gate needs the screening answer: --detectable mechanical|agent|none \
+             (mechanical = recognisable without judgement; agent = only an agent could \
+             recognise it; none = stays prose)"
+        )
+    })?;
+    let screen = findings::GateScreen::parse(raw).ok_or_else(|| {
+        anyhow::anyhow!("unknown --detectable answer `{raw}` — expected mechanical, agent, or none")
+    })?;
+    let authority = GateAuthority {
+        advisor: has_advisor_authority(),
+        dispatch: has_dispatch_authority(),
+    };
+    let outcome = promote_finding_to_gate(
+        backend, store_path, finding, id, screen, reason, for_role, force, authority,
+    )?;
+    println!("{}", outcome.message());
+    Ok(())
+}
+
+/// The session's authority, resolved once by the caller so the gate
+/// promotion itself is testable.
+#[derive(Debug, Clone, Copy)]
+// trace:STORY-1428 | ai:claude
+struct GateAuthority {
+    advisor: bool,
+    dispatch: bool,
+}
+
+/// What a gate promotion did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+// trace:STORY-1428 | ai:claude
+enum GatePromoteOutcome {
+    /// `--detectable none`: the class stays prose; nothing filed.
+    StaysProse { finding: String },
+    /// A gate task exists for the finding (newly filed or reused).
+    Gated {
+        finding: String,
+        gate: String,
+        screen: &'static str,
+        reused: bool,
+        status: RequirementStatus,
+        /// `Some(role)` when queued; `None` when filed but not queued.
+        queued_for: Option<String>,
+    },
+}
+
+impl GatePromoteOutcome {
+    fn message(&self) -> String {
+        match self {
+            Self::StaysProse { finding } => format!(
+                "Screened finding {finding} — stays prose (recorded; not re-opened on \
+                 future recurrences)."
+            ),
+            Self::Gated {
+                finding,
+                gate,
+                screen,
+                reused,
+                status,
+                queued_for,
+            } => {
+                let verb = if *reused { "reused existing" } else { "filed" };
+                let tail = match queued_for {
+                    Some(role) => format!("queued for {role}"),
+                    None => format!(
+                        "{status}, filed, not queued — ask the advisor to approve and \
+                         queue {gate}"
+                    ),
+                };
+                format!(
+                    "Promoted finding {finding} as a gate candidate ({screen}) — {verb} \
+                     {gate}, {tail}."
+                )
+            }
+        }
+    }
+}
+
+/// The body of the gate route, with authority passed in. Idempotent: a
+/// finding already `gated-by:` an existing task, or already referenced by a
+/// gate-candidate task (a retry after a partial write), reuses that task
+/// instead of filing a second one.
+#[allow(clippy::too_many_arguments)]
+// trace:STORY-1428 | ai:claude
+fn promote_finding_to_gate(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    mut finding: Requirement,
+    id: &str,
+    screen: findings::GateScreen,
+    reason: Option<&str>,
+    for_role: Option<&str>,
+    force: bool,
+    authority: GateAuthority,
+) -> Result<GatePromoteOutcome> {
     let tags: Vec<String> = finding.tags.iter().cloned().collect();
     let display_id = finding.spec_id.clone().unwrap_or_else(|| id.to_string());
     let threshold = findings::promote_threshold_for_project(store_path.parent());
@@ -9438,20 +9538,10 @@ fn handle_findings_promote_gate(
             );
         }
     }
-    let raw = detectable.ok_or_else(|| {
-        anyhow::anyhow!(
-            "--to gate needs the screening answer: --detectable mechanical|agent|none \
-             (mechanical = recognisable without judgement; agent = only an agent could \
-             recognise it; none = stays prose)"
-        )
-    })?;
-    let screen = findings::GateScreen::parse(raw).ok_or_else(|| {
-        anyhow::anyhow!("unknown --detectable answer `{raw}` — expected mechanical, agent, or none")
-    })?;
 
     let now = chrono::Utc::now();
     let author = get_default_author();
-    let mut new_comment = |content: String| Comment {
+    let new_comment = |content: String| Comment {
         id: Uuid::now_v7(),
         content,
         author: author.clone(),
@@ -9463,15 +9553,6 @@ fn handle_findings_promote_gate(
         session_id: resolve_current_session_id(), // trace:TASK-330
         relayed_from: None,
     };
-
-    finding
-        .tags
-        .retain(|t| !t.starts_with(findings::GATE_DECISION_PREFIX));
-    finding.tags.insert(format!(
-        "{}{}",
-        findings::GATE_DECISION_PREFIX,
-        screen.label()
-    ));
     let mut screening = format!(
         "Gate screening by {author} {date} at recurrence ×{recurrence}: {}.",
         screen.screening_summary(),
@@ -9481,25 +9562,46 @@ fn handle_findings_promote_gate(
         screening.push_str(&format!(" Reason: {text}"));
     }
 
+    // Record the screening answer on the finding FIRST, so a crash after
+    // this point leaves the decision recorded and a retry needs --force.
+    finding
+        .tags
+        .retain(|t| !t.starts_with(findings::GATE_DECISION_PREFIX));
+    finding.tags.insert(format!(
+        "{}{}",
+        findings::GATE_DECISION_PREFIX,
+        screen.label()
+    ));
+
     if !screen.produces_gate() {
         screening.push_str(" Recorded so later recurrences do not re-open the question.");
         finding.comments.push(new_comment(screening));
         finding.modified_at = now;
         backend.update_requirement(&finding)?;
-        println!(
-            "Screened finding {display_id} — stays prose (recorded; not re-opened on \
-             future recurrences)."
-        );
-        return Ok(());
+        return Ok(GatePromoteOutcome::StaysProse {
+            finding: display_id,
+        });
     }
+    finding.modified_at = now;
+    backend.update_requirement(&finding)?;
 
-    // File the gate task for the class, linked back to the finding.
+    // Find-or-file the gate task. Existing links win: the finding's own
+    // `gated-by:` target, else any gate-candidate task that references the
+    // finding (a retry after the task was written but before the finding
+    // was tagged). Checked inside the atomic write so two racing promotes
+    // cannot both file.
+    let prior_gate_ref = findings::gated_by(&tags).map(str::to_string);
+    let status = if authority.advisor {
+        RequirementStatus::Approved
+    } else {
+        RequirementStatus::Draft
+    };
     let mut gate = Requirement::new(
         findings::gate_task_title(&finding.title),
         findings::gate_task_description(&display_id, &finding.title, recurrence, screen),
     );
     gate.req_type = RequirementType::Task;
-    gate.status = RequirementStatus::Approved;
+    gate.status = status.clone();
     gate.owner = author.clone();
     gate.tags.insert(findings::GATE_CANDIDATE_TAG.to_string());
     gate.tags.insert(format!(
@@ -9514,25 +9616,53 @@ fn handle_findings_promote_gate(
         created_at: Some(now),
         created_by: Some(author.clone()),
     });
+    let finding_uuid = finding.id;
+    let mut reused: Option<Requirement> = None;
     let store = backend.update_atomically(|store| {
-        let type_prefix = store.get_type_prefix(&gate.req_type);
-        store.add_requirement_with_id(gate.clone(), None, type_prefix.as_deref());
+        let existing = store
+            .requirements
+            .iter()
+            .find(|r| {
+                prior_gate_ref.as_deref().is_some_and(|g| {
+                    r.spec_id.as_deref() == Some(g) || r.agreed_id.as_deref() == Some(g)
+                })
+            })
+            .or_else(|| {
+                store.requirements.iter().find(|r| {
+                    r.tags.contains(findings::GATE_CANDIDATE_TAG)
+                        && r.relationships.iter().any(|rel| {
+                            rel.target_id == finding_uuid
+                                && rel.rel_type == RelationshipType::References
+                        })
+                })
+            })
+            .cloned();
+        match existing {
+            Some(r) => reused = Some(r),
+            None => {
+                let type_prefix = store.get_type_prefix(&gate.req_type);
+                store.add_requirement_with_id(gate.clone(), None, type_prefix.as_deref());
+            }
+        }
     })?;
-    let written = store
-        .requirements
-        .last()
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("add_requirement_with_id produced no requirement"))?;
-    aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
+    let (written, was_reused) = match reused {
+        Some(r) => (r, true),
+        None => {
+            let w = store.requirements.last().cloned().ok_or_else(|| {
+                anyhow::anyhow!("add_requirement_with_id produced no requirement")
+            })?;
+            aida_core::object_store::write_object(&store_path.join("objects"), &w)?;
+            (w, false)
+        }
+    };
     let gate_id = written
         .spec_id
         .clone()
         .unwrap_or_else(|| written.id.to_string());
-    let role = queue_promoted_finding(store_path, written.id, &gate_id, for_role)?;
-    record_role_activity(&gate_id, "queue-add");
 
-    // Re-read the finding: the atomic write above may have rewritten the
-    // store, so apply the finding's changes on top of the fresh copy.
+    // Link the finding to the gate. The finding's own status is left as-is:
+    // the gate task is the queued work, and an Approved finding outside any
+    // queue would be a silent half-state (BUG-231).
     let mut fresh = backend
         .get_requirement_unambiguous(&display_id)?
         .unwrap_or(finding.clone());
@@ -9555,17 +9685,56 @@ fn handle_findings_promote_gate(
             created_by: Some(author.clone()),
         });
     }
-    screening.push_str(&format!(" Gate task: {gate_id}."));
+    let verb = if was_reused { "reused" } else { "filed" };
+    screening.push_str(&format!(" Gate task {verb}: {gate_id}."));
     fresh.comments.push(new_comment(screening));
-    fresh.status = RequirementStatus::Approved;
     fresh.modified_at = now;
     backend.update_requirement(&fresh)?;
-    println!(
-        "Promoted finding {display_id} as a gate candidate ({}) — filed {gate_id}, \
-         queued for {role}.",
-        screen.label()
-    );
-    Ok(())
+
+    // Queue only with dispatch authority and an enqueueable status — the
+    // same gate `aida add --queue` applies. A reused task keeps its status.
+    let route = for_role.unwrap_or("implementer");
+    let queued_for = if gate_should_queue(&written.status, !authority.advisor, route, authority) {
+        let role = queue_spec_for_role(
+            store_path,
+            written.id,
+            route,
+            format!("Gate task for finding {display_id} via `aida findings promote --to gate`"),
+        )
+        .with_context(|| {
+            format!(
+                "{gate_id} was filed but not queued — queue it with \
+                 `aida queue add {gate_id} --for {route}`"
+            )
+        })?;
+        record_role_activity(&gate_id, "queue-add");
+        Some(role)
+    } else {
+        None
+    };
+    Ok(GatePromoteOutcome::Gated {
+        finding: display_id,
+        gate: gate_id,
+        screen: screen.label(),
+        reused: was_reused,
+        status: written.status,
+        queued_for,
+    })
+}
+
+/// Whether the gate task may be queued: the `aida add --queue` refusal rule
+/// (`queue_at_filing_refusal`) plus dispatch authority for execution routes.
+// trace:STORY-1428 | ai:claude
+fn gate_should_queue(
+    status: &RequirementStatus,
+    downgraded: bool,
+    route: &str,
+    authority: GateAuthority,
+) -> bool {
+    if queue_at_filing_refusal(status, downgraded, Some(route)).is_some() {
+        return false;
+    }
+    authority.dispatch || !for_target_requires_dispatch_authority(Some(route))
 }
 
 /// TASK-516: the tag a spec carries while its imported plan is awaiting
@@ -11221,7 +11390,32 @@ fn queue_promoted_finding(
     display_id: &str,
     for_override: Option<&str>,
 ) -> Result<String> {
-    let role = for_override.unwrap_or("implementer").to_string();
+    let role = for_override.unwrap_or("implementer");
+    queue_spec_for_role(
+        store_path,
+        requirement_id,
+        role,
+        format!("Promoted from finding {display_id} via `aida findings promote`"),
+    )
+    .with_context(|| {
+        format!(
+            "failed to add {display_id} to the {role} queue — \
+             finding left at draft, not promoted"
+        )
+    })
+}
+
+/// Append a spec to a role's work queue for the current user; returns the
+/// role. Shared by the work and gate promote routes, each of which adds its
+/// own failure context.
+// trace:STORY-1428 | ai:claude
+fn queue_spec_for_role(
+    store_path: &std::path::Path,
+    requirement_id: Uuid,
+    role: &str,
+    note: String,
+) -> Result<String> {
+    let role = role.to_string();
     let user_id = current_user_id(None);
     let storage = Storage::new(store_path);
     let entry = aida_core::QueueEntry {
@@ -11231,21 +11425,14 @@ fn queue_promoted_finding(
         // resolves to max_position + 1000 (STORY-72).
         position: i64::MAX,
         added_by: user_id,
-        note: Some(format!(
-            "Promoted from finding {display_id} via `aida findings promote`"
-        )),
+        note: Some(note),
         added_at: chrono::Utc::now(),
         for_role: Some(role.clone()),
         for_scope: None,
         for_session: None,
         added_by_machine: None,
     };
-    storage.queue_add(entry).with_context(|| {
-        format!(
-            "failed to add {display_id} to the {role} queue — \
-             finding left at draft, not promoted"
-        )
-    })?;
+    storage.queue_add(entry)?;
     Ok(role)
 }
 
@@ -46339,6 +46526,9 @@ mod bug_87_queue_filter_tests;
 #[cfg(test)]
 #[path = "tests/bug_231_findings_promote_tests.rs"]
 mod bug_231_findings_promote_tests;
+#[cfg(test)]
+#[path = "tests/story_1428_gate_promote_tests.rs"]
+mod story_1428_gate_promote_tests;
 
 /// BUG-574: reliability papercuts — spurious non-zero exits on the idempotent
 /// re-entry paths of `aida session start` (re-running for a scope this clone
