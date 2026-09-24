@@ -9,12 +9,12 @@ description: |-
   - rel remove --type parent|child removes both reciprocal edges, matching rel add.
   - CLI, core and MCP use one relationship-type parser; spellings accepted by core resolve identically in rel remove.
   - Handler-level tests cover typed removal, --bidirectional and the parent/child pair.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:13:39.410585449Z
-modified_at: 2026-09-24T16:48:19.490960330Z
+modified_at: 2026-09-24T17:19:57.792292417Z
 req_type: Bug
 tags:
 - aida:rel
