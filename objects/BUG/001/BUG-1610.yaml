@@ -1,0 +1,44 @@
+id: 01a0d56d-900b-7a31-805f-aafc20764dc9
+spec_id: BUG-1610
+agreed_id: BUG-1610
+title: GitLab review recovery does not diagnose a feature branch that became the default branch
+description: |-
+  Observed while recovering a failed first drain into a newly created self-hosted GitLab project.
+
+  ## Reproduction
+  1. Create an empty GitLab project after local implementation already exists.
+  2. Push only `story-52-work`; GitLab makes it the project default branch because remote `main` does not exist.
+  3. `aida review STORY-52` reports no MR and offers to open one.
+  4. The suggested/manual `glab mr create --source-branch story-52-work` saves recovery state with both source_branch and target_branch set to `story-52-work`.
+  5. Retrying with `--recover --target-branch main` still fails because the recovery file overrides the corrected target: `You must be on a different branch other than story-52-work`.
+
+  ## Expected
+  Before offering MR creation, AIDA verifies that the intended base exists remotely and differs from the source. If the feature branch became the GitLab default because the repository was initialized in the wrong order, AIDA should explain the condition and print the exact recovery sequence: push local main, set the GitLab project default branch to main, then create a fresh MR without the stale recovery payload.
+
+  ## Acceptance
+  - GitLab preflight detects missing remote base and source-equals-default.
+  - The refusal names both branches and does not offer an impossible MR creation.
+  - Recovery commands are provider-correct: `git push -u origin main`, `glab repo update ... --defaultBranch main`, then a fresh `glab mr create --target-branch main`.
+  - Tests cover an empty GitLab project whose first pushed ref is the feature branch.
+
+  The root setup error is recoverable; the AIDA bug is that the review surface presents an impossible action without diagnosing it.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T21:58:42.443126121Z
+modified_at: 2026-09-24T21:58:42.443126121Z
+req_type: Bug
+tags:
+- gitlab
+- merge-request
+- recovery
+- severity:minor
+- ux
+filed_at:
+  code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 81c37e2cb
+  vendor: codex
