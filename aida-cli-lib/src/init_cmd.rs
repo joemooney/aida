@@ -4248,6 +4248,11 @@ pub(crate) fn handle_init_distributed_worktree(
     let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
+    // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
+    // commit, so the end-of-init refresh leaves the tracked config clean.
+    // trace:STORY-1467 | ai:claude
+    let config_content =
+        crate::project_capabilities::with_init_config_section(&cwd, config_content);
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // STORY-511: surface the auto-detected forge so the operator sees the
@@ -4559,6 +4564,10 @@ fn handle_init_post_clone(
     let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
+    // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
+    // commit, so the end-of-init refresh leaves the tracked config clean.
+    // trace:STORY-1467 | ai:claude
+    let config_content = crate::project_capabilities::with_init_config_section(cwd, config_content);
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
     println!(
         "  {} {}",
@@ -5133,6 +5142,11 @@ pub(crate) fn handle_init_distributed_sibling(
     let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
+    // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
+    // commit, so the end-of-init refresh leaves the tracked config clean.
+    // trace:STORY-1467 | ai:claude
+    let config_content =
+        crate::project_capabilities::with_init_config_section(&cwd, config_content);
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // Fresh init leaves docs/plans/ to the first plan-writing surface
