@@ -3,12 +3,12 @@ spec_id: BUG-1597
 agreed_id: BUG-1597
 title: queue_dead_target_summary_filter_includes_archived_targets_for_gc flakes under heavy parallel load and passes alone
 description: 'Seen three times on 2026-09-23: batch 38''s preflight, STORY-1464''s full run, and an earlier queue-cleanup test failure reported during TASK-1311. It fails in the full aida-cli-lib lib run under heavy machine load and passes 3/3 alone. Find the shared-state or timing dependency (store, cache, cwd or env) and make the test hermetic. Acceptance: 30 consecutive full-suite parallel runs pass.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T06:53:40.607192549Z
-modified_at: 2026-09-24T07:53:24.563787493Z
+modified_at: 2026-09-24T08:38:06.341286074Z
 req_type: Bug
 tags:
 - ci
