@@ -80,6 +80,12 @@ pub struct RequirementSummary {
     /// projected from the canonical YAML `origin` field; None = single-repo.
     // trace:STORY-634 | ai:claude
     pub origin: Option<String>,
+    /// The real completion timestamp (STORY-86's `completed_at`, stamped by
+    /// the Done->Completed auto-bump), projected from the canonical YAML so
+    /// `aida list --sort completed` orders on actual completion time instead
+    /// of the `modified_at` stand-in. None when not yet completed.
+    // trace:TASK-1474 | ai:claude
+    pub completed_at: Option<String>,
     pub yaml_path: String,
 }
 
@@ -370,12 +376,14 @@ pub enum SortOrder {
     /// Newest-created first by `created_at` DESC.
     // trace:TASK-1464 | ai:claude
     CreatedDesc,
-    /// Most-recently-completed first. A row's "completion date" is its
-    /// `modified_at` when `status = Completed` — the timestamp the terminal
-    /// merge-driven status flip stamped (see `docs/lifecycle.md` on `done` vs
-    /// `completed`) — and NULL otherwise, so specs with no completion date
-    /// sort deterministically last (SQLite orders NULLs last in DESC).
-    // trace:TASK-1464 | ai:claude
+    /// Most-recently-completed first, ordered on the real `completed_at`
+    /// timestamp (STORY-86, stamped by the Done->Completed auto-bump) rather
+    /// than `modified_at` — so a post-completion edit (a tag or comment) no
+    /// longer reorders the list. A `Completed` row that predates STORY-86 (no
+    /// stamped `completed_at`) falls back to `modified_at`, same as
+    /// `digest.rs`'s D7 rule. Rows with neither (not Completed) sort last
+    /// (SQLite orders NULLs last in DESC). Ties broken by `modified_at` DESC.
+    // trace:TASK-1464 trace:TASK-1474 | ai:claude
     CompletedDesc,
 }
 
@@ -518,7 +526,12 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // the canonical YAML `origin` field — the multi-repo repo/component dimension,
 // ADR-12) so `aida list --fields ...,origin` reads the cache.
 // trace:STORY-634 | ai:claude
-const SCHEMA_VERSION: &str = "14";
+// TASK-1474: bumped to "15" when the `completed_at` column was added
+// (projection of the canonical YAML `completed_at` field — STORY-86's
+// Done->Completed auto-bump timestamp) so `aida list --sort completed` orders
+// on the real completion time instead of the `modified_at` stand-in.
+// trace:TASK-1474 | ai:claude
+const SCHEMA_VERSION: &str = "15";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -1423,7 +1436,7 @@ impl Cache {
                     owner, feature, req_type, tags_json, created_at, modified_at,
                     archived, archived_at, deferred, deferred_at, deferred_until,
                     in_degree, out_degree, heft, yaml_path, assignee, blocked,
-                    has_pending_decision, execution_mode, weight, origin
+                    has_pending_decision, execution_mode, weight, origin, completed_at
              FROM requirements_cache WHERE 1=1",
         );
         let mut args: Vec<String> = Vec::new();
@@ -1574,14 +1587,15 @@ impl Cache {
             SortOrder::WeightDesc => sql.push_str(" ORDER BY weight DESC, modified_at DESC"),
             // trace:TASK-1464 | ai:claude
             SortOrder::CreatedDesc => sql.push_str(" ORDER BY created_at DESC"),
-            // trace:TASK-1464 | ai:claude — only `Completed` rows have a
-            // "completion date" (their modified_at); everything else is NULL
-            // and SQLite sorts NULLs last in DESC order, so incomplete specs
-            // deterministically fall to the bottom. Ties broken by modified_at
-            // DESC (a no-op for the Completed rows themselves, but keeps the
-            // NULL group in a stable freshest-first order too).
+            // trace:TASK-1474 | ai:claude — order on the real `completed_at`
+            // timestamp (STORY-86); a Completed row that predates STORY-86
+            // (completed_at never stamped) falls back to modified_at, same as
+            // digest.rs's D7 rule, so an old completed spec doesn't drop to
+            // the bottom just because the cache predates the field. Rows with
+            // neither (not Completed) are NULL and sort last in DESC order.
+            // Ties broken by modified_at DESC.
             SortOrder::CompletedDesc => sql.push_str(
-                " ORDER BY (CASE WHEN status = 'Completed' THEN modified_at ELSE NULL END) DESC, modified_at DESC",
+                " ORDER BY COALESCE(completed_at, CASE WHEN status = 'Completed' THEN modified_at ELSE NULL END) DESC, modified_at DESC",
             ),
         }
         if let Some(n) = filter.limit {
@@ -1639,7 +1653,7 @@ impl Cache {
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
                           c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee,
                           c.blocked, c.has_pending_decision, c.execution_mode, c.weight,
-                          c.origin
+                          c.origin, c.completed_at
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
                    WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
@@ -1938,6 +1952,8 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "weight",
     // trace:STORY-634 | ai:claude
     "origin",
+    // trace:TASK-1474 | ai:claude
+    "completed_at",
     "yaml_path",
 ];
 
@@ -2243,8 +2259,8 @@ fn insert_one(
             owner, feature, req_type, tags_json, created_at, modified_at,
             archived, archived_at, deferred, deferred_at, deferred_until,
             in_degree, out_degree, heft, blocked, yaml_path, assignee,
-            has_pending_decision, execution_mode, weight, origin
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+            has_pending_decision, execution_mode, weight, origin, completed_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -2280,6 +2296,13 @@ fn insert_one(
             req.weight.map(|w| w as f64),
             // trace:STORY-634 | ai:claude — NULL when single-repo.
             req.origin.as_ref().map(|o| o.to_string()),
+            // trace:TASK-1474 | ai:claude — the real completion timestamp
+            // (STORY-86), stamped by the Done->Completed auto-bump. NULL when
+            // not yet completed, or when completed before STORY-86 shipped.
+            req.implementation_info
+                .as_ref()
+                .and_then(|i| i.completed_at)
+                .map(|t| t.to_rfc3339()),
         ],
     )?;
 
@@ -2348,6 +2371,8 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         weight: row.get(26)?,
         // trace:STORY-634 | ai:claude — column index 27, nullable TEXT.
         origin: row.get(27)?,
+        // trace:TASK-1474 | ai:claude — column index 28, nullable TEXT.
+        completed_at: row.get(28)?,
     })
 }
 
@@ -2443,7 +2468,9 @@ fn yaml_path_for(req: &Requirement) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{RequirementPriority, RequirementStatus, RequirementType};
+    use crate::models::{
+        ImplementationInfo, RequirementPriority, RequirementStatus, RequirementType,
+    };
     use std::sync::{Mutex as StdMutex, OnceLock};
     use tempfile::tempdir;
 
@@ -2928,6 +2955,125 @@ mod tests {
             order,
             ["FR-1-021", "FR-1-020", "FR-1-022"],
             "most-recently-completed first; the never-completed row sorts last despite being freshest-modified"
+        );
+    }
+
+    /// TASK-1474: `--sort completed` must order on the real `completed_at`
+    /// timestamp (STORY-86), not `modified_at` — even when the two disagree.
+    // trace:TASK-1474 | ai:claude
+    #[test]
+    fn list_summaries_sorts_by_real_completed_at_not_modified_at() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        // Completed EARLIER (real completion date) but touched MOST recently
+        // afterward (e.g. a tag edit) — modified_at is freshest, completed_at
+        // is oldest. Must sort AFTER the other completed row.
+        let mut edited_after_completion = sample_req("FR-1-030", "completed then edited");
+        edited_after_completion.status = RequirementStatus::Completed;
+        edited_after_completion.implementation_info = Some(ImplementationInfo {
+            completed_at: Some("2026-01-01T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        });
+        edited_after_completion.modified_at = "2026-09-01T00:00:00Z".parse().unwrap();
+
+        // Completed LATER (real completion date) but never touched again —
+        // modified_at is oldest of the two, completed_at is newest. Must
+        // sort FIRST despite the stale modified_at.
+        let mut completed_recently = sample_req("FR-1-031", "completed recently");
+        completed_recently.status = RequirementStatus::Completed;
+        completed_recently.implementation_info = Some(ImplementationInfo {
+            completed_at: Some("2026-06-01T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        });
+        completed_recently.modified_at = "2026-06-01T00:00:00Z".parse().unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(edited_after_completion);
+        store.requirements.push(completed_recently);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                sort: SortOrder::CompletedDesc,
+                ..Default::default()
+            })
+            .unwrap();
+        let order: Vec<&str> = rows.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+        assert_eq!(
+            order,
+            ["FR-1-031", "FR-1-030"],
+            "completed DESC must order by the real completed_at, not modified_at"
+        );
+        assert_eq!(
+            rows[0].completed_at.as_deref(),
+            Some("2026-06-01T00:00:00+00:00")
+        );
+    }
+
+    /// TASK-1474: a post-completion edit (e.g. a tag or comment add, which
+    /// bumps `modified_at` but leaves `completed_at` untouched) must NOT
+    /// reorder the `--sort completed` view.
+    // trace:TASK-1474 | ai:claude
+    #[test]
+    fn post_completion_edit_does_not_reorder_completed_sort() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut older = sample_req("FR-1-040", "completed first");
+        older.status = RequirementStatus::Completed;
+        older.implementation_info = Some(ImplementationInfo {
+            completed_at: Some("2026-01-01T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        });
+        older.modified_at = "2026-01-01T00:00:00Z".parse().unwrap();
+
+        let mut newer = sample_req("FR-1-041", "completed second");
+        newer.status = RequirementStatus::Completed;
+        newer.implementation_info = Some(ImplementationInfo {
+            completed_at: Some("2026-02-01T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        });
+        newer.modified_at = "2026-02-01T00:00:00Z".parse().unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(older.clone());
+        store.requirements.push(newer);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let filter = ListFilter {
+            archive: ArchiveFilter::Both,
+            defer: DeferFilter::Both,
+            sort: SortOrder::CompletedDesc,
+            ..Default::default()
+        };
+        let before: Vec<String> = cache
+            .list_summaries(&filter)
+            .unwrap()
+            .iter()
+            .filter_map(|r| r.spec_id.clone())
+            .collect();
+        assert_eq!(before, ["FR-1-041", "FR-1-040"]);
+
+        // Simulate a post-completion edit on the OLDER-completed spec (e.g.
+        // `aida edit FR-1-040 --add-tag foo`): modified_at jumps to the
+        // present, far past `newer`'s modified_at, but completed_at is
+        // unchanged.
+        older.modified_at = "2026-09-01T00:00:00Z".parse().unwrap();
+        older.tags.insert("foo".into());
+        cache.upsert_requirement(&older).unwrap();
+
+        let after: Vec<String> = cache
+            .list_summaries(&filter)
+            .unwrap()
+            .iter()
+            .filter_map(|r| r.spec_id.clone())
+            .collect();
+        assert_eq!(
+            after, before,
+            "a post-completion edit must not reorder the completed-sort view"
         );
     }
 
@@ -3887,6 +4033,117 @@ mod tests {
             .expect("list reading the `blocked` column must succeed after self-heal");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].spec_id.as_deref(), Some("BUG-627"));
+    }
+
+    #[test]
+    fn old_schema_cache_missing_completed_at_column_self_heals_on_open() {
+        // TASK-1474: a cache whose `requirements_cache` table predates the
+        // `completed_at` column must drop + rebuild on open rather than
+        // hard-erroring with `table requirements_cache has no column named
+        // completed_at` — same BUG-627 self-heal contract as `blocked`,
+        // `origin`, etc. The on-disk schema_version is stamped CURRENT and a
+        // head SHA is recorded, so only the structural column check catches
+        // this (a version/SHA check alone would report FRESH).
+        // trace:BUG-627 trace:TASK-1474 | ai:claude
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE cache_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 CREATE TABLE requirements_cache (
+                     id TEXT PRIMARY KEY NOT NULL,
+                     spec_id TEXT,
+                     agreed_id TEXT,
+                     title TEXT NOT NULL,
+                     description TEXT NOT NULL DEFAULT '',
+                     status TEXT NOT NULL,
+                     priority TEXT NOT NULL,
+                     owner TEXT NOT NULL DEFAULT '',
+                     assignee TEXT,
+                     feature TEXT NOT NULL DEFAULT '',
+                     req_type TEXT NOT NULL,
+                     tags_json TEXT NOT NULL DEFAULT '[]',
+                     created_at TEXT NOT NULL,
+                     modified_at TEXT NOT NULL,
+                     archived INTEGER NOT NULL DEFAULT 0,
+                     archived_at TEXT,
+                     deferred INTEGER NOT NULL DEFAULT 0,
+                     deferred_at TEXT,
+                     deferred_until TEXT,
+                     in_degree INTEGER NOT NULL DEFAULT 0,
+                     out_degree INTEGER NOT NULL DEFAULT 0,
+                     heft INTEGER NOT NULL DEFAULT 0,
+                     blocked INTEGER NOT NULL DEFAULT 0,
+                     has_pending_decision INTEGER NOT NULL DEFAULT 0,
+                     execution_mode TEXT,
+                     weight REAL,
+                     origin TEXT,
+                     -- NOTE: no `completed_at` column — pre-TASK-1474 shape.
+                     yaml_path TEXT NOT NULL
+                 );
+                 CREATE VIRTUAL TABLE requirements_fts USING fts5(
+                     id UNINDEXED, spec_id, agreed_id, title, description, external_refs,
+                     tokenize = 'porter unicode61'
+                 );
+                 CREATE TABLE hierarchy_edges (
+                     parent_id TEXT NOT NULL,
+                     child_id TEXT NOT NULL,
+                     author_id TEXT NOT NULL DEFAULT '',
+                     PRIMARY KEY (parent_id, child_id, author_id)
+                 );",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, SCHEMA_VERSION],
+            )
+            .unwrap();
+            // Stamp a head SHA so a naive open would think the cache is fresh.
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "stalehead"],
+            )
+            .unwrap();
+        }
+
+        // Open with the current binary — must self-heal (drop the drifted
+        // table) and clear the stamped head SHA so the next read rebuilds.
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            cache.source_head_sha().unwrap().is_none(),
+            "self-heal should invalidate the recorded head SHA so a rebuild fires"
+        );
+
+        // A rebuild that writes the `completed_at` column must now succeed
+        // (would have hard-errored against the old table).
+        let mut req = sample_req("TASK-1474", "completed_at drift heals");
+        req.status = RequirementStatus::Completed;
+        req.implementation_info = Some(ImplementationInfo {
+            completed_at: Some("2026-09-01T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        });
+        let mut store = RequirementsStore::new();
+        store.requirements.push(req);
+        cache
+            .rebuild_from_store(&store, "newhead")
+            .expect("rebuild against the healed cache schema must succeed");
+
+        // A `--sort completed` query touching the new column must succeed
+        // and reflect the real completed_at value, not error.
+        let rows = cache
+            .list_summaries(&ListFilter {
+                sort: SortOrder::CompletedDesc,
+                ..Default::default()
+            })
+            .expect("list reading the `completed_at` column must succeed after self-heal");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spec_id.as_deref(), Some("TASK-1474"));
+        assert_eq!(
+            rows[0].completed_at.as_deref(),
+            Some("2026-09-01T00:00:00+00:00")
+        );
     }
 
     #[test]

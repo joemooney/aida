@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     -- ADR-12), projected from the canonical YAML `origin` field so
     -- `aida list --fields ...,origin` reads the cache. NULL = single-repo.
     origin TEXT,
+    -- TASK-1474: the real completion timestamp (STORY-86's `completed_at`,
+    -- stamped by the Done->Completed auto-bump), projected from the canonical
+    -- YAML so `aida list --sort completed` orders on actual completion time
+    -- instead of the `modified_at` stand-in (a post-completion tag/comment
+    -- edit no longer reorders the list). NULL when not yet completed.
+    completed_at TEXT,
     yaml_path TEXT NOT NULL                -- relative path within the git store
 );
 
@@ -80,6 +86,9 @@ CREATE INDEX IF NOT EXISTS idx_cache_heft ON requirements_cache(heft);
 CREATE INDEX IF NOT EXISTS idx_cache_weight ON requirements_cache(weight);
 -- TASK-902: index blocked so `aida list --blocked` filters without a table scan.
 CREATE INDEX IF NOT EXISTS idx_cache_blocked ON requirements_cache(blocked);
+-- TASK-1474: index completed_at so `aida list --sort completed` orders without
+-- a table scan.
+CREATE INDEX IF NOT EXISTS idx_cache_completed_at ON requirements_cache(completed_at);
 
 -- TASK-955: parent->child hierarchy edges, materialized at rebuild from the
 -- relationship graph so `aida list --parent <id> --recursive` can walk the full
