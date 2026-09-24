@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T07:58:36.743732005Z
-modified_at: 2026-09-20T19:34:55.243913013Z
+modified_at: 2026-09-24T16:27:24.298308218Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -34,8 +34,7 @@ tags:
 - from:session-0919
 - orchestrator
 relationships:
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0ba93-547f-7223-b2ba-6296e2f2cba4
   created_at: 2026-09-20T07:58:52.080640317Z
   created_by: joe
