@@ -1,0 +1,46 @@
+id: 01a0d400-9c32-78f2-b5ac-6dc7b0f35ce5
+spec_id: DOC-1-175
+title: 'Human explanation: learning from avoidable failures'
+description: |-
+  AIDA already captures part of the failure picture:
+
+  - `aida usage` records command duration and exit status.
+  - `auto-complete.jsonl` records failed phase, failure kind, message, per-phase duration, total duration, retries, and drafted BUG.
+  - Headless logs can distinguish clean completion, error, kill, and truncation.
+  - `aida usage drains` summarizes orchestrator failures.
+
+  What is missing is a durable, correlated “failure learning” event. It should work in two stages:
+
+  1. Record every meaningful failure automatically: spec / PR / session, phase and failure kind, timestamp and duration, retry/rework count, tokens or model usage when available, queue/throughput impact, and any linked BUG or review finding.
+
+  2. Classify it later as avoidable, probably avoidable, unavoidable, or unknown, with root cause, what should have detected or prevented it, a recommended process or product change, and review state.
+
+  We should not automatically label every failure avoidable. A failed CI job caused by an external outage is operationally important but not necessarily a learning failure. Avoidability is a judgment that may happen later, possibly through Jev or human review.
+
+  The cost model should include more than tokens: wall-clock time, agent/session time, model tokens where available, retry and rework count, time a queue slot was occupied, delay to downstream work, and human review time if recorded.
+
+  AIDA’s normal event history describes requirement changes, comments, and status transitions; it is not a complete runtime failure history. Detailed runtime records should remain in local append-only telemetry, with reports such as `aida usage failures`, an avoidability filter, and event detail. Important cases can link back to the spec, PR, or BUG without putting raw prompts, transcripts, or sensitive model data into the canonical requirements store.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T15:20:04.914684182Z
+modified_at: 2026-09-24T15:20:17.626065890Z
+req_type: Doc
+tags:
+- exposition
+- failure-learning
+- human
+- telemetry
+relationships:
+- rel_type: References
+  target_id: 01a0d3f7-0e05-78f1-845b-e1f3df4d9513
+  created_at: 2026-09-24T15:20:17.626058885Z
+  created_by: joe
+filed_at:
+  code_sha: 64b652e051a639975ced35f04527e83b4bd00d33
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 1c22d30ab1
+  vendor: codex
