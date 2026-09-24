@@ -10,12 +10,12 @@ description: |-
   - Alternatively, extend rel_remove_matches' legacy sweep to cover every family; pick one approach and justify it.
   - Run a dry-run census on the live store and record it on this spec. After merge, the orchestrator applies it.
   - Tests cover a legacy Custom depends-on edge being converted and being removable.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T17:35:05.360339938Z
-modified_at: 2026-09-24T17:35:05.360339938Z
+modified_at: 2026-09-24T17:35:38.324398234Z
 req_type: Task
 tags:
 - aida:rel
