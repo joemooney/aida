@@ -39,12 +39,12 @@ description: |
   OPEN QUESTION WORTH ONE COMMAND FIRST, flagged on BUG-1471 and still unverified: does `aida rel remove <s> <t> --type related` actually match a stored `!Custom related` edge? If it does not, the obvious hand-repair (remove the bad edge, add the good one) silently produces a twin instead of a fix, which would explain how the 14 twins got there and would make the REPAIR path broken in the same way the creation path was. Check that before writing the migration; if it holds it is a bug in its own right.
 
   NOT IN SCOPE: the 1295 `implements` / `implemented-by` edges. They have no typed equivalent, so unlike `related` they are not a near-miss for an existing variant. Whether trace-linkage earns a first-class edge is a taxonomy decision, not a migration.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:46:14.802500200Z
-modified_at: 2026-09-24T14:54:33.663151084Z
+modified_at: 2026-09-24T14:57:54.291350388Z
 req_type: Task
 tags:
 - cli
