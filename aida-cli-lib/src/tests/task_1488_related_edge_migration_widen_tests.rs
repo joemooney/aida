@@ -3,21 +3,18 @@
 // `RelationshipType::parse_relationship_type` is converted, not just the
 // `related` family (TASK-1426's original scope).
 //
-// NOTE on `duplicate-of`: TASK-1488's filed background cites the 2026-09-21
-// live census finding "Custom depends-on (1) and duplicate-of (1)" and lists
-// `duplicate-of` alongside `depends-on` / `verified_by` / `replaced_by` as a
-// spelling the shared parser resolves to a standard type. Checked directly
-// (`RelationshipType::parse_relationship_type("duplicate-of")`), it does
-// NOT: `parse_relationship_type` and the `from_str` it falls back to only
-// recognize the bare word `duplicate`, not `duplicate-of`. So under this
-// migration's actual selection predicate — "parses to a standard type" —
-// `duplicate-of` stays `Custom` and is left alone, exactly like `implements`.
-// That's exercised below as the "unparseable" case (real spelling from the
-// live store), and the "twin is deleted" case instead uses the bare
-// `duplicate` spelling, which does parse. This is a real gap between the
-// shared parser's alias table and the task's filed description, not a bug in
-// this migration; it's called out in the TASK-1488 completion comment.
+// NOTE on `duplicate-of`: TASK-1488's own census found this migration's
+// selection predicate did NOT cover the live `duplicate-of` edge on BUG-1175
+// — `parse_relationship_type` only recognized the bare word `duplicate`, not
+// `duplicate-of`. That gap was filed as BUG-1604 and is now fixed directly in
+// the shared parser (`RelationshipType::parse_relationship_type`,
+// aida-core/src/models.rs) rather than patched around here, so this
+// migration's predicate stays a driftless mirror of the shared parser. See
+// `duplicate_of_orphan_converts_to_duplicate` and
+// `duplicate_of_twin_is_deleted` below (the latter reproduces BUG-1175's
+// exact shape).
 // trace:TASK-1488 | ai:claude
+// trace:BUG-1604 | ai:claude
 
 use crate::related_edge_migration::{
     check_migrated, plan_migration, run_migration, standard_type_for, EdgeAction,
@@ -102,8 +99,19 @@ fn standard_type_for_matches_the_shared_parser_exactly() {
         standard_type_for(&custom("duplicate")),
         Some(RelationshipType::Duplicate)
     );
-    // The live-store spelling that does NOT parse — see module doc comment.
-    assert_eq!(standard_type_for(&custom("duplicate-of")), None);
+    // BUG-1604: the live-store spelling, now recognized.
+    assert_eq!(
+        standard_type_for(&custom("duplicate-of")),
+        Some(RelationshipType::Duplicate)
+    );
+    assert_eq!(
+        standard_type_for(&custom("duplicate_of")),
+        Some(RelationshipType::Duplicate)
+    );
+    assert_eq!(
+        standard_type_for(&custom("duplicateof")),
+        Some(RelationshipType::Duplicate)
+    );
     assert_eq!(standard_type_for(&custom("implements")), None);
     assert_eq!(standard_type_for(&custom("implemented-by")), None);
     assert_eq!(standard_type_for(&custom("sprint_23")), None);
@@ -171,15 +179,54 @@ fn duplicate_twin_is_deleted() {
 }
 
 #[test]
-fn unparseable_custom_name_is_left_alone() {
+fn duplicate_of_orphan_converts_to_duplicate() {
+    // BUG-1604: `duplicate-of` now parses via the shared
+    // `parse_relationship_type`, so it migrates like any other recognized
+    // spelling.
     let t = Uuid::now_v7();
-    // The real live-store spelling (see module doc comment) plus a made-up
-    // one, to confirm this isn't special-cased on the literal string.
+    let reqs = vec![spec("A-1", vec![edge(custom("duplicate-of"), t)])];
+    let plan = plan_migration(&reqs);
+    assert_eq!(plan.converted, 1);
+    assert_eq!(plan.specs[0].edges[0].to_type, "duplicate");
+    assert_eq!(
+        plan.specs[0].new_relationships,
+        vec![edge(RelationshipType::Duplicate, t)]
+    );
+    check_migrated("A-1", &plan.specs[0].new_relationships).unwrap();
+}
+
+#[test]
+fn duplicate_of_twin_is_deleted() {
+    // BUG-1604, reproducing BUG-1175's exact live-store shape: a
+    // Custom("duplicate-of") edge alongside a native Duplicate edge to the
+    // same target. The custom copy is deleted, not converted.
+    let t = Uuid::now_v7();
     let reqs = vec![spec(
         "A-1",
         vec![
             edge(custom("duplicate-of"), t),
+            edge(RelationshipType::Duplicate, t),
+        ],
+    )];
+    let plan = plan_migration(&reqs);
+    assert_eq!(plan.converted, 0);
+    assert_eq!(plan.twins_deleted, 1);
+    assert_eq!(
+        plan.specs[0].new_relationships,
+        vec![edge(RelationshipType::Duplicate, t)]
+    );
+}
+
+#[test]
+fn unparseable_custom_name_is_left_alone() {
+    let t = Uuid::now_v7();
+    // Made-up spellings, to confirm the predicate isn't special-cased on any
+    // particular literal string — it's a pure function of the shared parser.
+    let reqs = vec![spec(
+        "A-1",
+        vec![
             edge(custom("totally-custom-xyz"), t),
+            edge(custom("another-nonstandard-name"), t),
         ],
     )];
     let plan = plan_migration(&reqs);
@@ -255,7 +302,11 @@ fn apply_is_idempotent_across_the_widened_predicate() {
             edge(custom("implements"), b.id),
         ],
     );
-    set_rels(&backend, "FR-3", vec![edge(custom("duplicate-of"), b.id)]);
+    set_rels(
+        &backend,
+        "FR-3",
+        vec![edge(custom("sprint_assignment"), b.id)],
+    );
 
     let outcome = run_migration(&backend, false).unwrap();
     assert_eq!(outcome.specs_written, 1, "only FR-1 has a migratable edge");
@@ -268,8 +319,8 @@ fn apply_is_idempotent_across_the_widened_predicate() {
     );
     assert_eq!(
         rels_of(&backend, "FR-3"),
-        vec![edge(custom("duplicate-of"), b.id)],
-        "duplicate-of does not parse to a standard type, so it's untouched"
+        vec![edge(custom("sprint_assignment"), b.id)],
+        "sprint_assignment does not parse to a standard type, so it's untouched"
     );
 
     let again = run_migration(&backend, false).unwrap();

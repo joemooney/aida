@@ -9,9 +9,10 @@
 //! a strict superset of the original TASK-1426 scope (`related` /
 //! `related-to` / `relates-to` → `references`): it also covers spellings
 //! like `depends-on` → `blocked_by`, `verified_by` → `verified_by`,
-//! `replaced_by` → `superseded_by`, and any other spelling the shared parser
-//! resolves to a standard type. `implements` / `implemented-by`, `sprint_*`,
-//! and any other spelling the parser does not recognize stay `Custom`.
+//! `replaced_by` → `superseded_by`, `duplicate-of` → `duplicate` (BUG-1604),
+//! and any other spelling the shared parser resolves to a standard type.
+//! `implements` / `implemented-by`, `sprint_*`, and any other spelling the
+//! parser does not recognize stay `Custom`.
 //!
 //! Per (source, target, standard-type) triple holding at least one such
 //! edge:
@@ -46,6 +47,7 @@
 //! nothing to do.
 // trace:TASK-1426 | ai:claude
 // trace:TASK-1488 | ai:claude
+// trace:BUG-1604 | ai:claude
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
