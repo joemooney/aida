@@ -195,3 +195,42 @@ fn no_label_and_no_marker_ships_without_release() {
         "merge\n"
     );
 }
+
+// BUG-1532: a merge-hold MARKER binds `aida pr ship` with no drive running
+// and whatever its reason text says. Headless (no TTY) the ship is refused
+// before CI is watched — the marker survives, and nothing is released or
+// merged. Before the fix the client guard only honoured a marker whose
+// reason named a live drive member's spec.
+// trace:BUG-1532 | ai:claude
+#[test]
+fn marker_hold_binds_pr_ship_without_a_live_drive() {
+    let fixture = Fixture::new(false);
+    let holds = fixture.repo.join(".aida/merge-holds");
+    std::fs::create_dir_all(&holds).unwrap();
+    let marker = holds.join("PR-1287");
+    let body = r#"{"schema_version":2,"pr":1287,"reason_kind":"rework","detail":"CHANGES REQUESTED for TASK-1287 at 3acf3671fd7a","routing_state":"pending"}"#;
+    std::fs::write(&marker, body).unwrap();
+
+    let output = fixture.ship();
+    let text = output_text(&output);
+    assert!(!output.status.success(), "a held PR must not ship: {text}");
+    assert!(
+        text.contains("aida merge-hold clear 1287"),
+        "refusal must point at the human clear path: {text}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&marker).unwrap(),
+        body,
+        "the marker must survive the refused ship"
+    );
+    let events = std::fs::read_to_string(fixture.state.join("events")).unwrap_or_default();
+    assert!(
+        !events.contains("release") && !events.contains("merge"),
+        "nothing may be released or merged: {events:?}"
+    );
+    let calls = std::fs::read_to_string(fixture.state.join("calls")).unwrap_or_default();
+    assert!(
+        !calls.contains("pr checks") && !calls.contains("pr merge"),
+        "refused before the CI watch: {calls:?}"
+    );
+}
