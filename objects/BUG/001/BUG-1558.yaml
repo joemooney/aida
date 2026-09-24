@@ -119,16 +119,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:11:41.368773223Z
-modified_at: 2026-09-21T17:55:43.500930577Z
+modified_at: 2026-09-24T16:28:50.958681939Z
 req_type: Bug
 relationships:
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 019f8a54-7de7-7081-adc9-3ddf92b0ba7d
   created_at: 2026-09-21T16:11:50.825079565Z
   created_by: joe
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0c408-ccbb-7263-9f8b-5fe834d597aa
   created_at: 2026-09-21T16:11:52.129585129Z
   created_by: joe
