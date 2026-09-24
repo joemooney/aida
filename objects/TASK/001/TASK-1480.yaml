@@ -1,0 +1,23 @@
+id: 01a0d3c1-4844-7901-919b-37103f1101f7
+spec_id: TASK-1480
+agreed_id: TASK-1480
+title: Improve spec history navigation and progress views
+description: |-
+  Improve the ergonomics and meaning of requirement history.
+
+  A spec-specific invocation such as `aida history TASK-1479` should be accepted as an alias for `aida history --id TASK-1479`. When a single spec is selected, the command should make its status progression easy to see, rather than only showing the current digest row. Existing chronological event support (`--events`, including `--status-changes` and `--comments`) should be evaluated and exposed through a discoverable, coherent interface; consider whether a `--full` or similarly named option is useful for the complete edit/event trail.
+
+  ## Acceptance
+  - `aida history <SPEC-ID>` is equivalent to `aida history --id <SPEC-ID>` and does not break existing option parsing.
+  - A spec-focused history view clearly reports status transitions in chronological order, including timestamps and old/new status where available.
+  - The UX distinguishes a current digest, status-progress view, and complete event/edit history without requiring users to know internal implementation modes.
+  - Existing filters such as `--status-changes`, `--comments`, date bounds, and `--oneline` remain coherent and documented.
+  - Human and machine-readable output remain stable enough for their documented use cases.
+  - Tests cover the positional alias, multiple status changes, comments/edits, empty history, and invalid or ambiguous IDs.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T14:10:54.660906553Z
+modified_at: 2026-09-24T14:11:52.045164257Z
+req_type: Task
