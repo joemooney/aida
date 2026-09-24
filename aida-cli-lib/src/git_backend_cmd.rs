@@ -1898,10 +1898,13 @@ pub(crate) fn handle_git_backend_command(
                 "heft" | "centrality" => aida_core::SortOrder::HeftDesc,
                 // trace:FR-283 | ai:claude — heaviest user-set weight first.
                 "weight" => aida_core::SortOrder::WeightDesc,
+                // trace:TASK-1464 | ai:claude — creation / completion date sorts.
+                "created" => aida_core::SortOrder::CreatedDesc,
+                "completed" => aida_core::SortOrder::CompletedDesc,
                 "modified" | "" => aida_core::SortOrder::ModifiedDesc,
                 other => {
                     eprintln!(
-                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', or 'weight'); using 'modified'"
+                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', 'weight', 'created', or 'completed'); using 'modified'"
                     );
                     aida_core::SortOrder::ModifiedDesc
                 }
