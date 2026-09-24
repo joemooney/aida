@@ -212,10 +212,14 @@ pub(crate) fn handle_mailbox_command(
             // minutes. Checked against this sender's recent mail (local +
             // canonical) so a body sent twice in two commands is caught.
             // trace:BUG-1534 | ai:claude
-            if !*allow_second_person {
+            // Pronoun check first: a body with no second person never loads
+            // the mailbox, and a canonical-store read error never fails a
+            // plain send (best-effort, as on the MCP path).
+            if !*allow_second_person && !aida_core::mailbox::second_person_terms(&body).is_empty() {
                 let recent = if merged.is_empty() {
                     let local = mailbox_store::read_local_messages(project_root)?;
-                    let canonical = mailbox_store::read_canonical_messages(store_root)?;
+                    let canonical =
+                        mailbox_store::read_canonical_messages(store_root).unwrap_or_default();
                     merge_dedup(&local, &canonical)
                 } else {
                     merged.clone()

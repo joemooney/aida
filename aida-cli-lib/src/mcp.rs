@@ -2565,6 +2565,19 @@ impl<'a> McpServer<'a> {
         .map_err(|e| e.to_string())
     }
 
+    /// The orphan-store root the canonical mailbox layer lives under — the
+    /// same path the CLI hands `handle_mailbox_command` (the storage path),
+    /// falling back to `<project>/.aida-store` when storage is a legacy file.
+    // trace:BUG-1534 | ai:claude
+    fn mailbox_store_root(&self) -> PathBuf {
+        let path = self.storage.path();
+        if path.is_dir() {
+            path.to_path_buf()
+        } else {
+            self.project_root.join(".aida-store")
+        }
+    }
+
     /// MCP parity for `aida mailbox send` (STORY-493): send an inter-agent
     /// peer message into the local layer. `to` a specific agent or
     /// `broadcast: true` to all; `from` defaults to this server's identity.
@@ -2638,13 +2651,12 @@ impl<'a> McpServer<'a> {
             .get("allow_second_person")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        if !allow_second_person {
+        if !allow_second_person && !aida_core::mailbox::second_person_terms(body).is_empty() {
             let local = crate::mailbox_store::read_local_messages(&self.project_root)
                 .map_err(|e| e.to_string())?;
-            let canonical = crate::mailbox_store::read_canonical_messages(
-                &self.project_root.join(".aida-store"),
-            )
-            .unwrap_or_default();
+            let canonical =
+                crate::mailbox_store::read_canonical_messages(&self.mailbox_store_root())
+                    .unwrap_or_default();
             let recent = aida_core::mailbox::merge_dedup(&local, &canonical);
             if let Some(reason) = aida_core::mailbox::second_person_multicast_refusal(
                 &recent,
