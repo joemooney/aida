@@ -13,11 +13,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T17:59:30.069861681Z
-modified_at: 2026-09-24T18:06:32.557003378Z
+modified_at: 2026-09-24T18:06:35.756400453Z
 req_type: Bug
 tags:
 - aida:rel
 - papercut
+comments:
+- id: 01a0d499-0eec-7a91-95fd-839045368016
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved. It is a one-alias fix, so it is folded into the claude/task-1488 branch, which already widens the migration that consumes this parser, rather than getting a separate cycle.'
+  created_at: 2026-09-24T18:06:35.756400453Z
+  modified_at: 2026-09-24T18:06:35.756400453Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 2ab1b8d9595d61e30904573a1c13b2be45d0194d
   branch: main
