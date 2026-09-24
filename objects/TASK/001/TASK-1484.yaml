@@ -17,12 +17,12 @@ description: |-
   - PID reuse is handled conservatively using process-start identity or an equivalent guard.
   - Existing lock behavior remains non-destructive and bounded; `aida doctor heal stale-locks` remains available.
   - Tests cover normal release, dead owner, live owner past deadline, PID reuse, interrupted scheduler tick, and SQLite lock contention.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:36:57.062791556Z
-modified_at: 2026-09-24T17:16:36.755307713Z
+modified_at: 2026-09-24T18:14:05.220433401Z
 req_type: Task
 comments:
 - id: 01a0d3db-6ab9-75b2-835a-39bf61e2703a
