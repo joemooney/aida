@@ -410,6 +410,117 @@ fn crontab_after_install_preserves_unrelated_lines_byte_for_byte() {
     );
 }
 
+// BUG-1605 regression (reviewer-found blocker): a legacy line the user
+// commented out by hand (deliberately disabling it) is inert and must
+// never be silently reactivated. Since no ACTIVE entry exists for this
+// repo, this is the same case as "no entry at all": install-cron appends a
+// fresh active line, leaving the commented line exactly as the user left
+// it.
+#[test]
+fn crontab_after_install_leaves_a_commented_out_legacy_line_untouched() {
+    let marker = "aida-schedule-tick:/repo";
+    let commented_legacy = "# */15 * * * * cd /repo && /repo/target/release/aida schedule tick --format json >> /home/joe/.aida/schedule-tick.log 2>&1";
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!("{commented_legacy}\n");
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("no ACTIVE entry exists for this repo; a fresh one must be appended");
+
+    assert!(
+        body.contains(commented_legacy),
+        "the user's deliberately-disabled line must survive byte-for-byte: {body}"
+    );
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(
+        lines.len(),
+        2,
+        "appended alongside, not repaired in place: {body}"
+    );
+    assert_eq!(lines[0], commented_legacy, "left byte-for-byte untouched");
+    assert_eq!(lines[1], fresh, "a fresh active line is appended");
+}
+
+// BUG-1605 regression (reviewer-found blocker): the marker check has the
+// same hole — `line_has_marker` only checked the trailing bytes, so a
+// commented-out marked line (`# */15 ... # <marker>`) still "ended with"
+// the marker and was treated as an active, repairable entry. Fixed the
+// same way: a commented-out line is never a marker match either, so this
+// is again "no ACTIVE entry" → append a fresh active line, and the
+// commented line is left exactly as the user left it (today's marked-path
+// semantics for "no active entry": append, never repair-in-place).
+#[test]
+fn crontab_after_install_leaves_a_commented_out_marked_line_untouched() {
+    let marker = "aida-schedule-tick:/repo";
+    let commented_marked = format!(
+        "# */15 * * * * cd /repo && aida schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!("{commented_marked}\n");
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("a commented-out marked line is not an active entry; a fresh one must be appended");
+
+    assert!(
+        body.contains(&commented_marked),
+        "the user's deliberately-disabled marked line must survive byte-for-byte: {body}"
+    );
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(
+        lines.len(),
+        2,
+        "appended alongside, not repaired in place: {body}"
+    );
+    assert_eq!(lines[0], commented_marked, "left byte-for-byte untouched");
+    assert_eq!(lines[1], fresh, "a fresh active line is appended");
+}
+
+// BUG-1605 regression: a repo can carry MORE THAN ONE active legacy line —
+// several old installs stacking up before the marker convention existed.
+// All of them must collapse into exactly one correct, active line, not
+// just the first one found.
+#[test]
+fn crontab_after_install_collapses_two_legacy_lines_into_one() {
+    let marker = "aida-schedule-tick:/repo";
+    let legacy_a = "*/15 * * * * cd /repo && /repo/target/release/aida schedule tick --format json >> /home/joe/.aida/schedule-tick.log 2>&1";
+    let legacy_b =
+        "*/15 * * * * cd /repo && PATH=/usr/bin aida schedule tick >> ~/.aida/schedule-tick.log 2>&1";
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!(
+        "0 4 * * * unrelated\n{legacy_a}\n0 5 * * * middle\n{legacy_b}\n0 6 * * * trailing\n"
+    );
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("two active legacy lines exist; must collapse to one");
+
+    let lines: Vec<&str> = body.lines().collect();
+    let tick_lines: Vec<&&str> = lines
+        .iter()
+        .filter(|l| l.contains("schedule tick"))
+        .collect();
+    assert_eq!(
+        tick_lines.len(),
+        1,
+        "exactly one active tick line must remain: {body}"
+    );
+    assert_eq!(*tick_lines[0], fresh);
+    assert!(!body.contains(legacy_a), "{body}");
+    assert!(!body.contains(legacy_b), "{body}");
+    assert_eq!(lines.len(), 4, "one legacy line dropped, not both kept");
+    assert_eq!(lines[0], "0 4 * * * unrelated");
+    assert_eq!(
+        lines[1], fresh,
+        "the first legacy line's slot is repaired in place"
+    );
+    assert_eq!(lines[2], "0 5 * * * middle");
+    assert_eq!(lines[3], "0 6 * * * trailing");
+}
+
 #[test]
 fn crontab_after_uninstall_removes_only_the_matching_repo_line() {
     let marker_a = "aida-schedule-tick:/repo/a";

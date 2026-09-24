@@ -1656,6 +1656,16 @@ fn write_crontab(body: &str) -> Result<()> {
     Ok(())
 }
 
+/// Whether `line` is entirely a crontab comment: its first non-whitespace
+/// character is `#`. Cron treats such a line as inert — it never runs —
+/// so neither the marker match nor the legacy-line match may fire on it: a
+/// user who deliberately commented out their tick entry (marked or legacy)
+/// must never have it silently reactivated by `install-cron`.
+// trace:BUG-1605 | ai:claude
+fn line_is_commented_out(line: &str) -> bool {
+    line.trim_start().starts_with('#')
+}
+
 /// Whether `line` carries exactly this marker as its trailing `# <marker>`
 /// comment — never a bare substring match. A substring match on the marker
 /// (or on the whole crontab body) wrongly matches a repo whose path is a
@@ -1664,9 +1674,16 @@ fn write_crontab(body: &str) -> Result<()> {
 /// must never touch `/x/aida-web`'s entry (or vice versa). Anchoring on the
 /// trailing `# marker` token — the exact shape `build_tick_cron_line`
 /// writes — rules that out.
+///
+/// BUG-1605: a commented-out line (`# */15 * * * * cd ... # <marker>`) is
+/// NOT a marker match even though its trailing bytes still end with
+/// `# <marker>` — the whole line is inert, and matching it would let
+/// `crontab_after_install` "repair" a deliberately-disabled entry back to
+/// active.
 // trace:STORY-1463 | ai:claude
+// trace:BUG-1605 | ai:claude
 fn line_has_marker(line: &str, marker: &str) -> bool {
-    line.trim_end().ends_with(&format!("# {marker}"))
+    !line_is_commented_out(line) && line.trim_end().ends_with(&format!("# {marker}"))
 }
 
 /// The repo path a marker was built for (`tick_cron_marker`'s inverse):
@@ -1701,8 +1718,16 @@ fn is_aida_binary_token(tok: &str) -> bool {
 /// followed by `schedule tick` (further flags, e.g. the old `--format
 /// json`, may follow). Callers check `line_has_marker` first; a line that
 /// already carries this repo's marker is the MARKED case, not legacy.
+///
+/// BUG-1605: a commented-out legacy line (`# */15 * * * * cd <repo> && ...`)
+/// is NOT a legacy match — same reasoning as `line_has_marker`'s comment
+/// guard: the line is inert, and a user who disabled it deliberately must
+/// not have it silently reactivated.
 // trace:BUG-1605 | ai:claude
 fn line_is_legacy_tick_line(line: &str, repo: &str) -> bool {
+    if line_is_commented_out(line) {
+        return false;
+    }
     let rest = ["", "'", "\""].iter().find_map(|q| {
         let needle = format!(" cd {q}{repo}{q} &&");
         line.find(&needle).map(|pos| &line[pos + needle.len()..])
@@ -1714,6 +1739,21 @@ fn line_is_legacy_tick_line(line: &str, repo: &str) -> bool {
     tokens
         .windows(3)
         .any(|w| is_aida_binary_token(w[0]) && w[1] == "schedule" && w[2] == "tick")
+}
+
+/// Every line index in `existing` that is an ACTIVE (not commented-out)
+/// legacy tick line for `repo`, and is not already the marked line at
+/// `marked_pos` — in document order. There can be more than one: a repo
+/// may have accumulated several unmarked entries across old installs before
+/// the marker convention existed.
+// trace:BUG-1605 | ai:claude
+fn legacy_tick_line_positions(lines: &[&str], repo: &str, marked_pos: Option<usize>) -> Vec<usize> {
+    lines
+        .iter()
+        .enumerate()
+        .filter(|&(i, l)| Some(i) != marked_pos && line_is_legacy_tick_line(l, repo))
+        .map(|(i, _)| i)
+        .collect()
 }
 
 /// Whether `existing` already carries a tick entry for this repo — the
@@ -1737,68 +1777,68 @@ fn crontab_has_repair_target(existing: &str, marker: &str) -> bool {
 /// install-cron` are the "run this again to pick up a fix" affordance, so a
 /// previously-installed entry must self-repair the next time either runs.
 ///
-/// BUG-1605: a legacy, pre-marker line for this repo (`line_is_legacy_tick_line`)
-/// is repaired the same way — replaced in place with the current marked
-/// `line`, not appended alongside. When BOTH a marked line and a legacy line
-/// are present (a repo that has been through both eras), the marked line is
-/// repaired in place and the legacy line is dropped entirely, so exactly one
-/// correct line remains.
+/// BUG-1605: every ACTIVE (not commented-out) legacy, pre-marker line for
+/// this repo (`legacy_tick_line_positions`) is repaired the same way —
+/// collapsed into the current marked `line`, not appended alongside. A repo
+/// can carry more than one such line (several old installs stacked up
+/// before the marker convention existed); ALL of them are folded into the
+/// one kept line, so exactly one correct, active entry remains. A
+/// commented-out line — marked or legacy — is inert and is never touched:
+/// a user who deliberately disabled their tick entry keeps it disabled.
 ///
-/// Never reorders whatever `crontab -l` already printed; a repo with neither
-/// a marked nor a legacy line is still appended, never inserted elsewhere.
-/// Every other line — another repo's, or an unrelated user line — passes
-/// through byte-for-byte.
+/// Never reorders whatever `crontab -l` already printed; a repo with
+/// neither an active marked nor an active legacy line is still appended,
+/// never inserted elsewhere (this covers "no entry at all" and "every
+/// candidate line is commented out" alike). Every other line — another
+/// repo's, or an unrelated user line, commented or not — passes through
+/// byte-for-byte.
 // trace:STORY-1463 | ai:claude
 // trace:BUG-1600 | ai:claude
 // trace:BUG-1605 | ai:claude
 pub(crate) fn crontab_after_install(existing: &str, marker: &str, line: &str) -> Option<String> {
     let lines: Vec<&str> = existing.lines().collect();
     let marked_pos = lines.iter().position(|l| line_has_marker(l, marker));
-    let repo = repo_from_marker(marker);
-    let legacy_pos = repo.and_then(|repo| {
-        lines
-            .iter()
-            .position(|l| !line_has_marker(l, marker) && line_is_legacy_tick_line(l, repo))
-    });
+    let legacy_positions = match repo_from_marker(marker) {
+        Some(repo) => legacy_tick_line_positions(&lines, repo, marked_pos),
+        None => Vec::new(),
+    };
 
-    match (marked_pos, legacy_pos) {
-        (Some(pos), None) => {
+    if marked_pos.is_none() && legacy_positions.is_empty() {
+        let mut body = existing.to_string();
+        if !body.is_empty() && !body.ends_with('\n') {
+            body.push('\n');
+        }
+        body.push_str(line);
+        body.push('\n');
+        return Some(body);
+    }
+    if legacy_positions.is_empty() {
+        if let Some(pos) = marked_pos {
             if lines[pos] == line {
                 return None;
             }
-            let mut repaired = lines;
-            repaired[pos] = line;
-            let mut body = repaired.join("\n");
-            body.push('\n');
-            Some(body)
-        }
-        (marked_pos, Some(legacy_pos)) => {
-            // A legacy line exists (with or without an already-marked line
-            // too): keep exactly one correct line, in the marked line's slot
-            // when there was one, else the legacy line's own slot; drop the
-            // legacy line. Order of every other line is preserved.
-            let keep_pos = marked_pos.unwrap_or(legacy_pos);
-            let mut repaired = Vec::with_capacity(lines.len());
-            for (i, l) in lines.into_iter().enumerate() {
-                if i == legacy_pos && i != keep_pos {
-                    continue;
-                }
-                repaired.push(if i == keep_pos { line } else { l });
-            }
-            let mut body = repaired.join("\n");
-            body.push('\n');
-            Some(body)
-        }
-        (None, None) => {
-            let mut body = existing.to_string();
-            if !body.is_empty() && !body.ends_with('\n') {
-                body.push('\n');
-            }
-            body.push_str(line);
-            body.push('\n');
-            Some(body)
         }
     }
+
+    // Keep exactly one line: the marked line's slot when there was one,
+    // else the first legacy line's slot. Drop every other legacy line.
+    // Order of every other (unrelated) line is preserved.
+    let keep_pos = marked_pos.unwrap_or_else(|| legacy_positions[0]);
+    let drop: BTreeSet<usize> = legacy_positions
+        .iter()
+        .copied()
+        .filter(|&i| i != keep_pos)
+        .collect();
+    let mut repaired = Vec::with_capacity(lines.len());
+    for (i, l) in lines.into_iter().enumerate() {
+        if drop.contains(&i) {
+            continue;
+        }
+        repaired.push(if i == keep_pos { line } else { l });
+    }
+    let mut body = repaired.join("\n");
+    body.push('\n');
+    Some(body)
 }
 
 /// Pure: the new crontab body with every line carrying `marker` removed, or
