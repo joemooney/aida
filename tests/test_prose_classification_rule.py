@@ -145,6 +145,45 @@ NEGATIVE = {
                 || s.contains("could not resolve")
         }
     """,
+    # The matched line is never its own context (review finding 1).
+    "self_context_only": """
+        fn scan(item: &Item) -> bool {
+            let message = item.body();
+            if message.contains("TODO") {
+                return true;
+            }
+            false
+        }
+    """,
+    # A bare `e` is not an error signal: `e: &str` is common (review finding 2).
+    "bare_e_str_param": """
+        fn edge(e: &str) -> bool {
+            if e.contains("->") {
+                return true;
+            }
+            false
+        }
+    """,
+    # `// prose-ok: <why>` on the line or the line above (review finding 3).
+    "prose_ok_line_above": """
+        fn is_locked(reason: &str) -> bool {
+            let lower = reason.to_ascii_lowercase();
+            // prose-ok: SQLite has no typed busy code on this path
+            if lower.contains("database is locked") {
+                return true;
+            }
+            false
+        }
+    """,
+    "prose_ok_same_line": """
+        fn is_locked(reason: &str) -> bool {
+            let lower = reason.to_ascii_lowercase();
+            if lower.contains("database is locked") { // prose-ok: SQLite text only
+                return true;
+            }
+            false
+        }
+    """,
     # Test assertions on message text are how tests pin wording.
     "test_assertion": """
         #[cfg(test)]
@@ -198,6 +237,23 @@ class ProseClassificationRuleTest(unittest.TestCase):
         for name, body in NEGATIVE.items():
             with self.subTest(name=name):
                 self.assertEqual(findings({name: body}), [])
+
+    def test_prose_ok_needs_a_reason_and_adjacency(self):
+        # trace:STORY-1382 | ai:claude — an empty marker, or one two lines up,
+        # does not opt out.
+        for name, marker in {"empty": "// prose-ok:", "far": "// prose-ok: why\n    let x = 1;"}.items():
+            body = f"""
+                fn is_locked(reason: &str) -> bool {{
+                    let lower = reason.to_ascii_lowercase();
+                    {marker}
+                    if lower.contains("database is locked") {{
+                        return true;
+                    }}
+                    false
+                }}
+            """
+            with self.subTest(name=name):
+                self.assertTrue(findings({name: body}), f"{name} should still be flagged")
 
     def test_rule_is_production_scoped(self):
         import json

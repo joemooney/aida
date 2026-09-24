@@ -74,7 +74,9 @@ print_findings = sys.argv[4] == "1"
 # trace:STORY-1382 | ai:claude — a rule may declare `scope` ("test", the
 # default, or "production"), and an optional `context` / `exempt` window: the
 # line only counts when `context.regex` matches one of the `context.before`
-# lines ending at it, and never when `exempt` matches inside that window.
+# lines ABOVE it (never the matched line itself), unless `self_evident` matches
+# the line; never when `exempt` matches in that window, or when `optout`
+# matches the line or the line above it.
 PATTERNS = []
 for item in json.loads(rules_path.read_text()):
     context = item.get("context") or {}
@@ -87,6 +89,8 @@ for item in json.loads(rules_path.read_text()):
             "context": re.compile(context["regex"]) if context.get("regex") else None,
             "before": int(context.get("before", 0)),
             "exempt": re.compile(item["exempt"]) if item.get("exempt") else None,
+            "self_evident": re.compile(item["self_evident"]) if item.get("self_evident") else None,
+            "optout": re.compile(item["optout"]) if item.get("optout") else None,
         }
     )
 if any(rule["scope"] not in {"test", "production"} for rule in PATTERNS):
@@ -230,10 +234,19 @@ def scan() -> list[tuple[str, str, int, str, str]]:
                     continue
                 if not rule["regex"].search(code):
                     continue
-                window = lines[max(0, idx - 1 - rule["before"]) : idx]
-                if rule["context"] and not any(rule["context"].search(w) for w in window):
+                if rule["optout"] and any(
+                    rule["optout"].search(w) for w in lines[max(0, idx - 2) : idx]
+                ):
                     continue
-                if rule["exempt"] and any(rule["exempt"].search(w) for w in window):
+                window = lines[max(0, idx - 1 - rule["before"]) : idx - 1]
+                evident = rule["self_evident"] and rule["self_evident"].search(code)
+                if (
+                    rule["context"]
+                    and not evident
+                    and not any(rule["context"].search(w) for w in window)
+                ):
+                    continue
+                if rule["exempt"] and any(rule["exempt"].search(w) for w in lines[max(0, idx - 1 - rule["before"]) : idx]):
                     continue
                 findings.append((rule["id"], rel, idx, rule["label"], stripped))
                 break

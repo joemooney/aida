@@ -83,7 +83,7 @@ Two concrete mechanisms observed 2026-09-21, each caught by a different check, s
 
 **What doesn't count:** string tests on your own data (URLs, tags, collection membership, content heuristics over a commit subject), and test assertions that pin wording. These are not classification of another component's output.
 
-Where the project has a line ratchet (AIDA uses `scripts/check-portability.sh` with a production-scoped `prose-classification` rule), existing instances are baselined and new ones are refused. Removing a baseline row after fixing the site is how debt shrinks. Never add a row to bless new code.
+Where the project has a line ratchet (AIDA uses `scripts/check-portability.sh` with a production-scoped `prose-classification` rule), existing instances are baselined and new ones are refused. Removing a baseline row after fixing the site is how debt shrinks. Never add a row to bless new code. If a flagged line is not really classification, mark it `// prose-ok: <why>` on the line or the line above, and say why.
 
 <!-- trace:STORY-1382 | ai:claude -->
 
