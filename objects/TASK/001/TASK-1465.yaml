@@ -8,5 +8,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:30:47.871943661Z
-modified_at: 2026-09-24T00:30:47.871943661Z
+modified_at: 2026-09-24T08:14:06.952805466Z
 req_type: Task
+deferred: true
+deferred_at: 2026-09-24T08:14:06.952805466Z
+deferred_until: STORY-1467 completed
