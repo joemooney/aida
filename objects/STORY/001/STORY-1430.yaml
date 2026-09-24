@@ -54,26 +54,22 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:22:47.839462128Z
-modified_at: 2026-09-24T03:35:03.647805057Z
+modified_at: 2026-09-24T16:30:10.843675389Z
 req_type: Story
 relationships:
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0c408-ccbb-7263-9f8b-5fe834d597aa
   created_at: 2026-09-21T20:23:31.119877879Z
   created_by: joe
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0c4b7-b38c-7301-89cd-9b7a04a1e703
   created_at: 2026-09-21T20:23:43.949718880Z
   created_by: joe
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0c581-f3ab-7072-aa1d-1cf98d1108b7
   created_at: 2026-09-21T20:23:54.278394115Z
   created_by: joe
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0c4a6-f142-7fc1-8ec1-d073af6f4c15
   created_at: 2026-09-21T20:24:06.926318878Z
   created_by: joe
