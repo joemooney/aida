@@ -430,7 +430,7 @@ fn noexec_preview_includes_prompt_source_context_path_env_and_guidance_files() {
     .unwrap();
 
     assert!(
-        preview.contains("prompt_source: generated (from --spec)"),
+        preview.contains("prompt_source: generated (role launch prompt)"),
         "{preview}"
     );
     assert!(
@@ -503,7 +503,7 @@ fn noexec_preview_notes_context_disabled_when_no_context_is_set() {
         "no-context preview must not claim a context file env var: {preview}"
     );
     assert!(
-        preview.contains("prompt_source: none (no --prompt, no --spec, or --no-prompt)"),
+        preview.contains("prompt_source: none (--no-prompt)"),
         "{preview}"
     );
 }
@@ -522,7 +522,7 @@ fn show_prompt_distinguishes_explicit_from_generated_and_handles_no_prompt() {
     let generated = AgentPromptOptions::new(None, false);
     let rendered = render_agent_show_prompt(&generated, &["generated text".to_string()]);
     assert!(
-        rendered.contains("source: generated (from --spec)"),
+        rendered.contains("source: generated (role launch prompt)"),
         "{rendered}"
     );
     assert!(rendered.contains("generated text"), "{rendered}");
@@ -530,7 +530,7 @@ fn show_prompt_distinguishes_explicit_from_generated_and_handles_no_prompt() {
     let none = AgentPromptOptions::new(None, true);
     let rendered = render_agent_show_prompt(&none, &[]);
     assert!(
-        rendered.contains("source: none (no --prompt, no --spec, or --no-prompt)"),
+        rendered.contains("source: none (--no-prompt)"),
         "{rendered}"
     );
     assert!(
@@ -1359,9 +1359,185 @@ fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
         current_spec: None,
         ..plan
     };
+    // STORY-1471: a launch without --spec still gets a role orientation.
     let no_spec =
         agent_initial_prompt_args(&codex, &no_spec_plan, &AgentPromptOptions::new(None, false));
-    assert!(no_spec.is_empty());
+    assert_eq!(no_spec.len(), 1);
+    assert!(no_spec[0].contains("implementer seat"), "{}", no_spec[0]);
+    assert!(!no_spec[0].contains("aida show"), "{}", no_spec[0]);
+    let no_spec_opted_out =
+        agent_initial_prompt_args(&codex, &no_spec_plan, &AgentPromptOptions::new(None, true));
+    assert!(no_spec_opted_out.is_empty());
+}
+
+// STORY-1471: every launchable seat gets its own contract, with and without a
+// spec. Rendered from the embedded defaults (no role file) so a machine's
+// `~/.aida/roles/` cannot shadow the assertions.
+// trace:STORY-1471 | ai:claude
+#[test]
+fn role_launch_prompts_cover_every_role_with_and_without_spec() {
+    use crate::agent_launch_prompt::render_role_launch_prompt;
+    let ship = "then use `aida pr ship`.";
+    let cases: &[(&str, &str, &str)] = &[
+        (
+            "implementer",
+            "Implement STORY-9 per its acceptance",
+            "implementer seat",
+        ),
+        ("advisor", "advisor seat", "aida advisor"),
+        (
+            "reviewer",
+            "aida review record STORY-9",
+            "aida queue next --for reviewer",
+        ),
+        ("product", "Groom STORY-9", "aida queue next --for product"),
+        (
+            "integrator",
+            "Land the open PR for STORY-9",
+            "aida integrate",
+        ),
+    ];
+    for (role, spec_marker, no_spec_marker) in cases {
+        for agent in ["claude", "codex", "antigravity"] {
+            let with_spec =
+                render_role_launch_prompt(agent, Some(role), Some("STORY-9"), None, ship);
+            assert!(
+                with_spec.contains(spec_marker),
+                "{role}/{agent}: {with_spec}"
+            );
+            assert!(with_spec.contains("cat \"$AIDA_AGENT_CONTEXT_FILE\""));
+            assert!(with_spec.contains("aida show STORY-9"), "{with_spec}");
+            assert!(with_spec.contains(&format!("aida brief list --for-agent {agent}")));
+
+            let without = render_role_launch_prompt(agent, Some(role), None, None, ship);
+            assert!(
+                without.contains(no_spec_marker),
+                "{role}/{agent}: {without}"
+            );
+            assert!(without.contains("No spec was assigned"), "{without}");
+            assert!(!without.contains("aida show"), "{without}");
+            assert!(!without.contains("STORY-9"), "{without}");
+            assert_ne!(with_spec, without);
+        }
+    }
+
+    // Only the implementer contract carries the ship cadence.
+    for role in ["advisor", "reviewer", "product", "integrator"] {
+        let p = render_role_launch_prompt("claude", Some(role), Some("STORY-9"), None, ship);
+        assert!(!p.contains("aida pr ship"), "{role}: {p}");
+        assert!(!p.starts_with("Implement"), "{role}: {p}");
+    }
+    let implementer =
+        render_role_launch_prompt("claude", Some("implementer"), Some("STORY-9"), None, ship);
+    assert!(implementer.contains(ship), "{implementer}");
+
+    // `dialog` is the deprecated alias for advisor.
+    assert_eq!(
+        render_role_launch_prompt("claude", Some("dialog"), None, None, ship),
+        render_role_launch_prompt("claude", Some("advisor"), None, None, ship)
+    );
+    // A spec with no role keeps the historical implementer contract.
+    assert_eq!(
+        render_role_launch_prompt("claude", None, Some("STORY-9"), None, ship),
+        implementer
+    );
+    let no_role = render_role_launch_prompt("codex", None, None, None, ship);
+    assert!(no_role.contains("No role was provided"), "{no_role}");
+    let persona =
+        render_role_launch_prompt("claude", Some("security"), Some("STORY-9"), None, ship);
+    assert!(persona.contains("`security` role"), "{persona}");
+    assert!(
+        persona.contains("do not take implementation ownership"),
+        "{persona}"
+    );
+}
+
+// trace:STORY-1471 | ai:claude
+#[test]
+fn role_file_launch_prompts_override_the_embedded_defaults() {
+    use crate::agent_launch_prompt::render_role_launch_prompt;
+    let mut state = RoleState {
+        name: "reviewer".into(),
+        purpose: None,
+        created_at: chrono::Utc::now(),
+        last_active_at: chrono::Utc::now(),
+        working_directory: None,
+        notes: None,
+        global: true,
+        activity: Vec::new(),
+        scope_tags: Vec::new(),
+        scope_status: None,
+        system_prompt: None,
+        launch_prompt: Some("Idle {role} on {agent}: wait for a PR.".into()),
+        launch_prompt_spec: Some("As {role}, audit {spec} only.".into()),
+    };
+    let with_spec =
+        render_role_launch_prompt("codex", Some("reviewer"), Some("BUG-1"), Some(&state), "x");
+    assert!(
+        with_spec.ends_with("As reviewer, audit BUG-1 only."),
+        "{with_spec}"
+    );
+    assert!(with_spec.contains("aida show BUG-1"), "{with_spec}");
+    let without = render_role_launch_prompt("codex", Some("reviewer"), None, Some(&state), "x");
+    assert!(
+        without.ends_with("Idle reviewer on codex: wait for a PR."),
+        "{without}"
+    );
+
+    // A blank override falls back to the embedded default.
+    state.launch_prompt = Some("   ".into());
+    state.launch_prompt_spec = None;
+    assert_eq!(
+        render_role_launch_prompt("codex", Some("reviewer"), None, Some(&state), "x"),
+        render_role_launch_prompt("codex", Some("reviewer"), None, None, "x")
+    );
+    assert_eq!(
+        render_role_launch_prompt("codex", Some("reviewer"), Some("BUG-1"), Some(&state), "x"),
+        render_role_launch_prompt("codex", Some("reviewer"), Some("BUG-1"), None, "x")
+    );
+
+    // The fields round-trip through the role-file TOML.
+    let toml_text = toml::to_string_pretty(&state).unwrap();
+    assert!(toml_text.contains("launch_prompt = "), "{toml_text}");
+    let back: RoleState = toml::from_str(&toml_text).unwrap();
+    assert_eq!(back.launch_prompt.as_deref(), Some("   "));
+}
+
+// STORY-1471: --show-prompt prints exactly the generated text that the
+// launch injects, for a no-spec launch too.
+// trace:STORY-1471 | ai:claude
+#[test]
+fn show_prompt_prints_the_exact_injected_role_prompt() {
+    let tmp = TempDir::new().unwrap();
+    let config = AgentLaunchConfig {
+        agent_type: "antigravity",
+        binary: "agy",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+    };
+    for spec in [Some("TASK-7".to_string()), None] {
+        let plan = AgentLaunchPlan {
+            project_root: tmp.path().to_path_buf(),
+            launch_cwd: tmp.path().to_path_buf(),
+            role: Some("product".into()),
+            role_instance: RoleInstanceKind::Driver,
+            current_spec: spec,
+            name: "agy-test".to_string(),
+            lease_id: None,
+            native_session_id: None,
+            resumed_from: None,
+        };
+        let options = AgentPromptOptions::new(None, false);
+        let args = agent_initial_prompt_args(&config, &plan, &options);
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], "--prompt-interactive");
+        let rendered = render_agent_show_prompt(&options, &args);
+        assert!(
+            rendered.contains(&format!("\n\n{}\n", args[1])),
+            "{rendered}"
+        );
+        assert!(args[1].contains("product seat"), "{}", args[1]);
+    }
 }
 
 // trace:STORY-790 | ai:codex

@@ -6,6 +6,7 @@
 mod advisor;
 mod advisor_code_gate;
 mod advisor_watch;
+mod agent_launch_prompt;
 mod agent_registry;
 mod alias;
 mod archive_cmd;
@@ -20635,6 +20636,20 @@ struct RoleState {
     /// trace:TASK-1-022 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     system_prompt: Option<String>,
+
+    /// Initial message `aida agent new` injects when launched in this role
+    /// WITHOUT `--spec`. Overrides the embedded per-role orientation; the
+    /// launch-context read commands are always prepended. Placeholders:
+    /// `{role}`, `{agent}`.
+    // trace:STORY-1471 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    launch_prompt: Option<String>,
+
+    /// Initial message `aida agent new` injects when launched in this role
+    /// WITH `--spec`. Same contract as `launch_prompt`, plus `{spec}`.
+    // trace:STORY-1471 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    launch_prompt_spec: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -22092,6 +22107,8 @@ fn scaffold_starter_roles(
             scope_tags: Vec::new(),
             scope_status: None,
             system_prompt: system_prompt.map(|prompt| (*prompt).to_string()),
+            launch_prompt: None,
+            launch_prompt_spec: None,
         };
         let path = role_save_path(project_root, &state)?;
         save_role_at(&state, &path)?;
@@ -28014,9 +28031,18 @@ fn agent_initial_prompt_args(
     {
         Some(prompt.to_string())
     } else if options.auto_prompt {
-        plan.current_spec
-            .as_deref()
-            .map(|spec| render_agent_initial_prompt(config.agent_type, spec))
+        // STORY-1471: every launch gets a role-aware first message — the
+        // role's contract for `--spec`, or a short orientation without one.
+        // trace:STORY-1471 | ai:claude
+        Some(agent_launch_prompt::role_launch_prompt(
+            &plan.project_root,
+            config.agent_type,
+            plan.role.as_deref(),
+            plan.current_spec.as_deref(),
+            orchestrated_implementer_ship_instruction(
+                std::env::var(orchestrator::VARIANT_ENV).ok().as_deref(),
+            ),
+        ))
     } else {
         None
     };
@@ -28029,13 +28055,6 @@ fn agent_initial_prompt_args(
     }
 }
 
-fn render_agent_initial_prompt(agent_type: &str, spec: &str) -> String {
-    let ship_instruction = orchestrated_implementer_ship_instruction(
-        std::env::var(orchestrator::VARIANT_ENV).ok().as_deref(),
-    );
-    render_agent_initial_prompt_with_ship_instruction(agent_type, spec, ship_instruction)
-}
-
 fn orchestrated_implementer_ship_instruction(variant: Option<&str>) -> &'static str {
     match variant.map(str::trim).filter(|v| !v.is_empty()) {
         Some("full" | "through-ci" | "through-merge" | "skip-build") => {
@@ -28045,19 +28064,18 @@ fn orchestrated_implementer_ship_instruction(variant: Option<&str>) -> &'static 
     }
 }
 
+#[cfg(test)]
 fn render_agent_initial_prompt_with_ship_instruction(
     agent_type: &str,
     spec: &str,
     ship_instruction: &str,
 ) -> String {
-    format!(
-        "Read your AIDA launch context first:\n\
-         cat \"$AIDA_AGENT_CONTEXT_FILE\"\n\
-         aida show {spec}\n\
-         aida brief list --for-agent {agent_type}\n\n\
-         Implement {spec} per its acceptance criteria. Stay in single-spec scope for {spec}. \
-         Standard cadence: inspect context, make bounded changes, run relevant tests, run \
-         cargo fmt --all --check, commit with trailer ({spec}) and trace:{spec}, {ship_instruction}"
+    agent_launch_prompt::render_role_launch_prompt(
+        agent_type,
+        Some("implementer"),
+        Some(spec),
+        None,
+        ship_instruction,
     )
 }
 
@@ -29246,7 +29264,7 @@ fn render_agent_launch_noexec(
 }
 
 /// TASK-1467: label the prompt that would be sent as `explicit` (from
-/// `--prompt`) or `generated` (auto-built from `--spec`), or note that no
+/// `--prompt`) or `generated` (the role-aware launch prompt), or note that no
 /// initial message would be sent at all.
 fn prompt_source_label(prompt: &AgentPromptOptions, prompt_args: &[String]) -> &'static str {
     let explicit = prompt
@@ -29257,8 +29275,9 @@ fn prompt_source_label(prompt: &AgentPromptOptions, prompt_args: &[String]) -> &
         .is_some();
     match (explicit, prompt_args.is_empty()) {
         (true, _) => "explicit (--prompt)",
-        (false, false) => "generated (from --spec)",
-        (false, true) => "none (no --prompt, no --spec, or --no-prompt)",
+        // trace:STORY-1471 | ai:claude
+        (false, false) => "generated (role launch prompt)",
+        (false, true) => "none (--no-prompt)",
     }
 }
 

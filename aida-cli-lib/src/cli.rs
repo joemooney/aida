@@ -8248,7 +8248,7 @@ pub enum AgentNewCommand {
         #[clap(long, allow_hyphen_values = true)]
         prompt: Option<String>,
 
-        /// Do not auto-generate an initial message when --spec is supplied.
+        /// Do not send the automatic role-aware initial message.
         #[clap(long)]
         no_prompt: bool,
 
@@ -8372,7 +8372,7 @@ pub enum AgentNewCommand {
         #[clap(long, allow_hyphen_values = true)]
         prompt: Option<String>,
 
-        /// Do not auto-generate an initial message when --spec is supplied.
+        /// Do not send the automatic role-aware initial message.
         #[clap(long)]
         no_prompt: bool,
 
@@ -8480,7 +8480,7 @@ pub enum AgentNewCommand {
         #[clap(long, allow_hyphen_values = true)]
         prompt: Option<String>,
 
-        /// Do not auto-generate an initial message when --spec is supplied.
+        /// Do not send the automatic role-aware initial message.
         #[clap(long)]
         no_prompt: bool,
 
