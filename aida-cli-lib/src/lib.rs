@@ -6291,6 +6291,8 @@ fn handle_findings_command(
             reason,
             auto_complete,
             force,
+            to,
+            detectable,
         } => {
             let mut req = backend
                 .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
@@ -6303,6 +6305,41 @@ fn handle_findings_command(
                      Use `aida edit {id} --status approved` for a general status change."
                 );
             }
+
+            // STORY-1428: the gate-candidate destination. `--to work` (the
+            // default) keeps the original path below unchanged.
+            // trace:STORY-1428 | ai:claude
+            match to.trim().to_ascii_lowercase().as_str() {
+                "work" => {}
+                "gate" => {
+                    return handle_findings_promote_gate(
+                        backend,
+                        store_path,
+                        req,
+                        id,
+                        detectable.as_deref(),
+                        reason.as_deref(),
+                        r#for.as_deref(),
+                        *force,
+                    );
+                }
+                other => anyhow::bail!(
+                    "unknown promote destination `{other}` — expected `work` or `gate`"
+                ),
+            }
+            if detectable.is_some() {
+                anyhow::bail!("--detectable only applies to `--to gate`");
+            }
+            let gate_threshold = findings::promote_threshold_for_project(store_path.parent());
+            let gate_hint = if findings::offers_gate_route(&tags, gate_threshold) {
+                findings::recurrence_gate_hint(
+                    &tags,
+                    gate_threshold,
+                    req.spec_id.as_deref().unwrap_or(id.as_str()),
+                )
+            } else {
+                None
+            };
 
             // TASK-579: a finding's underlying fix may have already merged
             // referencing the id the finding carried *before* it became real
@@ -6438,6 +6475,11 @@ fn handle_findings_command(
             req.modified_at = now;
             backend.update_requirement(&req)?;
             println!("Promoted finding {id} — status → Approved, queued for {role}.");
+            // STORY-1428: at/above the threshold, promoting to work is not
+            // silent about the other destination. trace:STORY-1428 | ai:claude
+            if let Some(hint) = gate_hint {
+                println!("  {}", hint.dimmed());
+            }
         }
 
         FindingsCommand::Calibration {
@@ -9347,17 +9389,182 @@ fn handle_findings_recur(
     println!("Recurred {} — recurrence count now ×{next}.", display_id);
     // Threshold is configurable via [findings] promote_threshold in
     // .aida/config.toml; default 3. trace:TASK-37 | ai:claude
+    // STORY-1428: at the threshold the hint names BOTH destinations (work
+    // and gate); a settled gate question is reported, not re-asked.
+    // trace:STORY-1428 | ai:claude
     let threshold = findings::promote_threshold_for_project(Some(store_path));
-    if next >= threshold {
-        println!(
-            "  {}",
-            format!(
-                "Recurrence ≥ {threshold} is the promote-it signal — consider \
-                 `aida findings promote <ID>`."
-            )
-            .dimmed()
+    let bumped: Vec<String> = req.tags.iter().cloned().collect();
+    if let Some(hint) = findings::recurrence_gate_hint(&bumped, threshold, display_id) {
+        println!("  {}", hint.dimmed());
+    }
+    Ok(())
+}
+
+/// `aida findings promote <ID> --to gate` — the gate-candidate destination
+/// (STORY-1428). Records the screening answer on the finding. A `mechanical`
+/// or `agent` answer files a gate TASK for the class, linked both ways
+/// (`References` edges plus a `gated-by:<ID>` tag) and queued; a `none`
+/// answer records "stays prose" so later recurrences do not re-open it.
+// trace:STORY-1428 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn handle_findings_promote_gate(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    mut finding: Requirement,
+    id: &str,
+    detectable: Option<&str>,
+    reason: Option<&str>,
+    for_role: Option<&str>,
+    force: bool,
+) -> Result<()> {
+    let tags: Vec<String> = finding.tags.iter().cloned().collect();
+    let display_id = finding.spec_id.clone().unwrap_or_else(|| id.to_string());
+    let threshold = findings::promote_threshold_for_project(store_path.parent());
+    let recurrence = findings::finding_recurrence(&tags);
+    if recurrence < threshold {
+        anyhow::bail!(
+            "{display_id} has recurred ×{recurrence}, below the gate threshold ({threshold}) — \
+             promote it as work (`aida findings promote {display_id}`), or re-sight it with \
+             `aida findings recur {display_id}` when it comes back."
         );
     }
+    if let Some(prior) = findings::gate_decision(&tags) {
+        if !force {
+            anyhow::bail!(
+                "{display_id}'s gate question is already settled (`{}{}`) — not re-opened. \
+                 Pass --force to screen it again.",
+                findings::GATE_DECISION_PREFIX,
+                prior.label()
+            );
+        }
+    }
+    let raw = detectable.ok_or_else(|| {
+        anyhow::anyhow!(
+            "--to gate needs the screening answer: --detectable mechanical|agent|none \
+             (mechanical = recognisable without judgement; agent = only an agent could \
+             recognise it; none = stays prose)"
+        )
+    })?;
+    let screen = findings::GateScreen::parse(raw).ok_or_else(|| {
+        anyhow::anyhow!("unknown --detectable answer `{raw}` — expected mechanical, agent, or none")
+    })?;
+
+    let now = chrono::Utc::now();
+    let author = get_default_author();
+    let mut new_comment = |content: String| Comment {
+        id: Uuid::now_v7(),
+        content,
+        author: author.clone(),
+        created_at: now,
+        modified_at: now,
+        parent_id: None,
+        replies: Vec::new(),
+        reactions: Vec::new(),
+        session_id: resolve_current_session_id(), // trace:TASK-330
+        relayed_from: None,
+    };
+
+    finding
+        .tags
+        .retain(|t| !t.starts_with(findings::GATE_DECISION_PREFIX));
+    finding.tags.insert(format!(
+        "{}{}",
+        findings::GATE_DECISION_PREFIX,
+        screen.label()
+    ));
+    let mut screening = format!(
+        "Gate screening by {author} {date} at recurrence ×{recurrence}: {}.",
+        screen.screening_summary(),
+        date = now.format("%Y-%m-%d")
+    );
+    if let Some(text) = reason.map(str::trim).filter(|s| !s.is_empty()) {
+        screening.push_str(&format!(" Reason: {text}"));
+    }
+
+    if !screen.produces_gate() {
+        screening.push_str(" Recorded so later recurrences do not re-open the question.");
+        finding.comments.push(new_comment(screening));
+        finding.modified_at = now;
+        backend.update_requirement(&finding)?;
+        println!(
+            "Screened finding {display_id} — stays prose (recorded; not re-opened on \
+             future recurrences)."
+        );
+        return Ok(());
+    }
+
+    // File the gate task for the class, linked back to the finding.
+    let mut gate = Requirement::new(
+        findings::gate_task_title(&finding.title),
+        findings::gate_task_description(&display_id, &finding.title, recurrence, screen),
+    );
+    gate.req_type = RequirementType::Task;
+    gate.status = RequirementStatus::Approved;
+    gate.owner = author.clone();
+    gate.tags.insert(findings::GATE_CANDIDATE_TAG.to_string());
+    gate.tags.insert(format!(
+        "{}{}",
+        findings::GATE_DECISION_PREFIX,
+        screen.label()
+    ));
+    gate.tags.insert("gates".to_string());
+    gate.relationships.push(aida_core::models::Relationship {
+        rel_type: RelationshipType::References,
+        target_id: finding.id,
+        created_at: Some(now),
+        created_by: Some(author.clone()),
+    });
+    let store = backend.update_atomically(|store| {
+        let type_prefix = store.get_type_prefix(&gate.req_type);
+        store.add_requirement_with_id(gate.clone(), None, type_prefix.as_deref());
+    })?;
+    let written = store
+        .requirements
+        .last()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("add_requirement_with_id produced no requirement"))?;
+    aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
+    let gate_id = written
+        .spec_id
+        .clone()
+        .unwrap_or_else(|| written.id.to_string());
+    let role = queue_promoted_finding(store_path, written.id, &gate_id, for_role)?;
+    record_role_activity(&gate_id, "queue-add");
+
+    // Re-read the finding: the atomic write above may have rewritten the
+    // store, so apply the finding's changes on top of the fresh copy.
+    let mut fresh = backend
+        .get_requirement_unambiguous(&display_id)?
+        .unwrap_or(finding.clone());
+    fresh.tags = finding.tags.clone();
+    fresh
+        .tags
+        .retain(|t| !t.starts_with(findings::GATED_BY_PREFIX));
+    fresh
+        .tags
+        .insert(format!("{}{}", findings::GATED_BY_PREFIX, gate_id));
+    if !fresh
+        .relationships
+        .iter()
+        .any(|r| r.target_id == written.id && r.rel_type == RelationshipType::References)
+    {
+        fresh.relationships.push(aida_core::models::Relationship {
+            rel_type: RelationshipType::References,
+            target_id: written.id,
+            created_at: Some(now),
+            created_by: Some(author.clone()),
+        });
+    }
+    screening.push_str(&format!(" Gate task: {gate_id}."));
+    fresh.comments.push(new_comment(screening));
+    fresh.status = RequirementStatus::Approved;
+    fresh.modified_at = now;
+    backend.update_requirement(&fresh)?;
+    println!(
+        "Promoted finding {display_id} as a gate candidate ({}) — filed {gate_id}, \
+         queued for {role}.",
+        screen.label()
+    );
     Ok(())
 }
 
