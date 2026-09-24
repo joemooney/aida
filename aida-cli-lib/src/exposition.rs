@@ -538,17 +538,35 @@ fn apply_mechanical_readability(
     }
 }
 
-/// Resolves the filesystem path for an exposition sidecar file in `.aida-store` (TASK-1435).
+/// Sidecars are per-checkout runtime state under `<checkout>/.aida/expositions/`,
+/// gitignored by the `.aida/*` deny-by-default rule. They must NEVER live under
+/// `.aida-store/`: creating that directory in a linked worktree turns it into a
+/// fake store that shadows the main checkout's, and files inside the real store
+/// worktree get swept into canonical store history by `aida db sync`.
+// trace:TASK-1470 | ai:claude
+pub const EXPOSITIONS_DIR: &[&str] = &[".aida", "expositions"];
+
+/// Resolves the filesystem path for an exposition sidecar file (TASK-1435).
+/// `project_root` is the checkout's own root: in a linked worktree that is the
+/// worktree, not the main checkout, so each checkout keeps its own sidecars.
+// trace:TASK-1470 | ai:claude
 pub fn exposition_path(
     project_root: &Path,
     spec_id: &str,
     audience: ExpositionAudience,
 ) -> PathBuf {
-    project_root
-        .join(".aida-store")
-        .join("expositions")
-        .join(spec_id)
+    let mut path = project_root.to_path_buf();
+    for part in EXPOSITIONS_DIR {
+        path.push(part);
+    }
+    path.join(spec_id)
         .join(format!("{}.yaml", audience.as_str()))
+}
+
+/// True when `path` runs through a `.aida-store` directory.
+fn is_inside_store_worktree(path: &Path) -> bool {
+    path.components()
+        .any(|c| c.as_os_str() == std::ffi::OsStr::new(".aida-store"))
 }
 
 /// Reads an exposition sidecar from disk.
@@ -558,28 +576,104 @@ pub fn load_exposition(
     audience: ExpositionAudience,
 ) -> Option<ExpositionSidecar> {
     let path = exposition_path(project_root, spec_id, audience);
-    if path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            if let Ok(sidecar) = serde_yaml::from_str::<ExpositionSidecar>(&content) {
-                return Some(sidecar);
-            }
-        }
-    }
-    None
+    let content = std::fs::read_to_string(&path).ok()?;
+    serde_yaml::from_str::<ExpositionSidecar>(&content).ok()
 }
 
-/// Writes an exposition sidecar to disk, ensuring directory existence.
+/// Writes an exposition sidecar to disk, ensuring directory existence. Refuses
+/// any destination inside a `.aida-store` directory (for example when run from
+/// within the store worktree itself).
+// trace:TASK-1470 | ai:claude
 pub fn save_exposition(
     project_root: &Path,
     sidecar: &ExpositionSidecar,
 ) -> Result<PathBuf, std::io::Error> {
     let path = exposition_path(project_root, &sidecar.spec_id, sidecar.audience);
+    if is_inside_store_worktree(&path) {
+        return Err(std::io::Error::other(format!(
+            "refusing to write an exposition inside the requirement store ({}); run from the project checkout",
+            path.display()
+        )));
+    }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let yaml = serde_yaml::to_string(sidecar).map_err(std::io::Error::other)?;
     std::fs::write(&path, yaml)?;
     Ok(path)
+}
+
+/// The advisory evaluator `aida explain` uses: `None` (offline, with a note on
+/// stderr) unless `AIDA_JEV_API_KEY` is set; otherwise Jev with the advisory
+/// deadline applied.
+// trace:TASK-1470 | ai:claude
+pub fn advisory_evaluator(
+    lookup: impl Fn(&str) -> Option<String>,
+) -> Option<crate::evaluator::JevEvaluator> {
+    match resolve_jev_api_key(lookup) {
+        Some(key) => {
+            Some(crate::evaluator::JevEvaluator::new(key).with_timeout(JEV_ADVISORY_TIMEOUT))
+        }
+        None => {
+            eprintln!("{}", jev_key_unset_notice());
+            None
+        }
+    }
+}
+
+/// Result of [`explain_at`].
+#[derive(Debug, Clone)]
+pub struct ExplainOutcome {
+    pub sidecar: ExpositionSidecar,
+    pub stale: bool,
+    pub current_closure_hash: String,
+    /// Where the sidecar was written, when this call (re)generated it.
+    pub written_to: Option<PathBuf>,
+}
+
+/// Core of `aida explain`, independent of the process cwd: reuse or
+/// (re)generate the sidecar for `req` under `project_root`. The evaluator is
+/// built lazily, only when a sidecar is actually generated.
+// trace:TASK-1436 trace:TASK-1470 | ai:claude
+pub fn explain_at(
+    project_root: &Path,
+    all: &[Requirement],
+    req: &Requirement,
+    audience: ExpositionAudience,
+    refresh: bool,
+    force: bool,
+    make_evaluator: impl FnOnce() -> Option<Box<dyn crate::evaluator::EvaluatorEngine>>,
+) -> anyhow::Result<ExplainOutcome> {
+    let spec_id = req.display_id();
+    let closure = build_bounded_closure(req, all);
+    let current_closure_hash = closure.compute_sha256();
+
+    let mut written_to = None;
+    let sidecar = match load_exposition(project_root, &spec_id, audience) {
+        Some(sidecar) if !refresh && !force => sidecar,
+        Some(sidecar) if sidecar.is_human_reviewed() && !force => {
+            eprintln!(
+                "Note: exposition for {spec_id} ({audience}) has human_reviewed: true; skipping automated overwrite (use --force to overwrite)."
+            );
+            sidecar
+        }
+        _ => {
+            let mut sidecar = extract_offline_exposition(req, audience, &closure);
+            let evaluator = make_evaluator();
+            sidecar.audit = Some(audit_exposition(&sidecar, req, evaluator.as_deref()));
+            let path = save_exposition(project_root, &sidecar)
+                .map_err(|e| anyhow::anyhow!("failed to save exposition sidecar: {e}"))?;
+            written_to = Some(path);
+            sidecar
+        }
+    };
+
+    Ok(ExplainOutcome {
+        stale: sidecar.is_stale(&current_closure_hash),
+        sidecar,
+        current_closure_hash,
+        written_to,
+    })
 }
 
 /// Handles the `aida explain` CLI command (TASK-1436).
@@ -623,68 +717,38 @@ pub fn handle_explain_command(
         );
     };
 
-    let spec_id = req.display_id();
-    let closure = build_bounded_closure(req, &store.requirements);
-    let current_closure_hash = closure.compute_sha256();
-
-    let existing = load_exposition(&project_root, &spec_id, audience);
-
-    let sidecar = match existing {
-        Some(sidecar) if !refresh && !force => {
-            // Re-use existing sidecar, but check drift
-            sidecar
-        }
-        Some(sidecar) if sidecar.is_human_reviewed() && !force => {
-            eprintln!(
-                "Note: exposition for {} ({}) has human_reviewed: true; skipping automated overwrite (use --force to overwrite).",
-                spec_id,
-                audience
-            );
-            sidecar
-        }
-        _ => {
-            // Generate or regenerate
-            let mut sidecar = extract_offline_exposition(req, audience, &closure);
-
-            // Run advisory audit (TASK-1438). The remote Jev audit is network
-            // egress to api.typesafe.ai and runs ONLY when AIDA_JEV_API_KEY is
-            // set; otherwise it fails closed to the offline mechanical audit.
-            // trace:TASK-1470 | ai:claude
-            let evaluator_opt: Option<Box<dyn crate::evaluator::EvaluatorEngine>> =
-                match resolve_jev_api_key(|name| std::env::var(name).ok()) {
-                    Some(key) => Some(Box::new(
-                        crate::evaluator::JevEvaluator::new(key).with_timeout(JEV_ADVISORY_TIMEOUT),
-                    )),
-                    None => {
-                        eprintln!("{}", jev_key_unset_notice());
-                        None
-                    }
-                };
-
-            let audit = audit_exposition(&sidecar, req, evaluator_opt.as_deref());
-            sidecar.audit = Some(audit);
-
-            save_exposition(&project_root, &sidecar)
-                .map_err(|e| anyhow::anyhow!("failed to save exposition sidecar: {e}"))?;
-
-            sidecar
-        }
-    };
-
-    let is_stale = sidecar.is_stale(&current_closure_hash);
+    // The remote Jev audit is network egress to api.typesafe.ai and runs ONLY
+    // when AIDA_JEV_API_KEY is set; otherwise it fails closed to offline.
+    // trace:TASK-1470 | ai:claude
+    let outcome = explain_at(
+        &project_root,
+        &store.requirements,
+        req,
+        audience,
+        refresh,
+        force,
+        || {
+            advisory_evaluator(|name| std::env::var(name).ok())
+                .map(|e| Box::new(e) as Box<dyn crate::evaluator::EvaluatorEngine>)
+        },
+    )?;
 
     if json {
         let payload = serde_json::json!({
-            "spec_id": spec_id,
+            "spec_id": outcome.sidecar.spec_id,
             "audience": audience.as_str(),
-            "stale": is_stale,
-            "current_closure_hash": current_closure_hash,
-            "human_reviewed": sidecar.is_human_reviewed(),
-            "sidecar": sidecar,
+            "stale": outcome.stale,
+            "current_closure_hash": outcome.current_closure_hash,
+            "human_reviewed": outcome.sidecar.is_human_reviewed(),
+            "sidecar": outcome.sidecar,
         });
         println!("{}", serde_json::to_string_pretty(&payload)?);
     } else {
-        render_human_exposition(&sidecar, is_stale, &current_closure_hash);
+        render_human_exposition(
+            &outcome.sidecar,
+            outcome.stale,
+            &outcome.current_closure_hash,
+        );
     }
 
     Ok(())

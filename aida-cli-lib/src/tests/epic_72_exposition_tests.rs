@@ -33,7 +33,7 @@ fn test_sidecar_schema_serialization_and_deserialization() {
         rationale: "Decouples human-facing architectural narratives from internal YAML stores."
             .to_string(),
         key_constraints: vec![
-            "Must store sidecars at .aida-store/expositions/<SPEC-ID>/<audience>.yaml".to_string(),
+            "Must store sidecars at .aida/expositions/<SPEC-ID>/<audience>.yaml".to_string(),
             "Must compute SHA-256 hash over bounded graph closure".to_string(),
             "Fail-closed invariant enforcement on canonical requirements".to_string(),
         ],
@@ -304,13 +304,18 @@ fn test_sidecar_filesystem_roundtrip() {
     save_exposition(root, &sidecar).expect("Failed to save exposition");
 
     let expected_file = root
-        .join(".aida-store")
+        .join(".aida")
         .join("expositions")
         .join("SPEC-999")
         .join("executive.yaml");
     assert!(
         expected_file.exists(),
         "Sidecar YAML file must exist at expected path"
+    );
+    // trace:TASK-1470 | ai:claude
+    assert!(
+        !root.join(".aida-store").exists(),
+        "saving a sidecar must never create .aida-store"
     );
 
     let loaded = load_exposition(root, "SPEC-999", ExpositionAudience::Executive)
@@ -549,5 +554,186 @@ mod task_1470 {
             assert!(head.starts_with("HTTP/1.1 403"), "{head}");
             server.join().unwrap();
         }
+    }
+
+    // --- Review round 2: sidecars are per-checkout state under .aida/ ---
+
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .expect("git");
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    fn files_under_named_dir(root: &std::path::Path, name: &str) -> Vec<std::path::PathBuf> {
+        let mut hits = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.file_name().is_some_and(|n| n == ".git") {
+                    continue;
+                }
+                if path.is_dir() {
+                    if path.file_name().is_some_and(|n| n == name) {
+                        for inner in std::fs::read_dir(&path).unwrap().flatten() {
+                            hits.push(inner.path());
+                        }
+                    }
+                    stack.push(path);
+                }
+            }
+        }
+        hits
+    }
+
+    #[test]
+    fn explain_in_linked_worktree_never_creates_a_shadow_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path().join("main");
+        std::fs::create_dir_all(main_root.join(".aida")).unwrap();
+        git(&main_root, &["init", "-q", "-b", "main"]);
+        git(&main_root, &["config", "user.email", "t@t.t"]);
+        git(&main_root, &["config", "user.name", "t"]);
+        std::fs::write(
+            main_root.join(".aida/config.toml"),
+            "[deployment]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            main_root.join(".gitignore"),
+            ".aida/*\n!.aida/config.toml\n",
+        )
+        .unwrap();
+        git(&main_root, &["add", "."]);
+        git(&main_root, &["commit", "-q", "-m", "init"]);
+        // The canonical store worktree lives only in the main checkout.
+        std::fs::create_dir_all(main_root.join(".aida-store/objects")).unwrap();
+        let linked = tmp.path().join("linked");
+        git(
+            &main_root,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "--detach",
+                linked.to_str().unwrap(),
+            ],
+        );
+
+        let store_before = aida_core::store_locate::detect_distributed_store_from(&linked)
+            .expect("linked worktree resolves the main store");
+        assert_eq!(
+            store_before.canonicalize().unwrap(),
+            main_root.join(".aida-store").canonicalize().unwrap()
+        );
+
+        // Same root resolution the CLI uses: a linked worktree is its own checkout.
+        let project_root = crate::find_project_root_from(&linked).unwrap();
+        assert_eq!(
+            project_root.canonicalize().unwrap(),
+            linked.canonicalize().unwrap()
+        );
+
+        let req = make_sample_requirement("TASK-7", "Spec", "Body.\n\n- rule one");
+        let all = vec![req.clone()];
+        let outcome = crate::exposition::explain_at(
+            &project_root,
+            &all,
+            &req,
+            ExpositionAudience::Operator,
+            true,
+            false,
+            || None,
+        )
+        .unwrap();
+
+        let written = outcome.written_to.expect("sidecar written");
+        assert!(written.starts_with(linked.join(".aida").join("expositions")));
+        assert!(
+            !linked.join(".aida-store").exists(),
+            "explain must not create .aida-store in a linked worktree"
+        );
+        let store_after = aida_core::store_locate::detect_distributed_store_from(&linked)
+            .expect("store detection still resolves");
+        assert_eq!(
+            store_after.canonicalize().unwrap(),
+            main_root.join(".aida-store").canonicalize().unwrap(),
+            "store detection must still resolve the main checkout's store"
+        );
+        // The sidecar is gitignored runtime state, not a tracked change.
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&linked)
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(String::from_utf8_lossy(&status.stdout).trim().is_empty());
+
+        // Also from the main checkout: nothing lands in the real store.
+        crate::exposition::explain_at(
+            &main_root,
+            &all,
+            &req,
+            ExpositionAudience::Executive,
+            true,
+            false,
+            || None,
+        )
+        .unwrap();
+        assert!(files_under_named_dir(tmp.path(), ".aida-store")
+            .iter()
+            .all(|p| p.file_name().is_some_and(|n| n == "objects")));
+        assert!(files_under_named_dir(tmp.path(), "expositions")
+            .iter()
+            .all(|p| !p.components().any(|c| c.as_os_str() == ".aida-store")));
+    }
+
+    #[test]
+    fn save_exposition_refuses_any_store_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store_root = tmp.path().join(".aida-store");
+        let req = make_sample_requirement("TASK-8", "Spec", "Body.");
+        let closure = build_bounded_closure(&req, std::slice::from_ref(&req));
+        let expo = extract_offline_exposition(&req, ExpositionAudience::Operator, &closure);
+        let err = crate::exposition::save_exposition(&store_root, &expo).unwrap_err();
+        assert!(err.to_string().contains("refusing to write"));
+        assert!(
+            !store_root.exists(),
+            "nothing may be created under .aida-store"
+        );
+        let path =
+            crate::exposition::exposition_path(tmp.path(), "TASK-8", ExpositionAudience::Operator);
+        assert!(path.starts_with(tmp.path().join(".aida").join("expositions")));
+    }
+
+    #[test]
+    fn advisory_evaluator_applies_the_five_second_deadline() {
+        use crate::evaluator::JevEvaluator;
+        assert_eq!(
+            crate::exposition::JEV_ADVISORY_TIMEOUT,
+            std::time::Duration::from_secs(5)
+        );
+        assert_eq!(
+            JevEvaluator::new("k").request_timeout(),
+            JevEvaluator::DEFAULT_TIMEOUT
+        );
+        let evaluator = crate::exposition::advisory_evaluator(env_of(&[("AIDA_JEV_API_KEY", "k")]))
+            .expect("key set");
+        assert_eq!(
+            evaluator.request_timeout(),
+            std::time::Duration::from_secs(5)
+        );
+        assert!(crate::exposition::advisory_evaluator(env_of(&[])).is_none());
     }
 }

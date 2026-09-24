@@ -33547,7 +33547,15 @@ fn ambiguous_id_in_chain(
 }
 
 pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
-    let mut cur = std::env::current_dir()?;
+    find_project_root_from(&std::env::current_dir()?)
+}
+
+/// [`find_project_root`] from an explicit start directory: the nearest
+/// ancestor holding `.git` (a directory in the main checkout, a file in a
+/// linked worktree, so a linked worktree resolves to ITSELF).
+// trace:TASK-1470 | ai:claude
+pub(crate) fn find_project_root_from(start: &std::path::Path) -> Result<std::path::PathBuf> {
+    let mut cur = start.to_path_buf();
     loop {
         if cur.join(".git").exists() {
             return Ok(cur);

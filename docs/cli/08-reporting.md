@@ -272,7 +272,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **One line** — write a plain-language explanation of one spec for a chosen audience, and tell you whether it is still current.
 
-**Mental model.** `explain` extracts a summary, rationale, key constraints, trade-offs, and open questions from the spec body, saves them as a sidecar file next to the store (`expositions/<SPEC-ID>/<audience>.yaml`), and stamps it with a hash of the spec and its immediate neighbors. Later runs reuse the sidecar and mark it STALE when that neighborhood has changed. A quick quality audit checks that critical rules (for example "fail closed") survived the rewrite.
+**Mental model.** `explain` extracts a summary, rationale, key constraints, trade-offs, and open questions from the spec body, saves them as a sidecar file at `.aida/expositions/<SPEC-ID>/<audience>.yaml` in the current checkout, and stamps it with a hash of the spec and its immediate neighbors. Later runs reuse the sidecar and mark it STALE when that neighborhood has changed. A quick quality audit checks that critical rules (for example "fail closed") survived the rewrite.
 
 **Reach for it when** — you need to hand a spec to someone who doesn't read AIDA specs every day: an operator, an executive, a new contributor.
 
@@ -284,7 +284,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 - `--force` — overwrite a human-reviewed sidecar.
 - `--json` — the sidecar plus `stale`, `human_reviewed`, and the current neighborhood hash.
 
-**Gotchas.** The audit is offline unless `AIDA_JEV_API_KEY` is set. When it is set, `explain` sends the spec text to TypeSafe AI (`api.typesafe.ai`) for an advisory score. That call is network egress, has a 5-second deadline, and a failure is recorded as "unavailable", never as a pass. See the environment-variables chapter.
+**Gotchas.** Sidecars are local to each checkout and are not shared: they sit under the gitignored `.aida/` folder, never in the requirement store, so a linked worktree keeps its own set and nothing is synced to other clones. The audit is offline unless `AIDA_JEV_API_KEY` is set. When it is set, `explain` sends the spec text to TypeSafe AI (`api.typesafe.ai`) for an advisory score. That call is network egress, has a 5-second deadline, and a failure is recorded as "unavailable", never as a pass. See the environment-variables chapter.
 
 **Chains with** — `aida wiki build` renders every spec's explanation into a browsable local site.
 
