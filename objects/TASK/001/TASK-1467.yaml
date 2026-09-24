@@ -3,10 +3,10 @@ spec_id: TASK-1467
 agreed_id: TASK-1467
 title: 'aida agent new: preview prompt and complete launch contract'
 description: 'Add explicit dry-preview surfaces for supervised agent launches. `--show-prompt` prints the exact generated initial prompt and exits without launching. `--no-exec` (with `--noexec` and `--print-command` compatibility as appropriate) prints the complete resolved launch contract: executable and arguments, active role, explicit or generated prompt, launch-context snapshot path, relevant AIDA environment inputs, and the repository guidance files the child is expected to consume such as AGENTS.md or CLAUDE.md. The preview must not create a process, worktree, lease, status transition, network sync, or credential-bearing output. It must work for role-aware launches with and without a spec, clearly distinguish generated versus explicit prompt text, and document how the preview relates to `--show-context`.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:35:15.736670503Z
-modified_at: 2026-09-24T02:35:15.736670503Z
+modified_at: 2026-09-24T08:12:07.494729025Z
 req_type: Task
