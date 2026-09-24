@@ -360,7 +360,10 @@ mod tests {
     // trace:TASK-195 | ai:claude
     #[test]
     fn collect_meter_uses_notice_fast_awaiting_path_not_the_slow_wrapper() {
-        let src = include_str!("statusbar_cmd.rs");
+        // Normalise CRLF (Windows autocrlf checkout) so the `\n}\n`
+        // body-end search does not fall through to end-of-file.
+        // trace:BUG-1556 | ai:claude
+        let src = include_str!("statusbar_cmd.rs").replace("\r\n", "\n");
         let body_start = src
             .find("fn collect_meter(")
             .expect("collect_meter must exist in this file");
