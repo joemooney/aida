@@ -45,6 +45,23 @@ pub(crate) fn is_findings_block(content: &str) -> bool {
 use std::path::{Path, PathBuf};
 
 /// The verdict word, normalized from whatever the reviewer/skill wrote.
+///
+/// BUG-1505: this enum is the CANONICAL verdict vocabulary and
+/// [`VerdictKind::parse`] is the ONE normalizing parser every reader and
+/// writer routes through. The on-disk corpus carries many spellings of the
+/// same two outcomes (`Approved` / `APPROVED` / `approved` / `approve`,
+/// `CHANGES REQUESTED` / `RequestChanges` / `request-changes`); they all map
+/// here, and every writer persists [`VerdictKind::canonical`] instead of the
+/// raw word.
+///
+/// Normalization is deliberately SHALLOW — case, and the separator between
+/// words — and the match is on the WHOLE token. A value that carries
+/// qualifying prose around an approval word (`APPROVED pending
+/// cross-platform green`, `CONTENT APPROVED — MERGE WITHHELD FOR
+/// INDEPENDENCE`) is therefore [`VerdictKind::Unknown`], never Approved: the
+/// qualification is exactly what makes it not an approval, and no substring
+/// or prefix match is ever performed.
+// trace:BUG-1505 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum VerdictKind {
     /// The review passed — nothing blocks the spec being marked done.
@@ -53,29 +70,54 @@ pub enum VerdictKind {
     RequestChanges,
     /// The reviewer rejected the work outright — blocking.
     Rejected,
-    /// An unrecognised verdict word. Treated as non-blocking (we never
-    /// invent a refusal out of a string we do not understand), but the raw
-    /// word is preserved so surfaces can show it.
+    /// An unrecognised or ambiguous verdict word (including a qualified
+    /// approval). NEVER approving (PRIN-5: absent or unreadable evidence is
+    /// not good evidence) — every gate that asks "was this approved?" answers
+    /// no, and the `queue done` gate refuses outright. The raw word is kept on
+    /// [`RecordedVerdict::raw`] so surfaces can show it.
     #[default]
-    Other,
+    Unknown,
 }
 
 impl VerdictKind {
     /// Normalize a verdict word. Accepts the spellings the `/aida-review`
-    /// skill, the orchestrator, and humans actually write.
+    /// skill, the orchestrator, and humans actually write. Case-insensitive;
+    /// spaces, underscores and hyphens between words are equivalent and may
+    /// be absent (`RequestChanges`). Anything else is `Unknown`.
+    // trace:BUG-1505 | ai:claude
     pub fn parse(raw: &str) -> VerdictKind {
-        match raw
+        let norm: String = raw
             .trim()
-            .to_ascii_lowercase()
-            .replace(['_', ' '], "-")
-            .as_str()
-        {
+            .chars()
+            .filter(|c| !matches!(c, ' ' | '_' | '-'))
+            .flat_map(char::to_lowercase)
+            .collect();
+        match norm.as_str() {
             "approved" | "approve" | "lgtm" | "pass" | "passed" | "ok" => VerdictKind::Approved,
-            "requestchanges" | "request-changes" | "changes" | "changes-requested"
-            | "needs-changes" | "partial" => VerdictKind::RequestChanges,
+            "requestchanges" | "requestedchanges" | "changes" | "changesrequested"
+            | "needschanges" | "partial" => VerdictKind::RequestChanges,
             "rejected" | "reject" | "fail" | "failed" | "blocked" => VerdictKind::Rejected,
-            _ => VerdictKind::Other,
+            _ => VerdictKind::Unknown,
         }
+    }
+
+    /// The one canonical on-disk spelling for this outcome. `None` for
+    /// `Unknown` — an unrecognised word has no canonical form and must not be
+    /// silently rewritten into one.
+    // trace:BUG-1505 | ai:claude
+    pub fn canonical(&self) -> Option<&'static str> {
+        match self {
+            VerdictKind::Approved => Some("approved"),
+            VerdictKind::RequestChanges => Some("request-changes"),
+            VerdictKind::Rejected => Some("rejected"),
+            VerdictKind::Unknown => None,
+        }
+    }
+
+    /// Is this an approval? Only `Approved` — `Unknown` never approves.
+    // trace:BUG-1505 | ai:claude
+    pub fn approves(&self) -> bool {
+        matches!(self, VerdictKind::Approved)
     }
 
     /// Display label for terminal output.
@@ -84,14 +126,27 @@ impl VerdictKind {
             VerdictKind::Approved => "APPROVED",
             VerdictKind::RequestChanges => "CHANGES REQUESTED",
             VerdictKind::Rejected => "REJECTED",
-            VerdictKind::Other => "UNKNOWN",
+            VerdictKind::Unknown => "UNKNOWN",
         }
     }
 
     /// Does this verdict block "mark it done" until the branch moves on?
+    /// `Unknown` is not an explicit refusal (it is not reported as one), but
+    /// gates must still treat it as not-approving — see [`Self::approves`].
     pub fn blocks_done(&self) -> bool {
         matches!(self, VerdictKind::RequestChanges | VerdictKind::Rejected)
     }
+}
+
+/// Canonicalize a verdict word for persistence: the canonical spelling when
+/// the word is recognised, otherwise the trimmed raw word unchanged (an
+/// unrecognised word is preserved for a human, never guessed at).
+// trace:BUG-1505 | ai:claude
+pub fn canonical_verdict_word(raw: &str) -> String {
+    VerdictKind::parse(raw)
+        .canonical()
+        .map(str::to_string)
+        .unwrap_or_else(|| raw.trim().to_string())
 }
 
 /// The recorded verdict for one spec — the queryable state the gate reads.
@@ -234,8 +289,27 @@ pub fn verdict_path(project_root: &Path, spec: &str) -> PathBuf {
         .join(format!("{}.json", spec.trim().to_ascii_uppercase()))
 }
 
+/// Legacy key aliases, per fact, in preference order. BUG-1505: the corpus
+/// carries several key shapes for the same fact (47 distinct key sets across
+/// the verdict files measured 2026-09-23); the reader tries every observed
+/// spelling here, in ONE place, so no consumer hand-rolls its own fallbacks.
+/// The first entry of each list is the canonical key every writer emits.
+// trace:BUG-1505 | ai:claude
+pub(crate) const SHA_KEYS: &[&str] = &["reviewed_sha", "head_sha", "head", "sha"];
+pub(crate) const RECORDER_KEYS: &[&str] = &["recorded_by", "reviewer"];
+pub(crate) const RECORDED_AT_KEYS: &[&str] = &["recorded_at", "reviewed_at", "date"];
+pub(crate) const FINDINGS_KEYS: &[&str] = &["findings", "blocking_findings"];
+
 /// Parse a verdict file body. `None` when it is not a JSON object or carries
 /// no `verdict` field (an incomplete artifact is not a verdict).
+///
+/// This is the only supported way to consume a verdict file (BUG-1505): the
+/// verdict word goes through [`VerdictKind::parse`], and every legacy key
+/// alias ([`SHA_KEYS`], [`RECORDER_KEYS`], [`RECORDED_AT_KEYS`],
+/// [`FINDINGS_KEYS`]) is resolved here. A file explicitly marked
+/// `unverifiable: true` is read with NO reviewed sha, whatever else it
+/// carries — its author has said it cannot be placed against a head.
+// trace:BUG-1505 | ai:claude
 pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
     let value: serde_json::Value = serde_json::from_str(body).ok()?;
     let obj = value.as_object()?;
@@ -246,10 +320,11 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
             .filter(|s| !s.is_empty())
             .map(str::to_string)
     };
+    let first_of = |keys: &[&str]| keys.iter().find_map(|k| str_field(k));
     let raw = str_field("verdict")?;
-    let findings: Vec<String> = obj
-        .get("findings")
-        .and_then(|v| v.as_array())
+    let findings: Vec<String> = FINDINGS_KEYS
+        .iter()
+        .find_map(|k| obj.get(*k).and_then(|v| v.as_array()))
         .map(|items| {
             items
                 .iter()
@@ -260,13 +335,18 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
                 .collect()
         })
         .unwrap_or_default();
+    let reviewed_sha = if is_marked_unverifiable(obj) {
+        None
+    } else {
+        first_of(SHA_KEYS)
+    };
     Some(RecordedVerdict {
         kind: VerdictKind::parse(&raw),
         raw,
-        reviewed_sha: str_field("reviewed_sha"),
+        reviewed_sha,
         reviewed_branch: str_field("reviewed_branch"),
-        recorded_by: str_field("recorded_by"),
-        recorded_at: str_field("recorded_at"),
+        recorded_by: first_of(RECORDER_KEYS),
+        recorded_at: first_of(RECORDED_AT_KEYS),
         closed_by_merge: str_field("closed_by_merge"),
         closed_at: str_field("closed_at"),
         summary: str_field("summary"),
@@ -277,6 +357,16 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         surviving_findings: surviving_against_previous_round(obj, &findings),
         findings,
     })
+}
+
+/// `unverifiable: true` (bool, or the string `"true"`).
+// trace:BUG-1505 | ai:claude
+fn is_marked_unverifiable(obj: &JsonObj) -> bool {
+    match obj.get("unverifiable") {
+        Some(serde_json::Value::Bool(b)) => *b,
+        Some(serde_json::Value::String(s)) => s.trim().eq_ignore_ascii_case("true"),
+        _ => false,
+    }
 }
 
 /// STORY-1391: the findings in `current` that also appeared in the most recent
@@ -290,12 +380,14 @@ type JsonObj = serde_json::Map<String, serde_json::Value>;
 /// `head` is the older one and is still the only provenance on 42 of the
 /// verdict files on disk. A round carrying neither is unidentifiable.
 fn round_sha(m: &JsonObj) -> Option<String> {
-    m.get("reviewed_sha")
-        .or_else(|| m.get("head"))
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
+    // trace:BUG-1505 | ai:claude — same alias set as the reader.
+    SHA_KEYS.iter().find_map(|k| {
+        m.get(*k)
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    })
 }
 
 fn round_findings(m: &JsonObj) -> Vec<String> {
@@ -328,7 +420,8 @@ fn recording_key(m: &JsonObj) -> RecordingKey {
     (
         round_sha(m),
         field("recorded_by"),
-        field("verdict"),
+        // BUG-1505: a re-spelling of the same verdict is the same recording.
+        canonical_verdict_word(&field("verdict")),
         round_findings(m),
     )
 }
@@ -387,7 +480,7 @@ pub fn verdict_conflict_for_current_sha(body: &str) -> Option<String> {
         ) {
             VerdictKind::Approved => approvals.push(reviewer),
             VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
-            VerdictKind::Other => {}
+            VerdictKind::Unknown => {}
         }
     }
     approvals.sort();
@@ -455,7 +548,7 @@ pub fn reconcile_artifacts_for_sha<'a>(
                 .filter(|v| !v.is_empty())
                 .ok_or_else(|| "review recording has no verdict".to_string())?;
             let kind = VerdictKind::parse(raw);
-            if kind == VerdictKind::Other {
+            if kind == VerdictKind::Unknown {
                 return Err(format!("review recording has unrecognised verdict `{raw}`"));
             }
             let reviewer = recording
@@ -474,7 +567,7 @@ pub fn reconcile_artifacts_for_sha<'a>(
             match kind {
                 VerdictKind::Approved => approvals.push(reviewer),
                 VerdictKind::RequestChanges | VerdictKind::Rejected => blockers.push(reviewer),
-                VerdictKind::Other => unreachable!(),
+                VerdictKind::Unknown => unreachable!(),
             }
         }
     }
@@ -957,7 +1050,7 @@ pub(crate) fn build_verdict_object(
             .filter(|s| !s.is_empty())
             .map(str::to_string),
         recorded_by.trim().to_string(),
-        verdict.unwrap_or_default().trim().to_string(),
+        canonical_verdict_word(verdict.unwrap_or_default()),
         findings
             .iter()
             .map(|s| s.trim().to_string())
@@ -970,12 +1063,32 @@ pub(crate) fn build_verdict_object(
     // resolved. trace:BUG-1529 | ai:claude
     obj.remove("closed_by_merge");
     obj.remove("closed_at");
+    // BUG-1505: every writer persists the canonical spelling, produced by the
+    // one shared function rather than by each writer agreeing to be careful.
+    // When the caller supplies no verdict (the drain stamping provenance onto
+    // a reviewer-written file), the word already on disk is canonicalized in
+    // place — that is how `aida drain reviewer` stops persisting whatever
+    // spelling the reviewer phase produced. An unrecognised word is kept
+    // verbatim: it has no canonical form, and readers treat it as Unknown.
+    // trace:BUG-1505 | ai:claude
+    let verdict_word = verdict
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            obj.get("verdict")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        })
+        .map(|w| canonical_verdict_word(&w));
     let mut set = |k: &str, v: Option<&str>| {
         if let Some(v) = v.map(str::trim).filter(|s| !s.is_empty()) {
             obj.insert(k.to_string(), serde_json::Value::String(v.to_string()));
         }
     };
-    set("verdict", verdict);
+    set("verdict", verdict_word.as_deref());
     set("reviewed_sha", reviewed_sha);
     set("reviewed_branch", reviewed_branch);
     set("summary", summary);
@@ -1582,13 +1695,13 @@ pub fn queue_done_verdict_gate(
         .collect());
     }
     // An unrecognised verdict word is not evidence of approval. `handle_review_record`
-    // already refuses to WRITE one (`VerdictKind::Other` bails before the file is
+    // already refuses to WRITE one (`VerdictKind::Unknown` bails before the file is
     // written), but an older/hand-edited file can still carry a word `parse` does not
     // recognise, and falling through the way `blocks_done() == false` handles a real
     // Approved verdict would silently treat "could not classify" as "passed" — the same
     // shape as the preflight Skipped-funnels-to-Open defect. Refuse and say why instead.
     // trace:BUG-1507 | ai:claude (PRIN-5: absent is not good evidence)
-    if v.kind == VerdictKind::Other {
+    if v.kind == VerdictKind::Unknown {
         return VerdictGate::Refuse(
             vec![
                 format!(
@@ -1768,7 +1881,7 @@ pub fn short_sha(sha: &str) -> &str {
 /// view). `None` when there is nothing worth showing.
 pub fn verdict_notice_line(v: &RecordedVerdict) -> String {
     let mut line = v.kind.label().to_string();
-    if v.kind == VerdictKind::Other {
+    if v.kind == VerdictKind::Unknown {
         line = format!("{} ({})", line, v.raw);
     }
     if let Some(sha) = v.reviewed_sha.as_deref() {
@@ -1788,6 +1901,102 @@ pub fn verdict_notice_line(v: &RecordedVerdict) -> String {
         line.push_str(&format!(" — {s}"));
     }
     line
+}
+
+/// BUG-1505: one verdict file that does not match the canonical shape, with
+/// every reason it does not. Produced by [`audit_verdict_dir`] for the
+/// `aida doctor --category review-verdicts` report. Report-only: the audit
+/// never rewrites a file (the gitignored store has no history to recover a
+/// bad rewrite from).
+// trace:BUG-1505 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NonCanonicalVerdict {
+    /// File name under `.aida/review-verdicts/`.
+    pub file: String,
+    /// The verdict word as written (empty when absent/unreadable).
+    pub raw: String,
+    /// What the canonical parser reads it as.
+    pub kind: VerdictKind,
+    /// Human-readable reasons, one per deviation.
+    pub issues: Vec<String>,
+}
+
+/// Why `body` is not a canonical verdict record. Empty = canonical. Pure, so
+/// the audit's rules are unit-testable without a filesystem.
+// trace:BUG-1505 | ai:claude
+pub fn audit_verdict_body(body: &str) -> (String, VerdictKind, Vec<String>) {
+    let mut issues = Vec::new();
+    let Ok(serde_json::Value::Object(obj)) = serde_json::from_str::<serde_json::Value>(body) else {
+        issues.push("not a JSON object".to_string());
+        return (String::new(), VerdictKind::Unknown, issues);
+    };
+    let raw = obj
+        .get("verdict")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_string();
+    let kind = VerdictKind::parse(&raw);
+    if raw.is_empty() {
+        issues.push("no verdict".to_string());
+    } else {
+        match kind.canonical() {
+            Some(c) if c == raw => {}
+            Some(c) => issues.push(format!("verdict `{raw}` is not canonical (reads as `{c}`)")),
+            None => issues.push(format!(
+                "verdict `{raw}` is UNKNOWN or ambiguous — read as NOT approved; a human must decide it"
+            )),
+        }
+    }
+    for keys in [SHA_KEYS, RECORDER_KEYS, RECORDED_AT_KEYS, FINDINGS_KEYS] {
+        for alias in &keys[1..] {
+            if obj.contains_key(*alias) && !obj.contains_key(keys[0]) {
+                issues.push(format!("legacy key `{alias}` (canonical: `{}`)", keys[0]));
+            }
+        }
+    }
+    let has_sha = !is_marked_unverifiable(&obj)
+        && SHA_KEYS.iter().any(|k| {
+            obj.get(*k)
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| !s.trim().is_empty())
+        });
+    if !has_sha {
+        issues.push("no reviewed sha — cannot be placed against any head".to_string());
+    }
+    if !RECORDER_KEYS.iter().any(|k| obj.contains_key(*k)) {
+        issues.push("no recorder".to_string());
+    }
+    (raw, kind, issues)
+}
+
+/// Audit every top-level `*.json` under `.aida/review-verdicts/` and return
+/// the non-canonical ones, sorted by file name. Per-sha archives are not
+/// walked — they are copies of rounds whose live file is audited here.
+// trace:BUG-1505 | ai:claude
+pub fn audit_verdict_dir(project_root: &Path) -> Vec<NonCanonicalVerdict> {
+    let dir = project_root.join(".aida").join("review-verdicts");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<NonCanonicalVerdict> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .filter_map(|p| {
+            let file = p.file_name()?.to_str()?.to_string();
+            let body = std::fs::read_to_string(&p).unwrap_or_default();
+            let (raw, kind, issues) = audit_verdict_body(&body);
+            (!issues.is_empty()).then_some(NonCanonicalVerdict {
+                file,
+                raw,
+                kind,
+                issues,
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.file.cmp(&b.file));
+    out
 }
 
 #[cfg(test)]

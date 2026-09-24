@@ -110,6 +110,30 @@ impl Scaffolder {
             .unwrap_or("")
             .to_string()
     }
+
+    /// Generate the Notification(permission_prompt) hook content — TASK-1454's
+    /// marker-writer, recording that a seat is blocked on the operator's
+    /// approval. Downstream projects need this scaffolded, not just this dev
+    /// repo, so `aida ps` / `aida awaiting` work there too.
+    // trace:TASK-1461 | ai:claude
+    pub(super) fn generate_notification_hook(&self) -> String {
+        crate::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-notification.sh")
+            .copied()
+            .unwrap_or("")
+            .to_string()
+    }
+
+    /// Generate the UserPromptSubmit/PostToolUse hook content that clears
+    /// TASK-1454's pending-approval marker once the block resolves.
+    // trace:TASK-1461 | ai:claude
+    pub(super) fn generate_clear_pending_approval_hook(&self) -> String {
+        crate::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-clear-pending-approval.sh")
+            .copied()
+            .unwrap_or("")
+            .to_string()
+    }
 }
 
 // trace:TASK-147 | ai:claude

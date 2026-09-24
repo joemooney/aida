@@ -1115,7 +1115,7 @@ fn open_approvals(
 ) -> Vec<crate::review_verdict::RecordedVerdict> {
     candidates
         .iter()
-        .filter(|v| v.kind == crate::review_verdict::VerdictKind::Approved && !v.is_closed())
+        .filter(|v| v.kind.approves() && !v.is_closed())
         .cloned()
         .collect()
 }

@@ -8564,7 +8564,8 @@ mod task_168_pr_verdict_metadata_tests {
 
         let value: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        assert_eq!(value["verdict"], "Approved");
+        // BUG-1505: the drain stamp canonicalizes the reviewer's spelling.
+        assert_eq!(value["verdict"], "approved");
         assert_eq!(value["summary"], "clean");
         assert_eq!(value["findings"][0], "note");
         assert_eq!(value["mode"], "deep");
@@ -12829,7 +12830,7 @@ fn findings_needing_a_successor(
     verdict: &review_verdict::RecordedVerdict,
     already_filed: &std::collections::HashSet<String>,
 ) -> Vec<(String, String)> {
-    if !matches!(verdict.kind, review_verdict::VerdictKind::Approved) {
+    if !verdict.kind.approves() {
         return Vec::new();
     }
     let mut seen = std::collections::HashSet::new();
@@ -22765,6 +22766,18 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "delivery-rot",
         ],
         "scaffold-drift",
+    ),
+    // BUG-1505: review-verdict files that do not match the canonical shape
+    // (spelling, legacy keys, no sha, UNKNOWN verdicts). Report-only.
+    // trace:BUG-1505 | ai:claude
+    (
+        &[
+            "review-verdicts",
+            "review-verdict",
+            "verdicts",
+            "verdict-schema",
+        ],
+        "review-verdicts",
     ),
     // TASK-1122: raw machine identity (corporate email/hostname) already in
     // the store despite configured redaction. trace:TASK-1122 | ai:claude
@@ -67049,8 +67062,9 @@ fn build_processing_record(
     record.pr = pr;
     record.decisions = decisions;
     record.punted = punted;
+    // trace:BUG-1505 | ai:claude — persist the canonical spelling.
     record.review_verdict = verdict
-        .map(|v| v.verdict.trim().to_string())
+        .map(|v| review_verdict::canonical_verdict_word(&v.verdict))
         .filter(|s| !s.is_empty());
     record
 }
@@ -83416,12 +83430,15 @@ fn handle_review_spec(
     println!();
     let recommended = match &verdict {
         Some(v) => {
-            let label = match v.verdict.trim().to_ascii_lowercase().as_str() {
-                "approved" | "approve" | "lgtm" | "pass" => "APPROVE".green().bold().to_string(),
-                "requestchanges" | "request_changes" | "request-changes" | "changes"
-                | "partial" => "REQUEST CHANGES".yellow().bold().to_string(),
-                "rejected" | "reject" | "fail" => "REJECT".red().bold().to_string(),
-                _ => v.verdict.clone(),
+            // trace:BUG-1505 | ai:claude — the one canonical parser.
+            let kind = review_verdict::VerdictKind::parse(&v.verdict);
+            let label = match kind {
+                review_verdict::VerdictKind::Approved => "APPROVE".green().bold().to_string(),
+                review_verdict::VerdictKind::RequestChanges => {
+                    "REQUEST CHANGES".yellow().bold().to_string()
+                }
+                review_verdict::VerdictKind::Rejected => "REJECT".red().bold().to_string(),
+                review_verdict::VerdictKind::Unknown => v.verdict.clone(),
             };
             println!("  {} {}", "Reviewer verdict:".bold(), label);
             if let Some(s) = v.summary.as_deref().filter(|s| !s.trim().is_empty()) {
@@ -83430,7 +83447,7 @@ fn handle_review_spec(
             if let Some(url) = v.comment_url.as_deref().filter(|s| !s.is_empty()) {
                 println!("  {} {}", "Review comment:".bold(), url.dimmed());
             }
-            v.verdict.trim().to_ascii_lowercase()
+            review_verdict::canonical_verdict_word(&v.verdict)
         }
         None => {
             println!(
@@ -83451,7 +83468,7 @@ fn handle_review_spec(
             // `;` keeps the auto-bump pull from being dropped by a broken
             // chain. Worktree cleanup owns branch deletion.
             // trace:BUG-758 | ai:claude
-            "approved" | "approve" | "lgtm" | "pass" => match pr_number {
+            "approved" => match pr_number {
                 Some(n) => format!("gh pr merge {n} --squash; aida pull"),
                 None => format!("open a {change_noun}, then merge"),
             },
@@ -84436,7 +84453,7 @@ fn handle_review_record_at(
     #[cfg(test)]
     assert_review_write_root_is_isolated(&project_root);
     let kind = review_verdict::VerdictKind::parse(verdict);
-    if kind == review_verdict::VerdictKind::Other {
+    if kind == review_verdict::VerdictKind::Unknown {
         anyhow::bail!(
             "unrecognised verdict `{verdict}` — use one of: approved, request-changes, rejected"
         );
@@ -93490,7 +93507,7 @@ fn sibling_verdict_sweep_for_phase3(
             | Some(review_verdict::VerdictKind::Rejected) => {
                 auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::RequestChanges)
             }
-            Some(review_verdict::VerdictKind::Other) | None => {
+            Some(review_verdict::VerdictKind::Unknown) | None => {
                 return Err(auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::NoVerdict,
                     "fresh sibling verdict evidence does not contain a verdict for the current PR head",
@@ -93585,7 +93602,7 @@ fn sibling_verdict_sweep_for_phase3(
                 | Some(review_verdict::VerdictKind::Rejected) => {
                     auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::RequestChanges)
                 }
-                Some(review_verdict::VerdictKind::Other) | None => {
+                Some(review_verdict::VerdictKind::Unknown) | None => {
                     return Err(auto_complete::PhaseFailure::of(
                         auto_complete::FailureKind::NoVerdict,
                         "canonical and sibling verdict evidence do not establish a verdict for the current PR head",
@@ -99534,11 +99551,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )? {
                 if !graded.escalated_to_seat {
                     return Ok(auto_complete::ReviewerOutcome::Verdict(
-                        match graded.overall_verdict.as_str() {
-                            "approved" => auto_complete::Verdict::Approved,
-                            "request-changes" => auto_complete::Verdict::RequestChanges,
-                            _ => auto_complete::Verdict::Rejected,
-                        },
+                        // trace:BUG-1505 | ai:claude — canonical parser; anything
+                        // it cannot classify fails closed as Rejected.
+                        auto_complete::Verdict::parse(&graded.overall_verdict)
+                            .unwrap_or(auto_complete::Verdict::Rejected),
                     ));
                 }
                 let prompt = graded_review::generate_graded_reviewer_prompt(
