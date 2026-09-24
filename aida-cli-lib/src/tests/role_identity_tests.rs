@@ -199,6 +199,8 @@ fn roleless_recovery_uses_last_used_role_and_copyable_command() {
         scope_tags: Vec::new(),
         scope_status: None,
         system_prompt: None,
+        launch_prompt: None,
+        launch_prompt_spec: None,
     };
     let recent = RoleState {
         name: "advisor".to_string(),
@@ -241,6 +243,8 @@ fn roleless_recovery_ties_last_active_at_by_role_name() {
         scope_tags: Vec::new(),
         scope_status: None,
         system_prompt: None,
+        launch_prompt: None,
+        launch_prompt_spec: None,
     };
     let advisor = RoleState {
         name: "advisor".to_string(),
@@ -276,6 +280,8 @@ fn roleless_recovery_silent_when_role_is_active() {
         scope_tags: Vec::new(),
         scope_status: None,
         system_prompt: None,
+        launch_prompt: None,
+        launch_prompt_spec: None,
     };
     save_role_at(&role, &root.join(".aida/roles/advisor.toml")).unwrap();
 
