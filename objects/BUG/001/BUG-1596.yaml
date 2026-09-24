@@ -8,5 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T04:53:20.062858190Z
-modified_at: 2026-09-24T08:11:56.344422521Z
+modified_at: 2026-09-24T08:11:57.897494201Z
 req_type: Bug
+comments:
+- id: 01a0d278-a849-7d01-8b6f-61a9f23c1036
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Confirmed: history.rs:489 hard-codes the 000 shard. Small fix plus a shard 000/001 regression test.'
+  created_at: 2026-09-24T08:11:57.897494201Z
+  modified_at: 2026-09-24T08:11:57.897494201Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
