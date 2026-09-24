@@ -51,12 +51,12 @@ description: |
   STRETCH (per STORY-1385's mechanism, and marked so deliberately): the red-then-green transition per criterion is recorded, so a criterion that was never observed red is distinguishable from one that was. That is the strongest version — it would have caught every instance in the opening section — and I am not certain it is reachable without more instrumentation than it is worth.
 
   NOT IN SCOPE: applying this to every spec regardless of size. A one-line fix does not need a test-writing phase, and a rule that cannot be skipped for trivial work will be skipped for everything.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:44:38.754900781Z
-modified_at: 2026-09-24T12:08:54.818055391Z
+modified_at: 2026-09-24T14:09:54.435683159Z
 req_type: Story
 tags:
 - closure:pending
@@ -109,4 +109,17 @@ comments:
   created_at: 2026-09-24T12:08:54.818055391Z
   modified_at: 2026-09-24T12:08:54.818055391Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d3c0-7670-7620-9233-b471077d54a0
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit 64b652e), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit STORY-1386 --description ...` / `aida edit STORY-1386 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec STORY-1386 --since 64b652e^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit STORY-1386 --status completed`. (merge sha: 64b652e051a639975ced35f04527e83b4bd00d33)'
+  created_at: 2026-09-24T14:10:00.944552765Z
+  modified_at: 2026-09-24T14:10:00.944552765Z
+history:
+- id: 01a0d3c0-7670-7620-9233-b466e365cd93
+  author: aida-auto-bump
+  timestamp: 2026-09-24T14:10:00.944548110Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: guided
