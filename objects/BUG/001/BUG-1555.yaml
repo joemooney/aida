@@ -434,16 +434,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:47:50.210954180Z
-modified_at: 2026-09-22T07:53:09.922943Z
+modified_at: 2026-09-24T16:28:44.605603930Z
 req_type: Bug
 relationships:
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0c3ec-fe63-74f2-9e46-5700d5a9a564
   created_at: 2026-09-21T15:48:08.411728009Z
   created_by: joe
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0bb03-3ec2-7c40-9d51-80b0b22fbb2f
   created_at: 2026-09-21T15:48:15.696551590Z
   created_by: joe
