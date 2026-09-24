@@ -396,3 +396,86 @@ fn detect_distributed_store_resolves_from_sibling_worktree() {
         &["worktree", "remove", "--force", sibling.to_str().unwrap()],
     );
 }
+
+/// BUG-1598: `distributed_mode_declared_from` must agree with
+/// `detect_distributed_store_from` on where the walk-up stops — neither may
+/// adopt a temp root itself as a project root. A FAKE temp root (a plain
+/// tempdir, injected as the guarded root — never `TMPDIR`, never the real
+/// shared `/tmp`) holds a planted distributed `.aida/config.toml` directly
+/// at its own root; a `mktemp -d`-style fixture one level under it (with no
+/// `.aida` of its own) must NOT see it declared once that root is guarded.
+// trace:BUG-1598 | ai:claude
+#[test]
+fn distributed_mode_declared_from_never_adopts_a_temp_root() {
+    let fake_temp_root = TempDir::new().unwrap();
+    let roots = vec![fake_temp_root.path().to_path_buf()];
+
+    let planted = fake_temp_root.path().join(".aida");
+    fs::create_dir_all(&planted).unwrap();
+    fs::write(
+        planted.join("config.toml"),
+        "[deployment]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+    )
+    .unwrap();
+
+    let nested = fake_temp_root.path().join("a").join("b");
+    fs::create_dir_all(&nested).unwrap();
+
+    let guarded = distributed_mode_declared_from_with_roots(&nested, &roots);
+    assert_eq!(
+        guarded, None,
+        "must never report a temp root's ambient .aida as declaring distributed mode"
+    );
+
+    // Sanity check: WITHOUT the guard (empty roots list), the same fixture
+    // DOES declare distributed — proving the guard, not some other
+    // difference, is what suppresses adoption above.
+    let unguarded = distributed_mode_declared_from_with_roots(&nested, &[]);
+    assert_eq!(
+        unguarded,
+        Some(fake_temp_root.path().to_path_buf()),
+        "fixture must be adoptable when nothing is guarded, or this test proves nothing"
+    );
+}
+
+/// BUG-1598: `statusline_project_root` (backing `aida role` /
+/// `aida statusline`, plus the init tail — `scaffold_starter_roles`,
+/// `refresh_agent_packs`, `register_project_in_global_registry`) must not
+/// adopt a stray `.aida/config.toml` sitting directly in a temp root when
+/// run from a `mktemp -d`-rooted cwd. A FAKE temp root (a plain tempdir,
+/// injected — never `TMPDIR`, never the real shared `/tmp`) holds a planted
+/// `.aida/config.toml` directly at its own root; a fixture one level under
+/// it must fall back to ITSELF (the same behavior as "no marker found at
+/// all"), never adopt the temp root.
+// trace:BUG-1598 | ai:claude
+#[test]
+fn statusline_project_root_never_adopts_a_temp_root() {
+    let fake_temp_root = TempDir::new().unwrap();
+    let roots = vec![fake_temp_root.path().to_path_buf()];
+
+    fs::create_dir_all(fake_temp_root.path().join(".aida")).unwrap();
+    fs::write(
+        fake_temp_root.path().join(".aida").join("config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+
+    let nested = fake_temp_root.path().join("a").join("b");
+    fs::create_dir_all(&nested).unwrap();
+
+    let guarded = statusline_project_root_from_with_roots(&nested, &roots);
+    assert_eq!(
+        guarded, nested,
+        "must fall back to cwd (same as 'nothing found'), not adopt the temp root's .aida"
+    );
+
+    // Sanity check: WITHOUT the guard (empty roots list), the same fixture
+    // DOES walk up and find the temp root's config — proving the guard,
+    // not some other difference, is what suppresses adoption above.
+    let unguarded = statusline_project_root_from_with_roots(&nested, &[]);
+    assert_eq!(
+        unguarded,
+        fake_temp_root.path().to_path_buf(),
+        "fixture must be adoptable when nothing is guarded, or this test proves nothing"
+    );
+}
