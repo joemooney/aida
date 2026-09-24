@@ -24,8 +24,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T02:20:02.437526721Z
-modified_at: 2026-09-24T06:41:58.214619929Z
+modified_at: 2026-09-24T06:42:01.160331826Z
 req_type: Story
 tags:
 - closure:pending
 - seat-rotation token-economics autonomy advisor product cold-boot parent:EPIC-71 parent:EPIC-62
+comments:
+- id: 01a0d226-4f48-7c51-89ba-63e24bbab3a6
+  author: joe
+  content: 'First slice (branch claude/story-1464): (1) context signal: seat_rotation::last_context_tokens tail-reads the hook''s transcript (Claude message.usage / Codex token_count) — STORY-1462 watchdog was not on main, so this is a cheap tail reader using the ledger''s field conventions; (2) per-turn `aida awaiting --notice` prints ''Seat rotation: context at N tokens (ceiling C). Hand off and restart ...'' at/above AIDA_SEAT_CONTEXT_CEILING (default 300k, 0 disables); (3) handoff primitive: `aida session handoff --seat S --write FILE|-` writes .aida/handoff/<seat>/<stamp>.md + latest.md + log.jsonl, capped at 16000 bytes (~4k tokens, AC3); `--show` prints the seed. REMAINS: AC1/2 episodic `aida seat run --episodic` + scheduler job + bounded episodes seeded with handoff; AC4/5 `aida agent new --rotate` parent loop, turn-boundary relaunch, grace-window kill, identity/lease/mailbox inheritance; AC6 thrash guard; AC7 Codex hook parity verification + unify with STORY-1462 reader once merged; AC8 per-episode token cost in aida usage/ledger (log.jsonl records handoffs only, no context_tokens yet); no brief is written (briefs require a SPEC).'
+  created_at: 2026-09-24T06:42:01.160331826Z
+  modified_at: 2026-09-24T06:42:01.160331826Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
