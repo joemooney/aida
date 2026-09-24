@@ -39,12 +39,12 @@ description: |
   - Scaffold version is a PROJECT fact, not a per-spec one. Each scaffolded file carries its own `AIDA Generated: vX | checksum` marker, so a project can be at mixed versions. Do not stamp it on specs. Instead surface a project scaffold summary (versions present, count of stale/edited files) in `aida report` (STORY-1004) and `aida doctor`, where it matters when reporting an aida bug downstream.
   - The finishing SHA is already captured by the `(SPEC-ID)` commit trailer. Filing SHA → finishing SHA gives a spec's full code range.
   - `vendor`/`session` connect to the seat identity proposed in CR-1-172.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T14:19:48.859651743Z
-modified_at: 2026-09-24T09:10:05.730350347Z
+modified_at: 2026-09-24T09:10:07.144142952Z
 req_type: ChangeRequest
 tags:
 - intake:requester
