@@ -1,0 +1,17 @@
+id: 01a0d0bf-b3d9-7912-8aed-269542154b0d
+spec_id: TASK-1461
+agreed_id: TASK-1461
+title: Scaffold the pending-approval hooks for downstream aida init projects
+description: 'TASK-1454 wired aida-notification.sh and aida-clear-pending-approval.sh into this repo''s template settings.json and linked them into .claude/hooks. Downstream aida init builds settings in code (aida-core/src/scaffolding/settings.rs generate_claude_settings_json), and scaffolding/hooks.rs has no generators for these scripts, so downstream projects don''t get the pending-approval feature. Add both hooks to the scaffold (hook files plus settings entries: Notification with the permission_prompt matcher, and UserPromptSubmit plus PostToolUse for clear), with edit-preserving refresh via aida scaffold refresh.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T00:10:19.481919613Z
+modified_at: 2026-09-24T00:10:19.481919613Z
+req_type: Task
+tags:
+- followup
+- hooks
+- parent:TASK-1454
+- scaffolding
