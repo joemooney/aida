@@ -32,12 +32,12 @@ description: |
   - Do NOT auto-clear a stale-looking marker. A hold is a deliberate gate and its owner releases it; the defect is that the reader cannot tell the reason is dead, not that the hold is wrong.
 
   Related: BUG-1539 (the same root with the polarity reversed — the artefact destroyed, the subject persisting), BUG-1551 (a merge closing a spec past its own criteria — what the #2033 and #2042 release conditions were written to prevent).
-status: Done
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:21:21.696012729Z
-modified_at: 2026-09-24T00:17:41.165791953Z
+modified_at: 2026-09-24T00:24:28.990376221Z
 req_type: Bug
 relationships:
 - rel_type:
