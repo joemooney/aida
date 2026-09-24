@@ -7354,7 +7354,12 @@ pub(crate) fn handle_queue_rework(
                     r.set_status_from_str(&format!("{:?}", new_status));
                     r.modified_at = now;
                     if leaving_attention {
-                        cleared = crate::requeue::clear_shelve_markers(r);
+                        // Only a human at a terminal may undo the advisor's
+                        // escalation to a human. trace:TASK-1311 | ai:claude
+                        cleared = crate::requeue::clear_shelve_markers(
+                            r,
+                            crate::requeue::caller_may_clear_escalation(),
+                        );
                         let note = cleared.audit_note(
                             "`aida queue rework`",
                             &new_status.to_string(),
@@ -7371,6 +7376,12 @@ pub(crate) fn handle_queue_rework(
                         "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
                         "·".dimmed(),
                         cleared.removed_tags.join(", ")
+                    );
+                }
+                if let Some(w) = crate::requeue::kept_escalation_warning(&display_id, &cleared) {
+                    println!(
+                        "  {} {w}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                     );
                 }
             }

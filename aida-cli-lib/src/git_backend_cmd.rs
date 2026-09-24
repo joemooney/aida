@@ -5557,7 +5557,13 @@ pub(crate) fn handle_git_backend_command(
                 // comment records why the spec came back (auditable re-entry).
                 // trace:TASK-1311 | ai:claude
                 if was_needs_attention && !matches!(req.status, RequirementStatus::NeedsAttention) {
-                    let cleared = crate::requeue::clear_shelve_markers(&mut req);
+                    // The escalation tag is a hand-off to a human; only a
+                    // human at a terminal may clear it (not a non-TTY advisor
+                    // agent, not an orchestrated phase).
+                    let cleared = crate::requeue::clear_shelve_markers(
+                        &mut req,
+                        crate::requeue::caller_may_clear_escalation(),
+                    );
                     if cleared != crate::requeue::ClearedMarkers::default() {
                         let note = cleared.audit_note(
                             "`aida edit --status`",
@@ -5572,6 +5578,12 @@ pub(crate) fn handle_git_backend_command(
                             "·".dimmed(),
                             cleared.removed_tags.join(", ")
                         );
+                    }
+                    if let Some(w) = crate::requeue::kept_escalation_warning(
+                        req.spec_id.as_deref().unwrap_or(id),
+                        &cleared,
+                    ) {
+                        eprintln!("  {} {w}", "Warning:".yellow().bold());
                     }
                     left_needs_attention = true;
                 }

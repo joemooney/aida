@@ -1019,14 +1019,14 @@ fn metadata_rework_of_a_draft_is_refused_without_advisor_authority() {
     );
 }
 
-/// TASK-1311: a shelved, advisor-escalated spec returned by the one-keystroke
-/// requeue must re-enter the drain's ready set. Before the fix the status
-/// flipped but the machine-written `needs-human` tag (a burndown parking tag)
-/// and the FailureReason stayed, so the drain never picked the spec up again.
-/// The return is also recorded on the spec, so a wrong return is auditable.
+/// TASK-1311: a requeue by a NON-TTY advisor (the test process has no
+/// terminal) flips the status and clears the shelve metadata, but must KEEP
+/// the `needs-human` escalation tag: an escalation to a human is undone only
+/// by a human at a terminal. The spec stays parked and the return is recorded.
+/// The TTY-human half is the pure `requeue::may_clear_escalation` test.
 // trace:TASK-1311 | ai:claude
 #[test]
-fn requeue_of_shelved_escalated_spec_clears_parking_markers() {
+fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
     let backend = aida_core::GitBackend::new(&store_root).unwrap();
@@ -1069,19 +1069,27 @@ fn requeue_of_shelved_escalated_spec_clears_parking_markers() {
     let updated = storage.load().unwrap();
     let after = updated.get_requirement_by_spec_id("BUG-13110").unwrap();
     assert_eq!(after.status, RequirementStatus::Approved);
-    assert!(!after.tags.contains("needs-human"), "{:?}", after.tags);
+    assert!(
+        after.tags.contains("needs-human"),
+        "a non-TTY advisor must not undo an escalation: {:?}",
+        after.tags
+    );
     assert!(after.tags.contains("batch:keep"), "{:?}", after.tags);
     assert!(
         after.failure_reason.is_none(),
         "the shelve's FailureReason must not survive the requeue"
     );
     let tags: Vec<String> = after.tags.iter().cloned().collect();
-    assert_eq!(crate::burndown::parking_tag(&tags), None);
+    assert!(
+        crate::burndown::parking_tag(&tags).is_some(),
+        "still parked for a human"
+    );
     assert!(
         after.comments.iter().any(|c| c
             .content
             .contains("Returned from NeedsAttention to Approved via `aida queue rework`")
             && c.content.contains("ci/ci-red: clippy failed")
+            && c.content.contains("Kept escalation tag(s) needs-human")
             && c.content.contains("Triage reason: CI fixed on main")),
         "re-entry must record why the spec came back"
     );
