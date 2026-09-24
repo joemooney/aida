@@ -11291,6 +11291,12 @@ pub(crate) fn run_standalone_reviewer(
         }
     };
 
+    // TASK-1460: the skill wrote the verdict file with a heredoc, outside
+    // the record path — archive its round by reviewed commit the same way a
+    // recorded verdict is. Best-effort; the current file is left as written.
+    // trace:TASK-1460 | ai:claude
+    let _ = crate::review_verdict::adopt_direct_write(verdict_path);
+
     // STORY-439: tag-along reviewer-side calibration capture. Resolve
     // every spec the PR credits (via the existing title / branch / body
     // precedence used by the squash-subject repair) and write a review

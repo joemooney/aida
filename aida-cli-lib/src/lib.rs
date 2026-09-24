@@ -83026,10 +83026,10 @@ fn handle_review_spec(
 
     // The verdict file the `/aida-review` skill writes (it keys off this env
     // var — same handshake the standalone reviewer uses). trace:BUG-226
-    let verdict_path = project_root
-        .join(".aida")
-        .join("review-verdicts")
-        .join(format!("{}.json", spec_id));
+    // TASK-1460: the SAME path `review_verdict::record_verdict` writes, so
+    // the skill's direct write and the record below are one file, one round.
+    // trace:TASK-1460 | ai:claude
+    let verdict_path = review_verdict::verdict_path(project_root, &spec_id);
     if let Some(dir) = verdict_path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
@@ -83072,6 +83072,10 @@ fn handle_review_spec(
     }
 
     // ---- Read + present the verdict (AGENT ANALYZES + RECOMMENDS) ----
+    // TASK-1460: the skill wrote this file directly; archive its round
+    // (when it names a commit) before the record below stamps provenance.
+    // trace:TASK-1460 | ai:claude
+    let _ = review_verdict::adopt_direct_write(&verdict_path);
     let verdict = std::fs::read_to_string(&verdict_path)
         .ok()
         .and_then(|body| reviewer_summary::parse_verdict_file(&body));
@@ -93055,7 +93059,17 @@ fn spec_verdict_fallback_for_phase3(
     if mtime < reviewer_started_at {
         return Ok(None); // stale: recorded by some earlier review, not this one
     }
-    let outcome = read_verdict_file_for_head(&path, current_head)?;
+    // TASK-1460: a later round at another commit may have replaced the spec
+    // record; the archived round for THIS head (fresh this session) still
+    // answers. The current file is consulted first and its error stands when
+    // no such archive exists.
+    // trace:TASK-1460 | ai:claude
+    let outcome = match read_verdict_file_for_head(&path, current_head) {
+        Ok(outcome) => outcome,
+        Err(e) => {
+            phase3_head_archive_fallback(&path, current_head, reviewer_started_at).ok_or(e)?
+        }
+    };
     eprintln!(
         "  {} no PR-keyed verdict file, but the reviewer recorded {} for {} during this session — accepting it",
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -93282,6 +93296,140 @@ fn sibling_verdict_sweep_for_phase3(
         freshest.display()
     );
     Ok(Some(outcome))
+}
+
+/// TASK-1460: the phase-3 handshake's per-commit fallback. The verdict file
+/// at `path` is keyed by PR or spec, so a later round at a different commit
+/// replaces it; BUG-1539 archived every round at `<key>/<sha>.json`. This
+/// reads the archived round for `head` — only when it was written during this
+/// review session (mtime >= `started_at`, the same freshness gate BUG-806
+/// applies), and only through [`read_verdict_file_for_head`], so an archived
+/// approval still has to prove it covers `head`. `None` = no such round; the
+/// caller's original failure then stands.
+// trace:TASK-1460 | ai:claude
+fn phase3_head_archive_fallback(
+    path: &std::path::Path,
+    head: Option<&str>,
+    started_at: std::time::SystemTime,
+) -> Option<auto_complete::ReviewerOutcome> {
+    let head = head?;
+    // Fail closed: the archive may only answer when the CURRENT file is a
+    // well-formed, unconflicted verdict that was recorded at a DIFFERENT
+    // commit. Malformed JSON, a missing verdict, a reconcile conflict, or a
+    // current file already at `head` keep their original error (PRIN-5,
+    // TASK-1169) — an older archived approval must never paper over them.
+    // trace:TASK-1460 | ai:claude
+    read_verdict_file(path).ok()?;
+    let current_sha = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|b| review_verdict::parse_recorded_verdict(&b))
+        .and_then(|v| v.reviewed_sha)?;
+    if review_verdict::same_reviewed_sha(&current_sha, head) {
+        return None;
+    }
+    let archived = review_verdict::archived_verdict_file_for_sha(path, head)?;
+    let mtime = std::fs::metadata(&archived).ok()?.modified().ok()?;
+    if mtime < started_at {
+        return None;
+    }
+    read_verdict_file_for_head(&archived, Some(head)).ok()
+}
+
+#[cfg(test)]
+mod task_1460_phase3_archive_tests {
+    use super::*;
+
+    const R1: &str = "3acf3671fd7a1111111111111111111111111111";
+    const R2: &str = "cd21a1dc0a9e2222222222222222222222222222";
+
+    fn record(root: &std::path::Path, path: &std::path::Path, verdict: &str, sha: &str) {
+        review_verdict::record_verdict_at_path(
+            root,
+            path,
+            Some(verdict),
+            Some(sha),
+            None,
+            None,
+            &[],
+            "reviewer",
+        )
+        .unwrap();
+    }
+
+    // trace:TASK-1460 | ai:claude
+    #[test]
+    fn a_fresh_archived_round_at_head_answers_when_the_current_file_moved_on() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        let path = review_verdict::verdict_path(root, "PR-50");
+        let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        record(root, &path, "approved", R1);
+        record(root, &path, "approved", R2);
+        // The current file is at R2, so it cannot prove an approval of R1…
+        assert!(read_verdict_file_for_head(&path, Some(R1)).is_err());
+        // …but the archived round for R1 can.
+        assert!(matches!(
+            phase3_head_archive_fallback(&path, Some(R1), started),
+            Some(auto_complete::ReviewerOutcome::Verdict(
+                auto_complete::Verdict::Approved
+            ))
+        ));
+        // No head, an unreviewed head, or a round older than this session: none.
+        assert!(phase3_head_archive_fallback(&path, None, started).is_none());
+        assert!(phase3_head_archive_fallback(&path, Some("deadbeefdeadbeef"), started).is_none());
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
+        assert!(phase3_head_archive_fallback(&path, Some(R1), later).is_none());
+    }
+
+    // trace:TASK-1460 | ai:claude
+    #[test]
+    fn a_malformed_current_file_never_falls_back_to_an_archived_approval() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        let path = review_verdict::verdict_path(root, "PR-51");
+        let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        record(root, &path, "approved", R1);
+        // The current file is then corrupted, or carries no reviewed commit.
+        for bad in [
+            "{not json",
+            r#"{"summary":"no verdict"}"#,
+            r#"{"verdict":"approved"}"#,
+        ] {
+            std::fs::write(&path, bad).unwrap();
+            assert!(read_verdict_file_for_head(&path, Some(R1)).is_err());
+            assert!(
+                phase3_head_archive_fallback(&path, Some(R1), started).is_none(),
+                "must fail closed for {bad}"
+            );
+            assert!(read_verdict_file_for_head(&path, Some(R1))
+                .or_else(|e| phase3_head_archive_fallback(&path, Some(R1), started).ok_or(e))
+                .is_err());
+        }
+        // A spec-keyed malformed record is an error from the spec fallback too.
+        let spec_path = review_verdict::verdict_path(root, "TASK-61");
+        record(root, &spec_path, "approved", R1);
+        std::fs::write(&spec_path, "{not json").unwrap();
+        assert!(spec_verdict_fallback_for_phase3(root, "TASK-61", started, Some(R1)).is_err());
+    }
+
+    // trace:TASK-1460 | ai:claude
+    #[test]
+    fn the_spec_fallback_reads_the_archived_round_for_head() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        let path = review_verdict::verdict_path(root, "TASK-60");
+        let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        record(root, &path, "request-changes", R1);
+        record(root, &path, "approved", R2);
+        let got = spec_verdict_fallback_for_phase3(root, "TASK-60", started, Some(R1))
+            .unwrap_or_else(|_| panic!("the archived refusal at R1 must answer"));
+        assert!(matches!(
+            got,
+            Some(auto_complete::ReviewerOutcome::Verdict(
+                auto_complete::Verdict::RequestChanges
+            ))
+        ));
+    }
 }
 
 fn read_verdict_file(
@@ -96946,7 +97094,19 @@ impl RealPhaseDriver {
         }
 
         let gate_head_sha = pr_head_sha_best_effort(self, pr);
-        let outcome = match read_verdict_file_for_head(&verdict_path, gate_head_sha.as_deref()) {
+        // TASK-1460: a skill heredoc write bypassed the record path; archive
+        // it, then let a fresh archived verdict AT the head answer when the
+        // current file does not. trace:TASK-1460 | ai:claude
+        let _ = review_verdict::adopt_direct_write(&verdict_path);
+        let outcome = match read_verdict_file_for_head(&verdict_path, gate_head_sha.as_deref())
+            .or_else(|e| {
+                phase3_head_archive_fallback(
+                    &verdict_path,
+                    gate_head_sha.as_deref(),
+                    gate_started_at,
+                )
+                .ok_or(e)
+            }) {
             Ok(o) => o,
             Err(primary_failure) => {
                 if verdict_path.is_file() {
@@ -99231,52 +99391,66 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             );
         }
 
-        let outcome =
-            match read_verdict_file_for_head(&verdict_path, pre_review_head_sha.as_deref()) {
-                Ok(o) => o,
-                Err(primary_failure) => {
-                    if verdict_path.is_file() {
-                        return Err(primary_failure);
-                    }
-                    // BUG-806: the spec-keyed record, when fresh, IS the verdict.
-                    // BUG-809: failing that, sweep sibling checkouts — the env
-                    // anchor does not reliably survive a vendor tool sandbox.
-                    let fallback = spec_verdict_fallback_for_phase3(
+        // TASK-1460: see `run_one_agent_gate` — archive a direct skill write,
+        // then fall back to a fresh archived verdict at the reviewed head.
+        // trace:TASK-1460 | ai:claude
+        let _ = review_verdict::adopt_direct_write(&verdict_path);
+        let outcome = match read_verdict_file_for_head(
+            &verdict_path,
+            pre_review_head_sha.as_deref(),
+        )
+        .or_else(|e| {
+            phase3_head_archive_fallback(
+                &verdict_path,
+                pre_review_head_sha.as_deref(),
+                reviewer_started_at,
+            )
+            .ok_or(e)
+        }) {
+            Ok(o) => o,
+            Err(primary_failure) => {
+                if verdict_path.is_file() {
+                    return Err(primary_failure);
+                }
+                // BUG-806: the spec-keyed record, when fresh, IS the verdict.
+                // BUG-809: failing that, sweep sibling checkouts — the env
+                // anchor does not reliably survive a vendor tool sandbox.
+                let fallback = spec_verdict_fallback_for_phase3(
+                    &self.project_root,
+                    &self.spec,
+                    reviewer_started_at,
+                    pre_review_head_sha.as_deref(),
+                )?;
+                let fallback = match fallback {
+                    some @ Some(_) => some,
+                    None => sibling_verdict_sweep_for_phase3(
                         &self.project_root,
+                        pr,
                         &self.spec,
                         reviewer_started_at,
                         pre_review_head_sha.as_deref(),
-                    )?;
-                    let fallback = match fallback {
-                        some @ Some(_) => some,
-                        None => sibling_verdict_sweep_for_phase3(
-                            &self.project_root,
-                            pr,
-                            &self.spec,
-                            reviewer_started_at,
-                            pre_review_head_sha.as_deref(),
-                        )?,
-                    };
-                    if let Some(o) = fallback {
-                        o
-                    } else if self.no_human.is_some() {
-                        // BUG-280: under a headless `--no-human` drain, a NoVerdict
-                        // failure is most often the AskUserQuestion-in-headless
-                        // symptom (reviewer skill called a confirmation prompt
-                        // forbidden by the harness, bailed before writing the
-                        // verdict file). Enrich the error message so the recovery
-                        // hint names the likely cause instead of the generic
-                        // "no verdict file." trace:BUG-280 | ai:claude
-                        return Err(enrich_no_verdict_with_headless_diagnostic(
-                            primary_failure,
-                            &self.project_root,
-                            reviewer_started_at,
-                        ));
-                    } else {
-                        return Err(primary_failure);
-                    }
+                    )?,
+                };
+                if let Some(o) = fallback {
+                    o
+                } else if self.no_human.is_some() {
+                    // BUG-280: under a headless `--no-human` drain, a NoVerdict
+                    // failure is most often the AskUserQuestion-in-headless
+                    // symptom (reviewer skill called a confirmation prompt
+                    // forbidden by the harness, bailed before writing the
+                    // verdict file). Enrich the error message so the recovery
+                    // hint names the likely cause instead of the generic
+                    // "no verdict file." trace:BUG-280 | ai:claude
+                    return Err(enrich_no_verdict_with_headless_diagnostic(
+                        primary_failure,
+                        &self.project_root,
+                        reviewer_started_at,
+                    ));
+                } else {
+                    return Err(primary_failure);
                 }
-            };
+            }
+        };
 
         // The reviewer writes the decision fields, but the drain owns the
         // authoritative PR head and branch context. Normalize a PR-keyed
@@ -99605,6 +99779,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &[self.project_root.as_path(), lease_root.as_path()],
             pr as u64,
             std::slice::from_ref(&self.spec),
+            head_sha.as_deref(),
         );
         drain_merge_approval_gate(&candidates, head_sha.as_deref(), pr as u64)?;
         // TASK-1458: pin the merge to the approved head the gate just

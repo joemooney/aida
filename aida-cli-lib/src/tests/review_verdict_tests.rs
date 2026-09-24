@@ -1536,7 +1536,7 @@ fn current_file_readers_are_unchanged_by_the_archive() {
     assert_eq!(top, vec![verdict_path(root, "PR-11")]);
 
     // The TASK-1448 merge-gate candidate set is unchanged: one PR-keyed record.
-    let cands = crate::pr_ship::merge_gate_verdict_candidates(&[root], 11, &[]);
+    let cands = crate::pr_ship::merge_gate_verdict_candidates(&[root], 11, &[], None);
     assert_eq!(cands.len(), 1);
     assert_eq!(cands[0].kind, VerdictKind::Approved);
 }
@@ -1562,4 +1562,172 @@ fn a_round_with_no_reviewed_sha_is_not_archived() {
     let path = verdict_path(root, "PR-5");
     record_verdict_at_path(root, &path, Some("approved"), None, None, None, &[], "x").unwrap();
     assert!(!verdict_archive_dir(&path).unwrap().exists());
+}
+
+// ── TASK-1460: per-sha archive wired through close, adopt, migrate, gate ──
+// trace:TASK-1460 | ai:claude
+#[test]
+fn close_on_merge_also_closes_the_archived_round() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_pr(
+        root,
+        "TASK-77",
+        "request-changes",
+        SHA_R1,
+        "reviewer-a",
+        &["f".into()],
+    );
+    assert!(!read_verdict_for_sha(root, "TASK-77", SHA_R1)
+        .unwrap()
+        .is_closed());
+    assert!(close_verdict_on_merge(root, "TASK-77", "abc1234").unwrap());
+    let archived = read_verdict_for_sha(root, "TASK-77", SHA_R1).unwrap();
+    assert!(archived.is_closed(), "the archived round must read closed");
+    assert!(verdicts_for_sha(root, SHA_R1).iter().all(|v| v.is_closed()));
+    // Verdict word and findings are untouched by the close.
+    assert_eq!(archived.kind, VerdictKind::RequestChanges);
+    assert_eq!(archived.findings, vec!["f".to_string()]);
+}
+
+// trace:TASK-1460 | ai:claude
+#[test]
+fn close_on_merge_archives_a_pre_archive_refusal_closed() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    // Written before the archive existed; the migration marker is present so
+    // nothing else archives it first.
+    std::fs::write(dir.join(".archive-migrated"), "0\n").unwrap();
+    std::fs::write(
+        dir.join("BUG-9.json"),
+        format!(r#"{{"verdict":"rejected","reviewed_sha":"{SHA_R1}"}}"#),
+    )
+    .unwrap();
+    assert!(close_verdict_on_merge(root, "BUG-9", "PR-3").unwrap());
+    assert!(read_verdict_for_sha(root, "BUG-9", SHA_R1)
+        .unwrap()
+        .is_closed());
+    let archive = verdict_archive_dir(&verdict_path(root, "BUG-9"))
+        .unwrap()
+        .join(format!("{SHA_R1}.json"));
+    assert!(archive.is_file());
+}
+
+// trace:TASK-1460 | ai:claude
+#[test]
+fn a_direct_skill_write_is_adopted_into_the_archive() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let path = verdict_path(root, "PR-40");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let body = format!(
+        r#"{{"verdict":"Approved","summary":"ok","mode":"orchestrator-phase-3","reviewed_sha":"{SHA_R2}"}}"#
+    );
+    std::fs::write(&path, &body).unwrap();
+    adopt_direct_write(&path).unwrap();
+    adopt_direct_write(&path).unwrap(); // idempotent
+    assert_eq!(archive_files(root, "PR-40"), vec![format!("{SHA_R2}.json")]);
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        body,
+        "the current file is left as the skill wrote it"
+    );
+    assert_eq!(
+        verdict_file_for_sha(root, "PR-40", SHA_R2).as_deref(),
+        Some(path.as_path()),
+        "the current file answers first when it is at the sha"
+    );
+
+    // No reviewed commit → unidentifiable → not archived.
+    let bare = verdict_path(root, "PR-41");
+    std::fs::write(&bare, r#"{"verdict":"Approved"}"#).unwrap();
+    adopt_direct_write(&bare).unwrap();
+    assert!(!verdict_archive_dir(&bare).unwrap().exists());
+}
+
+// trace:TASK-1460 | ai:claude
+#[test]
+fn migration_archives_existing_sidecars_once_and_idempotently() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let legacy = format!(
+        r#"{{"verdict":"approved","reviewed_sha":"{SHA_R2}","recorded_by":"b","recorded_at":"2026-09-02T00:00:00Z",
+            "rounds":[{{"verdict":"request-changes","head":"{SHA_R1}","recorded_by":"a","recorded_at":"2026-09-01T00:00:00Z","findings":["x"]}}]}}"#
+    );
+    std::fs::write(dir.join("PR-3.json"), &legacy).unwrap();
+    std::fs::write(dir.join("PR-4.json"), r#"{"verdict":"approved"}"#).unwrap();
+    std::fs::write(dir.join("PR-5.json"), "not json").unwrap();
+
+    assert_eq!(migrate_sidecars_to_archive(&dir).unwrap(), 2);
+    assert_eq!(
+        archive_files(root, "PR-3"),
+        vec![format!("{SHA_R1}.json"), format!("{SHA_R2}.json")]
+    );
+    let r1 = read_verdict_for_sha(root, "PR-3", SHA_R1).unwrap();
+    assert_eq!(r1.kind, VerdictKind::RequestChanges);
+    assert_eq!(r1.findings, vec!["x".to_string()]);
+    assert!(!verdict_archive_dir(&dir.join("PR-4.json"))
+        .unwrap()
+        .exists());
+    // Top-level files are untouched; a re-run adds nothing.
+    assert_eq!(
+        std::fs::read_to_string(dir.join("PR-3.json")).unwrap(),
+        legacy
+    );
+    assert_eq!(migrate_sidecars_to_archive(&dir).unwrap(), 0);
+
+    // The lazy one-shot runs once, then the marker short-circuits it.
+    assert_eq!(ensure_sidecars_archived(&dir).unwrap(), 0);
+    assert!(dir.join(".archive-migrated").is_file());
+    std::fs::remove_dir_all(dir.join("PR-3")).unwrap();
+    assert_eq!(ensure_sidecars_archived(&dir).unwrap(), 0);
+    assert!(!dir.join("PR-3").exists(), "marker makes it one-shot");
+}
+
+// trace:TASK-1460 | ai:claude
+#[test]
+fn the_record_path_migrates_existing_sidecars_lazily() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("PR-8.json"),
+        format!(r#"{{"verdict":"approved","reviewed_sha":"{SHA_R1}"}}"#),
+    )
+    .unwrap();
+    record_pr(root, "PR-9", "approved", SHA_R2, "r", &[]);
+    assert_eq!(archive_files(root, "PR-8"), vec![format!("{SHA_R1}.json")]);
+    assert!(dir.join(".archive-migrated").is_file());
+}
+
+// trace:TASK-1460 | ai:claude
+#[test]
+fn merge_gate_candidates_include_the_archived_verdict_at_head() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_pr(root, "PR-20", "approved", SHA_R1, "reviewer-a", &[]);
+    // A later round at a different commit replaces the current file.
+    record_pr(root, "PR-20", "request-changes", SHA_R2, "reviewer-b", &[]);
+
+    let without_head = crate::pr_ship::merge_gate_verdict_candidates(&[root], 20, &[], None);
+    assert_eq!(without_head.len(), 1);
+    let at_head = crate::pr_ship::merge_gate_verdict_candidates(&[root], 20, &[], Some(SHA_R1));
+    assert_eq!(at_head.len(), 2);
+    assert!(at_head
+        .iter()
+        .any(|v| v.kind == VerdictKind::Approved && v.reviewed_sha.as_deref() == Some(SHA_R1)));
+    // The approval covers the head, so the TASK-1448 gate passes.
+    assert_eq!(
+        crate::pr_ship::approval_head_refusal(&at_head, Some(SHA_R1)),
+        None
+    );
+    // When the current file is already at head nothing is duplicated.
+    let current_head =
+        crate::pr_ship::merge_gate_verdict_candidates(&[root], 20, &[], Some(SHA_R2));
+    assert_eq!(current_head.len(), 1);
 }
