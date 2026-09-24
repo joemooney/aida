@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T16:43:05.320943179Z
-modified_at: 2026-09-24T17:41:53.637413430Z
+modified_at: 2026-09-24T19:07:47.390228047Z
 req_type: Task
 tags:
 - papercut
@@ -28,6 +28,12 @@ comments:
   content: 'Review: APPROVE (fresh strict Opus reviewer). PROXY DECISION (orchestrator for Joe): tracker imports now receive node-scoped IDs (TYPE-<node>-NNN) from the dispenser, where they used to get metadata-counter short IDs. Accepted: this is aida add''s no-block fallback, it cannot collide with short or block IDs (the old path could overwrite without checking), and merge-gate can assign agreed short IDs later. Requested before merge: pin the format with a test, add a docs line, and merge origin/main to clear the trivial conflicts from the 1486 squash.'
   created_at: 2026-09-24T17:41:53.637413430Z
   modified_at: 2026-09-24T17:41:53.637413430Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d4d1-153e-7ff3-b6a1-b919a0fe43e6
+  author: joe
+  content: 'Re-review of the project-root fix: APPROVE (fresh reviewer). project_root_from_store_hint applies the 4 rules correctly, the walk-up is guarded, and the black-box test confirms the fix. Non-blocking: the doc comment on run_on_distributed_store is stale. Queued for batch 53.'
+  created_at: 2026-09-24T19:07:47.390228047Z
+  modified_at: 2026-09-24T19:07:47.390228047Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 43649a4222d7611933b2943187d80a6154718587
