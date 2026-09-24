@@ -18,12 +18,12 @@ description: |-
   4. forge_for remains the default path; no production caller has to pass a forge to keep working.
 
   NOT IN SCOPE: converting existing forge call sites wholesale. Only the path the orchestrator's publication boundary uses needs the seam.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:03:47.643930772Z
-modified_at: 2026-09-21T18:03:52.931650235Z
+modified_at: 2026-09-24T08:12:43.820050039Z
 req_type: Task
 tags:
 - aida:preflight
