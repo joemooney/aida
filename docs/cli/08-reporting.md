@@ -266,6 +266,48 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 ---
 
+### `aida explain`
+
+<!-- doc-intent: TASK-1470 -->
+
+**One line** — write a plain-language explanation of one spec for a chosen audience, and tell you whether it is still current.
+
+**Mental model.** `explain` extracts a summary, rationale, key constraints, trade-offs, and open questions from the spec body, saves them as a sidecar file next to the store (`expositions/<SPEC-ID>/<audience>.yaml`), and stamps it with a hash of the spec and its immediate neighbors. Later runs reuse the sidecar and mark it STALE when that neighborhood has changed. A quick quality audit checks that critical rules (for example "fail closed") survived the rewrite.
+
+**Reach for it when** — you need to hand a spec to someone who doesn't read AIDA specs every day: an operator, an executive, a new contributor.
+
+**Don't reach for it when** — you want the literal contract (`aida show`) or an AI-written reading of the spec's purpose (`aida intent`). `explain` works offline by default and is extractive, not generative.
+
+**Key options (rationale only).**
+- `--audience` — `operator` (default), `executive`, `implementer`, or `contributor`.
+- `--refresh` — regenerate even when a sidecar exists. A sidecar a human marked as reviewed is kept unless you also pass `--force`.
+- `--force` — overwrite a human-reviewed sidecar.
+- `--json` — the sidecar plus `stale`, `human_reviewed`, and the current neighborhood hash.
+
+**Gotchas.** The audit is offline unless `AIDA_JEV_API_KEY` is set. When it is set, `explain` sends the spec text to TypeSafe AI (`api.typesafe.ai`) for an advisory score. That call is network egress, has a 5-second deadline, and a failure is recorded as "unavailable", never as a pass. See the environment-variables chapter.
+
+**Chains with** — `aida wiki build` renders every spec's explanation into a browsable local site.
+
+---
+
+### `aida wiki`
+
+<!-- doc-intent: TASK-1470 -->
+
+**One line** — build and browse a local HTML site of every spec with its plain-language explanation and a diagram of its immediate neighbors.
+
+**Mental model.** `aida wiki build` writes static pages to `.aida/wiki` (or `--out`): an index with freshness counts and an epic map, plus one page per spec. `aida wiki serve` serves that folder on `127.0.0.1` only (default port 8420, change it with `--port`; there is no option to bind another address). It builds the site first if needed; point it at another folder with `--dir`.
+
+**Reach for it when** — you want to click around the requirement graph in a browser, or show a stakeholder the project without giving them the CLI.
+
+**Don't reach for it when** — you want to share the site over the network. Copy the static folder somewhere instead. The server is deliberately loopback-only.
+
+**Gotchas.** Diagrams use a copy of mermaid bundled into `aida`, so the pages work offline and load nothing from the internet. Rebuild after the store changes; the pages are a snapshot.
+
+**Chains with** — `aida explain <ID> --audience <role>` to create or refresh the explanation a page shows.
+
+---
+
 ### `aida user-guide`
 
 **One line** — open the rendered user guide in the default browser.

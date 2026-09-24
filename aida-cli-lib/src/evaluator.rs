@@ -246,6 +246,18 @@ impl JevEvaluator {
         self.model = model.into();
         self
     }
+
+    /// Minimal evaluator shim for advisory callers (`aida explain`): replace the
+    /// default 15s request timeout with a caller-chosen deadline so an advisory
+    /// audit can never stall the command. Stands in for the unmerged resilience
+    /// adapter's `into_resilient` on the feature branch.
+    // trace:TASK-1470 | ai:claude
+    pub fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
+        if let Ok(client) = reqwest::Client::builder().timeout(timeout).build() {
+            self.client = client;
+        }
+        self
+    }
 }
 
 impl EvaluatorEngine for JevEvaluator {
