@@ -115,12 +115,12 @@ description: |
   RELATED AND DISTINCT: BUG-1533 is authorship the envelope cannot recover; BUG-1534 is
   reasoning relayed without provenance. This is neither — every record here is correctly
   attributed and correctly stored. It is only never read at the moment it matters.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:10:44.000996596Z
-modified_at: 2026-09-24T05:52:38.064787091Z
+modified_at: 2026-09-24T07:08:37.242287809Z
 req_type: Story
 tags:
 - parent:EPIC-62 substrate-as-bouncer consultation severity:operational
@@ -180,3 +180,21 @@ comments:
   created_at: 2026-09-21T06:30:36.197200902Z
   modified_at: 2026-09-21T06:30:36.197200902Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0d23e-a9f3-7740-81b5-676643ae16d4
+  author: aida-auto-bump
+  timestamp: 2026-09-24T07:08:37.235278608Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d23e-a9fa-79b1-bcdb-142ed176273b
+  timestamp: 2026-09-24T07:08:37.242285325Z
+  agent: aida
+  commit_sha: 27a2a394ead4c7aae3ff6fe370a23ca5b93e513e
+  summary: Completed via merge 27a2a394
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T07:08:37.235003247Z
+  completion_sha: 27a2a394ead4c7aae3ff6fe370a23ca5b93e513e
