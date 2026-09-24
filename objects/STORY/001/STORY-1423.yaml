@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:06:08.524538425Z
-modified_at: 2026-09-24T20:53:26.312784520Z
+modified_at: 2026-09-24T20:58:56.329444146Z
 req_type: Story
 tags:
 - closure:pending
@@ -321,6 +321,12 @@ comments:
         cargo test -p aida-cli-lib --lib this_repo
   created_at: 2026-09-24T20:35:03.634372283Z
   modified_at: 2026-09-24T20:35:03.634372283Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d536-d7c9-7420-9b2b-b43188a1e655
+  author: joe
+  content: 'Review: APPROVE (fresh reviewer). The change is tests only; both tests locate the config via CARGO_MANIFEST_DIR, which is safe from any cwd. closure:pending is set and the spec is blocked-by BUG-1606, so a merge will not complete it. Queued for batch 54.'
+  created_at: 2026-09-24T20:58:56.329444146Z
+  modified_at: 2026-09-24T20:58:56.329444146Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0d08f-a355-7422-b04b-a11b42f298cc
