@@ -8,8 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:32:13.729382147Z
-modified_at: 2026-09-24T08:12:11.580844195Z
+modified_at: 2026-09-24T10:50:54.670616141Z
 req_type: Story
+tags:
+- docs:impacted
 comments:
 - id: 01a0d144-5a5e-78f1-8ac8-eb249ff777e8
   author: joe
