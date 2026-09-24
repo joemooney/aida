@@ -30725,33 +30725,59 @@ fn handle_merge_lock_status(json: bool) -> Result<()> {
     Ok(())
 }
 
-/// Partition merge-hold markers into (stale, live) by a mergedness predicate:
-/// a marker whose PR has already merged is stale (a phantom hold left behind by
-/// a merge AIDA did not perform, e.g. a raw `gh pr merge`). Pure so the
-/// list/sweep logic is testable without a live forge.
-// trace:TASK-161 | ai:claude
+type StaleHold = (u64, String, merge_hold::TerminalState);
+
+/// Partition merge-hold markers into (stale, live) by a terminal-state
+/// predicate: a marker whose PR can never merge (again) is stale — merged (a
+/// phantom left by a merge AIDA did not perform, e.g. a raw `gh pr merge`) OR
+/// closed without merging (BUG-1541). Pure so the list/sweep logic is
+/// testable without a live forge.
+// trace:TASK-161 trace:BUG-1541 | ai:claude
 fn partition_stale_holds(
     holds: Vec<(u64, String)>,
-    mut is_merged: impl FnMut(u64) -> Option<bool>,
-) -> (Vec<(u64, String)>, Vec<(u64, String)>) {
+    mut terminal_state: impl FnMut(u64) -> Option<merge_hold::TerminalState>,
+) -> (Vec<StaleHold>, Vec<(u64, String)>) {
     let mut stale = Vec::new();
     let mut live = Vec::new();
     for (pr, reason) in holds {
-        // Only a definite "yes, merged" makes a marker stale; an unknown
-        // (offline / gh error) is treated as live so we never clear a hold we
-        // could not confirm is safe to drop. trace:TASK-161 | ai:claude
-        if is_merged(pr) == Some(true) {
-            stale.push((pr, reason));
-        } else {
-            live.push((pr, reason));
+        // Only a definite terminal state makes a marker stale; an unknown
+        // (offline / gh error / unrecognised state word) is treated as live so
+        // we never clear a hold we could not confirm is safe to drop.
+        // trace:TASK-161 trace:BUG-1541 | ai:claude
+        match terminal_state(pr) {
+            Some(terminal) => stale.push((pr, reason, terminal)),
+            None => live.push((pr, reason)),
         }
     }
     (stale, live)
 }
 
+/// The terminal state behind a marker, from one pinned forge read (or the
+/// pure-git fallback). Fails CLOSED: anything but a definite merged/closed
+/// answer is `None` (live).
+// trace:BUG-1541 | ai:claude
+fn hold_terminal_state(
+    root: &std::path::Path,
+    pr: u64,
+    fetched: Option<&Result<Option<merge_hold::PinnedChange>, String>>,
+) -> Option<merge_hold::TerminalState> {
+    match fetched {
+        Some(Ok(Some(change))) => change.state.terminal(),
+        // pure-git: no forge repo to pin; keep the forge-routed check.
+        Some(Ok(None)) => {
+            let mut sink = network_retry::StderrSink;
+            (pr_is_merged_with_sink(root, pr as u32, &mut sink) == Some(true))
+                .then_some(merge_hold::TerminalState::Merged)
+        }
+        // unreadable / unpinnable: cannot confirm terminal → stays live.
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod merge_hold_cli_tests {
     use super::partition_stale_holds;
+    use crate::merge_hold::TerminalState;
 
     #[test]
     fn stale_partition_splits_merged_from_open_and_unknown() {
@@ -30763,14 +30789,62 @@ mod merge_hold_cli_tests {
         // PR 1 merged -> stale; PR 2 still open -> live; PR 3 unknown (offline /
         // gh error) -> live, because an unconfirmed hold is never swept.
         let (stale, live) = partition_stale_holds(holds, |pr| match pr {
-            1 => Some(true),
-            2 => Some(false),
+            1 => Some(TerminalState::Merged),
             _ => None,
         });
-        assert_eq!(stale, vec![(1u64, "drive".to_string())]);
+        assert_eq!(
+            stale,
+            vec![(1u64, "drive".to_string(), TerminalState::Merged)]
+        );
         assert_eq!(
             live,
             vec![(2u64, "drive".to_string()), (3u64, "drive".to_string())]
+        );
+    }
+
+    // BUG-1541: a PR closed WITHOUT merging is equally phantom — it can never
+    // merge, so its hold releases nothing. It is swept and reported distinctly
+    // from a merged one; an unknown forge state stays live (fail closed).
+    // trace:BUG-1541 | ai:claude
+    #[test]
+    fn stale_partition_sweeps_closed_unmerged_and_fails_closed_on_unknown() {
+        use crate::merge_hold::ChangeState;
+        let states = [
+            (10u64, ChangeState::parse(Some("MERGED"))),
+            (11, ChangeState::parse(Some("CLOSED"))),
+            (12, ChangeState::parse(Some("OPEN"))),
+            (13, ChangeState::parse(None)),
+            (14, ChangeState::parse(Some("weird"))),
+            (15, ChangeState::parse(Some("closed"))), // GitLab spelling
+            (16, ChangeState::parse(Some("opened"))),
+        ];
+        let holds = states
+            .iter()
+            .map(|(pr, _)| (*pr, "r".to_string()))
+            .collect();
+        let (stale, live) = partition_stale_holds(holds, |pr| {
+            states
+                .iter()
+                .find(|(n, _)| *n == pr)
+                .and_then(|(_, s)| s.terminal())
+        });
+        assert_eq!(
+            stale.iter().map(|(pr, _, t)| (*pr, *t)).collect::<Vec<_>>(),
+            vec![
+                (10, TerminalState::Merged),
+                (11, TerminalState::ClosedUnmerged),
+                (15, TerminalState::ClosedUnmerged),
+            ]
+        );
+        assert_eq!(
+            live.iter().map(|(pr, _)| *pr).collect::<Vec<_>>(),
+            vec![12, 13, 14, 16],
+            "open and unknown states are never swept"
+        );
+        assert_eq!(TerminalState::Merged.describe(), "PR merged");
+        assert_eq!(
+            TerminalState::ClosedUnmerged.describe(),
+            "PR closed without merging"
         );
     }
 }
@@ -30796,16 +30870,9 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     .collect::<std::collections::HashMap<_, _>>()
             };
             let mut facts = fetch_all(&holds);
-            let (stale, live) = partition_stale_holds(holds, |pr| match facts.get(&pr) {
-                Some(Ok(Some(change))) => Some(change.merged),
-                // pure-git: no forge repo to pin; keep the forge-routed check.
-                Some(Ok(None)) => {
-                    let mut sink = network_retry::StderrSink;
-                    pr_is_merged_with_sink(&root, pr as u32, &mut sink)
-                }
-                // unreadable / unpinnable: cannot confirm merged → stays live.
-                _ => None,
-            });
+            // BUG-1541: merged AND closed-unmerged are both terminal.
+            let (stale, live) =
+                partition_stale_holds(holds, |pr| hold_terminal_state(&root, pr, facts.get(&pr)));
             // BUG-1236: `--fix` re-syncs the Layer-2 label on every LIVE hold
             // whose FORGE label is not confirmed present, then reports.
             // TASK-189: keyed off the forge read, not the recorded state, so a
@@ -30835,8 +30902,11 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     println!("No live hold needed a label re-sync.");
                 } else {
                     // Re-read so the listing below shows the post-fix forge.
-                    let all: Vec<(u64, String)> =
-                        live.iter().chain(stale.iter()).cloned().collect();
+                    let all: Vec<(u64, String)> = live
+                        .iter()
+                        .cloned()
+                        .chain(stale.iter().map(|(pr, r, _)| (*pr, r.clone())))
+                        .collect();
                     facts = fetch_all(&all);
                 }
                 // STORY-1397: recusal routing is reconciled HERE, on an
@@ -30889,13 +30959,69 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     .map(merge_hold::ForgeLabel::from_fetch)
                     .unwrap_or(merge_hold::ForgeLabel::Unknown(String::new()))
             };
+            // BUG-1469: a hold placed as a bare forge label has no marker, yet
+            // blocks the merge exactly like one. Enumerate open labeled PRs in
+            // ONE pinned query and list the label-only ones too; a scan that
+            // could not run is REPORTED, never rendered as "no such holds".
+            // trace:BUG-1469 | ai:claude
+            let label_scan = merge_hold::list_labeled_open_changes(&root, forge_kind);
+            let marker_prs: Vec<u64> = live
+                .iter()
+                .map(|(pr, _)| *pr)
+                .chain(stale.iter().map(|(pr, _, _)| *pr))
+                .collect();
+            let label_only: Vec<u64> = match &label_scan {
+                Ok(Some(labeled)) => merge_hold::label_only_holds(labeled, &marker_prs),
+                _ => Vec::new(),
+            };
+            // A live marker the per-PR read saw labeled but the scan did not
+            // list is a disagreement between two forge answers — surfaced,
+            // not silently resolved toward the smaller set.
+            let scan_disagrees: Vec<u64> = match &label_scan {
+                Ok(Some(labeled)) => live
+                    .iter()
+                    .map(|(pr, _)| *pr)
+                    .filter(|pr| {
+                        forge_label_of(*pr) == merge_hold::ForgeLabel::Present
+                            && !labeled.contains(pr)
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            let label_scan_state = match &label_scan {
+                Ok(Some(_)) => "ok".to_string(),
+                Ok(None) => "no-forge".to_string(),
+                Err(e) => format!("unknown: {}", e.lines().next().unwrap_or("")),
+            };
+            // BUG-1562: re-evaluate each live marker's premise at read time
+            // (PR head vs the sha it cites; a rework hold's verdict now
+            // approved or closed). FLAG only — never auto-clear.
+            // trace:BUG-1562 | ai:claude
+            let premise_of = |pr: u64| -> Option<String> {
+                let record = merge_hold::read_hold_record(&root, pr)?;
+                let head = match facts.get(&pr) {
+                    Some(Ok(Some(change))) => change.head_sha.clone(),
+                    _ => None,
+                };
+                merge_hold::premise_stale(&record, head.as_deref(), |spec| {
+                    review_verdict::read_recorded_verdict(&root, spec)
+                })
+            };
+            let source_of = |pr: u64| {
+                if forge_label_of(pr) == merge_hold::ForgeLabel::Present {
+                    merge_hold::HoldSource::MarkerAndLabel
+                } else {
+                    merge_hold::HoldSource::Marker
+                }
+            };
             let recorded_of = |pr: u64| match merge_hold::read_label_state(&root, pr) {
                 merge_hold::LabelState::Synced => "synced".to_string(),
                 merge_hold::LabelState::Unsynced(e) => format!("unsynced: {e}"),
                 merge_hold::LabelState::Unknown => "unknown".to_string(),
             };
             if *json {
-                let row = |pr: u64, reason: &str, is_stale: bool| {
+                let row = |pr: u64, reason: &str, terminal: Option<merge_hold::TerminalState>| {
+                    let is_stale = terminal.is_some();
                     let forge_label = forge_label_of(pr);
                     let record = merge_hold::read_hold_record(&root, pr);
                     let kind = record
@@ -30916,7 +31042,10 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         "reason_kind": kind,
                         "routing_state": routing,
                         "recused_principals": recused,
+                        "source": source_of(pr).as_str(),
                         "stale": is_stale,
+                        "stale_reason": terminal.map(merge_hold::TerminalState::as_str),
+                        "premise_stale": if is_stale { None } else { premise_of(pr) },
                         "label": forge_label.as_str(),
                         "label_recorded": recorded_of(pr),
                         "label_diverged": if is_stale {
@@ -30928,15 +31057,58 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 };
                 let mut items: Vec<serde_json::Value> = Vec::new();
                 for (pr, reason) in &live {
-                    items.push(row(*pr, reason, false));
+                    items.push(row(*pr, reason, None));
                 }
-                for (pr, reason) in &stale {
-                    items.push(row(*pr, reason, true));
+                // BUG-1469: label-only holds are rows too, naming the missing half.
+                for pr in &label_only {
+                    items.push(serde_json::json!({
+                        "pr": pr,
+                        "reason": merge_hold::LABEL_ONLY_REASON,
+                        "reason_kind": "unknown",
+                        "routing_state": "pending",
+                        "recused_principals": [],
+                        "source": merge_hold::HoldSource::LabelOnly.as_str(),
+                        "stale": false,
+                        "stale_reason": null,
+                        "premise_stale": null,
+                        "label": merge_hold::ForgeLabel::Present.as_str(),
+                        "label_recorded": "none",
+                        "label_diverged": null,
+                    }));
                 }
-                println!("{}", serde_json::json!({ "merge_holds": items }));
+                for (pr, reason, terminal) in &stale {
+                    items.push(row(*pr, reason, Some(*terminal)));
+                }
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "merge_holds": items,
+                        "label_scan": label_scan_state,
+                        "label_scan_disagrees": scan_disagrees,
+                    })
+                );
                 return Ok(());
             }
-            if live.is_empty() && stale.is_empty() {
+            if let Err(err) = &label_scan {
+                println!(
+                    "{}",
+                    format!(
+                        "Label-only holds UNKNOWN — the `aida:merge-hold` label scan did not run ({}); PRs held by the label alone may be missing below.",
+                        err.lines().next().unwrap_or("")
+                    )
+                    .yellow()
+                );
+            }
+            for pr in &scan_disagrees {
+                println!(
+                    "{}",
+                    format!(
+                        "PR #{pr}: the per-PR read shows the hold label but the label scan did not list it — the forge answers disagree."
+                    )
+                    .yellow()
+                );
+            }
+            if live.is_empty() && stale.is_empty() && label_only.is_empty() {
                 println!("No active merge-holds.");
                 return Ok(());
             }
@@ -30959,11 +31131,31 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     .to_string(),
                 };
                 println!("  PR #{pr}  {reason}  [{rendered} | recorded: {recorded}]");
+                if let Some(why) = premise_of(*pr) {
+                    println!(
+                        "      {}",
+                        format!(
+                            "premise stale: {why} — the hold is still armed; a human decides whether to `aida merge-hold clear {pr}`"
+                        )
+                        .yellow()
+                    );
+                }
             }
-            for (pr, reason) in &stale {
+            for pr in &label_only {
+                println!(
+                    "  PR #{pr}  {}  [{} | recorded: none — no marker, no reason; `aida merge-hold clear {pr}` releases it]",
+                    merge_hold::LABEL_ONLY_REASON,
+                    "label: present".green()
+                );
+            }
+            for (pr, reason, terminal) in &stale {
                 println!(
                     "  PR #{pr}  {reason}  {}",
-                    "[stale — PR merged; `aida merge-hold clear --stale` to sweep]".yellow()
+                    format!(
+                        "[stale — {}; `aida merge-hold clear --stale` to sweep]",
+                        terminal.describe()
+                    )
+                    .yellow()
                 );
             }
             Ok(())
@@ -31043,12 +31235,12 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             match (pr, stale) {
                 (Some(_), true) => {
                     anyhow::bail!(
-                        "give a PR number OR --stale, not both: `aida merge-hold clear <pr>` clears one, `aida merge-hold clear --stale` sweeps every already-merged marker"
+                        "give a PR number OR --stale, not both: `aida merge-hold clear <pr>` clears one, `aida merge-hold clear --stale` sweeps every marker whose PR merged or closed unmerged"
                     );
                 }
                 (None, false) => {
                     anyhow::bail!(
-                        "nothing to clear: `aida merge-hold clear <pr>` clears one hold, `aida merge-hold clear --stale` sweeps every already-merged marker"
+                        "nothing to clear: `aida merge-hold clear <pr>` clears one hold, `aida merge-hold clear --stale` sweeps every marker whose PR merged or closed unmerged"
                     );
                 }
                 (Some(pr), false) => {
@@ -31073,6 +31265,41 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         None => None,
                     };
                     let existed = cleared.is_some();
+                    // BUG-1499: no marker may still mean a LABEL-ONLY hold (a
+                    // seat applied the label by hand). The same human floor
+                    // above already applies; read the forge label (pinned) so
+                    // the clearance is recorded against a hold that really
+                    // existed, never against a guess.
+                    // trace:BUG-1499 | ai:claude
+                    let label_only_forge = if existed {
+                        None
+                    } else {
+                        Some(merge_hold::ForgeLabel::from_fetch(
+                            &merge_hold::fetch_pinned_change(
+                                &root,
+                                forge::resolve_forge_kind(&root),
+                                *pr,
+                            ),
+                        ))
+                    };
+                    let label_only_record = match &label_only_forge {
+                        Some(merge_hold::ForgeLabel::Present) => {
+                            let record = merge_hold::typed_hold(
+                                *pr,
+                                merge_hold::HoldReasonKind::Unknown,
+                                merge_hold::LABEL_ONLY_REASON,
+                                None,
+                            );
+                            let actor = merge_hold::human_clear_actor(
+                                &record,
+                                &current_user_id(None),
+                                merge_hold::current_principal().as_ref(),
+                            )
+                            .map_err(|e| anyhow::anyhow!(e))?;
+                            Some((record, actor))
+                        }
+                        _ => None,
+                    };
                     merge_hold::clear_hold(&root, *pr)?;
                     if let Some((record, actor)) = &cleared {
                         if let Err(err) = merge_hold::record_clearance(&root, record, actor) {
@@ -31088,7 +31315,17 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                             );
                         }
                     }
-                    if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
+                    if matches!(
+                        label_only_forge,
+                        Some(merge_hold::ForgeLabel::Absent | merge_hold::ForgeLabel::NoForge)
+                    ) {
+                        println!(
+                            "No merge-hold on PR #{pr}: no marker, and the forge carries no `aida:merge-hold` label."
+                        );
+                        return Ok(());
+                    }
+                    let unlabel = merge_hold::sync_label(&root, *pr, false);
+                    if let Err(err) = &unlabel {
                         eprintln!(
                         "  {} label not dropped on PR #{pr}: {err} — drop it by hand or re-run `aida merge-hold clear {pr}`",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow()
@@ -31098,9 +31335,26 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         println!(
                             "Cleared merge-hold on PR #{pr} (marker removed, `aida:merge-hold` label dropped)."
                         );
+                    } else if let Some((record, actor)) = &label_only_record {
+                        if unlabel.is_ok() {
+                            if let Err(err) = merge_hold::record_clearance(&root, record, actor) {
+                                eprintln!(
+                                    "  {} could not record who cleared PR #{pr}: {err}",
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                                );
+                            }
+                            println!(
+                                "Cleared label-only merge-hold on PR #{pr} (no marker; `aida:merge-hold` label dropped, clearance recorded as {}).",
+                                actor.key()
+                            );
+                        } else {
+                            anyhow::bail!(
+                                "label-only merge-hold on PR #{pr} is still in place: the label could not be removed"
+                            );
+                        }
                     } else {
                         println!(
-                            "No merge-hold marker for PR #{pr}; dropped the `aida:merge-hold` label anyway in case it lingered."
+                            "No merge-hold marker for PR #{pr} and the forge label could not be read; dropped the `aida:merge-hold` label anyway in case it lingered."
                         );
                     }
                     Ok(())
@@ -31111,22 +31365,23 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     // removing a marker is pinned to this project's repo — a
                     // same-numbered merged PR elsewhere must not sweep a live
                     // hold here. trace:TASK-1455 | ai:claude
+                    // BUG-1541: a PR closed WITHOUT merging is swept too —
+                    // it can never merge, so its hold releases nothing. An
+                    // unknown forge state stays (fail closed).
+                    // trace:BUG-1541 | ai:claude
                     let forge_kind = forge::resolve_forge_kind(&root);
-                    let (stale, _live) = partition_stale_holds(holds, |pr| {
-                        match merge_hold::fetch_pinned_change(&root, forge_kind, pr) {
-                            Ok(Some(change)) => Some(change.merged),
-                            Ok(None) => {
-                                let mut sink = network_retry::StderrSink;
-                                pr_is_merged_with_sink(&root, pr as u32, &mut sink)
-                            }
-                            Err(_) => None,
-                        }
+                    let (stale, live) = partition_stale_holds(holds, |pr| {
+                        let fetched = merge_hold::fetch_pinned_change(&root, forge_kind, pr);
+                        hold_terminal_state(&root, pr, Some(&fetched))
                     });
                     if stale.is_empty() {
-                        println!("No stale merge-holds (every marker's PR is still open).");
+                        println!(
+                            "No stale merge-holds ({} marker(s) on PRs that are open or whose state could not be confirmed).",
+                            live.len()
+                        );
                         return Ok(());
                     }
-                    for (pr, _reason) in &stale {
+                    for (pr, _reason, terminal) in &stale {
                         let _ = merge_hold::clear_hold(&root, *pr);
                         if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
                             eprintln!(
@@ -31134,7 +31389,10 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                                 crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                             );
                         }
-                        println!("Cleared stale merge-hold on PR #{pr} (PR already merged).");
+                        println!(
+                            "Cleared stale merge-hold on PR #{pr} ({}).",
+                            terminal.describe()
+                        );
                     }
                     println!("Swept {} stale merge-hold(s).", stale.len());
                     Ok(())

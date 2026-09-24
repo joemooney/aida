@@ -1900,6 +1900,8 @@ pub(crate) fn pr_ship_handler(
             pr_number as u32,
         ) == pr_ship::ReviewerLiveness::OnThisPr
     });
+    // Drive-ownership tier only (TASK-1253). A hold binds `pr ship` on its
+    // own, drive or no drive, at the BUG-1532 gate below.
     let hold_matches_drive_spec = crate::merge_hold::read_hold(&main_worktree, pr_number)
         .is_some_and(|reason| drive_specs.iter().any(|spec| reason.contains(spec)));
     let pr_is_drive_owned = reviewer_live_here || hold_matches_drive_spec;
@@ -1918,7 +1920,7 @@ pub(crate) fn pr_ship_handler(
         eprintln!(
             "{} PR-{} left OPEN — `aida pr ship` refused: {}. The orchestrator's \
              independent reviewer gates the merge. (Deliberate in-drive direct-publish? set \
-             AIDA_PR_SHIP_ALLOW_IN_DRIVE=1.)",
+             AIDA_PR_SHIP_ALLOW_IN_DRIVE=1 — it never bypasses a merge-hold.)",
             "⏸".yellow().bold(),
             pr_number,
             reason_text,
@@ -1932,6 +1934,32 @@ pub(crate) fn pr_ship_handler(
             )),
         );
         return Ok(());
+    }
+
+    // ---- BUG-1532: ANY merge-hold marker binds `aida pr ship`, with or
+    // without a live drive and whatever its reason text names. Checked HERE —
+    // before the CI watch (which would otherwise discount the hold's own red
+    // gate) and before the release step. A supervision/decision hold still
+    // releases for a human at a terminal (BUG-1167); a refusal-shaped hold
+    // (rework/recusal/malformed/untyped) never releases through a merge, and
+    // no hold releases without a human (BUG-1566). A label-only hold is
+    // caught at the release step below, where the forge label is read.
+    // AIDA_PR_SHIP_ALLOW_IN_DRIVE deliberately does not reach this gate.
+    // trace:BUG-1532 | ai:claude
+    if pr_number != 0 {
+        if let Some(refusal) = pr_ship::ship_hold_gate(
+            crate::merge_hold::read_hold_record(&main_worktree, pr_number).as_ref(),
+            crate::has_integrity_floor_authority(),
+            pr_number,
+        ) {
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Skipped(refusal.clone()),
+            );
+            anyhow::bail!(refusal);
+        }
     }
 
     // ---- STORY-529: draft-for-review gate. A spec tagged `review:draft-only`
@@ -2337,8 +2365,13 @@ pub(crate) fn pr_ship_handler(
         // my re-review" hold therefore moves to a human once approved.
         // trace:BUG-1167 trace:BUG-1566 | ai:claude
         let marker_reason = crate::merge_hold::read_hold(&hold_root, pr_number);
-        if let Some(refusal) = pr_ship::ship_hold_release_refusal(
-            marker_reason.is_some() || label_only_hold,
+        // BUG-1499: a LABEL-ONLY hold (no marker) is never released here —
+        // not even for a human — because a ship leaves no clearance record.
+        // It goes through `aida merge-hold clear <PR>`, which records it.
+        // trace:BUG-1499 | ai:claude
+        if let Some(refusal) = pr_ship::ship_hold_release_refusal_for(
+            marker_reason.is_some(),
+            label_only_hold,
             crate::has_integrity_floor_authority(),
             pr_number,
         ) {
@@ -2350,10 +2383,7 @@ pub(crate) fn pr_ship_handler(
             );
             anyhow::bail!(refusal);
         }
-        if marker_reason.is_some() || label_only_hold {
-            let reason = marker_reason
-                .as_deref()
-                .unwrap_or("aida:merge-hold label present (no local marker)");
+        if let Some(reason) = marker_reason.as_deref() {
             eprintln!(
                 "  {} releasing supervised merge-hold on PR-{} (explicit review-merge) — {}",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),

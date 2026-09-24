@@ -412,6 +412,78 @@ pub fn ship_hold_release_refusal(
     ))
 }
 
+/// BUG-1499: the release-step decision. A hold that exists ONLY as the forge
+/// label is refused for every caller, a human included: `pr ship` would drop
+/// the label with no clearance record, so it is sent to
+/// `aida merge-hold clear <PR>` (human floor + recorded clearance). A marker
+/// hold falls through to the BUG-1566 floor. `Some(msg)` = refuse.
+// trace:BUG-1499 | ai:claude
+pub fn ship_hold_release_refusal_for(
+    marker_present: bool,
+    label_only: bool,
+    integrity_floor_authority: bool,
+    pr: u64,
+) -> Option<String> {
+    if !marker_present && label_only {
+        return Some(format!(
+            "PR-{pr} is held by the `aida:merge-hold` label alone (no marker, no recorded reason); \
+             `aida pr ship` will not release it. A human clears it with `aida merge-hold clear {pr}` \
+             (which records the clearance), then re-runs `aida pr ship {pr}`."
+        ));
+    }
+    ship_hold_release_refusal(marker_present, integrity_floor_authority, pr)
+}
+
+/// BUG-1532: ANY merge-hold marker binds `aida pr ship` — whether or not a
+/// drive is live and whatever its reason text says (the old guard honoured a
+/// marker only when its prose named a running drive member's spec, so with
+/// the lane stopped no hold bound the client side at all).
+///
+/// The question is "is this command the decision the hold is waiting for?":
+///   - no human at a terminal → never (BUG-1566 floor): refuse, before CI
+///     is watched, the red gate discounted, or the hold touched;
+///   - a human, on a SUPERVISION or DECISION hold → yes: the explicit merge
+///     is that decision, so the BUG-1167 release proceeds;
+///   - a human, on a REWORK or RECUSAL hold, a malformed marker, or an
+///     untyped legacy marker (unknown is not permission) → no: a reviewer's
+///     refusal is not released by someone running a merge. The human clears
+///     it deliberately with `aida merge-hold clear <PR>` (recorded), then
+///     ships.
+///
+/// `AIDA_PR_SHIP_ALLOW_IN_DRIVE` does not reach this gate. `None` = proceed.
+// trace:BUG-1532 | ai:claude
+pub(crate) fn ship_hold_gate(
+    hold: Option<&crate::merge_hold::MergeHoldRecord>,
+    integrity_floor_authority: bool,
+    pr: u64,
+) -> Option<String> {
+    use crate::merge_hold::HoldReasonKind;
+    let hold = hold?;
+    if !integrity_floor_authority {
+        return ship_hold_release_refusal(true, false, pr);
+    }
+    let releasable = !hold.legacy
+        && matches!(
+            hold.reason_kind,
+            HoldReasonKind::Supervision | HoldReasonKind::Decision
+        );
+    if releasable {
+        return None;
+    }
+    let kind = if hold.legacy {
+        "an untyped legacy hold (read as a refusal)".to_string()
+    } else {
+        format!("a {} hold", hold.reason_kind.as_str())
+    };
+    Some(format!(
+        "PR-{pr} is under {kind}: {}. `aida pr ship` releases only a supervision or decision \
+         hold — merging is not the decision this one waits for. Once its release condition is \
+         met (e.g. a fresh approving verdict at the current head), a human clears it with \
+         `aida merge-hold clear {pr}` (recorded), then re-runs `aida pr ship {pr}`.",
+        hold.detail.trim()
+    ))
+}
+
 /// BUG-710/BUG-716/TASK-1253: a drive seat may not merge any PR, and no caller
 /// may merge the live drive's own PR. Merely observing an unrelated live drain
 /// is not grounds to block: those merges serialize on the merge lease.
@@ -1224,7 +1296,7 @@ mod tests {
     fn ship_release_site_gates_on_the_floor_before_clearing() {
         let src = include_str!("pr_cmd.rs");
         let gate = src
-            .find("pr_ship::ship_hold_release_refusal(")
+            .find("pr_ship::ship_hold_release_refusal_for(")
             .expect("pr ship must gate the hold release");
         let floor = src[gate..]
             .find("crate::has_integrity_floor_authority()")
@@ -1243,6 +1315,93 @@ mod tests {
     }
 
     use super::*;
+
+    // BUG-1499: a label-only hold is refused even for a HUMAN at a terminal
+    // (no clearance record would exist); a marker hold keeps the BUG-1566
+    // floor behaviour; no hold → no gate.
+    // trace:BUG-1499 | ai:claude
+    #[test]
+    fn label_only_hold_is_refused_even_for_a_human() {
+        let msg = ship_hold_release_refusal_for(false, true, true, 7).expect("human refused");
+        assert!(msg.contains("aida merge-hold clear 7"), "{msg}");
+        assert!(msg.contains("label alone"), "{msg}");
+        assert!(ship_hold_release_refusal_for(false, true, false, 7).is_some());
+        assert_eq!(ship_hold_release_refusal_for(true, false, true, 7), None);
+        assert_eq!(ship_hold_release_refusal_for(true, true, true, 7), None);
+        assert!(ship_hold_release_refusal_for(true, false, false, 7).is_some());
+        assert_eq!(ship_hold_release_refusal_for(false, false, false, 7), None);
+    }
+
+    // BUG-1532: a hold binds `pr ship` with NO drive running — the gate takes
+    // no drive input at all. Refusal holds refuse even a human; supervision
+    // holds still release for a human (BUG-1167); nothing releases headless.
+    // trace:BUG-1532 | ai:claude
+    #[test]
+    fn any_hold_binds_pr_ship_without_a_live_drive() {
+        use crate::merge_hold::{typed_hold, HoldReasonKind};
+        assert_eq!(ship_hold_gate(None, false, 9), None);
+        assert_eq!(ship_hold_gate(None, true, 9), None);
+
+        let rework = typed_hold(
+            9,
+            HoldReasonKind::Rework,
+            "CHANGES REQUESTED for BUG-1 at 3acf3671fd7a",
+            None,
+        );
+        let msg = ship_hold_gate(Some(&rework), true, 9).expect("refusal refuses a human");
+        assert!(msg.contains("rework hold"), "{msg}");
+        assert!(msg.contains("CHANGES REQUESTED for BUG-1"), "{msg}");
+        assert!(msg.contains("aida merge-hold clear 9"), "{msg}");
+        assert!(ship_hold_gate(Some(&rework), false, 9).is_some());
+
+        let mut recusal = typed_hold(9, HoldReasonKind::Recusal, "author", Some("a".into()));
+        recusal.recused_principals = vec!["agent:author".into()];
+        assert!(ship_hold_gate(Some(&recusal), true, 9).is_some());
+        let unknown = typed_hold(9, HoldReasonKind::Unknown, "malformed", None);
+        assert!(ship_hold_gate(Some(&unknown), true, 9).is_some());
+
+        for kind in [HoldReasonKind::Supervision, HoldReasonKind::Decision] {
+            let supervised = typed_hold(9, kind, "STORY-1 is marked drive", None);
+            assert_eq!(
+                ship_hold_gate(Some(&supervised), true, 9),
+                None,
+                "a human's explicit ship IS the decision a {kind:?} hold awaits"
+            );
+            let headless = ship_hold_gate(Some(&supervised), false, 9).expect("floor");
+            assert!(headless.contains("human"), "{headless}");
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        crate::merge_hold::write_hold(dir.path(), 9, "STORY-1 is marked drive").unwrap();
+        let legacy = crate::merge_hold::read_hold_record(dir.path(), 9).unwrap();
+        let msg = ship_hold_gate(Some(&legacy), true, 9).expect("untyped is not permission");
+        assert!(msg.contains("legacy"), "{msg}");
+    }
+
+    // BUG-1532: the real ship path consults the hold gate BEFORE the CI watch
+    // (so a held PR's red gate is never discounted) and the gate is fed the
+    // marker itself, not a drive-liveness or reason-substring predicate.
+    #[test]
+    fn ship_hold_gate_runs_before_ci_and_ignores_drive_liveness() {
+        let src = include_str!("pr_cmd.rs");
+        let gate = src
+            .find("pr_ship::ship_hold_gate(")
+            .expect("pr ship must consult the hold gate");
+        let args = &src[gate..gate + 300];
+        assert!(args.contains("read_hold_record(&main_worktree, pr_number)"));
+        assert!(args.contains("crate::has_integrity_floor_authority()"));
+        assert!(!args.contains("drive_specs"));
+        let ci = src
+            .find("crate::ci_gate::wait_for_checks_to_register(")
+            .expect("ci watch present");
+        let clear = src
+            .find("crate::merge_hold::clear_hold(&hold_root, pr_number)")
+            .expect("release site present");
+        assert!(
+            gate < ci && gate < clear,
+            "hold gate must precede CI + release"
+        );
+    }
 
     // ── TASK-1448: approval-covers-head merge gate ─────────────────────────
     // trace:TASK-1448 | ai:claude
