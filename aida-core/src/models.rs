@@ -4469,6 +4469,18 @@ impl Requirement {
             || self.id.to_string() == id
     }
 
+    /// Case-insensitive match on the native `spec_id` or the `agreed_id`.
+    // trace:BUG-1535 | ai:claude
+    pub fn matches_id_ignore_case(&self, id: &str) -> bool {
+        self.spec_id
+            .as_deref()
+            .is_some_and(|s| s.eq_ignore_ascii_case(id))
+            || self
+                .agreed_id
+                .as_deref()
+                .is_some_and(|s| s.eq_ignore_ascii_case(id))
+    }
+
     /// Gets the effective status string, preferring custom_status if set
     pub fn effective_status(&self) -> String {
         self.custom_status
@@ -5621,28 +5633,84 @@ impl RequirementsStore {
     /// Gets a requirement by SPEC-ID. Match is case-insensitive on the
     /// spec_id and the agreed short id, so callers may pass user input
     /// (e.g. "fr-1") without canonicalizing first.
+    ///
+    /// Resolution is deterministic when an id is ambiguous (one object holds
+    /// it as its native `spec_id`, another as its merge-gate `agreed_id`): the
+    /// NATIVE owner wins, matching the git backend, which reads the file the
+    /// id names before scanning agreed ids. Previously the first match in load
+    /// order won, so the answer depended on directory iteration.
+    // trace:BUG-1535 | ai:claude
     pub fn get_requirement_by_spec_id(&self, spec_id: &str) -> Option<&Requirement> {
-        self.requirements.iter().find(|r| {
-            r.spec_id
-                .as_deref()
-                .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-                || r.agreed_id
-                    .as_deref()
-                    .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-        })
+        self.spec_id_index(spec_id).map(|i| &self.requirements[i])
     }
 
     /// Gets a mutable reference to a requirement by SPEC-ID. Same matching
-    /// rules as `get_requirement_by_spec_id`.
+    /// and resolution-order rules as `get_requirement_by_spec_id`.
     pub fn get_requirement_by_spec_id_mut(&mut self, spec_id: &str) -> Option<&mut Requirement> {
-        self.requirements.iter_mut().find(|r| {
+        self.spec_id_index(spec_id)
+            .map(move |i| &mut self.requirements[i])
+    }
+
+    /// Index of the requirement `id` resolves to: native `spec_id` match
+    /// first, then `agreed_id`.
+    // trace:BUG-1535 | ai:claude
+    fn spec_id_index(&self, id: &str) -> Option<usize> {
+        let native = self.requirements.iter().position(|r| {
             r.spec_id
                 .as_deref()
-                .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-                || r.agreed_id
+                .is_some_and(|s| s.eq_ignore_ascii_case(id))
+        });
+        native.or_else(|| {
+            self.requirements.iter().position(|r| {
+                r.agreed_id
                     .as_deref()
-                    .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+                    .is_some_and(|s| s.eq_ignore_ascii_case(id))
+            })
         })
+    }
+
+    /// Resolve `id` for a WRITE (or any caller that must not act on a guess):
+    /// a UUID resolves directly; a spec/agreed id that names more than one
+    /// requirement is refused with an [`AmbiguousIdError`] listing every
+    /// candidate's unambiguous handle.
+    ///
+    /// [`AmbiguousIdError`]: crate::id_collisions::AmbiguousIdError
+    // trace:BUG-1535 | ai:claude
+    pub fn resolve_unambiguous_index(
+        &self,
+        id: &str,
+    ) -> Result<Option<usize>, crate::id_collisions::AmbiguousIdError> {
+        if let Ok(uuid) = uuid::Uuid::parse_str(id.trim()) {
+            return Ok(self.requirements.iter().position(|r| r.id == uuid));
+        }
+        let rows: Vec<crate::id_collisions::IdRow> = self
+            .requirements
+            .iter()
+            .filter(|r| r.matches_id_ignore_case(id.trim()))
+            .map(crate::id_collisions::IdRow::from)
+            .collect();
+        let candidates = crate::id_collisions::candidates_for_id(rows.iter(), id);
+        Ok(crate::id_collisions::resolve_candidates(id, candidates)?
+            .and_then(|uuid| self.requirements.iter().position(|r| r.id == uuid)))
+    }
+
+    /// [`Self::resolve_unambiguous_index`], returning the requirement.
+    pub fn get_requirement_unambiguous(
+        &self,
+        id: &str,
+    ) -> Result<Option<&Requirement>, crate::id_collisions::AmbiguousIdError> {
+        Ok(self
+            .resolve_unambiguous_index(id)?
+            .map(|i| &self.requirements[i]))
+    }
+
+    /// [`Self::resolve_unambiguous_index`], returning a mutable requirement.
+    pub fn get_requirement_unambiguous_mut(
+        &mut self,
+        id: &str,
+    ) -> Result<Option<&mut Requirement>, crate::id_collisions::AmbiguousIdError> {
+        let idx = self.resolve_unambiguous_index(id)?;
+        Ok(idx.map(move |i| &mut self.requirements[i]))
     }
 
     /// Assigns SPEC-IDs to requirements that don't have them
@@ -7254,6 +7322,83 @@ impl Default for RequirementsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // BUG-1535: an ambiguous id (native spec_id on one object, agreed_id on
+    // another) resolves to the NATIVE owner regardless of load order.
+    // trace:BUG-1535 | ai:claude
+    #[test]
+    fn get_requirement_by_spec_id_prefers_native_owner_in_any_order() {
+        let mut real = Requirement::new("real".into(), "d".into());
+        real.spec_id = Some("BUG-2-081".into());
+        real.agreed_id = Some("BUG-34".into());
+        let mut fixture = Requirement::new("fixture".into(), "d".into());
+        fixture.spec_id = Some("BUG-34".into());
+        for order in [
+            vec![real.clone(), fixture.clone()],
+            vec![fixture.clone(), real.clone()],
+        ] {
+            let mut store = RequirementsStore::new();
+            store.requirements = order;
+            assert_eq!(
+                store.get_requirement_by_spec_id("bug-34").unwrap().id,
+                fixture.id
+            );
+            assert_eq!(
+                store.get_requirement_by_spec_id_mut("BUG-34").unwrap().id,
+                fixture.id
+            );
+            assert_eq!(
+                store.get_requirement_by_spec_id("BUG-2-081").unwrap().id,
+                real.id
+            );
+        }
+        // An agreed-only id still resolves.
+        let mut store = RequirementsStore::new();
+        store.requirements = vec![real.clone()];
+        assert_eq!(
+            store.get_requirement_by_spec_id("BUG-34").unwrap().id,
+            real.id
+        );
+    }
+
+    // BUG-1535: the write-path resolver refuses an ambiguous id and accepts
+    // each candidate's unambiguous handle instead. trace:BUG-1535 | ai:claude
+    #[test]
+    fn get_requirement_unambiguous_refuses_ambiguous_ids() {
+        let mut real = Requirement::new("real".into(), "d".into());
+        real.spec_id = Some("BUG-2-081".into());
+        real.agreed_id = Some("BUG-34".into());
+        let mut fixture = Requirement::new("fixture".into(), "d".into());
+        fixture.spec_id = Some("BUG-34".into());
+        let mut store = RequirementsStore::new();
+        store.requirements = vec![real.clone(), fixture.clone()];
+
+        let err = store.get_requirement_unambiguous("bug-34").unwrap_err();
+        assert_eq!(err.candidates.len(), 2);
+        assert!(store.get_requirement_unambiguous_mut("BUG-34").is_err());
+        let by_uuid = store
+            .get_requirement_unambiguous(&fixture.id.to_string())
+            .unwrap()
+            .unwrap();
+        assert_eq!(by_uuid.id, fixture.id);
+        let by_native = store
+            .get_requirement_unambiguous("BUG-2-081")
+            .unwrap()
+            .unwrap();
+        assert_eq!(by_native.id, real.id);
+        assert!(store
+            .get_requirement_unambiguous("BUG-99")
+            .unwrap()
+            .is_none());
+
+        // An agreed-only id with a single owner still resolves.
+        store.requirements = vec![real.clone()];
+        let only = store
+            .get_requirement_unambiguous("BUG-34")
+            .unwrap()
+            .unwrap();
+        assert_eq!(only.id, real.id);
+    }
 
     // trace:TASK-330 | ai:claude
     #[test]

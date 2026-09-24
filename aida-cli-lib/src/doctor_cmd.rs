@@ -5285,6 +5285,46 @@ mod story_462_doctor_tests {
         }
     }
 
+    // BUG-1535: a merge-gate agreed_id equal to another object's native
+    // spec_id is reported under `id-collisions`, naming BOTH objects, and is
+    // never marked safe to auto-heal. trace:BUG-1535 | ai:claude
+    #[test]
+    fn id_collisions_finding_names_both_objects() {
+        use aida_core::models::{Requirement, RequirementsStore};
+        let mut fixture = Requirement::new("[test] fixture".into(), "d".into());
+        fixture.spec_id = Some("BUG-34".into());
+        let fixture_uuid = fixture.id;
+        let mut real = Requirement::new("real spec".into(), "d".into());
+        real.spec_id = Some("BUG-2-081".into());
+        real.agreed_id = Some("BUG-34".into());
+        let mut clean = Requirement::new("clean".into(), "d".into());
+        clean.spec_id = Some("BUG-35".into());
+        clean.agreed_id = Some("BUG-35".into());
+        let mut store = RequirementsStore::new();
+        store.requirements = vec![real, fixture, clean];
+
+        let findings = id_collision_findings(&store);
+        // One collision finding + the unique-id count check.
+        assert_eq!(findings.len(), 2, "{findings:?}");
+        let count = findings.iter().find(|f| f.id == "store-count").unwrap();
+        assert!(count.summary.contains("3 objects") && count.summary.contains("only 2 unique"));
+        let f = findings.iter().find(|f| f.id == "BUG-34").unwrap();
+        assert_eq!(f.category, "id-collisions");
+        assert_eq!(f.id, "BUG-34");
+        assert!(!f.safe_heal);
+        assert!(f.summary.contains("[test] fixture"), "{}", f.summary);
+        assert!(f.summary.contains("BUG-2-081"), "{}", f.summary);
+        // The native owner's unambiguous handle is its uuid.
+        assert!(
+            f.summary.contains(&fixture_uuid.to_string()),
+            "{}",
+            f.summary
+        );
+        for alias in ["id-collisions", "ambiguous-ids", "duplicate_ids"] {
+            assert_eq!(normalize_doctor_category(alias).unwrap(), "id-collisions");
+        }
+    }
+
     #[test]
     fn normalize_doctor_category_accepts_ci() {
         // trace:STORY-1043 | ai:codex

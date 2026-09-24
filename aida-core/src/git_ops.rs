@@ -3331,6 +3331,36 @@ pub fn is_global_id_format(spec_id: &str) -> bool {
     parts.len() == 2 && !parts[0].is_empty() && parts[1].chars().all(|c| c.is_ascii_digit())
 }
 
+/// Every short id the store already answers to, upper-cased: each object's
+/// file name (its native spec_id — reserved even when the YAML fails to
+/// parse), its `spec_id` field, and its `agreed_id`. The merge-gate never
+/// assigns an agreed_id in this set.
+// trace:BUG-1535 trace:BUG-82 | ai:claude
+pub fn collect_taken_short_ids(
+    files: &[(String, std::path::PathBuf)],
+) -> std::collections::HashSet<String> {
+    let mut taken = std::collections::HashSet::new();
+    for (stem, path) in files {
+        let stem = stem.trim();
+        if !stem.is_empty() {
+            taken.insert(stem.to_ascii_uppercase());
+        }
+        let Ok(existing) = crate::object_store::read_object_from_path(path) else {
+            continue;
+        };
+        for id in [existing.spec_id.as_deref(), existing.agreed_id.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            let id = id.trim();
+            if !id.is_empty() {
+                taken.insert(id.to_ascii_uppercase());
+            }
+        }
+    }
+    taken
+}
+
 pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
     use crate::node::AgreedCounters;
     use crate::object_store;
@@ -3365,20 +3395,15 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
     // of overwriting them. Without this, merge-gate could (and did, in
     // PR-12) assign `TASK-34` to a node-aware req while `TASK-34` already
     // resolved to a different requirement. trace:BUG-82 | ai:claude
-    let mut taken_short_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for (_spec_id, path) in &files {
-        let Ok(existing) = object_store::read_object_from_path(path) else {
-            continue;
-        };
-        if let Some(s) = &existing.spec_id {
-            if is_global_id_format(s) {
-                taken_short_ids.insert(s.to_ascii_uppercase());
-            }
-        }
-        if let Some(a) = &existing.agreed_id {
-            taken_short_ids.insert(a.to_ascii_uppercase());
-        }
-    }
+    //
+    // BUG-1535: the set is now EVERY id any object answers to — every native
+    // spec_id (not only global-form ones), every agreed_id, AND every object
+    // file's name even when its YAML fails to parse. The pre-fix guard
+    // `continue`d past an unreadable object, so its native id was never
+    // reserved and could be handed out as someone else's agreed_id; seven
+    // such collisions (BUG-34, STORY-41/42, TASK-31..34) reached the live
+    // store. trace:BUG-1535 | ai:claude
+    let mut taken_short_ids = collect_taken_short_ids(&files);
 
     for (_spec_id, path) in &files {
         let mut req = match object_store::read_object_from_path(path) {
@@ -3438,7 +3463,13 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
         let mut seq = counters.next(type_prefix);
         let mut agreed = AgreedCounters::format_agreed_id(type_prefix, seq);
         let mut skipped: Vec<String> = Vec::new();
-        for _ in 0..1000 {
+        // BUG-1535: bound the walk by the taken-set size, not a fixed 1000.
+        // Pigeonhole: at most `taken.len()` consecutive candidates can be
+        // taken, so this always lands on a free id. A fixed cap bailed on a
+        // store whose counter lags a dense block-dispensed range (the live
+        // store's BUG counter sits at 34 with ~1,500 BUG ids allocated).
+        // trace:BUG-1535 | ai:claude
+        for _ in 0..=taken_short_ids.len() {
             if !taken_short_ids.contains(&agreed.to_ascii_uppercase()) {
                 break;
             }
@@ -3448,7 +3479,7 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
         }
         if taken_short_ids.contains(&agreed.to_ascii_uppercase()) {
             anyhow::bail!(
-                "BUG-82 collision guard: walked 1000 candidates for prefix `{}` \
+                "merge-gate collision guard: walked every candidate for prefix `{}` \
                  without finding a free agreed-id (last tried: {}); aborting before \
                  assigning a collision",
                 type_prefix,
@@ -3457,11 +3488,19 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
         }
         if !skipped.is_empty() {
             eprintln!(
-                "  ⚠ BUG-82: skipped {} taken candidate(s) when gating {} → {} ({})",
+                "  ⚠ merge-gate: skipped {} agreed-id candidate(s) already in use when gating {} → {} ({})",
                 skipped.len(),
                 spec_id,
                 agreed,
-                skipped.join(", ")
+                if skipped.len() > 6 {
+                    format!(
+                        "{}, \u{2026}, {}",
+                        skipped[..3].join(", "),
+                        skipped[skipped.len() - 2..].join(", ")
+                    )
+                } else {
+                    skipped.join(", ")
+                }
             );
         }
 
@@ -4316,6 +4355,129 @@ mod tests {
         }
         // Distinct → no within-run double-allocation.
         assert_ne!(agreed[0], agreed[1]);
+    }
+
+    /// BUG-1535: the live-store shape. A native `[test]` fixture holds
+    /// `BUG-34` as its spec_id; a node-aware `BUG-2-081` awaits gating with
+    /// the BUG counter at 33. The gate must skip `BUG-34` and assign
+    /// `BUG-35` — never an id another object already answers to.
+    // trace:BUG-1535 | ai:claude
+    #[test]
+    fn merge_gate_never_assigns_an_existing_native_spec_id() {
+        use crate::models::{Requirement, RequirementType};
+        use crate::object_store;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().to_path_buf();
+        let objects = store.join("objects");
+        std::fs::create_dir_all(&objects).unwrap();
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        std::fs::write(store.join("registry/agreed_counters.toml"), "BUG = 33\n").unwrap();
+
+        let mut fixture = Requirement::new("[test] fixture".into(), String::new());
+        fixture.spec_id = Some("BUG-34".into());
+        fixture.req_type = RequirementType::Bug;
+        object_store::write_object(&objects, &fixture).unwrap();
+
+        // An object whose agreed_id (not spec_id) is BUG-35 also reserves it.
+        let mut gated = Requirement::new("already gated".into(), String::new());
+        gated.spec_id = Some("BUG-2-080".into());
+        gated.agreed_id = Some("bug-35".into());
+        gated.req_type = RequirementType::Bug;
+        object_store::write_object(&objects, &gated).unwrap();
+
+        let mut pending = Requirement::new("real spec".into(), String::new());
+        pending.spec_id = Some("BUG-2-081".into());
+        pending.req_type = RequirementType::Bug;
+        object_store::write_object(&objects, &pending).unwrap();
+
+        init(&store).unwrap();
+        configure_user(&store, "Test", "test@example.com").unwrap();
+
+        let assignments = merge_gate(&store).unwrap();
+        assert_eq!(
+            assignments,
+            vec![("BUG-2-081".to_string(), "BUG-36".to_string())],
+            "BUG-34 (native) and BUG-35 (agreed, lower-case) are both taken"
+        );
+        // And the store is collision-free afterwards.
+        let reqs: Vec<Requirement> = object_store::list_objects(&objects)
+            .unwrap()
+            .iter()
+            .map(|(_, p)| object_store::read_object_from_path(p).unwrap())
+            .collect();
+        assert!(crate::id_collisions::find_requirement_id_collisions(reqs.iter()).is_empty());
+    }
+
+    /// BUG-1535: a counter that lags far behind a dense run of taken ids
+    /// (the live store: BUG counter 34, ~1,500 BUG ids allocated by blocks)
+    /// must walk to the next free id instead of bailing at a fixed cap.
+    // trace:BUG-1535 | ai:claude
+    #[test]
+    fn merge_gate_walks_past_a_dense_taken_range_longer_than_1000() {
+        use crate::models::{Requirement, RequirementType};
+        use crate::object_store;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().to_path_buf();
+        let objects = store.join("objects");
+        std::fs::create_dir_all(&objects).unwrap();
+        for n in 1..=1100u32 {
+            let mut r = Requirement::new(format!("taken {n}"), String::new());
+            r.spec_id = Some(format!("SPIKE-{n}"));
+            r.req_type = RequirementType::Spike;
+            object_store::write_object(&objects, &r).unwrap();
+        }
+        let mut pending = Requirement::new("pending".into(), String::new());
+        pending.spec_id = Some("SPIKE-2-001".into());
+        pending.req_type = RequirementType::Spike;
+        object_store::write_object(&objects, &pending).unwrap();
+
+        init(&store).unwrap();
+        configure_user(&store, "Test", "test@example.com").unwrap();
+        let assignments = merge_gate(&store).unwrap();
+        assert_eq!(
+            assignments,
+            vec![("SPIKE-2-001".to_string(), "SPIKE-1101".to_string())]
+        );
+    }
+
+    /// BUG-1535: an object whose YAML fails to parse still reserves the id
+    /// its file name carries. The pre-fix guard skipped unreadable objects,
+    /// leaving their native id free to be handed out as an agreed_id.
+    // trace:BUG-1535 | ai:claude
+    #[test]
+    fn merge_gate_reserves_ids_of_unparseable_objects() {
+        use crate::models::{Requirement, RequirementType};
+        use crate::object_store;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().to_path_buf();
+        let objects = store.join("objects");
+        let broken = object_store::object_path(&objects, "TASK-1").unwrap();
+        std::fs::create_dir_all(broken.parent().unwrap()).unwrap();
+        std::fs::write(&broken, "this: [is not: a requirement\n").unwrap();
+
+        let mut pending = Requirement::new("pending".into(), String::new());
+        pending.spec_id = Some("TASK-2-001".into());
+        pending.req_type = RequirementType::Task;
+        object_store::write_object(&objects, &pending).unwrap();
+
+        let files = object_store::list_objects(&objects).unwrap();
+        let taken = collect_taken_short_ids(&files);
+        assert!(
+            taken.contains("TASK-1"),
+            "unparseable file's id is reserved"
+        );
+        assert!(taken.contains("TASK-2-001"));
+
+        init(&store).unwrap();
+        configure_user(&store, "Test", "test@example.com").unwrap();
+        let assignments = merge_gate(&store).unwrap();
+        assert_eq!(
+            assignments,
+            vec![("TASK-2-001".to_string(), "TASK-2".to_string())]
+        );
     }
 
     /// BUG-762: the counter write path must commit-through. A gating run

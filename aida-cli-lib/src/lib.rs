@@ -21997,6 +21997,15 @@ fn collect_doctor_findings(
         }
     }
 
+    // One id answering to more than one requirement (a merge-gate agreed_id
+    // equal to another object's native spec_id). Every such id is reported
+    // with every object it resolves to. Not auto-healed: renumbering a spec
+    // is a data migration on shared state and a disposition call.
+    // trace:BUG-1535 | ai:claude
+    for finding in id_collision_findings(store) {
+        push(finding);
+    }
+
     // A detached/mid-rebase store can accept commits that disappear on
     // `rebase --abort`; surface this before any further maintenance writes.
     // trace:BUG-1229 | ai:codex
@@ -22747,6 +22756,17 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["parent-tag-drift", "parent-tags", "parent-drift"],
         "parent-tag-drift",
     ),
+    // BUG-1535: an id that resolves to more than one requirement.
+    (
+        &[
+            "id-collisions",
+            "id-collision",
+            "ambiguous-ids",
+            "ambiguous-id",
+            "duplicate-ids",
+        ],
+        "id-collisions",
+    ),
     // A guarded command shape that exceeds its budget on too large a
     // fraction of recent calls, or a budget watching a shape that never
     // ran. trace:STORY-1422 | ai:claude
@@ -22846,6 +22866,60 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         "disk-headroom",
     ),
 ];
+
+/// `id-collisions` doctor findings: one per id that resolves to more than one
+/// requirement, naming every candidate and the handle that reaches it, plus a
+/// count check comparing UNIQUE ids to store objects. Row count vs file count
+/// is not that check: seven duplicated rows over seven double-claimed ids
+/// made the two equal by coincidence.
+// trace:BUG-1535 | ai:claude
+fn id_collision_findings(store: &aida_core::models::RequirementsStore) -> Vec<DoctorFinding> {
+    let mut out: Vec<DoctorFinding> =
+        aida_core::id_collisions::find_requirement_id_collisions(store.requirements.iter())
+            .into_iter()
+            .map(|collision| {
+                let lines = aida_core::id_collisions::describe_candidates(
+                    &collision.id,
+                    &collision.candidates,
+                );
+                DoctorFinding {
+                    category: "id-collisions".to_string(),
+                    id: collision.id.clone(),
+                    summary: format!(
+                        "{} resolves to {} requirements: {}",
+                        collision.id,
+                        collision.candidates.len(),
+                        lines.join("; ")
+                    ),
+                    action: "decide which object keeps the id, then give the other a free \
+                             agreed id (not auto-healed: renumbering is a data migration)"
+                        .to_string(),
+                    safe_heal: false,
+                }
+            })
+            .collect();
+    let objects = store.requirements.len();
+    let unique: std::collections::HashSet<String> = store
+        .requirements
+        .iter()
+        .map(|r| r.display_id().to_ascii_uppercase())
+        .collect();
+    if unique.len() != objects {
+        out.push(DoctorFinding {
+            category: "id-collisions".to_string(),
+            id: "store-count".to_string(),
+            summary: format!(
+                "{objects} objects in the store but only {} unique displayed ids \
+                 ({} object(s) display an id another object also displays)",
+                unique.len(),
+                objects - unique.len()
+            ),
+            action: "resolve the id collisions listed above".to_string(),
+            safe_heal: false,
+        });
+    }
+    out
+}
 
 fn normalize_doctor_category(raw: &str) -> Result<String> {
     let s = raw.trim().to_ascii_lowercase().replace('_', "-");
@@ -58039,6 +58113,10 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
             serde_json::to_string_pretty(&serde_json::json!({
                 "spec": f.id,
                 "closure_held_by": closure_hold.as_ref().map(|(ids, _)| ids.clone()),
+                // STORY-1430: the spec's own unmet declared closure criteria.
+                "closure_unmet_criteria": closure_hold
+                    .as_ref()
+                    .map(|_| aida_core::pickability::unmet_declared_closure_criteria(req)),
                 "bucket": bucket.key(),
                 "reason": reasons.first().map(|r| r.text.as_str()).unwrap_or_default(),
                 "reasons": reasons
@@ -58124,18 +58202,45 @@ fn closure_hold_line(
         return None;
     }
     let blockers = aida_core::pickability::unresolved_closure_blockers(req, store);
-    if blockers.is_empty() {
+    // STORY-1430: the spec's own declared-unmet closure criteria hold it too.
+    // trace:STORY-1430 | ai:claude
+    let criteria = aida_core::pickability::unmet_declared_closure_criteria(req);
+    if blockers.is_empty() && criteria.is_empty() {
         return None;
     }
     let ids = blockers.iter().map(|b| b.id.clone()).collect();
+    let mut parts = Vec::new();
+    if !blockers.is_empty() {
+        parts.push(format!(
+            "blocked by {} (until every blocker is Completed, Rejected or Superseded)",
+            aida_core::pickability::closure_blockers_label(&blockers)
+        ));
+    }
+    if !criteria.is_empty() {
+        parts.push(format!(
+            "its own closure criteria are unmet: {} (resolve by checking the box in its \
+             Closure section or removing the `{}` tag)",
+            closure_criteria_label(&criteria),
+            aida_core::pickability::CLOSURE_PENDING_TAG
+        ));
+    }
     Some((
         ids,
         format!(
-            "completion held — blocked by {}; stays Done after merge until every blocker \
-             is Completed, Rejected or Superseded",
-            aida_core::pickability::closure_blockers_label(&blockers)
+            "completion held — {}; stays Done after merge until resolved",
+            parts.join("; ")
         ),
     ))
+}
+
+/// STORY-1430: one-line rendering of unmet declared closure criteria.
+// trace:STORY-1430 | ai:claude
+fn closure_criteria_label(criteria: &[String]) -> String {
+    criteria
+        .iter()
+        .map(|c| format!("\"{c}\""))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 const PLAIN_WHY_CACHE_PREFIX: &str = "<!-- aida-plain";
@@ -67162,6 +67267,23 @@ const CLOSURE_HOLD_MARKER: &str = "[aida:closure-held]";
 struct ClosureHold {
     flip: AutoBumpFlip,
     blockers: Vec<aida_core::pickability::ClosureBlocker>,
+    /// STORY-1430: the spec's own declared closure criteria still unmet (a
+    /// `closure:pending` tag, or unchecked items in its Closure section).
+    criteria: Vec<String>,
+}
+
+/// STORY-1430: does anything hold `req`'s closure — an unresolved BlockedBy
+/// predecessor (BUG-1551) or one of its own declared, unmet closure criteria?
+/// Returns both sets; both empty = the auto-bump completes exactly as before.
+// trace:STORY-1430 | ai:claude
+fn closure_holders(
+    req: &aida_core::Requirement,
+    store: &aida_core::RequirementsStore,
+) -> (Vec<aida_core::pickability::ClosureBlocker>, Vec<String>) {
+    (
+        aida_core::pickability::unresolved_closure_blockers(req, store),
+        aida_core::pickability::unmet_declared_closure_criteria(req),
+    )
 }
 
 /// BUG-1551: `BlockedBy` gates closure, not just pickup (ADR recorded on the
@@ -67179,13 +67301,15 @@ fn split_closure_held_flips(
         let Some(req) = store.get_requirement_by_spec_id(&flip.spec_id) else {
             return true;
         };
-        let blockers = aida_core::pickability::unresolved_closure_blockers(req, store);
-        if blockers.is_empty() {
+        // trace:STORY-1430 | ai:claude
+        let (blockers, criteria) = closure_holders(req, store);
+        if blockers.is_empty() && criteria.is_empty() {
             return true;
         }
         held.push(ClosureHold {
             flip: flip.clone(),
             blockers,
+            criteria,
         });
         false
     });
@@ -67202,15 +67326,33 @@ fn closure_hold_comment(hold: &ClosureHold) -> String {
         hold.flip.sha.as_str()
     };
     let id = &hold.flip.spec_id;
+    let mut why = Vec::new();
+    if !hold.blockers.is_empty() {
+        why.push(format!(
+            "unresolved BlockedBy {}. BlockedBy gates completion as well as pickup; it \
+             releases once every blocker is Completed, Rejected or Superseded (an epic by \
+             its child rollup, an ADR once accepted)",
+            aida_core::pickability::closure_blockers_label(&hold.blockers)
+        ));
+    }
+    // STORY-1430: say WHAT is unmet and WHO resolves it. trace:STORY-1430 | ai:claude
+    if !hold.criteria.is_empty() {
+        why.push(format!(
+            "the spec's own declared closure criteria are unmet: {}. Whoever owns those \
+             criteria (the spec's owner or the advisor) resolves them by checking the box \
+             in the spec's Closure section, or removing the tag, via `aida edit {id} \
+             --description ...` / `aida edit {id} --remove-tag {}`",
+            closure_criteria_label(&hold.criteria),
+            aida_core::pickability::CLOSURE_PENDING_TAG
+        ));
+    }
     format!(
         "{CLOSURE_HOLD_MARKER} Code merged to the default branch (commit {short}), but \
-         completion is held at Done: unresolved BlockedBy {}. BlockedBy gates completion \
-         as well as pickup. The next `aida pull` completes it once every blocker is \
-         Completed, Rejected or Superseded (an epic by its child rollup, an ADR once \
-         accepted); to replay by hand, run `aida db reconcile-status --spec {id} --since \
-         {short}^`. If the blockers form a cycle, or you decide to ship without them, a \
+         completion is held at Done: {}. The next `aida pull` completes it once nothing \
+         holds it; to replay by hand, run `aida db reconcile-status --spec {id} --since \
+         {short}^`. If the blockers form a cycle, or you decide to ship regardless, a \
          human runs `aida edit {id} --status completed`. (merge sha: {})",
-        aida_core::pickability::closure_blockers_label(&hold.blockers),
+        why.join("; and "),
         hold.flip.sha
     )
 }
@@ -67244,7 +67386,9 @@ fn collect_released_closure_holds(store: &aida_core::RequirementsStore) -> Vec<A
         .filter(|r| matches!(r.status, RequirementStatus::Done))
         .filter_map(|r| {
             let sha = closure_hold_merge_sha(r)?;
-            if !aida_core::pickability::unresolved_closure_blockers(r, store).is_empty() {
+            // trace:STORY-1430 | ai:claude
+            let (blockers, criteria) = closure_holders(r, store);
+            if !blockers.is_empty() || !criteria.is_empty() {
                 return None;
             }
             let spec_id = r.agreed_id.clone().or_else(|| r.spec_id.clone())?;
@@ -67303,12 +67447,25 @@ fn apply_closure_hold(
 // trace:BUG-1551 | ai:claude
 fn report_closure_holds(holds: &[ClosureHold]) {
     for hold in holds {
-        eprintln!(
-            "  {} {} stays Done — merged, but blocked by {} (completion waits for the blocker)",
-            "↷".yellow(),
-            hold.flip.spec_id,
-            aida_core::pickability::closure_blockers_label(&hold.blockers)
-        );
+        if !hold.blockers.is_empty() {
+            eprintln!(
+                "  {} {} stays Done — merged, but blocked by {} (completion waits for the blocker)",
+                "↷".yellow(),
+                hold.flip.spec_id,
+                aida_core::pickability::closure_blockers_label(&hold.blockers)
+            );
+        }
+        // trace:STORY-1430 | ai:claude
+        if !hold.criteria.is_empty() {
+            eprintln!(
+                "  {} {} stays Done — merged, but its own closure criteria are unmet: {} \
+                 (the owner or advisor resolves them; see `aida why {}`)",
+                "↷".yellow(),
+                hold.flip.spec_id,
+                closure_criteria_label(&hold.criteria),
+                hold.flip.spec_id
+            );
+        }
     }
 }
 
