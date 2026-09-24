@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T04:23:19.458083645Z
-modified_at: 2026-09-24T23:04:25.579244745Z
+modified_at: 2026-09-24T23:04:50.161154468Z
 req_type: Doc
 tags:
 - example
@@ -42,6 +42,33 @@ relationships:
 - rel_type: References
   target_id: 01a0d18c-18d0-7472-bf35-1a4dd540bd0f
   created_at: 2026-09-24T04:23:31.721572077Z
+comments:
+- id: 01a0d5aa-1af1-7321-8be4-ea062d53530d
+  author: joe.mooney@gmail.com
+  content: |
+    Verification pass against main (post TASK-1470), recorded so the description above isn't read as claiming more than exists.
+
+    What's real today — three hand-written Jev call sites, each with its own prompt and its own response shape:
+    - `aida explain`'s advisory constraint-preservation check (exposition.rs::audit_exposition, evaluate_noul), gated by AIDA_JEV_API_KEY, fails closed to the offline mechanical audit.
+    - The graded-review criterion check used by the automated PR-completion flow (graded_review.rs::execute_graded_review, evaluate_noul per residual prose criterion).
+    - The contradiction sweep behind `aida doctor --contradictions` (contradictions.rs::sweep_contradictions_at, evaluate_choice over mechanically-matched candidate pairs).
+
+    Gaps versus DOC-3's/STORY-1472's proposed surface — none of this exists in code yet, and the description above was written to not claim it does:
+    - No `aida jev` command of any kind (no `status`, no catalog list/show, no explicit "run this named question" invocation, no listing/inspecting recorded results). Confirmed by grepping cli.rs/lib.rs for a `jev` subcommand — there is none.
+    - No "future routing" question (develop/reviewer/advisor/architect/research). DOC-3's own description had listed this alongside the three real integrations as an "existing" one; it is not — there is no code that asks Jev this or consumes an answer to it.
+    - No reusable, versioned question catalog. Each of the three sites' prompt/options/instructions is hard-coded inline; nothing declares a stable question ID, version, primitive, allowed answers, or evidence/fallback policy as STORY-1472 acceptance criterion 2 asks for.
+    - No shared recorded-judgments store with the provenance fields STORY-1472 asks for (source hash, question version, model, confidence, heuristic marker, payload hash, timestamp, latency). What exists instead, per site:
+      - exposition.rs: the audit (evaluator, scores, findings) is saved inside the exposition sidecar YAML at `.aida/expositions/<SPEC-ID>/<audience>.yaml`.
+      - graded_review.rs / lib.rs (PR auto-complete): the verdict, including per-criterion probability/confidence/model/payload hash, is saved to `.aida/review-verdicts/PR-<n>-graded.json`.
+      - contradictions.rs: findings (including confidence/probability/model/heuristic) are computed and printed/returned as JSON per invocation; nothing is written to disk, so a repeat `aida doctor --contradictions` re-asks Jev from scratch.
+    - No `aida jev status` reporting configured model/endpoint/credential availability (STORY-1472 acceptance criterion 1) — the closest existing thing is the environment-variables doc's description of `AIDA_JEV_API_KEY`/`AIDA_JEV_ENDPOINT`/`AIDA_JEV_MODEL`, which is documentation, not a runtime status command.
+
+    Comprehension measurement: the description above deliberately does not claim the `aida explain` readability/constraint-preservation scores measure actual human comprehension — they're a mechanical jargon heuristic or a single Jev advisory question, not a validated comprehension measure. Per current guidance, TASK-1437 and TASK-1440 (reopened; the earlier "human comprehension pilot" trial data backing them appears fabricated) are where genuine comprehension measurement would need to be designed and validated before any doc could honestly claim exposition quality is comprehension-tested.
+
+    Recommendation: if/when STORY-1472 is implemented, it should (a) factor the three existing inline prompts into named, versioned questions rather than leaving them ad hoc, and (b) give them a shared recorded-judgments log with the provenance fields above, including for the contradiction sweep, which currently has none.
+  created_at: 2026-09-24T23:04:50.161154468Z
+  modified_at: 2026-09-24T23:04:50.161154468Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 custom_fields:
   audience: user
   scenario: human orientation
