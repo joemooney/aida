@@ -8210,10 +8210,28 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
-        /// Print the resolved launch command and permission posture, then exit without spawning.
+        /// Print the complete resolved launch contract — argv, active role,
+        /// prompt source, launch-context snapshot path, AIDA environment
+        /// inputs, and repository guidance files (AGENTS.md/CLAUDE.md) the
+        /// child would consume — then exit without spawning a process,
+        /// creating a worktree/lease, flipping spec status, or any network
+        /// sync. See also `--show-prompt` (just the initial prompt) and
+        /// `--show-context` (the full launch-context markdown body).
         // trace:TASK-1232 | ai:codex
-        #[clap(long, alias = "print-command")]
+        // trace:TASK-1467 | ai:claude
+        #[clap(
+            long = "no-exec",
+            visible_alias = "noexec",
+            visible_alias = "print-command"
+        )]
         noexec: bool,
+
+        /// Print the exact initial prompt (explicit `--prompt` or the
+        /// auto-generated one) that would be sent, then exit without
+        /// spawning or any other side effect.
+        // trace:TASK-1467 | ai:claude
+        #[clap(long)]
+        show_prompt: bool,
 
         /// Initial message to pass to the spawned Claude session.
         // trace:BUG-1294 | ai:claude
@@ -8316,10 +8334,28 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
-        /// Print the resolved launch command and permission posture, then exit without spawning.
+        /// Print the complete resolved launch contract — argv, active role,
+        /// prompt source, launch-context snapshot path, AIDA environment
+        /// inputs, and repository guidance files (AGENTS.md/CLAUDE.md) the
+        /// child would consume — then exit without spawning a process,
+        /// creating a worktree/lease, flipping spec status, or any network
+        /// sync. See also `--show-prompt` (just the initial prompt) and
+        /// `--show-context` (the full launch-context markdown body).
         // trace:TASK-1232 | ai:codex
-        #[clap(long, alias = "print-command")]
+        // trace:TASK-1467 | ai:claude
+        #[clap(
+            long = "no-exec",
+            visible_alias = "noexec",
+            visible_alias = "print-command"
+        )]
         noexec: bool,
+
+        /// Print the exact initial prompt (explicit `--prompt` or the
+        /// auto-generated one) that would be sent, then exit without
+        /// spawning or any other side effect.
+        // trace:TASK-1467 | ai:claude
+        #[clap(long)]
+        show_prompt: bool,
 
         /// Initial message to pass to the spawned Codex session.
         // trace:BUG-1294 | ai:claude
@@ -8406,10 +8442,28 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
-        /// Print the resolved launch command and permission posture, then exit without spawning.
+        /// Print the complete resolved launch contract — argv, active role,
+        /// prompt source, launch-context snapshot path, AIDA environment
+        /// inputs, and repository guidance files (AGENTS.md/CLAUDE.md) the
+        /// child would consume — then exit without spawning a process,
+        /// creating a worktree/lease, flipping spec status, or any network
+        /// sync. See also `--show-prompt` (just the initial prompt) and
+        /// `--show-context` (the full launch-context markdown body).
         // trace:TASK-1232 | ai:codex
-        #[clap(long, alias = "print-command")]
+        // trace:TASK-1467 | ai:claude
+        #[clap(
+            long = "no-exec",
+            visible_alias = "noexec",
+            visible_alias = "print-command"
+        )]
         noexec: bool,
+
+        /// Print the exact initial prompt (explicit `--prompt` or the
+        /// auto-generated one) that would be sent, then exit without
+        /// spawning or any other side effect.
+        // trace:TASK-1467 | ai:claude
+        #[clap(long)]
+        show_prompt: bool,
 
         /// Initial message to pass to the spawned Antigravity session.
         // trace:BUG-1294 | ai:claude
