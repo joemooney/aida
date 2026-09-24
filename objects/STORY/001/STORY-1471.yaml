@@ -3,12 +3,12 @@ spec_id: STORY-1471
 agreed_id: STORY-1471
 title: 'aida agent new: inject role-aware launch prompts with and without a spec'
 description: 'Make supervised agent launches explicitly role-aware. Today a --spec launch injects the same implement-and-ship prompt regardless of whether the child is implementer, reviewer, advisor, product, or integrator; a launch without --spec has no initial role-oriented message and relies on environment variables, launch context, and repository guidance. Acceptance: generated prompts select the correct contract for each role (implementer builds, reviewer evaluates, advisor provides independent judgment/gates, product handles intake/order/wave continuity, integrator performs mechanical integration); a no-spec launch receives a concise orientation naming the active role, its boundaries, how to inspect context, and how to wait for or find work; explicit --prompt remains authoritative; --no-prompt suppresses only automatic prompt injection; AIDA_SESSION_ROLE and the launch-context snapshot remain available as machine-readable context; and prompt tests cover every launchable role and vendor prompt style.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:32:13.729382147Z
-modified_at: 2026-09-24T02:35:12.862769186Z
+modified_at: 2026-09-24T08:12:10.174001318Z
 req_type: Story
 comments:
 - id: 01a0d144-5a5e-78f1-8ac8-eb249ff777e8
