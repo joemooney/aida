@@ -86,12 +86,12 @@ description: |-
   11. The stretch-met rate is reportable over a window, per author or seat, as a calibration signal rather than a score.
   12. The stretch-to-required ratio within a spec is visible at grooming time, so a spec that is mostly stretch is caught before it is dispatched rather than after.
   13. The ex-post path from criteria 1-8 remains, for the genuine case where implementation reveals a bar was wrong. It must be distinguishable in the record from an ex-ante stretch, because one is a prediction and the other is a revision.
-status: Completed
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T12:34:14.434033357Z
-modified_at: 2026-09-24T04:55:37.500338129Z
+modified_at: 2026-09-24T04:55:54.954939577Z
 req_type: Story
 tags:
 - acceptance
