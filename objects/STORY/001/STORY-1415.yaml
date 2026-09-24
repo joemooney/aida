@@ -26,12 +26,12 @@ description: |
   NOT IN SCOPE: the split verdict itself, the classification rules, and the budget's threshold - all ADR-49. This spec is only the switch, the clock and the window.
 
   PROVENANCE: requested by the operator 2026-09-20 21:16, immediately after answering ADR-49's exit condition. The request is the second half of that answer - an exit condition with no mechanism to observe or enforce it is a statement of intent, and the operator asked for the mechanism unprompted.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:17:35.380363150Z
-modified_at: 2026-09-24T03:53:34.694815985Z
+modified_at: 2026-09-24T04:55:38.979200386Z
 req_type: Story
 tags:
 - batch:night-0920 review-gate operator-surface from:session-0920
@@ -52,3 +52,21 @@ comments:
   created_at: 2026-09-24T03:53:34.694815985Z
   modified_at: 2026-09-24T03:53:34.694815985Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d1c4-ecdb-7c63-b79a-670c3e818344
+  author: aida-auto-bump
+  timestamp: 2026-09-24T04:55:38.971844692Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d1c4-ece3-7971-ad30-955061bb9f5b
+  timestamp: 2026-09-24T04:55:38.979199385Z
+  agent: aida
+  commit_sha: 380cb9d8f3fe9327898323e6095cf74d101d5d6a
+  summary: Completed via merge 380cb9d8
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T04:55:37.492509178Z
+  completion_sha: 380cb9d8f3fe9327898323e6095cf74d101d5d6a
