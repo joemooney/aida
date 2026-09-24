@@ -814,6 +814,7 @@ fn normalize_upgrade_mode(check: bool, diff: bool, cmd: Option<&UpgradeCommand>)
 }
 
 // trace:STORY-1028 | ai:codex
+#[allow(clippy::type_complexity)]
 fn normalize_usage_mode<'a>(
     unused: Option<&'a str>,
     errors: bool,
@@ -824,12 +825,24 @@ fn normalize_usage_mode<'a>(
     slowest: bool,
     events: bool,
     action: Option<&'a UsageCommand>,
-) -> (Option<&'a str>, bool, bool, bool, bool, bool, bool, bool) {
+) -> (
+    Option<&'a str>,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+) {
     match action {
         Some(UsageCommand::Rebuild { .. } | UsageCommand::Show { .. }) => {
-            (None, false, false, false, false, false, false, false)
+            (None, false, false, false, false, false, false, false, false)
         }
-        Some(UsageCommand::Slowest) => (None, false, false, false, false, false, true, false),
+        Some(UsageCommand::Slowest) => {
+            (None, false, false, false, false, false, true, false, false)
+        }
         Some(UsageCommand::Unused { duration }) => (
             Some(duration.as_str()),
             false,
@@ -839,13 +852,20 @@ fn normalize_usage_mode<'a>(
             false,
             false,
             false,
+            false,
         ),
-        Some(UsageCommand::Errors) => (None, true, false, false, false, false, false, false),
-        Some(UsageCommand::Events) => (None, false, false, false, false, false, false, true),
-        Some(UsageCommand::Drains { failures, pattern }) => {
-            (None, false, true, *failures, *pattern, false, false, false)
+        Some(UsageCommand::Errors) => (None, true, false, false, false, false, false, false, false),
+        Some(UsageCommand::Events) => (None, false, false, false, false, false, false, true, false),
+        // TASK-1481: `aida usage timeline` — the compact one-line-per-invocation
+        // view. Brand new surface (no legacy flag predates it), so it's
+        // subcommand-only: no hidden `--timeline` alias to normalize.
+        Some(UsageCommand::Timeline) => {
+            (None, false, false, false, false, false, false, false, true)
         }
-        Some(UsageCommand::Health) => (None, false, false, false, false, true, false, false),
+        Some(UsageCommand::Drains { failures, pattern }) => (
+            None, false, true, *failures, *pattern, false, false, false, false,
+        ),
+        Some(UsageCommand::Health) => (None, false, false, false, false, true, false, false, false),
         None => {
             if slowest {
                 note_hidden_alias(concat!("aida usage ", "--slowest"), "aida usage slowest");
@@ -877,6 +897,7 @@ fn normalize_usage_mode<'a>(
                 health,
                 slowest,
                 events,
+                false,
             )
         }
     }
@@ -1779,6 +1800,22 @@ mod story_1028_mode_alias_tests {
                 false,
                 Some(&UsageCommand::Health)
             )
+        );
+        // TASK-1481: `timeline` is subcommand-only (no legacy flag predates
+        // it) — assert it flips only the new 9th (timeline) slot.
+        assert_eq!(
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Timeline)
+            ),
+            (None, false, false, false, false, false, false, false, true)
         );
     }
 }
@@ -5423,18 +5460,27 @@ fn run() -> Result<()> {
             // (to resolve drafted-BUG statuses) — keep plain `aida usage`
             // store-load-free. STORY-530: the `--health` catalog also needs
             // the store for draft-inbox depth + burn-down velocity.
-            let (unused, errors, auto_complete, failures, pattern, health, slowest, events) =
-                normalize_usage_mode(
-                    unused.as_deref(),
-                    *errors,
-                    *auto_complete,
-                    *failures,
-                    *pattern,
-                    *health,
-                    *slowest,
-                    *events,
-                    action.as_ref(),
-                );
+            let (
+                unused,
+                errors,
+                auto_complete,
+                failures,
+                pattern,
+                health,
+                slowest,
+                events,
+                timeline,
+            ) = normalize_usage_mode(
+                unused.as_deref(),
+                *errors,
+                *auto_complete,
+                *failures,
+                *pattern,
+                *health,
+                *slowest,
+                *events,
+                action.as_ref(),
+            );
             let store = if auto_complete || health {
                 storage.load().ok()
             } else {
@@ -5454,6 +5500,7 @@ fn run() -> Result<()> {
                 *read_write,
                 slowest,
                 events,
+                timeline,
                 cmd.as_deref(),
                 *slower_than,
                 store.as_ref(),

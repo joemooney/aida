@@ -192,6 +192,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida usage unused` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida usage errors` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida usage events` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida usage timeline` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida usage drains` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida usage health` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida metrics` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
