@@ -37,12 +37,12 @@ description: |-
   - Below the threshold, behaviour is unchanged.
 
   RELATED: PRIN-8 (the ladder, and the evidence trigger this implements); STORY-1427 (the gate library these candidates would land in); EPIC-66 (the gate mechanism itself); BUG-1544, BUG-1550, BUG-1556 (the instances).
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T17:49:23.844095324Z
-modified_at: 2026-09-24T07:04:27.694004731Z
+modified_at: 2026-09-24T08:37:52.969276493Z
 req_type: Story
 tags:
 - determinism
@@ -58,3 +58,21 @@ comments:
   created_at: 2026-09-24T07:03:10.378207678Z
   modified_at: 2026-09-24T07:03:10.378207678Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d290-62c1-7bb0-8549-e9a8b13df08d
+  author: aida-auto-bump
+  timestamp: 2026-09-24T08:37:52.961371312Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0d290-62c9-7f42-a898-02dcf6557d4d
+  timestamp: 2026-09-24T08:37:52.969274499Z
+  agent: aida
+  commit_sha: 1681a989a75cae65c8a82951db980411eb3966bb
+  summary: Completed via merge 1681a989
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T08:37:52.961182306Z
+  completion_sha: 1681a989a75cae65c8a82951db980411eb3966bb
