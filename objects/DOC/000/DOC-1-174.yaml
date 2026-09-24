@@ -1,5 +1,6 @@
 id: 01a0d1a7-54a2-7e20-8568-1ffb6c1261ae
 spec_id: DOC-1-174
+agreed_id: DOC-3
 title: 'Human explanation: reusable Jev questions and recorded judgments'
 description: |
   The proposed `aida jev` surface is a reusable question catalog over Jev's typed judgment primitives.
