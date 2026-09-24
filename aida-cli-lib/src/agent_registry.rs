@@ -1110,7 +1110,7 @@ pub(crate) fn mark_agent_ended(
 /// Load every registry entry (alive or stale) as `(path, entry)` pairs.
 /// Unlike `list_agent_views` this hands back the raw record so callers can
 /// mutate + rewrite it (pause/resume). trace:STORY-528 | ai:claude
-fn load_entries(project_root: &Path) -> Vec<(PathBuf, AgentRegistryEntry)> {
+pub(crate) fn load_entries(project_root: &Path) -> Vec<(PathBuf, AgentRegistryEntry)> {
     let mut out = Vec::new();
     if let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) {
         for entry in entries.flatten() {

@@ -2475,6 +2475,7 @@ mod tests {
             verdict_ref: None,
             release_condition: None,
             spec: None,
+            placed_by: None,
         }
     }
 

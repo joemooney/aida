@@ -307,6 +307,10 @@ struct DoctorReport {
     // trace:BUG-1573 | ai:codex
     #[serde(skip_serializing_if = "Vec::is_empty")]
     performance_audits: Vec<schedule_ledger::PerformanceAudit>,
+    /// STORY-1462: what the runaway-seat watchdog could and could not see.
+    // trace:STORY-1462 | ai:claude
+    #[serde(skip_serializing_if = "Option::is_none")]
+    runaway_seats: Option<crate::runaway_seats::Coverage>,
 }
 
 impl DoctorReport {
@@ -318,6 +322,7 @@ impl DoctorReport {
             healed: Vec::new(),
             bwrap: Some(bwrap_status_line()),
             performance_audits: Vec::new(),
+            runaway_seats: None,
         }
     }
 }
@@ -513,8 +518,36 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // STORY-1462: the runaway-seat watchdog. Reads the trailing day of this
+    // project's session transcripts (incrementally, via a per-file watermark)
+    // and trips on per-session wake/token/repeated-prompt/idle anomalies and
+    // the project's daily token spend. Zero-token and bounded; opt-in path
+    // for the same reason as disk-headroom. The coverage block travels with
+    // the report so unavailable evidence reads as unknown, never as ok.
+    // trace:STORY-1462 | ai:claude
+    let mut runaway_seats = None;
+    if doctor_category_selected(opts.category.as_deref(), "runaway-seats")? {
+        let cfg = crate::read_project_config_value(&project_root);
+        let policy = crate::runaway_seats::policy(cfg.as_ref());
+        let label = project_root
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| project_root.display().to_string());
+        let (seat_findings, coverage) = crate::runaway_seats::scan(
+            &label,
+            &crate::runaway_seats::default_sources(&project_root),
+            &policy,
+            chrono::Utc::now(),
+            &crate::runaway_seats::registry_attribution(&project_root),
+        );
+        findings.extend(seat_findings);
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+        runaway_seats = Some(coverage);
+    }
+
     let mut report = DoctorReport::from_findings(findings);
     report.performance_audits = performance_audits;
+    report.runaway_seats = runaway_seats;
     report.hidden_completed_without_commit = hidden_completed_without_commit;
 
     if opts.heal {
@@ -525,6 +558,9 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         render_doctor_report(&report, opts.heal)?;
+        if let Some(coverage) = &report.runaway_seats {
+            print!("{}", crate::runaway_seats::render_coverage(coverage));
+        }
         // STORY-707: `aida doctor` is the check-everything home. The heavy
         // orientation diagnostics that used to ride bare `aida status` — PR/CI
         // (a `gh` network call), live-session/lease liveness, worktree probes,
