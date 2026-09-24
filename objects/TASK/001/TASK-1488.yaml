@@ -15,12 +15,32 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T17:35:05.360339938Z
-modified_at: 2026-09-24T18:02:41.958603808Z
+modified_at: 2026-09-24T18:06:03.995269142Z
 req_type: Task
 tags:
 - aida:rel
 - docs:impacted
 - papercut
+comments:
+- id: 01a0d498-92db-7381-91fd-d91f93850129
+  author: joe
+  content: |-
+    Dry-run census against the live store, 2026-09-24, from `aida db migrate-related-edges --dry-run` on branch claude/task-1488 (sha 1042f00891af058d7273af1b4ec07fd9facbb080), built from origin/claude/bug-1602. Nothing was written; store HEAD did not move.
+
+    Found: 1 custom edge on 1 spec (depends-on: 1) out of 4417 specs scanned, resolving to blocked_by. Plan: 0 converted, 1 twin deleted (TASK-1236 already holds a native blocked_by edge to BUG-1156, so the Custom(depends-on) copy is deleted, not converted), 0 extras.
+
+    Design (widened predicate): a Custom edge migrates when its name is one of the original TASK-1426 `related`/`related-to`/`relates-to` family (checked directly, ahead of the parser) OR parses to a non-Custom RelationshipType via the shared RelationshipType::parse_relationship_type (BUG-1602). The `related-to` carve-out is necessary because parse_relationship_type's own References aliases cover `relates-to` but not `related-to` — relying on the parser alone would have silently narrowed TASK-1426's existing, tested coverage. Grouping generalized from "per target" to "per (standard type, target)" so two different custom spellings resolving to two different standard types on the same target convert independently. implements/implemented-by and sprint_* stay Custom automatically (the parser resolves them to Custom, so they never match the predicate) — no exclusion list needed.
+
+    Reciprocal edges: NOT written, for any paired kind, including Parent/Child (which `rel add` does auto-reciprocate). Chose not to, because the legacy edge was one-directional stored data and this migration's job is type repair, not topology repair; a spec that wants the canonical bidirectional pair after migration gets it the normal way (`aida rel add --type child` or `-b`, which already dedups). Documented in the module doc comment, the CLI help text, and pinned by `parent_child_orphan_converts_and_does_not_touch_the_target`.
+
+    Finding — `duplicate-of` does NOT migrate: the 2026-09-21 census (and this task's own filed background) cites a Custom(duplicate-of) edge as in-scope, but `RelationshipType::parse_relationship_type("duplicate-of")` returns `Custom("duplicate-of")`, not `Duplicate` — only the bare word `duplicate` is recognized. Verified directly (ad hoc `cargo run --example`, not left in the tree). The live edge is on BUG-1175 (a genuine twin: it already holds a native `Duplicate` edge to the same target), so it will convert automatically on the next migration run once the parser gap is fixed. Filed BUG-1604 for that (add `duplicate-of`/`duplicate_of`/`duplicateof` to `parse_relationship_type`'s alias table) rather than hand-patching it into this migration, to keep the selection predicate a driftless mirror of the shared parser as intended.
+
+    Tests (aida-cli-lib/src/tests/task_1488_related_edge_migration_widen_tests.rs, 9 new): depends-on -> blocked_by conversion; verified_by + replaced_by conversion; duplicate twin deleted (using the `duplicate` spelling that actually parses — see note above); an unparseable Custom name (both the real `duplicate-of` and a made-up one) left alone; implements untouched; Parent/Child conversion writes no reciprocal edge on the target; two different standard types on one target convert independently; full apply-and-rerun idempotency. All pass, alongside the original 8 TASK-1426 fixture tests (unchanged behavior).
+
+    Full verification: cargo fmt --check clean; cargo clippy -p aida-cli-lib -p aida-core -D clippy::correctness clean (0 errors, only pre-existing unrelated warnings); cargo test -p aida-cli-lib --lib: 6175 passed, 0 failed, 1 pre-existing ignored; external-prose-classifiers.py --check clean; glyph-lint.sh --block clean; docs/cli/verify-manual.py clean (flags/completeness/reflection/spec-id checks all OK); docs/cli/verify-interface-changes.py origin/main HEAD OK (TASK-1488 carries the docs:impacted tag, added since this touches aida-cli-lib/src/cli.rs help text).
+  created_at: 2026-09-24T18:06:03.995269142Z
+  modified_at: 2026-09-24T18:06:03.995269142Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 2ab1b8d9595d61e30904573a1c13b2be45d0194d
   branch: main
