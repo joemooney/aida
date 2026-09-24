@@ -80196,6 +80196,14 @@ mod task_928_parent_tag_edge_tests;
 #[path = "tests/task_1426_related_edge_migration_tests.rs"]
 mod task_1426_related_edge_migration_tests;
 
+// TASK-1488: fixture tests for the widened `aida db migrate-related-edges`
+// selection predicate — any Custom edge whose spelling parses to a standard
+// type via `RelationshipType::parse_relationship_type`, not just the
+// `related` family. trace:TASK-1488 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1488_related_edge_migration_widen_tests.rs"]
+mod task_1488_related_edge_migration_widen_tests;
+
 // BUG-1602: handler-level tests of `aida rel remove` itself (typed removal,
 // --bidirectional, the parent/child pair, the legacy Custom-related family)
 // through the real Command::Rel dispatch path — task_1426's tests above only

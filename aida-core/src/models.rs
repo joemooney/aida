@@ -1267,9 +1267,11 @@ impl RelationshipType {
     /// A strict superset of [`RelationshipType::from_str`], adding
     /// input-only conveniences: `related`/`relates-to`/`relates_to`/
     /// `relatesto` for [`RelationshipType::References`], `depends-on`/
-    /// `depends_on`/`dependson` for [`RelationshipType::BlockedBy`], and
+    /// `depends_on`/`dependson` for [`RelationshipType::BlockedBy`],
     /// `replaced_by`/`replacedby` alongside `from_str`'s existing
-    /// `replaced-by` for [`RelationshipType::SupersededBy`].
+    /// `replaced-by` for [`RelationshipType::SupersededBy`], and
+    /// `duplicate-of`/`duplicate_of`/`duplicateof` alongside `from_str`'s
+    /// existing `duplicate` for [`RelationshipType::Duplicate`] (BUG-1604).
     ///
     /// Deliberately NOT folded into `from_str`, which also backs
     /// `Deserialize` for stored data: `related` names an existing legacy
@@ -1278,11 +1280,13 @@ impl RelationshipType {
     /// This parser is for interpreting what an operator or agent just typed,
     /// never for reading back a stored relationship type.
     // trace:BUG-1602 | ai:claude
+    // trace:BUG-1604 | ai:claude
     pub fn parse_relationship_type(s: &str) -> Self {
         match s.trim().to_lowercase().as_str() {
             "related" | "relates-to" | "relates_to" | "relatesto" => RelationshipType::References,
             "depends-on" | "depends_on" | "dependson" => RelationshipType::BlockedBy,
             "replaced_by" | "replacedby" => RelationshipType::SupersededBy,
+            "duplicate-of" | "duplicate_of" | "duplicateof" => RelationshipType::Duplicate,
             other => Self::from_str(other),
         }
     }
@@ -8944,6 +8948,39 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
             assert_eq!(name, "implements");
         } else {
             panic!("Expected Custom variant");
+        }
+    }
+
+    // BUG-1604: `duplicate-of` (and its `_`/no-separator siblings) alongside
+    // `from_str`'s existing `duplicate`, in the same alias-family style as
+    // `depends-on` -> BlockedBy and `replaced_by` -> SupersededBy.
+    // trace:BUG-1604 | ai:claude
+    #[test]
+    fn test_parse_relationship_type_duplicate_of_aliases() {
+        for spelling in [
+            "duplicate-of",
+            "duplicate_of",
+            "duplicateof",
+            "Duplicate-Of",
+        ] {
+            assert_eq!(
+                RelationshipType::parse_relationship_type(spelling),
+                RelationshipType::Duplicate,
+                "{spelling} should parse to Duplicate"
+            );
+        }
+        // The bare word still works too (falls through to from_str).
+        assert_eq!(
+            RelationshipType::parse_relationship_type("duplicate"),
+            RelationshipType::Duplicate
+        );
+        // `from_str` (the Deserialize-backing parser) deliberately does NOT
+        // gain this alias, matching the existing `related` precedent: it
+        // must not silently reclassify an already-stored Custom edge.
+        if let RelationshipType::Custom(name) = RelationshipType::from_str("duplicate-of") {
+            assert_eq!(name, "duplicate-of");
+        } else {
+            panic!("from_str(\"duplicate-of\") should stay Custom");
         }
     }
 
