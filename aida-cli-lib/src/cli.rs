@@ -3761,17 +3761,20 @@ pub enum DbCommand {
         repair: bool,
     },
 
-    /// Repair custom `related` edges that graph traversals do not follow.
+    /// Repair custom edges that graph traversals do not follow.
     ///
-    /// Edges stored as the custom types `related`, `related-to` or
-    /// `relates-to` are rewritten: when the source already has a
-    /// `references` edge to the same target the custom edge is deleted,
-    /// otherwise it is converted to `references`. Other custom edge types
-    /// are left alone. Each changed spec is written with its own store
-    /// commit, and the command refuses to leave a spec holding two edges of
-    /// the same type to one target. Running it again after a successful
-    /// run changes nothing.
+    /// Any edge stored as a custom type whose spelling resolves to a
+    /// standard relationship type (for example `related`, `depends-on`,
+    /// `verified_by` or `replaced_by`) is rewritten: when the source already
+    /// has an edge of that standard type to the same target the custom edge
+    /// is deleted, otherwise it is converted in place. Other custom edge
+    /// types (for example `implements` or a `sprint_*` label) are left
+    /// alone. Each changed spec is written with its own store commit, and
+    /// the command refuses to leave a spec holding two edges of the same
+    /// type to one target. Running it again after a successful run changes
+    /// nothing.
     // trace:TASK-1426 | ai:claude
+    // trace:TASK-1488 | ai:claude
     MigrateRelatedEdges {
         /// Report the counts and the per-spec actions without writing
         /// anything.

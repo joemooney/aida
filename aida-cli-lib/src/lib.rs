@@ -2633,6 +2633,10 @@ mod task970_agent_output_tests;
 #[path = "tests/task_1486_store_refusal_tests.rs"]
 mod task_1486_store_refusal_tests;
 
+#[cfg(test)]
+#[path = "tests/task_1487_store_polish_tests.rs"]
+mod task_1487_store_polish_tests;
+
 fn maybe_run_asciinema_wrapper(raw_args: &[String], cli: &Cli) -> Result<Option<i32>> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         eprintln!(
@@ -3570,16 +3574,39 @@ fn run() -> Result<()> {
             );
             let target = match target {
                 RefreshSeedTarget::DistributedUnattached => {
-                    match unattached_distributed_root(&cwd)
-                        .filter(|root| branch_exists_anywhere(root, "aida-store"))
-                        .map(|root| try_attach_store_worktree(&root))
-                    {
-                        Some(Ok(store_path)) => {
-                            eprintln!(
-                                "  {} attached the AIDA store worktree from `aida-store`",
-                                "Note:".dimmed()
-                            );
-                            RefreshSeedTarget::Store(store_path)
+                    match unattached_distributed_root(&cwd) {
+                        // BUG-433 shape: the store is already physically
+                        // attached at `<root>/.aida-store` (no fetch/attach
+                        // needed) — use it directly, matching the main
+                        // resolver's `store_path_opt` computation.
+                        // trace:TASK-1487 | ai:claude
+                        Some(ref root) if attached_store_present(root) => {
+                            RefreshSeedTarget::Store(root.join(".aida-store"))
+                        }
+                        Some(root) if branch_exists_anywhere(&root, "aida-store") => {
+                            match try_attach_store_worktree(&root) {
+                                Ok(store_path) => {
+                                    eprintln!(
+                                        "  {} attached the AIDA store worktree from \
+                                         `aida-store`",
+                                        "Note:".dimmed()
+                                    );
+                                    RefreshSeedTarget::Store(store_path)
+                                }
+                                // Auto-attach failed (offline, diverged/locked
+                                // branch, git too old, …) — print the cause,
+                                // as the main resolver does for the same
+                                // failure, instead of silently dropping it.
+                                // trace:TASK-1487 | ai:claude
+                                Err(e) => {
+                                    eprintln!(
+                                        "  {} couldn't auto-attach the store worktree: {}",
+                                        "Note:".dimmed(),
+                                        e
+                                    );
+                                    RefreshSeedTarget::DistributedUnattached
+                                }
+                            }
                         }
                         _ => RefreshSeedTarget::DistributedUnattached,
                     }
@@ -4804,11 +4831,22 @@ fn run() -> Result<()> {
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
         let explicit_path = std::path::PathBuf::from(explicit_file);
-        // If path is a directory, use GitBackend and route through the backend API
+        // If path is a directory, use GitBackend and route through the backend
+        // API. Goes through `run_on_distributed_store` — not straight to
+        // `handle_git_backend_command` — so an explicit `--file <dir>` gets
+        // the same tracker (jira/github/gitlab) and mcp-serve special-casing
+        // as every other distributed-store resolution path; the git-backend
+        // handler alone has no arms for those commands and used to exit
+        // "not yet supported". trace:TASK-1487 | ai:claude
         if explicit_path.is_dir()
             || (!explicit_path.exists() && explicit_path.extension().is_none())
         {
-            return git_backend_cmd::handle_git_backend_command(&explicit_path, &cli.command);
+            // The explicit --file directory IS the project root here — there's
+            // no separate project to walk cwd up to, and cwd may not even be
+            // inside it (or may be inside some unrelated git repo). Pass it
+            // through explicitly so `mcp-serve` doesn't derive the wrong
+            // project root from cwd. trace:TASK-1487 | ai:claude
+            return run_on_distributed_store(&cli.command, &explicit_path, Some(&explicit_path));
         }
         // User explicitly specified a file path - use it directly
         explicit_path
@@ -4820,7 +4858,7 @@ fn run() -> Result<()> {
         // legacy resolver and wrongly reported there was no `.aida/config.toml`.
         // trace:TASK-1486 | ai:claude
         if let Some(store_path) = detect_distributed_store() {
-            return run_on_distributed_store(&cli.command, &store_path);
+            return run_on_distributed_store(&cli.command, &store_path, None);
         }
         // Distributed mode is declared in `.aida/config.toml` but the store
         // worktree isn't resolvable here — the hallmark of a freshly-cloned
@@ -4895,7 +4933,7 @@ fn run() -> Result<()> {
                 None
             };
             if let Some(store_path) = store_path_opt {
-                return run_on_distributed_store(&cli.command, &store_path);
+                return run_on_distributed_store(&cli.command, &store_path, None);
             }
             let on_store_ref = branch_exists_anywhere(&project_root, "aida-store");
             let branch_hint = if on_store_ref {
@@ -12813,8 +12851,18 @@ fn detect_distributed_store() -> Option<std::path::PathBuf> {
 /// pointing it at the store directory makes its load/save delegate to
 /// GitBackend, so their reads and writes land in `objects/` like every other
 /// command's. Everything else goes through the git-backend dispatcher.
-// trace:BUG-310 trace:TASK-1486 | ai:claude
-fn run_on_distributed_store(command: &Command, store_path: &std::path::Path) -> Result<()> {
+///
+/// `project_root_hint`, when given, is used as `mcp-serve`'s project root
+/// instead of walking cwd up to a `.git` — the explicit `--file <dir>` caller
+/// passes its own directory, since that directory IS the project root there
+/// (no separate project to find, and cwd may be unrelated to it entirely).
+/// The other callers pass `None` and keep the existing cwd-walk behavior.
+// trace:BUG-310 trace:TASK-1486 trace:TASK-1487 | ai:claude
+fn run_on_distributed_store(
+    command: &Command,
+    store_path: &std::path::Path,
+    project_root_hint: Option<&std::path::Path>,
+) -> Result<()> {
     let storage = Storage::new(store_path);
     match command {
         // MCP server reads/writes through the same canonical git store the CLI
@@ -12822,14 +12870,137 @@ fn run_on_distributed_store(command: &Command, store_path: &std::path::Path) -> 
         // `.aida/mcp-cache.yaml` only — invisible to the CLI and overwritten on
         // every MCP restart. trace:BUG-310 | ai:claude
         Command::McpServe => {
-            let project_root = find_project_root().unwrap_or_else(|_| store_path.to_path_buf());
+            let project_root =
+                mcp_serve_project_root(store_path, project_root_hint, find_project_root().ok());
             mcp::run_mcp_server(&storage, project_root)
         }
-        Command::Jira(cmd) => tracker_cmd::handle_jira_command(cmd, &storage),
-        Command::Github(cmd) => tracker_cmd::handle_github_command(cmd, &storage),
-        Command::Gitlab(cmd) => tracker_cmd::handle_gitlab_command(cmd, &storage),
+        // Tracker imports (`aida jira/github pull`) write new requirements
+        // through this `Storage`, same as every other distributed-store
+        // write path — they need the same node id and per-write auto-push
+        // `handle_git_backend_command` gives its own callers, just reached
+        // through a different signature (`&Storage`, not `&GitBackend`).
+        // trace:TASK-1487 | ai:claude
+        Command::Jira(cmd) => run_tracker_command(store_path, command, |storage| {
+            tracker_cmd::handle_jira_command(cmd, storage)
+        }),
+        Command::Github(cmd) => run_tracker_command(store_path, command, |storage| {
+            tracker_cmd::handle_github_command(cmd, storage)
+        }),
+        Command::Gitlab(cmd) => run_tracker_command(store_path, command, |storage| {
+            tracker_cmd::handle_gitlab_command(cmd, storage)
+        }),
         _ => git_backend_cmd::handle_git_backend_command(store_path, command),
     }
+}
+
+/// Pure decision for `mcp-serve`'s project root: an explicit hint (the
+/// `--file <dir>` caller's own directory) always wins over a cwd-derived git
+/// root, since cwd may be unrelated to — or simply not inside — the
+/// directory the user explicitly pointed at. Falls back to the store path
+/// itself only when neither resolves. Takes the cwd-walk result as a plain
+/// value (rather than calling `find_project_root()` itself) so this decision
+/// stays unit-testable without touching the process's actual cwd.
+///
+/// The hint is a STORE path (the `--file`/`AIDA_STORE` convention: it points
+/// at `<repo>/.aida-store`, the directory `GitBackend::new` expects
+/// `objects/` directly under — see the ~20 `project_root.join(".aida-store")`
+/// call sites), not the project root itself. Adopting it as-is regressed
+/// leases, roles, mailbox and ledger paths (all keyed off the real project
+/// root) and double-nested the store. `project_root_from_store_hint` derives
+/// the real root from it instead.
+// trace:TASK-1487 | ai:claude
+fn mcp_serve_project_root(
+    store_path: &std::path::Path,
+    project_root_hint: Option<&std::path::Path>,
+    cwd_project_root: Option<std::path::PathBuf>,
+) -> std::path::PathBuf {
+    project_root_hint
+        .map(project_root_from_store_hint)
+        .or(cwd_project_root)
+        .unwrap_or_else(|| store_path.to_path_buf())
+}
+
+/// Derive the project root a `--file <dir>`/`AIDA_STORE` hint implies, per
+/// the store-path convention:
+/// 1. The hint's final component is `.aida-store` → its parent is the root
+///    (the overwhelmingly common case: `--file` pointed straight at the
+///    worktree, the same as every other resolver in this codebase).
+/// 2. Otherwise the hint already looks like a project root itself (it has
+///    its own `.git` or `.aida/config.toml`) → use it as-is.
+/// 3. Otherwise walk up from the hint looking for an enclosing project root,
+///    guarded — like every other `.aida`-seeking walk-up in this codebase —
+///    against ever adopting a shared system temp root (BUG-1598).
+/// 4. Otherwise (a bare sandbox store — e.g. the `AIDA_STORE` dev-playground
+///    path, SPIKE-48 — with no enclosing project) the hint has no project
+///    root to point to; keep it as-is.
+// trace:TASK-1487 | ai:claude
+fn project_root_from_store_hint(hint: &std::path::Path) -> std::path::PathBuf {
+    project_root_from_store_hint_with_roots(hint, &aida_core::store_locate::real_temp_roots())
+}
+
+/// [`project_root_from_store_hint`], parameterized on the temp roots to
+/// guard against, so a test can exercise the guard against a fake root
+/// without touching the real, shared system temp dir.
+// trace:TASK-1487 | ai:claude
+fn project_root_from_store_hint_with_roots(
+    hint: &std::path::Path,
+    temp_roots: &[std::path::PathBuf],
+) -> std::path::PathBuf {
+    if hint.file_name() == Some(std::ffi::OsStr::new(".aida-store")) {
+        if let Some(parent) = hint.parent() {
+            return parent.to_path_buf();
+        }
+    }
+    if looks_like_project_root(hint) {
+        return hint.to_path_buf();
+    }
+    let canonical_roots = aida_core::store_locate::canonicalize_roots(temp_roots);
+    let mut current = hint.parent();
+    while let Some(dir) = current {
+        // BUG-1598: never walk INTO a temp root and adopt it (or whatever's
+        // in it) as the project — same guard every other walk-up here uses.
+        if aida_core::store_locate::is_in_canonical_roots(dir, &canonical_roots) {
+            break;
+        }
+        if looks_like_project_root(dir) {
+            return dir.to_path_buf();
+        }
+        current = dir.parent();
+    }
+    hint.to_path_buf()
+}
+
+/// Does `dir` look like an AIDA/git project root on its own — a `.git`
+/// directory or an `.aida/config.toml` file? Shared by both the direct-hint
+/// check and the walk-up in [`project_root_from_store_hint_with_roots`].
+// trace:TASK-1487 | ai:claude
+fn looks_like_project_root(dir: &std::path::Path) -> bool {
+    dir.join(".git").exists() || dir.join(".aida").join("config.toml").exists()
+}
+
+/// Run a tracker (jira/github/gitlab) command against the distributed store
+/// with the same two things `handle_git_backend_command` gives every other
+/// distributed-store command — reused here, not reimplemented, since tracker
+/// commands take a `&Storage` and can't go through that dispatcher's match:
+/// - the dispenser's node id, so oplog entries this command writes (a tracker
+///   pull's bulk import) aren't stamped node_id "0";
+/// - the per-write store auto-push, gated the same way
+///   `command_triggers_per_write_auto_push` gates every other write command,
+///   and only fired on success (an error return skips it, same as the
+///   git-backend dispatcher's post-match auto-push never running on an early
+///   `?` return from inside its match).
+// trace:TASK-1487 | ai:claude
+fn run_tracker_command(
+    store_path: &std::path::Path,
+    command: &Command,
+    handler: impl FnOnce(&Storage) -> Result<()>,
+) -> Result<()> {
+    let storage = Storage::new(store_path).with_dispenser(load_dispenser(store_path)?);
+    handler(&storage)?;
+    if command_triggers_per_write_auto_push(command) {
+        maybe_auto_push_store(store_path, StoreAutoPushMode::PerWrite, "per-write");
+    }
+    Ok(())
 }
 
 /// Where `aida init --refresh` seeds missing type protocols.
@@ -12867,14 +13038,22 @@ fn refresh_seed_target(
 }
 
 /// The project root when `start` is inside a distributed AIDA project: one
-/// whose `.aida/config.toml` declares distributed mode, or whose git repo has
-/// an `aida-store` branch. The same signals the main resolver uses to refuse
-/// the legacy fallback when the store isn't attached.
-// trace:TASK-1486 trace:BUG-428 trace:BUG-442 | ai:claude
+/// whose `.aida/config.toml` declares distributed mode, whose git repo has an
+/// `aida-store` branch, or whose store is physically attached at
+/// `<root>/.aida-store` despite neither of those (the BUG-433 shape: a
+/// session worktree forked from a commit that predates the committed
+/// scaffolding, or a symlink into another repo's store). The same signals the
+/// main resolver uses (see the `distributed_root` computation above) to
+/// refuse the legacy fallback when the store isn't resolvable through
+/// `detect_distributed_store`.
+// trace:TASK-1486 trace:BUG-428 trace:BUG-442 trace:BUG-433 trace:TASK-1487 | ai:claude
 fn unattached_distributed_root(start: &std::path::Path) -> Option<std::path::PathBuf> {
     distributed_mode_declared_from(start).or_else(|| {
         let root = start.ancestors().find(|d| d.join(".git").exists())?;
-        branch_exists_anywhere(root, "aida-store").then(|| root.to_path_buf())
+        if branch_exists_anywhere(root, "aida-store") {
+            return Some(root.to_path_buf());
+        }
+        attached_store_present(root).then(|| root.to_path_buf())
     })
 }
 
@@ -14318,6 +14497,14 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
                 | ConfigCommand::Digits { .. }
                 | ConfigCommand::Migrate { .. }
         ),
+        // TASK-1487: `jira/github pull` bulk-import new requirements into the
+        // local store (via `bulk_import_via_writer`) unless `--dry-run`; every
+        // other tracker subcommand (config/test/list/show/push/sync/labels/…)
+        // only reads the store or talks to the remote tracker. GitLab has no
+        // local-write subcommand for a git-canonical store (`refresh`'s sync
+        // state is SQLite-only). trace:TASK-1487 | ai:claude
+        Command::Jira(JiraCommand::Pull { dry_run, .. }) => !dry_run,
+        Command::Github(GitHubCommand::Pull { dry_run, .. }) => !dry_run,
         _ => false,
     }
 }
@@ -79996,7 +80183,13 @@ where
 {
     let path = storage.path();
     if path.is_dir() {
-        let backend = aida_core::GitBackend::new(path)?;
+        // Attach the same dispenser `storage` was built with, when it has
+        // one — otherwise a fresh `GitBackend` defaults to node_id "0" for
+        // every oplog entry this writer commits. trace:TASK-1487 | ai:claude
+        let mut backend = aida_core::GitBackend::new(path)?;
+        if let Some(dispenser) = storage.dispenser() {
+            backend = backend.with_dispenser(dispenser.clone());
+        }
         let mut writer = backend.bulk_writer()?;
         for req in reqs {
             writer.add(req)?;
@@ -80421,6 +80614,14 @@ mod task_928_parent_tag_edge_tests;
 #[cfg(test)]
 #[path = "tests/task_1426_related_edge_migration_tests.rs"]
 mod task_1426_related_edge_migration_tests;
+
+// TASK-1488: fixture tests for the widened `aida db migrate-related-edges`
+// selection predicate — any Custom edge whose spelling parses to a standard
+// type via `RelationshipType::parse_relationship_type`, not just the
+// `related` family. trace:TASK-1488 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1488_related_edge_migration_widen_tests.rs"]
+mod task_1488_related_edge_migration_widen_tests;
 
 // BUG-1602: handler-level tests of `aida rel remove` itself (typed removal,
 // --bidirectional, the parent/child pair, the legacy Custom-related family)
