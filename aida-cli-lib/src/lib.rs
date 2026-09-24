@@ -13429,7 +13429,9 @@ pub(crate) fn apply_carve_out(
 fn add_carved_from_edge(
     backend: &aida_core::CachedGitBackend,
     target_id: uuid::Uuid,
+    target_display: &str,
     source_id: uuid::Uuid,
+    source_display: &str,
 ) -> Result<()> {
     use aida_core::models::{Relationship, RelationshipType};
     use aida_core::DatabaseBackend;
@@ -13438,10 +13440,11 @@ fn add_carved_from_edge(
         anyhow::anyhow!(
             "carve-out target {} disappeared before the inverse carved-from edge could be \
              written — the carve-out edge/comment on the source are saved, but the reciprocal \
-             edge on the target is missing; re-run `aida rel add <source> {} --type carved-from` \
+             edge on the target is missing; re-run `aida rel add {} {} --type carved-from` \
              to repair it by hand",
             target_id,
-            target_id
+            target_display,
+            source_display
         )
     })?;
     if !target.relationships.iter().any(|r| {

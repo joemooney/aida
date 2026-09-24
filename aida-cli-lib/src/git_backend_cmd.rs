@@ -6154,7 +6154,14 @@ pub(crate) fn handle_git_backend_command(
             // reciprocal edge) is exactly the half-applied state this spec
             // exists to prevent. trace:STORY-1434 | ai:claude
             if let Some((target_id, target_display)) = carve_target {
-                crate::add_carved_from_edge(&backend, target_id, req.id)?;
+                let source_display = req.spec_id.as_deref().unwrap_or(id).to_string();
+                crate::add_carved_from_edge(
+                    &backend,
+                    target_id,
+                    &target_display,
+                    req.id,
+                    &source_display,
+                )?;
                 println!("  Carved out → {}", target_display.cyan());
             }
 
