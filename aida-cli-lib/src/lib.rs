@@ -92901,6 +92901,20 @@ fn phase3_head_archive_fallback(
     started_at: std::time::SystemTime,
 ) -> Option<auto_complete::ReviewerOutcome> {
     let head = head?;
+    // Fail closed: the archive may only answer when the CURRENT file is a
+    // well-formed, unconflicted verdict that was recorded at a DIFFERENT
+    // commit. Malformed JSON, a missing verdict, a reconcile conflict, or a
+    // current file already at `head` keep their original error (PRIN-5,
+    // TASK-1169) — an older archived approval must never paper over them.
+    // trace:TASK-1460 | ai:claude
+    read_verdict_file(path).ok()?;
+    let current_sha = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|b| review_verdict::parse_recorded_verdict(&b))
+        .and_then(|v| v.reviewed_sha)?;
+    if review_verdict::same_reviewed_sha(&current_sha, head) {
+        return None;
+    }
     let archived = review_verdict::archived_verdict_file_for_sha(path, head)?;
     let mtime = std::fs::metadata(&archived).ok()?.modified().ok()?;
     if mtime < started_at {
@@ -92953,6 +92967,37 @@ mod task_1460_phase3_archive_tests {
         assert!(phase3_head_archive_fallback(&path, Some("deadbeefdeadbeef"), started).is_none());
         let later = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
         assert!(phase3_head_archive_fallback(&path, Some(R1), later).is_none());
+    }
+
+    // trace:TASK-1460 | ai:claude
+    #[test]
+    fn a_malformed_current_file_never_falls_back_to_an_archived_approval() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        let path = review_verdict::verdict_path(root, "PR-51");
+        let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        record(root, &path, "approved", R1);
+        // The current file is then corrupted, or carries no reviewed commit.
+        for bad in [
+            "{not json",
+            r#"{"summary":"no verdict"}"#,
+            r#"{"verdict":"approved"}"#,
+        ] {
+            std::fs::write(&path, bad).unwrap();
+            assert!(read_verdict_file_for_head(&path, Some(R1)).is_err());
+            assert!(
+                phase3_head_archive_fallback(&path, Some(R1), started).is_none(),
+                "must fail closed for {bad}"
+            );
+            assert!(read_verdict_file_for_head(&path, Some(R1))
+                .or_else(|e| phase3_head_archive_fallback(&path, Some(R1), started).ok_or(e))
+                .is_err());
+        }
+        // A spec-keyed malformed record is an error from the spec fallback too.
+        let spec_path = review_verdict::verdict_path(root, "TASK-61");
+        record(root, &spec_path, "approved", R1);
+        std::fs::write(&spec_path, "{not json").unwrap();
+        assert!(spec_verdict_fallback_for_phase3(root, "TASK-61", started, Some(R1)).is_err());
     }
 
     // trace:TASK-1460 | ai:claude
