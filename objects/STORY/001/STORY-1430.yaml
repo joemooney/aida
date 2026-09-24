@@ -49,12 +49,12 @@ description: |
   graph), STORY-1423 (exists so post-fix criteria are not falsely closed — a symptom of this
   gap), BUG-1566 (the TTY asymmetry whose workaround this would delete), BUG-1555 (the spec that
   auto-completed past five open items).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T20:22:47.839462128Z
-modified_at: 2026-09-24T02:31:35.928209935Z
+modified_at: 2026-09-24T03:35:03.647805057Z
 req_type: Story
 relationships:
 - rel_type:
@@ -104,3 +104,21 @@ comments:
   created_at: 2026-09-24T02:31:35.928209935Z
   modified_at: 2026-09-24T02:31:35.928209935Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d17b-24ce-7550-b9e2-8c63c7e73f8a
+  author: aida-auto-bump
+  timestamp: 2026-09-24T03:35:03.630490867Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0d17b-24df-7de2-bd19-fb8125fb3c96
+  timestamp: 2026-09-24T03:35:03.647803290Z
+  agent: aida
+  commit_sha: ab644af98099ff56a7b493a96ba1b8d033163512
+  summary: Completed via merge ab644af9
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T03:35:02.553572161Z
+  completion_sha: ab644af98099ff56a7b493a96ba1b8d033163512
