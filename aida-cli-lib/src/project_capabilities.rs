@@ -4,8 +4,10 @@
 //! CI. The PR/MR + CI lifecycle does. Init therefore classifies what the
 //! project actually has — which forge (if any) backs `origin`, whether that
 //! forge's CLI is installed and authenticated, and whether CI configuration is
-//! present — records it under `[project.capabilities]` in `.aida/config.toml`,
-//! and prints it, so a forge-dependent feature degrades explicitly instead of
+//! present — records the repo facts (class, CI) under `[project.capabilities]`
+//! in the tracked `.aida/config.toml`, the per-machine facts (origin host,
+//! forge CLI/auth) in the gitignored `.aida/capabilities.local.toml`, and
+//! prints both, so a forge-dependent feature degrades explicitly instead of
 //! failing later.
 //!
 //! Detection is local and cheap: `git remote get-url origin`, a `PATH` scan,
@@ -269,39 +271,30 @@ fn render_section(caps: &ProjectCapabilities) -> String {
     let mut s = String::new();
     s.push_str(SECTION_MARKER);
     s.push_str(
-        "\n# What this project can use, detected at `aida init` (re-run init to refresh).\n\
+        "\n# Repo facts detected at `aida init` (re-run init to refresh).\n\
          # class: github | gitlab | pure-git | local-only.\n\
-         # Each capability: available | unavailable | not-applicable | unknown.\n\
-         # `unknown` means detection could not tell; it is never assumed either way.\n",
+         # ci: available | unavailable | not-applicable | unknown; `unknown`\n\
+         # means detection could not tell and is never assumed either way.\n\
+         # Per-machine forge CLI/auth state lives in the gitignored\n\
+         # .aida/capabilities.local.toml, never here.\n",
     );
     s.push_str(SECTION_HEADER);
     s.push('\n');
+    // Repo facts only: no host (a self-hosted or internal hostname must not
+    // be committed to a possibly-public repo) and no per-machine CLI/auth.
     s.push_str(&format!("class = \"{}\"\n", caps.class.token()));
-    if let Some(host) = &caps.origin_host {
-        let escaped = host.replace('\\', "\\\\").replace('"', "\\\"");
-        s.push_str(&format!("origin_host = \"{escaped}\"\n"));
-    }
-    s.push_str(&format!("forge_cli = \"{}\"\n", caps.forge_cli.token()));
-    s.push_str(&format!("forge_auth = \"{}\"\n", caps.forge_auth.token()));
-    s.push_str(&format!(
-        "forge_lifecycle = \"{}\"\n",
-        caps.forge_lifecycle.token()
-    ));
     s.push_str(&format!("ci = \"{}\"\n", caps.ci.token()));
     let list: Vec<String> = caps.ci_config.iter().map(|c| format!("\"{c}\"")).collect();
     s.push_str(&format!("ci_config = [{}]\n", list.join(", ")));
     s
 }
 
-/// Drop a previously written capabilities block: the marker comment run in
-/// front of the header, the header, and its key lines (up to the next blank
-/// line or table header). Anything else is left byte-for-byte.
+/// Line span `[first, last)` of an existing capabilities block: the marker
+/// comment run in front of the header (when present), the header, and its key
+/// lines up to the next blank line or table header.
 // trace:STORY-1467 | ai:claude
-fn strip_section(content: &str) -> String {
-    let lines: Vec<&str> = content.lines().collect();
-    let Some(header) = lines.iter().position(|l| l.trim() == SECTION_HEADER) else {
-        return content.to_string();
-    };
+fn section_span(lines: &[&str]) -> Option<(usize, usize)> {
+    let header = lines.iter().position(|l| l.trim() == SECTION_HEADER)?;
     let mut first = header;
     let mut i = header;
     while i > 0 && lines[i - 1].trim_start().starts_with('#') {
@@ -319,19 +312,53 @@ fn strip_section(content: &str) -> String {
         }
         last += 1;
     }
-    let mut kept: Vec<&str> = lines[..first].to_vec();
-    // Collapse the blank line we wrote in front of the block.
-    if kept.last().is_some_and(|l| l.trim().is_empty())
-        && lines.get(last).is_none_or(|l| l.trim().is_empty())
-    {
-        kept.pop();
+    Some((first, last))
+}
+
+/// `content` with its capabilities block replaced where it stands, or a fresh
+/// block appended when there is none. Pure; replacing in place (not moving
+/// the block to the end) is what keeps a refresh byte-identical after other
+/// init steps append their own sections. Every other byte is preserved.
+// trace:STORY-1467 | ai:claude
+fn upsert_section(content: &str, caps: &ProjectCapabilities) -> String {
+    let block = render_section(caps);
+    let lines: Vec<&str> = content.lines().collect();
+    if let Some((first, last)) = section_span(&lines) {
+        let mut out: Vec<&str> = lines[..first].to_vec();
+        out.extend(block.lines());
+        out.extend_from_slice(&lines[last..]);
+        let mut joined = out.join("\n");
+        if content.ends_with('\n') || last == lines.len() {
+            joined.push('\n');
+        }
+        return joined;
     }
-    kept.extend_from_slice(&lines[last..]);
-    let mut out = kept.join("\n");
-    if content.ends_with('\n') && !out.is_empty() {
-        out.push('\n');
+    let mut after = content.to_string();
+    if !after.is_empty() && !after.ends_with('\n') {
+        after.push('\n');
     }
-    out
+    if !after.is_empty() {
+        after.push('\n');
+    }
+    after.push_str(&block);
+    after
+}
+
+/// Append the repo-fact capabilities block to the config `aida init` is about
+/// to write, so the scaffold commit already contains it and the end-of-init
+/// refresh is a no-op instead of leaving `.aida/config.toml` dirty. Repo facts
+/// only, so no CLI or auth probe runs here.
+// trace:STORY-1467 | ai:claude
+pub(crate) fn with_init_config_section(root: &Path, content: String) -> String {
+    let caps = classify(
+        root,
+        forge::origin_url(root).as_deref(),
+        &Probes {
+            cli_on_path: &|_| false,
+            gh_authed: &|_| None,
+        },
+    );
+    upsert_section(&content, &caps)
 }
 
 /// Upsert `[project.capabilities]` into `<root>/.aida/config.toml`, appended
@@ -346,18 +373,54 @@ pub(crate) fn write_capabilities(root: &Path, caps: &ProjectCapabilities) -> Res
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
         Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
     };
-    let mut after = strip_section(&before);
-    if !after.is_empty() && !after.ends_with('\n') {
-        after.push('\n');
-    }
-    if !after.is_empty() {
-        after.push('\n');
-    }
-    after.push_str(&render_section(caps));
+    let after = upsert_section(&before, caps);
     toml::from_str::<toml::Value>(&after)
         .with_context(|| format!("{} would not stay valid TOML", path.display()))?;
     if after != before {
         std::fs::write(&path, after).with_context(|| format!("writing {}", path.display()))?;
+    }
+    Ok(true)
+}
+
+/// Gitignored per-machine runtime state (covered by the `.aida/*`
+/// deny-by-default ignore block): which host `origin` points at and whether
+/// this machine's forge CLI is installed and logged in.
+// trace:STORY-1467 | ai:claude
+pub(crate) const LOCAL_STATE_REL_PATH: &str = ".aida/capabilities.local.toml";
+
+/// Render the per-machine runtime state file.
+// trace:STORY-1467 | ai:claude
+fn render_local_state(caps: &ProjectCapabilities) -> String {
+    let mut s = String::from(
+        "# Per-machine forge state detected by `aida init` (STORY-1467).\n\
+         # Runtime state: gitignored, rewritten on every init.\n\
+         # Each value: available | unavailable | not-applicable | unknown.\n",
+    );
+    s.push_str(&format!("class = \"{}\"\n", caps.class.token()));
+    if let Some(host) = &caps.origin_host {
+        let escaped = host.replace('\\', "\\\\").replace('"', "\\\"");
+        s.push_str(&format!("origin_host = \"{escaped}\"\n"));
+    }
+    s.push_str(&format!("forge_cli = \"{}\"\n", caps.forge_cli.token()));
+    s.push_str(&format!("forge_auth = \"{}\"\n", caps.forge_auth.token()));
+    s.push_str(&format!(
+        "forge_lifecycle = \"{}\"\n",
+        caps.forge_lifecycle.token()
+    ));
+    s
+}
+
+/// Write `.aida/capabilities.local.toml`. Returns false when `.aida/` is
+/// absent (nothing initialized to attach it to).
+// trace:STORY-1467 | ai:claude
+pub(crate) fn write_local_state(root: &Path, caps: &ProjectCapabilities) -> Result<bool> {
+    if !root.join(".aida").is_dir() {
+        return Ok(false);
+    }
+    let path = root.join(LOCAL_STATE_REL_PATH);
+    let body = render_local_state(caps);
+    if std::fs::read_to_string(&path).ok().as_deref() != Some(body.as_str()) {
+        std::fs::write(&path, body).with_context(|| format!("writing {}", path.display()))?;
     }
     Ok(true)
 }
@@ -457,6 +520,9 @@ pub(crate) fn record_and_report(root: &Path) {
     let caps = detect(root);
     if let Err(e) = write_capabilities(root, &caps) {
         eprintln!("  note: could not record project capabilities: {e}");
+    }
+    if let Err(e) = write_local_state(root, &caps) {
+        eprintln!("  note: could not record local forge state: {e}");
     }
     println!();
     for line in summary_lines(&caps) {
@@ -666,6 +732,9 @@ mod tests {
         assert_eq!(t["class"].as_str(), Some("local-only"));
         assert_eq!(t["ci"].as_str(), Some("not-applicable"));
         assert!(t.get("origin_host").is_none());
+        for key in ["forge_cli", "forge_auth", "forge_lifecycle"] {
+            assert!(t.get(key).is_none(), "{key} is per-machine: {text}");
+        }
         assert_eq!(parsed["forge"]["provider"].as_str(), Some("github"));
     }
 
@@ -700,6 +769,112 @@ mod tests {
             std::fs::read_to_string(aida.join("config.toml")).unwrap(),
             "project = \"x\"\n"
         );
+    }
+
+    #[test]
+    fn tracked_config_never_carries_the_origin_host() {
+        let d = fixture();
+        let aida = d.path().join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        std::fs::write(
+            aida.join("config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n",
+        )
+        .unwrap();
+        let caps = classify(
+            d.path(),
+            Some("git@git.internal.example:team/repo.git"),
+            &probes(&all_cli, &must_not_probe),
+        );
+        assert!(write_capabilities(d.path(), &caps).unwrap());
+        let text = std::fs::read_to_string(aida.join("config.toml")).unwrap();
+        assert!(!text.contains("git.internal.example"), "{text}");
+        assert!(!text.contains("origin_host"), "{text}");
+        let parsed: toml::Value = toml::from_str(&text).unwrap();
+        assert_eq!(
+            parsed["project"]["capabilities"]["class"].as_str(),
+            Some("pure-git")
+        );
+    }
+
+    #[test]
+    fn local_state_holds_host_and_per_machine_forge_state() {
+        let d = fixture();
+        std::fs::create_dir_all(d.path().join(".aida")).unwrap();
+        let caps = classify(
+            d.path(),
+            Some("https://github.com/o/r.git"),
+            &probes(&all_cli, &not_authed),
+        );
+        assert!(write_local_state(d.path(), &caps).unwrap());
+        let first = std::fs::read_to_string(d.path().join(LOCAL_STATE_REL_PATH)).unwrap();
+        let parsed: toml::Value = toml::from_str(&first).unwrap();
+        assert_eq!(parsed["origin_host"].as_str(), Some("github.com"));
+        assert_eq!(parsed["forge_cli"].as_str(), Some("available"));
+        assert_eq!(parsed["forge_auth"].as_str(), Some("unavailable"));
+        assert_eq!(parsed["forge_lifecycle"].as_str(), Some("unavailable"));
+        assert!(write_local_state(d.path(), &caps).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(d.path().join(LOCAL_STATE_REL_PATH)).unwrap(),
+            first,
+            "rewrite must be idempotent"
+        );
+    }
+
+    #[test]
+    fn local_state_needs_an_initialized_aida_dir() {
+        let d = fixture();
+        let caps = classify(d.path(), None, &probes(&all_cli, &must_not_probe));
+        assert!(!write_local_state(d.path(), &caps).unwrap());
+        assert!(!d.path().join(".aida").exists());
+    }
+
+    #[test]
+    fn init_section_then_refresh_is_byte_identical() {
+        let d = fixture();
+        let aida = d.path().join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        add_github_workflow(d.path());
+        let seeded = with_init_config_section(d.path(), "[forge]\nprovider = \"x\"\n".into());
+        std::fs::write(aida.join("config.toml"), &seeded).unwrap();
+        let caps = classify(d.path(), None, &probes(&all_cli, &must_not_probe));
+        assert!(write_capabilities(d.path(), &caps).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(aida.join("config.toml")).unwrap(),
+            seeded
+        );
+    }
+
+    #[test]
+    fn refresh_replaces_the_block_where_it_stands() {
+        let d = fixture();
+        let aida = d.path().join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        let seeded = with_init_config_section(d.path(), "[forge]\nprovider = \"x\"\n".into());
+        // Later init steps append their own sections after the block.
+        let seeded = format!("{seeded}\n[scaffold]\nfootprint = \"full\"\n");
+        std::fs::write(aida.join("config.toml"), &seeded).unwrap();
+        let same = classify(d.path(), None, &probes(&all_cli, &must_not_probe));
+        assert!(write_capabilities(d.path(), &same).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(aida.join("config.toml")).unwrap(),
+            seeded
+        );
+
+        add_github_workflow(d.path());
+        let changed = classify(
+            d.path(),
+            Some("https://github.com/o/r.git"),
+            &probes(&all_cli, &authed),
+        );
+        assert!(write_capabilities(d.path(), &changed).unwrap());
+        let text = std::fs::read_to_string(aida.join("config.toml")).unwrap();
+        assert!(
+            text.ends_with("[scaffold]\nfootprint = \"full\"\n"),
+            "{text}"
+        );
+        assert!(text.contains("class = \"github\""), "{text}");
+        assert_eq!(text.matches(SECTION_HEADER).count(), 1, "{text}");
     }
 
     #[test]
