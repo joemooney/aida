@@ -1,0 +1,32 @@
+id: 01a0d44c-9ae8-7101-8043-22becfdc88ce
+spec_id: TASK-1487
+agreed_id: TASK-1487
+title: 'Store-resolution polish: surface the init --refresh attach failure, route --file <dir> trackers/mcp through the distributed path, and give tracker imports the dispenser node id'
+description: |-
+  Non-blocking notes from the TASK-1486 review.
+  (1) init --refresh drops the error from try_attach_store_worktree, so the user sees 'not attached' but not why (offline, diverged). Print the cause, as the main resolver does.
+  (2) unattached_distributed_root misses the BUG-433 shape: .aida-store/objects present, no config, no aida-store branch. Make it agree with detect_distributed_store.
+  (3) --file <dir> with a tracker command or mcp-serve still exits 'not yet supported'. Route it through run_on_distributed_store.
+  (4) Tracker imports via run_on_distributed_store skip the per-write store auto-push and the dispenser, so oplog entries get node_id 0. Use the dispenser's node id and honour auto-push.
+  (5) docs/admin-guide.md: say that an unattached distributed project first tries auto-attach; state that -p is ignored inside a distributed project; refresh the stale footer.
+
+  ## Acceptance
+  - Each item is fixed, or documented as deliberate, with a test where it changes behaviour.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T16:43:05.320943179Z
+modified_at: 2026-09-24T16:43:05.320943179Z
+req_type: Task
+tags:
+- papercut
+- store-locate
+filed_at:
+  code_sha: 43649a4222d7611933b2943187d80a6154718587
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 43649a4222
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
