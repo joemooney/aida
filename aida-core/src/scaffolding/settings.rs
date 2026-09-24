@@ -84,10 +84,14 @@ impl Scaffolder {
             ));
         }
 
+        // PostToolUse holds the Bash-matched track-commits hook and,
+        // separately, the pending-approval clear hook (no matcher — every
+        // tool, not just Bash, so the marker never outlives the turn it was
+        // raised on). trace:TASK-1461 | ai:claude
+        let mut post_matchers: Vec<String> = Vec::new();
         if self.config.include_track_commits_hook {
-            hooks.push(
-                r#"    "PostToolUse": [
-      {
+            post_matchers.push(
+                r#"      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -96,10 +100,29 @@ impl Scaffolder {
             "timeout": 15
           }
         ]
-      }
-    ]"#
+      }"#
                 .to_string(),
             );
+        }
+        if self.config.include_pending_approval_hooks {
+            post_matchers.push(
+                r#"      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-clear-pending-approval.sh",
+            "timeout": 5
+          }
+        ]
+      }"#
+                .to_string(),
+            );
+        }
+        if !post_matchers.is_empty() {
+            hooks.push(format!(
+                "    \"PostToolUse\": [\n{}\n    ]",
+                post_matchers.join(",\n")
+            ));
         }
 
         // SessionStart: role-context hook surfaces (role:<name>) state when
@@ -112,6 +135,48 @@ impl Scaffolder {
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-role-context.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]"#
+                .to_string(),
+            );
+        }
+
+        // UserPromptSubmit: clears the pending-approval marker (the other
+        // half of the pair below on PostToolUse) once a human sends the next
+        // prompt. trace:TASK-1461 | ai:claude
+        if self.config.include_pending_approval_hooks {
+            hooks.push(
+                r#"    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-clear-pending-approval.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]"#
+                .to_string(),
+            );
+        }
+
+        // Notification(permission_prompt): records the pending-approval
+        // marker Claude Code is waiting on the operator's approval — ground
+        // truth for `aida ps` / `aida awaiting`, not a heuristic.
+        // trace:TASK-1454 trace:TASK-1461 | ai:claude
+        if self.config.include_pending_approval_hooks {
+            hooks.push(
+                r#"    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-notification.sh",
             "timeout": 5
           }
         ]
@@ -377,5 +442,78 @@ mod tests {
         assert!(matchers
             .iter()
             .all(|m| m["matcher"] != "Write|Edit|MultiEdit"));
+    }
+
+    /// Default config wires the Notification(permission_prompt) marker hook,
+    /// the UserPromptSubmit clear, and a no-matcher PostToolUse clear entry
+    /// alongside the Bash-matched track-commits entry — matching this repo's
+    /// own template settings.json exactly.
+    // trace:TASK-1461 | ai:claude
+    #[test]
+    fn pending_approval_hooks_wired_by_default() {
+        let json = build(ScaffoldConfig::default());
+        let v = parse_json(&json);
+
+        let notif = &v["hooks"]["Notification"][0];
+        assert_eq!(notif["matcher"], "permission_prompt");
+        assert!(notif["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with("/aida-notification.sh"));
+
+        let ups = &v["hooks"]["UserPromptSubmit"][0];
+        assert!(ups.get("matcher").is_none());
+        assert!(ups["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with("/aida-clear-pending-approval.sh"));
+
+        let post_matchers = v["hooks"]["PostToolUse"]
+            .as_array()
+            .expect("PostToolUse array");
+        assert_eq!(
+            post_matchers.len(),
+            2,
+            "Bash track-commits + no-matcher clear"
+        );
+        let bash_entry = post_matchers
+            .iter()
+            .find(|m| m["matcher"] == "Bash")
+            .expect("Bash-matched track-commits entry present");
+        assert!(bash_entry["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with("/aida-track-commits.sh"));
+        let clear_entry = post_matchers
+            .iter()
+            .find(|m| m["matcher"].is_null())
+            .expect("no-matcher clear entry present");
+        assert!(clear_entry["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with("/aida-clear-pending-approval.sh"));
+    }
+
+    /// Disabling the flag drops Notification, UserPromptSubmit, and the
+    /// no-matcher PostToolUse entry, leaving the Bash track-commits entry
+    /// untouched.
+    // trace:TASK-1461 | ai:claude
+    #[test]
+    fn pending_approval_hooks_omitted_when_disabled() {
+        let cfg = ScaffoldConfig {
+            include_pending_approval_hooks: false,
+            ..ScaffoldConfig::default()
+        };
+        let json = build(cfg);
+        let v = parse_json(&json);
+
+        assert!(v["hooks"]["Notification"].is_null());
+        assert!(v["hooks"]["UserPromptSubmit"].is_null());
+
+        let post_matchers = v["hooks"]["PostToolUse"]
+            .as_array()
+            .expect("PostToolUse array still present for track-commits");
+        assert_eq!(post_matchers.len(), 1);
+        assert_eq!(post_matchers[0]["matcher"], "Bash");
     }
 }
