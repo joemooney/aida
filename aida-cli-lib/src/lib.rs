@@ -38053,7 +38053,7 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
         _ => return CiProbe::PrNoChecks { pr_number },
     };
     // TASK-1424 safety net: the GitLab-mirror-link status is informational
-    // only (it always posts `success`/`pending` — see
+    // only (it always posts `success` — see
     // `gitlab_mirror_link::post_github_mirror_status` — so a real
     // failure/pending mirror entry should be unreachable in practice), but
     // excluding its context here too means a future change to that
