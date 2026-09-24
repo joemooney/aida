@@ -522,8 +522,10 @@ pub fn import_tree(
     // Resolve parent_id to UUID if specified
     let parent_uuid = if let Some(ref parent_id) = options.parent_id {
         // Try SPEC-ID first, then UUID
+        // TASK-1468: an ambiguous parent id refuses the import.
+        // trace:TASK-1468 | ai:claude
         let uuid = store
-            .get_requirement_by_spec_id(parent_id)
+            .get_requirement_unambiguous(parent_id)?
             .map(|r| r.id)
             .or_else(|| parent_id.parse::<Uuid>().ok());
         if uuid.is_none() {
