@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T03:10:18.423470148Z
-modified_at: 2026-09-24T21:00:31.058554324Z
+modified_at: 2026-09-24T21:26:37.549613892Z
 req_type: Task
 tags:
 - docs:impacted
@@ -24,4 +24,10 @@ comments:
   content: 'PROXY DECISION (2026-09-24): don''t merge feat/jev-integration wholesale. Take only the exposition and wiki code from commit ab444341b3, plus a minimal evaluator shim, or review the resilience commit 02a13e7138 separately. Fix before merge: use AIDA_JEV_API_KEY (not the undocumented JEV_API_KEY) and document the network egress to api.typesafe.ai; vendor mermaid instead of loading it from a CDN; lock the wiki server to loopback; register its port in ~/.ports; regenerate the format-json audit for explain and wiki. Exclude the pilot doc (TASK-1437/1440, reopened), the presentation and the truncated docs/2026-09-12-aida-llm-experience-report.md.'
   created_at: 2026-09-24T12:52:02.513659433Z
   modified_at: 2026-09-24T12:52:02.513659433Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d550-30ed-7852-9a0c-18a2c6eb8d3a
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): the 15 pilot exposition sidecars committed into the canonical store at a3551b51f0 (.aida-store/expositions/) will be removed with an ordinary delete commit on aida-store after TASK-1470 merges. After the merge nothing reads that location, since sidecars move to .aida/expositions/. This is a plain deletion, not a history rewrite, so the files stay recoverable from git history (a3551b51f0), including for a TASK-1437 re-run.'
+  created_at: 2026-09-24T21:26:37.549613892Z
+  modified_at: 2026-09-24T21:26:37.549613892Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
