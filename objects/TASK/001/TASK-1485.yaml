@@ -23,8 +23,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:09:38.693878746Z
-modified_at: 2026-09-24T15:09:38.693878746Z
+modified_at: 2026-09-24T17:15:29.289812613Z
 req_type: Task
+deferred: true
+deferred_at: 2026-09-24T17:15:29.289812613Z
+deferred_until: a design sketch for the failure-learning event model (record vs later avoidability judgment, storage location outside the canonical store, and correlation keys) is written on the spec and signed off by the advisor. Architecture-class change per CLAUDE.md. Revisit once TASK-1481 and TASK-1484 have shipped the lower-level telemetry it builds on.
 filed_at:
   code_sha: 64b652e051a639975ced35f04527e83b4bd00d33
   branch: main
