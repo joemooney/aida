@@ -38,12 +38,12 @@ description: |
   - Whichever way it goes, the BUG-588 citation is corrected or removed — that spec is about the `history:` array, not this flag.
   - If the flag is added, `--format json` emits the same typed events so the series is machine-consumable; the stated use case is burn-down and status-flow analysis.
   - A check that documented `aida <cmd> --flag` invocations in CLAUDE.md actually parse would have caught this; worth considering as a cheap guard given the file is the project's onboarding surface and is read by every new agent session.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:24:16.280507219Z
-modified_at: 2026-09-23T23:14:00.861589723Z
+modified_at: 2026-09-24T00:08:44.700524026Z
 req_type: Bug
 tags:
 - agent-surface
@@ -90,4 +90,22 @@ comments:
   created_at: 2026-09-20T18:26:15.642285448Z
   modified_at: 2026-09-20T18:26:15.642285448Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0d0be-4193-7b90-a49b-2d94620edd0b
+  author: aida-auto-bump
+  timestamp: 2026-09-24T00:08:44.691624811Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d0be-419c-7412-8832-4d52e9a2a5cc
+  timestamp: 2026-09-24T00:08:44.700523210Z
+  agent: aida
+  commit_sha: 0df6ee8975935ac1b11bc035ca86574836656b27
+  summary: Completed via merge 0df6ee89
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T00:08:44.691340791Z
+  completion_sha: 0df6ee8975935ac1b11bc035ca86574836656b27
