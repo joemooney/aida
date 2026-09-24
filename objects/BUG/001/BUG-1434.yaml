@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T10:27:22.314033401Z
-modified_at: 2026-09-24T09:49:52.161509124Z
+modified_at: 2026-09-24T09:49:59.792966344Z
 req_type: Bug
 tags:
 - ci
@@ -56,4 +56,10 @@ comments:
   content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Show how many commits a PR is behind the default branch on the review surface.'
   created_at: 2026-09-24T08:13:17.230286063Z
   modified_at: 2026-09-24T08:13:17.230286063Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d2d2-6870-7952-b247-67130b8445ed
+  author: joe
+  content: 'Merged to main via #2155 (integration batch 43).'
+  created_at: 2026-09-24T09:49:59.792966344Z
+  modified_at: 2026-09-24T09:49:59.792966344Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
