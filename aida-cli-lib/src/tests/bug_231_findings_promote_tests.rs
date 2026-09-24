@@ -767,6 +767,26 @@ fn seed_plain_spec(root: &std::path::Path, spec_id: &str) -> Uuid {
 // trace:BUG-1147 | ai:codex
 #[test]
 fn queue_dead_target_summary_filter_includes_archived_targets_for_gc() {
+    // BUG-1597: `test_cached_backend` opens a `CachedGitBackend`, and every
+    // cache write it performs (the initial schema apply on a brand-new
+    // cache.db, `rebuild_from_store`, `upsert_requirement`) routes through
+    // `write_cache_lock_info` -> `CacheLockInfo::current()` -> `current_user()`,
+    // which reads `USER`/`USERNAME` via a plain, UNGUARDED `std::env::var`.
+    // That's a real data race against any sibling test that mutates those
+    // vars through `EnvVarGuard`/`EnvVarsGuard` (BUG-632/BUG-611): the guards
+    // serialise their own writers against each other via `ENV_LOCK`, but they
+    // don't protect an unguarded reader on another thread, and
+    // `std::env::set_var` can realloc the process `environ` out from under a
+    // concurrent `getenv` (see `test_env.rs`'s own BUG-697 note: "a test that
+    // merely READS env-derived state through the code under test must hold
+    // one of these guards too, or it races the setters"). Under heavy
+    // parallel `cargo test` load this raced intermittently and only there —
+    // passing 3/3 serial/alone, per BUG-1597. Hold the same `ENV_LOCK` used
+    // by every env-mutating test for this test's whole body so the cache's
+    // internal env read can never overlap a sibling's env write. The cache
+    // API can't take an explicit user, so a serial guard (not an explicit
+    // root/user param) is the fix here. trace:BUG-1597 | ai:claude
+    let _env_guard = crate::test_env::env_lock();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let cached = test_cached_backend(&root);
@@ -830,6 +850,11 @@ fn add_parent_and_blocked_by_combined_keeps_both_edges() {
     use aida_core::models::{Relationship, RelationshipType};
     use aida_core::DatabaseBackend;
 
+    // BUG-1597: `test_cached_backend` + its writes race an unguarded env
+    // read in the cache's write-lock bookkeeping; see the detailed note on
+    // `queue_dead_target_summary_filter_includes_archived_targets_for_gc`.
+    // trace:BUG-1597 | ai:claude
+    let _env_guard = crate::test_env::env_lock();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
 
@@ -928,6 +953,10 @@ fn seed_spec_with_dangling_rel(root: &std::path::Path, spec_id: &str) {
 // bail non-zero. trace:BUG-573 | ai:claude
 #[test]
 fn rel_list_exits_zero_on_dangling_and_not_found() {
+    // BUG-1597: see the detailed note on
+    // `queue_dead_target_summary_filter_includes_archived_targets_for_gc`.
+    // trace:BUG-1597 | ai:claude
+    let _env_guard = crate::test_env::env_lock();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     seed_spec_with_dangling_rel(&root, "TASK-573");
@@ -1010,6 +1039,10 @@ fn rel_list_exits_zero_on_dangling_and_not_found() {
 // trace:STORY-639 | ai:claude
 #[test]
 fn assign_sets_assignee_and_routes_queue_idempotently() {
+    // BUG-1597: see the detailed note on
+    // `queue_dead_target_summary_filter_includes_archived_targets_for_gc`.
+    // trace:BUG-1597 | ai:claude
+    let _env_guard = crate::test_env::env_lock();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let fid = seed_finding(&root, "TASK-639");
@@ -1076,6 +1109,10 @@ fn assign_sets_assignee_and_routes_queue_idempotently() {
 // user; the fleet view must span them. trace:STORY-672
 #[test]
 fn all_users_view_aggregates_every_users_queue() {
+    // BUG-1597: see the detailed note on
+    // `queue_dead_target_summary_filter_includes_archived_targets_for_gc`.
+    // trace:BUG-1597 | ai:claude
+    let _env_guard = crate::test_env::env_lock();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
 
