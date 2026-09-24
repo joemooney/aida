@@ -85,6 +85,9 @@ Keep this table in your head and every command below is obvious.
 - `--no-agent` — skip the reviewer-agent analysis, just report *where* the review surface is and the next command. For non-interactive contexts or when you only want the diff pointer.
 - the `prompt` / `assemble` subcommands — generate a markdown review prompt from linked specs' acceptance criteria (from an explicit `--specs` CSV or parsed `(REQ-ID)` trailers in a PR's commit range). The building blocks when you want to review *outside* the interactive flow.
 
+- the `record` subcommand's finding class — each recorded finding may carry a defect class from a small fixed vocabulary (incomplete-fix, fail-open, absent-evidence-reads-as-good, untested-path, contract-drift, race, perf, portability, stale-base, scope-creep), paired with the findings by position. An unknown class warns and records the finding unclassified; it never blocks the verdict.
+- the `classes` subcommand — counts recorded findings per class across every verdict, archived rounds included, optionally limited to a recent window. It answers "how often does this defect class recur?" without a keyword sweep that cannot tell an approval from a refusal. Findings recorded before classes existed stay unclassified; nothing is back-filled.
+
 **Gotchas.** A reviewer reads **code**, an advisor reads **commit messages** — when their verdicts conflict on whether to merge, trust the reviewer. The whole reason `review` runs the agent over the *diff* is that the diff is ground truth.
 
 **Chains with** — the verdict either passes the spec toward merge, or sends it to `aida rework`.
