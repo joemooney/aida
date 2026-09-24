@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T17:35:05.360339938Z
-modified_at: 2026-09-24T20:13:15.609924409Z
+modified_at: 2026-09-24T20:17:34.377666762Z
 req_type: Task
 tags:
 - aida:rel
@@ -65,6 +65,12 @@ comments:
   content: 'Strict review: APPROVE. The related family is not narrowed. Twin detection matches only native edges of the same resolved type and target. The live dry-run gives 2 twin deletes (BUG-1175, TASK-1236) and 0 conversions. Non-blocking notes: depends-on→BlockedBy could change meaning on stores that used it loosely; exact built-in names stored as Custom get rewritten (documented as an explicit operator command); stale comments in duplicate_twin_is_deleted and the module doc. Queued after BUG-1602 merges.'
   created_at: 2026-09-24T18:37:54.913271493Z
   modified_at: 2026-09-24T18:37:54.913271493Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d510-f8a9-7002-a46a-b5e3c72e281e
+  author: joe
+  content: 'Live migration applied by the orchestrator on 2026-09-24 13:16: deleted 2 twin edges, BUG-1175 duplicate-of→BUG-1176 and TASK-1236 depends-on→BUG-1156, whose native edges already existed. A re-run dry-run finds nothing. Store pushed.'
+  created_at: 2026-09-24T20:17:34.377666762Z
+  modified_at: 2026-09-24T20:17:34.377666762Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0d50d-05c9-7590-991f-216413c8267f
