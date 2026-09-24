@@ -460,6 +460,11 @@ pub enum LockInfoReclaim {
 /// only if unchanged, so a live writer that replaced it in between keeps its
 /// record. Used after a successful cache write and by
 /// `aida doctor heal stale-locks`.
+// Known window with two concurrent cleaners: R1 re-reads a dead record and
+// finds it unchanged; R2 then deletes it; a writer W creates its own record;
+// R1's remove_file then deletes W's LIVE record. The cost is diagnostics only
+// (W's contention message and heartbeat go missing until its next write):
+// SQLite is the actual lock, so no write is ever unguarded by this race.
 // trace:TASK-1484 | ai:claude
 pub fn reclaim_dead_lock_info(path: &Path) -> Result<LockInfoReclaim> {
     reclaim_dead_lock_info_with(path, classify_lock_owner)

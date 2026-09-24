@@ -704,13 +704,13 @@ where
     with_cache_retry_observed(cache_path, action, false, f)
 }
 
-/// The bounded retry ladder. On every SQLite busy/locked error the recorded
-/// lock owner is re-observed, so the terminal error can say whether this was
+/// The bounded retry ladder. When the retries are exhausted, the recorded
+/// lock owner is observed once so the terminal error can say whether this was
 /// live contention, stale metadata from a dead owner (SQLite held by an
 /// unrecorded process), or no recorded owner at all. A dead owner does NOT
 /// shortcut the ladder: SQLite is still the arbiter, so the probe stays
 /// bounded and identical. When `owns_sidecar`, the sidecar's heartbeat and
-/// phase are refreshed while waiting.
+/// phase are refreshed on each wait.
 // trace:TASK-1484 | ai:claude
 fn with_cache_retry_observed<T, F>(
     cache_path: &Path,
