@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:46:17.359985263Z
-modified_at: 2026-09-24T08:14:24.260369085Z
+modified_at: 2026-09-24T08:14:26.974892053Z
 req_type: Spike
+comments:
+- id: 01a0d27a-ee9e-7623-b775-91da9b731c43
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): DEFERRED until: a second regular writer clone, or the first store push conflict between clones. Only one writer clone in practice.'
+  created_at: 2026-09-24T08:14:26.974892053Z
+  modified_at: 2026-09-24T08:14:26.974892053Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 deferred: true
 deferred_at: 2026-09-24T08:14:24.260369085Z
 deferred_until: a second regular writer clone, or the first store push conflict between clones
