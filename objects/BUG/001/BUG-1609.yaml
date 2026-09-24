@@ -1,0 +1,46 @@
+id: 01a0d56d-1362-74b1-ae8b-bf172f319ac7
+spec_id: BUG-1609
+agreed_id: BUG-1609
+title: GitLab reviewer preflight still uses GitHub metadata resolution
+description: |-
+  Observed live with `[forge] provider = "gitlab"` and an authenticated self-hosted `glab` remote on 2026-09-24.
+
+  ## Reproduction
+  1. Open GitLab MR-1 from `story-52-work` to `main`.
+  2. Queue its review story.
+  3. Run `aida queue work STORY-59 --role reviewer --vendor codex --user joe --dry-run`.
+  4. AIDA prints `could not resolve PR base/head via gh — falling back to base=main, head=pr-1`.
+  5. The non-dry run subsequently fetches `refs/merge-requests/1/head` and prepares the correct GitLab review worktree, proving the forge and MR were available.
+
+  The fallback head `pr-1` is GitHub-shaped and not the GitLab source branch. Help for `aida pr auto-queue-review` also still says it detects changes via `gh pr list`, despite the command successfully handling this GitLab MR.
+
+  ## Expected
+  Reviewer preflight resolves change metadata through the configured Forge implementation. For GitLab it should use `GitLabForge::change_metadata` or equivalent `glab` API calls, report `story-52-work -> main`, and never emit a GitHub lookup warning or fabricate `pr-1`.
+
+  ## Acceptance
+  - GitLab integration test for review-story dry-run resolves the real MR head/base and SHA through the Forge trait.
+  - No `gh` process or GitHub-specific fallback name is used when provider is GitLab.
+  - Preflight fetch, stale-base, and intermediate-only checks share the same resolved change metadata.
+  - Auto-queue-review and review help text is forge-neutral or provider-specific.
+
+  This is a concrete live instance of the remaining call-site migration tracked by STORY-621.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T21:58:10.530410659Z
+modified_at: 2026-09-24T21:58:10.530410659Z
+req_type: Bug
+tags:
+- forge
+- gitlab
+- regression
+- reviewer
+- severity:major
+filed_at:
+  code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 81c37e2cb
+  vendor: codex
