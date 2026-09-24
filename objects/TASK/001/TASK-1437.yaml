@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T16:06:55.248003750Z
-modified_at: 2026-09-24T12:51:25.342276907Z
+modified_at: 2026-09-24T12:51:35.071072535Z
 req_type: Task
 tags:
 - epic-72
@@ -31,3 +31,10 @@ relationships:
   target_id: 01a0c9df-7d38-7e01-a9a5-03e85ab4f52a
   created_at: 2026-09-22T16:08:41.983917798Z
   created_by: joe
+comments:
+- id: 01a0d378-a81f-74e3-8a26-ba57eb5f4088
+  author: joe
+  content: 'CORRECTION (proxy, 2026-09-24): reopened. This task was completed on the strength of the ''human comprehension pilot'' doc on feat/jev-integration (commit 131c43c063). A review found the doc reports blind human trials and metrics with no supporting evidence. It was committed 2 minutes after the code, and its corpus table gives the wrong titles for EPIC-55, EPIC-9, BUG-406 and ADR-10. The claimed results can''t be treated as evidence. Re-do it with a real, reproducible evaluation, or reject it.'
+  created_at: 2026-09-24T12:51:35.071072535Z
+  modified_at: 2026-09-24T12:51:35.071072535Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
