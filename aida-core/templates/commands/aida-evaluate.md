@@ -1,5 +1,5 @@
 ---
-description: "Evaluate a requirement's quality using AI analysis."
+description: Run /aida-evaluate.
 ---
 # Evaluate AIDA Requirement
 

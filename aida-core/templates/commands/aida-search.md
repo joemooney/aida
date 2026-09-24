@@ -1,5 +1,5 @@
 ---
-description: "Search across requirements and code simultaneously."
+description: Run /aida-search.
 ---
 # Unified Search
 

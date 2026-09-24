@@ -1,5 +1,5 @@
 ---
-description: "Capture a rule, lesson, or convention from a mistake — substrate-aware \"update CLAUDE.md so you don't repeat this\"."
+description: Run /aida-learn.
 ---
 # Capture a Rule from a Mistake
 

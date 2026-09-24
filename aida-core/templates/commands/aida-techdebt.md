@@ -1,5 +1,5 @@
 ---
-description: "Run a read-only end-of-session sweep for duplication and code debt, then surface findings with a recommendation and filing verb each."
+description: Run /aida-techdebt.
 ---
 # Tech-Debt Scan
 

@@ -1,6 +1,6 @@
 ---
 name: aida-decide
-description: The human-decision drain as a skill. Sweep the whole decision inbox (every pending DecisionRequest + every under-specified spec the questions sweep flags), then loop the operator through each one interactively — record the chosen resolution for specs with enumerated choices (`aida questions answer`), or drop into the acceptance-authoring loop for specs that need criteria written (`aida questions clarify` / `/aida-clarify`) — until the inbox is empty. The human-facing analog of `aida burndown run` (which drains the decision-FREE ready set with headless agents). Use when the operator says "drain my decisions", "answer the pending questions", "clear the decision inbox", or wants to batch-resolve everything blocking the backlog in one sitting.
+description: The human-decision drain as a skill.
 allowed-tools:
   - Bash
   - Read

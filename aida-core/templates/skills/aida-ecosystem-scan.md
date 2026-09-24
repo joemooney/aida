@@ -1,6 +1,6 @@
 ---
 name: aida-ecosystem-scan
-description: Execute the ecosystem watch scan. Guided walkthrough to scan competitors, classify capabilities (Compete/Complement/Integrate/Ignore), write entries to docs/competitive-analysis/ecosystem-watch.md, and file requirements to close the engineering feedback loop.
+description: Execute the ecosystem watch scan.
 allowed-tools:
   - Bash
   - Read

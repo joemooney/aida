@@ -1,5 +1,5 @@
 ---
-description: "Keep guides, reports, and reference docs in sync with code and requirements."
+description: Run /aida-docs.
 ---
 # Manage Project Documentation
 

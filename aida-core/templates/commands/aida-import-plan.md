@@ -1,5 +1,5 @@
 ---
-description: "Turn a free-floating planner output file into first-class AIDA state."
+description: Run /aida-import-plan.
 ---
 # Import a Saved Plan into AIDA
 

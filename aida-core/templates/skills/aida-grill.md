@@ -1,6 +1,6 @@
 ---
 name: aida-grill
-description: Interrogate a requirement or design decision by walking every branch of the decision tree. Use before implementation to catch design gaps.
+description: Interrogate a requirement or design decision by walking every branch of the decision tree.
 allowed-tools:
   - Bash
   - Read

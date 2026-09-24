@@ -1,5 +1,5 @@
 ---
-description: "Review conversation and capture any missed requirements."
+description: Run /aida-capture.
 ---
 # Capture Session Requirements
 

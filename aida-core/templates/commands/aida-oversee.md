@@ -1,5 +1,5 @@
 ---
-description: "The oversight seat: watch a named objective, keep the drain aligned to it, fire the redrive+nudge reflexes, and surface ONLY what needs a human. Coordinates through the substrate; never drives or merges."
+description: Run /aida-oversee.
 ---
 # AIDA Oversee
 

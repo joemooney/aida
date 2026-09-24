@@ -1,6 +1,6 @@
 ---
 name: aida-intent
-description: Produce the plain-terms WHY-comprehension of a spec — read the spec plus its immediate graph neighborhood (parents, children, blockers, referenced specs, decisions, key comments) and distil its reason-for-being into two registers (layman prose + an LLM-dense brief). Write the result as a JSON sidecar the launcher folds onto the spec. Launched by `aida intent <spec>` (headless `claude -p`); not run by hand. trace:STORY-631 | ai:claude
+description: Produce the plain-terms WHY-comprehension of a spec — read the spec plus its immediate graph neighborhood (parents, children, blockers, referenced specs, decisions, key comments) and distil its reason-for-being into two registers (layman prose + an LLM-dense brief).
 disable-model-invocation: true
 allowed-tools:
   - Bash

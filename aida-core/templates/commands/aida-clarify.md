@@ -1,5 +1,5 @@
 ---
-description: "Interrogate the human to author acceptance criteria for a spec the questions sweep flagged as under-specified — the human-decision PRODUCER that turns \"parked: missing acceptance\" into \"burndown-ready\"."
+description: Run /aida-clarify.
 ---
 # Clarify an Under-Specified Spec
 

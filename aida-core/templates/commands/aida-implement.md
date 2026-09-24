@@ -1,5 +1,5 @@
 ---
-description: "Implement a requirement with full traceability."
+description: Run /aida-implement.
 ---
 # Implement AIDA Requirement
 

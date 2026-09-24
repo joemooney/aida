@@ -1,0 +1,7 @@
+# Always-loaded context budgets. CI tests enforce these values; adjust them only
+# with a measured before/after and an explicit review of the context cost.
+repo_claude_md_max_bytes = 16000
+scaffold_baseline_max_bytes = 40000
+skill_description_max_bytes = 240
+command_description_max_bytes = 48
+

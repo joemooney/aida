@@ -1,5 +1,5 @@
 ---
-description: "De-risk a supervised spec so it can climb down the autonomy ladder (guided/operator → drive/drain): decide its open design forks with the operator (recorded as ADRs + folded into acceptance), mandate the testable safety gates the drain's CI/reviewer enforce, then propose a new execution_mode — refusing to flip a destructive-action or drain-self-modification spec to drain. The advisor confirms the mode write; nothing is silent."
+description: Run /aida-derisk.
 ---
 # De-risk a Supervised Spec
 

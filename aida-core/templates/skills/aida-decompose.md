@@ -1,6 +1,6 @@
 ---
 name: aida-decompose
-description: Break a large requirement into vertical slice child requirements. Each slice cuts through all layers (DB, API, UI) and is independently deliverable.
+description: Break a large requirement into vertical slice child requirements.
 allowed-tools:
   - Bash
   - Read

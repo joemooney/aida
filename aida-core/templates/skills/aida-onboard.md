@@ -1,6 +1,6 @@
 ---
 name: aida-onboard
-description: Interactive project onboarding for new team members. Detect project type, summarize architecture, show requirement stats, and suggest first tasks.
+description: Interactive project onboarding for new team members.
 allowed-tools:
   - Bash
   - Read

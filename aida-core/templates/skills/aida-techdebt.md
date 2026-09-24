@@ -1,6 +1,6 @@
 ---
 name: aida-techdebt
-description: End-of-session duplication + debt scan. Read-only sweep for duplicated code, copy-pasted trace comments, dead trace paths (trace → Rejected spec), spec-graph duplicates, and orphan files — each finding gets a one-line recommendation and a filing verb. Use at the end of a working session or when the user says "techdebt", "find duplication", or "clean up".
+description: End-of-session duplication + debt scan.
 allowed-tools:
   - Bash
   - Read

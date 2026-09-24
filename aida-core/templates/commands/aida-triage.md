@@ -1,5 +1,5 @@
 ---
-description: "Two modes — clear the draft inbox, or investigate a bug. Follow the workflow in `.claude/skills/aida-triage/SKILL.md` and pick the mode by what was asked."
+description: Run /aida-triage.
 ---
 # Triage
 

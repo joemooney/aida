@@ -1,6 +1,6 @@
 ---
 name: aida-human-audit
-description: Audit the coordination inbox — reconcile every `aida human` item so the "does this need me?" report is true from the graph. Walk each surfaced item and triage it into needs-you / fix-state / file-tool-bug, act on it, and hand back a ledger. Never narrate an item away in chat when the fix is a substrate edit. Invocable by `aida human audit`.
+description: Audit the coordination inbox — reconcile every `aida human` item so the "does this need me?
 allowed-tools:
   - Bash
   - Read

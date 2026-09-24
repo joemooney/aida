@@ -1,6 +1,6 @@
 ---
 name: aida-status
-description: One-shot project status — requirement breakdown, cache freshness, sync state, recent activity, and (when working on AIDA itself) build/release context. Read-only; surfaces what `/aida-onboard` would dig deeper on.
+description: One-shot project status — requirement breakdown, cache freshness, sync state, recent activity, and (when working on AIDA itself) build/release context.
 allowed-tools:
   - Bash
 ---

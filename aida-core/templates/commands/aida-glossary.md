@@ -1,5 +1,5 @@
 ---
-description: "Build the ubiquitous language dictionary by scanning reqs and code for domain terms."
+description: Run /aida-glossary.
 ---
 # Maintain Project Glossary
 

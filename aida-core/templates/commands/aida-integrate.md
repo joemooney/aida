@@ -1,5 +1,5 @@
 ---
-description: "Land finished work — specs that are Done with an open PR — on the default branch, one PR at a time, in dependency order. The integrator seat: rebase stale branches, watch CI, squash-merge the green-and-reviewed ones, pull to auto-bump, and escalate (never resolve) anything that needs a judgment call."
+description: Run /aida-integrate.
 ---
 # Drain the Merge / Integration Queue
 

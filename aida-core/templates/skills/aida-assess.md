@@ -1,6 +1,6 @@
 ---
 name: aida-assess
-description: Headless advisor ASSESS pass (formerly intake) (STORY-560). Read every open spec the launcher fenced in, apply worth-doing judgment, and PROPOSE approve/reject/park/queue per spec with one-line reasoning. Propose-by-default — write NOTHING unless AIDA_INTAKE_APPLY=1. The advisor-side analog of /aida-burndown (which fires implementers). trace:STORY-560 | ai:claude
+description: Headless advisor ASSESS pass (formerly intake) (STORY-560).
 disable-model-invocation: true
 allowed-tools:
   - Bash
