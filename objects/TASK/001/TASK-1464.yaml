@@ -3,12 +3,12 @@ spec_id: TASK-1464
 agreed_id: TASK-1464
 title: Add useful date sorting to aida list
 description: 'Allow `aida list` to sort requirements by useful lifecycle dates, at minimum creation date and completion date when present, with a clear default direction and stable tie-breaking. Acceptance: sorting is selectable through an explicit CLI option, works with existing filters and output formats, handles missing completion dates deterministically, and documents the supported sort keys.'
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:26:19.871990021Z
-modified_at: 2026-09-24T08:39:23.110630034Z
+modified_at: 2026-09-24T08:55:20.862926829Z
 req_type: Task
 tags:
 - docs:impacted
