@@ -229,12 +229,12 @@ description: |
       CONSEQUENCE, STATED SO IT IS NOT A SURPRISE: five PRs are unreleasable through the
       normal path until each is re-reviewed at its current head. That is acceptable and it
       is the point; it is also a concrete cost of BUG-1466 that should be cited there.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-24T03:06:31.390694118Z
+modified_at: 2026-09-24T04:11:01.507539477Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -377,3 +377,21 @@ comments:
   created_at: 2026-09-24T02:44:24.769305024Z
   modified_at: 2026-09-24T02:44:24.769305024Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d19c-118a-7a32-a842-443aeea151b5
+  author: aida-auto-bump
+  timestamp: 2026-09-24T04:11:01.386989697Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0d19c-1203-7373-917d-5a722c37a345
+  timestamp: 2026-09-24T04:11:01.507537341Z
+  agent: aida
+  commit_sha: 968e41932a0e9bd0c733b6462fac3651aa946f68
+  summary: Completed via merge 968e4193
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T04:11:01.386570125Z
+  completion_sha: 968e41932a0e9bd0c733b6462fac3651aa946f68
