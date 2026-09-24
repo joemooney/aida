@@ -15,11 +15,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:17:11.313030554Z
-modified_at: 2026-09-24T15:50:40.496857238Z
+modified_at: 2026-09-24T16:00:48.582198088Z
 req_type: Bug
 tags:
 - integrity
 - store-locate
+comments:
+- id: 01a0d425-e5c6-70a1-8396-7d66a87505ca
+  author: joe
+  content: 'Review: APPROVE (fresh strict Opus reviewer). Every caller of the resolver now fails closed, including aida-server single-project mode and mcp-serve. Distributed precedence is unchanged, test_distributed passes, and the statusline stays quiet outside a project. Queued for batch 50.'
+  created_at: 2026-09-24T16:00:48.582198088Z
+  modified_at: 2026-09-24T16:00:48.582198088Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 64b652e051a639975ced35f04527e83b4bd00d33
   branch: main
