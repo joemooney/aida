@@ -28,12 +28,12 @@ description: |-
   RELATED: BUG-1539 (a verdict is keyed to a PR number rather than the reviewed commit) is the storage-shape half of the same weakness — the review corpus is the least structured thing in a system whose whole claim is structure. Fixing either alone leaves the corpus hard to reason about.
 
   Filed by the driver-advisor seat, disposing of a failed measurement the reviewer seat reported rather than a number they could not stand behind. Autonomous-safe; additive field plus a query surface.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:55:21.794367525Z
-modified_at: 2026-09-24T04:53:42.887697215Z
+modified_at: 2026-09-24T06:27:25.659003717Z
 req_type: Story
 tags:
 - docs:impacted
@@ -166,3 +166,21 @@ comments:
   created_at: 2026-09-21T10:13:48.678080447Z
   modified_at: 2026-09-21T10:13:48.678080447Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0d218-f354-7df3-bb16-47893cdc9c17
+  author: aida-auto-bump
+  timestamp: 2026-09-24T06:27:25.652083279Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d218-f35b-79d2-8d80-afdf3278d20b
+  timestamp: 2026-09-24T06:27:25.659003051Z
+  agent: aida
+  commit_sha: acf13ff920e7716a2e46b53ae0958f027e5bb649
+  summary: Completed via merge acf13ff9
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T06:27:25.651806382Z
+  completion_sha: acf13ff920e7716a2e46b53ae0958f027e5bb649
