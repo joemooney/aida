@@ -48,6 +48,7 @@ mod deps_cmd;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
+mod gitlab_mirror_link;
 mod graph_cmd;
 mod protocol_gate;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
@@ -40381,7 +40382,9 @@ fn kill_process_group(pid: u32) {
 ///   the group) degrades to a partial/empty read instead of wedging this
 ///   function — and the caller — indefinitely.
 // trace:BUG-1288 | ai:claude
-fn command_output_with_timeout(
+// trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link's bounded
+// `git`/`gh` calls reuse this instead of a second timeout implementation.
+pub(crate) fn command_output_with_timeout(
     mut cmd: std::process::Command,
     timeout: std::time::Duration,
 ) -> Option<std::process::Output> {
@@ -66327,6 +66330,11 @@ fn handle_push_command(
                     // STORY-760: fan the code branch out to every mirror hub so
                     // `aida push` can't leave one behind. Best-effort.
                     fan_out_mirror_push(&project_root, &branch, &project_root);
+                    // TASK-1424: best-effort, bounded — if GitHub is the review
+                    // surface and a GitLab mirror pipeline is known for this
+                    // branch, link it onto the GitHub PR head as a non-blocking
+                    // commit status. Never fails or delays this push.
+                    gitlab_mirror_link::sync_mirror_ci_link(&project_root, &branch);
                 }
                 Ok(s) => {
                     eprintln!(
