@@ -69,13 +69,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:04:54.098400831Z
-modified_at: 2026-09-24T02:52:31.045052988Z
+modified_at: 2026-09-24T02:53:23.313453684Z
 req_type: Bug
 tags:
 - aida:show
 - identity
 - severity:major
 - substrate-integrity
+relationships:
+- rel_type: Parent
+  target_id: 01a0d154-f138-7303-8041-5a7380459a2a
+  created_at: 2026-09-24T02:53:23.313453684Z
 comments:
 - id: 01a0c293-4c8d-7d03-b832-bd15bd264fa2
   author: joe
