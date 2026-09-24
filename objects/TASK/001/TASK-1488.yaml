@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T17:35:05.360339938Z
-modified_at: 2026-09-24T18:06:08.272880417Z
+modified_at: 2026-09-24T18:29:21.968716445Z
 req_type: Task
 tags:
 - aida:rel
@@ -40,6 +40,25 @@ comments:
     Full verification: cargo fmt --check clean; cargo clippy -p aida-cli-lib -p aida-core -D clippy::correctness clean (0 errors, only pre-existing unrelated warnings); cargo test -p aida-cli-lib --lib: 6175 passed, 0 failed, 1 pre-existing ignored; external-prose-classifiers.py --check clean; glyph-lint.sh --block clean; docs/cli/verify-manual.py clean (flags/completeness/reflection/spec-id checks all OK); docs/cli/verify-interface-changes.py origin/main HEAD OK (TASK-1488 carries the docs:impacted tag, added since this touches aida-cli-lib/src/cli.rs help text).
   created_at: 2026-09-24T18:06:03.995269142Z
   modified_at: 2026-09-24T18:06:03.995269142Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d4ad-e7b0-72c1-988f-6e9e2a40153f
+  author: joe
+  content: |-
+    Follow-up (BUG-1604, folded into this same branch): added duplicate-of/duplicate_of/duplicateof to RelationshipType::parse_relationship_type -> Duplicate. Both `rel add`/`rel remove` (cli_relationship_type) and the MCP relationship_type param already delegate straight to parse_relationship_type, so neither needed a change.
+
+    Re-ran the dry-run census, 2026-09-24, from `aida db migrate-related-edges --dry-run` on branch claude/task-1488 (sha baedb4d88cf948472f3bf93a4715fe6933715abb). Nothing was written; store HEAD did not move.
+
+    New census: 2 custom edges on 2 specs (depends-on: 1, duplicate-of: 1) out of 4418 specs scanned, resolving to blocked_by: 1, duplicate: 1. Plan: 0 converted, 2 twins deleted, 0 extras:
+    - BUG-1175: delete duplicate-of -> BUG-1176 (a native duplicate edge already exists to the same target)
+    - TASK-1236: delete depends-on -> BUG-1156 (a native blocked_by edge already exists to the same target)
+
+    This is the BUG-1175 edge the 2026-09-21 census and this task's own filed background originally expected to be in scope; it's now correctly picked up with no migration code changes, since its selection predicate was already a pure function of the shared parser.
+
+    New tests: aida-core/src/models.rs::models::tests::test_parse_relationship_type_duplicate_of_aliases (parser aliases), plus two migration fixtures in task_1488_related_edge_migration_widen_tests.rs: duplicate_of_orphan_converts_to_duplicate and duplicate_of_twin_is_deleted (the latter reproduces BUG-1175's exact shape). All pass, alongside everything from the prior comment.
+
+    Full verification: cargo fmt --check clean; cargo clippy -p aida-cli-lib -p aida-core -D clippy::correctness clean; cargo test -p aida-core --lib: 1057 passed, 0 failed, 2 pre-existing ignored; cargo test -p aida-cli-lib --lib: 1 flake on the full run (gitlab_mirror_link::task_1424_gitlab_mirror_link_tests::unresolvable_origin_skips_without_posting), confirmed passing on its own and as part of its 12-test module in isolation -- a parallel-execution flake from concurrent agents on this shared machine, unrelated to this change; external-prose-classifiers.py --check clean; glyph-lint.sh --block clean; docs/cli/verify-manual.py clean; docs/cli/verify-interface-changes.py origin/main HEAD OK (no new cli.rs change this round; still covered by TASK-1488's docs:impacted tag from the prior commit).
+  created_at: 2026-09-24T18:29:21.968716445Z
+  modified_at: 2026-09-24T18:29:21.968716445Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 2ab1b8d9595d61e30904573a1c13b2be45d0194d
