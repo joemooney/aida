@@ -12,12 +12,12 @@ description: |-
 
   ## Acceptance
   - Each item is fixed, or documented as deliberate, with a test where it changes behaviour.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T16:43:05.320943179Z
-modified_at: 2026-09-24T16:43:05.320943179Z
+modified_at: 2026-09-24T16:48:31.286745883Z
 req_type: Task
 tags:
 - papercut
