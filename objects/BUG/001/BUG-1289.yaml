@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:00.436499599Z
-modified_at: 2026-09-20T08:31:58.317620805Z
+modified_at: 2026-09-24T16:26:13.098703506Z
 req_type: Bug
 tags:
 - agent-ux
@@ -46,8 +46,7 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-09-19T21:07:02.194214823Z
-- rel_type:
-    custom: related
+- rel_type: References
   target_id: 01a0ba8e-4480-7991-a292-0ef0ad057b31
   created_at: 2026-09-19T21:12:23.467933446Z
   created_by: joe
