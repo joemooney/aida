@@ -82,6 +82,7 @@ spawns an agent.
 | `AIDA_SESSION_SCOPE` | The spec/requirement ID the session is scoped to. | unset = `None`. | launch-path | process env |
 | `AIDA_SESSION_PURPOSE` | Free-text purpose recorded when entering a role. | unset = none. | launch-path (`aida role enter`) | process env |
 | `AIDA_SESSION_ID` | Unique session identifier for telemetry/audit correlation. | unset = `None`. | launch-path (`aida session start`) | process env |
+| `AIDA_SEAT_CONTEXT_CEILING` | Context size (tokens of the latest model call, read from the tail of the hook's session transcript) at which the per-turn `aida awaiting --notice` line tells the seat to hand off (`aida session handoff --seat <seat> --write -`) and restart. `0` disables the rotation notice; garbage falls back to the default. | `300000`. | user | process env |
 | `AIDA_AI_TOOL` | Name of the AI interface in use (audit/telemetry attribution). | unset = `None` (empty treated as unset). | user | process env |
 | `AIDA_AGENT_TYPE` | Agent flavour (`claude` / `codex` / `antigravity` / …). | Sniffed from `CODEX_*` / `ANTIGRAVITY_*` / `GEMINI_*` / `CLAUDE*` env prefixes; falls back to `"other"`. | launch-path (`aida agent new`) | process env |
 | `AIDA_AGENT_NAME` | Unique name of the running agent process (e.g. `claude-3f2a`). | unset = `None`. | launch-path | process env |
