@@ -3,12 +3,12 @@ spec_id: TASK-1464
 agreed_id: TASK-1464
 title: Add useful date sorting to aida list
 description: 'Allow `aida list` to sort requirements by useful lifecycle dates, at minimum creation date and completion date when present, with a clear default direction and stable tie-breaking. Acceptance: sorting is selectable through an explicit CLI option, works with existing filters and output formats, handles missing completion dates deterministically, and documents the supported sort keys.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:26:19.871990021Z
-modified_at: 2026-09-24T09:00:21.635848052Z
+modified_at: 2026-09-24T09:49:42.310250630Z
 req_type: Task
 tags:
 - docs:impacted
@@ -28,3 +28,21 @@ comments:
   created_at: 2026-09-24T08:12:00.596779445Z
   modified_at: 2026-09-24T08:12:00.596779445Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d2d2-241f-75f2-afb4-f1ee5f9f4eed
+  author: aida-auto-bump
+  timestamp: 2026-09-24T09:49:42.303452748Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d2d2-2426-7f60-bc1d-31bad2dd59df
+  timestamp: 2026-09-24T09:49:42.310249461Z
+  agent: aida
+  commit_sha: 8794b550191abc6a4264822f5073e61e99d55869
+  summary: Completed via merge 8794b550
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T09:49:40.883828892Z
+  completion_sha: 8794b550191abc6a4264822f5073e61e99d55869
