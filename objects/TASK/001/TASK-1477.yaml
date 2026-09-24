@@ -8,9 +8,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T10:41:00.020275361Z
-modified_at: 2026-09-24T10:41:00.020275361Z
+modified_at: 2026-09-24T10:41:07.157760101Z
 req_type: Task
 tags:
 - followup
 - lifecycle
 - parent:TASK-1474
+relationships:
+- rel_type: Child
+  target_id: 01a0d2a4-ebd9-7ad1-8464-103e335ab44e
+  created_at: 2026-09-24T10:41:07.157760101Z
