@@ -173,6 +173,28 @@ pub struct HistoryEventRecord {
     pub detail: JsonValue,
 }
 
+/// TASK-1480 review fix: whether a single-spec `aida history` call (`--id`
+/// or the positional SPEC-ID alias — both resolve into `opts.id_filter`
+/// identically before this point, via `resolve_history_id_filter`, so one
+/// check here covers both invocation forms) should render the new
+/// status-progression narrative rather than fall through to the
+/// pre-existing digest path.
+///
+/// This is a HUMAN-only upgrade. `agent_mode` (the caller passes
+/// `crate::agent_output_mode()`, which is also true for any non-TTY
+/// stdout — scripts, `| cat`, CI, MCP-adjacent non-interactive use) must
+/// keep getting the EXACT pre-TASK-1480 output: `run_digest`'s single-row
+/// TOON table, since that is a documented, scripted machine-output shape.
+/// Silently swapping it for prose under a non-interactive caller is a
+/// breaking change, not a feature — the narrative view is additive for a
+/// human at a terminal only. `--full`/`events` (an explicit request for
+/// the complete trail) always wins regardless of agent/human, since that
+/// path was never digest-shaped to begin with.
+// trace:TASK-1480 | ai:claude
+fn single_spec_uses_progress_view(opts: &HistoryOpts, agent_mode: bool) -> bool {
+    opts.id_filter.is_some() && !opts.events_mode && !agent_mode
+}
+
 pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     if !store_path.is_dir() {
         anyhow::bail!(
@@ -185,9 +207,9 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
 
     // TASK-1480: a single spec (`--id` / the positional SPEC-ID alias)
     // without `--full`/`events` gets the dedicated status-progression view
-    // — a chronological timeline, not the digest's single current-state
-    // row and not the full commit-grouped events feed. trace:TASK-1480 | ai:claude
-    if opts.id_filter.is_some() && !opts.events_mode {
+    // for a HUMAN caller — see `single_spec_uses_progress_view` for why
+    // agent/piped callers are excluded. trace:TASK-1480 | ai:claude
+    if single_spec_uses_progress_view(opts, crate::agent_output_mode()) {
         return run_single_spec_progress(store_path, opts);
     }
 
@@ -2042,6 +2064,55 @@ mod tests {
         assert!(!event_kind_allowed(&other, &both));
     }
 
+    /// Review fix (post-TASK-1480): a single spec (`--id` or the positional
+    /// SPEC-ID alias) must render the new status-progression narrative for
+    /// a HUMAN caller only. An agent/piped caller (`agent_output_mode()`
+    /// true — non-TTY stdout, scripts, CI, `| cat`) must keep getting the
+    /// exact pre-TASK-1480 output: `run_digest`'s single-row TOON table.
+    ///
+    /// `--id` and the positional alias both resolve into `opts.id_filter`
+    /// identically before this decision is made (proved by
+    /// `history_positional_spec_id_parses` in `cli.rs`, which asserts both
+    /// forms parse to the same underlying value, and by `git_backend_cmd`'s
+    /// `requested_id = id.as_ref().or(spec.as_ref())` merge) — so a single
+    /// `id_filter`-keyed check here covers both invocation forms; there is
+    /// no separate "positional" branch to diverge.
+    // trace:TASK-1480 | ai:claude
+    #[test]
+    fn single_spec_view_selection_is_human_only() {
+        let opts = HistoryOpts {
+            id_filter: Some("TASK-1".to_string()),
+            events_mode: false,
+            ..base_opts()
+        };
+
+        // Human (TTY / non-agent): the new progression narrative.
+        assert!(single_spec_uses_progress_view(&opts, false));
+        // Agent/piped: stays on the pre-existing digest TOON path. This is
+        // the review-blocker regression check — before the fix this was
+        // `true`, silently swapping a documented machine-output shape for
+        // prose under every non-interactive caller.
+        assert!(!single_spec_uses_progress_view(&opts, true));
+
+        // `--full` (or the `events` subcommand) always wins, human or
+        // agent — that path was never digest-shaped to begin with.
+        let full = HistoryOpts {
+            events_mode: true,
+            ..opts.clone()
+        };
+        assert!(!single_spec_uses_progress_view(&full, false));
+        assert!(!single_spec_uses_progress_view(&full, true));
+
+        // No id at all (the general digest / events sweep) never takes the
+        // single-spec branch, regardless of agent/human.
+        let no_id = HistoryOpts {
+            id_filter: None,
+            ..opts
+        };
+        assert!(!single_spec_uses_progress_view(&no_id, false));
+        assert!(!single_spec_uses_progress_view(&no_id, true));
+    }
+
     /// TASK-1480: build a small history for one spec — several status
     /// changes plus a comment on the same commit as one of the transitions
     /// — and drive it through `collect_filtered_events` the same way
@@ -2158,8 +2229,15 @@ mod tests {
 
     /// TASK-1480: `aida history <SPEC-ID>` on a real spec that simply
     /// hasn't changed status yet must NOT error — it's a friendly empty
-    /// view, not an invalid id. `run()` routes a single, non-`--full` id
-    /// straight to the status-progression view; assert it returns `Ok`.
+    /// view, not an invalid id. Calls `run_single_spec_progress` directly
+    /// (the HUMAN-only view function `run()` routes to — see
+    /// `single_spec_uses_progress_view`) rather than the public `run()`
+    /// dispatcher, since `run()`'s routing now also depends on the
+    /// ambient, impure `agent_output_mode()` (real TTY/env state), which a
+    /// deterministic unit test must not depend on. The routing decision
+    /// itself is covered separately by
+    /// `single_spec_view_selection_is_human_only`.
+    // trace:TASK-1480 | ai:claude
     #[test]
     fn run_single_spec_with_no_status_changes_yet_is_not_an_error() {
         let dir = tempfile::tempdir().unwrap();
@@ -2189,7 +2267,7 @@ mod tests {
             ..base_opts()
         };
         assert!(
-            run(root, &opts).is_ok(),
+            run_single_spec_progress(root, &opts).is_ok(),
             "a real, quiet spec must not error"
         );
     }
@@ -2197,7 +2275,9 @@ mod tests {
     /// TASK-1480: an id that never appears anywhere in the orphan branch's
     /// history (well-formed shape, but nothing was ever committed under it)
     /// gets a clear error from the single-spec view, not a silent
-    /// "(no recent activity)."
+    /// "(no recent activity)." Calls `run_single_spec_progress` directly —
+    /// see the doc comment on the previous test for why.
+    // trace:TASK-1480 | ai:claude
     #[test]
     fn run_single_spec_with_no_history_at_all_is_an_error() {
         let dir = tempfile::tempdir().unwrap();
@@ -2227,7 +2307,7 @@ mod tests {
             events_mode: false,
             ..base_opts()
         };
-        let err = run(root, &opts).unwrap_err();
+        let err = run_single_spec_progress(root, &opts).unwrap_err();
         assert!(
             format!("{err:#}").to_lowercase().contains("not found"),
             "expected a not-found error, got: {err:#}"
