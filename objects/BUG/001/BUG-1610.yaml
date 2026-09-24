@@ -22,12 +22,12 @@ description: |-
   - Tests cover an empty GitLab project whose first pushed ref is the feature branch.
 
   The root setup error is recoverable; the AIDA bug is that the review surface presents an impossible action without diagnosing it.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:58:42.443126121Z
-modified_at: 2026-09-24T23:24:50.333820257Z
+modified_at: 2026-09-24T23:25:30.956035892Z
 req_type: Bug
 tags:
 - gitlab
