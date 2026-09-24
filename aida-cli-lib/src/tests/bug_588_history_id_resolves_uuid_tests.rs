@@ -29,23 +29,25 @@ fn resolve_history_id_filter_maps_uuid_to_spec_id() {
     // The bug's exact reproduction: feeding the UUID resolves to the
     // spec_id the event decoder keys on.
     assert_eq!(
-        resolve_history_id_filter(&backend, &uuid.to_string()),
+        resolve_history_id_filter(&backend, &uuid.to_string()).unwrap(),
         "TASK-42",
         "a UUID must resolve to its canonical spec_id (BUG-588)"
     );
 
     // A spec_id argument passes through untouched (no double-resolution).
     assert_eq!(
-        resolve_history_id_filter(&backend, "TASK-42"),
+        resolve_history_id_filter(&backend, "TASK-42").unwrap(),
         "TASK-42",
         "a spec_id argument must pass through unchanged"
     );
 
     // An unknown UUID has nothing to resolve to → pass through verbatim
-    // (it will simply match no events, which is the honest answer).
+    // (it will simply match no events, which is the honest answer) rather
+    // than erroring — TASK-1480 only refuses a malformed id or an
+    // ambiguous one, not a well-formed id that's merely not live right now.
     let unknown = uuid::Uuid::new_v4().to_string();
     assert_eq!(
-        resolve_history_id_filter(&backend, &unknown),
+        resolve_history_id_filter(&backend, &unknown).unwrap(),
         unknown,
         "an unresolvable UUID must pass through unchanged"
     );

@@ -7607,9 +7607,11 @@ pub(crate) fn handle_git_backend_command(
             doc_cmd::handle_doc_command(doc_cmd, store_path, &backend)?;
         }
         Command::History {
+            spec,
             limit,
             max_commits,
             events,
+            full,
             id,
             r#type,
             author,
@@ -7626,6 +7628,11 @@ pub(crate) fn handle_git_backend_command(
             include_meta,
             cmd,
         } => {
+            // TASK-1480: `aida history <SPEC-ID>` is shorthand for `aida
+            // history --id <SPEC-ID>` — clap keeps them mutually exclusive
+            // (`conflicts_with`), so at most one is ever set here.
+            // trace:TASK-1480 | ai:claude
+            let requested_id = id.as_ref().or(spec.as_ref());
             // STORY-1436: `--kind` reads the local event feed (non-actions
             // included) rather than the spec git log. trace:STORY-1436 | ai:claude
             if let Some(kind) = kind {
@@ -7646,7 +7653,9 @@ pub(crate) fn handle_git_backend_command(
                             "aida history events",
                         );
                     }
-                    *events
+                    // trace:TASK-1480 | ai:claude — `--full` is the
+                    // discoverable, non-hidden spelling of the same mode.
+                    *events || *full
                 }
             };
             // trace:FR-1-037 | ai:claude
@@ -7661,7 +7670,7 @@ pub(crate) fn handle_git_backend_command(
             // `--id <ID>` was passed, the user named a single spec so we
             // bypass archive filtering for that spec's timeline.
             // trace:STORY-441 | ai:claude
-            let archive = if id.is_some() || *all {
+            let archive = if requested_id.is_some() || *all {
                 aida_core::ArchiveFilter::Both
             } else if *archived {
                 aida_core::ArchiveFilter::ArchivedOnly
@@ -7672,7 +7681,7 @@ pub(crate) fn handle_git_backend_command(
             // timeline); `--all` and `--archived` keep it open so those audits
             // are complete; `--deferred` narrows to the shelf; default hides it.
             // trace:STORY-584 | ai:claude
-            let defer = if id.is_some() || *all || *archived {
+            let defer = if requested_id.is_some() || *all || *archived {
                 aida_core::DeferFilter::Both
             } else if *deferred {
                 aida_core::DeferFilter::DeferredOnly
@@ -7743,10 +7752,28 @@ pub(crate) fn handle_git_backend_command(
             // empty "(no recent activity)" — the filter never matched because it
             // only ever compared against spec_id. Resolve a UUID (or agreed_id)
             // to its canonical spec_id here so the documented invocation works.
+            // Also refuses early and clearly on a malformed id or one that
+            // resolves to more than one requirement (TASK-1480's "invalid or
+            // ambiguous IDs get a clear error" acceptance bar); a well-formed
+            // id that just isn't live right now (deleted, or never existed) is
+            // NOT rejected here — `history::run` decides that once it knows
+            // whether the id has any recorded history at all.
             // trace:BUG-588 | ai:claude
-            let id_filter = id
-                .as_ref()
-                .map(|raw| resolve_history_id_filter(&backend, raw));
+            // trace:TASK-1480 | ai:claude
+            let id_filter = match requested_id {
+                Some(raw) => Some(resolve_history_id_filter(&backend, raw)?),
+                None => None,
+            };
+            // TASK-1480: a single spec (`--id` / positional SPEC-ID) without
+            // `--full` defaults to the status-progression view — status
+            // transitions only, so `aida history TASK-1480` reads as a
+            // timeline rather than a single digest row. An explicit
+            // `--status-changes`/`--comments` narrows exactly as it always
+            // has; `--full` (or the `events` subcommand) opts back into the
+            // complete trail. trace:TASK-1480 | ai:claude
+            let single_spec_default_progress =
+                id_filter.is_some() && !events && !*status_changes && !*comments;
+            let status_changes_only = *status_changes || single_spec_default_progress;
             let opts = history::HistoryOpts {
                 limit: *limit,
                 max_commits: max.max(*limit),
@@ -7757,7 +7784,7 @@ pub(crate) fn handle_git_backend_command(
                 author_filter: author.clone(),
                 since: since.clone(),
                 until: until.clone(),
-                status_changes_only: *status_changes,
+                status_changes_only,
                 shipped_only: *shipped,
                 comments_only: *comments,
                 oneline: *oneline,

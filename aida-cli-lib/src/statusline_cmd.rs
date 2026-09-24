@@ -14,7 +14,11 @@ use colored::Colorize;
 
 use crate::*;
 
-pub(crate) fn handle_statusline_command(color: &str, title: bool) -> Result<()> {
+pub(crate) fn handle_statusline_command(
+    color: &str,
+    title: bool,
+    client: Option<&str>,
+) -> Result<()> {
     // trace:FR-1-041 | ai:claude
     // trace:TASK-896 — an OSC terminal-title string carries no ANSI, so
     // `--title` forces color off no matter what `--color` requested.
@@ -400,7 +404,26 @@ pub(crate) fn handle_statusline_command(color: &str, title: bool) -> Result<()> 
     if let Some(marker) = presence::statusline_solo_marker(chrono::Utc::now()) {
         parts.push(marker.magenta().bold().to_string());
     }
-    let line = parts.join(&separator);
+    let aida_segment = parts.join(&separator);
+    // trace:TASK-1479 | ai:claude — opt-in client-live merge. Only reads
+    // stdin when a client was named; plain `aida statusline` (client: None)
+    // is byte-for-byte unchanged from before this task. `read_stdin_payload`
+    // skips the read entirely on a TTY, and bounds any piped read to a
+    // ~200ms deadline (STDIN_READ_DEADLINE) so an open pipe/FIFO that never
+    // sends EOF can't wedge this hot path — both cases degrade to the
+    // AIDA-only segment, and the raw payload is never logged.
+    let line = match client {
+        Some(name) => {
+            let live = statusline_contract::read_stdin_payload().map(|raw| match name {
+                "claude" => statusline_claude_adapter::parse_claude_payload(&raw),
+                "antigravity" | "agy" => statusline_agy_adapter::parse_agy_payload(&raw),
+                _ => Default::default(),
+            });
+            let columns = statusline_contract::statusline_terminal_width();
+            statusline_contract::format_combined(&aida_segment, live.as_ref(), columns)
+        }
+        None => aida_segment,
+    };
     if title {
         // trace:TASK-896 — emit the (plain) one-liner as an OSC 2 set-window-title
         // escape. No trailing newline / body text: a prompt that runs
@@ -503,6 +526,11 @@ fn print_claude_statusline_setup(settings_path: &std::path::Path) {
         settings_path.display()
     );
     println!("  deleting it to re-add). Claude Code falls back to its built-in footer.");
+    println!();
+    println!("  Richer footer (opt-in): add `--client claude` to the command above to");
+    println!("  merge Claude Code's own live model/context-window fields alongside the");
+    println!("  AIDA segment (reads the statusLine JSON Claude Code already pipes on");
+    println!("  stdin). See docs/agents/statusline-contract.md.");
 }
 
 /// Print the Antigravity statusline setup guidance (and the JSON fragment).
@@ -539,6 +567,12 @@ fn antigravity_statusline_setup_text(
         "  Use `--replace-default` to emit/install `stack_with_default: false`.".to_string(),
         "  To disable later, remove the \"statusLine\" and \"title\" keys from".to_string(),
         format!("  {}.", settings_path.display()),
+        String::new(),
+        "  Richer footer (opt-in): add `--client antigravity` (alias `agy`) to the".to_string(),
+        "  statusLine command above to merge Agy's own live model/context/activity/VCS".to_string(),
+        "  fields alongside the AIDA segment, when Agy pipes that payload on stdin. See"
+            .to_string(),
+        "  docs/agents/statusline-contract.md.".to_string(),
     ]
     .join("\n")
 }
@@ -604,6 +638,13 @@ pub(crate) fn codex_statusline_setup_text() -> String {
         "  Tripwire: at each competitive refresh, re-check upstream Codex for a",
         "  command-backed `[tui] status_line` item. If that lands, prefer the",
         "  native footer over the tmux/title workaround.",
+        "",
+        "  Why no `--client codex` live-field adapter: Codex's footer never runs a",
+        "  command and so never pipes a stdin JSON payload — there's nothing for an",
+        "  adapter to parse. `--client claude`/`--client antigravity` (see",
+        "  docs/agents/statusline-contract.md) merge model/context/activity/VCS from",
+        "  a client's own live payload; Codex's built-in items above are the closest",
+        "  in-footer equivalent for this client.",
         "",
         "  To disable later, remove the `[tui] status_line` and `terminal_title`",
         "  lines (or the whole `[tui]` block) from your Codex config.toml.",

@@ -25,6 +25,8 @@ The commands you touch on day one and then every day after: `init` once, then `a
 
 **Gotchas.** It refuses to initialize *over a workspace of nested git repos* (it would capture the whole tree) — that's a feature, not a bug; use `--sibling` for that shape. Non-interactive `init` never prompts (so it's CI-safe), which means the first-machine permission-posture prompt is silently skipped — fine, it defaults to the faithful posture.
 
+**Outside a project.** Run from a directory that isn't inside an AIDA project, `add`, `list`, `edit` and the other store commands refuse with setup guidance instead of guessing a store. A legacy `default_project` entry in the old project registry (`~/.aida.config` / `~/.requirements.config`) is no longer used implicitly, because it could point at an unrelated project. To target a store on purpose, pass `--file <path>` or `-p <project>`, or set `AIDA_STORE` or `REQ_DB_NAME`.
+
 **Chains with** — followed by `aida add` (your first spec) and, if the repo has no remote, an offer to wire one. Once a day later, `aida doctor` checks the init stayed healthy.
 
 ---
