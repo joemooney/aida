@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T20:33:59.618260056Z
-modified_at: 2026-09-24T20:34:23.286262613Z
+modified_at: 2026-09-24T20:35:31.983489852Z
 req_type: Bug
 tags:
 - followup
@@ -37,6 +37,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0c4b7-b38c-7301-89cd-9b7a04a1e703
   created_at: 2026-09-24T20:34:03.799129379Z
+- rel_type: Blocks
+  target_id: 01a0c4b7-b38c-7301-89cd-9b7a04a1e703
+  created_at: 2026-09-24T20:35:31.983487222Z
+  created_by: joe
 filed_at:
   code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
   branch: main
