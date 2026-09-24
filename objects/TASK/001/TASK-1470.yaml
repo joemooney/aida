@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T03:10:18.423470148Z
-modified_at: 2026-09-24T08:12:16.891631371Z
+modified_at: 2026-09-24T12:52:02.513659433Z
 req_type: Task
 comments:
 - id: 01a0d278-f27b-7bc2-b524-4e63d2f63a10
@@ -16,4 +16,10 @@ comments:
   content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. EPIC-72 is marked Completed, but feat/jev-integration is unmerged and aida explain / aida wiki are absent on main. Integrate and fix the rollup.'
   created_at: 2026-09-24T08:12:16.891631371Z
   modified_at: 2026-09-24T08:12:16.891631371Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d379-1351-70c3-9dae-156e2571b0e0
+  author: joe
+  content: 'PROXY DECISION (2026-09-24): don''t merge feat/jev-integration wholesale. Take only the exposition and wiki code from commit ab444341b3, plus a minimal evaluator shim, or review the resilience commit 02a13e7138 separately. Fix before merge: use AIDA_JEV_API_KEY (not the undocumented JEV_API_KEY) and document the network egress to api.typesafe.ai; vendor mermaid instead of loading it from a CDN; lock the wiki server to loopback; register its port in ~/.ports; regenerate the format-json audit for explain and wiki. Exclude the pilot doc (TASK-1437/1440, reopened), the presentation and the truncated docs/2026-09-12-aida-llm-experience-report.md.'
+  created_at: 2026-09-24T12:52:02.513659433Z
+  modified_at: 2026-09-24T12:52:02.513659433Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
