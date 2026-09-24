@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T03:10:18.423470148Z
-modified_at: 2026-09-24T21:26:37.549613892Z
+modified_at: 2026-09-24T21:30:28.057300472Z
 req_type: Task
 tags:
 - docs:impacted
@@ -30,4 +30,10 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): the 15 pilot exposition sidecars committed into the canonical store at a3551b51f0 (.aida-store/expositions/) will be removed with an ordinary delete commit on aida-store after TASK-1470 merges. After the merge nothing reads that location, since sidecars move to .aida/expositions/. This is a plain deletion, not a history rewrite, so the files stay recoverable from git history (a3551b51f0), including for a TASK-1437 re-run.'
   created_at: 2026-09-24T21:26:37.549613892Z
   modified_at: 2026-09-24T21:26:37.549613892Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d553-b559-7ad1-8e25-0cb8bed8d6fc
+  author: joe
+  content: 'Review round 2: APPROVE (fresh strict Opus reviewer). Sidecars now live under .aida/expositions (confirmed ignored by git). save_exposition refuses any path containing .aida-store. The real git-worktree fixture test shows store detection is unchanged. Queued for batch 55.'
+  created_at: 2026-09-24T21:30:28.057300472Z
+  modified_at: 2026-09-24T21:30:28.057300472Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
