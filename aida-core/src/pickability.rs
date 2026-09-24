@@ -269,6 +269,75 @@ pub fn closure_blockers_label(blockers: &[ClosureBlocker]) -> String {
         .join(", ")
 }
 
+/// STORY-1430: the tag a spec carries to declare "my own closure criteria are
+/// not met yet" — the merge-driven auto-bump holds it at Done while the tag is
+/// present. Removing the tag is the resolution.
+pub const CLOSURE_PENDING_TAG: &str = "closure:pending";
+
+/// STORY-1430: the spec's OWN declared closure criteria that are still unmet —
+/// the explicit, machine-readable counterpart to prose like "this spec does not
+/// close until X". Two declared forms, no free-text parsing:
+///
+/// - the tag [`CLOSURE_PENDING_TAG`] (a whole-spec "not ready" flag), and
+/// - unchecked `- [ ]` items under a `## Closure` heading (or a bare
+///   `Closure:` line) in the description; `- [x]` items are met. The section
+///   ends at the next markdown heading or the next unindented `Label:` line.
+///
+/// Empty = nothing declared unmet, and the auto-bump behaves exactly as before.
+/// Each entry is the human text of one unmet criterion.
+// trace:STORY-1430 | ai:claude
+pub fn unmet_declared_closure_criteria(req: &Requirement) -> Vec<String> {
+    let mut unmet = Vec::new();
+    if req
+        .tags
+        .iter()
+        .any(|t| t.trim().eq_ignore_ascii_case(CLOSURE_PENDING_TAG))
+    {
+        unmet.push(format!("tag `{CLOSURE_PENDING_TAG}` is set"));
+    }
+    let mut in_closure = false;
+    for line in req.description.lines() {
+        let trimmed = line.trim();
+        let hashes = trimmed.trim_start_matches('#');
+        if hashes.len() < trimmed.len() && hashes.starts_with(' ') {
+            in_closure = is_closure_heading(hashes);
+            continue;
+        }
+        let unindented = !line.starts_with(char::is_whitespace);
+        if unindented && trimmed.ends_with(':') && !is_list_item(trimmed) {
+            in_closure = is_closure_heading(trimmed.trim_end_matches(':'));
+            continue;
+        }
+        if !in_closure {
+            continue;
+        }
+        let item = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+            .map(str::trim_start);
+        if let Some(rest) = item.and_then(|i| i.strip_prefix("[ ]")) {
+            let text = rest.trim();
+            unmet.push(if text.is_empty() {
+                "an unchecked closure item".to_string()
+            } else {
+                text.to_string()
+            });
+        }
+    }
+    unmet
+}
+
+/// STORY-1430: `Closure` / `Closure criteria` (case-insensitive) opens the
+/// declared-criteria section.
+fn is_closure_heading(text: &str) -> bool {
+    let t = text.trim().to_ascii_lowercase();
+    t == "closure" || t == "closure criteria"
+}
+
+fn is_list_item(trimmed: &str) -> bool {
+    trimmed.starts_with("- ") || trimmed.starts_with("* ")
+}
+
 /// Render a `BlockedReason` as a single line suitable for the
 /// `aida queue list` Blocked section, `aida queue next` skip hints, and
 /// the head-pickup banner. The label leads with the *reason kind*, then
@@ -604,5 +673,52 @@ mod tests {
         assert_eq!(got.len(), 1);
         assert!(got[0].status.is_none());
         assert!(closure_blockers_label(&got).ends_with("(missing)"));
+    }
+
+    // ── STORY-1430: declared closure criteria ───────────────────────────
+
+    // trace:STORY-1430 | ai:claude
+    #[test]
+    fn no_declared_criterion_means_nothing_unmet() {
+        let mut r = make_req("BUG-1", RequirementStatus::Done);
+        r.description = "Acceptance:\n- [ ] prose checklist outside a Closure section\n\
+                         This spec does not close until X."
+            .to_string();
+        assert!(unmet_declared_closure_criteria(&r).is_empty());
+    }
+
+    // trace:STORY-1430 | ai:claude
+    #[test]
+    fn closure_pending_tag_is_unmet() {
+        let mut r = make_req("BUG-1", RequirementStatus::Done);
+        r.tags.insert("Closure:Pending".to_string());
+        assert_eq!(
+            unmet_declared_closure_criteria(&r),
+            vec!["tag `closure:pending` is set".to_string()]
+        );
+    }
+
+    // trace:STORY-1430 | ai:claude
+    #[test]
+    fn closure_section_unchecked_items_are_unmet_checked_are_met() {
+        let mut r = make_req("BUG-1480", RequirementStatus::Done);
+        r.description =
+            "Fix it.\n\n## Closure\n- [ ] STORY-1423 criterion 1 re-measured after the fix\n\
+                         - [x] guard enabled\n  * [ ] indented second item\n\n\
+                         ## Notes\n- [ ] not a closure item\nAcceptance:\n- [ ] nor this"
+                .to_string();
+        assert_eq!(
+            unmet_declared_closure_criteria(&r),
+            vec![
+                "STORY-1423 criterion 1 re-measured after the fix".to_string(),
+                "indented second item".to_string()
+            ]
+        );
+        // A bare `Closure:` label opens the section too; checking every box
+        // clears it.
+        r.description = "Closure:\n- [x] done\n- [X] also done".to_string();
+        assert!(unmet_declared_closure_criteria(&r).is_empty());
+        r.description = "Closure criteria:\n- [ ] BUG-1288 headline under 26s".to_string();
+        assert_eq!(unmet_declared_closure_criteria(&r).len(), 1);
     }
 }
