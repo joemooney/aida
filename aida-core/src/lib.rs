@@ -122,6 +122,8 @@ pub mod pickability;
 #[cfg(feature = "native")]
 pub mod project;
 #[cfg(feature = "native")]
+pub mod provenance;
+#[cfg(feature = "native")]
 pub mod rebase;
 #[cfg(feature = "native")]
 pub mod registry;
@@ -245,6 +247,8 @@ pub use models::{
     FailureReason,
     FeatureDefinition,
     FieldChange,
+    // Filing provenance (CR-8)
+    FilingProvenance,
     // GitLab integration types
     GitLabIssueLink,
     GitLabLinkType,

@@ -4460,6 +4460,11 @@ pub(crate) fn handle_git_backend_command(
                         if let Some(o) = &req.origin {
                             lines.push(crate::toon::scalar("origin", &o.to_string()));
                         }
+                        // CR-8: filing provenance, one compact scalar, only
+                        // when stamped. trace:CR-8 | ai:claude
+                        if let Some(p) = req.filed_at.as_ref().filter(|p| !p.is_empty()) {
+                            lines.push(crate::toon::scalar("filed_at", &p.summary_line()));
+                        }
                         println!("{}", lines.join("\n"));
 
                         // Relationships as a uniform TOON table (rel,id,title).
@@ -4645,6 +4650,19 @@ pub(crate) fn handle_git_backend_command(
                     // absent = single-repo, prints nothing.
                     if let Some(o) = &req.origin {
                         println!("{}: {}", "Origin".bold(), o.to_string().cyan());
+                    }
+                    // CR-8: where (code state) and with what (tooling) the
+                    // spec was filed — one compact line, only when stamped.
+                    // trace:CR-8 | ai:claude
+                    if let Some(p) = req.filed_at.as_ref().filter(|p| !p.is_empty()) {
+                        println!("{}: {}", "Filed at".bold(), p.summary_line().dimmed());
+                        if p.build_diverges_from_code() && crate::cwd_is_aida_source_repo() {
+                            println!(
+                                "  {} filed by a binary built from a different commit than \
+                                 the checked-out code",
+                                "note:".yellow()
+                            );
+                        }
                     }
                     // BUG-524: surface when the spec was opened / last touched so
                     // `aida show` reveals its age. Stored UTC, rendered in local
