@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:10:54.660906553Z
-modified_at: 2026-09-24T15:16:33.714887600Z
+modified_at: 2026-09-24T16:03:53.384009045Z
 req_type: Task
 tags:
 - docs:impacted
@@ -35,3 +35,9 @@ comments:
   content: 'UX clarification: when history is focused on one spec, the default output should prefer compact digest rows such as + TASK-1479 Task InProgress 07:12 ..., while incorporating or summarizing status progression without verbose per-event prose. Keep aida history events --id SPEC and an eventual full-history option as the detailed audit view.'
   created_at: 2026-09-24T14:14:42.116117834Z
   modified_at: 2026-09-24T14:14:42.116117834Z
+- id: 01a0d428-b7a8-7091-bc30-afb07f5ae392
+  author: joe
+  content: 'Review round 2: APPROVE (fresh reviewer). Agent and piped output is byte-identical to main for --id, the positional alias, --full and the digest. The TTY progression view works. Queued for batch 50.'
+  created_at: 2026-09-24T16:03:53.384009045Z
+  modified_at: 2026-09-24T16:03:53.384009045Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
