@@ -786,6 +786,13 @@ pub struct ScaffoldConfig {
     /// switch-role / route-work / solo. Makes the advisor=specs-not-code
     /// boundary a tripwire instead of fine print. trace:STORY-670 | ai:claude
     pub include_advisor_code_guard_hook: bool,
+    /// Include the pending-approval marker hooks — Notification
+    /// (`permission_prompt`) writes the marker, UserPromptSubmit +
+    /// PostToolUse clear it — so `aida ps` / `aida awaiting` can say a seat
+    /// is BLOCKED on the human right now instead of guessing from a
+    /// time/process heuristic.
+    // trace:TASK-1454 trace:TASK-1461 | ai:claude
+    pub include_pending_approval_hooks: bool,
     /// Custom project type for specialized scaffolding
     pub project_type: ProjectType,
     /// Tech stack hints for context generation
@@ -843,6 +850,7 @@ impl Default for ScaffoldConfig {
             include_role_context_hook: true,
             include_git_guardrails_hook: true,
             include_advisor_code_guard_hook: true,
+            include_pending_approval_hooks: true,
             project_type: ProjectType::Generic,
             tech_stack: Vec::new(),
         }
@@ -2501,6 +2509,48 @@ aida show <SPEC-ID>
                 }
             }
 
+            // Pending-approval hooks: Notification(permission_prompt) writes
+            // the marker, aida-clear-pending-approval.sh clears it on
+            // UserPromptSubmit/PostToolUse. TASK-1454 wired these into THIS
+            // repo only; this scaffolds them for downstream `aida init`
+            // projects too. trace:TASK-1461 | ai:claude
+            if self.config.include_pending_approval_hooks {
+                for (path, body, description) in [
+                    (
+                        PathBuf::from(".claude/hooks/aida-notification.sh"),
+                        self.generate_notification_hook(),
+                        "Claude Code Notification hook recording a pending-approval marker"
+                            .to_string(),
+                    ),
+                    (
+                        PathBuf::from(".claude/hooks/aida-clear-pending-approval.sh"),
+                        self.generate_clear_pending_approval_hook(),
+                        "Claude Code hook clearing the pending-approval marker once resolved"
+                            .to_string(),
+                    ),
+                ] {
+                    if !body.is_empty() {
+                        let artifact = self.create_artifact(
+                            path.clone(),
+                            body,
+                            description,
+                            true, // shell script
+                        );
+                        match &artifact.file_status {
+                            FileStatus::New => new_files.push(path),
+                            FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                                modified_files.push(artifact.path.clone())
+                            }
+                            FileStatus::OlderVersion { .. } => {
+                                upgradeable_files.push(artifact.path.clone())
+                            }
+                            FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                        }
+                        artifacts.push(artifact);
+                    }
+                }
+            }
+
             // Generate settings.json with hook configuration
             let path = PathBuf::from(".claude/settings.json");
             let artifact = self.create_artifact(
@@ -3422,6 +3472,134 @@ mod tests {
             title: "Test Project".to_string(),
             description: "A test project for scaffolding".to_string(),
             ..Default::default()
+        }
+    }
+
+    /// A fresh scaffold writes BOTH pending-approval hook files and wires
+    /// both into `.claude/settings.json` — the Notification(permission_prompt)
+    /// marker writer, and the UserPromptSubmit/PostToolUse clear. Downstream
+    /// `aida init` projects previously got neither: `settings.rs` had no
+    /// generator call and `hooks.rs` had no `include_str!` for either script,
+    /// so only THIS dev repo (hand-wired by TASK-1454) had the feature.
+    // trace:TASK-1461 | ai:claude
+    #[test]
+    fn fresh_scaffold_contains_pending_approval_hooks_and_settings() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut scaffolder =
+            Scaffolder::new(temp_dir.path().to_path_buf(), ScaffoldConfig::default());
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+
+        let notification = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new(".claude/hooks/aida-notification.sh"))
+            .expect("aida-notification.sh must be scaffolded");
+        assert!(
+            notification.content.contains("pending-approval-set"),
+            "scaffolded notification hook must call the marker-set verb"
+        );
+
+        let clear = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new(".claude/hooks/aida-clear-pending-approval.sh"))
+            .expect("aida-clear-pending-approval.sh must be scaffolded");
+        assert!(
+            clear.content.contains("pending-approval-clear"),
+            "scaffolded clear hook must call the marker-clear verb"
+        );
+
+        let settings = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new(".claude/settings.json"))
+            .expect("settings.json must be scaffolded");
+        let v: serde_json::Value =
+            serde_json::from_str(&settings.content).expect("settings.json parses");
+
+        let notif_cmd = v["hooks"]["Notification"][0]["hooks"][0]["command"]
+            .as_str()
+            .expect("Notification hook command");
+        assert!(notif_cmd.ends_with("/aida-notification.sh"));
+        assert_eq!(
+            v["hooks"]["Notification"][0]["matcher"],
+            "permission_prompt"
+        );
+
+        let ups_cmd = v["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+            .as_str()
+            .expect("UserPromptSubmit hook command");
+        assert!(ups_cmd.ends_with("/aida-clear-pending-approval.sh"));
+
+        let post_matchers = v["hooks"]["PostToolUse"]
+            .as_array()
+            .expect("PostToolUse array");
+        let clear_entry = post_matchers
+            .iter()
+            .find(|m| {
+                m["hooks"][0]["command"]
+                    .as_str()
+                    .map(|c| c.ends_with("/aida-clear-pending-approval.sh"))
+                    .unwrap_or(false)
+            })
+            .expect("PostToolUse must include the no-matcher clear hook entry");
+        assert!(
+            clear_entry.get("matcher").is_none(),
+            "the clear hook's PostToolUse entry must carry no matcher (every tool, not just Bash)"
+        );
+
+        // Actually apply the scaffold and confirm the files land on disk
+        // executable, matching every other Claude Code hook.
+        scaffolder.apply(&preview).expect("scaffolding apply");
+        let notif_path = temp_dir.path().join(".claude/hooks/aida-notification.sh");
+        let clear_path = temp_dir
+            .path()
+            .join(".claude/hooks/aida-clear-pending-approval.sh");
+        assert!(notif_path.exists());
+        assert!(clear_path.exists());
+    }
+
+    /// `include_pending_approval_hooks = false` drops both hook files AND
+    /// every settings.json entry that wires them — no orphaned matcher block
+    /// left behind pointing at a script that was never written.
+    // trace:TASK-1461 | ai:claude
+    #[test]
+    fn pending_approval_hooks_omitted_when_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig {
+            include_pending_approval_hooks: false,
+            ..ScaffoldConfig::default()
+        };
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+
+        assert!(!preview
+            .artifacts
+            .iter()
+            .any(|a| a.path == Path::new(".claude/hooks/aida-notification.sh")));
+        assert!(!preview
+            .artifacts
+            .iter()
+            .any(|a| a.path == Path::new(".claude/hooks/aida-clear-pending-approval.sh")));
+
+        let settings = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new(".claude/settings.json"))
+            .expect("settings.json must be scaffolded");
+        let v: serde_json::Value =
+            serde_json::from_str(&settings.content).expect("settings.json parses");
+        assert!(v["hooks"]["Notification"].is_null());
+        assert!(v["hooks"]["UserPromptSubmit"].is_null());
+        // PostToolUse still exists (track-commits, Bash-matched) but must not
+        // contain a no-matcher entry pointing at the clear hook.
+        if let Some(entries) = v["hooks"]["PostToolUse"].as_array() {
+            assert!(!entries.iter().any(|m| m["hooks"][0]["command"]
+                .as_str()
+                .map(|c| c.ends_with("/aida-clear-pending-approval.sh"))
+                .unwrap_or(false)));
         }
     }
 
