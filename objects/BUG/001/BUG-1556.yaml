@@ -49,12 +49,12 @@ description: |
   - DO NOT ADD A NEW REPORTING SURFACE until the existing tracking issue is confirmed to exist and be unread. If it exists, the defect is routing/attention, not detection.
 
   Related: BUG-1555 is the single 09-21 instance, narrowed to that night after its first diagnosis was falsified. TASK-1418 catalogues instrument-failure families; this spec is the always-firing form at the channel level - the mirror of the inert instruments recorded there.
-status: Completed
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T15:53:14.701016287Z
-modified_at: 2026-09-24T07:17:49.470953433Z
+modified_at: 2026-09-24T08:09:06.770398677Z
 req_type: Bug
 relationships:
 - rel_type:
