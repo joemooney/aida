@@ -34,11 +34,13 @@ tags:
 - from:review-1976
 - mailbox
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0b5c8-f02f-7c22-84d1-8e58b8d59768
   created_at: 2026-09-20T17:52:26.126407342Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bbb0-8032-72a1-8089-6a058cfeb3cf
   created_at: 2026-09-20T17:52:26.993876374Z
   created_by: joe
@@ -50,7 +52,8 @@ relationships:
   target_id: 01a0b5c8-f02f-7c22-84d1-8e58b8d59768
   created_at: 2026-09-20T17:52:57.486858427Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0c5e9-2c7d-7203-9ccb-67d14e099397
   created_at: 2026-09-21T21:39:59.546369113Z
   created_by: joe

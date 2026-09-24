@@ -44,15 +44,18 @@ created_at: 2026-09-21T20:36:15.070702470Z
 modified_at: 2026-09-21T21:48:27.293484846Z
 req_type: Bug
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c590-f406-70b0-8b36-4b799402f01f
   created_at: 2026-09-21T20:36:33.072490563Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c5a2-ad1f-7a12-b65c-4081ca5148f7
   created_at: 2026-09-21T20:36:34.051955765Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0c547-d064-7531-9c74-d8f911c74b3a
   created_at: 2026-09-21T20:36:35.000282922Z
   created_by: joe

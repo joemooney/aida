@@ -30,27 +30,33 @@ created_at: 2026-05-11T03:53:30.689911850Z
 modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e14f2-6476-7921-ba83-c439f7a5a969
   created_at: 2026-05-11T03:53:32.332833674Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e14f2-71bf-7e72-aa29-f87455f4d07b
   created_at: 2026-05-11T03:53:34.206708860Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e0fc3-7c93-78c2-b9be-d4c8d9b5af99
   created_at: 2026-05-11T03:53:36.280257716Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e14b4-2d8c-7991-8099-a9f73c242fbe
   created_at: 2026-05-11T03:53:38.343020485Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e14ba-3b51-73e0-be73-44d8d86c4b5b
   created_at: 2026-05-11T03:53:40.487468275Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e14a1-6604-7342-9bd0-517aca7aca0b
   created_at: 2026-05-11T03:53:42.532558470Z
   created_by: joe

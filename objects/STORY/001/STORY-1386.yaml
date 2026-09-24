@@ -69,19 +69,23 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T12:44:40.612461274Z
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bae3-3204-7040-a898-dc92c87ca6d1
   created_at: 2026-09-20T12:44:53.555113281Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0becf-5722-7db2-a49b-1e13af40f0bf
   created_at: 2026-09-20T12:44:55.099592833Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0be92-0d6d-7be0-a445-7e6cd3d8361b
   created_at: 2026-09-20T12:44:57.134051883Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
   created_at: 2026-09-20T12:44:58.525697566Z
   created_by: joe

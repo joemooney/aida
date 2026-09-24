@@ -47,7 +47,8 @@ req_type: Bug
 tags:
 - drain cli papercut
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0c821-b359-7150-991a-529d51a1c5fb
   created_at: 2026-09-22T08:00:55.469833635Z
   created_by: joe

@@ -57,7 +57,8 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-20T13:34:32.057290506Z
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bda4-a9ff-7cb2-978c-fda93ba5c931
   created_at: 2026-09-20T13:34:57.418373370Z
   created_by: joe
@@ -65,7 +66,8 @@ relationships:
   target_id: 01a0bda4-a9ff-7cb2-978c-fda93ba5c931
   created_at: 2026-09-20T17:52:40.707884772Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0c076-775d-75b2-9b55-17dd4a36623e
   created_at: 2026-09-20T20:16:29.955191730Z
   created_by: joe

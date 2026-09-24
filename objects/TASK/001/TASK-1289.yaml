@@ -39,18 +39,21 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-19T16:31:06.913615297Z
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0bafb-5814-71a0-843f-244a570a2ef8
   created_at: 2026-09-19T18:43:54.256275815Z
   created_by: joe
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T20:49:26.843597828Z
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0bdf1-1a9e-7143-a108-d97d887bf651
   created_at: 2026-09-20T08:31:55.313664676Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0c1a7-d90d-7de0-9a15-8fb494af554d
   created_at: 2026-09-21T01:50:05.486057313Z
   created_by: joe

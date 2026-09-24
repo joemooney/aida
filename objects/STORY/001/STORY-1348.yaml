@@ -25,7 +25,8 @@ created_at: 2026-09-19T16:00:06.988687999Z
 modified_at: 2026-09-19T17:16:30.940259085Z
 req_type: Story
 relationships:
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 01a0b5dd-93e3-7382-bb96-c99e4a8014af
   created_at: 2026-09-19T16:00:11.073742278Z
   created_by: joe

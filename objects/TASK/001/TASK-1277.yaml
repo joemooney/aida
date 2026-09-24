@@ -15,12 +15,12 @@ description: |-
   - A bug PR with no test-file change is reported the same way (warn/refuse per config).
   - The reviewer prompt for a headless review includes the type's checklist items verbatim.
   - Unit tests: one per machine-checkable item kind, plus the warn/refuse/force matrix; integrity floors (CI gate, merge lease, single drain) are untouched.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:27:26.797150984Z
-modified_at: 2026-09-20T06:30:58.155581127Z
+modified_at: 2026-09-24T04:49:53.051725651Z
 req_type: Task
 tags:
 - agent-ux
@@ -42,3 +42,7 @@ relationships:
   created_at: 2026-09-19T16:37:54.727954121Z
   created_by: joe
 execution_mode: guided
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-24T04:49:53.051725651Z
+  implemented_by: joe

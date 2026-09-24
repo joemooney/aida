@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T04:43:20.175462375Z
-modified_at: 2026-09-24T04:43:20.175462375Z
+modified_at: 2026-09-24T04:45:41.877763682Z
 req_type: Bug
 tags:
 - ci
 - flaky-test
 - recurrence
 - scheduler
+comments:
+- id: 01a0d1bb-d075-7861-be5a-04ae1755c56c
+  author: joe
+  content: 'Investigation 2026-09-23: repeated `aida list` warnings were caused by stale cache-lock metadata, not an active list process. `.aida/cache.db.lock-info` identified dead PID 1643379 from `aida show BUG-1514`, held since 2026-09-22 and reported as 24h+ old; `ps` confirmed the PID no longer existed. Reads continued, but cache refresh/upsert attempts retried against the stale lock and emitted the warning. Operator then ran `aida doctor heal stale-locks` and confirmed the safe removal of `/home/joe/ai/aida/.aida/cache.db.lock-info`; one finding was healed successfully. Doctor also reported bwrap and gh healthy. This appears to be stale lock cleanup behavior after an interrupted or unclean AIDA process; verify subsequent `aida list` runs are warning-free.'
+  created_at: 2026-09-24T04:45:41.877763682Z
+  modified_at: 2026-09-24T04:45:41.877763682Z

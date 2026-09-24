@@ -22,7 +22,8 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T01:50:17.803124910Z
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0b5e0-7244-7451-89a9-f8c561574633
   created_at: 2026-09-19T04:02:23.167879950Z
   created_by: joe

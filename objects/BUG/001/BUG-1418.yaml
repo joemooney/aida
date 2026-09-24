@@ -45,15 +45,18 @@ tags:
 - observability
 - telemetry
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bac0-0f79-7ec0-9e4a-ca3f33c5d621
   created_at: 2026-09-20T06:05:03.904899211Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
   created_at: 2026-09-20T06:05:04.806856727Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0c999-45b1-7290-9e2f-58a1b988c57b
   created_at: 2026-09-22T14:51:10.863385596Z
   created_by: joe

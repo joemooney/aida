@@ -47,7 +47,8 @@ tags:
 - release-blocker
 - windows
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a09bda-3b6b-7e71-9599-5d83319c402e
   created_at: 2026-09-20T13:13:55.759608995Z
   created_by: joe

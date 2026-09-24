@@ -24,7 +24,8 @@ tags:
 - performance
 - preflight
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
   created_at: 2026-09-20T06:22:23.411023877Z
   created_by: joe

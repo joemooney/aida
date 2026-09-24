@@ -30,7 +30,8 @@ tags:
 - agent-ux mailbox mcp parity from:review-pr-1976
 - batch:night-0920
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0b5c8-f02f-7c22-84d1-8e58b8d59768
   created_at: 2026-09-20T17:52:24.340977351Z
   created_by: joe

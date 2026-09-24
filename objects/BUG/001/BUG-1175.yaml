@@ -42,7 +42,8 @@ tags:
 - fast-follow:TASK-1207
 - regression
 relationships:
-- rel_type: !Custom duplicate-of
+- rel_type:
+    custom: duplicate-of
   target_id: 01a0abcb-34d9-7613-a06c-0fda505073f8
   created_at: 2026-09-16T19:59:28.120803036Z
   created_by: joe

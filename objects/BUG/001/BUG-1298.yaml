@@ -51,19 +51,23 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T22:03:24.105125205Z
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bba5-04e1-7530-9c2d-33b3d51dc915
   created_at: 2026-09-19T22:03:46.491468547Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
   created_at: 2026-09-19T23:12:09.618389490Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0bdd1-d238-7e62-927f-9cbcce3e5049
   created_at: 2026-09-20T07:57:25.156792369Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0bdf1-1a9e-7143-a108-d97d887bf651
   created_at: 2026-09-20T08:31:39.907079810Z
   created_by: joe

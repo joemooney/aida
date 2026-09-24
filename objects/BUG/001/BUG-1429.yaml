@@ -34,11 +34,13 @@ tags:
 - from:session-0919
 - orchestrator
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0ba93-547f-7223-b2ba-6296e2f2cba4
   created_at: 2026-09-20T07:58:52.080640317Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0bf81-ba01-7fe1-81dc-732287005552
   created_at: 2026-09-20T15:49:10.235340936Z
   created_by: joe

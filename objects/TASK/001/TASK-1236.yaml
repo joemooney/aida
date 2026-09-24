@@ -20,7 +20,8 @@ req_type: Task
 tags:
 - agents role-picker liveness ux aida:agent depends-on:bug-1156
 relationships:
-- rel_type: !Custom depends-on
+- rel_type:
+    custom: depends-on
   target_id: 01a0a37d-8dad-7da0-abdb-d32f1ebefa91
   created_at: 2026-09-15T07:02:41.857513122Z
   created_by: joe
@@ -28,7 +29,8 @@ relationships:
   target_id: 01a0a37d-8dad-7da0-abdb-d32f1ebefa91
   created_at: 2026-09-15T07:02:58.138418852Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0a5ad-219c-77f2-92d5-32545b7ad40c
   created_at: 2026-09-15T15:26:27.988469098Z
   created_by: joe

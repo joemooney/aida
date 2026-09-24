@@ -73,7 +73,8 @@ tags:
 - reference
 - vocabulary
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 019e493e-7775-7c53-8a74-120e6378e713
   created_at: 2026-05-21T06:34:55.353211324Z
   created_by: joe

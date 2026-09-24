@@ -23,7 +23,8 @@ tags:
 - ecosystem-watch
 - memory-lane
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bb7b-bce4-70e3-a413-1d96f5bc07a8
   created_at: 2026-09-19T21:54:34.733313329Z
   created_by: joe

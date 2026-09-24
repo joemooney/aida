@@ -24,11 +24,13 @@ tags:
 - kind:observation
 - severity:minor
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0bcb1-5a2f-7213-ad74-29d3eaa7ae58
   created_at: 2026-09-20T02:42:25.525407345Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0bdf1-1a9e-7143-a108-d97d887bf651
   created_at: 2026-09-20T08:32:10.545332436Z
   created_by: joe

@@ -29,7 +29,8 @@ tags:
 - pr-ship
 - ux-signal
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0b231-8dd1-78d2-928a-0a4858dfd56f
   created_at: 2026-09-18T01:46:32.301141043Z
   created_by: joe

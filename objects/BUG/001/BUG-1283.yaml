@@ -35,11 +35,13 @@ tags:
 - test-only
 - windows
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0b579-10a6-7ca1-8a98-6efbb6063865
   created_at: 2026-09-19T20:42:31.174314357Z
   created_by: joe
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0b5ce-6f5d-7be3-b693-e98175dbb944
   created_at: 2026-09-19T20:42:32.046133656Z
   created_by: joe

@@ -50,7 +50,8 @@ tags:
 - observability
 - orchestrator
 relationships:
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bbe9-818d-7f62-a04f-1781238842c1
   created_at: 2026-09-19T23:53:36.343565318Z
   created_by: joe

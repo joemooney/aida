@@ -48,7 +48,8 @@ relationships:
   target_id: 019e4848-2ecd-74b3-8e38-cb1806e06458
   created_at: 2026-05-21T02:05:59.935608583Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 019e4849-724b-7381-9302-0bfe943e04a2
   created_at: 2026-05-21T02:07:17.599839225Z
   created_by: joe

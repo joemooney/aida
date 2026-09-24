@@ -55,7 +55,8 @@ tags:
 - scripts-release
 - ux
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 019e558d-dd03-7932-86ae-81ef169053ef
   created_at: 2026-05-23T15:57:06.000725290Z
   created_by: joe

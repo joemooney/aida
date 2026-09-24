@@ -54,11 +54,13 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-20T00:13:39.843531328Z
-- rel_type: !Custom related
+- rel_type:
+    custom: related
   target_id: 01a0bb67-f38d-7750-8851-7277d32ddb25
   created_at: 2026-09-20T00:15:04.580626852Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0be0f-f915-7d50-bf96-f467b4f2b9a4
   created_at: 2026-09-20T09:05:18.536759732Z
   created_by: joe

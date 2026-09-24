@@ -21,11 +21,13 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T19:29:38.725932059Z
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0bb98-8094-72d0-bb04-c45cdb1995dd
   created_at: 2026-09-19T21:35:33.946897144Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0bdf1-1a9e-7143-a108-d97d887bf651
   created_at: 2026-09-20T08:32:26.558849567Z
   created_by: joe

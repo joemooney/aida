@@ -111,7 +111,8 @@ tags:
 - no-human
 - reviewer-findings
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 019e369e-ae93-74b2-a580-89c6ac635e8b
   created_at: 2026-05-17T15:47:13.376863740Z
   created_by: joe

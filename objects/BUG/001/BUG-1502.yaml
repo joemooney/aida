@@ -61,7 +61,8 @@ relationships:
   target_id: 01a0c17d-8f51-7151-95ff-295ea30594af
   created_at: 2026-09-22T11:13:15.068223786Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0c8e2-0ae8-7f02-8576-88969cebba5b
   created_at: 2026-09-22T11:31:03.557736472Z
   created_by: joe
