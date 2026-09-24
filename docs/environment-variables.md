@@ -377,6 +377,28 @@ Claude models; set these only when pointing at a proxy or a non-default model.
 
 ---
 
+## Advisory evaluator: TypeSafe AI (Jev)
+
+<!-- trace:TASK-1470 -->
+
+Some commands can ask TypeSafe AI's Jev evaluator for an advisory score. **Any
+Jev call is network egress to `https://api.typesafe.ai/v1/systemone`** (or to
+`AIDA_JEV_ENDPOINT` when set): the request carries the spec text being judged
+and the API key as a bearer token. With no key configured, nothing is sent and
+each command falls back to its offline path.
+
+| Variable | What it does | Default | Who sets it | Scope |
+| --- | --- | --- | --- | --- |
+| `AIDA_JEV_API_KEY` | Opt-in key for the Jev evaluator. For `aida explain` this is the **only** switch: when it is unset or blank, `aida explain` prints a one-line note, runs the offline mechanical audit, and makes no network call. If a remote audit fails, the result is recorded as the offline audit with an "unavailable" finding, never as a pass. The unprefixed `JEV_API_KEY` is **not** read. | unset (offline) | user | process env |
+| `TYPESAFE_API_KEY` | Fallback key read by the contradiction sweep (`aida doctor --contradictions`) and the review-verdict evaluator, which also look in `~/.env` for either key. Not read by `aida explain`. | unset | user | process env / `~/.env` |
+| `AIDA_JEV_ENDPOINT` | Override the Jev endpoint URL. | `https://api.typesafe.ai/v1/systemone` | ops / dev | process env |
+| `AIDA_JEV_MODEL` | Override the Jev model id. | `jev-1.13.0` | ops / dev | process env |
+
+`aida wiki` makes no network calls: its pages load a copy of mermaid that
+ships inside the `aida` binary, and `aida wiki serve` binds `127.0.0.1` only.
+
+---
+
 ## Web server: auth & sessions (`aida-server`)
 
 Read by `aida-server`'s web-auth layer. All optional — the server runs

@@ -15,3 +15,7 @@ aida-core/templates/** text eol=lf
 # searches then silently span the whole file). The tests also normalise
 # defensively. trace:BUG-1556 | ai:claude
 *.rs text eol=lf
+
+# Vendored third-party asset served by `aida wiki` (mermaid 11.6.0 from npm).
+# Byte-exact: no EOL conversion, no textual diffs. trace:TASK-1470 | ai:claude
+aida-cli-lib/assets/wiki/mermaid.min.js -text -diff linguist-vendored

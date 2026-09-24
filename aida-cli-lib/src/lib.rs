@@ -114,6 +114,10 @@ mod effort_calibration;
 pub mod evaluator;
 // trace:STORY-1426 | ai:antigravity
 pub mod contradictions;
+// trace:EPIC-72 trace:TASK-1435 trace:TASK-1436 trace:TASK-1438 | ai:antigravity
+pub mod exposition;
+// trace:EPIC-72 trace:TASK-1439 | ai:antigravity
+pub mod wiki;
 // trace:STORY-1424 | ai:antigravity
 mod event_wait;
 mod events;
@@ -3897,6 +3901,23 @@ fn run() -> Result<()> {
         return handle_why(id, *plain, *json);
     }
 
+    // trace:EPIC-72 trace:TASK-1436 | ai:antigravity
+    if let Command::Explain {
+        spec,
+        audience,
+        refresh,
+        force,
+        json,
+    } = &cli.command
+    {
+        return exposition::handle_explain_command(spec, audience, *refresh, *force, *json);
+    }
+
+    // trace:EPIC-72 trace:TASK-1439 | ai:antigravity
+    if let Command::Wiki(command) = &cli.command {
+        return wiki::handle_wiki_command(command);
+    }
+
     // STORY-694: `aida status <spec>` is the per-spec liveness view — it reads
     // the local session leases + probes pid liveness and self-loads the store
     // read-only for the spec's lifecycle status. Like `aida why` it needs no
@@ -5610,6 +5631,8 @@ fn run() -> Result<()> {
             unreachable!("autopilot is dispatched before storage init")
         }
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
+        Command::Explain { .. } => unreachable!("explain is dispatched before storage init"),
+        Command::Wiki(_) => unreachable!("wiki is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
@@ -14811,6 +14834,8 @@ fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
     } else if matches!(
         command,
         Command::Why { .. }
+            | Command::Explain { .. }
+            | Command::Wiki(_)
             | Command::List { .. }
             | Command::Show { .. }
             | Command::Status { .. }
@@ -33522,7 +33547,15 @@ fn ambiguous_id_in_chain(
 }
 
 pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
-    let mut cur = std::env::current_dir()?;
+    find_project_root_from(&std::env::current_dir()?)
+}
+
+/// [`find_project_root`] from an explicit start directory: the nearest
+/// ancestor holding `.git` (a directory in the main checkout, a file in a
+/// linked worktree, so a linked worktree resolves to ITSELF).
+// trace:TASK-1470 | ai:claude
+pub(crate) fn find_project_root_from(start: &std::path::Path) -> Result<std::path::PathBuf> {
+    let mut cur = start.to_path_buf();
     loop {
         if cur.join(".git").exists() {
             return Ok(cur);
@@ -106077,3 +106110,8 @@ mod task_1445_pr_attribution_disagreement_tests;
 #[cfg(test)]
 #[path = "tests/bug_1486_stakeholder_db_verb_tests.rs"]
 mod bug_1486_stakeholder_db_verb_tests;
+
+// trace:EPIC-72 trace:TASK-1435 trace:TASK-1436 trace:TASK-1438 trace:TASK-1439 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/epic_72_exposition_tests.rs"]
+mod epic_72_exposition_tests;

@@ -239,6 +239,10 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida health` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida groom` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida why` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida explain` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida wiki` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida wiki build` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida wiki serve` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida focus` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida focus clear` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida focus show` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

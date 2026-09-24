@@ -164,6 +164,7 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
 // trace:ADR-55 | ai:antigravity
 pub struct JevEvaluator {
     client: reqwest::Client,
+    request_timeout: std::time::Duration,
     api_key: String,
     endpoint: String,
     model: String,
@@ -172,11 +173,12 @@ pub struct JevEvaluator {
 impl JevEvaluator {
     pub const DEFAULT_ENDPOINT: &'static str = "https://api.typesafe.ai/v1/systemone";
     pub const DEFAULT_MODEL: &'static str = "jev-1.13.0";
+    pub const DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
     /// Create a new Jev evaluator with given API key and default options.
     pub fn new(api_key: impl Into<String>) -> Self {
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
+            .timeout(Self::DEFAULT_TIMEOUT)
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
@@ -187,6 +189,7 @@ impl JevEvaluator {
 
         Self {
             client,
+            request_timeout: Self::DEFAULT_TIMEOUT,
             api_key: api_key.into(),
             endpoint,
             model,
@@ -245,6 +248,32 @@ impl JevEvaluator {
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.model = model.into();
         self
+    }
+
+    /// Minimal evaluator shim for advisory callers (`aida explain`): replace the
+    /// default 15s request timeout with a caller-chosen deadline so an advisory
+    /// audit can never stall the command. Stands in for the unmerged resilience
+    /// adapter's `into_resilient` on the feature branch.
+    // trace:TASK-1470 | ai:claude
+    pub fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
+        match reqwest::Client::builder().timeout(timeout).build() {
+            Ok(client) => {
+                self.client = client;
+                self.request_timeout = timeout;
+            }
+            Err(err) => eprintln!(
+                "Note: could not apply a {}s evaluator timeout ({err}); keeping the {}s default.",
+                timeout.as_secs(),
+                self.request_timeout.as_secs()
+            ),
+        }
+        self
+    }
+
+    /// The request timeout the HTTP client was actually built with.
+    // trace:TASK-1470 | ai:claude
+    pub fn request_timeout(&self) -> std::time::Duration {
+        self.request_timeout
     }
 }
 

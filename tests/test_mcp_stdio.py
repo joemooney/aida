@@ -200,6 +200,7 @@ def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> subproc
         cwd=cwd,
         env=merged_env,
         text=True,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
