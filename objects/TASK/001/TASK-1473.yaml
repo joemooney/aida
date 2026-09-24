@@ -1,0 +1,16 @@
+id: 01a0d1fa-eb21-76f3-be09-834d7c5a6243
+spec_id: TASK-1473
+agreed_id: TASK-1473
+title: 'Watchdog follow-ups: alert once after N consecutive degraded or blind runs, and a light startup path for the scheduled check'
+description: 'From the strict review of STORY-1462 (APPROVE at ade248453e). (1) A watchdog that stays degraded or blind never pages anyone (runaway_seats.rs ~1072). PRIN-5 wants the silence noticed: after N consecutive degraded or blind runs (e.g. 4, one hour), raise one deduped alert. (2) The scheduled check pays about 8s of aida doctor startup every 15 minutes. Add a lighter entry path for this one category.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T05:54:37.473370317Z
+modified_at: 2026-09-24T05:54:37.473370317Z
+req_type: Task
+tags:
+- followup
+- parent:STORY-1462
+- watchdog
