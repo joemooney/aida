@@ -1,5 +1,5 @@
 ---
-description: "Exhaustive documentation quality review — finds stale, inconsistent, unprofessional, and hyped content."
+description: Run /aida-docs-review.
 ---
 # AIDA Documentation Review
 

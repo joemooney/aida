@@ -1,5 +1,5 @@
 ---
-description: "Categorize workspace warnings by risk and produce a prioritized cleanup plan."
+description: Run /aida-compiler-warnings.
 ---
 # Analyze Compiler Warnings
 

@@ -1,6 +1,6 @@
 ---
 name: aida-queue
-description: View the current personal/role queue — what's routed to you, in what order, with priority and notes. Read-only counterpart to /aida-pickup; use this when you want to inspect the queue without committing to start the next item.
+description: View the current personal/role queue — what's routed to you, in what order, with priority and notes.
 allowed-tools:
   - Bash
 ---

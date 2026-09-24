@@ -1,5 +1,5 @@
 ---
-description: "Substrate-first fleet monitor — census every agent session (managed or not), classify each, and give ONE recommended next action per non-nominal item. Read + route only; never starts work, takes a lease, or merges. Use a shell-side event watcher to trigger another census."
+description: Run /aida-fleet-watch.
 ---
 # Watch the Fleet
 

@@ -1,6 +1,6 @@
 ---
 name: aida-derisk
-description: De-risk a supervised spec so it can climb DOWN the autonomy ladder (guided/operator → drive/drain). Treats execution_mode=guided as a "not-yet-de-risked" STATE, not a permanent label. Surfaces the spec's undecided design forks, decides each with the operator, records each as a traceable ADR AND folds it into the acceptance criteria, then mandates the testable safety gates the drain's CI + reviewer phases enforce (round-trip/corruption tests, dry-run, backup-before-write, project-local-first, never-touch-sensitive-paths). Finally proposes a new execution_mode — drain when the spec is fully-decided AND its safety is testable/CI-gated; drive/guided otherwise — and REFUSES to propose drain for a destructive-action or drain-self-modification spec, naming the class. The advisor confirms the mode write; nothing is silent.
+description: De-risk a supervised spec so it can climb DOWN the autonomy ladder (guided/operator → drive/drain).
 allowed-tools:
   - Bash
   - Read

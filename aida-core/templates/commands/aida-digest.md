@@ -1,5 +1,5 @@
 ---
-description: "Produce a curated narrative work digest for a time window."
+description: Run /aida-digest.
 ---
 # AIDA Digest
 

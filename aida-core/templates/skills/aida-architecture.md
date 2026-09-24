@@ -1,6 +1,6 @@
 ---
 name: aida-architecture
-description: Review codebase architecture health. Identify structural issues like god objects, circular dependencies, shallow modules, and orphaned code. Suggest improvements aligned with requirements.
+description: Review codebase architecture health.
 allowed-tools:
   - Bash
   - Read

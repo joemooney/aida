@@ -1,5 +1,5 @@
 ---
-description: "Query AIDA as quiet project memory before changing code."
+description: Run /aida-memory-query.
 ---
 # AIDA Memory Query
 

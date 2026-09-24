@@ -1,5 +1,5 @@
 ---
-description: "Sync AIDA templates and scaffolding across projects."
+description: Run /aida-sync.
 ---
 # AIDA Sync
 

@@ -1,6 +1,6 @@
 ---
 name: aida-guided-implement
-description: Guided keystone-implementation mode — a structured, step-by-step decision dialog for implementing a keystone / architecture / security / supervised spec that must NOT run unattended. Reads the spec + its graph, surfaces each major architectural fork as a structured question (options + consequences + a recommendation + an "enter your own" prose escape), records each answer as a traceable ADR (`decision` requirement linked to the spec), agrees the approach BEFORE any code, then implements between answers — pausing just-in-time only for a smaller fork that emerges. Finishes by opening a PR for human review; for keystone work the MERGE stays human.
+description: Guided keystone-implementation mode — a structured, step-by-step decision dialog for implementing a keystone / architecture / security / supervised spec that must NOT run unattended.
 allowed-tools:
   - Bash
   - Read

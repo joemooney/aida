@@ -1,5 +1,5 @@
 ---
-description: "Assemble a correctly-phrased `/goal` autonomous loop that drains your active role's queue — one item at a time, until it is empty."
+description: Run /aida-drain-queue.
 ---
 # Drain Your Role's Work Queue
 

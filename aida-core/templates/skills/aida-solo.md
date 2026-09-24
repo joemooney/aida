@@ -1,6 +1,6 @@
 ---
 name: aida-solo
-description: The WARM interactive solo-driver — put THIS Claude session in the solo advisor+integrator seat and run the supervised loop with live judgment (groom → implement → integrate → repeat) until the safe backlog is drained. The better-judgment counterpart to the headless cold-boot `aida solo run`. Use when the user says "drive the backlog solo", "work the safe backlog end-to-end", or "be the advisor and integrator". Keystone work (security, architecture, the autonomy machinery) is PARKED for the human, never shipped unattended.
+description: The WARM interactive solo-driver — put THIS Claude session in the solo advisor+integrator seat and run the supervised loop with live judgment (groom → implement → integrate → repeat) until the safe backlog is drained.
 disable-model-invocation: true
 allowed-tools:
   - Bash

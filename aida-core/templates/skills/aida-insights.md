@@ -1,6 +1,6 @@
 ---
 name: aida-insights
-description: Monthly usage-pattern review — most-used commands, drain success rate, advisor calibration agreement %, and the deprecation / UX-gap / substrate-gap follow-ups they suggest. Read-only; the "where is the project spending its attention?" surface.
+description: Monthly usage-pattern review — most-used commands, drain success rate, advisor calibration agreement %, and the deprecation / UX-gap / substrate-gap follow-ups they suggest.
 allowed-tools:
   - Bash
 ---

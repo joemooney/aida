@@ -1,5 +1,5 @@
 ---
-description: "Run a read-only multi-agent drift report on the AIDA project and surface fixes."
+description: Run /aida-doctor.
 ---
 # /aida-doctor
 

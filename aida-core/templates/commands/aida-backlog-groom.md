@@ -1,5 +1,5 @@
 ---
-description: "Guided burndown-prep: one advisor pass from approvable drafts and Approved-but-not-queued specs to a blessed, drain-ready queue."
+description: Run /aida-backlog-groom.
 ---
 # Groom the Backlog
 

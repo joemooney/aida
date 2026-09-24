@@ -1,6 +1,6 @@
 ---
 name: aida-pickup
-description: Producer/consumer queue loop — peek at the next item routed to your active role, work it, mark it done, repeat. Use this between work items to pick up the next thing without re-entering the conversation.
+description: Producer/consumer queue loop — peek at the next item routed to your active role, work it, mark it done, repeat.
 disable-model-invocation: true
 allowed-tools:
   - Bash

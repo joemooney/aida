@@ -149,6 +149,8 @@ fn linkage(
         shipped,
         branch: branch.map(|b| b.to_string()),
         other_branches: Vec::new(),
+        branch_scan_truncated: None,
+        files_scan_incomplete: false,
         worktree: None,
         shipped_pr,
         repo: None,
@@ -773,4 +775,93 @@ fn resolve_default_branch_picks_master_when_main_absent() {
 fn resolve_default_branch_picks_main_when_present() {
     let (_tmp, root) = init_repo_on("main");
     assert_eq!(resolve_default_branch_ref(&root).as_deref(), Some("main"));
+}
+
+// BUG-1594 (PRIN-5): a bounded forge lookup that hit its ceiling renders as
+// "timed out … state unknown", and a lookup the shared budget skipped as
+// "skipped … state unknown" — never as "no PR opened yet".
+// trace:BUG-1594 | ai:claude
+#[test]
+fn bug_1594_timed_out_and_skipped_lookups_render_as_unknown_not_absent() {
+    let (state, url) = change_linkage_state_for(crate::forge::ChangeLookup::Unreachable(
+        FORGE_LOOKUP_TIMED_OUT.to_string(),
+    ));
+    assert_eq!(state, ChangeLinkageState::TimedOut);
+    assert!(url.is_none());
+    let (plain, _) = change_linkage_state_for(crate::forge::ChangeLookup::Unreachable(
+        "dial tcp: i/o timeout".to_string(),
+    ));
+    assert_eq!(plain, ChangeLinkageState::Unreachable);
+
+    for state in [
+        ChangeLinkageState::TimedOut,
+        ChangeLinkageState::LookupSkipped,
+    ] {
+        let lines = format_change_linkage(crate::forge::ForgeKind::GitHub, &state);
+        let text: String = lines.iter().map(|(_, v)| v.as_str()).collect();
+        assert!(text.contains("state unknown"), "{state:?}: {text}");
+        assert!(!text.contains("no PR opened"), "{state:?}: {text}");
+    }
+    let timed = format_change_linkage(
+        crate::forge::ForgeKind::GitHub,
+        &ChangeLinkageState::TimedOut,
+    );
+    assert!(timed[0].1.contains("timed out"), "{timed:?}");
+}
+
+// BUG-1594: the branch search is capped; past the cap the linkage records
+// how much it covered instead of presenting a partial search as complete.
+// trace:BUG-1594 | ai:claude
+#[test]
+fn bug_1594_branch_scan_past_cap_is_flagged_truncated() {
+    let (_tmp, root) = init_repo();
+    git(&root, &["checkout", "-q", "-b", "task-1594"]);
+    let total = LINKAGE_BRANCH_SCAN_MAX_COMMITS + 3;
+    for i in 0..total {
+        commit(
+            &root,
+            "work.txt",
+            &format!("{i}\n"),
+            &format!("feat: step {i} (TASK-1594)"),
+        );
+    }
+    let l = collect_git_linkage(&root, &["TASK-1594".to_string()]);
+    assert_eq!(l.commits.len(), total);
+    assert!(!l.shipped);
+    assert_eq!(l.branch.as_deref(), Some("task-1594"));
+    assert_eq!(
+        l.branch_scan_truncated,
+        Some((LINKAGE_BRANCH_SCAN_MAX_COMMITS, total))
+    );
+    let note = format_branch_scan_truncated_note(LINKAGE_BRANCH_SCAN_MAX_COMMITS, total);
+    assert!(note.contains("incomplete"), "{note}");
+
+    // Under the cap, the search is complete and says nothing.
+    let (_tmp2, root2) = init_repo();
+    git(&root2, &["checkout", "-q", "-b", "task-1595"]);
+    commit(&root2, "w.txt", "1\n", "feat: one (TASK-1595)");
+    let l2 = collect_git_linkage(&root2, &["TASK-1595".to_string()]);
+    assert_eq!(l2.branch_scan_truncated, None);
+    assert!(!l2.files_scan_incomplete);
+}
+
+// BUG-1594: the trace walk reports `complete = false` when its budget is
+// already spent, and still finds hits (via the prefilter) when unbounded.
+// trace:BUG-1594 | ai:claude
+#[test]
+fn bug_1594_trace_scan_budget_reports_incomplete() {
+    let (_tmp, root) = init_repo();
+    std::fs::write(
+        root.join("lib.rs"),
+        "// trace:TASK-1596 | ai:claude\nfn traced() {}\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("other.rs"), "fn untraced() {}\n").unwrap();
+    let wanted: HashSet<String> = ["TASK-1596".to_string()].into_iter().collect();
+    let (hits, complete) = scan_trace_graph_bounded(&root, &wanted, None);
+    assert!(complete);
+    assert_eq!(hits["TASK-1596"].len(), 1);
+    assert_eq!(hits["TASK-1596"][0].symbol.as_deref(), Some("traced"));
+    let (_, complete) = scan_trace_graph_bounded(&root, &wanted, Some(std::time::Duration::ZERO));
+    assert!(!complete);
 }

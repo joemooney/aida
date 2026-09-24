@@ -1891,6 +1891,10 @@ aida show <SPEC-ID>
                         Some(s) if s.rel_path.ends_with(".md") => s,
                         _ => continue,
                     };
+                    // trace:TASK-1441 | ai:codex
+                    if matches!(skill.name, "aida-advise" | "aida-assess" | "aida-intent") {
+                        continue;
+                    }
                     if (skill.name == "aida-memory-query"
                         && !self.config.include_aida_memory_query_skill)
                         || (skill.name == "aida-memory-capture"
@@ -2820,6 +2824,10 @@ aida show <SPEC-ID>
                 _ => continue,
             };
             let name = filename.trim_end_matches(".md").to_string();
+            // trace:TASK-1441 | ai:codex
+            if matches!(name.as_str(), "aida-advise" | "aida-assess" | "aida-intent") {
+                continue;
+            }
             if already_listed.contains(&name) {
                 continue;
             }

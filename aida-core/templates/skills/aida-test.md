@@ -1,6 +1,6 @@
 ---
 name: aida-test
-description: Generate and run tests linked to requirements. Use when user wants to create tests for a requirement or verify requirement implementation.
+description: Generate and run tests linked to requirements.
 allowed-tools:
   - Bash
   - Read

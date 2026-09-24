@@ -1,5 +1,5 @@
 ---
-description: Capture conversation residue, write a durable handoff, and recommend fresh session vs compact.
+description: Run /aida-handoff.
 argument-hint: [SPEC-ID]
 allowed-tools: Bash, Read, Grep, Edit, Write
 ---

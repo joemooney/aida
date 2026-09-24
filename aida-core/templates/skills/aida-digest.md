@@ -1,6 +1,6 @@
 ---
 name: aida-digest
-description: Produce a curated narrative work digest — Released / Major progress / Strategic direction / Next iteration / Process artifacts — for a time window. The advisor's primary outward-facing artifact; distinguishes meaningful achievement from churn.
+description: Produce a curated narrative work digest — Released / Major progress / Strategic direction / Next iteration / Process artifacts — for a time window.
 allowed-tools:
   - Bash
   - Read

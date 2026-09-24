@@ -1,6 +1,6 @@
 ---
 name: aida-search
-description: Unified search across requirements and code. Find requirements by keyword, trace links between specs and implementation, and correlate results.
+description: Unified search across requirements and code.
 allowed-tools:
   - Bash
   - Grep

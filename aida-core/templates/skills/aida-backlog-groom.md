@@ -1,6 +1,6 @@
 ---
 name: aida-backlog-groom
-description: Guided burndown-prep — one advisor pass from approvable drafts and approved-but-not-queued specs to a blessed, drain-ready queue. Surfaces both buckets, keeps approval an explicit human judgment (never auto-approve), then grooms the chosen set onto the queue with risk + file-overlap heuristics.
+description: Guided burndown-prep — one advisor pass from approvable drafts and approved-but-not-queued specs to a blessed, drain-ready queue.
 allowed-tools:
   - Bash
   - Read

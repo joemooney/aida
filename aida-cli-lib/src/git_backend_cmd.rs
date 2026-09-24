@@ -4099,6 +4099,11 @@ pub(crate) fn handle_git_backend_command(
                             worktree: Option<String>,
                             shipped_pr: Option<u64>,
                             repo: Option<String>,
+                            // BUG-1594 (PRIN-5): `false` when a bounded scan
+                            // stopped early; `incomplete` names which part.
+                            // trace:BUG-1594 | ai:claude
+                            complete: bool,
+                            incomplete: Vec<String>,
                         }
                         let relationships: Vec<RelJson> = req
                             .relationships
@@ -4134,7 +4139,19 @@ pub(crate) fn handle_git_backend_command(
                                 }
                             }
                             let linkage = crate::collect_git_linkage(&project_root, &ids);
+                            // trace:BUG-1594 | ai:claude
+                            let mut incomplete = Vec::new();
+                            if let Some((scanned, total)) = linkage.branch_scan_truncated {
+                                incomplete
+                                    .push(crate::format_branch_scan_truncated_note(scanned, total));
+                            }
+                            if linkage.files_scan_incomplete {
+                                incomplete
+                                    .push(crate::LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.to_string());
+                            }
                             Some(GitLinkageJson {
+                                complete: incomplete.is_empty(),
+                                incomplete,
                                 commits: linkage
                                     .commits
                                     .into_iter()

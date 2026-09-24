@@ -1,6 +1,6 @@
 ---
 name: aida-doc
-description: Proactive living-documentation capture. Prompts the user for the WHY behind recently-touched specs (scenario, motivation, alternatives, example) and writes the answers to the store via `aida doc add`. Use at natural checkpoints — after /aida-pickup ships, after /aida-review merges, at session end, or manually when the user says "this needs docs."
+description: Proactive living-documentation capture.
 allowed-tools:
   - Bash
   - Read

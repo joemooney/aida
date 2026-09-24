@@ -22816,6 +22816,22 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "scheduler-driver",
     ),
+    // STORY-1367: free disk headroom on the filesystem holding the project
+    // root, checked against a configurable floor
+    // (`[doctor.disk_headroom] min_free_gib`, default 60). Zero-token,
+    // substrate-only — the first job STORY-1367 registers to catch the class
+    // of incident where a full disk silently kills a drain.
+    // trace:STORY-1367 | ai:claude
+    (
+        &[
+            "disk-headroom",
+            "disk-space",
+            "disk",
+            "headroom",
+            "free-space",
+        ],
+        "disk-headroom",
+    ),
 ];
 
 fn normalize_doctor_category(raw: &str) -> Result<String> {
@@ -38983,44 +38999,99 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
 // trace:BUG-1288 | ai:claude
 const FORGE_CLI_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
+/// Review follow-up (BUG-1288): on unix, kill the CHILD'S WHOLE PROCESS
+/// GROUP rather than only the direct child. `command_output_with_timeout`
+/// spawns with `process_group(0)` below, which makes the child's own pid its
+/// process group id, so any grandchild it forks (a credential-manager
+/// helper, a background `git` op) inherits that same group — `killpg` reaps
+/// the group in one signal instead of leaving a grandchild alive to hold the
+/// stdout/stderr pipe write ends open past the timeout. `pid` must be a pid
+/// this process spawned with `process_group(0)` (the only caller), which is
+/// what makes it both safe to signal and a valid process-group id.
+// trace:BUG-1288 | ai:claude
+#[cfg(unix)]
+fn kill_process_group(pid: u32) {
+    // SAFETY: `pid` is this process's own child (see the doc comment above),
+    // and `libc::killpg` is a plain signal-delivery syscall — no pointers,
+    // no aliasing concerns.
+    unsafe {
+        libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+    }
+}
+
 /// BUG-1288: run `cmd` but never block past `timeout` waiting on it — a
 /// portable (`Child::kill` works on every target) alternative to
 /// `Command::output()` for a subprocess whose peer (a forge API) can stall
 /// arbitrarily long. stdout/stderr are drained on background threads so the
 /// child can never deadlock on a full pipe while the caller polls for exit;
-/// on timeout the child is killed and `None` is returned — every existing
+/// on timeout the child (and, on unix, its whole process group — see
+/// `kill_process_group`) is killed and `None` is returned — every existing
 /// caller already treats `output().ok()` failure as "unknown, not zero"
 /// (PRIN-5), so a timeout degrades exactly like any other unreachable-forge
 /// failure already does.
+///
+/// Two review follow-ups folded in here, both about NOT hanging past
+/// `timeout` even when the direct child has an uncooperative descendant:
+/// - unix: spawned with `process_group(0)` and killed with `killpg` (see
+///   `kill_process_group`) instead of `Child::kill`, which only ever
+///   signals the one direct child. Windows keeps the pre-existing
+///   direct-child-only `Child::kill` — no job-object process-tree kill
+///   implemented yet, so a grandchild there can still outlive the timeout
+///   and hold the pipes open; see the bounded read below for why that no
+///   longer means blocking forever.
+/// - the reader threads are joined through a channel with a BOUNDED wait,
+///   not an unconditional `JoinHandle::join()`. On the happy path (child
+///   exited on its own) the bound is generous and never realistically hit;
+///   after a kill it is short, so a pipe that somehow stayed open past the
+///   process-group kill (Windows; a grandchild that double-forked out of
+///   the group) degrades to a partial/empty read instead of wedging this
+///   function — and the caller — indefinitely.
 // trace:BUG-1288 | ai:claude
 fn command_output_with_timeout(
     mut cmd: std::process::Command,
     timeout: std::time::Duration,
 ) -> Option<std::process::Output> {
     use std::io::Read;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+
     let mut child = cmd
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .ok()?;
+    // Only used to target `killpg` below; on non-unix targets nothing reads
+    // it, so it is cfg-gated too rather than left as a dead binding.
+    #[cfg(unix)]
+    let pid = child.id();
     let mut stdout_pipe = child.stdout.take()?;
     let mut stderr_pipe = child.stderr.take()?;
-    let stdout_handle = std::thread::spawn(move || {
+    let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
+    let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
         let mut buf = Vec::new();
         let _ = stdout_pipe.read_to_end(&mut buf);
-        buf
+        let _ = stdout_tx.send(buf);
     });
-    let stderr_handle = std::thread::spawn(move || {
+    std::thread::spawn(move || {
         let mut buf = Vec::new();
         let _ = stderr_pipe.read_to_end(&mut buf);
-        buf
+        let _ = stderr_tx.send(buf);
     });
     let start = std::time::Instant::now();
+    let mut killed = false;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break Some(status),
             Ok(None) => {
                 if start.elapsed() >= timeout {
+                    killed = true;
+                    #[cfg(unix)]
+                    kill_process_group(pid);
                     let _ = child.kill();
                     let _ = child.wait();
                     break None;
@@ -39033,29 +39104,87 @@ fn command_output_with_timeout(
             // hit instead of only on the timeout path.
             // trace:BUG-1288 | ai:claude
             Err(_) => {
+                killed = true;
+                #[cfg(unix)]
+                kill_process_group(pid);
                 let _ = child.kill();
                 let _ = child.wait();
                 break None;
             }
         }
     };
-    // NOTE: killing `child` only signals the direct child (`gh`/`glab`
-    // itself). If that process has already spawned a grandchild that
-    // inherited the stdout/stderr pipe write ends (a helper process, a
-    // credential-manager subprocess, …), that grandchild can keep the pipes
-    // open after the direct child exits — `read_to_end` below then blocks
-    // until the grandchild itself exits, not just until `child` does. This
-    // is a real gap (no process-group kill here), accepted for now because
-    // known forge CLIs don't fork long-lived helpers for these read-only
-    // calls; revisit with a process-group spawn (`setsid`/job object) if
-    // that stops being true. trace:BUG-1288 | ai:claude
-    let stdout = stdout_handle.join().unwrap_or_default();
-    let stderr = stderr_handle.join().unwrap_or_default();
+    // Bounded on the kill path (short — the group is already dead or dying,
+    // this is only a safety net for a descendant that escaped it), generous
+    // on the normal-exit path (the child already closed its own pipe ends;
+    // this bound exists so a hypothetical stuck reader still can't hang the
+    // caller forever, not because it is expected to be hit).
+    let read_wait = if killed {
+        std::time::Duration::from_millis(500)
+    } else {
+        std::time::Duration::from_secs(30)
+    };
+    let stdout = stdout_rx.recv_timeout(read_wait).unwrap_or_default();
+    let stderr = stderr_rx.recv_timeout(read_wait).unwrap_or_default();
     status.map(|status| std::process::Output {
         status,
         stdout,
         stderr,
     })
+}
+
+/// BUG-1594: the message a forge lookup carries when the scoped
+/// [`with_forge_lookup_timeout`] ceiling killed it. Rendered by `aida show`
+/// as "timed out" rather than a generic unreachable so the output says
+/// exactly why the PR/MR state is unknown (PRIN-5).
+// trace:BUG-1594 | ai:claude
+pub(crate) const FORGE_LOOKUP_TIMED_OUT: &str = "forge lookup timed out";
+
+thread_local! {
+    // trace:BUG-1594 | ai:claude
+    static FORGE_LOOKUP_TIMEOUT: std::cell::Cell<Option<std::time::Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// BUG-1594: run `f` with every open-change forge lookup it makes (`gh pr
+/// list` / `glab api`) bounded by `timeout`. Scoped rather than global so
+/// interactive read surfaces (`aida show`) get a hard ceiling while the
+/// orchestrator's phase probes keep their existing unbounded semantics.
+// trace:BUG-1594 | ai:claude
+pub(crate) fn with_forge_lookup_timeout<T>(
+    timeout: std::time::Duration,
+    f: impl FnOnce() -> T,
+) -> T {
+    let prev = FORGE_LOOKUP_TIMEOUT.with(|c| c.replace(Some(timeout)));
+    struct Restore(Option<std::time::Duration>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let prev = self.0;
+            FORGE_LOOKUP_TIMEOUT.with(|c| c.set(prev));
+        }
+    }
+    let _restore = Restore(prev);
+    f()
+}
+
+/// BUG-1594: spawn a forge-CLI lookup honoring the scoped
+/// [`with_forge_lookup_timeout`] ceiling. `Ok(None)` means the call was
+/// killed at the ceiling; `Err` is a spawn failure; with no scoped ceiling
+/// this is exactly `Command::output()`.
+// trace:BUG-1594 | ai:claude
+pub(crate) fn forge_lookup_output(
+    mut cmd: std::process::Command,
+) -> std::io::Result<Option<std::process::Output>> {
+    match FORGE_LOOKUP_TIMEOUT.with(|c| c.get()) {
+        None => cmd.output().map(Some),
+        Some(timeout) => {
+            let started = std::time::Instant::now();
+            match command_output_with_timeout(cmd, timeout) {
+                Some(out) => Ok(Some(out)),
+                None if started.elapsed() >= timeout => Ok(None),
+                None => Err(std::io::Error::other("could not spawn the forge CLI")),
+            }
+        }
+    }
 }
 
 /// Resolve the `glab` (GitLab CLI) binary, mirroring `resolve_gh_binary`'s
@@ -39237,12 +39366,13 @@ fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup
         "-q",
         r#".[] | "\(.number)\t\(.title)\t\(.url)\t\(.headRefName)""#,
     ]);
-    let spawned = std::process::Command::new(&gh_bin)
-        .current_dir(project_root)
-        .args(&args)
-        .output();
-    let out = match spawned {
-        Ok(o) => o,
+    // BUG-1594: honor a caller-scoped ceiling (`aida show`) so one slow
+    // `gh` call cannot stall an interactive read. trace:BUG-1594 | ai:claude
+    let mut gh_cmd = std::process::Command::new(&gh_bin);
+    gh_cmd.current_dir(project_root).args(&args);
+    let out = match forge_lookup_output(gh_cmd) {
+        Ok(Some(o)) => o,
+        Ok(None) => return PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.to_string()),
         Err(e) => return PrLookup::GhFailed(gh_spawn_error(&gh_bin, project_root, &e)),
     };
     if !out.status.success() {
@@ -47932,7 +48062,24 @@ pub(crate) fn scan_trace_graph(
     project_root: &std::path::Path,
     wanted: &HashSet<String>,
 ) -> std::collections::HashMap<String, Vec<TraceHit>> {
+    scan_trace_graph_bounded(project_root, wanted, None).0
+}
+
+/// BUG-1594: [`scan_trace_graph`] with an optional wall-clock `budget`.
+/// Returns the hits plus `complete` — `false` when the budget ran out before
+/// every source file was read, so a caller can say the file list is partial
+/// instead of presenting it as complete (PRIN-5). A file is only line-split
+/// and regex-matched when its raw text contains `trace:` and one of the
+/// wanted ids — the common case (a file that never mentions the spec) now
+/// costs one substring search instead of a regex pass over every line.
+// trace:BUG-1594 | ai:claude
+pub(crate) fn scan_trace_graph_bounded(
+    project_root: &std::path::Path,
+    wanted: &HashSet<String>,
+    budget: Option<std::time::Duration>,
+) -> (std::collections::HashMap<String, Vec<TraceHit>>, bool) {
     use regex::Regex;
+    let started = std::time::Instant::now();
     // Capture the full spec id — including the optional third segment of a
     // node-aware id (`FR-1-042`), or `trace:FR-1-042` would bucket under a
     // bogus `FR-1`.
@@ -47953,10 +48100,19 @@ pub(crate) fn scan_trace_graph(
 
     let mut out: std::collections::HashMap<String, Vec<TraceHit>> =
         std::collections::HashMap::new();
+    let mut complete = true;
     for path in &files {
+        if budget.is_some_and(|b| started.elapsed() >= b) {
+            complete = false;
+            break;
+        }
         let Ok(content) = std::fs::read_to_string(path) else {
             continue;
         };
+        // BUG-1594: cheap prefilter before the per-line regex pass.
+        if !content.contains("trace:") || !wanted.iter().any(|id| content.contains(id.as_str())) {
+            continue;
+        }
         let lines: Vec<&str> = content.lines().collect();
         for (i, line) in lines.iter().enumerate() {
             for cap in trace_re.captures_iter(line) {
@@ -47988,7 +48144,7 @@ pub(crate) fn scan_trace_graph(
             }
         }
     }
-    out
+    (out, complete)
 }
 
 /// STORY-511: the resolved state of the change-request (PR/MR) line in
@@ -48015,6 +48171,48 @@ pub(crate) enum ChangeLinkageState {
     Unreachable,
     /// Work is committed but no local branch holds it.
     BranchNotFound,
+    /// BUG-1594: the forge lookup was killed at its per-call ceiling.
+    // trace:BUG-1594 | ai:claude
+    TimedOut,
+    /// BUG-1594: the shared forge-lookup budget was already spent, so this
+    /// branch's lookup never ran.
+    // trace:BUG-1594 | ai:claude
+    LookupSkipped,
+}
+
+/// BUG-1594: map a forge lookup onto the rendered linkage state (plus the
+/// open change's url), distinguishing a ceiling timeout from a generic
+/// unreachable API. Shared by the primary and sibling-branch lookups.
+// trace:BUG-1594 | ai:claude
+pub(crate) fn change_linkage_state_for(
+    lookup: crate::forge::ChangeLookup,
+) -> (ChangeLinkageState, Option<String>) {
+    match lookup {
+        crate::forge::ChangeLookup::Found(c) => (
+            ChangeLinkageState::InFlightFound {
+                number: c.id,
+                url: c.url.clone(),
+            },
+            Some(c.url),
+        ),
+        crate::forge::ChangeLookup::NoChange => (ChangeLinkageState::InFlightNoChange, None),
+        crate::forge::ChangeLookup::CliMissing => (ChangeLinkageState::CliMissing, None),
+        crate::forge::ChangeLookup::CliFailed(_) => (ChangeLinkageState::CliFailed, None),
+        crate::forge::ChangeLookup::Unreachable(msg) if msg == FORGE_LOOKUP_TIMED_OUT => {
+            (ChangeLinkageState::TimedOut, None)
+        }
+        crate::forge::ChangeLookup::Unreachable(_) => (ChangeLinkageState::Unreachable, None),
+    }
+}
+
+/// BUG-1594: the note `aida show` prints when the in-flight branch search
+/// stopped before covering every referencing commit.
+// trace:BUG-1594 | ai:claude
+pub(crate) fn format_branch_scan_truncated_note(scanned: usize, total: usize) -> String {
+    format!(
+        "branch search incomplete: checked the newest {scanned} of {total} commits \
+         — other branches may also reference this spec"
+    )
 }
 
 /// STORY-511: render the change-request linkage lines for `aida show`'s
@@ -48065,6 +48263,23 @@ pub(crate) fn format_change_linkage(
             out.push((
                 noun.to_string(),
                 format!("{noun} API unreachable — {noun} state unknown (transient)"),
+            ));
+        }
+        ChangeLinkageState::TimedOut => {
+            // trace:BUG-1594 | ai:claude
+            out.push((
+                noun.to_string(),
+                format!(
+                    "{cli_label} lookup timed out after {}s — {noun} state unknown",
+                    FORGE_CLI_CALL_TIMEOUT.as_secs()
+                ),
+            ));
+        }
+        ChangeLinkageState::LookupSkipped => {
+            // trace:BUG-1594 | ai:claude
+            out.push((
+                noun.to_string(),
+                format!("{noun} lookup skipped (time budget spent) — {noun} state unknown"),
             ));
         }
         ChangeLinkageState::BranchNotFound => {
@@ -48981,6 +49196,17 @@ pub(crate) struct GitLinkage {
     /// silently. Empty in the common single-branch case.
     // trace:BUG-1528 | ai:claude
     pub(crate) other_branches: Vec<String>,
+    /// BUG-1594: `Some((scanned, total))` when the in-flight branch search
+    /// stopped before walking every referencing commit (commit cap or wall-
+    /// clock budget hit), so `branch`/`other_branches` may be incomplete.
+    /// Rendered as an explicit note — partial linkage is never shown as
+    /// complete (PRIN-5). `None` when the search covered every commit.
+    // trace:BUG-1594 | ai:claude
+    pub(crate) branch_scan_truncated: Option<(usize, usize)>,
+    /// BUG-1594: the trace-comment walk hit its time budget, so `files` may
+    /// be missing entries. Rendered as an explicit note (PRIN-5).
+    // trace:BUG-1594 | ai:claude
+    pub(crate) files_scan_incomplete: bool,
     /// Worktree path checked out at `branch`, if any.
     pub(crate) worktree: Option<String>,
     /// PR number parsed from a squash-merge subject (shipped case only).
@@ -48991,6 +49217,25 @@ pub(crate) struct GitLinkage {
     // trace:STORY-634 | ai:claude
     pub(crate) repo: Option<String>,
 }
+
+/// BUG-1594: the most referencing commits the in-flight branch search walks
+/// (newest first) before it stops and reports itself partial.
+// trace:BUG-1594 | ai:claude
+pub(crate) const LINKAGE_BRANCH_SCAN_MAX_COMMITS: usize = 20;
+
+/// BUG-1594: the wall-clock budget for the in-flight branch search.
+// trace:BUG-1594 | ai:claude
+const LINKAGE_BRANCH_SCAN_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// BUG-1594: the wall-clock budget for the trace-comment source walk.
+// trace:BUG-1594 | ai:claude
+const LINKAGE_TRACE_SCAN_BUDGET: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// BUG-1594: the total wall-clock budget `aida show` spends on forge
+/// (PR/MR) lookups across the primary branch and any sibling branches; each
+/// single call is additionally capped at [`FORGE_CLI_CALL_TIMEOUT`].
+// trace:BUG-1594 | ai:claude
+const SHOW_FORGE_LOOKUP_BUDGET: std::time::Duration = std::time::Duration::from_secs(4);
 
 /// TASK-241: collect the git linkage for `ids` — commits referencing the
 /// AIDA `(SPEC-ID)` format, files carrying `trace:` comments, and
@@ -49127,9 +49372,14 @@ pub(crate) fn collect_git_linkage_opts(
     // ---- Files carrying trace comments for the spec ----
     // BUG-550: gated — the per-spec source-tree walk only matters to callers
     // that render `files`; the reviews-bucket classifier skips it.
+    // BUG-1594: bounded — a cold page cache made this walk alone take tens
+    // of seconds; past the budget the list is flagged partial, not complete.
+    let mut files_scan_incomplete = false;
     let files: Vec<(String, Option<String>)> = if scan_trace {
         let wanted: HashSet<String> = ids.iter().cloned().collect();
-        let trace_hits = scan_trace_graph(project_root, &wanted);
+        let (trace_hits, complete) =
+            scan_trace_graph_bounded(project_root, &wanted, Some(LINKAGE_TRACE_SCAN_BUDGET));
+        files_scan_incomplete = !complete;
         let mut f: Vec<(String, Option<String>)> = trace_hits
             .values()
             .flatten()
@@ -49146,6 +49396,7 @@ pub(crate) fn collect_git_linkage_opts(
     let mut shipped = false;
     let mut branch: Option<String> = None;
     let mut other_branches: Vec<String> = Vec::new();
+    let mut branch_scan_truncated: Option<(usize, usize)> = None;
     let mut worktree: Option<String> = None;
     let mut shipped_pr: Option<u64> = None;
     if let Some((full, _, _)) = commits.first() {
@@ -49180,7 +49431,22 @@ pub(crate) fn collect_git_linkage_opts(
             let norm_id = |s: &str| s.to_ascii_lowercase().replace([' ', '_'], "-");
             let mut candidates: Vec<String> = Vec::new();
             let mut local_candidates: Vec<String> = Vec::new();
+            // BUG-1594: `git branch --contains` is one subprocess per
+            // referencing commit, and a spec with a long commit trail (or
+            // commits old enough that every agent branch contains them) made
+            // this loop dominate `aida show`. Walk newest-first under a
+            // commit cap AND a wall-clock budget; if either stops the walk,
+            // record it so the renderer says the branch search is partial.
+            // trace:BUG-1594 | ai:claude
+            let scan_started = std::time::Instant::now();
+            let mut scanned = 0usize;
             for (commit_full, _, _) in &commits {
+                if scanned >= LINKAGE_BRANCH_SCAN_MAX_COMMITS
+                    || scan_started.elapsed() >= LINKAGE_BRANCH_SCAN_BUDGET
+                {
+                    break;
+                }
+                scanned += 1;
                 let Some(contains) = git(&[
                     "branch",
                     "--all",
@@ -49228,6 +49494,9 @@ pub(crate) fn collect_git_linkage_opts(
                         candidates.push(b.to_string());
                     }
                 }
+            }
+            if scanned < commits.len() {
+                branch_scan_truncated = Some((scanned, commits.len()));
             }
             // BUG-1528: every candidate whose name matches the spec's own
             // id, in first-seen (recency) order. The first becomes `branch`;
@@ -49280,6 +49549,8 @@ pub(crate) fn collect_git_linkage_opts(
         shipped,
         branch,
         other_branches,
+        branch_scan_truncated,
+        files_scan_incomplete,
         worktree,
         shipped_pr,
         // trace:STORY-634 | ai:claude — the scanned repo's workspace slug.
@@ -49307,12 +49578,27 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
         shipped,
         branch,
         other_branches,
+        branch_scan_truncated,
+        files_scan_incomplete,
         worktree,
         shipped_pr,
         // trace:STORY-634 | ai:claude
         repo,
     } = collect_git_linkage(project_root, ids);
 
+    if commits.is_empty() && files.is_empty() && files_scan_incomplete {
+        // BUG-1594 (PRIN-5): an empty result from a scan that did not finish
+        // is "unknown", not "no linkage" — never print the newcomer hint.
+        // trace:BUG-1594 | ai:claude
+        println!(
+            "\n{}: {}",
+            "Git linkage".green().bold(),
+            "no referencing commits; trace-comment scan incomplete (time budget) — \
+             traced files unknown"
+                .yellow()
+        );
+        return;
+    }
     if commits.is_empty() && files.is_empty() {
         // TASK-726: the link is AIDA's whole magic — it's what makes "recall why"
         // work — but a newcomer has no idea how to create one. When there's no
@@ -49416,28 +49702,21 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
                     );
                     // STORY-516: forge-routed lookup → STORY-511 forge-aware
                     // rendering. trace:STORY-516 trace:STORY-511 | ai:claude
-                    let (state, url): (ChangeLinkageState, Option<String>) =
-                        match change_lookup_for_branch(project_root, b) {
-                            crate::forge::ChangeLookup::Found(c) => (
-                                ChangeLinkageState::InFlightFound {
-                                    number: c.id,
-                                    url: c.url.clone(),
-                                },
-                                Some(c.url),
-                            ),
-                            crate::forge::ChangeLookup::NoChange => {
-                                (ChangeLinkageState::InFlightNoChange, None)
-                            }
-                            crate::forge::ChangeLookup::CliMissing => {
-                                (ChangeLinkageState::CliMissing, None)
-                            }
-                            crate::forge::ChangeLookup::CliFailed(_) => {
-                                (ChangeLinkageState::CliFailed, None)
-                            }
-                            crate::forge::ChangeLookup::Unreachable(_) => {
-                                (ChangeLinkageState::Unreachable, None)
-                            }
-                        };
+                    // BUG-1594: every lookup is capped per call and the whole
+                    // set shares one budget; a lookup the budget no longer
+                    // covers is rendered as skipped, never as "no PR".
+                    // trace:BUG-1594 | ai:claude
+                    let forge_started = std::time::Instant::now();
+                    let bounded_lookup = |branch_name: &str| {
+                        if forge_started.elapsed() >= SHOW_FORGE_LOOKUP_BUDGET {
+                            return (ChangeLinkageState::LookupSkipped, None);
+                        }
+                        change_linkage_state_for(with_forge_lookup_timeout(
+                            FORGE_CLI_CALL_TIMEOUT,
+                            || change_lookup_for_branch(project_root, branch_name),
+                        ))
+                    };
+                    let (state, url) = bounded_lookup(b);
                     render(format_change_linkage(forge, &state), url.as_deref());
                     // BUG-1528 (AC3/AC4): more than one branch references
                     // this spec — a branch-crossing. Say so, with each
@@ -49445,28 +49724,7 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
                     // picking `b` above and leaving the rest invisible.
                     // trace:BUG-1528 | ai:claude
                     for other in &other_branches {
-                        let (ostate, ourl): (ChangeLinkageState, Option<String>) =
-                            match change_lookup_for_branch(project_root, other) {
-                                crate::forge::ChangeLookup::Found(c) => (
-                                    ChangeLinkageState::InFlightFound {
-                                        number: c.id,
-                                        url: c.url.clone(),
-                                    },
-                                    Some(c.url),
-                                ),
-                                crate::forge::ChangeLookup::NoChange => {
-                                    (ChangeLinkageState::InFlightNoChange, None)
-                                }
-                                crate::forge::ChangeLookup::CliMissing => {
-                                    (ChangeLinkageState::CliMissing, None)
-                                }
-                                crate::forge::ChangeLookup::CliFailed(_) => {
-                                    (ChangeLinkageState::CliFailed, None)
-                                }
-                                crate::forge::ChangeLookup::Unreachable(_) => {
-                                    (ChangeLinkageState::Unreachable, None)
-                                }
-                            };
+                        let (ostate, ourl) = bounded_lookup(other);
                         println!(
                             "  {}     {} {}",
                             "Branch".bold(),
@@ -49480,6 +49738,15 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
                     format_change_linkage(forge, &ChangeLinkageState::BranchNotFound),
                     None,
                 ),
+            }
+            // BUG-1594 (PRIN-5): the branch search stopped early — say so,
+            // so the branch lines above are never read as complete.
+            // trace:BUG-1594 | ai:claude
+            if let Some((scanned, total)) = branch_scan_truncated {
+                println!(
+                    "  {}",
+                    format_branch_scan_truncated_note(scanned, total).yellow()
+                );
             }
         }
     }
@@ -49531,7 +49798,18 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
             }
         }
     }
+    // BUG-1594 (PRIN-5): a partial trace walk is labeled, never passed off
+    // as the complete file list. trace:BUG-1594 | ai:claude
+    if files_scan_incomplete {
+        println!("  {}", LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.yellow());
+    }
 }
+
+/// BUG-1594: the note `aida show` prints when the trace-comment walk stopped
+/// at its time budget.
+// trace:BUG-1594 | ai:claude
+pub(crate) const LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE: &str =
+    "trace-comment scan incomplete (time budget) — more files may reference this spec";
 
 /// Build the `## Reusable helpers` markdown section for `target` by walking
 /// the requirement graph (siblings / tag-mates / same-feature specs) and

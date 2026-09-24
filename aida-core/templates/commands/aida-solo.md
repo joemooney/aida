@@ -1,5 +1,5 @@
 ---
-description: "The WARM interactive solo-driver: put THIS session in the solo advisor+integrator seat and run the supervised groom → implement → integrate loop with live judgment until the safe backlog is drained — keystone parked for the human."
+description: Run /aida-solo.
 ---
 <!-- trace:STORY-668 -->
 # Drive the Safe Backlog Solo (warm, full judgment)

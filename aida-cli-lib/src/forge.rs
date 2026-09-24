@@ -1791,11 +1791,15 @@ impl GitLabForge {
         let glab = crate::resolve_forge_cli(ForgeKind::GitLab).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `glab` — is the GitLab CLI installed?")
         })?;
-        Command::new(&glab)
-            .current_dir(&self.project_root)
-            .args(args.iter().map(String::as_str))
-            .output()
-            .context("could not invoke `glab` — is the GitLab CLI installed?")
+        // BUG-1594: honor a caller-scoped lookup ceiling (`aida show`); a
+        // timeout surfaces as an error the MR mappers already classify as
+        // "state unknown". trace:BUG-1594 | ai:claude
+        let mut cmd = Command::new(&glab);
+        cmd.current_dir(&self.project_root)
+            .args(args.iter().map(String::as_str));
+        crate::forge_lookup_output(cmd)
+            .context("could not invoke `glab` — is the GitLab CLI installed?")?
+            .ok_or_else(|| anyhow::anyhow!(crate::FORGE_LOOKUP_TIMED_OUT))
     }
 
     fn glab_api_put(&self, path: &str, fields: &[(&str, &str)]) -> Result<std::process::Output> {
@@ -2676,6 +2680,11 @@ fn glab_lookup_from_list_output(
         // The only Err `glab(...)` produces is "could not invoke glab" — the CLI
         // is not on PATH. Map to the CliMissing arm so callers print the install
         // hint rather than treating it as a definitive "no change". | ai:claude
+        // BUG-1594: a scoped-ceiling timeout is not a missing CLI — keep it
+        // an honest "unreachable/timed out". trace:BUG-1594 | ai:claude
+        Err(e) if e.to_string() == crate::FORGE_LOOKUP_TIMED_OUT => {
+            return ChangeLookup::Unreachable(crate::FORGE_LOOKUP_TIMED_OUT.to_string())
+        }
         Err(_) => return ChangeLookup::CliMissing,
     };
     if !out.status.success() {

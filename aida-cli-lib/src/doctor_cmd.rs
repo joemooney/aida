@@ -490,6 +490,21 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         }
     }
 
+    // STORY-1367: free disk headroom on the filesystem holding the project
+    // root, checked against a configurable floor. Silent when healthy — a
+    // job that reports every run trains people to ignore it, which is how
+    // the 2026-09-19 hub-drift warnings were ignored in the first place.
+    // Kept in this opt-in append path (not the hot `collect_doctor_findings`
+    // path) for the same reason as `remote-drift`: cheap, but not free, and
+    // `aida status` should not pay for a disk probe on every invocation.
+    // trace:STORY-1367 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "disk-headroom")? {
+        let cfg = crate::read_project_config_value(&project_root);
+        let min_free_gib = disk_headroom_min_free_gib(cfg.as_ref());
+        findings.extend(scan_disk_headroom(&project_root, min_free_gib));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     let mut report = DoctorReport::from_findings(findings);
     report.performance_audits = performance_audits;
     report.hidden_completed_without_commit = hidden_completed_without_commit;
@@ -869,6 +884,75 @@ pub(crate) fn performance_policy(cfg: Option<&toml::Value>) -> PerformancePolicy
         policy.window_hours = hours;
     }
     policy
+}
+
+/// STORY-1367 default: the free-space floor a project has not configured
+/// explicitly. Matches the number measured against the incident this job
+/// exists to catch (root hit 100% with 16K free; a check at this floor would
+/// have surfaced it hours earlier).
+// trace:STORY-1367 | ai:claude
+const DEFAULT_DISK_HEADROOM_MIN_FREE_GIB: u64 = 60;
+
+/// Read `[doctor.disk_headroom] min_free_gib`, falling back to the default
+/// floor. A project on a smaller or larger disk than the measured incident
+/// tunes this rather than the check code.
+// trace:STORY-1367 | ai:claude
+pub(crate) fn disk_headroom_min_free_gib(cfg: Option<&toml::Value>) -> u64 {
+    cfg.and_then(|c| c.get("doctor"))
+        .and_then(|d| d.get("disk_headroom"))
+        .and_then(|d| d.get("min_free_gib"))
+        .and_then(|v| v.as_integer())
+        .filter(|v| *v > 0)
+        .map(|v| v as u64)
+        .unwrap_or(DEFAULT_DISK_HEADROOM_MIN_FREE_GIB)
+}
+
+/// Pure threshold judgment, separated from the disk probe so the floor logic
+/// is testable without manufacturing a full filesystem (same shape as
+/// `machine_readiness::decide_capacity`). `None` = healthy = no finding — a
+/// job that reports every run trains people to ignore it.
+// trace:STORY-1367 | ai:claude
+fn disk_headroom_finding(free_bytes: u64, min_free_gib: u64) -> Option<DoctorFinding> {
+    let min_free_bytes = min_free_gib.saturating_mul(1024 * 1024 * 1024);
+    if free_bytes >= min_free_bytes {
+        return None;
+    }
+    let free_gib = free_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+    Some(DoctorFinding {
+        category: "disk-headroom".to_string(),
+        id: "disk-headroom".to_string(),
+        summary: format!(
+            "free disk space is {free_gib:.1} GiB, below the {min_free_gib} GiB floor \
+             (`[doctor.disk_headroom] min_free_gib`)"
+        ),
+        action: "reclaim space — stale worktrees (`aida session reap`), Rust build artifacts \
+                 (`cargo clean`), or raise `min_free_gib` deliberately if the floor no longer \
+                 matches this host"
+            .to_string(),
+        safe_heal: false,
+    })
+}
+
+/// STORY-1367: free space on the filesystem holding `project_root`, via
+/// `sysinfo` (same disk-enumeration approach as `machine_readiness`, which
+/// this check does not reuse directly because that module answers a
+/// different question — "is this host big enough for a planned drain of N
+/// lanes/specs/hours" — while this one is an ambient, fixed-floor cadence
+/// check with no drain-sizing inputs). Silent (empty) when the filesystem
+/// can't be resolved rather than risk a false positive.
+// trace:STORY-1367 | ai:claude
+fn scan_disk_headroom(project_root: &std::path::Path, min_free_gib: u64) -> Vec<DoctorFinding> {
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let Some(disk) = disks
+        .iter()
+        .filter(|d| project_root.starts_with(d.mount_point()))
+        .max_by_key(|d| d.mount_point().as_os_str().len())
+    else {
+        return Vec::new();
+    };
+    disk_headroom_finding(disk.available_space(), min_free_gib)
+        .into_iter()
+        .collect()
 }
 
 /// BUG-1572: which binaries' calls the performance gate is allowed to count.
@@ -1779,6 +1863,67 @@ mod story_1422_performance_gate_tests {
             .is_empty(),
             "2.9% clears the 10% tolerance and the 9,900ms worst call clears a 15,000ms ceiling"
         );
+    }
+}
+
+/// STORY-1367: the disk-headroom job. `disk_headroom_finding` is pure so the
+/// floor logic is verified without manufacturing a full filesystem;
+/// `scan_disk_headroom` is verified against the real filesystem with a floor
+/// forced to each side of "always healthy" / "never healthy" so the wiring
+/// itself (path → mount → available_space) is proven too.
+#[cfg(test)]
+mod story_1367_disk_headroom_tests {
+    use super::*;
+
+    const GIB: u64 = 1024 * 1024 * 1024;
+
+    #[test]
+    fn healthy_headroom_is_silent() {
+        assert!(disk_headroom_finding(100 * GIB, 60).is_none());
+        assert!(disk_headroom_finding(60 * GIB, 60).is_none());
+    }
+
+    #[test]
+    fn low_headroom_reports_once_with_the_floor_and_measured_free_space() {
+        let finding = disk_headroom_finding(16 * 1024, 60).expect("below-floor must report");
+        assert_eq!(finding.category, "disk-headroom");
+        assert!(finding.summary.contains("60 GiB"), "{}", finding.summary);
+        assert!(!finding.safe_heal, "never auto-healed — operator decision");
+    }
+
+    #[test]
+    fn min_free_gib_reads_config_and_falls_back_to_the_default() {
+        assert_eq!(
+            disk_headroom_min_free_gib(None),
+            DEFAULT_DISK_HEADROOM_MIN_FREE_GIB
+        );
+        let cfg: toml::Value = "[doctor.disk_headroom]\nmin_free_gib = 200\n"
+            .parse()
+            .unwrap();
+        assert_eq!(disk_headroom_min_free_gib(Some(&cfg)), 200);
+        // A non-positive override is ignored rather than manufacturing an
+        // always-failing (0) or always-passing check.
+        let zero: toml::Value = "[doctor.disk_headroom]\nmin_free_gib = 0\n"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            disk_headroom_min_free_gib(Some(&zero)),
+            DEFAULT_DISK_HEADROOM_MIN_FREE_GIB
+        );
+    }
+
+    #[test]
+    fn scan_is_silent_against_a_floor_the_real_disk_always_clears() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(scan_disk_headroom(tmp.path(), 0).is_empty());
+    }
+
+    #[test]
+    fn scan_reports_against_a_floor_no_real_disk_clears() {
+        let tmp = tempfile::tempdir().unwrap();
+        let findings = scan_disk_headroom(tmp.path(), u64::MAX / (1024 * 1024 * 1024));
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].category, "disk-headroom");
     }
 }
 

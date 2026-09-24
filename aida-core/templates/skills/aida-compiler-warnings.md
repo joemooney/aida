@@ -1,6 +1,6 @@
 ---
 name: aida-compiler-warnings
-description: Analyze compiler warnings across the workspace, categorize by risk level, and recommend a prioritized action plan. Use when the user wants to clean up warnings or assess code health.
+description: Analyze compiler warnings across the workspace, categorize by risk level, and recommend a prioritized action plan.
 allowed-tools:
   - Bash
   - Read

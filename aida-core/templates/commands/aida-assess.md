@@ -1,5 +1,5 @@
 ---
-description: "Headless advisor INTAKE pass: a cold-boot advisor agent reads all open specs, applies worth-doing judgment, and proposes approve/reject/park/queue per spec. The advisor-side analog of `/aida-burndown` (which fires implementers)."
+description: Run /aida-assess.
 ---
 # AIDA Assess
 

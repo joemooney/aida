@@ -1,5 +1,5 @@
 ---
-description: "Capture the WHY behind recently-touched specs as `Doc` requirements."
+description: Run /aida-doc.
 ---
 # Capture Living Documentation
 

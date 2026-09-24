@@ -1,5 +1,5 @@
 ---
-description: "Exhaustive code quality review with a structured report and before/after diffs."
+description: Run /aida-code-review.
 ---
 # Code Review
 

@@ -1,5 +1,5 @@
 ---
-description: "Commit staged changes with automatic requirement linking."
+description: Run /aida-commit.
 ---
 # AIDA Commit
 

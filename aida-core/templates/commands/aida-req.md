@@ -1,5 +1,5 @@
 ---
-description: "Add a new requirement to the database with AI evaluation."
+description: Run /aida-req.
 ---
 # Add AIDA Requirement
 

@@ -1,6 +1,6 @@
 ---
 name: aida-memory-query
-description: Query AIDA as quiet project memory before changing code. Use when starting work, investigating context, or checking whether a decision already exists.
+description: Query AIDA as quiet project memory before changing code.
 allowed-tools:
   - Bash
   - Grep

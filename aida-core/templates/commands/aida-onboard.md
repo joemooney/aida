@@ -1,5 +1,5 @@
 ---
-description: "Interactive onboarding for new team members."
+description: Run /aida-onboard.
 ---
 # Project Onboarding
 
