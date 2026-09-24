@@ -1,0 +1,58 @@
+id: 01a0d1a7-54a2-7e20-8568-1ffb6c1261ae
+spec_id: DOC-1-174
+title: 'Human explanation: reusable Jev questions and recorded judgments'
+description: |
+  The proposed `aida jev` surface is a reusable question catalog over Jev's typed judgment primitives.
+
+  AIDA owns a catalog of reusable questions. Jev answers those questions using `noul`, `choice`, or `score`. AIDA records the answer and provenance. Separate gates and disciplines consume those answers according to their own policies.
+
+  A question is not itself a gate. For example:
+
+      Question: How complex is this spec?
+      Answers: simple, moderate, complex, architectural
+
+  One project might use `complex` to require advisor review. Another might use it to route the work to an architect. The question stays reusable; the policy varies.
+
+  The existing Jev integrations already correspond to questions, although they are currently embedded as inline prompts:
+
+  - Graded review: Does this diff satisfy this acceptance criterion?
+  - Contradiction scan: Is spec B compatible with, superseding, or contradicting spec A?
+  - Exposition audit: How readable is this explanation, and does it preserve the constraints?
+  - Future routing: Should this go to developer, reviewer, advisor, architect, or research?
+
+  The catalog could eventually contain questions such as:
+
+  - `spec.complexity.v1`
+  - `spec.blast_radius.v1`
+  - `spec.human_understandability.v1`
+  - `spec.review_lane.v1`
+  - `spec.security_sensitivity.v1`
+  - `spec.duplicate_relationship.v1`
+  - `spec.change_impact.v1`
+  - `acceptance.criterion_satisfaction.v1`
+  - `spec.relationship.v1`
+
+  Each question should declare a stable ID and version, primitive, allowed answers or score levels, required context, deterministic evidence expectations, fallback behavior, and advisory/authority policy.
+
+  Recorded results should include the spec source hash, question version, model, confidence, heuristic marker, payload hash, timestamp, latency, and answer. Raw context should not be retained by default; a redacted evidence artifact could be explicitly requested.
+
+  This is a human-authored explanation of STORY-1472, not canonical requirement text and not an AI-generated replacement for the story.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T04:23:19.458083645Z
+modified_at: 2026-09-24T04:23:19.458083645Z
+req_type: Doc
+tags:
+- example
+- exposition
+- human
+- jev
+relationships:
+- rel_type: References
+  target_id: 01a0d18c-18d0-7472-bf35-1a4dd540bd0f
+  created_at: 2026-09-24T04:23:31.721572077Z
+custom_fields:
+  audience: user
+  scenario: human orientation

@@ -1,0 +1,12 @@
+id: 01a0d1a9-0c63-7820-aa77-c03595ad09bd
+spec_id: TASK-1471
+agreed_id: TASK-1471
+title: Show linked documentation in human-format aida show
+description: 'Make human-readable aida show output surface linked narrative Docs and human-authored expositions that reference the displayed spec. Acceptance: (1) aida show <SPEC> in human format includes a clearly labeled Documentation or Explanations section when linked Docs exist; (2) each entry shows its Doc ID, title, audience/scenario/tags where available, and an actionable command such as aida doc show <DOC-ID>; (3) entries are absent when none exist; (4) reverse References links are resolved without changing canonical spec content; (5) default machine-oriented formats remain stable and do not gain prose unless their schema explicitly includes a documentation field; (6) the output distinguishes human-authored exposition from generated or other documentation provenance; (7) add coverage for direct and reverse documentation links, including STORY-1472 -> DOC-1-174.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T04:25:12.035374412Z
+modified_at: 2026-09-24T04:25:12.035374412Z
+req_type: Task

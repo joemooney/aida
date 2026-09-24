@@ -44,8 +44,7 @@ req_type: Task
 tags:
 - cost token-economics context-economy claude-md memory-hygiene parent:EPIC-71
 relationships:
-- rel_type:
-    custom: implemented-by
+- rel_type: !Custom implemented-by
   target_id: 01a0cc15-6a99-7743-a3f6-1bebbd35e7a8
   created_at: 2026-09-23T02:25:58.921268961Z
   created_by: joe
