@@ -8,11 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T11:36:40.430493408Z
-modified_at: 2026-09-24T11:36:40.430493408Z
+modified_at: 2026-09-24T13:21:15.507815412Z
 req_type: Bug
 tags:
 - flaky-test
 - test-hermeticity
+comments:
+- id: 01a0d393-d2f3-7fd1-9775-480a788b4012
+  author: joe
+  content: Commit 1c22d30ab1 references this requirement
+  created_at: 2026-09-24T13:21:15.507815412Z
+  modified_at: 2026-09-24T13:21:15.507815412Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 0f2b9a882aa6ce80f5a520751032d445eb3ec92b
   branch: main
