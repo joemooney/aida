@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:20:04.914684182Z
-modified_at: 2026-09-24T17:15:35.549614796Z
+modified_at: 2026-09-24T17:15:38.448336540Z
 req_type: Doc
 tags:
 - exposition
@@ -38,6 +38,13 @@ relationships:
   target_id: 01a0d3f7-0e05-78f1-845b-e1f3df4d9513
   created_at: 2026-09-24T15:20:17.626058885Z
   created_by: joe
+comments:
+- id: 01a0d46a-6850-7340-a5c8-95d536bf6134
+  author: joe
+  content: 'PROXY DECISION (orchestrator acting for Joe): deferred together with TASK-1485, which it explains.'
+  created_at: 2026-09-24T17:15:38.448336540Z
+  modified_at: 2026-09-24T17:15:38.448336540Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 deferred: true
 deferred_at: 2026-09-24T17:15:35.549614796Z
 deferred_until: TASK-1485's design sketch is signed off. This doc explains that model and should follow the settled design, not precede it.
