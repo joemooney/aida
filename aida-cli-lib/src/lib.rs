@@ -41,6 +41,7 @@ mod context_prompt;
 mod coordination;
 mod criteria;
 mod criteria_gate;
+mod criteria_red_run;
 mod db_cmd;
 mod decide_cmd;
 mod deep_link;
