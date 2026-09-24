@@ -8,12 +8,12 @@ description: |-
   Consequence: the widened 'aida db migrate-related-edges' (TASK-1488) correctly leaves any Custom(duplicate-of) edge untouched, since its selection predicate is a pure function of parse_relationship_type (deliberately, to avoid a second hand-maintained alias list that can drift). The live store has one such edge -- BUG-1175 holds both a Custom(duplicate-of) edge and a native Duplicate edge to the same target (a genuine twin) -- that will stay unmigrated until this is fixed.
 
   Fix: add 'duplicate-of' (and probably 'duplicate_of'/'duplicateof' for consistency with the other aliases' _/no-separator variants) to parse_relationship_type's match arms, mapping to RelationshipType::Duplicate. After that lands, a routine re-run of 'aida db migrate-related-edges' picks up BUG-1175's edge automatically -- no migration code changes needed.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T17:59:30.069861681Z
-modified_at: 2026-09-24T20:19:26.504521893Z
+modified_at: 2026-09-24T20:42:46.882474806Z
 req_type: Bug
 tags:
 - aida:rel
@@ -51,6 +51,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a0d528-0ce2-7912-bcd5-979cc74191c7
+  author: aida-auto-bump
+  timestamp: 2026-09-24T20:42:46.882999331Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 processing_record:
 - id: 01a0d50d-0145-77e3-9120-457dea721f46
   timestamp: 2026-09-24T20:13:14.437522530Z
@@ -65,3 +72,7 @@ filed_at:
   aida_build_sha: 43649a4222
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T20:42:46.882981820Z
+  completion_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
