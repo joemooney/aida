@@ -23,8 +23,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:09:38.693878746Z
-modified_at: 2026-09-24T17:15:29.289812613Z
+modified_at: 2026-09-24T17:15:32.280348712Z
 req_type: Task
+comments:
+- id: 01a0d46a-5038-7cc2-b829-eeb079f97c9e
+  author: joe
+  content: 'PROXY DECISION (orchestrator acting for Joe): deferred, not rejected. This is a cross-cutting telemetry layer (CLI, orchestrator, review, PR and headless surfaces), so under the repo rule that architecture changes need a sketch plus advisor signoff before implementation it cannot be approved straight into a night drain. The trigger is recorded on the defer.'
+  created_at: 2026-09-24T17:15:32.280348712Z
+  modified_at: 2026-09-24T17:15:32.280348712Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 deferred: true
 deferred_at: 2026-09-24T17:15:29.289812613Z
 deferred_until: a design sketch for the failure-learning event model (record vs later avoidability judgment, storage location outside the canonical store, and correlation keys) is written on the spec and signed off by the advisor. Architecture-class change per CLAUDE.md. Revisit once TASK-1481 and TASK-1484 have shipped the lower-level telemetry it builds on.
