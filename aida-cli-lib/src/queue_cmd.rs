@@ -10871,6 +10871,18 @@ pub(crate) fn handle_queue_work(
             )
         })?;
 
+    // STORY-1386: opt-in pre-implementation red run, in this lane's own
+    // freshly created worktree and BEFORE the implementer agent launches.
+    // `lane_is_fresh` skips a lane already carrying commits (retry/rework).
+    // trace:STORY-1386 | ai:claude
+    if role == "implementer" && plan.review_target.is_none() {
+        crate::criteria_red_run::after_lane_created(
+            &project_root,
+            &lease.worktree_path,
+            &plan.anchor_display,
+        );
+    }
+
     // TASK-99: warn (don't auto-pull) when the base the new worktree forked
     // from is behind origin/main. Closes the visibility half of the
     // 2026-05-13 stale-base pain cheaply: the operator sees the drift at

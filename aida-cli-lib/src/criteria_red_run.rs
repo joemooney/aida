@@ -2,8 +2,9 @@
 //!
 //! When a drain's implementer phase starts, the spec's criterion-traced tests
 //! (found by the same tracer `aida criteria <SPEC>` prints — no second
-//! tracer) are run in the drain lane's OWN fresh worktree, before the
-//! implementer touches it, with a per-lane `CARGO_TARGET_DIR` inside that
+//! tracer) are run by `aida queue work` in the lane's OWN fresh worktree,
+//! right after the worktree + lease are created and before the implementer
+//! agent launches, with a per-lane `CARGO_TARGET_DIR` inside that
 //! worktree. It never runs in the operator's main checkout. The run is
 //! recorded per criterion under `.aida/red-runs/<SPEC>.json` in the main
 //! worktree (written atomically):
@@ -280,8 +281,37 @@ fn git_head(dir: &Path) -> Option<String> {
     git_probe(dir, &["rev-parse", "HEAD"])
 }
 
+/// The default-branch tip as seen from `main_root`: the first of
+/// `origin/HEAD`, `origin/main`, `origin/master`, `main`, `master` that
+/// resolves. Bounded git probes.
+fn default_branch_tip(main_root: &Path) -> Option<String> {
+    [
+        "origin/HEAD",
+        "origin/main",
+        "origin/master",
+        "main",
+        "master",
+    ]
+    .iter()
+    .find_map(|r| {
+        git_probe(
+            main_root,
+            &[
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("{r}^{{commit}}"),
+            ],
+        )
+        .filter(|sha| !sha.is_empty())
+    })
+}
+
 /// A lane worktree the red run may use: it exists, it is not the main
-/// checkout, and it is clean (the implementer has not touched it yet).
+/// checkout, its HEAD IS the default-branch tip (no commits ahead — a retry
+/// or rework lane that already carries implementation commits would make
+/// every criterion read "cannot fail", PRIN-5), and it has no tracked
+/// changes (the implementer has not touched it yet).
 pub(crate) fn lane_is_fresh(main_root: &Path, workspace: &Path) -> bool {
     let (Ok(main), Ok(lane)) = (main_root.canonicalize(), workspace.canonicalize()) else {
         return false;
@@ -289,7 +319,66 @@ pub(crate) fn lane_is_fresh(main_root: &Path, workspace: &Path) -> bool {
     if main == lane {
         return false;
     }
-    git_probe(&lane, &["status", "--porcelain"]).is_some_and(|s| s.is_empty())
+    let (Some(head), Some(tip)) = (git_head(&lane), default_branch_tip(&main)) else {
+        return false;
+    };
+    if head != tip {
+        return false;
+    }
+    git_probe(&lane, &["status", "--porcelain", "--untracked-files=no"])
+        .is_some_and(|s| s.is_empty())
+}
+
+/// Record the red run for a freshly created lane: skipped unless the lane is
+/// fresh and the spec has criterion-traced tests. `description` is the
+/// spec's description (its `## Acceptance` section).
+pub(crate) fn record_for_lane(
+    main_root: &Path,
+    workspace: &Path,
+    spec: &str,
+    description: &str,
+    runner: &mut dyn TestRunner,
+    budget: Duration,
+) -> Option<RedRunRecord> {
+    if !lane_is_fresh(main_root, workspace) {
+        return None;
+    }
+    let report = crate::criteria::build_criteria_report(workspace, spec, description).ok()?;
+    record_red_run_once(main_root, workspace, &report, runner, budget)
+}
+
+/// `aida queue work` hook: called right after the lane's worktree and lease
+/// are created and BEFORE the implementer agent launches. Opt-in (see
+/// [`budget`]) and best-effort — every failure degrades to "no record".
+pub(crate) fn after_lane_created(project_root: &Path, workspace: &Path, spec: &str) {
+    let main_root = crate::main_worktree_root_from(project_root);
+    let Some(budget) = budget(&main_root) else {
+        return;
+    };
+    let Some(store) = crate::load_store_for_lookup(&main_root) else {
+        return;
+    };
+    let Some(req) = store.requirements.iter().find(|r| {
+        r.spec_id
+            .as_deref()
+            .is_some_and(|id| id.eq_ignore_ascii_case(spec))
+    }) else {
+        return;
+    };
+    let mut runner = CommandTestRunner;
+    if let Some(record) = record_for_lane(
+        &main_root,
+        workspace,
+        spec,
+        &req.description,
+        &mut runner,
+        budget,
+    ) {
+        eprintln!("  red run (before implementation):");
+        for line in summary_lines(&record) {
+            eprintln!("    {line}");
+        }
+    }
 }
 
 /// One line per criterion, used by the drain banner and `aida criteria`.
@@ -752,6 +841,116 @@ mod tests {
         assert!(!record_path(lane.path(), "RED-1").exists());
         // The main checkout itself is never an acceptable lane.
         assert!(!lane_is_fresh(main.path(), main.path()));
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    }
+
+    /// A main repo on `main` with one commit holding a criterion-traced test,
+    /// plus a lane worktree forked at the main tip.
+    fn repo_with_lane() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        let lane = tmp.path().join("lane");
+        std::fs::create_dir_all(main.join("tests")).unwrap();
+        git(&main, &["init", "-q", "-b", "main"]);
+        std::fs::write(
+            main.join("tests/red.rs"),
+            "// trace:RED-1.AC1 | ai:claude\n#[test]\nfn lane_test() {\n}\n",
+        )
+        .unwrap();
+        git(&main, &["add", "."]);
+        git(&main, &["commit", "-q", "-m", "base"]);
+        git(
+            &main,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "lane",
+                lane.to_str().unwrap(),
+            ],
+        );
+        (tmp, main, lane)
+    }
+
+    // The hook `aida queue work` calls after worktree creation fires for a
+    // fresh lane at the main tip.
+    // trace:STORY-1386 | ai:claude
+    #[test]
+    fn a_fresh_lane_at_the_main_tip_is_recorded() {
+        let (_tmp, main, lane) = repo_with_lane();
+        let mut runner = fake(&[("lane_test", TestOutcome::Failed)]);
+        let record = record_for_lane(
+            &main,
+            &lane,
+            "RED-1",
+            DESC,
+            &mut runner,
+            Duration::from_secs(9),
+        )
+        .expect("fresh lane records");
+        assert_eq!(runner.workspaces, vec![lane.clone()]);
+        assert_eq!(record.criteria[0].verdict, CriterionVerdict::Red);
+        assert!(record_path(&main, "RED-1").exists());
+    }
+
+    // PRIN-5: a retry/rework lane that already carries commits would read
+    // every criterion as "cannot fail" — it is not fresh and is skipped.
+    // trace:STORY-1386 | ai:claude
+    #[test]
+    fn a_clean_lane_ahead_of_main_is_not_fresh_and_is_skipped() {
+        let (_tmp, main, lane) = repo_with_lane();
+        std::fs::write(lane.join("impl.rs"), "fn implemented() {}\n").unwrap();
+        git(&lane, &["add", "."]);
+        git(&lane, &["commit", "-q", "-m", "implementation"]);
+        assert!(!lane_is_fresh(&main, &lane));
+        let mut runner = fake(&[("lane_test", TestOutcome::Passed)]);
+        assert!(record_for_lane(
+            &main,
+            &lane,
+            "RED-1",
+            DESC,
+            &mut runner,
+            Duration::from_secs(9)
+        )
+        .is_none());
+        assert!(runner.calls.is_empty());
+        assert!(!record_path(&main, "RED-1").exists());
+    }
+
+    // The hook lives in `aida queue work`, after the worktree + lease are
+    // created (session_start + lease lookup) and before the implementer
+    // agent launches.
+    // trace:STORY-1386 | ai:claude
+    #[test]
+    fn queue_work_calls_the_hook_after_worktree_creation_before_launch() {
+        let src = include_str!("queue_cmd.rs");
+        let start = src.find("pub(crate) fn handle_queue_work(").unwrap();
+        let body = &src[start..];
+        let created = body.find("    session_start(").unwrap();
+        let lease = body.find("let lease = list_leases(&project_root)").unwrap();
+        let hook = body.find("criteria_red_run::after_lane_created(").unwrap();
+        let launch = body.find("session::exec_claude_with_session(").unwrap();
+        assert!(created < lease && lease < hook && hook < launch);
+        let auto = include_str!("auto_complete.rs");
+        assert!(!auto.contains(&["record_red", "_run("].concat()));
     }
 
     // trace:STORY-1386 | ai:claude

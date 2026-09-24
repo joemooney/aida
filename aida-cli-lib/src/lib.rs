@@ -100238,50 +100238,6 @@ mod forge_seam_tests {
 }
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
-    // STORY-1386 (first slice): before the implementer runs, run the spec's
-    // criterion-traced tests in the lane's own fresh worktree and record the
-    // red run once under the main worktree. Opt-in and best-effort — every
-    // failure degrades to "no record".
-    // trace:STORY-1386 | ai:claude
-    fn record_red_run(&mut self, workspace: &std::path::Path) {
-        let main_root = main_worktree_root_from(&self.project_root);
-        let Some(budget) = criteria_red_run::budget(&main_root) else {
-            return;
-        };
-        if !criteria_red_run::lane_is_fresh(&main_root, workspace) {
-            return;
-        }
-        let Some(store) = load_store_for_lookup(&main_root) else {
-            return;
-        };
-        let Some(req) = store.requirements.iter().find(|r| {
-            r.spec_id
-                .as_deref()
-                .is_some_and(|id| id.eq_ignore_ascii_case(&self.spec))
-        }) else {
-            return;
-        };
-        let Ok(report) = criteria::build_criteria_report(workspace, &self.spec, &req.description)
-        else {
-            return;
-        };
-        let mut runner = criteria_red_run::CommandTestRunner;
-        if let Some(record) = criteria_red_run::record_red_run_once(
-            &main_root,
-            workspace,
-            &report,
-            &mut runner,
-            budget,
-        ) {
-            if !self.json {
-                eprintln!("  red run (before implementation):");
-                for line in criteria_red_run::summary_lines(&record) {
-                    eprintln!("    {line}");
-                }
-            }
-        }
-    }
-
     fn capture_phase_done_pr(&mut self) {
         self.phase_done_pr = self.pr_number;
     }
