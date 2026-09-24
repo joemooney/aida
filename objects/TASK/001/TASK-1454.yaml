@@ -9,12 +9,12 @@ description: |-
   1. The hook writes and clears the marker; aida ps shows Blocked (naming the tool) only when it is present.
   2. aida awaiting lists blocked seats.
   3. Tests for set, clear and render; no false Blocked on a long Bash call.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T13:16:11.213474237Z
-modified_at: 2026-09-24T00:10:23.352401301Z
+modified_at: 2026-09-24T01:21:37.002651686Z
 req_type: Task
 tags:
 - docs:impacted
@@ -29,3 +29,21 @@ relationships:
 - rel_type: Parent
   target_id: 01a0d0bf-b3d9-7912-8aed-269542154b0d
   created_at: 2026-09-24T00:10:23.352401301Z
+history:
+- id: 01a0d100-f8e3-7cc3-b8c3-54b7ba90281b
+  author: aida-auto-bump
+  timestamp: 2026-09-24T01:21:36.995937473Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d100-f8ea-7412-9d1f-39200ce258c8
+  timestamp: 2026-09-24T01:21:37.002650734Z
+  agent: aida
+  commit_sha: 004c470cc25480bc79460b51bd1ee4be26cfe961
+  summary: Completed via merge 004c470c
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T01:21:35.490869833Z
+  completion_sha: 004c470cc25480bc79460b51bd1ee4be26cfe961
