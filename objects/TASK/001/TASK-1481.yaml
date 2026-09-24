@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T14:25:44.534269063Z
-modified_at: 2026-09-24T17:47:12.304741228Z
+modified_at: 2026-09-24T17:53:09.666565903Z
 req_type: Task
 tags:
 - docs:impacted
@@ -27,4 +27,10 @@ comments:
   content: 'PROXY DECISION (orchestrator acting for Joe): approved as written. The acceptance is concrete and testable, and the change is bounded.'
   created_at: 2026-09-24T17:15:14.372046415Z
   modified_at: 2026-09-24T17:15:14.372046415Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d48c-c222-7e21-b683-65f8bfba62b9
+  author: joe
+  content: 'Review: APPROVE (fresh reviewer). Addition only: no lines removed from usage_cmd.rs; tests use EnvVarsGuard, which takes the env lock, and don''t depend on timezone. Queued for batch 51.'
+  created_at: 2026-09-24T17:53:09.666565903Z
+  modified_at: 2026-09-24T17:53:09.666565903Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
