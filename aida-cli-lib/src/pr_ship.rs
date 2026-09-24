@@ -444,20 +444,28 @@ pub fn ship_hold_release_refusal_for(
 ///     is watched, the red gate discounted, or the hold touched;
 ///   - a human, on a SUPERVISION or DECISION hold → yes: the explicit merge
 ///     is that decision, so the BUG-1167 release proceeds;
-///   - a human, on a REWORK or RECUSAL hold, a malformed marker, or an
-///     untyped legacy marker (unknown is not permission) → no: a reviewer's
-///     refusal is not released by someone running a merge. The human clears
-///     it deliberately with `aida merge-hold clear <PR>` (recorded), then
-///     ships.
+///   - a human, on a REFUSAL hold (typed rework, or an untyped legacy marker
+///     — unknown is not permission) → only when a FRESH APPROVED verdict is
+///     recorded at the PR's current head (criterion 4, decided by
+///     `release_of`, i.e. [`crate::merge_hold::refusal_release`]). A person
+///     running a merge is not the reviewer's answer; a new verdict at the
+///     head is. Otherwise refuse, naming the verdict on record and its sha —
+///     or its missing sha (criterion 11);
+///   - a human, on a RECUSAL hold or a malformed marker → no: those are
+///     released by an independent reader / a deliberate
+///     `aida merge-hold clear <PR>` (recorded).
 ///
+/// `release_of` is called only for a refusal hold with a human present, so
+/// the forge head read it needs is never made otherwise.
 /// `AIDA_PR_SHIP_ALLOW_IN_DRIVE` does not reach this gate. `None` = proceed.
 // trace:BUG-1532 | ai:claude
 pub(crate) fn ship_hold_gate(
     hold: Option<&crate::merge_hold::MergeHoldRecord>,
     integrity_floor_authority: bool,
     pr: u64,
+    release_of: impl FnOnce(&crate::merge_hold::MergeHoldRecord) -> crate::merge_hold::RefusalRelease,
 ) -> Option<String> {
-    use crate::merge_hold::HoldReasonKind;
+    use crate::merge_hold::{HoldReasonKind, RefusalRelease};
     let hold = hold?;
     if !integrity_floor_authority {
         return ship_hold_release_refusal(true, false, pr);
@@ -475,13 +483,51 @@ pub(crate) fn ship_hold_gate(
     } else {
         format!("a {} hold", hold.reason_kind.as_str())
     };
+    if hold.is_refusal() {
+        return match release_of(hold) {
+            RefusalRelease::Released(_) => None,
+            RefusalRelease::Held(why) => Some(format!(
+                "PR-{pr} is under {kind}. A reviewer refusal is released only by a fresh APPROVED \
+                 verdict recorded at the PR's current head, and {why}. (Marker summary from \
+                 placement, not current: {}.) Once that verdict is recorded, re-run \
+                 `aida pr ship {pr}`. A human may instead override deliberately with \
+                 `aida merge-hold clear {pr}` (recorded).",
+                hold.detail.trim()
+            )),
+        };
+    }
     Some(format!(
         "PR-{pr} is under {kind}: {}. `aida pr ship` releases only a supervision or decision \
-         hold — merging is not the decision this one waits for. Once its release condition is \
-         met (e.g. a fresh approving verdict at the current head), a human clears it with \
-         `aida merge-hold clear {pr}` (recorded), then re-runs `aida pr ship {pr}`.",
+         hold, or a refusal answered by a fresh approving verdict at the current head — merging \
+         is not the decision this one waits for. Once its release condition is met, a human \
+         clears it with `aida merge-hold clear {pr}` (recorded), then re-runs `aida pr ship {pr}`.",
         hold.detail.trim()
     ))
+}
+
+/// BUG-1532: the merge pin when a refusal hold is released by a fresh
+/// verdict. The verdict covers exactly `head_sha`, so the merge is pinned
+/// there (overriding the TASK-1448 pin, which is None when the verdict's key
+/// is not among its candidates); with no readable head the release is
+/// refused. Not verdict-released → the TASK-1448 pin stands unchanged.
+// trace:BUG-1532 | ai:claude
+pub(crate) fn refusal_release_pin(
+    released_by_verdict: bool,
+    match_head: Option<String>,
+    head_sha: Option<&str>,
+    pr: u64,
+) -> Result<Option<String>, String> {
+    if !released_by_verdict {
+        return Ok(match_head);
+    }
+    match head_sha.map(str::trim).filter(|h| !h.is_empty()) {
+        Some(head) => Ok(Some(head.to_string())),
+        None => Err(format!(
+            "PR-{pr}: the reviewer-refusal hold's release rests on a verdict at the PR head, but \
+             the head could not be read to pin the merge to it; the hold stays. Re-run \
+             `aida pr ship {pr}`."
+        )),
+    }
 }
 
 /// BUG-710/BUG-716/TASK-1253: a drive seat may not merge any PR, and no caller
@@ -1359,9 +1405,17 @@ mod tests {
     // trace:BUG-1532 | ai:claude
     #[test]
     fn any_hold_binds_pr_ship_without_a_live_drive() {
-        use crate::merge_hold::{typed_hold, HoldReasonKind};
-        assert_eq!(ship_hold_gate(None, false, 9), None);
-        assert_eq!(ship_hold_gate(None, true, 9), None);
+        use crate::merge_hold::{typed_hold, HoldReasonKind, RefusalRelease, VerdictRef};
+        let held = |_: &crate::merge_hold::MergeHoldRecord| {
+            RefusalRelease::Held(
+                "the verdict on record is CHANGES REQUESTED for BUG-1 at 3acf3671fd7a".into(),
+            )
+        };
+        let never = |_: &crate::merge_hold::MergeHoldRecord| -> RefusalRelease {
+            panic!("release_of must only be consulted for a refusal hold with a human present")
+        };
+        assert_eq!(ship_hold_gate(None, false, 9, never), None);
+        assert_eq!(ship_hold_gate(None, true, 9, never), None);
 
         let rework = typed_hold(
             9,
@@ -1369,34 +1423,88 @@ mod tests {
             "CHANGES REQUESTED for BUG-1 at 3acf3671fd7a",
             None,
         );
-        let msg = ship_hold_gate(Some(&rework), true, 9).expect("refusal refuses a human");
+        let msg = ship_hold_gate(Some(&rework), true, 9, held).expect("refusal refuses a human");
         assert!(msg.contains("rework hold"), "{msg}");
         assert!(msg.contains("CHANGES REQUESTED for BUG-1"), "{msg}");
         assert!(msg.contains("aida merge-hold clear 9"), "{msg}");
-        assert!(ship_hold_gate(Some(&rework), false, 9).is_some());
+        assert!(msg.contains("fresh APPROVED"), "{msg}");
+        assert!(msg.contains("at 3acf3671fd7a"), "{msg}");
+        assert!(ship_hold_gate(Some(&rework), false, 9, never).is_some());
+        // Criterion 4: a fresh APPROVED verdict at the head releases a
+        // refusal for a human — and never for a headless seat.
+        let fresh = |_: &crate::merge_hold::MergeHoldRecord| {
+            RefusalRelease::Released(VerdictRef::new(
+                "BUG-1",
+                Some(9),
+                Some("cd21a1dc0a9e".into()),
+                None,
+            ))
+        };
+        assert_eq!(ship_hold_gate(Some(&rework), true, 9, fresh), None);
+        assert!(ship_hold_gate(Some(&rework), false, 9, fresh).is_some());
 
         let mut recusal = typed_hold(9, HoldReasonKind::Recusal, "author", Some("a".into()));
         recusal.recused_principals = vec!["agent:author".into()];
-        assert!(ship_hold_gate(Some(&recusal), true, 9).is_some());
+        assert!(ship_hold_gate(Some(&recusal), true, 9, never).is_some());
         let unknown = typed_hold(9, HoldReasonKind::Unknown, "malformed", None);
-        assert!(ship_hold_gate(Some(&unknown), true, 9).is_some());
+        assert!(ship_hold_gate(Some(&unknown), true, 9, never).is_some());
 
         for kind in [HoldReasonKind::Supervision, HoldReasonKind::Decision] {
             let supervised = typed_hold(9, kind, "STORY-1 is marked drive", None);
             assert_eq!(
-                ship_hold_gate(Some(&supervised), true, 9),
+                ship_hold_gate(Some(&supervised), true, 9, never),
                 None,
                 "a human's explicit ship IS the decision a {kind:?} hold awaits"
             );
-            let headless = ship_hold_gate(Some(&supervised), false, 9).expect("floor");
+            let headless = ship_hold_gate(Some(&supervised), false, 9, never).expect("floor");
             assert!(headless.contains("human"), "{headless}");
         }
 
         let dir = tempfile::tempdir().unwrap();
         crate::merge_hold::write_hold(dir.path(), 9, "STORY-1 is marked drive").unwrap();
         let legacy = crate::merge_hold::read_hold_record(dir.path(), 9).unwrap();
-        let msg = ship_hold_gate(Some(&legacy), true, 9).expect("untyped is not permission");
+        let msg = ship_hold_gate(Some(&legacy), true, 9, held).expect("untyped is not permission");
         assert!(msg.contains("legacy"), "{msg}");
+    }
+
+    // BUG-1532: a verdict-released hold merges PINNED to the head the verdict
+    // covers, even when the TASK-1448 pin is None (the verdict's key was not a
+    // candidate); no readable head → refused. Otherwise the pin is untouched.
+    // trace:BUG-1532 | ai:claude
+    #[test]
+    fn verdict_released_hold_always_merges_pinned_to_the_head() {
+        assert_eq!(
+            refusal_release_pin(true, None, Some("cd21a1dc0a9e"), 7),
+            Ok(Some("cd21a1dc0a9e".to_string()))
+        );
+        assert_eq!(
+            refusal_release_pin(true, Some("old".into()), Some("cd21a1dc0a9e"), 7),
+            Ok(Some("cd21a1dc0a9e".to_string()))
+        );
+        let err = refusal_release_pin(true, None, None, 7).unwrap_err();
+        assert!(err.contains("hold stays"), "{err}");
+        assert!(refusal_release_pin(true, None, Some("  "), 7).is_err());
+        assert_eq!(refusal_release_pin(false, None, None, 7), Ok(None));
+        assert_eq!(
+            refusal_release_pin(false, Some("abc".into()), Some("def"), 7),
+            Ok(Some("abc".to_string()))
+        );
+        // Wiring: the pin is applied to merge_opts BEFORE the hold is cleared.
+        let src = include_str!("pr_cmd.rs");
+        let pin = src
+            .find("pr_ship::refusal_release_pin(")
+            .expect("ship applies the release pin");
+        let assign = src
+            .find("Ok(pin) => merge_opts.match_head = pin")
+            .expect("pin assigned to the merge");
+        let clear = src
+            .find("crate::merge_hold::clear_hold(&hold_root, pr_number)")
+            .expect("release site");
+        let merge = src[clear..]
+            .find("&merge_opts,")
+            .map(|i| i + clear)
+            .expect("merge call");
+        assert!(pin < assign && assign < clear && clear < merge);
     }
 
     // BUG-1532: the real ship path consults the hold gate BEFORE the CI watch
