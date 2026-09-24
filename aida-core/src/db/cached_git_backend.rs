@@ -74,20 +74,29 @@ impl CachedGitBackend {
     /// store directory — that would pollute the orphan branch's worktree —
     /// so the probe starts at `git_root.parent()` and walks up.
     pub fn default_cache_path(git_root: &Path) -> PathBuf {
+        Self::default_cache_path_with_roots(git_root, &crate::store_locate::real_temp_roots())
+    }
+
+    /// [`default_cache_path`], parameterized on the temp roots to guard
+    /// against. Factored out so a test can plant an ambient `.aida` under a
+    /// FAKE temp root (a plain tempdir standing in for "a temp root") and
+    /// assert the walk-up refuses to adopt it — without mutating `TMPDIR` or
+    /// touching the real, shared system temp dir.
+    // trace:BUG-1598 | ai:claude
+    fn default_cache_path_with_roots(git_root: &Path, temp_roots: &[PathBuf]) -> PathBuf {
         let mut probe = match git_root.parent() {
             Some(p) => p.to_path_buf(),
             None => return git_root.with_extension("cache.db"),
         };
         for _ in 0..6 {
-            // BUG-1598: never adopt the OS temp directory itself as the
-            // project root. A store rooted one or two levels under
-            // `std::env::temp_dir()` (a `mktemp -d`/`tempfile::tempdir()`
-            // fixture with no `.aida` of its own) would otherwise walk
-            // straight into `/tmp` and, if anything else on the machine ever
-            // left a `.aida/` sitting there, silently share/corrupt that
-            // cache instead of falling through to its own sibling file
-            // below. trace:BUG-1598 | ai:claude
-            if crate::store_locate::is_system_temp_dir(&probe) {
+            // BUG-1598: never adopt a temp root itself as the project root.
+            // A store rooted one or two levels under a temp dir (a
+            // `mktemp -d`/`tempfile::tempdir()` fixture with no `.aida` of
+            // its own) would otherwise walk straight into it and, if
+            // anything else on the machine ever left a `.aida/` sitting
+            // there, silently share/corrupt that cache instead of falling
+            // through to its own sibling file below.
+            if crate::store_locate::is_temp_root_in(&probe, temp_roots) {
                 break;
             }
             if probe.join(".aida").is_dir() {
@@ -870,6 +879,43 @@ mod tests {
         let mut r = Requirement::new(title.into(), "desc".into());
         r.spec_id = Some(spec_id.into());
         r
+    }
+
+    /// BUG-1598: the direct test at the fix site — proves
+    /// `default_cache_path` itself refuses to adopt a temp root, not just
+    /// its callers. The store sits directly under a FAKE temp root (a plain
+    /// tempdir injected as the guarded root, standing in for "a temp root"
+    /// like `/tmp`) that holds a planted `.aida/`; without the guard, the
+    /// walk-up would find that `.aida` one hop up from `store.parent()` and
+    /// return `<fake_temp_root>/.aida/cache.db`. With the guard, it must
+    /// stop before adopting it and fall back to the sibling-file path
+    /// instead. No env mutation — the fake root is injected directly.
+    // trace:BUG-1598 | ai:claude
+    #[test]
+    fn default_cache_path_never_adopts_a_temp_root_ancestor() {
+        let fake_temp_root = tempdir().unwrap();
+        std::fs::create_dir_all(fake_temp_root.path().join(".aida")).unwrap();
+
+        let git_root = fake_temp_root.path().join("store");
+        std::fs::create_dir_all(&git_root).unwrap();
+
+        let roots = vec![fake_temp_root.path().to_path_buf()];
+        let resolved = CachedGitBackend::default_cache_path_with_roots(&git_root, &roots);
+        assert_eq!(
+            resolved,
+            git_root.with_extension("cache.db"),
+            "must fall back to the sibling-file cache path, not adopt the fake temp root's .aida"
+        );
+
+        // Sanity check: WITHOUT the guard (empty roots list), the same
+        // fixture DOES adopt the planted `.aida` — proving the guard, not
+        // some other difference, is what redirects the result above.
+        let unguarded = CachedGitBackend::default_cache_path_with_roots(&git_root, &[]);
+        assert_eq!(
+            unguarded,
+            fake_temp_root.path().join(".aida").join("cache.db"),
+            "fixture must be adoptable when nothing is guarded, or this test proves nothing"
+        );
     }
 
     #[test]

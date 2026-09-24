@@ -12,26 +12,74 @@
 
 use std::path::{Path, PathBuf};
 
-/// BUG-1598: is `path` the OS system temp directory itself (e.g. `/tmp` on
-/// Linux, or whatever `$TMPDIR` names)?
+/// BUG-1598: every walk-up-looking-for-`.aida` resolver in this codebase
+/// (`aida-core`, `aida-cli-lib`, `aida-tui` all have one) must stop BEFORE
+/// treating an OS temp directory as a legitimate project root. The system
+/// temp dir is shared by every process on the machine — a `mktemp -d`/
+/// `tempfile::tempdir()` fixture one or two levels under it has NO ancestor
+/// of its own between itself and the temp root, so an unbounded walk-up
+/// reaches it in a couple of hops. If anything (a stray manual `aida init`
+/// run from `/tmp`, another test, another concurrent process on a shared dev
+/// box) ever left a real `.aida/` sitting there, every later "isolated"
+/// tempdir-rooted test or command would silently ADOPT that shared `.aida`
+/// — sharing its cache, corrupting it with unrelated data ("duplicate AIDA
+/// spec IDs detected"), and leaving `.aida`/`.aida-store` behind at the temp
+/// root for the next run to trip over too.
 ///
-/// Any walk-up-looking-for-`.aida` resolver must stop BEFORE treating this
-/// directory as a legitimate project root. The system temp dir is shared by
-/// every process on the machine — a `mktemp -d`/`tempfile::tempdir()`
-/// fixture one or two levels under it has NO ancestor of its own between
-/// itself and `/tmp`, so an unbounded walk-up reaches `/tmp` in a couple of
-/// hops. If anything (a stray manual `aida init` run from `/tmp`, another
-/// test, another concurrent process on a shared dev box) ever left a real
-/// `.aida/` sitting there, every later "isolated" tempdir-rooted test or
-/// command would silently ADOPT that shared `.aida` — sharing its cache,
-/// corrupting it with unrelated data ("duplicate AIDA spec IDs detected"),
-/// and leaving `/tmp/.aida`/`/tmp/.aida-store` behind for the next run to
-/// trip over too. Comparing canonicalized paths (not raw equality) so a
-/// symlinked `/tmp` (macOS: `/tmp` -> `/private/tmp`) is still caught.
+/// A project literally rooted AT a temp directory (`aida init` run directly
+/// in `/tmp`) is a case this deliberately does not support: every walk-up
+/// listed above treats a temp root as "no project here", consistently, the
+/// same as any other directory with no `.aida`. There is no user-facing
+/// message for it — from the walk-up's point of view it's indistinguishable
+/// from "not an AIDA project yet". A walk-up may still find and adopt a
+/// project BELOW a temp root (e.g. `/tmp/real-project/.aida`); only the temp
+/// root itself is off-limits.
+///
+/// The real temp roots ([`real_temp_roots`]) are `std::env::temp_dir()` (so
+/// `$TMPDIR`, a sandboxed session's redirect, or CI's `RUNNER_TEMP`-backed
+/// override is always covered) PLUS the fixed, well-known Unix roots
+/// (`/tmp`, `/var/tmp`, `/private/tmp` — macOS symlinks `/tmp` to
+/// `/private/tmp`, and some sandboxes point `TMPDIR` at a per-session
+/// directory while leaving the literal `/tmp` fully populated and
+/// world-writable). Guarding only `temp_dir()` would miss `/tmp` itself
+/// whenever `$TMPDIR` points elsewhere — exactly the sandboxed/CI case this
+/// exists for.
 // trace:BUG-1598 | ai:claude
 pub fn is_system_temp_dir(path: &Path) -> bool {
+    is_temp_root_in(path, &real_temp_roots())
+}
+
+/// The fixed set of directories that must never be adopted as a project
+/// root: `std::env::temp_dir()` plus, on Unix, the well-known system temp
+/// roots regardless of what `$TMPDIR` currently points at. See
+/// [`is_system_temp_dir`] for why each of these is included.
+// trace:BUG-1598 | ai:claude
+pub fn real_temp_roots() -> Vec<PathBuf> {
+    let mut roots = vec![std::env::temp_dir()];
+    #[cfg(unix)]
+    {
+        roots.push(PathBuf::from("/tmp"));
+        roots.push(PathBuf::from("/var/tmp"));
+        roots.push(PathBuf::from("/private/tmp"));
+    }
+    roots
+}
+
+/// Is `path` one of `roots`? Canonicalizes both sides before comparing (so a
+/// symlinked root, e.g. macOS `/tmp` -> `/private/tmp`, still matches),
+/// falling back to the raw path on either side when `canonicalize` fails
+/// (e.g. a listed root like `/private/tmp` that doesn't exist on this host).
+///
+/// Roots are passed in rather than hardcoded so callers — and tests — can
+/// exercise the guard against a fake root without mutating process-global
+/// env state (`TMPDIR`) or touching the real, shared system temp dir. The
+/// public, no-argument callers ([`is_system_temp_dir`],
+/// `CachedGitBackend::default_cache_path`) supply [`real_temp_roots`].
+// trace:BUG-1598 | ai:claude
+pub fn is_temp_root_in(path: &Path, roots: &[PathBuf]) -> bool {
     let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
-    canon(path) == canon(&std::env::temp_dir())
+    let canon_path = canon(path);
+    roots.iter().any(|root| canon_path == canon(root))
 }
 
 /// Classification of a candidate store path: either it resolves to a usable
@@ -153,11 +201,23 @@ fn main_worktree_store(current: &Path, rel_store: &str) -> Option<PathBuf> {
 /// worktree via `git rev-parse --git-common-dir` instead of giving up.
 // trace:BUG-57 trace:BUG-331 | ai:claude
 pub fn detect_distributed_store_from(start: &Path) -> Option<PathBuf> {
+    detect_distributed_store_from_with_roots(start, &real_temp_roots())
+}
+
+/// [`detect_distributed_store_from`], parameterized on the temp roots to
+/// guard against. Factored out so a test can exercise the guard against a
+/// fake root without mutating `TMPDIR` or touching the real, shared system
+/// temp dir.
+// trace:BUG-1598 | ai:claude
+fn detect_distributed_store_from_with_roots(
+    start: &Path,
+    temp_roots: &[PathBuf],
+) -> Option<PathBuf> {
     let mut current = start;
     loop {
-        // BUG-1598: never walk INTO the system temp dir and adopt whatever
+        // BUG-1598: never walk INTO a temp root and adopt whatever
         // `.aida/config.toml` some unrelated process left sitting there.
-        if is_system_temp_dir(current) {
+        if is_temp_root_in(current, temp_roots) {
             return None;
         }
         let config_path = current.join(".aida").join("config.toml");
@@ -398,75 +458,72 @@ mod tests {
         assert!(!is_system_temp_dir(Path::new("/definitely/not/temp")));
     }
 
-    /// RAII guard: redirects `TMPDIR` (and thus `std::env::temp_dir()`) to a
-    /// private fixture dir for the guard's lifetime, restoring the prior
-    /// value on drop. Deliberately does NOT touch the real, shared `/tmp` —
-    /// this is a multi-agent dev box where other processes may legitimately
-    /// be reading/writing real ambient state under `/tmp` at any moment, and
-    /// this test must not race them.
-    // trace:BUG-1598 | ai:claude
-    struct TmpDirRedirect {
-        prev: Option<std::ffi::OsString>,
+    #[test]
+    fn is_temp_root_in_matches_only_listed_roots() {
+        let tmp = TempDir::new().unwrap();
+        let other = TempDir::new().unwrap();
+        let roots = vec![tmp.path().to_path_buf()];
+        assert!(is_temp_root_in(tmp.path(), &roots));
+        assert!(!is_temp_root_in(other.path(), &roots));
+        // A root that doesn't exist on this host must fall back to raw-path
+        // comparison instead of erroring (canonicalize fails for it).
+        let missing_root = vec![PathBuf::from("/private/tmp")];
+        assert!(is_temp_root_in(Path::new("/private/tmp"), &missing_root));
     }
 
-    impl TmpDirRedirect {
-        fn to(path: &Path) -> Self {
-            let prev = std::env::var_os("TMPDIR");
-            // SAFETY: test-only, single-purpose env mutation restored on drop.
-            unsafe { std::env::set_var("TMPDIR", path) };
-            TmpDirRedirect { prev }
-        }
-    }
-
-    impl Drop for TmpDirRedirect {
-        fn drop(&mut self) {
-            // SAFETY: test-only, restoring what this guard changed.
-            unsafe {
-                match &self.prev {
-                    Some(v) => std::env::set_var("TMPDIR", v),
-                    None => std::env::remove_var("TMPDIR"),
-                }
-            }
+    #[test]
+    fn real_temp_roots_includes_the_fixed_unix_set() {
+        let roots = real_temp_roots();
+        assert!(roots.contains(&std::env::temp_dir()));
+        #[cfg(unix)]
+        {
+            assert!(roots.contains(&PathBuf::from("/tmp")));
+            assert!(roots.contains(&PathBuf::from("/var/tmp")));
+            assert!(roots.contains(&PathBuf::from("/private/tmp")));
         }
     }
 
     #[test]
-    fn detect_distributed_store_from_never_adopts_the_system_temp_dir() {
+    fn detect_distributed_store_from_never_adopts_a_temp_root() {
         // Simulate the exact pollution scenario BUG-1598 describes: a real
-        // `.aida/config.toml` sitting directly in the system temp dir (as a
-        // stray manual `aida init` run, another test, or another process on
-        // a shared dev box might leave), and a `mktemp -d`-style fixture one
+        // `.aida/config.toml` sitting directly in a temp root (as a stray
+        // manual `aida init` run, another test, or another process on a
+        // shared dev box might leave), and a `mktemp -d`-style fixture one
         // level under it with no `.aida` of its own. The walk-up must stop
-        // before reaching the temp dir, never adopting the ambient config.
+        // before reaching the temp root, never adopting the ambient config.
         //
-        // `TMPDIR` is redirected to a private fixture for this test instead
-        // of touching the real `/tmp`, so this never races a concurrent
-        // process's genuine use of the shared system temp dir.
-        let fake_system_temp = TempDir::new().unwrap();
-        let _redirect = TmpDirRedirect::to(fake_system_temp.path());
-        let system_temp = std::env::temp_dir();
-        assert_eq!(
-            system_temp.canonicalize().unwrap(),
-            fake_system_temp.path().canonicalize().unwrap(),
-            "TMPDIR redirect must take effect"
-        );
+        // The temp root is INJECTED as a fake — a plain tempdir standing in
+        // for "a temp root" — rather than mutating `TMPDIR` or touching the
+        // real, shared system temp dir, so this test can never race a
+        // concurrent process's genuine use of it.
+        let fake_temp_root = TempDir::new().unwrap();
+        let roots = vec![fake_temp_root.path().to_path_buf()];
 
-        let planted = system_temp.join(".aida");
+        let planted = fake_temp_root.path().join(".aida");
         std::fs::create_dir_all(&planted).unwrap();
         std::fs::write(
             planted.join("config.toml"),
             "[deployment]\nstore_path = \".aida-store\"\n",
         )
         .unwrap();
-        std::fs::create_dir_all(system_temp.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(fake_temp_root.path().join(".aida-store")).unwrap();
 
-        let nested = system_temp.join("a").join("b");
+        let nested = fake_temp_root.path().join("a").join("b");
         std::fs::create_dir_all(&nested).unwrap();
 
-        let resolved = detect_distributed_store_from(&nested);
+        let resolved = detect_distributed_store_from_with_roots(&nested, &roots);
         assert!(
             resolved.is_none(),
-            "must never adopt the system temp dir's ambient .aida, got {resolved:?}"
+            "must never adopt a temp root's ambient .aida, got {resolved:?}"
+        );
+
+        // Sanity check: WITHOUT the guard (empty roots list), the same
+        // fixture DOES resolve — proving the guard, not some other
+        // difference, is what suppresses adoption above.
+        let unguarded = detect_distributed_store_from_with_roots(&nested, &[]);
+        assert!(
+            unguarded.is_some(),
+            "fixture must be adoptable when nothing is guarded, or this test proves nothing"
         );
     }
 }

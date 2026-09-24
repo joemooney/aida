@@ -12897,8 +12897,29 @@ fn aida_store_override_from(path: &std::path::Path) -> StoreOverride {
 /// legacy fallback (it would show stale data) and point at `aida init`.
 /// trace:BUG-428 | ai:claude
 fn distributed_mode_declared_from(start: &std::path::Path) -> Option<std::path::PathBuf> {
+    distributed_mode_declared_from_with_roots(start, &aida_core::store_locate::real_temp_roots())
+}
+
+/// [`distributed_mode_declared_from`], parameterized on the temp roots to
+/// guard against. Must agree with `detect_distributed_store_from` on where
+/// the walk-up stops — otherwise a stray `.aida/config.toml` sitting
+/// directly in a temp root (see `aida_core::store_locate` for why that
+/// happens) makes THIS function claim distributed mode where the store
+/// resolver finds nothing, producing a misleading "run aida init" refusal
+/// instead of the correct legacy fallback. Factored out (rather than calling
+/// `is_system_temp_dir` inline) so a test can exercise the guard against a
+/// fake root without mutating `TMPDIR` or touching the real, shared system
+/// temp dir.
+// trace:BUG-1598 | ai:claude
+fn distributed_mode_declared_from_with_roots(
+    start: &std::path::Path,
+    temp_roots: &[std::path::PathBuf],
+) -> Option<std::path::PathBuf> {
     let mut current = start;
     loop {
+        if aida_core::store_locate::is_temp_root_in(current, temp_roots) {
+            return None;
+        }
         let config_path = current.join(".aida").join("config.toml");
         if let Ok(content) = std::fs::read_to_string(&config_path) {
             // The first `.aida/config.toml` we hit walking up decides the
@@ -30049,6 +30070,15 @@ fn find_aida_project_root_from(start: &std::path::Path) -> Result<std::path::Pat
         .canonicalize()
         .with_context(|| format!("failed to resolve {}", start.display()))?;
     loop {
+        // BUG-1598: never adopt a temp root itself as the project root —
+        // see `aida_core::store_locate` for the shared rationale.
+        // trace:BUG-1598 | ai:claude
+        if aida_core::store_locate::is_system_temp_dir(&current) {
+            anyhow::bail!(
+                "not inside an AIDA project (no .aida/config.toml found from {})",
+                start.display()
+            );
+        }
         if current.join(".aida").join("config.toml").exists() {
             return Ok(current);
         }
