@@ -634,6 +634,7 @@ impl RequirementsService for AidaService {
             reactions: Vec::new(),
             // trace:TASK-330 | ai:claude — REST/gRPC writes carry no session id
             session_id: None,
+            relayed_from: None,
         };
 
         store.requirements[idx].comments.push(comment.clone());
@@ -1573,6 +1574,7 @@ impl RequirementsService for AidaServiceMultiProject {
             reactions: Vec::new(),
             // trace:TASK-330 | ai:claude — REST/gRPC writes carry no session id
             session_id: None,
+            relayed_from: None,
         };
 
         store.requirements[idx].comments.push(comment.clone());

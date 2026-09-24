@@ -126,6 +126,120 @@ pub fn resolve_sender(
     ("default".to_string(), SenderSource::ShellUser)
 }
 
+/// Second-person words that bind to whoever is READING the body.
+// trace:BUG-1534 | ai:claude
+const SECOND_PERSON: &[&str] = &[
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves",
+    "you're",
+    "youre",
+    "you've",
+    "you'll",
+    "you'd",
+];
+
+/// The distinct second-person words in `body`, lowercased, in first-seen
+/// order. Empty when the body names no reader in the second person.
+///
+/// BUG-1534 criterion 3: "your point about X" identifies the RECIPIENT, not
+/// the author, so a second-person body is only well-attributed when exactly
+/// one seat reads it.
+// trace:BUG-1534 | ai:claude
+pub fn second_person_terms(body: &str) -> Vec<String> {
+    let normalized = body.replace(['\u{2019}', '\u{2018}'], "'");
+    let mut out: Vec<String> = Vec::new();
+    for raw in normalized.split(|c: char| !(c.is_alphanumeric() || c == '\'')) {
+        let word = raw.trim_matches('\'').to_lowercase();
+        if SECOND_PERSON.contains(&word.as_str()) && !out.contains(&word) {
+            out.push(word);
+        }
+    }
+    out
+}
+
+/// How far back a send looks for the same body already sent to another
+/// recipient. The BUG-1534 instances were milliseconds to one second apart;
+/// ten minutes also covers a seat that pastes the same body twice by hand.
+// trace:BUG-1534 | ai:claude
+pub const MULTICAST_WINDOW_MS: i64 = 10 * 60 * 1000;
+
+fn normalize_body(body: &str) -> String {
+    body.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Refuse a second-person body that more than one seat will read.
+///
+/// BUG-1534: a body addressed as "you"/"your" and delivered to two seats
+/// credits each reader with the other's claim — the pronoun binds to whoever
+/// is reading. A rule ("name the author") failed on its own adopter within
+/// forty minutes, so the check is a property of the SEND: it returns the
+/// refusal reason when `body` is second person AND either `to` is a
+/// broadcast, or `from` already sent the identical body to a DIFFERENT
+/// recipient within [`MULTICAST_WINDOW_MS`] of `now_ms`. `None` means the
+/// send is fine. Pure (no I/O) so both the CLI and MCP send paths share it.
+// trace:BUG-1534 | ai:claude
+pub fn second_person_multicast_refusal(
+    existing: &[Message],
+    from: &str,
+    to: &Recipient,
+    body: &str,
+    now_ms: i64,
+) -> Option<String> {
+    let terms = second_person_terms(body);
+    if terms.is_empty() {
+        return None;
+    }
+    let words = terms
+        .iter()
+        .map(|t| format!("\"{t}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if matches!(to, Recipient::Broadcast) {
+        return Some(format!(
+            "this body addresses its reader as {words} and is a broadcast, so every seat \
+             reads the claim as addressed to itself"
+        ));
+    }
+    let wanted = normalize_body(body);
+    let sibling = existing.iter().find(|m| {
+        !m.deleted
+            && m.from == from
+            && !same_recipient(&m.to, to)
+            && (0..=MULTICAST_WINDOW_MS).contains(&(now_ms - m.timestamp))
+            && normalize_body(&m.body) == wanted
+    })?;
+    let other = match &sibling.to {
+        Recipient::Agent(a) => a.clone(),
+        Recipient::Broadcast => "all".to_string(),
+    };
+    Some(format!(
+        "this body addresses its reader as {words} and the same body was already sent to \
+         '{other}', so each reader would take the other's claim as its own"
+    ))
+}
+
+fn same_recipient(a: &Recipient, b: &Recipient) -> bool {
+    match (a, b) {
+        (Recipient::Agent(x), Recipient::Agent(y)) => x.trim().eq_ignore_ascii_case(y.trim()),
+        (Recipient::Broadcast, Recipient::Broadcast) => true,
+        _ => false,
+    }
+}
+
+/// Render the sender, with the relayed claim's original author when there is
+/// one: `via <from>, originally <relayed_from>`. Plain text (callers colour
+/// it).
+// trace:BUG-1534 | ai:claude
+pub fn provenance_label(from: &str, relayed_from: Option<&str>) -> String {
+    match relayed_from.map(str::trim).filter(|r| !r.is_empty()) {
+        Some(orig) => format!("via {from}, originally {orig}"),
+        None => from.to_string(),
+    }
+}
+
 /// A message recipient: a specific agent, or every agent (broadcast).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "agent", rename_all = "snake_case")]
@@ -311,6 +425,17 @@ pub struct Message {
     // trace:BUG-1592 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from_role: Option<String>,
+    /// The seat whose claim this message RELAYS, when the sender is
+    /// reproducing another seat's measurement, finding or argument rather
+    /// than reporting its own. `None` means the sender asserts the body as
+    /// its own (verified) content. Structured metadata, not prose, so the
+    /// original author survives every hop and renders as "via <from>,
+    /// originally <relayed_from>". `#[serde(default)]` keeps every older
+    /// record deserializing unchanged — they are marked by absence, never
+    /// retro-attributed.
+    // trace:BUG-1534 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relayed_from: Option<String>,
 }
 
 impl Message {
@@ -982,6 +1107,7 @@ mod tests {
             archived: false,
             from_source: SenderSource::Explicit,
             from_role: None,
+            relayed_from: None,
         }
     }
 
@@ -1800,5 +1926,151 @@ mod tests {
             json.get("from_role").is_none(),
             "from_role must be OMITTED when absent, not written as null: {json:?}"
         );
+    }
+
+    // ---- BUG-1534: relayed-claim provenance + second-person multicast ----
+
+    fn body_msg(from: &str, to: Recipient, ts: i64, body: &str) -> Message {
+        let mut m = msg(&format!("m{ts}"), "t", from, to, ts);
+        m.body = body.to_string();
+        m
+    }
+
+    #[test]
+    fn second_person_terms_detects_reader_pronouns_only() {
+        // trace:BUG-1534 | ai:claude
+        assert_eq!(
+            second_person_terms("YOUR tally is right and you\u{2019}re correct"),
+            vec!["your".to_string(), "you're".to_string()]
+        );
+        assert!(second_person_terms("claude-reviewer-1's tally is right; young yoke").is_empty());
+    }
+
+    #[test]
+    fn second_person_body_sent_to_a_second_recipient_is_refused() {
+        // trace:BUG-1534 | ai:claude — instance 3: same body, 336 ms apart.
+        let body = "YOUR TALLY IS RIGHT";
+        let prior = vec![body_msg(
+            "claude-product-1",
+            Recipient::Agent("claude-reviewer-1".into()),
+            1_789_968_757_820,
+            body,
+        )];
+        let reason = second_person_multicast_refusal(
+            &prior,
+            "claude-product-1",
+            &Recipient::Agent("advisor".into()),
+            "  YOUR TALLY\nIS RIGHT ",
+            1_789_968_758_156,
+        )
+        .expect("second recipient of a second-person body must be refused");
+        assert!(reason.contains("claude-reviewer-1"), "{reason}");
+    }
+
+    #[test]
+    fn multicast_guard_allows_named_attribution_single_recipient_and_other_senders() {
+        // trace:BUG-1534 | ai:claude
+        let now = 1_000_000;
+        let prior = vec![body_msg(
+            "a",
+            Recipient::Agent("b".into()),
+            now - 10,
+            "your tally",
+        )];
+        // Same recipient again (a resend) is not a multicast.
+        assert!(second_person_multicast_refusal(
+            &prior,
+            "a",
+            &Recipient::Agent("B".into()),
+            "your tally",
+            now
+        )
+        .is_none());
+        // A different sender's identical body is not this sender's multicast.
+        assert!(second_person_multicast_refusal(
+            &prior,
+            "z",
+            &Recipient::Agent("c".into()),
+            "your tally",
+            now
+        )
+        .is_none());
+        // The attributed form passes to a second recipient.
+        let named = vec![body_msg(
+            "a",
+            Recipient::Agent("b".into()),
+            now - 10,
+            "b's tally is right",
+        )];
+        assert!(second_person_multicast_refusal(
+            &named,
+            "a",
+            &Recipient::Agent("c".into()),
+            "b's tally is right",
+            now
+        )
+        .is_none());
+        // Outside the window the earlier send no longer counts.
+        let old = vec![body_msg(
+            "a",
+            Recipient::Agent("b".into()),
+            now - MULTICAST_WINDOW_MS - 1,
+            "your tally",
+        )];
+        assert!(second_person_multicast_refusal(
+            &old,
+            "a",
+            &Recipient::Agent("c".into()),
+            "your tally",
+            now
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn second_person_broadcast_is_refused() {
+        // trace:BUG-1534 | ai:claude
+        assert!(second_person_multicast_refusal(
+            &[],
+            "a",
+            &Recipient::Broadcast,
+            "your c9 is right",
+            1
+        )
+        .is_some());
+        assert!(second_person_multicast_refusal(
+            &[],
+            "a",
+            &Recipient::Broadcast,
+            "reviewer's c9 is right",
+            1
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn relayed_from_round_trips_and_legacy_records_stay_unmarked() {
+        // trace:BUG-1534 | ai:claude
+        let mut m = msg(
+            "r1",
+            "t",
+            "claude-product-1",
+            Recipient::Agent("advisor".into()),
+            1,
+        );
+        m.relayed_from = Some("claude-reviewer-1".into());
+        let json = serde_json::to_string(&m).unwrap();
+        let back: Message = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.relayed_from.as_deref(), Some("claude-reviewer-1"));
+        assert_eq!(
+            provenance_label(&back.from, back.relayed_from.as_deref()),
+            "via claude-product-1, originally claude-reviewer-1"
+        );
+        // A record written before the field existed is NOT retro-attributed.
+        let legacy = json.replace(",\"relayed_from\":\"claude-reviewer-1\"", "");
+        assert!(!legacy.contains("relayed_from"));
+        let old: Message = serde_json::from_str(&legacy).unwrap();
+        assert_eq!(old.relayed_from, None);
+        assert_eq!(provenance_label(&old.from, None), "claude-product-1");
     }
 }

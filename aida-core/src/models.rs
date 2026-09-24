@@ -3624,6 +3624,16 @@ pub struct Comment {
     // trace:TASK-330 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+
+    /// The seat whose claim this comment RELAYS (`aida comment add
+    /// --relayed-from <seat>`), when the author is recording another seat's
+    /// measurement, finding or argument rather than something it verified
+    /// itself. `None` = the author's own claim. Structured so the original
+    /// author survives into anything built on the comment; older comments
+    /// deserialize as `None` (marked by absence, never retro-attributed).
+    // trace:BUG-1534 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relayed_from: Option<String>,
 }
 
 impl Comment {
@@ -3640,6 +3650,7 @@ impl Comment {
             replies: Vec::new(),
             reactions: Vec::new(),
             session_id: None,
+            relayed_from: None,
         }
     }
 
@@ -3656,6 +3667,7 @@ impl Comment {
             replies: Vec::new(),
             reactions: Vec::new(),
             session_id: None,
+            relayed_from: None,
         }
     }
 
@@ -3669,6 +3681,16 @@ impl Comment {
             if !trimmed.is_empty() {
                 self.session_id = Some(trimmed.to_string());
             }
+        }
+        self
+    }
+
+    /// Record the seat whose claim this comment relays (builder-style). A
+    /// `None` or blank seat is a no-op.
+    // trace:BUG-1534 | ai:claude
+    pub fn with_relayed_from(mut self, seat: Option<&str>) -> Self {
+        if let Some(seat) = seat.map(str::trim).filter(|s| !s.is_empty()) {
+            self.relayed_from = Some(seat.to_string());
         }
         self
     }
@@ -7398,6 +7420,23 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(only.id, real.id);
+    }
+
+    // trace:BUG-1534 | ai:claude
+    #[test]
+    fn comment_relayed_from_round_trips_and_legacy_comments_stay_unmarked() {
+        let c = Comment::new("claude-product-1".into(), "tally is 902".into())
+            .with_relayed_from(Some(" claude-reviewer-1 "));
+        assert_eq!(c.relayed_from.as_deref(), Some("claude-reviewer-1"));
+        let yaml = serde_yaml::to_string(&c).unwrap();
+        let back: Comment = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(back.relayed_from.as_deref(), Some("claude-reviewer-1"));
+        // Own claim: nothing written, and blank input is a no-op.
+        let own = Comment::new("a".into(), "b".into()).with_relayed_from(Some("  "));
+        assert_eq!(own.relayed_from, None);
+        assert!(!serde_yaml::to_string(&own)
+            .unwrap()
+            .contains("relayed_from"));
     }
 
     // trace:TASK-330 | ai:claude

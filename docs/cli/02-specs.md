@@ -15,6 +15,14 @@ Chapter 1 gave you the floor: capture, view, finish. This chapter is about the t
 
 One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-ref` attach a *one-way external pointer* (`linear:LIN-123`, `github:owner/repo#123`) that renders as a link in `aida show` and is searchable — AIDA stores the breadcrumb but **does not sync state back** to the external system, so don't expect a closed Jira ticket to flip an AIDA spec.
 
+**Carving a criterion out — `--carve-out` / `--carve-into` / `--carve-reason`.** When an accepted criterion turns out to belong on a *different* spec (a piece of scope split off, a closure condition repointed), hand-editing the description and leaving the reason in a separate comment splits into two halves that can drift: the stale wording keeps reading as the live gate, and the correction sits wherever someone happened to add it. `aida edit <SPEC> --carve-out "<exact criterion text>" --carve-into <TARGET-SPEC> [--carve-reason "..."]` does it as one atomic edit:
+  - the criterion text — copied verbatim from the description, matched exactly or the edit refuses rather than silently no-op'ing — is struck and replaced with a pointer at the spec that now carries it;
+  - a typed `carved-out-to` edge is recorded on the source (plus the inverse `carved-from` edge on the target), walkable by `aida graph --follow carved-out-to` / the `query_graph` MCP tool — not a string tag, so nothing has to parse English to answer "what still gates this spec";
+  - the reason lands as a `CARVE-OUT:`-prefixed comment that `aida show`'s **default** view (no `-c`) surfaces inline right after the description — the free-text `CORRECTION:` / `PROXY DECISION:` conventions the advisor seat already used by hand get the same default-visible treatment;
+  - `--carve-into` resolves through the same unambiguous-id path every other write uses — a target id that names two specs refuses instead of guessing.
+
+  `aida do` additionally warns at pickup time, before the human contract, when a `drain`/`operator` spec still carries an unresolved carve-out — the moment stale acceptance text would otherwise steer a harness onto a gate that already moved.
+
 **Chains with** — the disposing seat's `edit --status approved` is step 2 of the [journey](README.md#the-journey--from-empty-repo-to-shipped-feature); everyone's everyday refinement tool.
 
 ---

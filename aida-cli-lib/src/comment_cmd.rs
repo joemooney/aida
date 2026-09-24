@@ -29,6 +29,7 @@ pub(crate) fn handle_comment_command(cmd: &CommentCommand, storage: &Storage) ->
             author,
             parent,
             interactive,
+            relayed_from,
         } => {
             // Use --content flag if provided, otherwise use positional argument
             let effective_content = resolve_body(
@@ -38,7 +39,15 @@ pub(crate) fn handle_comment_command(cmd: &CommentCommand, storage: &Storage) ->
             )?;
             match effective_content {
                 Some(c) if !*interactive => {
-                    add_comment_cli(storage, id, &c, author.as_deref(), parent.as_deref())?;
+                    // trace:BUG-1534 | ai:claude
+                    add_comment_cli_relayed(
+                        storage,
+                        id,
+                        &c,
+                        author.as_deref(),
+                        parent.as_deref(),
+                        relayed_from.as_deref(),
+                    )?;
                 }
                 _ => {
                     add_comment_interactive(storage, id, author.as_deref(), parent.as_deref())?;
@@ -192,6 +201,19 @@ pub(crate) fn add_comment_cli(
     author: Option<&str>,
     parent_id: Option<&str>,
 ) -> Result<()> {
+    add_comment_cli_relayed(storage, req_id, content, author, parent_id, None)
+}
+
+/// [`add_comment_cli`] plus the seat whose claim the comment relays.
+// trace:BUG-1534 | ai:claude
+pub(crate) fn add_comment_cli_relayed(
+    storage: &Storage,
+    req_id: &str,
+    content: &str,
+    author: Option<&str>,
+    parent_id: Option<&str>,
+    relayed_from: Option<&str>,
+) -> Result<()> {
     let mut store = storage.load()?;
     let id = parse_requirement_id(req_id, &store)?;
 
@@ -212,7 +234,8 @@ pub(crate) fn add_comment_cli(
         Comment::new_reply(author, content.to_string(), parent_uuid).with_session_id(session_id)
     } else {
         Comment::new(author, content.to_string()).with_session_id(session_id)
-    };
+    }
+    .with_relayed_from(relayed_from);
 
     if let Some(parent_str) = parent_id {
         let parent_uuid = Uuid::parse_str(parent_str)?;
