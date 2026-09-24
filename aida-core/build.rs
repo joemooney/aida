@@ -82,6 +82,11 @@ fn main() {
     // trace:STORY-255
     embed_directory(&mut code, "templates/memories", "memories");
 
+    // Shipped gate library — named, invocable discipline checklists read on
+    // demand by `aida gate show/run` instead of carried as ambient prose.
+    // trace:STORY-1427 | ai:claude
+    embed_directory(&mut code, "templates/gates", "gates");
+
     // User-local terminal helpers. trace:STORY-995 | ai:codex
     embed_file(
         &mut code,
@@ -114,6 +119,7 @@ fn main() {
         "    (\"docs/competitive-analysis/ecosystem-watch.md\", \"Starter ecosystem-watch log read by scripts/release.sh\"),\n",
     );
     code.push_str("    (\"memories\", \"Starter memory pack - generic discipline for `aida init --with-memories`\"),\n");
+    code.push_str("    (\"gates\", \"Gate library - named checklists invoked by `aida gate` and `aida add --gates`\"),\n");
     code.push_str("    (\"terminal/terminator/aida_terminator.py\", \"Terminator DBus plugin for `aida session focus/send`\"),\n");
     code.push_str("];\n");
 

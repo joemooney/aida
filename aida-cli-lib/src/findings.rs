@@ -280,6 +280,171 @@ pub fn parse_promote_threshold(content: &str) -> Option<u32> {
     None
 }
 
+// ---------------------------------------------------------------------------
+// STORY-1428: the gate-candidate promote destination.
+//
+// The recurrence counter already crosses a threshold (`promote_threshold`,
+// default 3), but `aida findings promote` had one destination — more WORK —
+// so a class fixed three times got fixed a fourth. At/above the threshold the
+// promote step now offers a second destination: gate the CLASS. The screening
+// answer is recorded as a `gate-decision:<answer>` tag on the finding; a
+// gated finding also carries `gated-by:<ID>` naming the gate task it produced,
+// so a later recurrence can be checked against the gate. A "stays prose"
+// answer is recorded too, so the question is not re-opened on every
+// recurrence. trace:STORY-1428 | ai:claude
+// ---------------------------------------------------------------------------
+
+/// Tag prefix recording the gate-screening answer, e.g.
+/// `gate-decision:mechanical`.
+// trace:STORY-1428 | ai:claude
+pub const GATE_DECISION_PREFIX: &str = "gate-decision:";
+/// Tag prefix naming the gate task a finding produced, e.g.
+/// `gated-by:TASK-42`.
+// trace:STORY-1428 | ai:claude
+pub const GATED_BY_PREFIX: &str = "gated-by:";
+/// Tag every gate task filed from a finding carries.
+// trace:STORY-1428 | ai:claude
+pub const GATE_CANDIDATE_TAG: &str = "gate-candidate";
+
+/// The answer to the gate-screening questions, asked in order:
+/// 1. Is the class mechanically detectable (no judgement needed)? → rung 1-3.
+/// 2. Else, would an agent gate recognise it reliably? → rung 4 (heuristic,
+///    must not silently block).
+/// 3. Else it stays prose and the recurrence is accepted as a known cost.
+// trace:STORY-1428 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GateScreen {
+    Mechanical,
+    Agent,
+    Prose,
+}
+
+impl GateScreen {
+    /// Parse the `--detectable` answer. Accepts a few natural spellings.
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "mechanical" | "mechanically" | "yes" => Some(Self::Mechanical),
+            "agent" | "heuristic" => Some(Self::Agent),
+            "none" | "no" | "prose" => Some(Self::Prose),
+            _ => None,
+        }
+    }
+
+    /// The stable tag value (`gate-decision:<label>`).
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Mechanical => "mechanical",
+            Self::Agent => "agent",
+            Self::Prose => "prose",
+        }
+    }
+
+    /// Plain-language screening record for the audit comment.
+    pub fn screening_summary(self) -> &'static str {
+        match self {
+            Self::Mechanical => {
+                "mechanically detectable — a deterministic gate (rung 1-3) is warranted"
+            }
+            Self::Agent => {
+                "not mechanically detectable, but an agent gate can recognise it (rung 4) — \
+                 its verdict is heuristic and must not silently block"
+            }
+            Self::Prose => {
+                "neither mechanically detectable nor reliably agent-recognisable — the class \
+                 stays prose and its recurrence is accepted as a known cost"
+            }
+        }
+    }
+
+    /// Whether this answer produces a gate task.
+    pub fn produces_gate(self) -> bool {
+        !matches!(self, Self::Prose)
+    }
+}
+
+/// The recorded gate-screening answer on a finding, if any.
+// trace:STORY-1428 | ai:claude
+pub fn gate_decision(tags: &[String]) -> Option<GateScreen> {
+    tags.iter()
+        .find_map(|t| t.strip_prefix(GATE_DECISION_PREFIX))
+        .and_then(GateScreen::parse)
+}
+
+/// The gate task a finding produced (`gated-by:<ID>`), if any.
+// trace:STORY-1428 | ai:claude
+pub fn gated_by(tags: &[String]) -> Option<&str> {
+    tags.iter().find_map(|t| t.strip_prefix(GATED_BY_PREFIX))
+}
+
+/// Whether the promote step should offer the gate-candidate destination:
+/// the recurrence has reached the threshold AND the gate question has not
+/// already been settled. Below the threshold behaviour is unchanged.
+// trace:STORY-1428 | ai:claude
+pub fn offers_gate_route(tags: &[String], threshold: u32) -> bool {
+    finding_recurrence(tags) >= threshold && gate_decision(tags).is_none()
+}
+
+/// The one-line guidance printed after a recurrence bump or a work promote.
+/// `None` when there is nothing to say (below threshold). A settled gate
+/// question is reported rather than re-asked.
+// trace:STORY-1428 | ai:claude
+pub fn recurrence_gate_hint(tags: &[String], threshold: u32, display_id: &str) -> Option<String> {
+    let n = finding_recurrence(tags);
+    if n < threshold {
+        return None;
+    }
+    match (gate_decision(tags), gated_by(tags)) {
+        (Some(GateScreen::Prose), _) => Some(format!(
+            "Gate question already settled for {display_id}: stays prose (recurrence accepted \
+             as a known cost) — not re-opened."
+        )),
+        (Some(_), Some(gate)) => Some(format!(
+            "{display_id} is gated by {gate} — a recurrence ×{n} means the gate did not stop \
+             the class; check {gate}."
+        )),
+        (Some(_), None) => Some(format!(
+            "{display_id} was screened as a gate candidate — a recurrence ×{n} means no gate \
+             has stopped the class yet."
+        )),
+        (None, _) => Some(format!(
+            "Recurrence ×{n} ≥ {threshold}: two destinations — fix this instance \
+             (`aida findings promote {display_id}`) or gate the class \
+             (`aida findings promote {display_id} --to gate --detectable \
+             mechanical|agent|none`)."
+        )),
+    }
+}
+
+/// Title for the gate task filed from a finding.
+// trace:STORY-1428 | ai:claude
+pub fn gate_task_title(finding_title: &str) -> String {
+    const MAX: usize = 80;
+    let t = format!("Gate the class: {}", finding_title.trim());
+    if t.chars().count() > MAX {
+        let cut: String = t.chars().take(MAX - 1).collect();
+        format!("{cut}…")
+    } else {
+        t
+    }
+}
+
+/// Description for the gate task filed from a finding.
+// trace:STORY-1428 | ai:claude
+pub fn gate_task_description(
+    finding_id: &str,
+    finding_title: &str,
+    recurrence: u32,
+    screen: GateScreen,
+) -> String {
+    format!(
+        "Gate candidate promoted from finding {finding_id} (\"{finding_title}\"), which has \
+         recurred ×{recurrence}. Screening: {summary}.\n\n\
+         Build the gate for the CLASS, not another instance fix. A later \
+         `aida findings recur {finding_id}` means this gate did not stop the class.",
+        summary = screen.screening_summary()
+    )
+}
+
 /// One row in the triage view.
 // trace:TASK-714
 #[derive(Debug, Clone, ts_rs_forge::TS)]
@@ -1022,5 +1187,88 @@ mod tests {
         let rendered = render_finding_row(&row);
         assert!(rendered.starts_with(&format!("{FINDING_LABEL} TASK-7")));
         assert!(rendered.contains("×4"));
+    }
+
+    // trace:STORY-1428 | ai:claude
+    fn tags(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn gate_screen_parses_answers_and_labels_round_trip() {
+        assert_eq!(
+            GateScreen::parse("mechanical"),
+            Some(GateScreen::Mechanical)
+        );
+        assert_eq!(GateScreen::parse(" Agent "), Some(GateScreen::Agent));
+        assert_eq!(GateScreen::parse("none"), Some(GateScreen::Prose));
+        assert_eq!(GateScreen::parse("maybe"), None);
+        for s in [GateScreen::Mechanical, GateScreen::Agent, GateScreen::Prose] {
+            assert_eq!(GateScreen::parse(s.label()), Some(s));
+        }
+        assert!(GateScreen::Mechanical.produces_gate());
+        assert!(GateScreen::Agent.produces_gate());
+        assert!(!GateScreen::Prose.produces_gate());
+    }
+
+    #[test]
+    fn gate_route_offered_only_at_or_above_threshold() {
+        assert!(!offers_gate_route(&tags(&["from-advisor:general"]), 3));
+        assert!(!offers_gate_route(&tags(&["recurrence:2"]), 3));
+        assert!(offers_gate_route(&tags(&["recurrence:3"]), 3));
+        assert!(offers_gate_route(&tags(&["recurrence:7"]), 3));
+    }
+
+    #[test]
+    fn settled_gate_question_is_not_reoffered() {
+        let prose = tags(&["recurrence:5", "gate-decision:prose"]);
+        assert!(!offers_gate_route(&prose, 3));
+        assert_eq!(gate_decision(&prose), Some(GateScreen::Prose));
+        let hint = recurrence_gate_hint(&prose, 3, "TASK-1").unwrap();
+        assert!(hint.contains("stays prose"), "{hint}");
+        assert!(hint.contains("not re-opened"), "{hint}");
+    }
+
+    #[test]
+    fn recurrence_hint_below_threshold_is_silent() {
+        assert_eq!(
+            recurrence_gate_hint(&tags(&["recurrence:2"]), 3, "TASK-1"),
+            None
+        );
+    }
+
+    #[test]
+    fn recurrence_hint_offers_both_destinations_at_threshold() {
+        let hint = recurrence_gate_hint(&tags(&["recurrence:3"]), 3, "TASK-1").unwrap();
+        assert!(hint.contains("aida findings promote TASK-1`"), "{hint}");
+        assert!(hint.contains("--to gate"), "{hint}");
+    }
+
+    #[test]
+    fn recurrence_after_gate_points_at_the_gate() {
+        let t = tags(&[
+            "recurrence:4",
+            "gate-decision:mechanical",
+            "gated-by:TASK-9",
+        ]);
+        assert_eq!(gated_by(&t), Some("TASK-9"));
+        let hint = recurrence_gate_hint(&t, 3, "TASK-1").unwrap();
+        assert!(hint.contains("gated by TASK-9"), "{hint}");
+        assert!(hint.contains("did not stop"), "{hint}");
+    }
+
+    #[test]
+    fn gate_task_title_and_description_name_the_class() {
+        assert_eq!(
+            gate_task_title("ETXTBSY on fixture"),
+            "Gate the class: ETXTBSY on fixture"
+        );
+        let long = "x".repeat(200);
+        assert_eq!(gate_task_title(&long).chars().count(), 80);
+        let d = gate_task_description("TASK-1", "ETXTBSY", 4, GateScreen::Agent);
+        assert!(
+            d.contains("TASK-1") && d.contains("×4") && d.contains("rung 4"),
+            "{d}"
+        );
     }
 }

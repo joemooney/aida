@@ -1544,6 +1544,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
+        Command::Gate(_) => unreachable!("gate is dispatched before storage init"),
         Command::Lifecycle { .. } => {
             unreachable!("lifecycle is dispatched before storage init")
         }
@@ -2987,6 +2988,7 @@ pub(crate) fn handle_git_backend_command(
                 // trace:FR-283 | ai:claude
                 weight: None,
                 mode,
+                gates: Vec::new(),
             };
             return handle_git_backend_command(store_path, &add);
         }
@@ -3015,6 +3017,7 @@ pub(crate) fn handle_git_backend_command(
             // trace:FR-283 | ai:claude
             weight,
             mode,
+            gates,
             ..
         } => {
             // TASK-725: newcomer-friendly capture — `aida add "do X"`. The
@@ -3158,6 +3161,15 @@ pub(crate) fn handle_git_backend_command(
                 None
             };
             let effective_priority: Option<String> = priority.clone().or(interactive_priority);
+
+            // STORY-1427: `--gates` runs named library gates over the draft text
+            // before filing. Advisory — prints verdicts, never blocks; absent the
+            // flag this is a no-op. trace:STORY-1427 | ai:claude
+            crate::gate_cmd::run_intake_gates(
+                gates,
+                &title_resolved,
+                resolved_description.as_deref().unwrap_or_default(),
+            )?;
 
             let mut req =
                 Requirement::new(title_resolved, resolved_description.unwrap_or_default());
