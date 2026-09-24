@@ -12514,13 +12514,25 @@ pub enum Command {
     },
 
     /// Project activity — what's been touched and how it stands now.
-    /// Default mode is a per-requirement digest sorted by last-touch
-    /// time, intended for "what was I up to last session?" Use
-    /// `events` to switch to a chronological per-event feed (slower;
-    /// decodes each commit's YAML diff into status changes, comments
-    /// added, etc.).
+    /// Default mode (no SPEC-ID) is a per-requirement digest sorted by
+    /// last-touch time, intended for "what was I up to last session?" Pass
+    /// a SPEC-ID (`aida history <SPEC-ID>`, short for `--id <SPEC-ID>`) to
+    /// switch to that one spec's status-progression view instead — its
+    /// status transitions in chronological order, each with a timestamp
+    /// and old→new status. Add `--full` (or the `events` subcommand) for
+    /// the complete edit/comment trail, not just status changes.
     // trace:FR-1-037 | ai:claude
+    // trace:TASK-1480 | ai:claude
     History {
+        /// SPEC-ID to focus on — shorthand for `--id <SPEC-ID>`.
+        /// `aida history <SPEC-ID>` is equivalent to `aida history --id
+        /// <SPEC-ID>`: it selects that one spec's status-progression view.
+        /// Accepts the same forms as `--id` (SPEC-ID, agreed id, or raw
+        /// UUID). Not combinable with `--id` — pass one or the other.
+        // trace:TASK-1480 | ai:claude
+        #[clap(value_name = "SPEC_ID", conflicts_with = "id")]
+        spec: Option<String>,
+
         /// Number of items to show. In digest mode (default) this caps
         /// the number of distinct requirements; in events mode it
         /// caps the number of decoded events.
@@ -12537,17 +12549,30 @@ pub enum Command {
         /// transitions, comments added, tags edited, etc.). Slower than
         /// digest because it shells out to `git show` per file per
         /// commit; useful for inspecting one requirement closely with
-        /// --id, less useful as a general overview.
+        /// --id, less useful as a general overview. `--full` is the more
+        /// discoverable spelling of the same mode.
         #[clap(long, hide = true)]
         events: bool,
+
+        /// The complete edit/event trail — every status change, comment,
+        /// tag edit, and field edit, chronological newest-first.
+        /// Equivalent to the `events` subcommand, but composes naturally
+        /// after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a
+        /// single spec (`--id` / positional SPEC-ID) shows the shorter
+        /// status-progression view instead of the full trail.
+        // trace:TASK-1480 | ai:claude
+        #[clap(long, global = true)]
+        full: bool,
 
         /// Only show entries for this requirement (accepts a SPEC-ID, an
         /// agreed short ID, or the raw UUID `aida show` prints — a UUID
         /// is resolved to its canonical spec_id; BUG-588). Works both
         /// before and after the `events` subcommand, e.g. `aida history
-        /// events --id BUG-1474`.
+        /// events --id BUG-1474`. The positional SPEC-ID form
+        /// (`aida history <SPEC-ID>`) is shorthand for this same flag.
         // trace:BUG-1474 | ai:claude — global so it parses after `events`, not
         // just before it, matching the documented invocation.
+        // trace:TASK-1480 | ai:claude
         #[clap(long, global = true)]
         id: Option<String>,
 
@@ -12570,7 +12595,12 @@ pub enum Command {
         #[clap(long, global = true)]
         until: Option<String>,
 
-        /// (events only) filter to status transitions.
+        /// Filter to status-transition events. For a single spec (`--id` /
+        /// positional SPEC-ID) without `--full`, status transitions are
+        /// already the default view, so this is mostly useful paired with
+        /// `--full`/`events` to narrow the complete trail down to just the
+        /// status changes.
+        // trace:TASK-1480 | ai:claude
         #[clap(long, global = true)]
         status_changes: bool,
 
@@ -12594,11 +12624,18 @@ pub enum Command {
         #[clap(long, global = true)]
         shipped: bool,
 
-        /// (events only) filter to comment events.
+        /// Filter to comment events. For a single spec (`--id` /
+        /// positional SPEC-ID) without `--full`, this switches the
+        /// status-progression view to a comment timeline instead; paired
+        /// with `--full`/`events` it narrows the complete trail to just
+        /// comments.
+        // trace:TASK-1480 | ai:claude
         #[clap(long, global = true)]
         comments: bool,
 
-        /// (events only) terse one-line-per-event format.
+        /// Terse one-line-per-event format. Applies to the events feed,
+        /// the status-progression view, and the comment timeline alike.
+        // trace:TASK-1480 | ai:claude
         #[clap(long, global = true)]
         oneline: bool,
 
@@ -12631,8 +12668,12 @@ pub enum Command {
         #[clap(long, global = true)]
         include_meta: bool,
 
-        /// History view.
+        /// History view. `events` switches to the full chronological feed
+        /// (same as `--full`); most day-to-day use never needs it — the
+        /// bare command (digest) or a SPEC-ID (status progression) covers
+        /// it.
         // trace:STORY-1028 | ai:codex
+        // trace:TASK-1480 | ai:claude
         #[clap(subcommand)]
         cmd: Option<HistoryCommand>,
     },
@@ -14876,6 +14917,62 @@ mod tests {
                 ..
             } if id == "BUG-1474"
         ));
+    }
+
+    // TASK-1480: `aida history <SPEC-ID>` is the positional shorthand for
+    // `aida history --id <SPEC-ID>`. Asserts the alias parses into the
+    // `spec` field, composes with other flags, conflicts with an explicit
+    // `--id`, and doesn't collide with the `events` subcommand.
+    // trace:TASK-1480 | ai:claude
+    #[test]
+    fn history_positional_spec_id_parses() {
+        let cli = Cli::try_parse_from(["aida", "history", "TASK-1480"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                spec: Some(ref s),
+                id: None,
+                cmd: None,
+                ..
+            } if s == "TASK-1480"
+        ));
+
+        // Composes with other flags in either order.
+        let cli = Cli::try_parse_from(["aida", "history", "TASK-1480", "--oneline"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                spec: Some(ref s),
+                oneline: true,
+                ..
+            } if s == "TASK-1480"
+        ));
+        let cli = Cli::try_parse_from(["aida", "history", "--full", "TASK-1480"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                spec: Some(ref s),
+                full: true,
+                ..
+            } if s == "TASK-1480"
+        ));
+
+        // Bare `events` still resolves to the subcommand, not a spec named
+        // "events" — no real spec id is shaped like that, and the
+        // subcommand keeps priority.
+        let cli = Cli::try_parse_from(["aida", "history", "events"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                spec: None,
+                cmd: Some(HistoryCommand::Events),
+                ..
+            }
+        ));
+
+        // Passing both the positional and --id is refused, not silently
+        // resolved one way or the other.
+        assert!(Cli::try_parse_from(["aida", "history", "TASK-1480", "--id", "TASK-9"]).is_err());
     }
 
     // trace:TASK-1427 | ai:codex

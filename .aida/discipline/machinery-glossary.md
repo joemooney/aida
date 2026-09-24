@@ -343,8 +343,11 @@ Why this matters for agent work:
   is silently un-auditable. `aida doctor` does not currently flag
   empty-history specs — known gap.
 
-Cross-references: `aida history events` reads from these arrays;
-`aida history --id <ID>` filters to one spec's entries. The
+Cross-references: `aida history <ID>` (shorthand for `aida history --id
+<ID>`) filters to one spec's entries and shows its status progression by
+default at a human terminal; add `--full` (or use `aida history events`)
+for the complete edit/comment trail. Agent/piped callers keep getting the
+pre-existing single-row digest TOON table for a SPEC-ID, unchanged. The
 substrate-grounded equivalent in code: `aida-core::object_store` walks
 the YAML files directly. trace:TASK-121
 

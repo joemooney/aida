@@ -12688,6 +12688,11 @@ fn ensure_discipline_pack_gitignore_allow_list(cwd: &std::path::Path) -> Result<
 #[path = "tests/bug_588_history_id_resolves_uuid_tests.rs"]
 mod bug_588_history_id_resolves_uuid_tests;
 
+// trace:TASK-1480 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1480_history_id_alias_tests.rs"]
+mod task_1480_history_id_alias_tests;
+
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
 ///
@@ -14017,25 +14022,42 @@ fn remove_blocked_by_edge(
 }
 
 /// Handle commands routed to the GitBackend (when --file points to a directory).
-/// Resolve an `aida history --id <X>` argument to the canonical spec_id the
-/// orphan-branch event decoder keys on. `aida history` walks the git log and
-/// tags every event with the YAML's `spec_id`, so a UUID (which `aida show`
-/// prints) or an agreed_id never matched the filter and produced an empty
-/// "(no recent activity)" — the symptom BUG-588 reports. When the argument
-/// parses as a UUID we look the spec up and substitute its spec_id; otherwise
-/// we pass the argument through unchanged (it's already a spec_id, or a
-/// not-found value that will simply match nothing). Best-effort: a backend
-/// lookup error falls back to the raw argument rather than failing the command.
+/// Resolve an `aida history --id <X>` / positional `aida history <X>`
+/// argument to the canonical spec_id the orphan-branch event decoder keys
+/// on. `aida history` walks the git log and tags every event with the
+/// YAML's `spec_id`, so a UUID (which `aida show` prints) or an agreed_id
+/// never matched the filter and produced an empty "(no recent activity)" —
+/// the symptom BUG-588 reports. When the argument resolves to exactly one
+/// live requirement (by spec_id, agreed_id, or UUID) we substitute its
+/// canonical spec_id.
+///
+/// TASK-1480: this is also the "invalid or ambiguous IDs get a clear error"
+/// gate. Two cases refuse outright: a string that can't possibly be a spec
+/// id (BUG-599's format hint) and one that resolves to more than one
+/// requirement ([`aida_core::id_collisions::AmbiguousIdError`], which
+/// already names each candidate's unambiguous handle). A well-formed id
+/// that simply isn't *live* right now — deleted, or never assigned — is
+/// passed through unchanged rather than rejected here: a deleted spec can
+/// still have real history to show, so `history::run` is the one that
+/// decides, once it knows whether the id has any recorded events at all.
 /// trace:BUG-588 | ai:claude
-fn resolve_history_id_filter<B: aida_core::db::DatabaseBackend>(backend: &B, raw: &str) -> String {
-    if let Ok(uuid) = uuid::Uuid::parse_str(raw.trim()) {
-        if let Ok(Some(req)) = backend.get_requirement(&uuid) {
-            if let Some(spec_id) = req.spec_id {
-                return spec_id;
-            }
-        }
+// trace:TASK-1480 | ai:claude
+fn resolve_history_id_filter<B: aida_core::db::DatabaseBackend>(
+    backend: &B,
+    raw: &str,
+) -> Result<String> {
+    let trimmed = raw.trim();
+    let looks_like_uuid = uuid::Uuid::parse_str(trimmed).is_ok();
+    if !looks_like_uuid && !aida_core::object_store::valid_spec_id_format(trimmed) {
+        return Err(crate::not_found::invalid_spec_id_format(trimmed));
     }
-    raw.to_string()
+    // `get_requirement_unambiguous` already turns a multi-match into an
+    // `anyhow::Error` (AmbiguousIdError's own Display), so `?` here IS the
+    // "ambiguous id gets a clear error" behavior. trace:TASK-1480 | ai:claude
+    match backend.get_requirement_unambiguous(trimmed)? {
+        Some(req) => Ok(req.spec_id.clone().unwrap_or_else(|| trimmed.to_string())),
+        None => Ok(trimmed.to_string()),
+    }
 }
 
 fn command_triggers_per_write_auto_push(command: &Command) -> bool {
