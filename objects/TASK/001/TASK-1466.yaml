@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:26:22.463333032Z
-modified_at: 2026-09-24T08:13:56.440975437Z
+modified_at: 2026-09-24T08:14:02.658011307Z
 req_type: Task
+comments:
+- id: 01a0d27a-8fa2-7671-bad4-30f939f4fe16
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): DEFERRED until: STORY-1469 approved. aida report bug/idea works today; the rename exists to avoid a clash with a proposed command.'
+  created_at: 2026-09-24T08:14:02.658011307Z
+  modified_at: 2026-09-24T08:14:02.658011307Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 deferred: true
 deferred_at: 2026-09-24T08:13:56.440975437Z
 deferred_until: STORY-1469 approved
