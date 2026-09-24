@@ -234,7 +234,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:18:31.246345754Z
-modified_at: 2026-09-24T02:43:56.117222395Z
+modified_at: 2026-09-24T02:44:24.769305024Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -370,4 +370,10 @@ comments:
   content: 'PROXY: partial slice on claude/bug-1469 (any marker binds pr ship before CI). Kept open, because criterion 4 (a refusal hold releases only on a fresh verdict at head) and criterion 10 (markers point to the verdict record) are unmet.'
   created_at: 2026-09-24T00:24:48.166076413Z
   modified_at: 2026-09-24T00:24:48.166076413Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d14c-c641-7da3-aaec-cc7a9eccb0cc
+  author: joe
+  content: 'PROXY (claude/bug-1532, 3fd9c90004): criteria 4, 10, 11 implemented. INTERPRETATION of criterion 4, recorded because the spec does not say who performs the release: a fresh verdict MEETS the release condition; it does not clear the label by itself. The spec never explicitly allows verdict-driven (unattended) release, and review record already says a later approval does not clear the hold, so the clear stays behind the human-TTY floor (BUG-1566). Concretely: (a) aida pr ship, run by a human at a terminal, releases a REFUSAL hold (typed rework, or untyped legacy per criterion 5) only when an APPROVED verdict is recorded at the PR''s current head, looked up with review_verdict::read_verdict_for_sha under the marker''s verdict_ref key, then PR-<n>. No key is ever parsed from prose (criterion 6). It is re-checked under the merge lease against the head about to land, and a newer refusal outranks an older approval. Otherwise it refuses, naming the verdict on record, its sha and path, or the missing sha (criterion 11: an unstamped verdict is answered only by a verdict that records one). (b) merge-hold list reports the condition as MET or not met, and does not clear. (c) merge-hold clear remains the recorded human override. It now warns when the condition is not met and records which verdict, if any, met it. Recusal and malformed holds are unchanged. Criterion 10: markers carry verdict_ref (key, pr, reviewed_sha, recorded_by). review record and review stranded --fix write it, merge-hold add --verdict sets it, and list shows the record path as the owner source. Criterion 6 (the one-time kinding pass over live markers) is an operator task, not code.'
+  created_at: 2026-09-24T02:44:24.769305024Z
+  modified_at: 2026-09-24T02:44:24.769305024Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
