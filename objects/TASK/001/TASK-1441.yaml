@@ -34,24 +34,39 @@ description: |
   9. Orchestrator-internal skills (headless-only, e.g. aida-advise, aida-assess) are not scaffolded into the interactive catalogue by default, or are marked so the harness does not list them.
   10. The regrowth guard (criterion 6) also covers the scaffold: a test fails when the generated CLAUDE.md + its @-imports + the summed skill/command description bytes exceed a configured budget, so a new template cannot silently raise every downstream project's baseline.
   11. Delivery to existing projects rides aida scaffold refresh (edit-preserving), so projects already scaffolded get the slimmer templates without --force.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T02:03:24.869760515Z
-modified_at: 2026-09-23T04:45:49.172994047Z
+modified_at: 2026-09-24T01:54:46.603320641Z
 req_type: Task
 tags:
 - cost token-economics context-economy claude-md memory-hygiene parent:EPIC-71
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0cc15-6a99-7743-a3f6-1bebbd35e7a8
   created_at: 2026-09-23T02:25:58.921268961Z
   created_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Claude independent review: 9 of 11 acceptance criteria met (CLAUDE.md 62.7KB -> 2.6KB, moved verbatim to docs/agents/aida-repository-guide.md; budgets enforced by context_budget.rs). ONE BLOCKER: invalid YAML frontmatter in one skill. Otherwise ready.'
-  recovery_hint: address the review findings, move TASK-1441 back to In Progress, and clear the PR hold only after approval
-  shelved_at: 2026-09-23T04:45:49.172994047Z
+history:
+- id: 01a0d11f-54ba-7a23-bcf5-d06aadb6e457
+  author: aida-auto-bump
+  timestamp: 2026-09-24T01:54:46.586230375Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0d11f-54cb-76a1-9e53-243278009e1b
+  timestamp: 2026-09-24T01:54:46.603314421Z
+  agent: aida
+  commit_sha: a69f039eca874ded7d25aed6476fd74f9ec17d65
+  summary: 'Re-review at a91c8b1afd: the blocker is fixed (aida-fasttrack frontmatter quote closed; all template frontmatter parses except the pre-existing aida-doctor colon issue, which is not introduced here). Main merged in with a trivial fleet-watch description resolution. context_budget test and BUG-1589 waiting-guidance tests pass locally on the merged tree. APPROVE. The test-side parse check remains a followup.'
+  punted:
+  - 'punted: Claude independent review: 9 of 11 acceptance criteria met (CLAUDE.md 62.7KB -> 2.6KB, moved verbatim to docs/agents/aida-repository-guide.md; budgets enforced by context_budget.rs). ONE BLOCKER: invalid YAML frontmatter in one skill. Otherwise ready.'
+  review_verdict: approve
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-24T01:54:46.582328424Z
+  completion_sha: a69f039eca874ded7d25aed6476fd74f9ec17d65
