@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T17:35:05.360339938Z
-modified_at: 2026-09-24T18:29:21.968716445Z
+modified_at: 2026-09-24T18:37:54.913271493Z
 req_type: Task
 tags:
 - aida:rel
@@ -59,6 +59,12 @@ comments:
     Full verification: cargo fmt --check clean; cargo clippy -p aida-cli-lib -p aida-core -D clippy::correctness clean; cargo test -p aida-core --lib: 1057 passed, 0 failed, 2 pre-existing ignored; cargo test -p aida-cli-lib --lib: 1 flake on the full run (gitlab_mirror_link::task_1424_gitlab_mirror_link_tests::unresolvable_origin_skips_without_posting), confirmed passing on its own and as part of its 12-test module in isolation -- a parallel-execution flake from concurrent agents on this shared machine, unrelated to this change; external-prose-classifiers.py --check clean; glyph-lint.sh --block clean; docs/cli/verify-manual.py clean; docs/cli/verify-interface-changes.py origin/main HEAD OK (no new cli.rs change this round; still covered by TASK-1488's docs:impacted tag from the prior commit).
   created_at: 2026-09-24T18:29:21.968716445Z
   modified_at: 2026-09-24T18:29:21.968716445Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d4b5-bb61-7a51-9b50-2dd5a1b96cf9
+  author: joe
+  content: 'Strict review: APPROVE. The related family is not narrowed. Twin detection matches only native edges of the same resolved type and target. The live dry-run gives 2 twin deletes (BUG-1175, TASK-1236) and 0 conversions. Non-blocking notes: depends-on→BlockedBy could change meaning on stores that used it loosely; exact built-in names stored as Custom get rewritten (documented as an explicit operator command); stale comments in duplicate_twin_is_deleted and the module doc. Queued after BUG-1602 merges.'
+  created_at: 2026-09-24T18:37:54.913271493Z
+  modified_at: 2026-09-24T18:37:54.913271493Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 2ab1b8d9595d61e30904573a1c13b2be45d0194d
