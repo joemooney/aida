@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:46:14.802500200Z
-modified_at: 2026-09-24T14:12:34.009016031Z
+modified_at: 2026-09-24T14:22:59.026422964Z
 req_type: Task
 tags:
 - graph substrate-as-bouncer cli migration
@@ -59,4 +59,10 @@ comments:
   content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Still valid (140 custom:related edges). Recount before migrating.'
   created_at: 2026-09-24T08:12:53.993985193Z
   modified_at: 2026-09-24T08:12:53.993985193Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d3cc-55d2-7273-92be-ad4f115c76be
+  author: joe
+  content: 'Step 0 answer, checked in a throwaway fixture store (never the real store). QUESTION: does ''aida rel remove <s> <t> --type related'' match a stored custom ''related'' edge? ANSWER: it matched, but only because the git-store ''rel remove'' arm ignored --type completely: it dropped EVERY edge from source to target. With a custom related edge and a References edge side by side, ''rel remove FR-1 FR-2 --type related'' printed ''Removed 2 relationship(s)'' and deleted both. So the hand repair (remove related, then add references) happened to work, but any typed remove (for example --type child) silently deleted the good edges too, and --bidirectional was ignored as well. That is a repair-path bug and it is fixed in the same change: the arm now resolves --type through the same alias as ''rel add'' and removes only matching edges. The references family (references, related, related-to, relates-to) also matches stored legacy custom related edges, so removing a stale legacy edge still works. --bidirectional now removes the inverse edge on the target. There is a unit test for the matching (rel_remove_type_matching), and a fixture check showed ''--type child'' now removes nothing and ''--type related'' removes only the References edge.'
+  created_at: 2026-09-24T14:22:59.026422964Z
+  modified_at: 2026-09-24T14:22:59.026422964Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
