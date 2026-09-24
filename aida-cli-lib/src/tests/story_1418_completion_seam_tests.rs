@@ -608,6 +608,83 @@ fn mark_completed_never_overwrites_an_existing_completed_at() {
     );
 }
 
+/// TASK-1477 follow-up (review finding on the first commit): reopening a
+/// Completed spec (e.g. `aida edit --status draft`, `aida queue rework`)
+/// must clear the stale `completed_at` — otherwise `mark_completed`'s
+/// absent-only stamp on the *next* completion is a no-op, the first
+/// completion's date survives forever, and `aida list --sort completed`
+/// misorders the spec after a reopen + re-complete cycle.
+// trace:TASK-1477 | ai:claude
+#[test]
+fn reopen_then_recomplete_gets_a_fresh_completed_at() {
+    let mut req = aida_core::Requirement::new("seam".into(), String::new());
+    req.set_status_from_str("Done");
+
+    // First completion.
+    crate::completion::mark_completed(&mut req);
+    let first_stamp = req
+        .implementation_info
+        .as_ref()
+        .and_then(|i| i.completed_at)
+        .expect("first completion stamps completed_at");
+
+    // Reopen: every call site captures the prior status BEFORE mutating,
+    // exactly like git_backend_cmd.rs / queue_cmd.rs / mcp.rs do.
+    let prior = req.status.clone();
+    req.set_status_from_str("Draft");
+    crate::completion::clear_completed_at_on_reopen(&mut req, &prior);
+    assert!(
+        req.implementation_info
+            .as_ref()
+            .and_then(|i| i.completed_at)
+            .is_none(),
+        "reopen must clear the stale completed_at"
+    );
+
+    // Second completion, strictly later than the first.
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    crate::completion::mark_completed(&mut req);
+    let second_stamp = req
+        .implementation_info
+        .as_ref()
+        .and_then(|i| i.completed_at)
+        .expect("re-completion stamps completed_at");
+
+    assert!(
+        second_stamp > first_stamp,
+        "re-completion must stamp a fresh, later completed_at (first={first_stamp:?}, \
+         second={second_stamp:?})"
+    );
+}
+
+/// A no-op reopen guard: clearing must only fire when the PRIOR status was
+/// actually Completed — a status edit that never touched Completed (e.g.
+/// Draft -> Approved) must not disturb an unrelated completed_at some other
+/// field-mangling left behind.
+// trace:TASK-1477 | ai:claude
+#[test]
+fn clear_completed_at_on_reopen_is_a_noop_when_prior_was_not_completed() {
+    let mut req = aida_core::Requirement::new("seam".into(), String::new());
+    req.set_status_from_str("Draft");
+    let stamp = chrono::Utc::now();
+    req.implementation_info = Some(aida_core::ImplementationInfo {
+        completed_at: Some(stamp),
+        ..Default::default()
+    });
+
+    let prior = req.status.clone();
+    req.set_status_from_str("Approved");
+    crate::completion::clear_completed_at_on_reopen(&mut req, &prior);
+
+    assert_eq!(
+        req.implementation_info
+            .as_ref()
+            .and_then(|i| i.completed_at),
+        Some(stamp),
+        "a non-Completed-prior edit must not clear an unrelated completed_at"
+    );
+}
+
 /// A failed persist must not emit.
 #[test]
 fn a_failed_persist_does_not_emit() {
