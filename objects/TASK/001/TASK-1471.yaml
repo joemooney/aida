@@ -8,5 +8,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-09-24T04:25:12.035374412Z
+modified_at: 2026-09-24T08:13:38.286523877Z
 req_type: Task
+deferred: true
+deferred_at: 2026-09-24T08:13:38.286523877Z
+deferred_until: TASK-1470 merged
