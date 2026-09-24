@@ -1273,6 +1273,42 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
     }
 }
 
+/// STORY-1436: which gate slug a fresh-pickup refusal records under — a
+/// `BlockedBy` refusal is named distinctly from every other pickability hold.
+// trace:STORY-1436 | ai:claude
+pub(crate) fn pickup_refusal_gate(pickup: &QueueFreshPickup) -> &'static str {
+    use aida_core::pickability::BlockedReason;
+    match pickup {
+        QueueFreshPickup::Blocked(
+            BlockedReason::UnsatisfiedBlocker { .. } | BlockedReason::PermanentlyBlocked { .. },
+        ) => crate::events::GATE_BLOCKED_BY_PICKUP,
+        _ => crate::events::GATE_QUEUE_PICKUP,
+    }
+}
+
+/// STORY-1436: record a refused fresh pickup — but never for a dry-run
+/// preview (`drain preview`, `queue work --dry-run`), which refuses nothing
+/// and would inflate the held-gate counts.
+// trace:STORY-1436 | ai:claude
+pub(crate) fn record_pickup_refusal(
+    project_root: &std::path::Path,
+    pickup: &QueueFreshPickup,
+    spec: String,
+    reason: &str,
+    dry_run: bool,
+) {
+    if dry_run {
+        return;
+    }
+    crate::events::record_gate_held(
+        project_root,
+        pickup_refusal_gate(pickup),
+        Some(spec),
+        None,
+        reason,
+    );
+}
+
 pub(crate) fn queue_drain_pickup_policy(
     req: &aida_core::Requirement,
     store: &aida_core::RequirementsStore,
@@ -8266,12 +8302,14 @@ pub(crate) fn resolve_queue_work_plan(
             .iter()
             .find(|r| r.id == entry.requirement_id)
             .unwrap();
-        if let Some(reason) = queue_fresh_pickup_reason_label(&queue_fresh_pickup_policy(
-            req,
-            &store,
-            force_needs_attention,
-            storage.path().parent(),
-        )) {
+        let pickup =
+            queue_fresh_pickup_policy(req, &store, force_needs_attention, storage.path().parent());
+        if let Some(reason) = queue_fresh_pickup_reason_label(&pickup) {
+            // STORY-1436: the pickup gate HELD — record it so a seat refused
+            // work is distinguishable from an idle one. trace:STORY-1436 | ai:claude
+            if let Some(root) = storage.path().parent() {
+                record_pickup_refusal(root, &pickup, req.display_id(), &reason, dry_run);
+            }
             anyhow::bail!(
                 "`{}` is not pickable for fresh work: {}",
                 req.display_id(),

@@ -2968,13 +2968,54 @@ mod tests {
     }
 
     // trace:TASK-1281 | ai:codex
+    // trace:BUG-1595 | ai:claude
     #[test]
     fn tick_lock_is_nonblocking_and_reusable() {
         let tmp = tempfile::tempdir().unwrap();
         let first = try_tick_lock(tmp.path()).unwrap().unwrap();
         assert!(try_tick_lock(tmp.path()).unwrap().is_none());
         drop(first);
-        assert!(try_tick_lock(tmp.path()).unwrap().is_some());
+
+        // BUG-1595 (recurrence of BUG-1303): re-locking right after drop can
+        // still observe contention under `--test-threads` parallelism, even
+        // though this process's own fd for the lock file is closed.
+        //
+        // Root cause, not a test artifact: `try_tick_lock` takes an
+        // fs2 `flock`(2)-style advisory lock, which is owned by the OPEN
+        // FILE DESCRIPTION, not by this process's fd. `std::fs::File`
+        // already opens with `O_CLOEXEC` (confirmed via strace: the
+        // `openat` call carries `O_CLOEXEC`), so that is not the gap.
+        // The gap is that `O_CLOEXEC` only takes effect at `execve()` — it
+        // does nothing about `fork()` itself. `aida-cli-lib`'s test binary
+        // shells out to git constantly (`std::process::Command`, 700+
+        // call sites), and every such spawn forks the *whole* process,
+        // which briefly duplicates every open fd — including this test's
+        // lock fd, if it happens to be open at that instant — into the
+        // child. For the short fork()..execve() window the child holds
+        // its own reference to the same open file description, so the
+        // advisory lock stays held even after `drop(first)` closes our
+        // fd. Switching to Linux OFD locks (`fcntl(F_OFD_SETLK)`) would
+        // not close this gap either: POSIX defines OFD locks as
+        // inherited across `fork()` exactly like `flock()` (a copy of
+        // the fd from `fork()` refers to the same open file description
+        // and shares its OFD lock). So this window is not a bug in the
+        // lock; it is real, unavoidable, and cannot be raced out of the
+        // implementation by picking a different lock primitive. The
+        // bounded retry below is what BUG-1595 calls for in that case.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let reacquired = loop {
+            match try_tick_lock(tmp.path()).unwrap() {
+                Some(guard) => break Some(guard),
+                None if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                None => break None,
+            }
+        };
+        assert!(
+            reacquired.is_some(),
+            "lock was not reacquired within 2s of dropping the first guard"
+        );
     }
 
     // A chatty tick advances the store once, regardless of job count.

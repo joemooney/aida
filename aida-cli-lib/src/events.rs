@@ -361,6 +361,28 @@ pub enum EventKind {
         /// Recipient handle / role / broadcast as the sender addressed it.
         to: String,
     },
+    /// STORY-1436: a gate REFUSED or HELD — the non-action the rest of this
+    /// feed cannot record. Every other kind is a thing that happened; this is
+    /// a thing that was PREVENTED (an integrity-floor refusal, a blocked
+    /// pickup, a stale-approval or review-in-progress merge refusal, a
+    /// closure hold, an ambiguous-id refusal). It is the denominator a rate
+    /// of bypasses/passes needs, and it is what makes a blocked seat
+    /// distinguishable from an idle one. Recording it never changes the
+    /// gate's outcome. **Not actionable**: the gate worked; the record is for
+    /// query surfaces (`aida history events --kind gate-held`), not a wake.
+    // trace:STORY-1436 | ai:claude
+    GateHeld {
+        /// Stable gate slug, one of the `GATE_*` constants in this module.
+        gate: String,
+        /// The PR the gate refused on, when one applies.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pr: Option<u64>,
+        /// Why the gate held, as the refusal message stated it.
+        reason: String,
+        /// Who was refused: `AIDA_AGENT_ID` when set, else the shell user.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        actor: Option<String>,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -397,7 +419,9 @@ impl EventKind {
             // a decision point (STORY-1051).
             EventKind::RunStarted
             | EventKind::PhaseEntered { .. }
-            | EventKind::SpecReDriven { .. } => false,
+            | EventKind::SpecReDriven { .. }
+            // STORY-1436: a correct refusal is recorded for counting, not a wake.
+            | EventKind::GateHeld { .. } => false,
             // Real decision points — wake the supervisor.
             EventKind::ReclassifiedNeedsHuman { .. }
             | EventKind::CiTerminal { .. }
@@ -472,6 +496,7 @@ impl EventKind {
             EventKind::CronJobFired { .. } => "CronJobFired",
             EventKind::CronJobFailed { .. } => "CronJobFailed",
             EventKind::MailReceived { .. } => "MailReceived",
+            EventKind::GateHeld { .. } => "GateHeld",
             EventKind::Unknown => "Unknown",
         }
     }
@@ -506,6 +531,7 @@ impl EventKind {
             "ReviewVerdictRecorded",
             "DispositionChanged",
             "ExecutionModeChanged",
+            "GateHeld",
         ]
     }
 }
@@ -904,9 +930,515 @@ fn try_emit(project_root: &Path, ev: &Event) -> std::io::Result<()> {
     Ok(())
 }
 
+/// STORY-1436: gate slugs carried by [`EventKind::GateHeld`]. The first two
+/// are the human integrity floor (STORY-1353 / BUG-1566) — the pair a floor
+/// refusal rate counts against its complement, a hold released.
+// trace:STORY-1436 | ai:claude
+pub const GATE_MERGE_HOLD_CLEAR_FLOOR: &str = "merge-hold-clear-floor";
+/// `aida pr ship` refused to release a merge-hold (BUG-1566 floor, BUG-1499
+/// label-only hold, BUG-1532 unmet refusal-release condition).
+pub const GATE_SHIP_HOLD_RELEASE: &str = "ship-hold-release";
+/// TASK-1448: the recorded approval does not cover the head about to merge.
+pub const GATE_STALE_APPROVAL: &str = "stale-approval";
+/// STORY-1405: a reviewer is mid-way through this PR's head.
+pub const GATE_REVIEW_IN_PROGRESS: &str = "review-in-progress";
+/// Fresh pickup refused by an unsatisfied/permanent `BlockedBy`.
+pub const GATE_BLOCKED_BY_PICKUP: &str = "blocked-by-pickup";
+/// Fresh pickup refused for any other pickability reason.
+pub const GATE_QUEUE_PICKUP: &str = "queue-pickup";
+/// BUG-1551 / STORY-1430: merged, but closure held at Done.
+pub const GATE_CLOSURE_HOLD: &str = "closure-hold";
+/// BUG-1535: an id resolving to more than one requirement was refused.
+pub const GATE_AMBIGUOUS_ID: &str = "ambiguous-id";
+
+/// Gates that constitute the human integrity floor over a merge-hold.
+// trace:STORY-1436 | ai:claude
+pub const FLOOR_GATES: &[&str] = &[GATE_MERGE_HOLD_CLEAR_FLOOR, GATE_SHIP_HOLD_RELEASE];
+
+/// Who is being refused: the registered agent id when one is set, else the
+/// shell user. Best-effort; `None` only when neither resolves.
+// trace:STORY-1436 | ai:claude
+pub fn gate_actor() -> Option<String> {
+    std::env::var("AIDA_AGENT_ID")
+        .ok()
+        .or_else(|| std::env::var("AIDA_USER").ok())
+        .or_else(|| std::env::var("USER").ok())
+        .or_else(|| std::env::var("USERNAME").ok())
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+/// Build the [`EventKind::GateHeld`] record (pure; the emit is separate so
+/// tests can assert the shape without touching disk).
+// trace:STORY-1436 | ai:claude
+pub fn gate_held_event(
+    gate: &str,
+    spec: Option<String>,
+    pr: Option<u64>,
+    reason: &str,
+    actor: Option<String>,
+    seat: Option<String>,
+) -> Event {
+    let mut ev = Event::new(
+        spec,
+        "",
+        EventKind::GateHeld {
+            gate: gate.to_string(),
+            pr,
+            reason: reason.trim().to_string(),
+            actor,
+        },
+    );
+    ev.seat = seat;
+    ev
+}
+
+/// STORY-1436: record that a gate refused or held. Cheap (one appended line)
+/// and never failing — [`emit`] swallows every IO error, so a failed write can
+/// never change the gate's outcome. Call it immediately before the refusal.
+// trace:STORY-1436 | ai:claude
+pub fn record_gate_held(
+    project_root: &Path,
+    gate: &str,
+    spec: Option<String>,
+    pr: Option<u64>,
+    reason: &str,
+) {
+    emit(
+        project_root,
+        &gate_held_event(gate, spec, pr, reason, gate_actor(), active_seat()),
+    );
+}
+
+/// STORY-1436: the denominator view — how often each gate held, and for the
+/// integrity floor, how often it held against how often a hold was released
+/// (`MergeHoldChanged { placed: false }`) in the same window.
+// trace:STORY-1436 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GateTally {
+    /// `(gate, count)`, highest count first then by name.
+    pub by_gate: Vec<(String, usize)>,
+    /// Integrity-floor refusals ([`FLOOR_GATES`]).
+    pub floor_refusals: usize,
+    /// Holds released in the window (`MergeHoldChanged { placed: false }`).
+    pub floor_releases: usize,
+}
+
+impl GateTally {
+    /// Share of floor encounters that HELD, as a whole percent; `None` when
+    /// the floor was not encountered at all (no denominator).
+    pub fn floor_held_pct(&self) -> Option<u32> {
+        let total = self.floor_refusals + self.floor_releases;
+        (total > 0).then(|| ((self.floor_refusals * 100 + total / 2) / total) as u32)
+    }
+}
+
+/// Tally `events` (already window-filtered by the caller).
+// trace:STORY-1436 | ai:claude
+pub fn tally_gates<'a>(events: impl IntoIterator<Item = &'a Event>) -> GateTally {
+    let mut counts: std::collections::BTreeMap<String, usize> = Default::default();
+    let mut tally = GateTally::default();
+    for ev in events {
+        match &ev.kind {
+            EventKind::GateHeld { gate, .. } => {
+                *counts.entry(gate.clone()).or_default() += 1;
+                if FLOOR_GATES.contains(&gate.as_str()) {
+                    tally.floor_refusals += 1;
+                }
+            }
+            EventKind::MergeHoldChanged { placed: false, .. } => tally.floor_releases += 1,
+            _ => {}
+        }
+    }
+    let mut by_gate: Vec<(String, usize)> = counts.into_iter().collect();
+    by_gate.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    tally.by_gate = by_gate;
+    tally
+}
+
+/// Normalize an event-kind name for matching: `gate-held`, `gate_held`,
+/// `GateHeld` and `gateheld` all compare equal.
+// trace:STORY-1436 | ai:claude
+pub fn normalize_kind_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
+}
+
+/// STORY-1436: every event in the rotated archive then the live stream,
+/// oldest first — a window count must not lose the prior generation.
+// trace:STORY-1436 | ai:claude
+pub fn read_all_with_archive(project_root: &Path) -> Vec<Event> {
+    let parse = |path: PathBuf| -> Vec<Event> {
+        std::fs::read_to_string(path)
+            .map(|body| {
+                body.lines()
+                    .filter_map(|l| serde_json::from_str::<Event>(l).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let mut out = parse(events_archive_path(project_root));
+    out.extend(parse(events_path(project_root)));
+    out
+}
+
+/// Parse a `--since`/`--until` bound: RFC 3339, or a bare `YYYY-MM-DD`
+/// (midnight UTC).
+// trace:STORY-1436 | ai:claude
+pub fn parse_time_bound(value: &str) -> Option<DateTime<Utc>> {
+    let v = value.trim();
+    if let Ok(t) = DateTime::parse_from_rfc3339(v) {
+        return Some(t.with_timezone(&Utc));
+    }
+    chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d")
+        .ok()
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+        .map(|dt| dt.and_utc())
+}
+
+/// Filter for [`kind_report`].
+// trace:STORY-1436 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub struct KindQuery {
+    /// Event kind name, any casing/separator (`gate-held`, `GateHeld`).
+    pub kind: String,
+    pub since: Option<DateTime<Utc>>,
+    pub until: Option<DateTime<Utc>>,
+    /// Match `actor` (GateHeld) or `seat`, case-insensitive. `me` = the
+    /// current [`gate_actor`] — "what did I try to do and could not".
+    pub who: Option<String>,
+    pub limit: usize,
+}
+
+/// STORY-1436: render the events of one kind in a window, newest first, and
+/// — for `GateHeld` — the per-gate tally plus the integrity floor's refusals
+/// beside its releases for the SAME window (the denominator).
+// trace:STORY-1436 | ai:claude
+pub fn kind_report(events: &[Event], q: &KindQuery, mut w: impl Write) -> std::io::Result<()> {
+    let want = normalize_kind_name(&q.kind);
+    let known = EventKind::known_names()
+        .iter()
+        .any(|n| normalize_kind_name(n) == want);
+    if !known {
+        writeln!(
+            w,
+            "unknown event kind `{}`; known kinds: {}",
+            q.kind,
+            EventKind::known_names().join(", ")
+        )?;
+        return Ok(());
+    }
+    let who = q.who.as_deref().map(|v| {
+        if v.eq_ignore_ascii_case("me") {
+            gate_actor().unwrap_or_default().to_ascii_lowercase()
+        } else {
+            v.trim().to_ascii_lowercase()
+        }
+    });
+    let in_window: Vec<&Event> = events
+        .iter()
+        .filter(|e| q.since.is_none_or(|s| e.ts >= s))
+        .filter(|e| q.until.is_none_or(|u| e.ts < u))
+        .collect();
+    let matches_who = |e: &Event| -> bool {
+        let Some(who) = who.as_deref() else {
+            return true;
+        };
+        let actor = match &e.kind {
+            EventKind::GateHeld { actor, .. } => actor.as_deref(),
+            _ => None,
+        };
+        [actor, e.seat.as_deref()]
+            .into_iter()
+            .flatten()
+            .any(|v| v.eq_ignore_ascii_case(who))
+    };
+    let mut hits: Vec<&Event> = in_window
+        .iter()
+        .copied()
+        .filter(|e| normalize_kind_name(e.kind.name()) == want)
+        .filter(|e| matches_who(e))
+        .collect();
+    let total = hits.len();
+    hits.reverse();
+    hits.truncate(q.limit.max(1));
+    let label = EventKind::known_names()
+        .iter()
+        .find(|n| normalize_kind_name(n) == want)
+        .copied()
+        .unwrap_or("?");
+    writeln!(
+        w,
+        "{label} events: {total} in window (showing {})",
+        hits.len()
+    )?;
+    for e in &hits {
+        let at = e.ts.format("%Y-%m-%d %H:%M:%SZ");
+        match &e.kind {
+            EventKind::GateHeld {
+                gate,
+                pr,
+                reason,
+                actor,
+            } => {
+                let target = match (pr, e.spec.as_deref()) {
+                    (Some(p), _) => format!("PR #{p}"),
+                    (None, Some(s)) => s.to_string(),
+                    (None, None) => "-".to_string(),
+                };
+                let who = match (actor.as_deref(), e.seat.as_deref()) {
+                    (Some(a), Some(s)) => format!("{a} ({s})"),
+                    (Some(a), None) => a.to_string(),
+                    (None, Some(s)) => format!("({s})"),
+                    (None, None) => "unknown".to_string(),
+                };
+                let first = reason.lines().next().unwrap_or_default();
+                writeln!(w, "  {at}  {gate}  {target}  refused {who}: {first}")?;
+            }
+            other => {
+                let body = serde_json::to_string(other).unwrap_or_default();
+                let spec = e.spec.as_deref().unwrap_or("-");
+                writeln!(w, "  {at}  {spec}  {body}")?;
+            }
+        }
+    }
+    if label == "GateHeld" {
+        let scoped: Vec<&Event> = in_window
+            .iter()
+            .copied()
+            .filter(|e| matches_who(e))
+            .collect();
+        let tally = tally_gates(scoped.iter().copied());
+        if !tally.by_gate.is_empty() {
+            writeln!(w, "By gate:")?;
+            for (gate, n) in &tally.by_gate {
+                writeln!(w, "  {gate:<24} {n}")?;
+            }
+        }
+        let pct = tally
+            .floor_held_pct()
+            .map(|p| format!("{p}% held"))
+            .unwrap_or_else(|| "not encountered".to_string());
+        writeln!(
+            w,
+            "Integrity floor: {} refusal(s) vs {} release(s) in the same window ({pct})",
+            tally.floor_refusals, tally.floor_releases
+        )?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:STORY-1436 | ai:claude
+    #[test]
+    fn gate_held_round_trips_and_is_not_actionable() {
+        let ev = gate_held_event(
+            GATE_MERGE_HOLD_CLEAR_FLOOR,
+            None,
+            Some(1978),
+            "clearing a merge-hold requires a human",
+            Some("claude-reviewer-1".into()),
+            Some("reviewer".into()),
+        );
+        let line = serde_json::to_string(&ev).unwrap();
+        assert!(line.contains(r#""event":"GateHeld""#), "{line}");
+        assert!(line.contains(r#""pr":1978"#), "{line}");
+        assert!(line.contains(r#""actor":"claude-reviewer-1""#), "{line}");
+        let back: Event = serde_json::from_str(&line).unwrap();
+        assert_eq!(back, ev);
+        assert!(!back.kind.is_actionable());
+        assert!(!back.kind.is_terminal());
+        assert_eq!(back.kind.name(), "GateHeld");
+        assert!(EventKind::known_names().contains(&"GateHeld"));
+    }
+
+    // trace:STORY-1436 | ai:claude
+    #[test]
+    fn gate_tally_counts_floor_refusals_against_releases() {
+        let evs = vec![
+            gate_held_event(GATE_MERGE_HOLD_CLEAR_FLOOR, None, Some(1), "r", None, None),
+            gate_held_event(GATE_SHIP_HOLD_RELEASE, None, Some(2), "r", None, None),
+            gate_held_event(GATE_MERGE_HOLD_CLEAR_FLOOR, None, Some(3), "r", None, None),
+            gate_held_event(
+                GATE_BLOCKED_BY_PICKUP,
+                Some("S-1".into()),
+                None,
+                "r",
+                None,
+                None,
+            ),
+            Event::new(
+                None,
+                "",
+                EventKind::MergeHoldChanged {
+                    pr: 4,
+                    placed: false,
+                    reason: None,
+                },
+            ),
+            Event::new(
+                None,
+                "",
+                EventKind::MergeHoldChanged {
+                    pr: 5,
+                    placed: true,
+                    reason: None,
+                },
+            ),
+        ];
+        let t = tally_gates(&evs);
+        assert_eq!(t.floor_refusals, 3);
+        assert_eq!(t.floor_releases, 1);
+        assert_eq!(t.floor_held_pct(), Some(75));
+        assert_eq!(t.by_gate[0], (GATE_MERGE_HOLD_CLEAR_FLOOR.to_string(), 2));
+        assert_eq!(GateTally::default().floor_held_pct(), None);
+    }
+
+    // A failed write must never surface: an unwritable root is swallowed.
+    // trace:STORY-1436 | ai:claude
+    #[test]
+    fn record_gate_held_never_fails_on_unwritable_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        // `.aida` is a FILE, so create_dir_all fails — emit must swallow it.
+        std::fs::write(tmp.path().join(".aida"), b"not a dir").unwrap();
+        record_gate_held(tmp.path(), GATE_AMBIGUOUS_ID, None, None, "ambiguous");
+        assert!(read_all(tmp.path()).is_empty());
+    }
+
+    // trace:STORY-1436 | ai:claude
+    #[test]
+    fn record_gate_held_appends_actor_seat_and_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        // One guard for all three: the env lock is not re-entrant.
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            (EVENTS_DISABLE_ENV, None),
+            ("AIDA_AGENT_ID", Some("claude-reviewer-1")),
+            ("AIDA_SESSION_ROLE", Some("reviewer")),
+        ]);
+        record_gate_held(
+            tmp.path(),
+            GATE_MERGE_HOLD_CLEAR_FLOOR,
+            None,
+            Some(1978),
+            "needs a human",
+        );
+        let evs = read_all(tmp.path());
+        assert_eq!(evs.len(), 1);
+        assert_eq!(evs[0].seat.as_deref(), Some("reviewer"));
+        assert!(matches!(
+            &evs[0].kind,
+            EventKind::GateHeld { gate, pr: Some(1978), reason, actor }
+                if gate == GATE_MERGE_HOLD_CLEAR_FLOOR
+                    && reason == "needs a human"
+                    && actor.as_deref() == Some("claude-reviewer-1")
+        ));
+    }
+
+    // trace:STORY-1436 | ai:claude
+    #[test]
+    fn kind_report_shows_gate_rows_and_floor_rate() {
+        let old = {
+            let mut e = gate_held_event(
+                GATE_AMBIGUOUS_ID,
+                Some("X-1".into()),
+                None,
+                "old",
+                None,
+                None,
+            );
+            e.ts = parse_time_bound("2026-01-01").unwrap();
+            e
+        };
+        let evs = vec![
+            old,
+            gate_held_event(
+                GATE_MERGE_HOLD_CLEAR_FLOOR,
+                None,
+                Some(1978),
+                "needs a human",
+                Some("claude-reviewer-1".into()),
+                Some("reviewer".into()),
+            ),
+            gate_held_event(
+                GATE_BLOCKED_BY_PICKUP,
+                Some("STORY-9".into()),
+                None,
+                "blocked by TASK-1",
+                Some("joe".into()),
+                None,
+            ),
+            Event::new(
+                None,
+                "",
+                EventKind::MergeHoldChanged {
+                    pr: 1978,
+                    placed: false,
+                    reason: None,
+                },
+            ),
+        ];
+        let q = KindQuery {
+            kind: "gate-held".into(),
+            since: parse_time_bound("2026-06-01"),
+            limit: 20,
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        kind_report(&evs, &q, &mut out).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("GateHeld events: 2 in window"), "{text}");
+        assert!(
+            text.contains("PR #1978  refused claude-reviewer-1 (reviewer)"),
+            "{text}"
+        );
+        assert!(text.contains("STORY-9"), "{text}");
+        assert!(!text.contains("X-1"), "{text}");
+        assert!(
+            text.contains(
+                "Integrity floor: 1 refusal(s) vs 1 release(s) in the same window (50% held)"
+            ),
+            "{text}"
+        );
+
+        // `--author` narrows to one refused party.
+        let mut out = Vec::new();
+        let q = KindQuery {
+            who: Some("claude-reviewer-1".into()),
+            ..q
+        };
+        kind_report(&evs, &q, &mut out).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("GateHeld events: 1 in window"), "{text}");
+        assert!(!text.contains("STORY-9"), "{text}");
+    }
+
+    // trace:STORY-1436 | ai:claude
+    #[test]
+    fn kind_report_rejects_unknown_kind_with_the_known_list() {
+        let q = KindQuery {
+            kind: "nope".into(),
+            limit: 5,
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        kind_report(&[], &q, &mut out).unwrap();
+        assert!(String::from_utf8(out).unwrap().contains("GateHeld"));
+    }
+
+    // trace:STORY-1436 | ai:claude
+    #[test]
+    fn kind_names_normalize() {
+        assert_eq!(
+            normalize_kind_name("gate-held"),
+            normalize_kind_name("GateHeld")
+        );
+        assert_eq!(normalize_kind_name("gate_held"), "gateheld");
+    }
 
     // TASK-1297: an older event line written before `excluded_from_batch`
     // existed must still deserialize — `#[serde(default)]` makes a missing

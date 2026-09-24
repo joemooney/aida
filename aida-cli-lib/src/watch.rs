@@ -519,6 +519,16 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
         ),
         // trace:STORY-1226 | ai:claude
         EventKind::MailReceived { to } => ("mail-received", format!("mail sent to {to}")),
+        // trace:STORY-1436 | ai:claude
+        EventKind::GateHeld {
+            gate, pr, reason, ..
+        } => (
+            "gate-held",
+            format!(
+                "gate {gate} held{}: {reason}",
+                pr.map(|p| format!(" on PR #{p}")).unwrap_or_default()
+            ),
+        ),
         EventKind::Unknown => (
             "unknown",
             "unrecognized event (newer drain binary?)".to_string(),
