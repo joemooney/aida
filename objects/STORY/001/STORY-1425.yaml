@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:46:59.718785414Z
-modified_at: 2026-09-24T08:08:17.696056836Z
+modified_at: 2026-09-24T08:08:20.373460314Z
 req_type: Story
 tags:
 - docs:impacted
@@ -61,3 +61,9 @@ comments:
   created_at: 2026-09-21T17:00:21.702475686Z
   modified_at: 2026-09-21T17:00:21.702475686Z
   session_id: 01a0b204-9df4-7622-8b91-f12fd291d8df
+- id: 01a0d275-5695-7a22-a968-a6451b11f413
+  author: joe
+  content: 'Review BLOCK addressed in the fast-forward fix on claude/story-1425: the baseline README is sanitized (trace comments, SPEC-IDs, [aida:] markers, .aida paths), arm A''s scratch path no longer carries the spec id, a failed store arm reports unknown with the delta unknown, and --yes is required for unattended runs. A dry run on BUG-1189 and TASK-1248 found no trace markers or SPEC-IDs in the arm A brief. One residual remains: the output path sits under ~/.aida/reconstitute/. No live (agent-launching) run yet, and none is possible here: this repo has no criterion-traced tests, so both arms would be unknown. Status is held at in-progress until a live run on a project with traced criteria (aida-hub) is done.'
+  created_at: 2026-09-24T08:08:20.373460314Z
+  modified_at: 2026-09-24T08:08:20.373460314Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
