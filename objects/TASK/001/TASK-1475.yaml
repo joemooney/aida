@@ -13,8 +13,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T09:09:51.043038964Z
-modified_at: 2026-09-24T09:09:51.043038964Z
+modified_at: 2026-09-24T09:09:55.500325813Z
 req_type: Task
 tags:
 - parent:CR-8
 - provenance
+relationships:
+- rel_type: Child
+  target_id: 01a0cea3-12fb-7253-b63d-c450eac7fa45
+  created_at: 2026-09-24T09:09:55.500325813Z
