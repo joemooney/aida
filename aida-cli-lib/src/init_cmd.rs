@@ -2365,10 +2365,10 @@ enabled = true
 #
 # [watchdog]
 # max_wakes_per_hour = 120
-# max_tokens_per_hour = 100000000
-# daily_token_budget = 2000000000
-# budget_alert_pct = 50
-# restart_context_tokens = 300000
+# max_tokens_per_hour = 500000000
+# daily_token_budget = 6000000000
+# budget_alert_pct = 90
+# restart_context_tokens = 0   # off; e.g. 300000 to recommend a restart
 #
 # [[schedule.jobs]]
 # name = "watchdog"
