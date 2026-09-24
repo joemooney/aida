@@ -37,6 +37,15 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-clear-pending-approval.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -67,6 +76,11 @@
             "type": "command",
             "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-mail-notice.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-clear-pending-approval.sh",
+            "timeout": 5
           }
         ]
       }
