@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:40:49.880980182Z
-modified_at: 2026-06-13T01:48:35.955681802Z
+modified_at: 2026-09-24T16:30:26.031565471Z
 req_type: Story
 tags:
 - deferred:stabilization-first
@@ -22,8 +22,7 @@ tags:
 - repositioning
 - ws1-substrate
 relationships:
-- rel_type:
-    custom: related-to
+- rel_type: References
   target_id: 019eacf3-dcc9-78e3-a54c-f65fc5d492c0
   created_at: 2026-06-12T20:42:51.611811551Z
   created_by: joe
