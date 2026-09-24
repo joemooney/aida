@@ -4968,8 +4968,15 @@ fn heal_doctor_completed_without_commit(
             continue;
         }
         if matches!(req.status, RequirementStatus::Completed) {
+            let prior = req.status.clone();
             req.status = RequirementStatus::Done;
             req.modified_at = chrono::Utc::now();
+            // TASK-1477: this heal re-opens a Completed spec — clear the
+            // stale completed_at so the eventual re-completion (once a
+            // corroborating commit lands) stamps a fresh date instead of
+            // keeping this one forever.
+            // trace:TASK-1477 | ai:claude
+            crate::completion::clear_completed_at_on_reopen(req, &prior);
             action = Some(format!(
                 "re-opened {} from Completed to Done (no corroborating commit) for triage",
                 finding.id
@@ -7087,6 +7094,54 @@ hostname = "localhost"
         // Idempotent: a second heal is a no-op (spec already left Completed).
         let again = heal_doctor_completed_without_commit(root, &finding).unwrap();
         assert_eq!(again.status, "skipped");
+    }
+
+    /// TASK-1477 (review finding): this heal is an un-complete path — it must
+    /// clear the stale `implementation_info.completed_at` the same way
+    /// `aida edit --status` / `aida queue rework` do, so a later re-completion
+    /// (once a corroborating commit lands) stamps a fresh date instead of
+    /// keeping this one forever and misordering `aida list --sort completed`.
+    /// `completion_sha` is left untouched (BUG-410's reopen guard needs it).
+    // trace:TASK-1477 | ai:claude
+    #[test]
+    fn integrity_heal_reopens_completed_to_done_and_clears_completed_at() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        let mut req = completed_spec("TASK-701");
+        let stale_stamp = chrono::Utc::now() - chrono::Duration::days(10);
+        req.implementation_info = Some(aida_core::ImplementationInfo {
+            completed_at: Some(stale_stamp),
+            completion_sha: Some("deadbeef".to_string()),
+            ..Default::default()
+        });
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![req];
+        storage.save(&store).unwrap();
+
+        let finding = DoctorFinding {
+            category: "completed-without-commit".to_string(),
+            id: "TASK-701".to_string(),
+            summary: "Completed spec TASK-701 has no commit ...".to_string(),
+            action: "re-open".to_string(),
+            safe_heal: false,
+        };
+        let result = heal_doctor_completed_without_commit(root, &finding).unwrap();
+        assert_eq!(result.status, "healed");
+
+        let reloaded = storage.load().unwrap();
+        let info = reloaded.requirements[0]
+            .implementation_info
+            .as_ref()
+            .expect("implementation_info survives the heal");
+        assert!(
+            info.completed_at.is_none(),
+            "the stale completed_at must be cleared on reopen"
+        );
+        assert_eq!(
+            info.completion_sha.as_deref(),
+            Some("deadbeef"),
+            "completion_sha is left alone — BUG-410's reopen guard depends on it"
+        );
     }
 
     /// BUG-407: `confirm_doctor_category` must NOT block on stdin in a

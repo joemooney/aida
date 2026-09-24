@@ -5737,6 +5737,10 @@ pub(crate) fn handle_git_backend_command(
                 // below (same "before the mutation" rule STORY-738 uses).
                 // trace:TASK-1450 | ai:claude
                 let status_before = req.status.to_string();
+                // TASK-1477: captured before the mutation so a reopen (this
+                // spec was Completed, canonical isn't) can clear the stale
+                // completed_at stamp below. trace:TASK-1477 | ai:claude
+                let prior_status_for_reopen = req.status.clone();
                 // STORY-1418: an into-Completed edit stamps through the seam;
                 // the ship record is emitted below once the write lands.
                 // trace:STORY-1418 | ai:claude
@@ -5744,6 +5748,14 @@ pub(crate) fn handle_git_backend_command(
                     crate::completion::mark_completed(&mut req);
                 } else {
                     req.set_status_from_str(canonical);
+                    // TASK-1477: reopening a Completed spec must clear the
+                    // stale completed_at so the next completion stamps a
+                    // fresh date instead of keeping the first one forever.
+                    // trace:TASK-1477 | ai:claude
+                    crate::completion::clear_completed_at_on_reopen(
+                        &mut req,
+                        &prior_status_for_reopen,
+                    );
                 }
                 disposition_event = Some((status_before, req.status.to_string()));
                 // TASK-1446: a spec deliberately reopened to Draft after its

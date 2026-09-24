@@ -7460,6 +7460,11 @@ pub(crate) fn handle_queue_rework(
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
                     r.set_status_from_str(&format!("{:?}", new_status));
                     r.modified_at = now;
+                    // TASK-1477: `queue rework` can reopen a Completed spec
+                    // (Completed -> InProgress is `rework_smart_target`'s
+                    // default) — clear the stale completed_at so the next
+                    // completion stamps a fresh date. trace:TASK-1477 | ai:claude
+                    crate::completion::clear_completed_at_on_reopen(r, &current_status);
                     if leaving_attention {
                         // Only a human at a terminal may undo the advisor's
                         // escalation to a human. trace:TASK-1311 | ai:claude

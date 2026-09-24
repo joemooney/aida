@@ -4333,6 +4333,11 @@ impl<'a> McpServer<'a> {
                         if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
                             r.set_status_from_str(&format!("{:?}", new_status));
                             r.modified_at = now;
+                            // TASK-1477: the `queue_rework` MCP tool can also
+                            // reopen a Completed spec — clear the stale
+                            // completed_at so the next completion stamps a
+                            // fresh date. trace:TASK-1477 | ai:claude
+                            crate::completion::clear_completed_at_on_reopen(r, &current_status);
                             if leaving_attention {
                                 // An MCP caller is never a human at a
                                 // terminal, so it never clears the advisor's
