@@ -5565,9 +5565,43 @@ pub(crate) fn handle_git_backend_command(
                 // orchestrator-shelving metadata. The punt ledger
                 // (`.aida/punts.jsonl`) keeps the durable history for both.
                 // trace:EPIC-28 | ai:claude
+                //
+                // TASK-1311: the clearing lives in `requeue::clear_shelve_markers`
+                // so `aida edit` and `aida queue rework` return a spec to flight
+                // identically. It also drops the `needs-human` tag an advisor
+                // escalation wrote, which is a burndown parking tag: without
+                // that, a triaged spec stayed out of the drain for good. The
+                // comment records why the spec came back (auditable re-entry).
+                // trace:TASK-1311 | ai:claude
                 if was_needs_attention && !matches!(req.status, RequirementStatus::NeedsAttention) {
-                    req.attention_reason = None;
-                    req.failure_reason = None;
+                    // The escalation tag is a hand-off to a human; only a
+                    // human at a terminal may clear it (not a non-TTY advisor
+                    // agent, not an orchestrated phase).
+                    let cleared = crate::requeue::clear_shelve_markers(
+                        &mut req,
+                        crate::requeue::caller_may_clear_escalation(),
+                    );
+                    if cleared != crate::requeue::ClearedMarkers::default() {
+                        let note = cleared.audit_note(
+                            "`aida edit --status`",
+                            &req.status.to_string(),
+                            None,
+                        );
+                        req.add_comment(aida_core::Comment::new(get_default_author(), note));
+                    }
+                    if !cleared.removed_tags.is_empty() {
+                        eprintln!(
+                            "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
+                            "·".dimmed(),
+                            cleared.removed_tags.join(", ")
+                        );
+                    }
+                    if let Some(w) = crate::requeue::kept_escalation_warning(
+                        req.spec_id.as_deref().unwrap_or(id),
+                        &cleared,
+                    ) {
+                        eprintln!("  {} {w}", "Warning:".yellow().bold());
+                    }
                     left_needs_attention = true;
                 }
                 changed = true;

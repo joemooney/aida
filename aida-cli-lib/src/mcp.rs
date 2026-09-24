@@ -4160,11 +4160,13 @@ impl<'a> McpServer<'a> {
 
     // trace:EPIC-27 trace:BUG-480
     fn tool_queue_rework(&self, args: &Value) -> Result<String, String> {
-        // BUG-480: rework re-queues a spec for execution (and may flip its
-        // status), so it carries the same advisor-authority weight as
-        // queue_add. MCP is never advisor authority — refuse unconditionally,
-        // matching the queue_add gate above. Mechanics live in
-        // `tool_queue_rework_inner`. trace:BUG-480 | ai:claude
+        // BUG-480: rework re-queues a spec for execution, so it needs the
+        // same DISPATCH authority as queue_add (product, advisor or
+        // integrator role, or a live orchestrator); a caller without it is
+        // refused here. Any status flip it entails is gated separately on
+        // advisor authority by `mcp_status_gate_message` in the inner
+        // handler. Mechanics live in `tool_queue_rework_inner`.
+        // trace:BUG-480 trace:TASK-1311 | ai:claude
         if let Some(msg) = mcp_queue_authority_message() {
             return Err(msg);
         }
@@ -4221,24 +4223,53 @@ impl<'a> McpServer<'a> {
         }
 
         let mut summary = String::new();
+        let mut kept_warning: Option<String> = None;
         if let Some(ref new_status) = target_status {
             if new_status != &current_status {
                 let new_status = new_status.clone();
                 let now = chrono::Utc::now();
+                // TASK-1311: mirror the CLI rework — leaving NeedsAttention
+                // clears the shelve markers so the drain picks the spec up.
+                // trace:TASK-1311 | ai:claude
+                let leaving_attention = current_status == RequirementStatus::NeedsAttention
+                    && new_status != RequirementStatus::NeedsAttention;
                 self.storage
                     .update_atomically(|s| {
                         if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
                             r.set_status_from_str(&format!("{:?}", new_status));
                             r.modified_at = now;
+                            if leaving_attention {
+                                // An MCP caller is never a human at a
+                                // terminal, so it never clears the advisor's
+                                // escalation to a human. trace:TASK-1311
+                                let cleared = crate::requeue::clear_shelve_markers(r, false);
+                                kept_warning =
+                                    crate::requeue::kept_escalation_warning(&display, &cleared);
+                                let note = cleared.audit_note(
+                                    "the `queue_rework` MCP tool",
+                                    &new_status.to_string(),
+                                    reason,
+                                );
+                                r.add_comment(aida_core::Comment::new(
+                                    crate::get_default_author(),
+                                    note,
+                                ));
+                            }
                         }
                     })
                     .map_err(|e| e.to_string())?;
+                if leaving_attention {
+                    crate::queue_cmd::clear_failure_reason_targeted(&self.storage, &spec_id);
+                }
                 crate::record_role_activity(&spec_id, "rework");
                 crate::update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
                 summary.push_str(&format!(
                     "{} status: {} → {}\n",
                     display, current_status, new_status
                 ));
+                if let Some(w) = &kept_warning {
+                    summary.push_str(&format!("Warning: {w}\n"));
+                }
             }
         }
 

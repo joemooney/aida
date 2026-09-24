@@ -2294,6 +2294,7 @@ pub(crate) fn pr_ship_handler(
             &[project_root.as_path(), main_worktree.as_path()],
             pr_number,
             &gate_spec_ids,
+            head_sha.as_deref(),
         );
         // TASK-1458: gate + merge pin + durable override audit, in one
         // function so the wiring test drives exactly what ship runs.

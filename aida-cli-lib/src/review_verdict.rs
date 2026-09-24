@@ -1041,6 +1041,19 @@ pub(crate) fn write_verdict_object(
     path: &Path,
     obj: &serde_json::Map<String, serde_json::Value>,
 ) -> std::io::Result<()> {
+    // TASK-1460: files recorded before the per-sha archive existed are
+    // migrated into it once, lazily, the first time anything records here —
+    // BEFORE this write, so the migration sees the pre-existing state.
+    // Best-effort: a failed migration never costs the record being written.
+    // trace:TASK-1460 | ai:claude
+    if let Some(dir) = path.parent() {
+        if let Err(e) = ensure_sidecars_archived(dir) {
+            eprintln!(
+                "warning: could not migrate existing verdicts in {} into the per-commit archive: {e}",
+                dir.display()
+            );
+        }
+    }
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
         .unwrap_or_else(|_| "{}".to_string());
     write_verdict_atomic(path, &format!("{body}\n"))?;
@@ -1132,23 +1145,42 @@ fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
 /// it was taken at `sha`; otherwise the per-sha archive does. Prefix-tolerant
 /// the same way every other sha comparison here is ([`same_reviewed_sha`]).
 // trace:BUG-1539 | ai:claude
+// trace:TASK-1460 | ai:claude
 pub fn read_verdict_for_sha(project_root: &Path, key: &str, sha: &str) -> Option<RecordedVerdict> {
-    let path = verdict_path(project_root, key);
-    if let Some(current) = std::fs::read_to_string(&path)
+    let path = verdict_file_for_sha(project_root, key, sha)?;
+    std::fs::read_to_string(path)
         .ok()
         .and_then(|b| parse_recorded_verdict(&b))
-    {
-        if current
-            .reviewed_sha
-            .as_deref()
-            .is_some_and(|r| same_reviewed_sha(r, sha))
-        {
-            return Some(current);
-        }
+}
+
+/// TASK-1460: the FILE holding the verdict recorded under `key` for commit
+/// `sha` — the current file when it was taken at `sha`, else the newest
+/// matching archive file. The phase-3 handshake needs the file (its reader
+/// checks conflicts, escalation and freshness on the artifact itself), not
+/// just the parsed verdict.
+// trace:TASK-1460 | ai:claude
+pub fn verdict_file_for_sha(project_root: &Path, key: &str, sha: &str) -> Option<PathBuf> {
+    let path = verdict_path(project_root, key);
+    let current_at_sha = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|b| parse_recorded_verdict(&b))
+        .and_then(|v| v.reviewed_sha)
+        .is_some_and(|r| same_reviewed_sha(&r, sha));
+    if current_at_sha {
+        return Some(path);
     }
-    archived_in_dir(&verdict_archive_dir(&path)?, sha)
+    archived_verdict_file_for_sha(&path, sha)
+}
+
+/// TASK-1460: the archived round of the verdict file at `path` for commit
+/// `sha` (never the current file itself), newest recording first when more
+/// than one archive file matches a short sha.
+// trace:TASK-1460 | ai:claude
+pub fn archived_verdict_file_for_sha(path: &Path, sha: &str) -> Option<PathBuf> {
+    archived_files_in_dir(&verdict_archive_dir(path)?, sha)
         .into_iter()
         .next()
+        .map(|(p, _)| p)
 }
 
 /// BUG-1539: every archived verdict for commit `sha` under ANY key — the
@@ -1173,10 +1205,17 @@ pub fn verdicts_for_sha(project_root: &Path, sha: &str) -> Vec<RecordedVerdict> 
 }
 
 fn archived_in_dir(dir: &Path, sha: &str) -> Vec<RecordedVerdict> {
+    archived_files_in_dir(dir, sha)
+        .into_iter()
+        .map(|(_, v)| v)
+        .collect()
+}
+
+fn archived_files_in_dir(dir: &Path, sha: &str) -> Vec<(PathBuf, RecordedVerdict)> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
-    let mut out: Vec<RecordedVerdict> = entries
+    let mut out: Vec<(PathBuf, RecordedVerdict)> = entries
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
@@ -1185,11 +1224,123 @@ fn archived_in_dir(dir: &Path, sha: &str) -> Vec<RecordedVerdict> {
                 .and_then(|s| s.to_str())
                 .is_some_and(|stem| same_reviewed_sha(stem, sha))
         })
-        .filter_map(|p| std::fs::read_to_string(p).ok())
-        .filter_map(|b| parse_recorded_verdict(&b))
+        .filter_map(|p| {
+            let v = parse_recorded_verdict(&std::fs::read_to_string(&p).ok()?)?;
+            Some((p, v))
+        })
         .collect();
-    out.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
+    out.sort_by(|a, b| b.1.recorded_at.cmp(&a.1.recorded_at));
     out
+}
+
+/// TASK-1460: archive a verdict file that was written OUTSIDE the record
+/// path — the `/aida-review` skill writes `AIDA_REVIEW_VERDICT_FILE` with a
+/// shell heredoc — so its round lands in the per-sha archive exactly as a
+/// recorded one would. The current file is left byte-for-byte as written.
+/// A file with no verdict or no reviewed commit is unidentifiable and is not
+/// archived (the same refusal the record path makes). Idempotent.
+// trace:TASK-1460 | ai:claude
+pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
+    let Some(obj) = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.as_object().cloned())
+    else {
+        return Ok(());
+    };
+    archive_round_by_sha(path, &obj)
+}
+
+/// TASK-1460: the marker that says the one-shot sidecar migration has run in
+/// a verdict directory. A dotfile with no `.json` extension, so every `*.json`
+/// walker of the directory is untouched by it.
+const MIGRATION_MARKER: &str = ".archive-migrated";
+
+/// TASK-1460: run [`migrate_sidecars_to_archive`] once per verdict directory.
+/// Called lazily from the record path; the marker makes every later call a
+/// single `stat`.
+// trace:TASK-1460 | ai:claude
+pub fn ensure_sidecars_archived(dir: &Path) -> std::io::Result<usize> {
+    let marker = dir.join(MIGRATION_MARKER);
+    if marker.exists() || !dir.is_dir() {
+        return Ok(0);
+    }
+    let migrated = migrate_sidecars_to_archive(dir)?;
+    std::fs::write(&marker, format!("{migrated}\n"))?;
+    Ok(migrated)
+}
+
+/// TASK-1460: move every verdict recorded before BUG-1539's per-sha archive
+/// into it — each top-level `<KEY>.json` in `dir`, its archived `rounds`
+/// oldest first and then its current round, lands at `<KEY>/<sha>.json`
+/// through the same [`archive_round_by_sha`] the record path uses.
+///
+/// Idempotent: a commit that already has an archive file is skipped whole,
+/// so a re-run (or a round the record path already archived) adds nothing
+/// and can never reorder a newer recording under an older one. Rounds with
+/// no reviewed commit are unidentifiable and stay where they are. The
+/// top-level files are never modified. Returns the archive files created.
+// trace:TASK-1460 | ai:claude
+pub fn migrate_sidecars_to_archive(dir: &Path) -> std::io::Result<usize> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(0);
+    };
+    let mut files: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file())
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| !n.starts_with('.'))
+        })
+        .collect();
+    files.sort();
+    let mut created = 0;
+    for path in files {
+        let Some(obj) = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+            .and_then(|v| v.as_object().cloned())
+        else {
+            continue;
+        };
+        let Some(archive_dir) = verdict_archive_dir(&path) else {
+            continue;
+        };
+        let mut recordings: Vec<JsonObj> = obj
+            .get("rounds")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter_map(|r| r.as_object().cloned()).collect())
+            .unwrap_or_default();
+        let mut current = obj.clone();
+        current.remove("rounds");
+        recordings.push(current);
+        // Decide per commit up front, so a commit is either migrated whole or
+        // (already archived) not touched at all.
+        let mut fresh: Vec<String> = Vec::new();
+        for rec in &recordings {
+            let Some(sha) = round_sha(rec) else { continue };
+            let Some(sha) = archivable_sha(&sha).map(str::to_ascii_lowercase) else {
+                continue;
+            };
+            if !fresh.contains(&sha) && !archive_dir.join(format!("{sha}.json")).exists() {
+                fresh.push(sha);
+            }
+        }
+        for rec in &recordings {
+            let in_fresh = round_sha(rec)
+                .as_deref()
+                .and_then(archivable_sha)
+                .is_some_and(|s| fresh.contains(&s.to_ascii_lowercase()));
+            if in_fresh {
+                archive_round_by_sha(&path, rec)?;
+            }
+        }
+        created += fresh.len();
+    }
+    Ok(created)
 }
 
 /// BUG-1529 criterion 1: close a spec's outstanding refusal out when its
@@ -1255,9 +1406,16 @@ pub fn close_verdict_on_merge(
         "closed_at".to_string(),
         serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
     );
-    let pretty = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
+    let pretty = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
         .unwrap_or_else(|_| "{}".to_string());
     write_verdict_atomic(&path, &format!("{pretty}\n"))?;
+    // TASK-1460: the current round is also archived at its reviewed commit;
+    // close it there too, or `verdicts_for_sha` / `read_verdict_for_sha`
+    // would still report this refusal as open. The archive's top level is
+    // this same recording, so re-archiving replaces it with the closed copy
+    // and keeps that commit's earlier recordings in its `rounds`.
+    // trace:TASK-1460 | ai:claude
+    archive_round_by_sha(&path, &obj)?;
     Ok(true)
 }
 
