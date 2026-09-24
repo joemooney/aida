@@ -74,7 +74,8 @@ fn allowed_direct_writes() -> BTreeMap<&'static str, usize> {
         ("aida-cli-lib/lib.rs", 1),
         ("aida-cli-lib/doctor_cmd.rs", 1),
         ("aida-cli-lib/report_cmd.rs", 1),
-        ("aida-core/db/cache.rs", 9),
+        // +2: TASK-1464 `--sort completed` test fixtures (inline #[cfg(test)]).
+        ("aida-core/db/cache.rs", 11),
         ("aida-core/db/cached_git_backend.rs", 4),
         ("aida-core/db/git_backend.rs", 1),
     ])

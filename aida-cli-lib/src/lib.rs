@@ -85227,7 +85227,8 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         // trace:BUG-1516 | ai:claude
         ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
         // trace:TASK-1307 | ai:claude
-        ReviewCommand::Stranded { json, fix } => handle_review_stranded(*json, *fix),
+        // trace:TASK-1423 | ai:claude
+        ReviewCommand::Stranded { json, fix, age } => handle_review_stranded(*json, *fix, *age),
         // trace:STORY-1415 | ai:claude
         ReviewCommand::Mode { mode } => match mode {
             cli::ReviewModeCommand::MassChange { action, days, json } => {
@@ -85392,6 +85393,208 @@ fn run_stranded_sweep(project_root: &std::path::Path) -> Result<Vec<stranded_swe
     Ok(rows)
 }
 
+/// TASK-1423: resolve a branch's CURRENT tip commit from LOCAL git objects
+/// only — no `git fetch`, no forge call. Tries the local branch first (a
+/// still-live worktree may have it), then the `origin` remote-tracking ref
+/// (what a fetched-but-locally-deleted branch leaves behind — the normal
+/// shape after a session that pushed and exited without merging). `None`
+/// when neither resolves: offline and honest about what it doesn't know,
+/// never a guess.
+// trace:TASK-1423 | ai:claude
+fn local_branch_tip(project_root: &std::path::Path, branch: &str) -> Option<String> {
+    let branch = branch.trim();
+    if branch.is_empty() {
+        return None;
+    }
+    for refname in [
+        format!("refs/heads/{branch}"),
+        format!("refs/remotes/origin/{branch}"),
+    ] {
+        let Ok(out) = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["rev-parse", "--verify", "--quiet", &refname])
+            .output()
+        else {
+            continue;
+        };
+        if !out.status.success() {
+            continue;
+        }
+        let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !sha.is_empty() {
+            return Some(sha);
+        }
+    }
+    None
+}
+
+/// TASK-1423: the offline counterpart to [`run_stranded_sweep`] — every spec
+/// whose last recorded verdict still blocks done, with no forge call: the
+/// "did anything land since the review" check comes from `local_branch_tip`
+/// (LOCAL git only) instead of asking the forge for the PR's live head, so
+/// this stays fast and answerable with no network and no open-PR
+/// requirement. Same file-discovery pass as `run_stranded_sweep` (every
+/// spec-keyed file under `.aida/review-verdicts/`), so the two reports can
+/// never disagree about which files exist.
+// trace:TASK-1423 | ai:claude
+fn run_stalled_sweep(project_root: &std::path::Path) -> Result<Vec<stranded_sweep::StalledRow>> {
+    let dir = project_root.join(".aida").join("review-verdicts");
+    let mut spec_ids: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if !stranded_sweep::is_spec_keyed_verdict_filename(stem) {
+                continue;
+            }
+            spec_ids.push(stem.to_string());
+        }
+    }
+    spec_ids.sort();
+    spec_ids.dedup();
+    if spec_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Ok(Vec::new());
+    };
+    let dispenser = load_dispenser(&store_path)?;
+    let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+
+    let now = chrono::Utc::now();
+    let mut rows = Vec::new();
+    for spec_id in spec_ids {
+        let Some(verdict) = review_verdict::read_recorded_verdict(project_root, &spec_id) else {
+            continue;
+        };
+        if !verdict.kind.blocks_done() {
+            continue;
+        }
+        let Ok(Some(req)) = backend.get_requirement_by_spec_id(&spec_id) else {
+            continue;
+        };
+        let spec_completed = matches!(req.status, aida_core::RequirementStatus::Completed);
+        if !review_verdict::is_outstanding_refusal(&verdict, spec_completed) {
+            continue;
+        }
+
+        // No forge, no gh: the branch tip comes from whatever local git
+        // already has on disk. `verdict.reviewed_branch` is what
+        // `aida review record` stamps (defaulting to the checked-out branch
+        // at record time), so it names the branch to look up.
+        let tip = verdict
+            .reviewed_branch
+            .as_deref()
+            .and_then(|b| local_branch_tip(project_root, b));
+        let relation = review_verdict::classify_tip_relation(
+            verdict.reviewed_sha.as_deref(),
+            tip.as_deref(),
+            None,
+        );
+        if !stranded_sweep::is_stalled(&verdict, spec_completed, relation) {
+            continue;
+        }
+
+        let age = awaiting_you::blocked_age(verdict.recorded_at.as_deref(), now);
+        rows.push(stranded_sweep::StalledRow {
+            spec_id: req.display_id(),
+            verdict_kind: verdict.kind,
+            reviewed_sha: verdict.reviewed_sha.clone(),
+            reviewed_branch: verdict.reviewed_branch.clone(),
+            recorded_at: verdict.recorded_at.clone(),
+            summary: verdict.summary.clone(),
+            stall_secs: age.map(|a| a.secs),
+            overdue: age.is_some_and(|a| a.overdue),
+        });
+    }
+    stranded_sweep::sort_by_staleness(&mut rows);
+    Ok(rows)
+}
+
+/// `aida review stranded --age` — TASK-1423. Answers "which specs have a
+/// review verdict with no subsequent run, and for how long" entirely
+/// offline: the per-spec verdict files plus local git, no forge call, no
+/// open-PR requirement. Split out of BUG-1470 acceptance criterion 3 — the
+/// session that filed it diagnosed a throughput stall as ten already-refused
+/// PRs with zero head movement and no owner, invisible because nothing
+/// reported "verdict, no subsequent run".
+// trace:TASK-1423 | ai:claude
+fn handle_review_stalled(project_root: &std::path::Path, json: bool) -> Result<()> {
+    let rows = run_stalled_sweep(project_root)?;
+
+    if json {
+        let arr: Vec<_> = rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "spec": r.spec_id,
+                    "verdict": r.verdict_kind.label(),
+                    "reviewed_sha": r.reviewed_sha,
+                    "reviewed_branch": r.reviewed_branch,
+                    "recorded_at": r.recorded_at,
+                    "summary": r.summary,
+                    "stall_seconds": r.stall_secs,
+                    "stall": r
+                        .stall_secs
+                        .map(crate::last_drain::format_age)
+                        .unwrap_or_else(|| "unknown".to_string()),
+                    "overdue": r.overdue,
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "count": rows.len(),
+                "stalled": arr,
+            }))?
+        );
+        return Ok(());
+    }
+
+    if rows.is_empty() {
+        println!(
+            "{} no stalled review verdicts found",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
+        return Ok(());
+    }
+    println!(
+        "{} {} spec(s) with a review verdict and no subsequent run — oldest first:",
+        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+        rows.len()
+    );
+    for row in &rows {
+        let stall = row
+            .stall_secs
+            .map(crate::last_drain::format_age)
+            .unwrap_or_else(|| "unknown".to_string());
+        let overdue = if row.overdue { " — overdue" } else { "" };
+        println!(
+            "  {} {} at {} — {stall}{overdue}",
+            row.spec_id.cyan(),
+            row.verdict_kind.label(),
+            row.reviewed_sha
+                .as_deref()
+                .map(review_verdict::short_sha)
+                .unwrap_or("?"),
+        );
+        if let Some(s) = &row.summary {
+            println!("      {}", s.dimmed());
+        }
+    }
+    Ok(())
+}
+
 /// `aida review stranded` — TASK-1307. Default is a read-only report;
 /// `--fix` is the separate explicit remediation pass (acceptance 3),
 /// applying the same protection BUG-1452 now gives a fresh refusal: a merge
@@ -85399,9 +85602,17 @@ fn run_stranded_sweep(project_root: &std::path::Path) -> Result<Vec<stranded_swe
 /// 4) because it re-derives the stranded set from live state each call — a
 /// spec the previous `--fix` already held/parked no longer classifies as
 /// stranded, so a second run changes nothing.
+///
+/// `--age` (TASK-1423) is a different report over the same directory of
+/// verdict files: offline (local git only, no forge lookup, so it never
+/// requires an open PR or `gh`), answering "which specs have a verdict with
+/// no subsequent run, and for how long" — see `handle_review_stalled`.
 // trace:TASK-1307 | ai:claude
-fn handle_review_stranded(json: bool, fix: bool) -> Result<()> {
+fn handle_review_stranded(json: bool, fix: bool, age: bool) -> Result<()> {
     let project_root = find_project_root()?;
+    if age {
+        return handle_review_stalled(&project_root, json);
+    }
     let rows = run_stranded_sweep(&project_root)?;
 
     if fix {
@@ -87017,61 +87228,70 @@ fn generate_review_prompt(
 
     // Resolve the spec list. Preference order: --specs explicit,
     // --pr range parse, error if neither.
-    let (spec_ids, header_subtitle): (Vec<String>, String) = if let Some(csv) = specs_csv {
-        let ids: Vec<String> = csv
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        if ids.is_empty() {
-            anyhow::bail!("--specs was empty after splitting on commas");
-        }
-        (ids.clone(), format!("Specs: {}", ids.join(", ")))
-    } else if let Some(pr_n) = pr {
-        let project_root = find_project_root()?;
-        let forge = forge_override
-            .and_then(ReviewForge::parse)
-            .or_else(|| detect_forge_from_origin(&project_root))
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "couldn't detect forge from origin URL — pass --forge github|gitlab"
-                )
-            })?;
-        let (base, head) = pr_base_head(&project_root, forge, pr_n)?;
-        let messages = git_log_messages(&project_root, &base, &head)?;
-        let mut ids: Vec<String> = Vec::new();
-        for msg in &messages {
-            for id in extract_spec_ids_from_commit(msg) {
-                if !ids
-                    .iter()
-                    .any(|existing| existing.eq_ignore_ascii_case(&id))
-                {
-                    ids.push(id);
+    // trace:BUG-1434 | ai:claude
+    let (spec_ids, header_subtitle, staleness_note): (Vec<String>, String, Option<String>) =
+        if let Some(csv) = specs_csv {
+            let ids: Vec<String> = csv
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if ids.is_empty() {
+                anyhow::bail!("--specs was empty after splitting on commas");
+            }
+            (ids.clone(), format!("Specs: {}", ids.join(", ")), None)
+        } else if let Some(pr_n) = pr {
+            let project_root = find_project_root()?;
+            let forge = forge_override
+                .and_then(ReviewForge::parse)
+                .or_else(|| detect_forge_from_origin(&project_root))
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "couldn't detect forge from origin URL — pass --forge github|gitlab"
+                    )
+                })?;
+            let (base, head) = pr_base_head(&project_root, forge, pr_n)?;
+            let messages = git_log_messages(&project_root, &base, &head)?;
+            let mut ids: Vec<String> = Vec::new();
+            for msg in &messages {
+                for id in extract_spec_ids_from_commit(msg) {
+                    if !ids
+                        .iter()
+                        .any(|existing| existing.eq_ignore_ascii_case(&id))
+                    {
+                        ids.push(id);
+                    }
                 }
             }
-        }
-        if ids.is_empty() {
-            anyhow::bail!(
-                "no `(REQ-ID)` trailers found in {}..{} ({} commits inspected)",
-                base,
-                head,
-                messages.len()
-            );
-        }
-        let label = match forge {
-            ReviewForge::GitHub => format!("PR #{} — branch `{}`", pr_n, head),
-            ReviewForge::GitLab => format!("MR !{} — branch `{}`", pr_n, head),
+            if ids.is_empty() {
+                anyhow::bail!(
+                    "no `(REQ-ID)` trailers found in {}..{} ({} commits inspected)",
+                    base,
+                    head,
+                    messages.len()
+                );
+            }
+            let label = match forge {
+                ReviewForge::GitHub => format!("PR #{} — branch `{}`", pr_n, head),
+                ReviewForge::GitLab => format!("MR !{} — branch `{}`", pr_n, head),
+            };
+            let note = stale_base_note(&project_root, &head, &base);
+            (ids, label, note)
+        } else {
+            anyhow::bail!("pass --specs <CSV> or --pr <N>");
         };
-        (ids, label)
-    } else {
-        anyhow::bail!("pass --specs <CSV> or --pr <N>");
-    };
 
     // Compose the markdown.
     let mut out = String::new();
     out.push_str("# Review Prompt\n\n");
     out.push_str(&header_subtitle);
-    out.push_str("\n\n## What to verify\n\n");
+    out.push_str("\n\n");
+    if let Some(note) = &staleness_note {
+        out.push_str("## Staleness\n\n");
+        out.push_str(note);
+        out.push('\n');
+    }
+    out.push_str("## What to verify\n\n");
 
     let mut missing: Vec<String> = Vec::new();
     for id in &spec_ids {
@@ -87251,6 +87471,122 @@ fn pr_base_head(
         ReviewForge::GitLab => format!("mr-{}", n),
     };
     Ok(("main".to_string(), head))
+}
+
+/// How many commits `origin/<base>` (the default branch's last-fetched
+/// state) is ahead of `head` — i.e. how far the PR's tree trails the
+/// branch its checks and findings are compared against. Purely local: it
+/// reads whatever `origin/<base>` already points at and never fetches, so
+/// it's cheap enough to run on every prompt generation.
+///
+/// Returns `None` when the count can't be resolved (no such
+/// remote-tracking ref locally, `head` not resolvable, git not on PATH,
+/// …). Callers must render that as "unknown", never as `0` — a `0` reads
+/// as "you're current" while `None` means "we don't know", and conflating
+/// them turns absent evidence into false reassurance.
+// trace:BUG-1434 | ai:claude
+fn commits_behind_default(project_root: &std::path::Path, head: &str, base: &str) -> Option<u64> {
+    let remote_base = format!("origin/{}", base);
+    let range = format!("{}..{}", head, remote_base);
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-list", "--count", &range])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<u64>()
+        .ok()
+}
+
+/// `git diff --name-only <a>...<b>` (triple-dot: files changed on `b`
+/// since its merge-base with `a`). Best-effort — any git failure yields an
+/// empty list rather than an error, since overlap is a nicety layered on
+/// top of the commits-behind count, not load-bearing on its own.
+// trace:BUG-1434 | ai:claude
+fn git_diff_name_only(project_root: &std::path::Path, a: &str, b: &str) -> Vec<String> {
+    let range = format!("{}...{}", a, b);
+    let Ok(out) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["diff", "--name-only", &range])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+/// Files the intervening commits (`head..origin/<base>`) touch that the
+/// PR's own commits (`base..head`) also touch — the overlap where a stale
+/// base is most likely to distort a check or finding (acceptance #2 of
+/// this bug). Best-effort like `git_diff_name_only`: any git failure
+/// yields an empty overlap rather than an error.
+// trace:BUG-1434 | ai:claude
+fn stale_base_file_overlap(project_root: &std::path::Path, head: &str, base: &str) -> Vec<String> {
+    let remote_base = format!("origin/{}", base);
+    let intervening = git_diff_name_only(project_root, head, &remote_base);
+    let pr_own = git_diff_name_only(project_root, base, head);
+    let pr_own_set: std::collections::HashSet<&str> = pr_own.iter().map(|s| s.as_str()).collect();
+    let mut overlap: Vec<String> = intervening
+        .into_iter()
+        .filter(|f| pr_own_set.contains(f.as_str()))
+        .collect();
+    overlap.sort();
+    overlap.dedup();
+    overlap
+}
+
+/// Render the staleness section for `generate_review_prompt`'s `--pr` path.
+/// `None` means "say nothing" — either the head is level with
+/// `origin/<base>` (acceptance #5: no extra output when current) or the
+/// figure legitimately can't be computed and the caller has already fallen
+/// back to a different note. `commits_behind_default` returning `None`
+/// (PRIN-5: absent evidence, not a false `0`) still produces `Some` text
+/// here, stating "unknown" explicitly rather than omitting the section.
+// trace:BUG-1434 | ai:claude
+fn stale_base_note(project_root: &std::path::Path, head: &str, base: &str) -> Option<String> {
+    match commits_behind_default(project_root, head, base) {
+        None => Some(format!(
+            "PR head is an unknown number of commits behind `{base}` — the local \
+             `origin/{base}` ref couldn't be resolved, so staleness could not be computed. \
+             Treat the checks and findings below as unverified against the current default \
+             branch.\n"
+        )),
+        Some(0) => None,
+        Some(n) => {
+            let plural = if n == 1 { "" } else { "s" };
+            let mut note = format!(
+                "PR head is {n} commit{plural} behind `{base}` — the checks and findings below \
+                 were computed against a tree that far behind the default branch.\n"
+            );
+            let overlap = stale_base_file_overlap(project_root, head, base);
+            if !overlap.is_empty() {
+                let files = overlap
+                    .iter()
+                    .map(|f| format!("`{f}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                note.push_str(&format!(
+                    "This PR also touches file{} those {n} intervening commit{plural} touched, \
+                     the case where findings are most likely distorted: {files}\n",
+                    if overlap.len() == 1 { "" } else { "s" }
+                ));
+            }
+            Some(note)
+        }
+    }
 }
 
 /// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
@@ -104427,6 +104763,12 @@ mod bug_800_review_test_command_prompt_tests;
 #[cfg(test)]
 #[path = "tests/story_1350_review_approach_tests.rs"]
 mod story_1350_review_approach_tests;
+
+// BUG-1434: the review prompt states how far a PR's head trails the
+// default branch, computed locally, never rendering "unknown" as 0.
+#[cfg(test)]
+#[path = "tests/bug_1434_stale_base_tests.rs"]
+mod bug_1434_stale_base_tests;
 
 // STORY-790 review findings: drift brief then-vs-now + mail/briefs since exit.
 // trace:STORY-790 | ai:claude
