@@ -5392,6 +5392,12 @@ pub(crate) fn handle_git_backend_command(
 
             let mut changed = false;
             let mut force_dropped_structural_tags: Vec<String> = Vec::new();
+            // STORY-1434: (target uuid, target display id) once the
+            // carve-out target has been resolved+validated and the edge +
+            // comment folded into `req` below — carried past the single
+            // save so the inverse edge can be written on the target
+            // afterwards. trace:STORY-1434 | ai:claude
+            let mut carve_target: Option<(uuid::Uuid, String)> = None;
             // TASK-1450: before/after pairs for the seat-tagged coordination
             // events emitted once the edit is durably written — captured here
             // (not reconstructed after the fact) so the recorded values are
@@ -5415,13 +5421,21 @@ pub(crate) fn handle_git_backend_command(
             // composes with a plain `--description` pass in one invocation.
             // Refuses (instead of silently no-op'ing) when the text isn't
             // found verbatim — a criterion carved from the wrong wording is
-            // worse than an explicit error. trace:STORY-1434 | ai:claude
+            // worse than an explicit error.
+            //
+            // Atomicity: the target is resolved and validated FIRST — via
+            // `get_requirement_unambiguous` (BUG-1535), so a `--carve-into`
+            // id that names two specs refuses instead of guessing — and the
+            // edge + the CARVE-OUT comment are folded into THIS `req` before
+            // the single save below, alongside the struck description. One
+            // write, not a description change plus a separate follow-up
+            // write that could land only half-applied. trace:STORY-1434
             if let Some(criterion) = carve_out {
                 let target_id_arg = carve_into
                     .as_deref()
                     .expect("clap requires --carve-into with --carve-out");
                 let target = backend
-                    .get_requirement_by_spec_id(target_id_arg)?
+                    .get_requirement_unambiguous(target_id_arg)?
                     .ok_or_else(|| {
                         not_found::requirement_not_found(target_id_arg, Some(store_path))
                     })?;
@@ -5432,16 +5446,26 @@ pub(crate) fn handle_git_backend_command(
                     .spec_id
                     .clone()
                     .unwrap_or_else(|| target_id_arg.to_string());
+                let source_display = req.spec_id.as_deref().unwrap_or(id).to_string();
                 match carve_out_description(&req.description, criterion, &target_display) {
                     Some(new_description) => {
                         req.description = new_description;
+                        apply_carve_out(
+                            &mut req,
+                            target.id,
+                            &source_display,
+                            &target_display,
+                            criterion,
+                            carve_reason.as_deref(),
+                        );
                         changed = true;
+                        carve_target = Some((target.id, target_display));
                     }
                     None => anyhow::bail!(
                         "--carve-out text not found verbatim in {}'s description — copy the \
                          exact wording (including case and punctuation) from `aida show {}`.",
-                        req.spec_id.as_deref().unwrap_or(id),
-                        req.spec_id.as_deref().unwrap_or(id)
+                        source_display,
+                        source_display
                     ),
                 }
             }
@@ -6118,28 +6142,20 @@ pub(crate) fn handle_git_backend_command(
                 );
             }
 
-            // STORY-1434: record the carve-out edge + reason comment AFTER
-            // the scalar save, same ordering reason as the supersede lineage
-            // above — the helper re-reads the persisted spec (which already
-            // carries the struck description written above), so writing the
-            // edge first would be clobbered by the save. trace:STORY-1434
-            if let (Some(criterion), Some(target_arg)) = (carve_out, carve_into) {
-                let edit_spec = req.spec_id.as_deref().unwrap_or(id).to_string();
-                match crate::add_carved_out_edge(
-                    &backend,
-                    &edit_spec,
-                    criterion,
-                    target_arg,
-                    carve_reason.as_deref(),
-                ) {
-                    Ok(disp) => println!("  Carved out → {}", disp.cyan()),
-                    Err(e) => eprintln!(
-                        "  {} could not record carve-out to {}: {}",
-                        "Warning:".yellow().bold(),
-                        target_arg,
-                        e
-                    ),
-                }
+            // STORY-1434: the carved-out-to edge + CARVE-OUT comment already
+            // landed on `req` and were saved atomically above (with the
+            // struck description); only the INVERSE carved-from edge on the
+            // TARGET remains, written after the source's save the same way
+            // the blocked-by/supersede edges below are. `target` is
+            // re-fetched by UUID — never re-resolved from the user-typed
+            // `--carve-into` id — so this cannot rediscover an ambiguity;
+            // a failure here (backend error, target vanished) is a real
+            // error, not a warning: a one-sided carve-out (source struck, no
+            // reciprocal edge) is exactly the half-applied state this spec
+            // exists to prevent. trace:STORY-1434 | ai:claude
+            if let Some((target_id, target_display)) = carve_target {
+                crate::add_carved_from_edge(&backend, target_id, req.id)?;
+                println!("  Carved out → {}", target_display.cyan());
             }
 
             // STORY-446: apply blocked-by edge add/remove AFTER any scalar edit

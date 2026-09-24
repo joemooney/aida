@@ -165,6 +165,69 @@ fn carved_out_targets_is_empty_for_a_plain_spec() {
     assert!(carved_out_targets(&req).is_empty());
 }
 
+// ── apply_carve_out (atomicity: edge + comment on the SAME req) ─────────
+
+#[test]
+fn apply_carve_out_writes_the_edge_and_a_default_visible_comment_on_one_req() {
+    let mut req = Requirement::new("source".into(), "d".into());
+    let target_id = uuid::Uuid::now_v7();
+
+    apply_carve_out(
+        &mut req,
+        target_id,
+        "TASK-1",
+        "TASK-2",
+        "a green nightly proves the GitLab path end to end.",
+        Some("live smoke fails before forge-smoke markers emit"),
+    );
+
+    assert_eq!(carved_out_targets(&req), vec![target_id]);
+    assert_eq!(req.comments.len(), 1, "exactly one comment landed on req");
+    let body = &req.comments[0].content;
+    assert!(body.starts_with("CARVE-OUT:"), "{body}");
+    assert!(body.contains("TASK-2"), "{body}");
+    assert!(
+        body.contains("live smoke fails before forge-smoke markers emit"),
+        "{body}"
+    );
+    assert!(
+        is_default_visible_comment(body),
+        "the comment apply_carve_out writes must itself pass the default-visible check: {body}"
+    );
+}
+
+#[test]
+fn apply_carve_out_is_idempotent_on_the_edge() {
+    let mut req = Requirement::new("source".into(), "d".into());
+    let target_id = uuid::Uuid::now_v7();
+    apply_carve_out(&mut req, target_id, "TASK-1", "TASK-2", "x", None);
+    apply_carve_out(&mut req, target_id, "TASK-1", "TASK-2", "x", None);
+    assert_eq!(
+        carved_out_targets(&req),
+        vec![target_id],
+        "the edge must not duplicate"
+    );
+    assert_eq!(
+        req.comments.len(),
+        2,
+        "each call still logs its own comment"
+    );
+}
+
+#[test]
+fn apply_carve_out_defaults_the_reason_when_none_given() {
+    let mut req = Requirement::new("source".into(), "d".into());
+    apply_carve_out(
+        &mut req,
+        uuid::Uuid::now_v7(),
+        "TASK-1",
+        "TASK-2",
+        "x",
+        None,
+    );
+    assert!(req.comments[0].content.contains("no reason given"));
+}
+
 // ── do_dispatch::carve_out_pickup_warning ────────────────────────────────
 
 #[test]

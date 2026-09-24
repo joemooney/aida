@@ -13370,92 +13370,94 @@ pub(crate) fn carved_out_targets(req: &aida_core::Requirement) -> Vec<uuid::Uuid
         .collect()
 }
 
-/// Record that `spec_id` carved a criterion OUT to `target_id` — a typed
-/// `Custom("carved-out-to")` edge on the source plus the inverse
-/// `Custom("carved-from")` edge on the target (both idempotent, mirroring
-/// [`add_superseded_by_edge`]/[`add_blocked_by_edge`]) — and log the move as
-/// a comment on the source whose body opens with the `CARVE-OUT:` marker
-/// [`is_default_visible_comment`] recognizes, so `aida show`'s default view
-/// surfaces the reason without `-c`. Returns the target's display id.
+/// Apply a carve-out to an ALREADY-RESOLVED-AND-VALIDATED `req`: push the
+/// typed `Custom("carved-out-to")` edge (idempotent) and the `CARVE-OUT:`
+/// comment [`is_default_visible_comment`] recognizes. Pure — no backend I/O —
+/// so the caller can fold this into the SAME `req` mutation the rest of
+/// `aida edit`'s scalar fields go through and save it in the one atomic
+/// write, instead of a separate follow-up write that could land only
+/// half-applied (the description struck but the edge/comment lost, or vice
+/// versa, on a failure in between).
 // trace:STORY-1434 | ai:claude
-fn add_carved_out_edge(
-    backend: &aida_core::CachedGitBackend,
-    spec_id: &str,
+pub(crate) fn apply_carve_out(
+    req: &mut aida_core::Requirement,
+    target_id: uuid::Uuid,
+    source_display: &str,
+    target_display: &str,
     criterion: &str,
-    target_id: &str,
     reason: Option<&str>,
-) -> Result<String> {
+) {
     use aida_core::models::{Relationship, RelationshipType};
-    use aida_core::DatabaseBackend;
-
-    let mut req = backend
-        .get_requirement_by_spec_id(spec_id)?
-        .ok_or_else(|| not_found::requirement_not_found(spec_id, None))?;
-    let target = backend
-        .get_requirement_by_spec_id(target_id)?
-        .ok_or_else(|| not_found::requirement_not_found(target_id, None))?;
-    if target.id == req.id {
-        anyhow::bail!(
-            "a requirement cannot carve a criterion into itself ({})",
-            spec_id
-        );
-    }
-    let target_display = target
-        .spec_id
-        .clone()
-        .unwrap_or_else(|| target_id.to_string());
 
     if !req.relationships.iter().any(|r| {
         matches!(&r.rel_type, RelationshipType::Custom(name) if name.eq_ignore_ascii_case(CARVED_OUT_TO_REL))
-            && r.target_id == target.id
+            && r.target_id == target_id
     }) {
         req.relationships.push(Relationship {
             rel_type: RelationshipType::Custom(CARVED_OUT_TO_REL.to_string()),
-            target_id: target.id,
+            target_id,
             created_at: Some(chrono::Utc::now()),
             created_by: Some(get_default_author()),
         });
     }
 
-    let now = chrono::Utc::now();
     let reason_line = reason
         .map(|r| r.trim())
         .filter(|r| !r.is_empty())
         .unwrap_or("no reason given");
     let comment_body = format!(
-        "CARVE-OUT: \"{criterion}\" is no longer carried by {spec_id} — it is now carried by \
-         {target_display}.\n\nReason: {reason_line}"
+        "CARVE-OUT: \"{criterion}\" is no longer carried by {source_display} — it is now \
+         carried by {target_display}.\n\nReason: {reason_line}"
     );
-    req.comments.push(aida_core::Comment {
-        id: Uuid::now_v7(),
-        content: comment_body,
-        author: get_default_author(),
-        created_at: now,
-        modified_at: now,
-        parent_id: None,
-        replies: Vec::new(),
-        reactions: Vec::new(),
-        session_id: resolve_current_session_id(),
-    });
-    req.modified_at = now;
-    backend.update_requirement(&req)?;
+    let mut comment = aida_core::Comment::new(get_default_author(), comment_body);
+    // trace:TASK-330 | ai:claude — stamp the producing session, same as
+    // `aida comment add`'s comment.
+    comment.session_id = resolve_current_session_id();
+    req.comments.push(comment);
+}
 
-    // Inverse carved-from edge on the target (also idempotent).
-    let mut target = backend.get_requirement_by_spec_id(target_id)?.unwrap();
+/// Write the inverse `Custom("carved-from")` edge on the carve-out TARGET,
+/// after the source's atomic save has landed. Idempotent. The target is
+/// re-fetched by UUID (never re-resolved from a user-typed id — the caller
+/// already resolved and validated it once via `get_requirement_unambiguous`),
+/// so this can only fail on a genuine backend error or the target having
+/// disappeared between resolution and this call — either way that is an
+/// error the caller must surface, not swallow as a warning: a one-sided
+/// carve-out (source struck, no inverse edge) is exactly the kind of
+/// half-applied state this spec exists to prevent.
+// trace:STORY-1434 | ai:claude
+fn add_carved_from_edge(
+    backend: &aida_core::CachedGitBackend,
+    target_id: uuid::Uuid,
+    source_id: uuid::Uuid,
+) -> Result<()> {
+    use aida_core::models::{Relationship, RelationshipType};
+    use aida_core::DatabaseBackend;
+
+    let mut target = backend.get_requirement(&target_id)?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "carve-out target {} disappeared before the inverse carved-from edge could be \
+             written — the carve-out edge/comment on the source are saved, but the reciprocal \
+             edge on the target is missing; re-run `aida rel add <source> {} --type carved-from` \
+             to repair it by hand",
+            target_id,
+            target_id
+        )
+    })?;
     if !target.relationships.iter().any(|r| {
         matches!(&r.rel_type, RelationshipType::Custom(name) if name.eq_ignore_ascii_case(CARVED_FROM_REL))
-            && r.target_id == req.id
+            && r.target_id == source_id
     }) {
         target.relationships.push(Relationship {
             rel_type: RelationshipType::Custom(CARVED_FROM_REL.to_string()),
-            target_id: req.id,
+            target_id: source_id,
             created_at: Some(chrono::Utc::now()),
             created_by: Some(get_default_author()),
         });
         target.modified_at = chrono::Utc::now();
         backend.update_requirement(&target)?;
     }
-    Ok(target_display)
+    Ok(())
 }
 
 #[cfg(test)]
