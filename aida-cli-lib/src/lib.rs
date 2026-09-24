@@ -9357,6 +9357,9 @@ fn handle_findings_add(
 
     // Mirror `aida doc add`'s minimal persistence path — works regardless of
     // id_format policy (node-aware ids drop in when blocks aren't allocated).
+    // CR-8: stamp filing provenance BEFORE the store write — the object is
+    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
         store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
@@ -9681,6 +9684,9 @@ fn promote_finding_to_gate(
     });
     let finding_uuid = finding.id;
     let mut reused: Option<Requirement> = None;
+    // CR-8: stamp filing provenance BEFORE the store write — the object is
+    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    aida_core::provenance::stamp_if_absent(&mut gate);
     let store = backend.update_atomically(|store| {
         let existing = store
             .requirements
@@ -13220,6 +13226,9 @@ fn file_reviewer_verdict_unavailable_finding(
         .insert("kind:ReviewerVerdictUnavailable".to_string());
     req.tags.insert("severity:major".to_string());
 
+    // CR-8: stamp filing provenance BEFORE the store write — the object is
+    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
         store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
@@ -13272,6 +13281,9 @@ fn file_agent_gate_warning_finding(
     req.tags.insert("kind:AgentGateWarning".to_string());
     req.tags.insert("severity:major".to_string());
 
+    // CR-8: stamp filing provenance BEFORE the store write — the object is
+    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
         store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
@@ -46777,6 +46789,9 @@ mod bug_87_queue_filter_tests;
 #[path = "tests/bug_231_findings_promote_tests.rs"]
 mod bug_231_findings_promote_tests;
 #[cfg(test)]
+#[path = "tests/cr_8_filing_provenance_tests.rs"]
+mod cr_8_filing_provenance_tests;
+#[cfg(test)]
 #[path = "tests/story_1428_gate_promote_tests.rs"]
 mod story_1428_gate_promote_tests;
 
@@ -54575,6 +54590,9 @@ fn file_integration_wait_finding(
     req.tags.insert("severity:major".to_string());
     req.tags.insert("aida:burndown".to_string());
 
+    // CR-8: stamp filing provenance BEFORE the store write — the object is
+    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
         store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
