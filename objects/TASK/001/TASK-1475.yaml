@@ -1,0 +1,20 @@
+id: 01a0d2ad-a743-7e62-81ef-27634712e4ff
+spec_id: TASK-1475
+agreed_id: TASK-1475
+title: 'Drift hint for filing provenance: commits since filed_at.code_sha touching the spec''s traced files'
+description: |-
+  Follow-up to CR-8 acceptance 6 (deferred as too heavy for the first slice). `aida show` / `aida why` should report how many commits since `filed_at.code_sha` touched files that this spec's `trace:` comments or linked commits point at. Must stay cheap (local git only, no network).
+
+  ## Acceptance
+  1. `aida show <SPEC>` prints a one-line drift hint when `filed_at.code_sha` is set and resolvable, e.g. `12 commits since filing touched 3 traced files`.
+  2. Unresolvable SHA (shallow clone, other repo) prints nothing and never errors.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T09:09:51.043038964Z
+modified_at: 2026-09-24T09:09:51.043038964Z
+req_type: Task
+tags:
+- parent:CR-8
+- provenance
