@@ -47209,6 +47209,14 @@ mod git_linkage_tests;
 #[path = "tests/change_linkage_format_tests.rs"]
 mod change_linkage_format_tests;
 
+/// TASK-1475 (CR-8 acceptance 6 follow-up): coverage for `filing_drift_hint`
+/// — the filing-provenance staleness signal `aida show` / `aida why`
+/// render. Pure git, no `gh`/`glab` on PATH.
+// trace:TASK-1475 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1475_filing_drift_tests.rs"]
+mod task_1475_filing_drift_tests;
+
 /// TASK-238: coverage for the queue-list tag surfacing — the inline
 /// chip formatter and the `--by-batch` group key. trace:TASK-238
 #[cfg(test)]
@@ -50716,6 +50724,130 @@ const LINKAGE_TRACE_SCAN_BUDGET: std::time::Duration = std::time::Duration::from
 // trace:BUG-1594 | ai:claude
 const SHOW_FORGE_LOOKUP_BUDGET: std::time::Duration = std::time::Duration::from_secs(4);
 
+/// TASK-1475: wall-clock ceiling for EACH bounded git call the filing-drift
+/// hint makes (at most two: the linked-commits file-touch lookup, and the
+/// `code_sha..HEAD` log walk). Local git only, no network — this is a
+/// safety net against a pathological huge history, not the expected cost.
+// trace:TASK-1475 | ai:claude
+const DRIFT_HINT_GIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// TASK-1475 (follow-up to CR-8 acceptance 6): a cheap filing-provenance
+/// staleness signal — how many commits since `filed_at.code_sha` touched a
+/// file this spec's `trace:` comments or linked commits point at. Local git
+/// only (no network), every subprocess bounded via
+/// [`command_output_with_timeout`] so a slow/huge repo can only ever cost
+/// this function its fixed per-call budget, never hang `aida show`/`aida
+/// why`.
+///
+/// `linkage_files`/`linkage_commits` are the already-collected
+/// [`GitLinkage::files`]/[`GitLinkage::commits`] — this never re-runs the
+/// trace-comment tree walk or the referencing-commit log.
+///
+/// Returns `None` when there is nothing to say: no provenance, no
+/// `code_sha`, an unresolvable sha (shallow clone / a different repo —
+/// TASK-1475 AC2), no traced files at all, or a genuinely driftless zero
+/// (no commits since filing touched any traced file — not worth a line).
+/// When the sha resolves but the bounded walk can't finish in budget,
+/// returns `Some(..)` naming the state "unknown" rather than silently
+/// reporting zero — a truncated scan must never be mistaken for a complete,
+/// driftless one (PRIN-5).
+// trace:TASK-1475 | ai:claude
+pub(crate) fn filing_drift_hint(
+    project_root: &std::path::Path,
+    filed_at: Option<&aida_core::FilingProvenance>,
+    linkage_files: &[(String, Option<String>)],
+    linkage_commits: &[(String, String, String)],
+) -> Option<String> {
+    let code_sha = filed_at.and_then(|p| p.code_sha.as_deref())?.trim();
+    if code_sha.is_empty() {
+        return None;
+    }
+
+    // Traced files: every location a `trace:` comment names this spec, plus
+    // every file the spec's own linked (referencing) commits touched — one
+    // bounded `git show` covering all of them at once.
+    let mut traced: std::collections::BTreeSet<String> =
+        linkage_files.iter().map(|(f, _)| f.clone()).collect();
+    if !linkage_commits.is_empty() {
+        let shas: Vec<&str> = linkage_commits
+            .iter()
+            .take(LINKAGE_BRANCH_SCAN_MAX_COMMITS)
+            .map(|(full, _, _)| full.as_str())
+            .collect();
+        let mut cmd = std::process::Command::new("git");
+        cmd.arg("-C")
+            .arg(project_root)
+            .args(["show", "--format=", "--name-only"])
+            .args(&shas);
+        if let Some(out) = command_output_with_timeout(cmd, DRIFT_HINT_GIT_TIMEOUT) {
+            if out.status.success() {
+                for line in String::from_utf8_lossy(&out.stdout).lines() {
+                    let line = line.trim();
+                    if !line.is_empty() {
+                        traced.insert(line.to_string());
+                    }
+                }
+            }
+        }
+    }
+    if traced.is_empty() {
+        return None;
+    }
+
+    // One bounded `git log <code_sha>..HEAD --name-only -- <traced files>`
+    // does double duty: a non-zero exit means the sha didn't resolve
+    // (shallow clone / different repo — AC2, degrade to silence); a
+    // timeout means the walk itself couldn't finish (degrade to "unknown",
+    // never a guessed zero); success parses into a commit count plus the
+    // distinct traced files those commits actually touched (pathspec-
+    // restricted, so this is always <= traced.len()).
+    let mut log_cmd = std::process::Command::new("git");
+    log_cmd
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "log",
+            &format!("{code_sha}..HEAD"),
+            "--name-only",
+            "--pretty=format:\u{1}",
+        ])
+        .arg("--")
+        .args(traced.iter());
+    match command_output_with_timeout(log_cmd, DRIFT_HINT_GIT_TIMEOUT) {
+        Some(out) if out.status.success() => {
+            let text = String::from_utf8_lossy(&out.stdout);
+            let mut commit_count = 0usize;
+            let mut touched: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+            for chunk in text.split('\u{1}') {
+                let chunk = chunk.trim();
+                if chunk.is_empty() {
+                    continue;
+                }
+                commit_count += 1;
+                for line in chunk.lines() {
+                    let line = line.trim();
+                    if !line.is_empty() {
+                        touched.insert(line);
+                    }
+                }
+            }
+            if commit_count == 0 {
+                // Genuinely driftless — nothing to hint at.
+                None
+            } else {
+                Some(format!(
+                    "{commit_count} commit{} since filing touched {} traced file{}",
+                    if commit_count == 1 { "" } else { "s" },
+                    touched.len(),
+                    if touched.len() == 1 { "" } else { "s" },
+                ))
+            }
+        }
+        Some(_) => None,
+        None => Some("commits since filing: unknown (scan didn't finish in budget)".to_string()),
+    }
+}
+
 /// TASK-241: collect the git linkage for `ids` — commits referencing the
 /// AIDA `(SPEC-ID)` format, files carrying `trace:` comments, and
 /// branch/worktree/shipped state. gh-free by design: the in-flight
@@ -51037,7 +51169,12 @@ pub(crate) fn collect_git_linkage_opts(
     }
 }
 
-fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bool) {
+fn print_git_linkage(
+    project_root: &std::path::Path,
+    ids: &[String],
+    verbose: bool,
+    filed_at: Option<&aida_core::FilingProvenance>,
+) {
     use std::process::Command as PCmd;
 
     let git = |args: &[&str]| -> Option<String> {
@@ -51281,6 +51418,14 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
     // as the complete file list. trace:BUG-1594 | ai:claude
     if files_scan_incomplete {
         println!("  {}", LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.yellow());
+    }
+    // TASK-1475 (CR-8 acceptance 6 follow-up): a one-line filing-drift
+    // signal — how much of the traced surface has moved since the code
+    // state this spec was filed against. Silent when there's nothing to
+    // say (no provenance, unresolvable sha, no traced files, or no drift).
+    // trace:TASK-1475 | ai:claude
+    if let Some(hint) = filing_drift_hint(project_root, filed_at, &files, &commits) {
+        println!("  {}", hint.dimmed());
     }
 }
 
@@ -59502,6 +59647,34 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
     // auto-complete on merge — say so, naming the blocker, so the hold is
     // visible where "why hasn't this closed?" gets asked. trace:BUG-1551 | ai:claude
     let closure_hold = closure_hold_line(req, &store);
+    // TASK-1475 (CR-8 acceptance 6 follow-up): the filing-drift hint. Skip
+    // the git-linkage scan entirely when there's no `code_sha` to anchor
+    // on — the common case for specs filed before CR-8 — so `aida why`
+    // pays for this only when it can actually say something.
+    // trace:TASK-1475 | ai:claude
+    let drift_hint = req
+        .filed_at
+        .as_ref()
+        .filter(|p| p.code_sha.is_some())
+        .and_then(|_| {
+            let mut ids: Vec<String> = Vec::new();
+            if let Some(a) = req.agreed_id.as_deref() {
+                ids.push(a.to_string());
+            }
+            if let Some(s) = req.spec_id.as_deref() {
+                ids.push(s.to_string());
+            }
+            if ids.is_empty() {
+                ids.push(f.id.clone());
+            }
+            let linkage = collect_git_linkage(&project_root, &ids);
+            filing_drift_hint(
+                &project_root,
+                req.filed_at.as_ref(),
+                &linkage.files,
+                &linkage.commits,
+            )
+        });
 
     if json {
         println!(
@@ -59528,6 +59701,9 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
                     "hint": fr.recovery_hint,
                 })),
                 "needs_human": bucket.needs_human(),
+                // TASK-1475: null when there's nothing to say (no
+                // provenance, unresolvable sha, no traced files, no drift).
+                "drift_since_filing": drift_hint,
             }))?
         );
         return Ok(());
@@ -59567,6 +59743,11 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
         for line in failure_reason_lines(fr) {
             println!("    {}", line.magenta());
         }
+    }
+    // TASK-1475 (CR-8 acceptance 6 follow-up): the filing-drift hint.
+    // trace:TASK-1475 | ai:claude
+    if let Some(hint) = &drift_hint {
+        println!("    {}", hint.dimmed());
     }
     // STORY-727: `aida why` previously named no command. The reason text now
     // names it generically (`<id>`); fill in the CONCRETE templated command as a
@@ -81021,7 +81202,7 @@ fn render_spec_card(
             .parent()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-        print_git_linkage(&project_root, &ids, verbose);
+        print_git_linkage(&project_root, &ids, verbose, req.filed_at.as_ref());
     }
     println!("{}", rule.dimmed());
 }
