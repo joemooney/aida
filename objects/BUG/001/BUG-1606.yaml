@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T20:33:59.618260056Z
-modified_at: 2026-09-24T21:35:29.693672991Z
+modified_at: 2026-09-24T22:07:16.504530993Z
 req_type: Bug
 tags:
 - closure:pending
@@ -61,6 +61,12 @@ comments:
   content: 'Orchestrator: tagged closure:pending. The fix (e23cb15823) removes the whole-store scans, but the acceptance needs `aida doctor check performance` to be quiet on both limbs over a fresh window of real traffic after the fix is installed. Close only after that measurement.'
   created_at: 2026-09-24T21:35:29.693672991Z
   modified_at: 2026-09-24T21:35:29.693672991Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d575-6818-7913-baf7-3576bb5c91b7
+  author: joe
+  content: 'Review follow-up in 519af1777c: (1) The upstream-report notice now writes its marker only when the cache snapshot it read is stamped at the store HEAD it checked. A test covers the stale-cache case, where a foreign writer holds the lock and catch-up is skipped. (2) In the incremental catch-up, a missed targeted epic read now makes the catch-up decline, so the cache falls back to a full rebuild. Write paths mark the cache stale in the same case. (3) The targeted epic read now opens that one object file directly, so a miss no longer falls through to the agreed_id scan. (4) For custom_status rows, the notice resolves the base status with one targeted read. If it can''t be resolved, the report counts as open.'
+  created_at: 2026-09-24T22:07:16.504530993Z
+  modified_at: 2026-09-24T22:07:16.504530993Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
