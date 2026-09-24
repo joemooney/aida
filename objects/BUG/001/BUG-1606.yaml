@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T20:33:59.618260056Z
-modified_at: 2026-09-24T20:54:29.898264580Z
+modified_at: 2026-09-24T21:34:54.365677971Z
 req_type: Bug
 tags:
 - followup
@@ -41,6 +41,20 @@ relationships:
   target_id: 01a0c4b7-b38c-7301-89cd-9b7a04a1e703
   created_at: 2026-09-24T20:35:31.983487222Z
   created_by: joe
+comments:
+- id: 01a0d557-c59d-7053-bf00-ddf08725d521
+  author: joe
+  content: |-
+    ROOT CAUSE (evidence-backed), fixed in e23cb15823 on claude/bug-1606.
+
+    Evidence: (1) The 329,623ms call was 'aida show TASK-1480 --full' started 14:41:48Z by an agent (Claude transcript). At 14:44:29Z ps showed it in state D (uninterruptible disk wait) with 0:01 CPU; a second 'aida show TASK-1479' was also in D. (2) Host: root fs is a spinning HDD (sda, ROTA=1). /proc/pressure/io showed some ~50-60% and full ~30-40% during measurement. Memory was fine (54G available), so this is IO starvation, not CPU or locks. (3) On a scratch copy of this store and cache, one commit to an epic child made the next 'aida show' open and parse 9,950 object YAMLs; with a fresh cache it opens 1-3. strace attributed them to three whole-store scans. Two scans came from CachedGitBackend::refresh_parent_epic_status: during the read-path incremental catch-up it called inner.get_requirement(epic_uuid), which is object_store::find_by_uuid, a linear parse of every object, once per ancestor epic (TASK-931 has EPIC-54 and EPIC-51). The third was the upstream-report notice (report_cmd::maybe_print_upstream_recheck_notice), which calls storage.load() whenever the store HEAD moves. BUG-1594 re-armed that check on every HEAD change. (4) Cold reproduction: I evicted the scratch store's pages with posix_fadvise DONTNEED, then ran the old release binary. It sat in D for over 3 minutes (wchan folio_wait_bit_common), walking objects/TASK at about 6 files/s, until the run was interrupted. That matches the production 30-330s tail. In the telemetry, the slow shows mostly had no concurrent slow command, which rules out lock waits as the main cause. The concurrent 25-27s 'list' exit-1 calls are the separate cache retry ladder.
+
+    Fix: the epic rollup reads the epic's stored status with one targeted read (cache uuid->spec_id->YAML, uuid re-checked); a miss falls back to Draft with no scan. The notice reads cache summaries; on a cache error it skips and leaves the marker unwritten. Result: object reads per show after an epic-child commit went from 9,950 to 5.
+
+    Not covered: a full cache rebuild (recorded HEAD not an ancestor of the new HEAD, or schema drift) still parses the whole store once, by design. Git-linkage and forge budgets were not implicated. Acceptance still needs a fresh in-lineage window, where aida doctor check performance is quiet on both limbs after the fix merges and is installed.
+  created_at: 2026-09-24T21:34:54.365677971Z
+  modified_at: 2026-09-24T21:34:54.365677971Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
   branch: main
