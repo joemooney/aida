@@ -60,6 +60,7 @@ mod do_dispatch;
 mod doc_cmd;
 mod docs;
 mod doctor_cmd;
+// trace:STORY-1462 | ai:claude — runaway-seat watchdog doctor category.
 mod drain_caps;
 mod drain_cmd;
 mod drain_lock;
@@ -71,6 +72,7 @@ mod orchestrator_cmd;
 mod pr_cmd;
 mod protocol_cmd;
 mod queue_cmd;
+mod runaway_seats;
 mod solo_cmd;
 mod status_cmd;
 mod supervise_cmd;
@@ -185,6 +187,7 @@ mod metrics_cmd;
 mod network_retry;
 mod node_cmd;
 mod not_found;
+mod pr_claim_surface;
 mod reconstitute;
 // trace:STORY-1029 | ai:codex — rule-gated operator notifications.
 mod notify;
@@ -23114,6 +23117,21 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "disk-headroom",
     ),
+    // STORY-1462: runaway-seat watchdog — per-session wake-rate, token-rate,
+    // repeated-injected-prompt, idle-ratio, context-ceiling, compaction and
+    // model-side-mail-poll anomalies read from on-disk session transcripts,
+    // plus the project's trailing-24h token spend against `[watchdog]`
+    // thresholds. Zero-token, substrate-only. trace:STORY-1462 | ai:claude
+    (
+        &[
+            "runaway-seats",
+            "runaway-seat",
+            "runaway",
+            "watchdog",
+            "seat-watchdog",
+        ],
+        "runaway-seats",
+    ),
 ];
 
 /// `id-collisions` doctor findings: one per id that resolves to more than one
@@ -31729,7 +31747,20 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 verdict_ref,
                 release_condition,
                 spec: None,
+                placed_by: Some(merge_hold::placing_seat()),
             };
+            // STORY-1416 criterion 1a: before the marker lands, show what is
+            // already on record for this PR (marker + verdicts, with seat and
+            // sha). Informational only — never blocks the write.
+            // trace:STORY-1416 | ai:claude
+            {
+                let extra: Vec<&str> = verdict.as_deref().into_iter().collect();
+                let standing = pr_claim_surface::read_pr_record(&root, *pr, &extra);
+                pr_claim_surface::print(
+                    *pr,
+                    &pr_claim_surface::lines_for_marker_write(&standing, &record),
+                );
+            }
             // BUG-1562: never silently overwrite an existing marker's body.
             // trace:BUG-1562 | ai:claude
             merge_hold::place_hand_hold(&root, &record, *replace)
@@ -85353,6 +85384,26 @@ fn handle_review_record_at(
         );
     }
     let recorded_by = review_recorded_by();
+
+    // STORY-1416 criterion 1b: recording a verdict for a PR surfaces the
+    // standing marker (its text and who placed it) and any prior verdict
+    // BEFORE either is overwritten below. Informational only.
+    // trace:STORY-1416 | ai:claude
+    if let Some(n) = pr {
+        let standing = pr_claim_surface::read_pr_record(&project_root, n, &[spec]);
+        pr_claim_surface::print(
+            n,
+            &pr_claim_surface::lines_for_verdict_write(
+                &standing,
+                &pr_claim_surface::IncomingVerdict {
+                    key: &spec.trim().to_ascii_uppercase(),
+                    kind,
+                    sha: resolved_sha.as_deref(),
+                    recorded_by: &recorded_by,
+                },
+            ),
+        );
+    }
 
     // A refusal is a protection event, not merely metadata. Arm the local
     // merge chokepoint before publishing the verdict; mirroring the label also
