@@ -3,12 +3,12 @@ spec_id: BUG-1598
 agreed_id: BUG-1598
 title: A test writes /tmp/.aida (and /tmp/.aida-store), which pollutes every later test run under /tmp with a shared cache and breaks test_distributed.sh
 description: 'Twice on 2026-09-23/24, a stray /tmp/.aida/cache.db (plus a legacy /tmp/.aida-store YAML) appeared. Any aida invocation whose cwd is under /tmp, such as tests/test_distributed.sh using mktemp -d, walks up, finds /tmp/.aida and shares that cache, which fails with ''duplicate AIDA spec IDs detected'' or empty lists. Removing the directories makes the test pass. Find the test or command that runs aida with cwd=/tmp, or with a root that resolves to /tmp, and make it hermetic: use a tempdir root with its own .aida. Consider a guard so project-root discovery never adopts /tmp itself as a project root. Acceptance: after a full cargo test --workspace, /tmp/.aida does not exist.'
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T11:36:40.430493408Z
-modified_at: 2026-09-24T13:21:15.507815412Z
+modified_at: 2026-09-24T13:21:24.269532773Z
 req_type: Bug
 tags:
 - flaky-test
