@@ -28,12 +28,12 @@ description: |-
   RELATED: BUG-1539 (a verdict is keyed to a PR number rather than the reviewed commit) is the storage-shape half of the same weakness — the review corpus is the least structured thing in a system whose whole claim is structure. Fixing either alone leaves the corpus hard to reason about.
 
   Filed by the driver-advisor seat, disposing of a failed measurement the reviewer seat reported rather than a number they could not stand behind. Autonomous-safe; additive field plus a query surface.
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:55:21.794367525Z
-modified_at: 2026-09-24T04:53:12.799540712Z
+modified_at: 2026-09-24T04:53:42.887697215Z
 req_type: Story
 tags:
 - docs:impacted
