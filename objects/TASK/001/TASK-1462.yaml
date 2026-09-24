@@ -3,12 +3,12 @@ spec_id: TASK-1462
 agreed_id: TASK-1462
 title: 'aida agent new: honor active role in picker and label description optional'
 description: 'When an operator has entered a persistent AIDA role and runs aida agent new without --role, the interactive role picker should preselect the active role instead of always highlighting implementer. The agent description prompt should explicitly state that the field is optional and may be left blank. Acceptance: active AIDA_SESSION_ROLE is the picker cursor when it exists in the role list; without an active role, implementer remains the default; the description prompt visibly says optional; existing explicit --role and non-interactive behavior remain unchanged.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:22:37.476698185Z
-modified_at: 2026-09-24T08:53:07.034651916Z
+modified_at: 2026-09-24T09:10:14.729523605Z
 req_type: Task
 tags:
 - docs:impacted
@@ -19,7 +19,23 @@ comments:
   created_at: 2026-09-24T08:12:06.200256040Z
   modified_at: 2026-09-24T08:12:06.200256040Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d2ae-03c2-7573-b6f6-15b2cedf9701
+  author: aida-auto-bump
+  timestamp: 2026-09-24T09:10:14.722325953Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d2ae-03c9-74c3-9f4a-0483a8b58395
+  timestamp: 2026-09-24T09:10:14.729521451Z
+  agent: aida
+  commit_sha: 63bef08e342346d72092e55f2a75f723a186a201
+  summary: Completed via merge 63bef08e
 implementation_info:
   implemented: true
   implemented_at: 2026-09-24T08:53:07.034651916Z
   implemented_by: joe
+  completed_at: 2026-09-24T09:10:14.722173703Z
+  completion_sha: 63bef08e342346d72092e55f2a75f723a186a201
