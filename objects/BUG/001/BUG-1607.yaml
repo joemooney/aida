@@ -1,0 +1,47 @@
+id: 01a0d56c-35d0-73c1-aa5f-8e152106f3d3
+spec_id: BUG-1607
+agreed_id: BUG-1607
+title: Reviewer launch ignores Codex selection and hardcodes Claude
+description: |-
+  Observed live in a Codex-only project on 2026-09-24.
+
+  ## Reproduction
+  1. Configure `[agents] enabled = ["codex"]`; do not install a `claude` executable.
+  2. Open GitLab MR-1 for a queued review.
+  3. Run `aida human review STORY-52`.
+  4. It reaches `running reviewer` and fails with `failed to spawn claude`.
+  5. Queue the review story and run `aida queue work STORY-59 --role reviewer --vendor codex --user joe`.
+  6. The resolver prints `vendor: codex` and `exec: codex`, creates the reviewer worktree and lease, then prints `launching claude reviewer` and fails with `No such file or directory`.
+
+  The failure leaves a valid reviewer lease/worktree but no reviewer process. A manual Codex launch is required to recover.
+
+  ## Expected
+  Every reviewer entry point uses one shared resolved-vendor contract. Explicit `--vendor codex` wins, then project/user agent configuration; a Codex-only project never requires Claude. Human review needs either a vendor option or the same configured resolution. Launch banners, recovery hints, argv, and registry metadata must name the actual resolved vendor.
+
+  ## Acceptance
+  - Codex-only integration coverage for both `aida human review <spec>` and `aida queue work <review-story> --role reviewer --vendor codex`.
+  - The latter launches `codex`, not `claude`, after worktree creation.
+  - Human review selects Codex from project configuration when Claude is unavailable.
+  - A launch failure cleans up or clearly preserves the prepared lease with a copy-paste Codex recovery command.
+
+  Regression context: BUG-705 fixed the analogous phase-1 implementer hardcoded-Claude path; TASK-1279 claimed reviewer seat parity.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T21:57:13.808572289Z
+modified_at: 2026-09-24T21:57:13.808572289Z
+req_type: Bug
+tags:
+- codex
+- multivendor
+- regression
+- reviewer
+- severity:major
+filed_at:
+  code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 81c37e2cb
+  vendor: codex
