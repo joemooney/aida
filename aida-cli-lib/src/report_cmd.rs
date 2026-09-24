@@ -373,6 +373,39 @@ fn is_open_upstream_aida_report(req: &Requirement) -> bool {
     req.title.starts_with("AIDA:") || req.tags.contains(UPSTREAM_AIDA_TAG)
 }
 
+/// BUG-1606: the same open-upstream-report rows as
+/// [`open_upstream_report_rows`], computed from the cache's summary rows
+/// instead of a full store load. The status is the cache's projected string
+/// (the stored status's `Debug` name, e.g. `Completed`).
+// trace:BUG-1606 | ai:claude
+fn open_upstream_report_rows_from_summaries(
+    summaries: &[aida_core::RequirementSummary],
+    current_version: &str,
+) -> Vec<UpstreamRecheckRow> {
+    let mut rows: Vec<_> = summaries
+        .iter()
+        .filter(|s| {
+            let closed = matches!(s.status.as_str(), "Done" | "Completed" | "Rejected");
+            !closed
+                && !s.archived
+                && (s.title.starts_with("AIDA:") || s.tags.iter().any(|t| t == UPSTREAM_AIDA_TAG))
+        })
+        .map(|s| {
+            let tags: HashSet<String> = s.tags.iter().cloned().collect();
+            let observed = observed_version(&tags).unwrap_or_else(|| "unknown".to_string());
+            UpstreamRecheckRow {
+                spec_id: s.spec_id.clone().unwrap_or_else(|| s.id.to_string()),
+                title: s.title.clone(),
+                older: version_is_older(&observed, current_version),
+                observed_version: observed,
+                current_version: current_version.to_string(),
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| a.spec_id.cmp(&b.spec_id));
+    rows
+}
+
 fn observed_version(tags: &HashSet<String>) -> Option<String> {
     tags.iter()
         .find_map(|t| t.strip_prefix(OBSERVED_VERSION_PREFIX).map(str::to_string))
@@ -424,21 +457,35 @@ fn render_recheck_rows(rows: &[UpstreamRecheckRow]) {
     }
 }
 
-pub(crate) fn maybe_print_upstream_recheck_notice(storage: &Storage) {
+pub(crate) fn maybe_print_upstream_recheck_notice(
+    storage: &Storage,
+    backend: &aida_core::CachedGitBackend,
+) {
     let project_root = project_root_for_storage(storage);
     let marker = project_root.join(NOTICE_MARKER);
     let current = env!("CARGO_PKG_VERSION");
-    // BUG-1594: one cheap `rev-parse` of the store worktree's HEAD. The full
-    // store load below runs only when the binary version OR the store HEAD
+    // BUG-1594: one cheap `rev-parse` of the store worktree's HEAD. The
+    // report scan below runs only when the binary version OR the store HEAD
     // changed since the last check.
     let head = store_head_sha(storage.path()).or_else(|| store_objects_fingerprint(storage.path()));
     if upstream_notice_is_current(&marker, current, head.as_deref()) {
         return;
     }
-    let Ok(store) = storage.load() else {
+    // BUG-1606: read the report rows from the cache, never a full store load.
+    // In a busy store HEAD moves every few minutes, so the first command after
+    // each commit (an `aida show`, say) used to parse all ~4,400 objects here;
+    // on a loaded spinning disk with a cold page cache that alone took minutes.
+    // The notice is advisory: a cache error skips it and leaves the marker
+    // unwritten, so the next command checks again.
+    // trace:BUG-1606 | ai:claude
+    let Ok(summaries) = backend.list_summaries(&aida_core::ListFilter {
+        archive: aida_core::ArchiveFilter::NonArchivedOnly,
+        defer: aida_core::DeferFilter::Both,
+        ..Default::default()
+    }) else {
         return;
     };
-    let stale = open_upstream_report_rows(&store, current)
+    let stale = open_upstream_report_rows_from_summaries(&summaries, current)
         .into_iter()
         .filter(|row| row.older)
         .count();
@@ -685,6 +732,66 @@ mod tests {
         assert!(rows[0].older);
         assert_eq!(rows[1].spec_id, "BUG-2");
         assert!(!rows[1].older);
+    }
+
+    // BUG-1606: the per-command notice now reads cache summaries instead of
+    // loading every object. The cache-derived rows must match the load-derived
+    // rows: open reports in, closed and archived ones out, the same `older`
+    // verdicts. trace:BUG-1606 | ai:claude
+    #[test]
+    fn bug_1606_notice_rows_from_cache_match_full_load_rows() {
+        use aida_core::DatabaseBackend;
+
+        let tmp = TempDir::new().unwrap();
+        let store_root = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        aida_core::git_ops::init(&store_root).unwrap();
+        aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        let cache_path = tmp.path().join(".aida").join("cache.db");
+        let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path).unwrap();
+
+        let report = |spec: &str, title: &str, version: &str| {
+            let mut r = Requirement::new(title.into(), "body".into());
+            r.spec_id = Some(spec.to_string());
+            r.tags.insert(UPSTREAM_AIDA_TAG.to_string());
+            r.tags.insert(format!("observed-version:{version}"));
+            r
+        };
+        backend
+            .add_requirement(report("BUG-1", "old report", "1.0.0"))
+            .unwrap();
+        // Title-only report (no upstream tag), still open.
+        let mut titled = Requirement::new("AIDA: titled".into(), "body".into());
+        titled.spec_id = Some("BUG-2".to_string());
+        backend.add_requirement(titled).unwrap();
+        let mut closed = report("BUG-3", "closed report", "1.0.0");
+        closed.status = RequirementStatus::Completed;
+        backend.add_requirement(closed).unwrap();
+        let mut archived = report("BUG-4", "archived report", "1.0.0");
+        archived.archived = true;
+        backend.add_requirement(archived).unwrap();
+        let mut not_a_report = Requirement::new("unrelated".into(), "body".into());
+        not_a_report.spec_id = Some("BUG-5".to_string());
+        backend.add_requirement(not_a_report).unwrap();
+
+        let from_load = open_upstream_report_rows(&backend.load().unwrap(), "2.0.0");
+        let summaries = backend
+            .list_summaries(&aida_core::ListFilter {
+                archive: aida_core::ArchiveFilter::NonArchivedOnly,
+                defer: aida_core::DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap();
+        let from_cache = open_upstream_report_rows_from_summaries(&summaries, "2.0.0");
+
+        assert_eq!(from_cache, from_load);
+        let ids: Vec<&str> = from_cache.iter().map(|r| r.spec_id.as_str()).collect();
+        assert_eq!(ids, vec!["BUG-1", "BUG-2"]);
+        assert!(from_cache[0].older);
+        assert!(
+            !from_cache[1].older,
+            "an unknown observed version is not older"
+        );
     }
 
     // BUG-1594: the marker re-arms the check when the store HEAD moves (a
