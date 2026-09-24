@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:04:54.098400831Z
-modified_at: 2026-09-21T06:10:21.749559683Z
+modified_at: 2026-09-24T02:05:24.629564598Z
 req_type: Bug
 tags:
 - aida:show
@@ -209,3 +209,27 @@ comments:
   created_at: 2026-09-21T06:10:21.749559683Z
   modified_at: 2026-09-21T06:10:21.749559683Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0d129-1115-7f73-8579-5a81d6dc0b89
+  author: joe
+  content: |-
+    Proposed renumbering for the 7 existing collisions. NOT applied: this is a data migration on shared state, so a human or advisor has to decide it. Detected by the new `aida doctor --category id-collisions` (branch claude/bug-1535).
+
+    Correction to the spec text: only 4 of the 7 colliding natives are Rejected [test] fixtures (BUG-34, TASK-31, TASK-32, TASK-33). STORY-41, STORY-42 and TASK-34 are real Completed specs, so 'move the fixture' does not apply to all seven.
+
+    | id | native owner (spec_id = file name) | agreed-id holder |
+    |---|---|---|
+    | BUG-34 | [test] dispense skip verification (Rejected) | BUG-2-081 /aida-review status flip (Completed) |
+    | STORY-41 | Story 2a: Node id is String (Completed) | STORY-2-075 Review PR-11 EPIC-20 batch 11 (Completed) |
+    | STORY-42 | Story 2b: Auto-suffix preferred id (Completed) | STORY-2-076 aida queue work [<id>] (Completed) |
+    | TASK-31 | [FR-215 test] child req (Rejected) | TASK-2-074 session start --launch --name (Completed) |
+    | TASK-32 | [FR-215 verify] child (Rejected) | TASK-2-080 cross-platform bg_worker test (Completed) |
+    | TASK-33 | [FR-215 v2] child (Rejected) | TASK-2-078 queue list --tree (Completed) |
+    | TASK-34 | Convention: v2/v3 follow-ups as STORYs (Completed) | TASK-2-077 held-branch retry-later (Completed) |
+
+    Proposal (recommended): the native owner keeps the id, because it is the file name, and `aida show` now resolves to it deterministically. Give each agreed-id holder a fresh free agreed_id, allocated at apply time; today that would be about BUG-1595, STORY-1469/1470 and TASK-1466..1469. Record the old id in a comment on each moved spec. Only an agreed_id field edit is needed: no file renames and no relationship rewrites.
+    Caveat: the 2026-05 commit trailers and trace comments that cite these ids were written for the agreed-id holder, which is the spec that got merged. Before applying, grep main for (BUG-34) (STORY-41) (STORY-42) (TASK-31..34) and rewrite them or annotate them.
+    Alternative for the 4 Rejected fixtures only: archive them and keep the real spec on the short id. This needs the fixture's native id changed too, so it is heavier and not recommended.
+    Also noted: registry/agreed_counters.toml is stale (BUG=34, STORY=82, TASK=195 while ids run to ~1594/1468/1465). The branch makes the merge-gate walk to the next free id instead of bailing at 1000.
+  created_at: 2026-09-24T02:05:24.629564598Z
+  modified_at: 2026-09-24T02:05:24.629564598Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
