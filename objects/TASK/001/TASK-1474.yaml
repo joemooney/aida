@@ -8,10 +8,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T09:00:18.777923101Z
-modified_at: 2026-09-24T09:00:18.777923101Z
+modified_at: 2026-09-24T09:00:21.635848052Z
 req_type: Task
 tags:
 - cache
 - followup
 - list
 - parent:TASK-1464
+relationships:
+- rel_type: Child
+  target_id: 01a0d0ce-5b5f-7ba0-a2c1-e1f6c66c4aa4
+  created_at: 2026-09-24T09:00:21.635848052Z
