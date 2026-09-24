@@ -8,5 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T00:30:46.229764521Z
-modified_at: 2026-09-24T08:12:18.192734568Z
+modified_at: 2026-09-24T08:12:19.483897443Z
 req_type: Story
+comments:
+- id: 01a0d278-fc9b-7980-9117-d28c9b1630c7
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Classify forge, CI and no-remote capabilities in init. Pure-git support is core.'
+  created_at: 2026-09-24T08:12:19.483897443Z
+  modified_at: 2026-09-24T08:12:19.483897443Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
