@@ -1,0 +1,20 @@
+id: 01a0d874-c9a3-76f1-840a-6b6b680daf14
+spec_id: TASK-1511
+agreed_id: TASK-1511
+title: 'Night shift: headless cold-boot of seat jobs (split from TASK-1492)'
+description: 'Split from TASK-1492, which covered re-drive and mail-latency escalation. STORY-1218''s slice-3 scope includes cold-boot: detached, under the budget-evidence guard, at most 1 per hour per seat and 4 per day in total. The signoff leaves six design questions open, listed on TASK-1492: seat selection and vendor mapping, the source of liveness, the meaning of ''overdue'', the would-drain-or-merge test, the authority a cold-booted seat gets, and where the daily cap is counted. Question 5 decides whether an unattended process may start a seat that holds approve or merge authority, so it needs Joe''s decision and a sketch with advisor signoff before any implementation. Acceptance: a default-off local switch; never launches a seat with advisor, approve or merge authority unless Joe explicitly decides otherwise; all caps enforced and tested through seams.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T12:05:27.587470098Z
+modified_at: 2026-09-25T12:05:27.587470098Z
+req_type: Task
+filed_at:
+  code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
