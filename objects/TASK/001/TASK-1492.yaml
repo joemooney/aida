@@ -1,0 +1,37 @@
+id: 01a0d64e-56c6-74d2-8b0c-26bd42b7bfcc
+spec_id: TASK-1492
+agreed_id: TASK-1492
+title: 'Night shift slice 3: opt-in re-drive step, mailbox-latency escalation and headless cold-boot'
+description: |
+  Slice 3 of STORY-1218 (night shift): the re-drive step, mailbox-latency escalation, and headless cold-boot. Slice 1 (the tick core: local enable, guards, selection, detached launch, circuit breakers, ShiftTick, dry-run, status) shipped per docs/plans/2026-09-24-shift-tick.md; the tick currently reports "re-drive: off" and "mail latency: not checked". GUIDED build, human-reviewed PR, no auto-merge (advisor Q6 ruling).
+
+  Re-drive design (sketch §2 step 3): split `supervisor.rs` into `plan_redrives(store, events, opts) -> Vec<SuperviseDecision>` and `apply_requeue` (status to Approved, emits `SpecReDriven`); the launch half stays in `handle_supervise_command` for the manual verb. The tick calls plan + requeue only (never `launch_redrive`, which runs a foreground `queue work --force-claim` per spec), within the ADR-26 caps (3 attempts, 2m/8m/30m backoff from the SpecReDriven history, `[shift] max_redrives_per_tick` default 3), only when the drain lock is free. Floors: re-drive only parks whose spec `execution_mode == drain`; never a spec with a live merge hold or an `attention_reason`.
+
+  A5 (binding) — ADR-26 default-off. The re-drive step is a separate opt-in, `[shift] redrive = false` by default, set in the same local layer as A1 (~/.aida/shift-local.toml). Enabling the shift does NOT enable automatic re-drive. `--dry-run` reports the re-drive step as "off (ADR-26 default)". This honours ADR-26 fork C until the operator flips it after watching real parks.
+
+  A6 (binding) — The re-drive cap must hold. `plan_redrives` reads attempts from BOTH `events.jsonl` and `events.jsonl.1`. Add a `redrive-evidence` guard that fails, so no re-drive happens that tick, when `AIDA_EVENTS_DISABLE` is truthy in the tick process or the event stream cannot be read. The tick-side split must also carry out the ADR-26 cap branch, not just requeue: reclassify to needs-human, emit `ReclassifiedNeedsHuman`, and file the cap finding. Otherwise a spec that has hit the cap sits silently in NeedsAttention. Test `shift_redrive_cap_survives_event_rotation`: 3 SpecReDriven events are in the archive and the live file is empty, and the spec must not be re-driven.
+
+  A7 (binding) — Re-driven specs need a queue entry. The implementer dequeues at pickup, so a parked spec is usually NOT in the queue. `apply_requeue` must make sure a queue entry exists, re-adding it at the head in oldest-parked order. Test: a transient park is re-driven, and the spec appears in the next wave's argv/specs. Never add `--force-claim` for a re-drive. If the spec cannot be claimed without it, that is a park for a human.
+
+  Mail-latency escalation (sketch §5): per recipient, the oldest-unread age using the same merge_dedup + watermark read as `collect_snapshot` (hoisted to `mailbox_store::oldest_unread_by_recipient`). Above `[shift] mail_latency` (default 30m) call `notify::send_direct(rule="mail-latency")`, once per episode per seat (shift-state `mail_episodes`), re-armed after the age drops back under the threshold; never to the mailbox or chat. notify's own min_interval and quiet_hours still apply. The ShiftTick event gains `mail_escalated`; the A8(b) breaker trip should also route through notify here.
+
+  Cold-boot (ADR-46 §1, moved from STORY-1226): an overdue SEAT job with no live holder of that role gets a headless seat (codex exec / claude -p per configured vendor) at most once per hour per seat, ledgered on `JobLedger.cold_boot_at`. Binding per the advisor: cold-boot also spawns detached (A2 hygiene), stays under the same budget-evidence guard (A9), and is capped at 1 per hour per seat and at most 4 per day in total. It never happens for a job that would drain or merge, and a live seat suppresses it. The ShiftTick event gains `redriven` and `cold_booted`.
+
+  Named tests: `shift_tick_redrives_transient_park_without_seat`, `shift_tick_skips_redrive_while_drain_live`, `shift_tick_never_redrives_merge_hold_or_non_drain_park`, `shift_redrive_cap_survives_event_rotation`, `shift_mail_latency_escalates_once_per_episode_and_rearms`, `cold_boot_once_per_hour_per_seat_suppressed_by_live_seat`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T02:04:13.382715808Z
+modified_at: 2026-09-25T02:04:13.382715808Z
+req_type: Task
+tags:
+- autonomy keystone orchestrator reliability
+filed_at:
+  code_sha: a276969ea936d46b488ec50e058b70773e1ca994
+  branch: claude/story-1218
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c7d35baa35
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
