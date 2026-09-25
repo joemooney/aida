@@ -18,6 +18,55 @@ use crate::{
     humanize_relative, parse_days_arg, usage,
 };
 
+/// How a usage header names its window: `("in the last", "7d")` for a
+/// compact relative duration, otherwise `("since", <resolved local time>)`
+/// so an absolute or `... ago` value reads naturally.
+// trace:TASK-1509 | ai:claude
+fn window_label(raw: &str) -> (&'static str, String) {
+    window_label_at(raw, chrono::Utc::now(), &chrono::Local)
+}
+
+/// [`window_label`] rendered for a header: `in the last 7d` or
+/// `since 2026-09-01 00:00 -07:00`, with the value highlighted.
+// trace:TASK-1509 | ai:claude
+fn window_phrase(raw: &str) -> String {
+    let (lead, value) = window_label(raw);
+    format!("{} {}", lead, value.cyan())
+}
+
+/// [`window_label`] against an explicit `now` and timezone, for tests.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn window_label_at<Tz: chrono::TimeZone>(
+    raw: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> (&'static str, String)
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let trimmed = raw.trim();
+    let is_compact_duration = trimmed
+        .char_indices()
+        .next_back()
+        .is_some_and(|(idx, unit)| {
+            matches!(unit, 'm' | 'h' | 'd' | 'w')
+                && idx > 0
+                && trimmed[..idx].chars().all(|c| c.is_ascii_digit())
+        });
+    if is_compact_duration {
+        return ("in the last", trimmed.to_string());
+    }
+    match crate::queue_cmd::parse_since_arg_at(trimmed, now, tz) {
+        Ok(at) => (
+            "since",
+            at.with_timezone(tz)
+                .format("%Y-%m-%d %H:%M %:z")
+                .to_string(),
+        ),
+        Err(_) => ("since", trimmed.to_string()),
+    }
+}
+
 // ----------------------------------------------------------------------------
 // `aida usage slowest` + `aida usage events` — the performance lens
 // (STORY-709). Both read the SAME `~/.aida/usage.jsonl` log via
@@ -166,9 +215,9 @@ fn handle_usage_slowest(since_raw: &str, json_out: bool, limit: usize) -> Result
     }
 
     println!(
-        "{} slowest commands in the last {} (by p95 latency)",
+        "{} slowest commands {} (by p95 latency)",
         "Usage:".bold(),
-        since_raw.cyan()
+        window_phrase(since_raw)
     );
     println!(
         "  {:<24} {:>6} {:>8} {:>8} {:>8}",
@@ -234,9 +283,9 @@ fn handle_usage_events(
     }
 
     let mut header = format!(
-        "{} recent events in the last {}",
+        "{} recent events {}",
         "Usage:".bold(),
-        since_raw.cyan()
+        window_phrase(since_raw)
     );
     if let Some(c) = cmd_filter {
         header.push_str(&format!(" (cmd = {})", c.cyan()));
@@ -442,9 +491,9 @@ fn handle_usage_timeline(
     }
 
     let mut header = format!(
-        "{} recent invocations in the last {}",
+        "{} recent invocations {}",
         "Usage:".bold(),
-        since_raw.cyan()
+        window_phrase(since_raw)
     );
     if let Some(c) = cmd_filter {
         header.push_str(&format!(" (cmd = {})", c.cyan()));
@@ -902,7 +951,8 @@ pub(crate) fn handle_usage_command(
     // since the cutoff. (A "command not in events at all" is invisible
     // here — we can only report what we've seen.)
     if let Some(raw) = unused_raw {
-        let cutoff_window = parse_days_arg(raw)?;
+        // trace:TASK-1509 | ai:claude
+        let cutoff_window = crate::queue_cmd::parse_lookback(raw, "--unused")?;
         let cutoff = now - cutoff_window;
         let mut last_seen: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> =
             std::collections::HashMap::new();
@@ -933,9 +983,9 @@ pub(crate) fn handle_usage_command(
             println!("{}", serde_json::to_string_pretty(&arr)?);
         } else {
             println!(
-                "{} commands NOT used in the last {} (deprecation candidates):",
+                "{} commands NOT used {} (deprecation candidates):",
                 "Usage:".bold(),
-                raw.cyan()
+                window_phrase(raw)
             );
             if stale.is_empty() {
                 println!("  (none — everything we've seen has been used recently)");
@@ -993,15 +1043,15 @@ pub(crate) fn handle_usage_command(
 
     let header = if errors_only {
         format!(
-            "{} commands with errors in the last {}",
+            "{} commands with errors {}",
             "Usage:".bold(),
-            since_raw.cyan()
+            window_phrase(since_raw)
         )
     } else {
         format!(
-            "{} top commands in the last {}",
+            "{} top commands {}",
             "Usage:".bold(),
-            since_raw.cyan()
+            window_phrase(since_raw)
         )
     };
     println!("{}", header);
@@ -1047,9 +1097,8 @@ pub(crate) fn handle_usage_command(
                 println!(
                     "    {}",
                     format!(
-                        "recent 7d: {} — the row above is the {} aggregate (a since-resolved batch)",
+                        "recent 7d: {} — the row above is the whole-window aggregate (a since-resolved batch)",
                         parts.join(", "),
-                        since_raw
                     )
                     .dimmed()
                 );
@@ -1172,9 +1221,9 @@ fn handle_usage_read_write(since_raw: &str, json_out: bool, limit: usize) -> Res
     }
 
     println!(
-        "{} trace-read-rate audit over the last {}",
+        "{} trace-read-rate audit {}",
         "Usage:".bold(),
-        since_raw.cyan()
+        window_phrase(since_raw)
     );
     println!(
         "  {} is the intent graph consulted, or just written?",
@@ -1265,9 +1314,9 @@ fn handle_auto_complete_usage(
             println!("[]");
         } else {
             println!(
-                "{} (no --auto-complete runs recorded in the last {})",
+                "{} (no --auto-complete runs recorded {})",
                 "Auto-complete:".bold(),
-                since_raw.cyan()
+                window_phrase(since_raw)
             );
             println!(
                 "  {} {}",
@@ -1393,10 +1442,10 @@ fn render_auto_complete_failures(
     }
 
     println!(
-        "{} {} runs in the last {} — {} ok, {} failed ({:.0}% success)",
+        "{} {} runs {} — {} ok, {} failed ({:.0}% success)",
         "Auto-complete:".bold(),
         summary.total,
-        since_raw.cyan(),
+        window_phrase(since_raw),
         summary.success.to_string().green(),
         if summary.failed == 0 {
             summary.failed.to_string().dimmed()

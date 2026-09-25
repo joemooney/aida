@@ -2877,9 +2877,11 @@ mod story_762_vendor_binary_tests {
 /// are expected to carry git corroboration. A FIXED migration date, not a
 /// rolling window: a window would slide forward and eventually hide genuinely
 /// stranded recent completions. Override per-run with `--since` /
-/// `AIDA_DOCTOR_COMPLETED_SINCE`.
+/// `AIDA_DOCTOR_COMPLETED_SINCE`. Pinned to UTC midnight so the count does
+/// not depend on the machine's timezone.
 // trace:TASK-1089 | ai:claude
-const GIT_CANONICAL_MIGRATION_CUTOFF: &str = "2026-06-01";
+// trace:TASK-1509 | ai:claude
+const GIT_CANONICAL_MIGRATION_CUTOFF: &str = "2026-06-01T00:00:00Z";
 
 fn default_completed_without_commit_recent_cutoff() -> Option<String> {
     Some(GIT_CANONICAL_MIGRATION_CUTOFF.to_string())
@@ -6965,7 +6967,7 @@ hostname = "localhost"
     fn default_cutoff_is_the_fixed_migration_date() {
         assert_eq!(
             default_completed_without_commit_recent_cutoff().as_deref(),
-            Some("2026-06-01"),
+            Some("2026-06-01T00:00:00Z"),
             "the default completed-without-commit cutoff must be the migration date"
         );
     }

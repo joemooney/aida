@@ -205,7 +205,7 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 **Don't reach for it when** — the spec is still *live* work — archiving non-terminal specs is guarded for a reason (the closed long-tail is the target). And don't reach for `archive` when you mean *delete* (`del`) — archive preserves; or when you mean *reject* (`edit --status rejected`) — archive is orthogonal to status, it doesn't say "we decided no."
 
 **Key options (rationale only).**
-- `--older-than <DURATION>` — bulk-sweep every spec last touched before a window (`30d`, `12h`, RFC3339). Mutually exclusive with a single ID; this is the maintenance verb.
+- `--older-than <DURATION>` — bulk-sweep every spec last touched before a point: a relative window (`30d`, `12h`, `2w`, `24 hours ago`), an ISO date (local midnight), a zone-less ISO datetime (local time), or RFC3339 — the same grammar as every other time bound. <!-- trace:TASK-1509 | ai:claude --> Mutually exclusive with a single ID; this is the maintenance verb.
 - `--status <CSV>` — restrict the `--older-than` sweep to specific statuses; defaults to `completed,rejected` so a bulk sweep can't accidentally archive live work.
 - `--dry-run` — print the sweep plan without writing. **Always** dry-run a bulk `--older-than` first.
 - `--force` — opt past the safety rails: archive a *non-terminal* or *queued* spec, or let the sweep include non-terminal statuses. The deliberate override when you really do mean to shelve live work.

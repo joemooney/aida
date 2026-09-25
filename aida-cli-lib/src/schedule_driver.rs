@@ -296,10 +296,24 @@ fn read_optional(path: &Path) -> Result<Option<String>> {
     }
 }
 
+/// The temporary file `write_atomic` renames over `path`: one per target
+/// (`with_extension` gave the `.service` and `.timer` the same one).
+// trace:BUG-1619 | ai:claude
+fn atomic_tmp_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".aida-tmp");
+    path.with_file_name(name)
+}
+
 fn write_atomic(path: &Path, content: &str) -> Result<()> {
-    let tmp = path.with_extension("aida-tmp");
+    let tmp = atomic_tmp_path(path);
     std::fs::write(&tmp, content).with_context(|| format!("failed to write {}", tmp.display()))?;
-    std::fs::rename(&tmp, path).with_context(|| format!("failed to write {}", path.display()))
+    std::fs::rename(&tmp, path).map_err(|e| {
+        // Leave no `.aida-tmp` behind when the rename fails.
+        // trace:BUG-1619 | ai:claude
+        let _ = std::fs::remove_file(&tmp);
+        anyhow::Error::new(e).context(format!("failed to write {}", path.display()))
+    })
 }
 
 fn systemctl_ok(host: &mut dyn DriverHost, args: &[&str]) -> Result<CommandOutput> {
@@ -318,17 +332,147 @@ fn systemctl_ok(host: &mut dyn DriverHost, args: &[&str]) -> Result<CommandOutpu
 // Install / remove (A13)
 // ---------------------------------------------------------------------------
 
+/// Why a driver install reported [`DriverInstallOutcome::Repaired`]. More
+/// than one can hold (rewritten files on a timer that was also disabled).
+// trace:BUG-1619 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct RepairCauses {
+    /// What was rewritten because it ran an older invocation (unit file
+    /// names, or "the crontab entry").
+    pub rewrote: Vec<String>,
+    /// The timer was disabled and has been enabled again.
+    pub re_enabled: bool,
+    /// The timer was enabled but not running and has been started.
+    pub restarted: bool,
+}
+
+impl RepairCauses {
+    /// PURE: the clause after "Repaired this repo's scheduler <what>: ".
+    // trace:BUG-1619 | ai:claude
+    pub(crate) fn describe(&self) -> String {
+        let mut parts = Vec::new();
+        if !self.rewrote.is_empty() {
+            parts.push(format!(
+                "rewrote {} (it ran an older invocation)",
+                self.rewrote.join(" and ")
+            ));
+        }
+        if self.re_enabled {
+            parts.push("re-enabled and started the timer (it was disabled)".to_string());
+        } else if self.restarted {
+            parts.push("started the timer (it was enabled but not running)".to_string());
+        }
+        if parts.is_empty() {
+            "enabled and started the timer (its earlier state could not be read)".to_string()
+        } else {
+            parts.join("; ")
+        }
+    }
+}
+
+/// What [`install_systemd_units`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SystemdInstall {
+    pub outcome: DriverInstallOutcome,
+    /// Set when `outcome` is `Repaired`.
+    pub repair: RepairCauses,
+}
+
+/// What a failed [`install_systemd_units`] left in the unit directory.
+// trace:BUG-1619 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum UnitFilesAfterFailure {
+    /// No unit file was written (the existing files already matched, or
+    /// the first write failed).
+    Unchanged,
+    /// A fresh install was undone: the timer disabled (when it had been
+    /// enabled) and every file carrying our marker removed.
+    CleanedUp {
+        /// `enable` had been attempted, so the cleanup ran `disable --now`.
+        /// False when a write failed first: nothing was enabled.
+        // trace:BUG-1619 | ai:claude
+        timer_enabled: bool,
+        removed: Vec<String>,
+        /// Files this install wrote that could not be removed.
+        left: Vec<String>,
+        /// `disable --now` failed during the cleanup.
+        disable_error: Option<String>,
+    },
+    /// An existing install's files were rewritten before the failure and
+    /// left in place (a failed repair never tears down an existing install).
+    Rewritten(Vec<String>),
+}
+
+/// The error context of a failed systemd install: what happened to the
+/// unit files. `aida shift install` downcasts to it to word its summary.
+// trace:BUG-1619 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SystemdInstallFailure {
+    pub timer_name: String,
+    pub files: UnitFilesAfterFailure,
+}
+
+impl std::fmt::Display for SystemdInstallFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let timer = &self.timer_name;
+        match &self.files {
+            UnitFilesAfterFailure::Unchanged => {
+                write!(f, "could not install {timer}; no unit file was changed")?
+            }
+            UnitFilesAfterFailure::CleanedUp {
+                removed,
+                left,
+                disable_error,
+                ..
+            } => {
+                write!(f, "could not install {timer}; ")?;
+                if let Some(e) = disable_error {
+                    write!(f, "disabling it failed ({e}); ")?;
+                }
+                if removed.is_empty() {
+                    write!(f, "none of the unit files this install wrote were removed")?;
+                } else {
+                    write!(
+                        f,
+                        "removed the unit files this install wrote ({})",
+                        removed.join(", ")
+                    )?;
+                }
+                if !left.is_empty() {
+                    write!(
+                        f,
+                        "; could not remove {} (delete it with `aida schedule uninstall-systemd`)",
+                        left.join(", ")
+                    )?;
+                }
+            }
+            UnitFilesAfterFailure::Rewritten(names) => write!(
+                f,
+                "could not finish repairing {timer}; the rewritten unit files ({}) were left in \
+                 place",
+                names.join(", ")
+            )?,
+        }
+        write!(f, ". Any other driver for this repo was left in place.")
+    }
+}
+
 /// Write (or repair) both unit files, enable and start the timer, then
 /// verify with `systemctl --user is-enabled` and `is-active`. Refuses, before
-/// writing anything, when a file with our name exists without our marker.
-/// A fresh install whose `daemon-reload` or `enable` fails removes the files
-/// it just wrote, so a unit directory the user manager does not read (a
-/// different `XDG_CONFIG_HOME`) is not left holding orphaned units.
+/// writing anything, when a file with our name exists without our marker, and
+/// on a fresh install when systemd already knows the timer from another
+/// directory or cannot be asked (BUG-1619).
+/// A fresh install that fails at any later step (writing the second file,
+/// `daemon-reload`, `enable`, `start`, or the verify) disables the timer
+/// and removes the files carrying our marker, so nothing is orphaned. A
+/// failed repair of an existing install leaves its files in place. Every
+/// failure carries a [`SystemdInstallFailure`] context.
 // trace:TASK-1491 | ai:claude
+// trace:BUG-1619 | ai:claude
 pub(crate) fn install_systemd_units(
     host: &mut dyn DriverHost,
     units: &SystemdUnits,
-) -> Result<DriverInstallOutcome> {
+) -> Result<SystemdInstall> {
     let dir = host.unit_dir()?;
     let files = [
         (&units.service_name, &units.service),
@@ -351,68 +495,140 @@ pub(crate) fn install_systemd_units(
         current.push(cur);
     }
     let none_existed = current.iter().all(Option::is_none);
-    // Unchanged files: whether the timer was already enabled and running
-    // decides AlreadyUpToDate versus Repaired (a re-enable or restart is a
-    // repair, not a no-op).
-    let already_running = !none_existed
-        && current
-            .iter()
-            .zip(files)
-            .all(|(cur, (_, content))| cur.as_deref() == Some(content.as_str()))
-        && timer_state(host, &units.timer_name) == SystemdDriverStatus::Installed;
-    std::fs::create_dir_all(&dir).with_context(|| format!("failed to create {}", dir.display()))?;
-    let mut wrote = false;
-    for ((name, content), cur) in files.iter().zip(&current) {
-        if cur.as_deref() != Some(content.as_str()) {
-            write_atomic(&dir.join(name), content)?;
-            wrote = true;
+    // A fresh install (neither file in our unit directory) goes ahead only
+    // when systemd does not know the timer at all. If it is known, a unit
+    // with our name was loaded from another directory (an `XDG_CONFIG_HOME`
+    // mismatch, `~/.local/share/systemd/user`, ...), and enabling or, on a
+    // failure, disabling that name would act on that other install. So
+    // refuse before writing or disabling anything.
+    // trace:BUG-1619 | ai:claude
+    if none_existed {
+        let probe = match host.systemctl_user(&["is-enabled", &units.timer_name]) {
+            Ok(out) => classify_fresh_probe(&out, &units.timer_name),
+            Err(e) => FreshProbe::Unknown(format!("{e:#}")),
+        };
+        let refusal = match probe {
+            FreshProbe::NotFound => None,
+            FreshProbe::Known(state) => Some(format!(
+                // trace:BUG-1619 | ai:claude
+                "systemd already knows {timer} (`systemctl --user is-enabled` reports \
+                 {state:?}), but its unit file is not in {dir}. Another install of this repo's \
+                 timer is loaded from a different unit directory (for example a different \
+                 XDG_CONFIG_HOME, or ~/.local/share/systemd/user). Refusing to install over it; \
+                 check `systemctl --user status {timer}` and remove the other copy first",
+                timer = units.timer_name,
+                dir = dir.display(),
+            )),
+            FreshProbe::Unknown(why) => Some(format!(
+                // trace:BUG-1619 | ai:claude
+                "could not tell whether systemd already knows {timer} ({why}). Refusing to \
+                 install without that check; make sure the systemd user manager is reachable \
+                 (`systemctl --user status`) and run the install again",
+                timer = units.timer_name,
+            )),
+        };
+        if let Some(msg) = refusal {
+            return Err(anyhow::anyhow!(msg).context(SystemdInstallFailure {
+                timer_name: units.timer_name.clone(),
+                files: UnitFilesAfterFailure::Unchanged,
+            }));
         }
     }
-    let registered = (|| -> Result<()> {
-        if wrote {
+    // The timer's state before this run decides AlreadyUpToDate versus
+    // Repaired and, for a repair, which cause to report.
+    let prior = if none_existed {
+        SystemdDriverStatus::Missing
+    } else {
+        timer_state(host, &units.timer_name)
+    };
+    let mut rewrote: Vec<String> = Vec::new();
+    let mut enable_attempted = false;
+    let result = (|| -> Result<()> {
+        std::fs::create_dir_all(&dir)
+            .with_context(|| format!("failed to create {}", dir.display()))?;
+        for ((name, content), cur) in files.iter().zip(&current) {
+            if cur.as_deref() != Some(content.as_str()) {
+                write_atomic(&dir.join(name), content)?;
+                rewrote.push((*name).clone());
+            }
+        }
+        if !rewrote.is_empty() {
             systemctl_ok(host, &["daemon-reload"])?;
         }
+        enable_attempted = true;
         systemctl_ok(host, &["enable", &units.timer_name])?;
+        // A rewritten timer only picks up its new settings on a restart.
+        let verb = if rewrote.is_empty() {
+            "start"
+        } else {
+            "restart"
+        };
+        systemctl_ok(host, &[verb, &units.timer_name])?;
+        let state = timer_state(host, &units.timer_name);
+        if state != SystemdDriverStatus::Installed {
+            anyhow::bail!(
+                "`systemctl --user is-enabled` / `is-active` report {} {}, not enabled and \
+                 running",
+                units.timer_name,
+                state.describe()
+            );
+        }
         Ok(())
     })();
-    if let Err(e) = registered {
-        if !(wrote && none_existed) {
-            return Err(e);
-        }
-        let removed = remove_marked_files(&dir, &files.map(|(n, _)| n.as_str()), &units.marker);
-        let _ = host.systemctl_user(&["daemon-reload"]);
-        return Err(e.context(format!(
-            "could not enable {}; removed the unit files this install wrote ({}). \
-             Any other driver for this repo was left in place.",
-            units.timer_name,
-            if removed.is_empty() {
-                "none could be removed".to_string()
+    if let Err(e) = result {
+        let files_after = if rewrote.is_empty() {
+            UnitFilesAfterFailure::Unchanged
+        } else if none_existed {
+            // Fresh install: undo it. Disable first so no enabled timer
+            // points at a deleted unit, then remove only our marked files.
+            let disable_error = if enable_attempted {
+                match systemctl_ok(host, &["disable", "--now", &units.timer_name]) {
+                    Ok(_) => None,
+                    Err(d) => Some(format!("{d:#}")),
+                }
             } else {
-                removed.join(", ")
+                None
+            };
+            let removed = remove_marked_files(&dir, &files.map(|(n, _)| n.as_str()), &units.marker);
+            if !removed.is_empty() {
+                let _ = host.systemctl_user(&["daemon-reload"]);
             }
-        )));
+            let left = rewrote
+                .iter()
+                .filter(|n| !removed.contains(n))
+                .cloned()
+                .collect();
+            UnitFilesAfterFailure::CleanedUp {
+                timer_enabled: enable_attempted,
+                removed,
+                left,
+                disable_error,
+            }
+        } else {
+            UnitFilesAfterFailure::Rewritten(rewrote)
+        };
+        return Err(e.context(SystemdInstallFailure {
+            timer_name: units.timer_name.clone(),
+            files: files_after,
+        }));
     }
-    // A rewritten timer only picks up its new settings on a restart.
-    systemctl_ok(
-        host,
-        &[if wrote { "restart" } else { "start" }, &units.timer_name],
-    )?;
-    let state = timer_state(host, &units.timer_name);
-    if state != SystemdDriverStatus::Installed {
-        anyhow::bail!(
-            "wrote {} but `systemctl --user is-enabled` / `is-active` report it {}, not \
-             enabled and running. Any other driver for this repo was left in place.",
-            units.timer_name,
-            state.describe()
-        );
-    }
-    Ok(if already_running {
-        DriverInstallOutcome::AlreadyUpToDate
-    } else if none_existed {
+    let outcome = if none_existed {
         DriverInstallOutcome::Installed
+    } else if rewrote.is_empty() && prior == SystemdDriverStatus::Installed {
+        DriverInstallOutcome::AlreadyUpToDate
     } else {
         DriverInstallOutcome::Repaired
-    })
+    };
+    let repair = if outcome == DriverInstallOutcome::Repaired {
+        RepairCauses {
+            rewrote,
+            re_enabled: prior == SystemdDriverStatus::Disabled,
+            restarted: prior == SystemdDriverStatus::Stopped,
+        }
+    } else {
+        RepairCauses::default()
+    };
+    Ok(SystemdInstall { outcome, repair })
 }
 
 /// Delete each named file in `dir` that carries our marker; returns the
@@ -516,6 +732,9 @@ impl Driver {
 pub(crate) struct SwitchReport {
     pub driver: Driver,
     pub outcome: DriverInstallOutcome,
+    /// Why, when `outcome` is `Repaired`.
+    // trace:BUG-1619 | ai:claude
+    pub repair: RepairCauses,
     /// Crontab lines removed after the systemd timer was verified.
     pub removed_cron_lines: Vec<String>,
     /// What was removed of systemd after the crontab entry was verified.
@@ -547,10 +766,11 @@ fn switch_to_systemd(host: &mut dyn DriverHost, inv: &TickInvocation) -> Result<
         );
     }
     let units = build_systemd_units(inv);
-    let outcome = install_systemd_units(host, &units)?;
+    let installed = install_systemd_units(host, &units)?;
     let mut report = SwitchReport {
         driver: Driver::Systemd,
-        outcome,
+        outcome: installed.outcome,
+        repair: installed.repair,
         removed_cron_lines: Vec::new(),
         systemd_removal: None,
         linger_off: false,
@@ -604,9 +824,19 @@ fn switch_to_cron(host: &mut dyn DriverHost, inv: &TickInvocation) -> Result<Swi
          both drivers now run (harmless: the tick lock keeps them from overlapping; \
          `aida doctor` reports it)",
     )?;
+    // trace:BUG-1619 | ai:claude
+    let repair = if outcome == DriverInstallOutcome::Repaired {
+        RepairCauses {
+            rewrote: vec!["the crontab entry".to_string()],
+            ..RepairCauses::default()
+        }
+    } else {
+        RepairCauses::default()
+    };
     Ok(SwitchReport {
         driver: Driver::Cron,
         outcome,
+        repair,
         removed_cron_lines: Vec::new(),
         systemd_removal: Some(removal),
         linger_off: false,
@@ -746,6 +976,64 @@ pub(crate) fn classify_is_enabled(out: &CommandOutput) -> Result<bool, String> {
         "disabled" | "masked" | "masked-runtime" | "static" | "linked" | "linked-runtime"
         | "indirect" | "not-found" => Ok(false),
         _ => Err(unreadable("is-enabled", out)),
+    }
+}
+
+/// What `is-enabled` says about a timer whose unit file is not in our
+/// unit directory.
+// trace:BUG-1619 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum FreshProbe {
+    /// No unit file with this name anywhere systemd looks.
+    NotFound,
+    /// systemd knows the unit (the reported state).
+    Known(String),
+    /// Could not tell (no user bus, unrecognised output).
+    Unknown(String),
+}
+
+/// PURE: classify `is-enabled <timer_name>` for the fresh-install check.
+/// Newer systemd prints `not-found`; older releases print nothing on stdout
+/// and `Failed to get unit file state for <timer_name>: No such file or
+/// directory` on stderr. Any other known state means the unit exists
+/// somewhere. Everything else is unknown, so the check fails closed: in
+/// particular a bus/connection failure, which can also end in "No such file
+/// or directory" (`Failed to connect to bus: No such file or directory`).
+// trace:BUG-1619 | ai:claude
+pub(crate) fn classify_fresh_probe(out: &CommandOutput, timer_name: &str) -> FreshProbe {
+    let stdout = out.stdout.trim();
+    let stderr = out.stderr.trim();
+    // A bus or connection failure is never "not found", whatever errno text
+    // follows it. trace:BUG-1619 | ai:claude
+    const BUS_FAILURES: [&str; 5] = [
+        "Failed to connect to bus",
+        "Failed to connect to user scope bus",
+        "Failed to get D-Bus connection",
+        "Transport endpoint is not connected",
+        "Connection refused",
+    ];
+    if BUS_FAILURES.iter().any(|m| stderr.contains(m)) {
+        return FreshProbe::Unknown(format!(
+            "`systemctl --user is-enabled {timer_name}` could not reach the user manager: {stderr}"
+        ));
+    }
+    if stdout == "not-found" {
+        return FreshProbe::NotFound;
+    }
+    // Old systemd: only the is-enabled message for this exact unit counts.
+    // trace:BUG-1619 | ai:claude
+    let legacy_prefix = format!("Failed to get unit file state for {timer_name}:");
+    if stdout.is_empty()
+        && !out.success
+        && stderr
+            .lines()
+            .any(|l| l.starts_with(&legacy_prefix) && l.contains("No such file or directory"))
+    {
+        return FreshProbe::NotFound;
+    }
+    match classify_is_enabled(out) {
+        Ok(_) => FreshProbe::Known(stdout.to_string()),
+        Err(r) => FreshProbe::Unknown(r),
     }
 }
 
@@ -912,9 +1200,10 @@ pub(crate) fn print_switch_report(report: &SwitchReport, exe: &Path) {
         DriverInstallOutcome::AlreadyUpToDate => {
             println!("Already installed: this repo's scheduler {what} is up to date.")
         }
+        // trace:BUG-1619 | ai:claude
         DriverInstallOutcome::Repaired => println!(
-            "Repaired this repo's scheduler {what}: it was running an older invocation and has \
-             been rewritten."
+            "Repaired this repo's scheduler {what}: {}.",
+            report.repair.describe()
         ),
     }
     if !report.removed_cron_lines.is_empty() {

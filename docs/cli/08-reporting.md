@@ -20,6 +20,17 @@ Four of these commands look superficially similar — they all "report on the pr
 
 The dividing lines: `status` is *now*, everything else is *over a window*. `history` is the raw machine-readable record; `digest` is the same events run through editorial logic into prose for a human reader. `metrics`/`usage` don't read the graph at all — they read the telemetry substrate. `why` is the only one scoped to a single spec.
 
+## Time bounds
+
+Every flag that bounds a window in time takes the same forms, whichever command it is on: `history`, `digest`, `usage` (and `usage unused`), `metrics agent-lift`, `status --activity`, `queue progress`, `approvals`, `review classes` / `findings classes`, `findings calibration`, `autonomy calibration mismatches`, `load calibration`, `archive --older-than`, `mailbox archive` / `mailbox gc --older-than`, `doctor --since`, and `tail` / `drain tail` / `headless tail --since`. <!-- trace:TASK-1509 | ai:claude -->
+
+- **Relative, "that far before now"** — compact `30m`, `12h`, `7d`, `2w` (minutes, hours, days, weeks), or the phrase `<N> <unit>(s) ago` (`24 hours ago`, `1 week ago`).
+- **A bare ISO date** (`2026-05-01`) — **local midnight** on that date, not UTC midnight.
+- **A zone-less ISO datetime** (`2026-05-01T10:00`, `2026-05-01 10:00`) — that local wall-clock time.
+- **RFC3339** (`2026-05-01T10:00:00Z`, `…+02:00`) — the explicit zone wins.
+
+Local forms use the offset in effect on that date, so they stay right across a daylight-saving change; a local time that falls in a daylight-saving gap or overlap is refused rather than guessed. A few commands also accept extra forms of their own: `digest --since` and `doctor --since` take a git tag or ref, and the `tail` family keeps seconds (`30s`, or a bare number meaning seconds) and spelled-out units (`10min`). Flags named `--since`/`--until` that take a git ref, a tag, or a condition rather than a time (`db reconcile-status`, `doc coverage`, `field-study scan`, `changelog`, `defer --until`) are not time bounds and keep their own meaning.
+
 ---
 
 ### `aida status`
@@ -106,7 +117,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **Key options (rationale only).**
 - `--audience customer|team|self|operator` — the single most consequential flag: it sets both the framing *and* SPEC-ID visibility. `customer` strips SPEC-IDs (they're internal breadcrumbs, noise to a user); `operator` is the CLI-surface diff for power-users. Pick the reader.
-- `--since` — the window start, accepting a duration, an ISO date, *or a git tag/ref*. The tag form ("everything since `v0.12.0`") is the release-notes path.
+- `--since` — the window start: any [time bound](#time-bounds) (`7d`, `2w`, `24 hours ago`, an ISO date at local midnight, RFC3339), *or a git tag/ref*. The tag form ("everything since `v0.12.0`") is the release-notes path.
 - `--include-next` / `--include-process` — toggle the forward-looking and memory-pack sections; defaults differ by audience (process is on for team/self, off for customer) so the right reader gets the right depth.
 - `--copy` / `--out` — it's a document you'll paste somewhere, so clipboard and file-write are first-class and compose.
 - `--reset` — clears the cadence marker. `digest` remembers its last window in `.aida/last-digest.toml` and auto-resumes; `--reset` is how you break that chain when the next digest shouldn't continue from here.
@@ -155,7 +166,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **Key options (rationale only).**
 - `--markdown` — emit pasteable Markdown for release notes / a case study (the default is the colorized terminal view). The flag exists because this command's *output is meant to be shared*.
-- `--since <window>` — bound the reporting period (the case-study window).
+- `--since <window>` — bound the reporting period (the case-study window); any [time bound](#time-bounds), default `30d`.
 - `--json` — the computed signals for machine consumers.
 
 **Gotchas.** `metrics` is a parent command — bare `aida metrics` lists subcommands; you want `aida metrics agent-lift`. It and `usage drains` read the *same* `auto-complete.jsonl`, so they never disagree on the numbers — they disagree on *framing*. Pick by whether you're proving or debugging.

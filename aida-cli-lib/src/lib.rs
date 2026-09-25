@@ -24940,40 +24940,49 @@ fn criterion_trace_suffix(suffix: &str) -> bool {
     matches!(rest.len(), 5 | 6) && rest.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-/// Resolve a `--since` value to a UTC cutoff: first try it as a git ref/tag and
-/// take that commit's committer date; failing that, parse it as an RFC-3339
-/// datetime or a bare `YYYY-MM-DD` date. None if it resolves to neither.
+/// Resolve a `--since` value to a UTC cutoff: first parse it with the shared
+/// time-bound grammar (a relative duration, an ISO date at local midnight, a
+/// zone-less ISO datetime, or RFC3339); failing that, try it as a git
+/// ref/tag and take that commit's committer date. The grammar goes first so
+/// a duration such as `500d` is never read as an abbreviated commit ID. None
+/// if it resolves to neither, or if it matches the grammar but cannot be
+/// resolved (a DST gap/overlap, an out-of-range duration).
 /// trace:TASK-673 | ai:claude
+// trace:TASK-1509 | ai:claude
 fn resolve_completed_since_cutoff(
     project_root: &std::path::Path,
     since: &str,
 ) -> Option<chrono::DateTime<chrono::Utc>> {
+    resolve_completed_since_cutoff_at(project_root, since, chrono::Utc::now(), &chrono::Local)
+}
+
+/// [`resolve_completed_since_cutoff`] against an explicit `now` and timezone.
+// trace:TASK-1509 | ai:claude
+fn resolve_completed_since_cutoff_at<Tz: chrono::TimeZone>(
+    project_root: &std::path::Path,
+    since: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Option<chrono::DateTime<chrono::Utc>> {
     use std::process::Command as PCmd;
+    match queue_cmd::parse_since_arg_at(since, now, tz) {
+        Ok(t) => return Some(t),
+        Err(e) if queue_cmd::is_definitive_time_bound_error(&e) => return None,
+        Err(_) => {}
+    }
     let out = PCmd::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", "-1", "--format=%cI", since])
+        .args(["log", "-1", "--format=%cI", since.trim(), "--"])
         .output()
-        .ok();
-    if let Some(o) = out {
-        if o.status.success() {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&s) {
-                return Some(dt.with_timezone(&chrono::Utc));
-            }
-        }
+        .ok()?;
+    if !out.status.success() {
+        return None;
     }
-    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(since) {
-        return Some(dt.with_timezone(&chrono::Utc));
-    }
-    if let Ok(d) = chrono::NaiveDate::parse_from_str(since, "%Y-%m-%d") {
-        let naive = d.and_hms_opt(0, 0, 0)?;
-        return Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
-            naive,
-            chrono::Utc,
-        ));
-    }
-    None
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    chrono::DateTime::parse_from_rfc3339(&s)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
 /// One-line bubblewrap (`bwrap`) OS-sandbox availability status, shared by
@@ -66784,26 +66793,13 @@ fn locate_aida_server_binary(cwd: &std::path::Path) -> Result<std::path::PathBuf
 // trace:STORY-122 | ai:claude
 // ----------------------------------------------------------------------------
 
-/// Parse `Nd` / `Nh` / `Nm` into seconds. Mirrors the parser used by
-/// `aida queue progress --since`. Returns an error on malformed input.
+/// Parse a `--since` lookback window for the usage, health and metrics
+/// surfaces: how far before now the bound lies. Uses the shared time-bound
+/// grammar (`30d`, `12h`, `2w`, `24 hours ago`, an ISO date or datetime in
+/// local time, or RFC3339). Returns an error on malformed input.
+// trace:TASK-1509 | ai:claude
 pub(crate) fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        anyhow::bail!("--since cannot be empty");
-    }
-    // BUG-100: peel the last CHAR (not the last byte). `split_at` panics
-    // on a non-char-boundary byte index, so a multi-byte trailing unit
-    // like `2日` would crash the process.
-    let (num, unit) = split_last_char(trimmed);
-    let n: i64 = num
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid duration `{}` — try `30d`, `7d`, `12h`", raw))?;
-    Ok(match unit {
-        "d" => chrono::Duration::days(n),
-        "h" => chrono::Duration::hours(n),
-        "m" => chrono::Duration::minutes(n),
-        _ => anyhow::bail!("invalid duration unit `{}` — use d/h/m", unit),
-    })
+    queue_cmd::parse_lookback(raw, "--since")
 }
 
 /// Split a non-empty string into `(prefix, last_char_str)` on a valid
