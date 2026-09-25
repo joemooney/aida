@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:38:32.393127411Z
-modified_at: 2026-09-25T01:10:55.097714880Z
+modified_at: 2026-09-25T01:27:58.395290958Z
 req_type: Spike
 tags:
 - architecture
@@ -152,4 +152,26 @@ comments:
   content: 'Positioning note from the operator: to date, the operator has never used the AIDA capability described as “ask your codebase why” or “point at any line of code and get the decision behind it.” That may become useful later, and an LLM may be able to use it today, but it is not currently the lived center of gravity. A more grounded framing is that AIDA stands for an AI design/development assistant: a lightweight requirements-management and implementation system, a requirements plug-in for Codex, Claude, and other AI agents, and a runtime harness for agent work. AIDA may be comparable in spirit to Temporal, but is oriented toward coordinating and recording more nondeterministic behavior rather than deterministic workflows alone.'
   created_at: 2026-09-24T15:03:47.658406562Z
   modified_at: 2026-09-24T15:03:47.658406562Z
+- id: 01a0d62d-26bb-7b50-a71d-077dd56130a6
+  author: joe
+  content: |-
+    SPIKE-86 RESULT, 2026-09-24. Report: docs/positioning/2026-09-24-spike-86-positioning-from-engineering.md on branch claude/spike-86, commit e2f91fcd25. No PR opened.
+
+    EVIDENCE (main pinned at 9154924fd2; store HEAD 788c4e050d; commits over 5,000 lines excluded as mechanical moves; tests and dispatcher hunks attributed to layers):
+    - Share of attributed changed lines, 30d / 90d: control plane 50.9% / 46.1%; surface 12.9% / 14.6%; store 12.8% / 15.8%; execution 9.1% / 10.3%; intent (criteria, traces, reconstitute) 6.6% / 6.3%. The TUI changed 1,277 lines across 20 commits in 30d.
+    - Specs created in the last 30d: 1,399 work specs, 632 of them machine-filed (failure stubs and Review-PR records). 57.1% of the 767 authored ones are control plane. Including machine-filed specs, the control-plane share is 76.5%, which corroborates the 36-of-49 sample.
+    - Layer model validated by dependency direction, not by where defects cluster: the store and intent modules import 0 control-plane modules; queue_cmd.rs has 156 aida_core references. Removing the control plane leaves the memory lane working; removing the store leaves nothing.
+    - Capture coverage: 931 of 1,047 90d commits (88.9%) carry a SPEC-ID trailer; there are 15,601 trace comments; but only 27 criteria-level traces, across 10 specs. 42.1% of recently authored specs carry parseable acceptance criteria. Note: `aida criteria gap` is not a subcommand.
+    - Neighbours: 0 whole-word mentions of Temporal, Airflow, Argo, Nomad, Zuul, Bors, Mergify or Aviator in docs/positioning or docs/competitive-analysis. That is a gap on the architecture side only; no new vs-* page is needed.
+
+    RECONCILIATION: T1 VIS-1 is superseded. T2 (STORY-551 / CR-6) is subsumed into the pitch. T3 ADR-4 splits: governance is subsumed into the control plane; "concede the substrate, interop with Beads" is refuted (0 source files mention Beads; EPIC-39 has 0 children). T4 Trojan-horse TUI is superseded as positioning; the humility tactic moves to `aida why` and the memory lane. T5 orchestrator/merge queue is live as the architecture description only.
+
+    RECOMMENDATION:
+    - Market pitch: the comparative north star. AIDA captures intent (requirements, decisions, rejected alternatives, code-to-spec links) so agents work from it today and the project is far better placed to be rebuilt than from commit messages and a README. The entry point is `aida why`.
+    - Architecture description: a git-canonical intent store plus a control plane that acts as the corpus-integrity layer.
+
+    OPERATOR DECISIONS NEEDED: (1) the successor-vision wording, after which VIS-1 is superseded; (2) replace or reaffirm the Trojan-horse framing, via a successor DECISION spec; (3) ADR-4 and EPIC-39: rejected, superseded, or kept parked; (4) whether the effort imbalance (intent 6.6% against control 50.9%) is acceptable or should get a rebalancing target; (5) adopt STORY-1425's comparative measure on aida-hub as the north star's executable check; (6) the corpus-sufficiency PRIN wording and its enforcement level. Proposed texts are in report section 7; nothing was filed without operator sign-off.
+  created_at: 2026-09-25T01:27:58.395290958Z
+  modified_at: 2026-09-25T01:27:58.395290958Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 human_only: true
