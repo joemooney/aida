@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:50:20.038947417Z
-modified_at: 2026-09-25T01:44:24.372291836Z
+modified_at: 2026-09-25T02:10:56.212713561Z
 req_type: Story
 tags:
 - aida:queue
@@ -182,4 +182,10 @@ comments:
     The design is sound. Implement it with A1–A9 and the budget decision above.
   created_at: 2026-09-25T01:15:50.530625766Z
   modified_at: 2026-09-25T01:15:50.530625766Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d654-7c54-7893-8ad0-a7d95ed83b41
+  author: joe
+  content: 'IMPLEMENTED on claude/story-1429 (a5a3e61514), all of A1-A9 plus the budget answer in one branch; no split was needed. Note on the budget test: when the budget runs out the drain stops with the hard-fail exit 3 (DRIVE_EXIT_HARD_FAIL, as BUG-1608 pinned), not 2, so drain_batch_requeued_spec_reshelve_spends_budget_twice and its pipelined twin assert 3. SpecRequeued is emitted only when a spec goes back into flight (Approved/Planned/InProgress); dropping a parked spec to Rejected goes through the owner but is recorded only by DispositionChanged. The lease gate fails closed on ANY unparseable lease file in .aida/sessions, not only one that names the spec, because an unparseable lease''s scope is unknown. Decision record: ADR-58.'
+  created_at: 2026-09-25T02:10:56.212713561Z
+  modified_at: 2026-09-25T02:10:56.212713561Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
