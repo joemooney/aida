@@ -302,6 +302,11 @@ fn guard_uses_aida(guard: &Guard) -> bool {
 /// that runner contract so the local preflight cannot accept a command that CI
 /// rejects. See <https://docs.github.com/actions/writing-workflows/workflow-syntax-for-github-actions#custom-shell>.
 // trace:BUG-1420 | ai:codex
+/// The GitHub Actions expression for the PR's base branch, which preflight
+/// replaces with the repository's default branch.
+// trace:BUG-1624 | ai:claude
+const BASE_REF_PLACEHOLDER: &str = "${{ github.base_ref }}";
+
 fn github_actions_bash(command: &str) -> Command {
     let mut shell = Command::new("bash");
     shell.args([
@@ -350,7 +355,16 @@ fn execute(project_root: &Path, guards: Vec<ResolvedGuard>, timeout: Duration) -
     // so nothing can consult PATH, so there is nothing to build.
     // trace:TASK-1289 | ai:claude
     let mut binary: Option<Result<String, String>> = None;
-    let default_branch = crate::forge::default_branch_of(project_root);
+    // The default branch comes from the forge (`gh repo view`) or from
+    // `origin/HEAD`, neither of which the operator controls, and the guard
+    // text is run by `bash -c`. git ref names may contain `;`, `$()`,
+    // backticks and quotes, so a name is substituted into guard text only
+    // when it is a valid branch name made of shell-inert characters;
+    // otherwise any guard that needs it is reported inconclusive and runs
+    // nothing. trace:BUG-1624 | ai:claude
+    let raw_default_branch = crate::forge::default_branch_of(project_root);
+    let default_branch = crate::git_arg_guard::is_shell_safe_branch_name(&raw_default_branch)
+        .then(|| raw_default_branch.clone());
     let inherited_path = std::env::var_os("PATH").unwrap_or_default();
     let path = std::env::join_paths(
         std::iter::once(
@@ -385,6 +399,18 @@ fn execute(project_root: &Path, guards: Vec<ResolvedGuard>, timeout: Duration) -
                 continue;
             }
         };
+        // trace:BUG-1624 | ai:claude
+        if guard.command.contains(BASE_REF_PLACEHOLDER) && default_branch.is_none() {
+            results.push(GuardResult::Inconclusive {
+                name: guard.name,
+                reason: format!(
+                    "the repository's default branch name {raw_default_branch:?} is not a \
+                     shell-safe git branch name, so it was not substituted for \
+                     `{BASE_REF_PLACEHOLDER}` and the guard did not run"
+                ),
+            });
+            continue;
+        }
         // This guard will execute, so the worktree binary is needed now.
         let built = binary.get_or_insert_with(|| build_worktree_binary(project_root, &binary_path));
         let binary_label = match &*built {
@@ -403,16 +429,23 @@ fn execute(project_root: &Path, guards: Vec<ResolvedGuard>, timeout: Duration) -
                 continue;
             }
         }
-        let command = guard
+        // Only a shell-safe name reaches the command text (checked above).
+        // trace:BUG-1624 | ai:claude
+        let mut command = guard
             .command
-            .replace("${{ github.event_name }}", "pull_request")
-            .replace("${{ github.base_ref }}", &default_branch);
+            .replace("${{ github.event_name }}", "pull_request");
+        if let Some(branch) = default_branch.as_deref() {
+            command = command.replace(BASE_REF_PLACEHOLDER, branch);
+        }
         let mut child = github_actions_bash(&command);
         child
             .current_dir(project_root)
             .env("PATH", &path)
-            .env("AIDA_PREFLIGHT_BINARY", &binary_path)
-            .env("AIDA_PREFLIGHT_DEFAULT_BRANCH", &default_branch);
+            .env("AIDA_PREFLIGHT_BINARY", &binary_path);
+        match default_branch.as_deref() {
+            Some(branch) => child.env("AIDA_PREFLIGHT_DEFAULT_BRANCH", branch),
+            None => child.env_remove("AIDA_PREFLIGHT_DEFAULT_BRANCH"),
+        };
         results.push(match run_bounded(&mut child, timeout) {
             Ok(Some(out)) if out.status.success() => GuardResult::Passed(guard.name),
             Ok(Some(out)) => GuardResult::Failed {
@@ -652,6 +685,106 @@ mod tests {
             Duration::from_secs(2),
         );
         assert_eq!(results, vec![GuardResult::Passed("Base branch".into())]);
+    }
+
+    /// BUG-1624: a default branch name is forge/remote data. One carrying
+    /// shell syntax (`;`, `$()`, backticks, a quote breakout) must never be
+    /// spliced into the `bash -c` guard text: the guard that needs it is
+    /// inconclusive (so publication refuses) and nothing runs. The marker
+    /// file each payload would create lives inside the scratch repo.
+    // trace:BUG-1624 | ai:claude
+    #[test]
+    fn bug_1624_hostile_default_branch_runs_nothing() {
+        for payload in [
+            "main;>injected",
+            "main$(>injected)",
+            "main`>injected`",
+            "x';>injected;'",
+            "x\";>injected;\"",
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            assert!(Command::new("git")
+                .args(["init", "-q"])
+                .current_dir(root.path())
+                .status()
+                .unwrap()
+                .success());
+            let target = format!("refs/remotes/origin/{payload}");
+            assert!(
+                Command::new("git")
+                    .args(["symbolic-ref", "refs/remotes/origin/HEAD", &target])
+                    .current_dir(root.path())
+                    .status()
+                    .unwrap()
+                    .success(),
+                "git accepts {payload:?} as a ref name"
+            );
+            assert_eq!(crate::forge::default_branch_of(root.path()), payload);
+            let results = execute(
+                root.path(),
+                vec![
+                    ResolvedGuard::Found(Guard {
+                        name: "Quoted base".into(),
+                        command: "test '${{ github.base_ref }}' = trunk".into(),
+                    }),
+                    ResolvedGuard::Found(Guard {
+                        name: "Bare base".into(),
+                        command: "git diff origin/${{ github.base_ref }} >/dev/null 2>&1 || true"
+                            .into(),
+                    }),
+                ],
+                Duration::from_secs(5),
+            );
+            assert_eq!(results.len(), 2, "{payload:?}: {results:?}");
+            for result in &results {
+                let GuardResult::Inconclusive { reason, .. } = result else {
+                    panic!("{payload:?}: expected inconclusive, got {result:?}");
+                };
+                assert!(reason.contains("not a shell-safe"), "{reason}");
+            }
+            assert!(
+                matches!(decide(&results), PreflightDecision::Refuse { .. }),
+                "{payload:?}: an unsubstituted guard must refuse publication"
+            );
+            assert!(
+                !root.path().join("injected").exists(),
+                "{payload:?}: the default branch name was run as shell code"
+            );
+        }
+    }
+
+    /// BUG-1624: a hostile default branch is not exported to guards either,
+    /// and a guard that never mentions it still runs.
+    // trace:BUG-1624 | ai:claude
+    #[test]
+    fn bug_1624_hostile_default_branch_is_not_exported() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(root.path())
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("git")
+            .args([
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/main;>injected",
+            ])
+            .current_dir(root.path())
+            .status()
+            .unwrap()
+            .success());
+        let results = execute(
+            root.path(),
+            vec![ResolvedGuard::Found(Guard {
+                name: "No base".into(),
+                command: "test -z \"${AIDA_PREFLIGHT_DEFAULT_BRANCH:-}\"".into(),
+            })],
+            Duration::from_secs(5),
+        );
+        assert_eq!(results, vec![GuardResult::Passed("No base".into())]);
+        assert!(!root.path().join("injected").exists());
     }
 
     /// Finding 3: a guard set where nothing executes must not trigger the

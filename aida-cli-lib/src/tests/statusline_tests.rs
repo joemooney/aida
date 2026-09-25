@@ -5661,10 +5661,12 @@ fn parse_session_env_handles_unquoted_value() {
     assert_eq!(pairs, vec![("FOO".to_string(), "bar".to_string())]);
 }
 
-/// TASK-63: apply_session_env_to_process really mutates the process
-/// env, and returns the names it set. Use a name unique to this test
-/// so parallel test runs don't trample each other.
-// trace:TASK-63 | ai:claude
+/// TASK-63: apply_session_env_to_process returns the names it set, and
+/// (BUG-1624) sets only the allowlisted session-env names. A name outside
+/// the allowlist is neither set nor reported; the positive side is pinned
+/// on the pure `trusted_session_env` so the test never mutates a real
+/// session variable other tests read.
+// trace:TASK-63 trace:BUG-1624 | ai:claude
 #[test]
 fn apply_session_env_to_process_sets_env() {
     const VAR: &str = "AIDA_TEST_TASK_63_APPLIED";
@@ -5676,12 +5678,19 @@ fn apply_session_env_to_process_sets_env() {
     }
     let body = format!("export {}='hello world'\n", VAR);
     let applied = apply_session_env_to_process(&body);
-    assert_eq!(applied, vec![VAR.to_string()]);
-    assert_eq!(std::env::var(VAR).unwrap(), "hello world");
-    #[allow(unused_unsafe)]
-    unsafe {
-        std::env::remove_var(VAR);
-    }
+    assert!(applied.is_empty(), "{applied:?}");
+    assert!(std::env::var_os(VAR).is_none());
+    let pairs = trusted_session_env(
+        "export CARGO_TARGET_DIR='/w/target'\nexport AIDA_AGENT_TYPE='claude'\n",
+        std::path::Path::new("rel/aida"),
+    );
+    assert_eq!(
+        pairs,
+        vec![
+            ("CARGO_TARGET_DIR".to_string(), "/w/target".to_string()),
+            ("AIDA_AGENT_TYPE".to_string(), "claude".to_string()),
+        ]
+    );
 }
 
 /// STORY-52: leases predating the cargo_target_dir field must still

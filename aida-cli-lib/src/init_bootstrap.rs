@@ -401,7 +401,11 @@ fn emit_enter_dir(plan_dir: &Path) {
     let wrapper = std::env::var("AIDA_SHELL_WRAPPER").ok();
     if crate::shell_eval::marker_has_cap(wrapper.as_deref(), crate::shell_eval::INIT_CD_CAP) {
         let _eval = crate::shell_eval::EvalBlock::open_with(true);
-        println!("cd '{}'", abs.display());
+        // Eval'd by the wrapper: quote the path. trace:BUG-1624 | ai:claude
+        println!(
+            "cd '{}'",
+            crate::sh_single_quote(&abs.display().to_string())
+        );
     } else {
         println!("      cd {}", plan_dir.display());
     }
