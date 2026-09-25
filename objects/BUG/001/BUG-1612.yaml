@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:51:09.557186527Z
-modified_at: 2026-09-25T03:36:02.877064082Z
+modified_at: 2026-09-25T04:25:08.414171663Z
 req_type: Bug
 tags:
 - concurrency
@@ -57,6 +57,21 @@ comments:
     - update_atomically: loads the whole store (multi-spec closures need it) but writes only the diff.
   created_at: 2026-09-25T03:34:00.196954718Z
   modified_at: 2026-09-25T03:34:00.196954718Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d6cf-5a3e-78b0-8597-e8537b8e3654
+  author: joe
+  content: |-
+    Review round 2 (REQUEST_CHANGES addressed):
+    1. save() snapshot. The snapshot is now an interior-mutable LoadSnapshot; a clone gets a deep copy. Each successful save refreshes it for every object written, created or deleted. update_atomically refreshes the snapshot of the store it returns. One loaded store can now be saved repeatedly: repeated edits, create-then-edit and create-then-delete all land, and aida-server needs no API change. save() is now a two-phase compare-and-swap that plans everything before writing:
+       - spec changed on disk and left untouched by this caller: skipped (the disk copy is newer, nothing of the caller's is lost), and the cache is rebuilt from disk;
+       - spec changed on disk and also changed by this caller (or deleted by it): returns a typed StoreConflictError and writes nothing at all;
+       - no snapshot, with an on-disk modified_at newer than the caller's copy (TASK-1161): now a conflict error too, where it used to warn and return Ok.
+       On a conflict, aida-server ServerState::save reloads the store and returns ABORTED. supervisor's save(?) now stops before any re-drive launch.
+    2. Lock file. It is never written to now and stays empty. On first use per process, .aida/*.lock is excluded in the store: through the store .gitignore if it has the line, otherwise appended to the worktree info/exclude (git_ops::ensure_store_lock_excluded). This covers new and existing stores. Tests: a Rust fixture (no .gitignore, add, then git add -A . and commit: nothing staged, lock file empty) and a test_distributed.sh step (init, add, db sync, add -A: not tracked).
+    3. Added AIDA_STORE_LOCK_TIMEOUT_SECS to docs/environment-variables.md.
+    Also: updated the clear_failure_reason_targeted comment, and filed BUG-1613 (metadata.yaml is written wholesale by save() and BulkWriter).
+  created_at: 2026-09-25T04:25:08.414171663Z
+  modified_at: 2026-09-25T04:25:08.414171663Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b4984d495336027fed771caed71bc429dc1fd20c
