@@ -3,12 +3,12 @@ spec_id: BUG-1630
 agreed_id: BUG-1630
 title: build.rs watches ../.git/HEAD, which never exists in linked worktrees, so every cargo test rebuilds the whole lib
 description: 'Found while finishing BUG-1618. In a linked worktree .git is a file (gitdir: ...), so the build script''s rerun-if-changed on ../.git/HEAD points at a path that doesn''t exist, and cargo reruns the build script every time. Each filtered test run rebuilds all of aida-cli-lib (3-4 min), which multiplies CPU, memory pressure and agent time in the worktree-per-spec workflow. Fix: resolve the real git dir (git rev-parse --git-dir / --git-common-dir, or parse the gitdir: file) and watch HEAD and the ref it points to there; fall back gracefully when git is absent. Acceptance: in a linked worktree a second ''cargo test -p aida-cli-lib --lib <filter>'' with no source change does not rerun the build script or recompile the lib; the version stamp still updates on commit.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T20:32:14.600361247Z
-modified_at: 2026-09-25T20:32:14.600361247Z
+modified_at: 2026-09-25T20:32:29.019945940Z
 req_type: Bug
 filed_at:
   code_sha: 99698621ba5890d30a9d128655537987cfd239d4
