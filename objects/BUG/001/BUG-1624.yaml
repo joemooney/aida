@@ -3,12 +3,12 @@ spec_id: BUG-1624
 agreed_id: BUG-1624
 title: 'Shell injection: forge default branch name interpolated into a shell command in implementer_preflight'
 description: 'Found during the BUG-1622 audit. implementer_preflight.rs ~409 builds a shell command string that contains the forge''s default branch name. A crafted branch name (from a repo or forge the operator doesn''t control) could inject shell syntax. Fix: pass the value as an argv element, not through a shell, or quote it robustly and validate it against git''s ref-name rules. Grep for other shell strings (sh -c, bash -c, format! into Command::new("sh")) that interpolate store-, config- or forge-derived values. Acceptance: a regression test where a default branch name containing '';'', ''$()'' or backticks runs nothing, plus a documented audit of every sh -c site.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T15:52:33.233412803Z
-modified_at: 2026-09-25T18:25:33.476939675Z
+modified_at: 2026-09-25T19:14:13.639940630Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -76,6 +76,20 @@ comments:
   created_at: 2026-09-25T18:24:19.902982285Z
   modified_at: 2026-09-25T18:24:19.902982285Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d9fd-54d9-7393-9f9f-d561035f5d0c
+  author: aida-auto-bump
+  timestamp: 2026-09-25T19:14:13.337449665Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0d9fd-5607-70e0-ac30-7272726bbb48
+  timestamp: 2026-09-25T19:14:13.639938432Z
+  agent: implementer
+  commit_sha: 537d3087230f1747e1fc47e13bfb1ddf0d41d453
+  summary: Completed via merge 537d3087
 filed_at:
   code_sha: b821736ce75455f3858816002777b451fd4aaf03
   branch: main
@@ -84,3 +98,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T19:14:13.337426526Z
+  completion_sha: 537d3087230f1747e1fc47e13bfb1ddf0d41d453
