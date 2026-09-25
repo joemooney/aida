@@ -3,12 +3,12 @@ spec_id: BUG-1627
 agreed_id: BUG-1627
 title: Session-env hardening follow-ups after BUG-1624 (no-launch hint, NUL panic, AIDA_AGENT_TYPE trust, test env restore)
 description: 'Low findings from BUG-1624''s security re-review. (a) queue_cmd.rs ~11703: the queue work --no-launch hint still says ''source .aida/session-env.sh''; point to aida worktree enter instead. (b) lib.rs ~40472: a NUL byte in an allowed value makes std::env::set_var panic; skip such values. (c) The file still controls AIDA_AGENT_TYPE, which turns on the advisor code-gate agent exemption and adds a mailbox identity; take it from the lease, or accept only known agent types. (d) bug_1624_apply_session_env_to_process_ignores_non_allowlisted_names should restore PATH and LD_PRELOAD in case of a regression. Acceptance: a test for each.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T18:24:55.506358857Z
-modified_at: 2026-09-25T19:41:48.412217086Z
+modified_at: 2026-09-25T20:34:29.534048092Z
 req_type: Bug
 comments:
 - id: 01a0d9d0-a9d4-7ff0-b491-7779493683bf
@@ -23,6 +23,20 @@ comments:
   created_at: 2026-09-25T19:41:48.412217086Z
   modified_at: 2026-09-25T19:41:48.412217086Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0da46-d20e-7c02-a730-c24fd7daca6b
+  author: aida-auto-bump
+  timestamp: 2026-09-25T20:34:29.518906680Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0da46-d21e-7f02-8684-95c19c9de950
+  timestamp: 2026-09-25T20:34:29.534046639Z
+  agent: implementer
+  commit_sha: 5b98d7cfb3485889468fe1fa78a09924b04f49af
+  summary: Completed via merge 5b98d7cf
 filed_at:
   code_sha: 1df2e0445e433eb9bef4af0dc02c93a6712f7c80
   branch: main
@@ -31,3 +45,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T20:34:29.518879353Z
+  completion_sha: 5b98d7cfb3485889468fe1fa78a09924b04f49af
