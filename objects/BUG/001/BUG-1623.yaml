@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T15:30:53.823179350Z
-modified_at: 2026-09-25T18:45:05.057849766Z
+modified_at: 2026-09-25T19:01:27.821489180Z
 req_type: Bug
 comments:
 - id: 01a0d931-3140-7210-972a-8a1d6795a190
@@ -46,6 +46,24 @@ comments:
     - (d) No test pins the n1 message or n3 stderr routing.
   created_at: 2026-09-25T18:45:05.057849766Z
   modified_at: 2026-09-25T18:45:05.057849766Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d9f1-a68d-7641-885c-c729aa3b0781
+  author: joe
+  content: |-
+    Strict review (final delta): APPROVE — at 5c0de126c3 (delta f96605b6da..5c0de126c3). The required n1 fix is resolved.
+    VERIFIED:
+    - n1: shift.rs:1401-1411 unsettled_wave_detail describes the state in both cases. Enabled: 'waits for the next shift tick to settle it'. Disabled: 'a disabled shift does not tick, so re-drive waits until the shift runs again'. Neither advises 'aida shift enable'.
+    - No change to any pass or hold: shift_enabled only feeds the detail string. The redrive-lock-free verdict is still lock_live.is_none(), and the wave_open arm still returns Some. redrive_guards has exactly one caller, redrive_step (shift.rs:1501, which passes cfg.enabled). Both paths reach it: the tick (shift.rs:1928) and the watch pass (redrive_pass, shift.rs:2401, via run_redrive_pass with load_config, the same config the tick loads).
+    - ECHILD: waitid P_PID and try_wait return ECHILD only when the shell is no longer our waitable child, so no unreaped shell is left behind. Skipping child.wait() is correct. Nothing in-tree sets SIGCHLD to SIG_IGN or calls waitpid(-1), so the branch is unreachable today.
+    - emit_pass_output (supervise_cmd.rs:474-497): the plain-text output is byte-identical. The report still goes through print_watch_report and println!. The nudge goes to the same global Stdout. The order is unchanged, nudge errors are still swallowed, and the nudge still runs only under --execute.
+    - Mutations (in a throwaway worktree): (1) restoring the old enable-advising text fails watch_unsettled_wave_hold_describes_state_without_advising_enable at bug_1621_watch_redrive_tests.rs:335. (2) Ignoring the flag in the guard (always true) fails it at :369, so the guard wiring is pinned, not only the helper. (3) Sending the JSON-mode nudge to out fails watch_json_execute_keeps_stdout_pure_json_and_routes_nudge_to_stderr (story_1096_supervise_watch_tests.rs:225).
+    - Test runs of cargo test -p aida-cli-lib --lib: notify 25, shift 65, supervis 72, watch 71. All pass.
+    NITS (non-blocking):
+    - (a) notify.rs:760-763 and 771-776: the comment says the pid 'may have been reused'. That holds only if the group is empty. While background members survive, Linux keeps the pgid, so killpg would be safe, and skipping leaves those orphaned leftovers running. They are reparented, not unreaped, and the path is unreachable in-tree. Either choice is defensible.
+    - (b) supervise_cmd.rs:485: in plain mode the report goes to the real stdout, not the injected out. Only the nudge line uses out, so plain mode can't be tested through the injection.
+    - (c) A stdout write failure now returns Err instead of panicking inside println!. This is benign.
+  created_at: 2026-09-25T19:01:27.821489180Z
+  modified_at: 2026-09-25T19:01:27.821489180Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b821736ce75455f3858816002777b451fd4aaf03
