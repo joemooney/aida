@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T06:31:24.916031923Z
-modified_at: 2026-09-25T08:10:31.430165381Z
+modified_at: 2026-09-25T08:13:59.048946359Z
 req_type: Task
 tags:
 - cache
@@ -160,6 +160,61 @@ comments:
     - OQ6 Keep the module in aida-cli-lib (proposed, least churn), or move the decoder and cache into aida-core now so non-CLI surfaces can reuse them?
   created_at: 2026-09-25T08:10:31.430165381Z
   modified_at: 2026-09-25T08:10:31.430165381Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d7a0-dd88-7c60-afc3-722424267caf
+  author: joe
+  content: |
+    ADVISOR SIGNOFF: APPROVED — with binding amendments A1-A10 below. Implement as two slices (see SLICING).
+
+    VERIFICATION OF THE SKETCH'S CLAIMS (independent, 2026-09-25)
+    - The git walk is as described. `collect_filtered_events` (history.rs:405) runs one `git log -n<max_commits>`, then one `git show --name-status` per commit and two `git show <rev>:<path>` per changed object. Its callers are `run` and the progression view, plus `collect_event_records` (used by MCP at mcp.rs:2535, which sets the window to max(5*limit, 500), and by status_cmd.rs:1067, which uses a 2,000-commit window). Confirmed.
+    - The silent truncation is real. In events mode the default window is `(limit*5).max(50)` (git_backend_cmd.rs:7787), and `run` never reports that the window ran out. I re-ran `aida history events --shipped -n 10`: it took 0.77 s and returned 4 ships, with no notice.
+    - Re-timed: `--since "1 day ago" -n 50` took 6.1 s (the sketch measured 7.3 s). `--shipped -n 10 --max-commits 300` took 4.9 s, about 16 ms per commit. The per-commit cost depends on how many objects each commit touches, so the sketch's 38 ms figure is plausible for its window. The order of magnitude holds. The store has 37,615 commits and 6 merges.
+    - Lock and cache claims check out: busy_timeout=0 plus the BUG-681 short ladder, the BUG-683 corrupt-file self-heal, the `cache.db.lock-info` sidecar, the `AIDA_CACHE_RETRY_*` scoping, and fs2 `try_lock_exclusive` in store_lock.rs. fs2 and rusqlite are already dependencies of aida-cli-lib.
+
+    ON THE DESIGN
+    - A separate history.db is sound. It is derived and disposable, git stays canonical, and it shares no connection, WAL or lock with cache.db. Decoupling from the query cache is the right call.
+    - The answer-only-when-complete rule with a fall back to the git walk is sound. So is never touching store_lock or cache.db. The history path reads immutable objects by SHA plus one ref. A racing writer only makes the cache one commit stale, and HEAD comparison catches that on the next query.
+    - Incremental and rewrite handling are correct in principle: tip ancestry, root identity, version stamps and a truncate-and-restart on mismatch. The mechanics below must be tightened before this counts as correct with merges or a bounded budget.
+
+    BINDING AMENDMENTS
+    A1 (a new pre-req BUG: renames). The walk calls `git show --name-status` with rename detection on, which is git's default. On this store, `git log -n3000 --diff-filter=R` finds 426 R lines. For example, commit "chore: update 1 requirements, delete 1" pairs BUG-389 with BUG-390 at R076. The walk parses `R076\told\tnew` as one path containing a tab. Both blob reads fail, so the walk silently drops the Deleted event and the Added/Modified event. The sketch's batched decoder uses `--no-renames`, so the cache would disagree with its own oracle on every one of these commits. File a separate BUG to add `--no-renames` to the walk's `git show` (and to the digest's `git log --name-status`), with a regression test. Land it before or with slice 1. After that, both paths emit D+A and the parity oracle is honest.
+    A2 (backfill resumption with merges). "Walk from floor_sha^" follows only the first parent, so it loses or duplicates side-branch commits after a merge. The same goes for "complete=1 once the root is indexed". Fix both:
+      - Pin a `backfill_anchor` sha in meta when a backfill starts.
+      - Enumerate commits deterministically with `git rev-list <anchor>`, in the same order options the cache uses for seq, and resume by an indexed-count offset or an exclusion set, never by `floor^`.
+      - Set complete=1 when that enumeration is exhausted.
+      - Use the sorted set of root commits (`rev-list --max-parents=0`) for `store_root_sha`, because a store can have more than one root after syncs.
+      Add a test that resumes a chunk boundary in the middle of a merged side branch.
+    A3 (budgeted catch-up). "tip..HEAD in one transaction" and a 1.5 s budget conflict when the gap is large, for example a sibling session far behind. Before indexing:
+      - Count the gap with `rev-list --count tip..HEAD`.
+      - If the gap fits the budget, index it in one transaction.
+      - Otherwise index in chunks, oldest first, from `rev-list --reverse --topo-order tip..HEAD`. Only commit a chunk whose newest commit C satisfies `count(tip..C) == rows in the chunk prefix`, so the indexed set stays ancestor-closed and tip_sha stays meaningful. If no such boundary exists, fall back to the walk for this query.
+      - Size backfill chunks by time, not a fixed 2,000 commits. At the sketch's own estimate, 2,000 commits is 3-10 s, well over the budget. Commit small transactions until the budget runs out.
+    A4 (the `--id` window). With `--id`, git applies `-n<max_commits>` only to commits that touch that spec's path. Some of those commits decode to zero events, such as a modified_at-only edit. To make the window reproducible, record a per-commit touched-object row, `touches(commit_seq, spec_id)`, and define an `--id` window as the newest N touching commits. "Newest N rows by seq" is correct only without `--id`. Add `history_cache_id_window_parity`.
+    A5 (the author filter). Today `--author` is a case-sensitive substring match (`e.author.contains(a)`). SQLite `LIKE` is case-insensitive for ASCII. Use `instr(author, ?) > 0` or a Rust post-filter. Do not use LIKE.
+    A6 (the fallback path). `default_cache_path(store).with_file_name("history.db")` is wrong when there is no `.aida` directory. The cache fallback is `<root>.cache.db`, so with_file_name produces `<parent>/history.db`, a stray file in the project root. Add an explicit `history_db_path()` that mirrors `default_cache_path_with_roots` (including the BUG-1598 temp-root guard) and falls back to `git_root.with_extension("history.db")`.
+    A7 (coverage accounting). Rule 4(b), "limit matches at or above the floor", must count matches after every filter, including the Rust post-filters for archived and deferred specs. It must also be checked together with rule (c), the window. Treat `--since`/`--until` as pure commit_ts filters. Document that git's `--since` walk-stop can differ under clock skew, and keep that case out of the byte-parity bar.
+    A8 (measurement). The 1-3 min full-build figure is an estimate. The slice 1 PR must report a measured cold full build and a measured warm query on the real store: `--shipped -n 10`, `--since 1d -n 50`, and the MCP default. Record them on this spec.
+    A9 (the fallback footer). Show it only on a fallback caused by a cache miss or error, never when `AIDA_HISTORY_CACHE=0`. Word it for users, with no internal nouns.
+    A10 (decoder-version discipline). Add a unit test that fails when `EventKind`'s serde shape changes without a `HISTORY_DECODER_VERSION` bump. A snapshot of the serialized variants is enough.
+
+    OPEN QUESTIONS — DECISIONS
+    OQ1 Location: SHARED across sibling worktrees. Resolve the store path with `canonicalize()` before the `.aida` walk-up. Sibling session worktrees reach the canonical store through the `.aida-store` symlink, so they all land on the canonical project's `.aida/`. The content is a pure function of immutable commits, and the tip, root and version checks make sharing safe. Put the versions in the filename, `history-v<schema>-<decoder>.db` with a matching `.lock`, so a dev build with a bumped decoder and the released binary never reset each other's index back and forth. An unwritable shared directory, such as a sandboxed session, fails open to the walk (A6 still applies). `cache rebuild --history` may prune files for other versions.
+    OQ2 Window: the cache HONOURS the window exactly in this task. It is the parity oracle, and a semantics change should not ride inside a performance change. The silent truncation is a real user-facing bug, so FILE IT SEPARATELY NOW. Its minimal fix works without the cache: when the walk exhausts an implicit (defaulted) window before finding `limit` matches, print a short notice that it searched only the most recent N changes and how to widen that, and add a `window_exhausted` flag to JSON/MCP. Once the cache ships, a follow-up on that BUG may drop the implicit window for cache-served queries.
+    OQ3 Ordering: the parity bar is exact order equality on linear fixtures. On merge fixtures, require the same set of events and the same event order within each commit, and define the cache's seq order, which is topo-consistent, as authoritative. Do not switch the fallback to `--topo-order` in this task. With 6 merges in 37.6k commits the difference is theoretical, and changing the oracle's order would muddy parity. Document it.
+    OQ4 First build: build inline within the budget, with a resumable newest-first backfill, as proposed and amended by A2 and A3. Rule 4(b) means recent-window queries go fast after the first few slices. Keep explicit `aida cache rebuild --history` as the full, unbudgeted build. Do not warm the index during `aida sync` in this task.
+    OQ5: plain `aida cache rebuild` stays requirements-only, which keeps the decoupling explicit. It prints one hint line saying the history index rebuilds with `--history`. `cache status` shows both.
+    OQ6 Crate: aida-cli-lib, as proposed. Nothing outside the CLI consumes it yet. Move it to aida-core only when a second consumer exists.
+
+    SLICING (heft)
+    The spec records heft 0. The work actually covers a new module, a batched decoder, backfill, catch-up and reset mechanics, CLI, doctor and MCP surfaces, and about 17 tests. Split it:
+    - Pre-req BUG: A1, `--no-renames`. Small, and independent of this task.
+    - Separate BUG: the OQ2 truncation notice. Small, and independent of this task.
+    - Slice 1: `history_cache.rs` covering the schema, batched decoder, catch-up, backfill and reset (A2-A4), coverage (A7), fail-open, the env-off switch, the shared versioned location (OQ1 and A6), wiring into `collect_filtered_events`, `cache rebuild --history`, the `cache status` History section (this satisfies the diagnostics acceptance), and the parity, rewrite, corruption, lock-independence and window tests. Include the A8 measurements.
+    - Slice 2: the doctor freshness line, the MCP `source`/`index_tip` fields, the fallback footer (A9), and `mcp_history_reports_source_field`.
+    The trailing IDs on each slice PR must name the slice so the merge does not complete TASK-1505 early.
+  created_at: 2026-09-25T08:13:59.048946359Z
+  modified_at: 2026-09-25T08:13:59.048946359Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: dce27130ca391f4e587993afadb05b1447a6643f
