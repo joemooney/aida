@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T11:20:12.338074957Z
-modified_at: 2026-09-24T17:13:50.705898562Z
+modified_at: 2026-09-25T05:18:13.016951329Z
 req_type: Task
 tags:
 - docs:impacted
@@ -37,6 +37,81 @@ comments:
   created_at: 2026-09-24T15:47:58.145468498Z
   modified_at: 2026-09-24T15:47:58.145468498Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d6ff-f218-7211-b726-4e73c4a09341
+  author: joe
+  content: |-
+    Product decision: fold terminal-title integration into the statusline setup umbrella. Claude Code — command-backed statusLine
+      Add this to /home/joe/ai/aida/.claude/settings.json:
+
+      {
+        "statusLine": {
+          "command": "aida statusline --color=always 2>/dev/null || printf '%s' \"$(pwd)\"",
+          "type": "command"
+        }
+      }
+
+      Or install it for this project:
+        aida statusline setup --client claude --install
+
+      To disable later, remove the "statusLine" key from
+      /home/joe/ai/aida/.claude/settings.json (or run `aida statusline setup --client claude --install` after
+      deleting it to re-add). Claude Code falls back to its built-in footer.
+
+    Codex CLI — built-in TUI footer
+      Codex's footer renders built-in item IDs; it does not run
+      `aida statusline` as a command. Configure the companion built-in
+      fields in `~/.codex/config.toml` (personal) or a trusted project's
+      `.codex/config.toml` (team):
+
+      [tui]
+      status_line = ["model-with-reasoning", "context-remaining", "git-branch", "current-dir"]
+      terminal_title = null
+
+      `terminal_title = null` disables Codex's OSC title writer. Current
+      Codex releases overwrite shell prompt title hooks, so this prevents
+      Codex from racing AIDA or your multiplexer for terminal-title ownership.
+
+      Recommended full-fidelity path: put the AIDA segment in your
+      multiplexer status line so it survives inside any Codex or Claude
+      session:
+
+        # tmux
+        set -g status-right '#(aida statusline --color=never)'
+        set -g status-interval 15
+
+      `aida statusbar --plain` is the lower-cost ambient meter variant for
+      the same tmux `status-right` slot.
+
+      Tripwire: at each competitive refresh, re-check upstream Codex for a
+      command-backed `[tui] status_line` item. If that lands, prefer the
+      native footer over the tmux/title workaround.
+
+      To disable later, remove the `[tui] status_line` and `terminal_title`
+      lines (or the whole `[tui]` block) from your Codex config.toml.
+
+    Antigravity CLI — command-backed statusLine + title
+      Add this to /home/joe/.gemini/antigravity-cli/settings.json:
+
+      {
+        "statusLine": {
+          "command": "aida statusline --color=always 2>/dev/null || printf '%s' \"$(pwd)\"",
+          "stack_with_default": true,
+          "type": "command"
+        },
+        "title": {
+          "command": "aida statusline --title",
+          "type": "command"
+        }
+      }
+
+      Or install it for this user:
+        aida statusline setup --client antigravity --install
+
+      Use `--replace-default` to emit/install `stack_with_default: false`.
+      To disable later, remove the "statusLine" and "title" keys from
+      /home/joe/.gemini/antigravity-cli/settings.json. should configure both client adapters (Claude/Codex/Agy) and terminal identity updates, while agent launch/runtime code emits the current role, spec, vendor, and session title. Use generic OSC title updates by default, with tmux/screen handling and an optional user hook; keep title updates independently disableable.
+  created_at: 2026-09-25T05:18:13.016951329Z
+  modified_at: 2026-09-25T05:18:13.016951329Z
 history:
 - id: 01a0d468-c36a-7a81-80ce-fcb025953bd3
   author: aida-auto-bump
