@@ -72107,6 +72107,10 @@ mod pull_summary_status_change_tests;
 mod queue_work_tests;
 
 #[cfg(test)]
+#[path = "tests/bug_1607_reviewer_vendor_tests.rs"]
+mod bug_1607_reviewer_vendor_tests;
+
+#[cfg(test)]
 #[path = "tests/queue_rework_tests.rs"]
 mod queue_rework_tests;
 
@@ -85650,6 +85654,63 @@ fn review_is_terminal_noop(status: &RequirementStatus) -> bool {
     )
 }
 
+/// BUG-1607: resolve (and preflight) the vendor `handle_review_spec` will
+/// launch the interactive reviewer with — the SAME shared contract
+/// `aida queue work` resolves for the implementer/reviewer launch (flag >
+/// `[agents]` project/user config > default, filtered to an enabled AND
+/// installed profile). This verb has no `--vendor` flag of its own, so a
+/// Codex-only project (no Claude installed) must be picked up from config
+/// alone.
+///
+/// `None` only for `no_agent` (no launch, so no vendor is needed) — every
+/// other refusal (disabled profile, unreachable binary, unsupported
+/// interactive vendor) propagates as `Err` from here, BEFORE
+/// `handle_review_spec` acquires the review lease below it. Previously
+/// there was no resolution here at all: the launch always hardcoded
+/// `claude`, so the command reached "running reviewer" holding a live
+/// lease and then failed with a raw ENOENT.
+///
+/// Split out from `handle_review_spec` (which gates on an interactive TTY
+/// and therefore cannot run inside `cargo test`) so an automated test can
+/// exercise this exact resolution-and-preflight code directly.
+// trace:BUG-1607 | ai:claude
+fn review_spec_resolve_vendor(
+    project_root: &std::path::Path,
+    no_agent: bool,
+) -> Result<Option<session::HeadlessVendor>> {
+    if no_agent {
+        return Ok(None);
+    }
+    let vendor = session::resolve_enabled_headless_vendor(project_root)?;
+    session::preflight_launch_vendor(vendor, true)?;
+    Ok(Some(vendor))
+}
+
+/// BUG-1607: build + spawn the interactive reviewer [`session::ReviewerLaunchPlan`]
+/// for `vendor` — the exact launch `handle_review_spec` runs once a human is
+/// confirmed at an interactive terminal. Split out for the same testability
+/// reason as [`review_spec_resolve_vendor`]: `handle_review_spec` itself
+/// gates on a TTY and cannot run under `cargo test`, but this is the real
+/// launch code, not a reimplemented stand-in for it.
+// trace:BUG-1607 | ai:claude
+fn review_spec_launch_reviewer(
+    vendor: session::HeadlessVendor,
+    session_name: &str,
+    prompt: &str,
+    session_id: &str,
+) -> Result<std::process::ExitStatus> {
+    let plan = session::interactive_reviewer_launch_plan(
+        vendor,
+        None,
+        Some(session_name),
+        prompt,
+        session_id,
+        false,
+    )
+    .map_err(|e| anyhow::anyhow!("aida review: {e}"))?;
+    session::spawn_reviewer_launch_plan(&plan).context("failed to launch the reviewer")
+}
+
 /// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
 /// counterpart to `aida queue work`. Resolves the spec's review surface,
 /// runs the existing headless reviewer tier (`/aida-review`) over the diff
@@ -85879,6 +85940,11 @@ fn handle_review_spec(
         );
     }
 
+    // BUG-1607: resolve (and preflight) the launch vendor — see
+    // `review_spec_resolve_vendor`'s doc for why this is BEFORE the lease
+    // below is acquired, and why it is split out as its own function.
+    let review_vendor = review_spec_resolve_vendor(project_root, no_agent)?;
+
     // BUG-511: hold a session lease scoped to the spec while the review
     // runs — same substrate as `aida queue work`, so the footer / `aida
     // why` / burndown-explain see the spec in flight and a concurrent
@@ -86036,9 +86102,15 @@ fn handle_review_spec(
         "BUG-721: non-interactive review must be refused before the reviewer launch"
     );
     let name = format!("review-{}", spec_id.to_ascii_lowercase());
+    // BUG-1607: launch through the SAME shared plan resolver
+    // `run_standalone_reviewer` uses, instead of hardcoding `claude` — see
+    // `review_spec_launch_reviewer`'s doc. `review_vendor` is always `Some`
+    // here — the only `None` arm (`no_agent`) already returned above.
+    // trace:BUG-1607 | ai:claude
+    let vendor = review_vendor
+        .expect("review_vendor is Some whenever no_agent is false (already returned above)");
     let status: std::process::ExitStatus =
-        session::spawn_claude_session(None, Some(&name), &prompt, &session_id, false)
-            .context("failed to launch the reviewer")?;
+        review_spec_launch_reviewer(vendor, &name, &prompt, &session_id)?;
     if !status.success() {
         eprintln!(
             "  {} the reviewer exited non-zero ({})",

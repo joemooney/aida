@@ -10799,6 +10799,23 @@ pub(crate) fn handle_queue_work(
         }
     }
 
+    // BUG-1607: preflight the resolved launch vendor BEFORE `session_start`
+    // below mints a lease/worktree — both vendor SUPPORT (an interactive
+    // launch refuses Agy; this used to be checked only after session_start,
+    // at the `launch_vendor == Agy && !no_human` bail further down, leaving
+    // an orphaned lease/worktree behind exactly like the bug this fixes) and
+    // binary reachability (`launch_vendor` above, via
+    // `resolve_enabled_headless_vendor`, only checks the `[agents] enabled`
+    // config, not whether the binary is installed — the observed failure:
+    // `vendor: codex` resolved correctly, then the launch itself hardcoded
+    // `claude`, or on a genuinely codex-only machine `codex` was never
+    // installed). `--no-launch` is exempt: it deliberately defers the
+    // launch, so neither check should block the setup-only prep.
+    // trace:BUG-1607 | ai:claude
+    if !no_launch {
+        session::preflight_launch_vendor(launch_vendor, !no_human)?;
+    }
+
     // Set AIDA_SESSION_ROLE for the exec'd claude (and for any in-process
     // logic the rest of this command runs against). session_start reads
     // it to record the lease's role field when --role isn't passed; we
@@ -11170,6 +11187,7 @@ pub(crate) fn handle_queue_work(
             quiet,
             &verdict_path,
             contained,
+            launch_vendor,
         );
     }
     // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
@@ -11201,13 +11219,16 @@ pub(crate) fn handle_queue_work(
         );
         return session::exec_codex_session(&prompt, codex_bypass, resolved_model.as_deref());
     }
-    if launch_vendor == session::HeadlessVendor::Agy && !no_human {
-        anyhow::bail!(
-            "interactive queue work does not support vendor `agy` yet. Recovery: re-run with \
-             `--no-human` for a headless AGY launch, choose `--vendor claude` or `--vendor codex`, \
-             or use `--no-launch`."
-        );
-    }
+    // BUG-1607: an interactive Agy launch is now refused by
+    // `preflight_launch_vendor` above, BEFORE `session_start` minted the
+    // lease/worktree this function is already holding by this point — so
+    // `launch_vendor == Agy && !no_human` can no longer reach here. No
+    // per-arm Agy handling needed below either: `match launch` only spawns
+    // Claude.
+    debug_assert!(
+        !(launch_vendor == session::HeadlessVendor::Agy && !no_human),
+        "BUG-1607: preflight_launch_vendor must refuse an interactive Agy launch before this point"
+    );
     match launch {
         QueueWorkLaunch::Resume(id) => {
             if no_human {
@@ -11379,9 +11400,16 @@ pub(crate) fn run_standalone_reviewer(
     quiet: bool,
     verdict_path: &std::path::Path,
     contained: bool,
+    // BUG-1607: the ALREADY-RESOLVED launch vendor (flag > `[agents]` config >
+    // default, filtered to an enabled+installed profile — the same contract
+    // `handle_queue_work` resolves for the implementer path). Every arm below
+    // reuses this value instead of re-deriving or hardcoding `claude`, so a
+    // codex-routed standalone reviewer actually launches `codex`.
+    // trace:BUG-1607 | ai:claude
+    launch_vendor: session::HeadlessVendor,
 ) -> Result<()> {
-    // Spawn claude, wait, and capture the headless JSONL log path (None
-    // for an interactive review — there is no stream-json log).
+    // Spawn the resolved vendor, wait, and capture the headless JSONL log
+    // path (None for an interactive review — there is no stream-json log).
     let (status, log_path): (std::process::ExitStatus, Option<std::path::PathBuf>) = match launch {
         QueueWorkLaunch::Resume(id) => {
             if no_human {
@@ -11418,6 +11446,23 @@ pub(crate) fn run_standalone_reviewer(
                 )?;
                 (status, Some(log_path))
             } else {
+                // BUG-1607: `handle_queue_work` already refuses a
+                // non-Claude `--resume` before minting the launch decision
+                // (headless resume currently only supports the Claude
+                // session model), so `launch_vendor` here is guaranteed
+                // Claude. Guard it anyway — this function is unit-tested
+                // directly, so the invariant must hold even when this arm
+                // is reached without going through that outer gate.
+                // trace:BUG-1607 | ai:claude
+                if launch_vendor != session::HeadlessVendor::Claude {
+                    anyhow::bail!(
+                        "resuming an interactive reviewer session currently supports only the \
+                         Claude session model, but the resolved launch vendor is `{}`. \
+                         Recovery: start a fresh `{}` reviewer instead of `--resume`.",
+                        launch_vendor.as_str(),
+                        launch_vendor.as_str()
+                    );
+                }
                 eprintln!(
                     "{} {}",
                     crate::glyph(crate::glyphs::Glyph::FlowActive)
@@ -11439,7 +11484,6 @@ pub(crate) fn run_standalone_reviewer(
         }
         QueueWorkLaunch::Fresh(id) => {
             if no_human {
-                let launch_vendor = session::resolve_enabled_headless_vendor(project_root)?;
                 let log_path = project_root
                     .join(".aida")
                     .join("headless-logs")
@@ -11485,26 +11529,47 @@ pub(crate) fn run_standalone_reviewer(
                 (status, Some(log_path))
             } else {
                 let name = session::derive_session_name(scope, branch, role);
-                eprintln!(
-                    "{} {}",
-                    crate::glyph(crate::glyphs::Glyph::FlowActive)
-                        .green()
-                        .bold(),
-                    format!(
-                        "launching claude reviewer in {} ({}, prompt `{}`)",
-                        worktree.display(),
-                        claude_posture_display(permission_mode, contained),
-                        prompt
-                    )
-                    .cyan()
-                );
-                let status = session::spawn_claude_session(
+                // BUG-1607: build the launch plan through the ONE shared
+                // resolver instead of hardcoding `claude` — this was the
+                // actual bug: the resolver upstream correctly printed
+                // `vendor: codex`, but this arm always spawned `claude`
+                // regardless, failing after the lease + worktree already
+                // existed. trace:BUG-1607 | ai:claude
+                let plan = session::interactive_reviewer_launch_plan(
+                    launch_vendor,
                     permission_mode,
                     name.as_deref(),
                     prompt,
                     &id,
                     contained,
                 )?;
+                let posture = match launch_vendor {
+                    session::HeadlessVendor::Claude => {
+                        claude_posture_display(permission_mode, contained)
+                    }
+                    session::HeadlessVendor::Codex | session::HeadlessVendor::Agy => {
+                        if permission_mode == Some("bypassPermissions") {
+                            "bypass".to_string()
+                        } else {
+                            "native".to_string()
+                        }
+                    }
+                };
+                eprintln!(
+                    "{} {}",
+                    crate::glyph(crate::glyphs::Glyph::FlowActive)
+                        .green()
+                        .bold(),
+                    format!(
+                        "launching {} reviewer in {} ({}, prompt `{}`)",
+                        launch_vendor.as_str(),
+                        worktree.display(),
+                        posture,
+                        prompt
+                    )
+                    .cyan()
+                );
+                let status = session::spawn_reviewer_launch_plan(&plan)?;
                 (status, None)
             }
         }
