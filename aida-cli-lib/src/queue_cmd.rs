@@ -4885,6 +4885,24 @@ pub(crate) fn handle_queue_command(
                 .or(req.spec_id.as_deref())
                 .unwrap_or("???");
 
+            // BUG-1611: the lifecycle guard runs first, before any other gate
+            // or side effect. `queue done` from Draft / NeedsAttention needs
+            // the approval authority the lifecycle guard names; a closed spec
+            // (Rejected / Completed / Superseded) is refused outright because
+            // `queue done` is not a reopen verb. `--force` does not bypass
+            // this: it overrides evidence gates, not authority. The drain's
+            // own `queue done` from Approved / In Progress is unaffected.
+            // trace:BUG-1611 | ai:claude
+            if let Some(refusal) =
+                crate::queue_done_lifecycle_refusal(&req.status, has_advisor_authority())
+            {
+                anyhow::bail!(crate::queue_done_lifecycle_refusal_message(
+                    display_id,
+                    &req.status,
+                    refusal
+                ));
+            }
+
             // BUG-1244: fail closed before any lifecycle mutation when a
             // branch names another spec, commit evidence exclusively names
             // other specs, or the since-merge-base range cannot be read.
@@ -5209,6 +5227,11 @@ pub(crate) fn handle_queue_command(
                 })?;
             }
 
+            // BUG-1611: Draft can no longer reach here without approval
+            // authority (the lifecycle guard above refuses it); the warning
+            // below still flags an authorized Draft and the never-started
+            // Approved / Planned cases. trace:BUG-1611 | ai:claude
+            //
             // BUG-684: `queue done` promotes ANY status straight to Done — a
             // Draft/Approved/Planned spec (never started) flips to Done with a
             // green check, so a typo'd id silently corrupts state. This is

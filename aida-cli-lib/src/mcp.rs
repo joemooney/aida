@@ -4081,6 +4081,20 @@ impl<'a> McpServer<'a> {
         let display = Self::display_id_of(req);
         let spec_id = req.spec_id.clone().unwrap_or_else(|| "???".to_string());
 
+        // BUG-1611: the same lifecycle guard as the CLI `queue done`, through
+        // the shared decision, before any write. A Draft / NeedsAttention spec
+        // needs the server's approval authority; a closed spec is refused
+        // outright. trace:BUG-1611 | ai:claude
+        if let Some(refusal) =
+            crate::queue_done_lifecycle_refusal(&req.status, mcp_caller_has_advisor_authority())
+        {
+            return Err(crate::queue_done_lifecycle_refusal_message(
+                &display,
+                &req.status,
+                refusal,
+            ));
+        }
+
         // STORY-86: queue done flips to Done (work finished on a branch), not
         // Completed — the auto-bump on merge advances Done → Completed. Stamp
         // implementation_info the same way the CLI path does. trace:EPIC-27
@@ -4292,11 +4306,6 @@ impl<'a> McpServer<'a> {
             // until a worker establishes a lease. trace:BUG-1470 | ai:codex
             None => crate::rework_target_for_mode(&current_status, false),
         };
-        if let Some(ref new_status) = target_status {
-            if let Some(message) = mcp_status_gate_message(&current_status, new_status) {
-                return Err(message);
-            }
-        }
 
         // Terminal-status guard (mirrors the CLI). trace:EPIC-27
         if matches!(
@@ -4315,6 +4324,16 @@ impl<'a> McpServer<'a> {
                 "{} is already In Progress — pass `force: true` to re-queue it anyway.",
                 display
             ));
+        }
+
+        // BUG-1611: the authority gate runs after the closed-work guard so a
+        // non-forced rework of a closed spec names the reopen first; a forced
+        // one still meets the (now terminal-aware) lifecycle guard here.
+        // trace:BUG-1611 | ai:claude
+        if let Some(ref new_status) = target_status {
+            if let Some(message) = mcp_status_gate_message(&current_status, new_status) {
+                return Err(message);
+            }
         }
 
         let mut summary = String::new();
@@ -7873,7 +7892,7 @@ fn queue_tool_descriptors() -> Value {
         },
         {
             "name": "queue_done",
-            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Stamps implementation_info. Optionally capture user-facing interface changes (the deterministic operator-digest source) via interface_cli/mcp/tui/other, or no_interface_change for a no-impact spec. Optionally record the verification steps the builder ran via test_plan (surfaced in the PR body).",
+            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Refuses a spec that has not passed the approval gate (Draft or NeedsAttention, unless the server holds approval authority) and a closed spec (Rejected, Completed, Superseded). Stamps implementation_info. Optionally capture user-facing interface changes (the deterministic operator-digest source) via interface_cli/mcp/tui/other, or no_interface_change for a no-impact spec. Optionally record the verification steps the builder ran via test_plan (surfaced in the PR body).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -12503,6 +12522,10 @@ mod tests {
         server
             .tool_queue_add_inner(&json!({ "id": &spec, "user": u }))
             .unwrap();
+        // BUG-1611: `queue_done` finishes approved work; the seed lands Draft,
+        // so move it into flight the way the advisor + `queue work` would.
+        // trace:BUG-1611 | ai:claude
+        force_status(&server, &spec, RequirementStatus::InProgress);
 
         let done = server
             .tool_queue_done(&json!({ "id": &spec, "user": u }))
@@ -12521,6 +12544,35 @@ mod tests {
 
         let listed = server.tool_queue_list(&json!({ "user": u })).unwrap();
         assert!(listed.contains("Queue is empty"), "listed: {listed}");
+    }
+
+    /// BUG-1611: MCP `queue_done` runs the same lifecycle guard as the CLI. A
+    /// closed spec is refused whatever the server's role (so this check does
+    /// not depend on the test shell's AIDA_SESSION_ROLE), with no write and
+    /// neutral guidance; an In Progress spec passes (covered above).
+    // trace:BUG-1611 | ai:claude
+    #[test]
+    fn queue_done_refuses_a_closed_spec_without_writing() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let u = "queue-done-closed-user";
+        let spec = seed_req(&server, "Declined");
+        force_status(&server, &spec, RequirementStatus::Rejected);
+
+        let err = server
+            .tool_queue_done(&json!({ "id": &spec, "user": u }))
+            .expect_err("queue_done on a Rejected spec must refuse");
+        assert!(err.contains("queue done refused"), "err: {err}");
+        assert!(!err.contains("AIDA_SESSION_ROLE"), "err: {err}");
+
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&spec).unwrap();
+        assert_eq!(req.status, RequirementStatus::Rejected);
+        assert!(req.implementation_info.is_none());
+
+        // The authority half, through the shared decision the tool calls.
+        assert!(crate::queue_done_lifecycle_refusal(&RequirementStatus::Draft, false).is_some());
+        assert!(crate::queue_done_lifecycle_refusal(&RequirementStatus::Approved, false).is_none());
     }
 
     #[test]
