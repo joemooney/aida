@@ -32,12 +32,12 @@ description: |-
   - It states honestly when the goal cannot be met unattended: items that need humans, a live run, or an operator decision are reported, not faked.
   - It is vendor-aware: it names the subagent, background-shell and stop primitives it needs, and degrades gracefully where a harness lacks them.
   - A skill lint / plan-verify pass and the template consistency checks pass.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:44:20.512933062Z
-modified_at: 2026-09-25T04:44:20.512933062Z
+modified_at: 2026-09-25T04:44:31.870256367Z
 req_type: Story
 tags:
 - autonomy
