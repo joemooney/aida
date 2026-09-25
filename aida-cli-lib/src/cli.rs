@@ -577,9 +577,11 @@ pub enum FieldStudyCommand {
     /// field-study log. Idempotent — a commit already recorded is skipped.
     // trace:SPIKE-67 | ai:claude
     Scan {
-        /// Git revision range to scan (e.g. `HEAD~200`, a tag, `--since`-style
-        /// rev). Default: the most recent commits up to `--limit`.
+        /// Git revision range to scan (e.g. `HEAD~200`, a tag, `v1.0..HEAD`).
+        /// A value starting with `-` is refused. Default: the most recent
+        /// commits up to `--limit`.
         // trace:SPIKE-67 | ai:claude
+        // trace:BUG-1622 | ai:claude
         #[clap(long, value_name = "REV")]
         since: Option<String>,
         /// Cap how many commits are inspected. Default 200.
@@ -11378,15 +11380,16 @@ pub enum Command {
         all: bool,
 
         /// Exempt specs completed before this point from the
-        /// completed-without-commit integrity check: a git ref/tag whose
-        /// commit date is the cutoff, a relative duration (`30d`, `2w`,
-        /// `24 hours ago`), an ISO date (local midnight), a zone-less ISO
-        /// datetime (local time), or RFC3339. Quiets noise on
-        /// legacy history predating trace conventions. Falls back to the
-        /// AIDA_DOCTOR_COMPLETED_SINCE env var.
+        /// completed-without-commit integrity check: a relative duration
+        /// (`30d`, `2w`, `24 hours ago`), an ISO date (local midnight), a
+        /// zone-less ISO datetime (local time), RFC3339, or else a git
+        /// ref/tag whose commit date is the cutoff. An invalid value is an
+        /// error. Quiets noise on legacy history predating trace
+        /// conventions. Falls back to the AIDA_DOCTOR_COMPLETED_SINCE env var.
         // trace:TASK-673 | ai:claude
         // trace:TASK-1509 | ai:claude
-        #[clap(long, value_name = "REF_OR_DATE")]
+        // trace:BUG-1622 | ai:claude
+        #[clap(long, value_name = "DATE_OR_REF")]
         since: Option<String>,
 
         /// Print the guided, copy-pasteable steps to bring the OS sandbox

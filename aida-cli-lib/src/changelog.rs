@@ -260,7 +260,15 @@ pub fn scan_commits_in_range(project_root: &Path, range: &str) -> Vec<CommitRec>
     let Ok(out) = ProcessCommand::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", range, "--no-merges", "--pretty=format:%s"])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "log",
+            "--no-merges",
+            "--pretty=format:%s",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            range,
+            "--",
+        ])
         .output()
     else {
         return Vec::new();

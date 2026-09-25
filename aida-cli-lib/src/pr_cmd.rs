@@ -464,6 +464,11 @@ pub(crate) fn pr_rebase_handler(
         PrRebaseMode::Default
     };
 
+    // trace:BUG-1622 | ai:claude
+    if let Some(sha) = onto_parent {
+        crate::git_arg_guard::reject_option_like("--onto-parent", sha)?;
+    }
+
     let project_root = find_project_root()?;
 
     // ---- Step 1: resolve PR metadata via the forge (STORY-621 Slice 2:
@@ -614,7 +619,14 @@ pub(crate) fn pr_rebase_handler(
         let is_ancestor = std::process::Command::new("git")
             .arg("-C")
             .arg(&wt_path)
-            .args(["merge-base", "--is-ancestor", parent_sha, "HEAD"])
+            // trace:BUG-1622 | ai:claude
+            .args([
+                "merge-base",
+                "--is-ancestor",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                parent_sha,
+                "HEAD",
+            ])
             .status();
         if !matches!(is_ancestor, Ok(s) if s.success()) {
             cleanup_worktree();
@@ -637,7 +649,14 @@ pub(crate) fn pr_rebase_handler(
         let mut cmd = std::process::Command::new("git");
         cmd.arg("-C").arg(&wt_path);
         match onto_parent {
-            Some(parent_sha) => cmd.args(["rebase", "--onto", &origin_base, parent_sha]),
+            // trace:BUG-1622 | ai:claude
+            Some(parent_sha) => cmd.args([
+                "rebase",
+                "--onto",
+                &origin_base,
+                crate::git_arg_guard::END_OF_OPTIONS,
+                parent_sha,
+            ]),
             None => cmd.args(["rebase", &origin_base]),
         };
         cmd.status()

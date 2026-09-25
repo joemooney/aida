@@ -117,6 +117,8 @@ pub(crate) fn parse_digest_since_at<Tz: chrono::TimeZone>(
         }
         Err(_) => {}
     }
+    // trace:BUG-1622 | ai:claude
+    crate::git_arg_guard::reject_option_like("--since", trimmed)?;
     if let Some(t) = resolve_git_ref_date(project_root, trimmed) {
         return Ok(t);
     }
@@ -128,11 +130,20 @@ pub(crate) fn parse_digest_since_at<Tz: chrono::TimeZone>(
     );
 }
 
-fn resolve_git_ref_date(project_root: &Path, refspec: &str) -> Option<DateTime<Utc>> {
+pub(crate) fn resolve_git_ref_date(project_root: &Path, refspec: &str) -> Option<DateTime<Utc>> {
     let out = ProcessCommand::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", "-1", "--format=%cI", refspec])
+        // `--end-of-options` keeps a dash-led value from reading as a git
+        // option. trace:BUG-1622 | ai:claude
+        .args([
+            "log",
+            "-1",
+            "--format=%cI",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            refspec,
+            "--",
+        ])
         .output()
         .ok()?;
     if !out.status.success() {

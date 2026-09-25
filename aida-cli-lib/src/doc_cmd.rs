@@ -291,6 +291,10 @@ pub(crate) fn handle_doc_command(
         // Release-time doc-coverage gate. Warn-only.
         // trace:TASK-680 | ai:claude
         DocCommand::Coverage { since, json } => {
+            // trace:BUG-1622 | ai:claude
+            if let Some(s) = since.as_deref() {
+                crate::git_arg_guard::reject_option_like("--since", s)?;
+            }
             let store = backend.load()?;
             let project_root =
                 find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -367,14 +371,22 @@ pub(crate) fn handle_doc_command(
 /// Resolve the commit time of a git ref/tag as a UTC timestamp. Best-effort —
 /// `None` on any git failure or unparseable output.
 // trace:TASK-680 | ai:claude
-fn git_ref_commit_time(
+pub(crate) fn git_ref_commit_time(
     root: &std::path::Path,
     git_ref: &str,
 ) -> Option<chrono::DateTime<chrono::Utc>> {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
-        .args(["log", "-1", "--format=%cI", git_ref])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "log",
+            "-1",
+            "--format=%cI",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            git_ref,
+            "--",
+        ])
         .output()
         .ok()?;
     if !out.status.success() {

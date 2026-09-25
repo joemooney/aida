@@ -64,8 +64,7 @@ fn digest(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<DateTime<Ut
 fn doctor(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<DateTime<Utc>, String> {
     // A scratch dir, as for digest: a bad value's git probe finds no repo.
     let tmp = tempfile::TempDir::new().expect("tempdir");
-    crate::resolve_completed_since_cutoff_at(tmp.path(), raw, now, tz)
-        .ok_or_else(|| format!("`{raw}` did not resolve"))
+    crate::resolve_completed_since_cutoff_at(tmp.path(), raw, now, tz).map_err(|e| e.to_string())
 }
 
 fn classified_flags() -> Vec<(&'static str, Kind)> {
@@ -313,9 +312,8 @@ fn an_out_of_range_duration_is_refused_not_a_panic() {
         for (flag, kind) in classified_flags() {
             let Kind::Shared(parse) = kind else { continue };
             let err = parse(raw, now, &tz).expect_err(flag);
-            if flag != "aida doctor --since" {
-                assert!(err.contains("out of range"), "{flag} `{raw}`: {err}");
-            }
+            // trace:BUG-1622 | ai:claude
+            assert!(err.contains("out of range"), "{flag} `{raw}`: {err}");
         }
         let err = parse_time_bound_at(raw, "--until", now, &tz).unwrap_err();
         assert!(
@@ -323,14 +321,18 @@ fn an_out_of_range_duration_is_refused_not_a_panic() {
             "{err}"
         );
     }
-    // Out of range even for the tail-only spelled units.
-    assert!(crate::headless_tail::parse_since_at("999999999999999999min", now, &tz).is_err());
+    // Out of range even for the tail-only spelled units, and the message
+    // says so. trace:BUG-1622 | ai:claude
+    for raw in ["999999999999999999min", "99999999999999999999999s"] {
+        let err = crate::headless_tail::parse_since_at(raw, now, &tz).unwrap_err();
+        assert!(err.to_string().contains("out of range"), "{raw}: {err}");
+    }
     // A hex-looking out-of-range duration never falls back to a git ref.
     let tmp = scratch_repo();
     git(tmp.path(), &["branch", "99999999999999d"]);
-    assert!(
-        crate::resolve_completed_since_cutoff_at(tmp.path(), "99999999999999d", now, &tz).is_none()
-    );
+    let err = crate::resolve_completed_since_cutoff_at(tmp.path(), "99999999999999d", now, &tz)
+        .unwrap_err();
+    assert!(err.to_string().contains("out of range"), "{err}");
     let err = crate::digest::parse_digest_since_at(Some("99999999999999d"), tmp.path(), now, &tz)
         .unwrap_err();
     assert!(err.to_string().contains("out of range"), "{err}");
@@ -355,4 +357,194 @@ fn usage_headers_name_the_window_for_every_form() {
         label("2026-05-01T10:00:00Z"),
         ("since", "2026-05-01 12:00 +02:00".to_string())
     );
+}
+
+// ---------------------------------------------------------------------------
+// Invalid values and git option injection.
+// trace:BUG-1622 | ai:claude
+// ---------------------------------------------------------------------------
+
+#[test]
+fn doctor_since_refuses_a_value_that_is_neither_a_time_nor_a_ref() {
+    let tmp = scratch_repo();
+    let now = Utc.with_ymd_and_hms(2026, 7, 15, 12, 0, 0).unwrap();
+    let tz = FixedOffset::east_opt(0).unwrap();
+    for raw in ["not-a-time", "garbage", "v9.9.9"] {
+        let err = crate::resolve_completed_since_cutoff_at(tmp.path(), raw, now, &tz)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("--since"), "{raw}: {err}");
+        assert!(err.contains(raw), "{raw}: {err}");
+    }
+}
+
+/// Values git would read as an option if they reached it unguarded. Each
+/// writes (or would write) a file under the scratch dir.
+fn option_like_values(dir: &std::path::Path) -> Vec<(String, std::path::PathBuf)> {
+    let out = dir.join("pwned.txt");
+    let out2 = dir.join("pwned2.txt");
+    vec![
+        (format!("--output={}", out.display()), out.clone()),
+        (format!("  --output={}", out2.display()), out2),
+        (
+            format!("-o{}", dir.join("pwned3.txt").display()),
+            dir.join("pwned3.txt"),
+        ),
+    ]
+}
+
+fn assert_nothing_written(dir: &std::path::Path, label: &str) {
+    for name in ["pwned.txt", "pwned2.txt", "pwned3.txt"] {
+        let p = dir.join(name);
+        assert!(!p.exists(), "{label}: git wrote {}", p.display());
+        // A range suffix must not sneak a file in either.
+        let p = dir.join(format!("{name}..HEAD"));
+        assert!(!p.exists(), "{label}: git wrote {}", p.display());
+    }
+}
+
+#[test]
+fn doctor_and_digest_since_refuse_option_like_values() {
+    let tmp = scratch_repo();
+    let root = tmp.path();
+    let sink = tempfile::TempDir::new().unwrap();
+    let now = Utc.with_ymd_and_hms(2026, 7, 15, 12, 0, 0).unwrap();
+    let tz = FixedOffset::east_opt(0).unwrap();
+    for (raw, _) in option_like_values(sink.path()) {
+        let err = crate::resolve_completed_since_cutoff_at(root, &raw, now, &tz)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("--since") && err.contains("starts with `-`"),
+            "{err}"
+        );
+        let err = crate::digest::parse_digest_since_at(Some(&raw), root, now, &tz)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("--since") && err.contains("starts with `-`"),
+            "{err}"
+        );
+    }
+    assert_nothing_written(sink.path(), "doctor/digest --since");
+}
+
+#[test]
+fn git_ref_helpers_treat_an_option_like_value_as_a_revision() {
+    // The second guard: even called directly, past the dash check, the
+    // helpers hand the value to git after `--end-of-options`, so git reads
+    // it as a (nonexistent) revision and writes nothing.
+    let tmp = scratch_repo();
+    let root = tmp.path();
+    let sink = tempfile::TempDir::new().unwrap();
+    for (raw, _) in option_like_values(sink.path()) {
+        assert!(crate::digest::resolve_git_ref_date(root, &raw).is_none());
+        assert!(crate::doc_cmd::git_ref_commit_time(root, &raw).is_none());
+        assert!(crate::changelog::scan_commits_in_range(root, &raw).is_empty());
+        assert!(crate::changelog::scan_commits_in_range(root, &format!("{raw}..HEAD")).is_empty());
+        assert!(crate::field_study::recent_shas(root, Some(&raw), 5).is_empty());
+    }
+    assert_nothing_written(sink.path(), "git ref helpers");
+    // The guard does not break ordinary refs.
+    git(root, &["tag", "v1.0.0"]);
+    assert_eq!(
+        crate::digest::resolve_git_ref_date(root, "v1.0.0"),
+        Some(scratch_commit_date())
+    );
+    assert_eq!(
+        crate::doc_cmd::git_ref_commit_time(root, "v1.0.0"),
+        Some(scratch_commit_date())
+    );
+    assert_eq!(
+        crate::changelog::scan_commits_in_range(root, "v1.0.0").len(),
+        1
+    );
+    assert_eq!(
+        crate::field_study::recent_shas(root, Some("HEAD"), 5).len(),
+        1
+    );
+}
+
+#[test]
+fn reconcile_status_since_refuses_option_like_values() {
+    // A dash-led `--since` became `<value>..HEAD`, so `--output=<path>`
+    // made git write `<path>..HEAD`.
+    let tmp = scratch_repo();
+    let root = tmp.path();
+    let store = root.join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let sink = tempfile::TempDir::new().unwrap();
+    for (raw, _) in option_like_values(sink.path()) {
+        let err = crate::handle_db_reconcile_status(&store, Some(&raw), None, true)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("--since") && err.contains("starts with `-`"),
+            "{err}"
+        );
+    }
+    assert_nothing_written(sink.path(), "db reconcile-status --since");
+}
+
+#[test]
+fn ref_taking_cli_flags_refuse_option_like_values() {
+    // The handlers that take a git ref check the value before touching the
+    // store or git; run them from the parsed CLI so the flag wiring is
+    // covered too.
+    let sink = tempfile::TempDir::new().unwrap();
+    let bad = format!("--output={}", sink.path().join("pwned.txt").display());
+    let parse = |args: &[&str]| <crate::cli::Cli as clap::Parser>::try_parse_from(args).unwrap();
+    // The `--flag=value` spelling: clap refuses a dash-led value given as a
+    // separate argument, but takes it when fused.
+    for flag in ["--since", "--until"] {
+        let fused = format!("{flag}={bad}");
+        let args = ["aida", "changelog", "generate", fused.as_str()];
+        let cli = parse(&args);
+        let crate::cli::Command::Changelog(cmd) = cli.command else {
+            panic!("not a changelog command: {args:?}");
+        };
+        let err = crate::changelog_cmd::handle_changelog_command(&cmd)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("starts with `-`"), "{args:?}: {err}");
+        assert!(err.contains(flag), "{args:?}: {err}");
+    }
+    let cli = parse(&["aida", "field-study", "scan", &format!("--since={bad}")]);
+    let crate::cli::Command::FieldStudy { cmd } = cli.command else {
+        panic!("not a field-study command");
+    };
+    let err = crate::field_study_cmd::handle_field_study_command(&cmd)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("--since") && err.contains("starts with `-`"),
+        "{err}"
+    );
+    assert_nothing_written(sink.path(), "changelog/field-study");
+}
+
+#[test]
+fn doc_coverage_since_refuses_option_like_values() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let store_root = dir.path().join("store");
+    std::fs::create_dir_all(&store_root).unwrap();
+    aida_core::git_ops::init(&store_root).unwrap();
+    let backend =
+        aida_core::CachedGitBackend::open(&store_root, &dir.path().join(".aida").join("cache.db"))
+            .unwrap();
+    let sink = tempfile::TempDir::new().unwrap();
+    for (raw, _) in option_like_values(sink.path()) {
+        let cmd = crate::cli::DocCommand::Coverage {
+            since: Some(raw.clone()),
+            json: true,
+        };
+        let err = crate::doc_cmd::handle_doc_command(&cmd, &store_root, &backend)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("--since") && err.contains("starts with `-`"),
+            "{err}"
+        );
+    }
+    assert_nothing_written(sink.path(), "doc coverage --since");
 }

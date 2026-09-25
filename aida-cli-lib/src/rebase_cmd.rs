@@ -28,6 +28,11 @@ pub(crate) fn handle_rebase_command(
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
+    // trace:BUG-1622 | ai:claude
+    if let Some(b) = branch {
+        crate::git_arg_guard::reject_option_like("--branch", b)?;
+    }
+
     // ---- Phase 1+2: detect + classify ----
     let detection = match rebase::detect(&project_root, branch, !no_fetch) {
         Ok(d) => d,
@@ -120,7 +125,12 @@ pub(crate) fn handle_rebase_command(
                 let status = std::process::Command::new("git")
                     .arg("-C")
                     .arg(&project_root)
-                    .args(["rebase", &detection.upstream])
+                    // trace:BUG-1622 | ai:claude
+                    .args([
+                        "rebase",
+                        crate::git_arg_guard::END_OF_OPTIONS,
+                        &detection.upstream,
+                    ])
                     .status();
                 match status {
                     Ok(s) if s.success() => executed = true,

@@ -342,8 +342,8 @@ pub struct ScanOutcome {
 
 /// Walk recent commits and append fresh observations. Idempotent: a
 /// (sha, rule) pair already in the log is never re-appended. `since` is any
-/// git revision range expression (e.g. `HEAD~200`, a tag, a date via
-/// `--since`); `limit` caps how many commits are inspected.
+/// git revision range expression (e.g. `HEAD~200`, a tag, `v1.0..HEAD`);
+/// `limit` caps how many commits are inspected.
 pub fn scan(root: &Path, since: Option<&str>, limit: usize) -> ScanOutcome {
     let seen: BTreeSet<(String, String)> = read_observations()
         .into_iter()
@@ -438,14 +438,18 @@ fn commit_facts(root: &Path, sha: &str) -> Option<CommitFacts> {
 }
 
 /// Short SHAs of recent commits, newest first.
-fn recent_shas(root: &Path, since: Option<&str>, limit: usize) -> Vec<String> {
+pub(crate) fn recent_shas(root: &Path, since: Option<&str>, limit: usize) -> Vec<String> {
     let mut args = vec!["log".to_string(), "--no-merges".to_string()];
     // `--no-merges` already drops merges; the explicit is_merge guard is a
     // belt-and-suspenders for ranges passed as raw revs.
     args.push(format!("--max-count={}", limit));
     args.push("--format=%h".to_string());
     if let Some(s) = since {
+        // `--end-of-options` keeps a dash-led value from reading as a git
+        // option; `--` keeps it from reading as a path. trace:BUG-1622 | ai:claude
+        args.push(crate::git_arg_guard::END_OF_OPTIONS.to_string());
         args.push(s.to_string());
+        args.push("--".to_string());
     }
     let argv: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     git_stdout(root, &argv)

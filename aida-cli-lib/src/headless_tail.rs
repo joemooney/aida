@@ -953,7 +953,12 @@ pub(crate) fn parse_since_at<Tz: chrono::TimeZone>(
         Err(e) if crate::queue_cmd::is_definitive_time_bound_error(&e) => {
             Err(anyhow!("invalid --since value: {e}"))
         }
-        Err(_) => parse_tail_only_duration(s).map_err(|_| {
+        // An out-of-range tail-only form keeps its own "out of range" error
+        // instead of the generic "expected ..." list. trace:BUG-1622 | ai:claude
+        Err(_) => parse_tail_only_duration(s).map_err(|e| {
+            if e.is::<TailOutOfRange>() {
+                return anyhow!("invalid --since value: {e}");
+            }
             anyhow!(
                 "invalid --since value `{}` — expected a relative duration \
                  (e.g. `30s`, `10m`, `2h`, `1d`, `2w`, `24 hours ago`; a bare \
@@ -983,9 +988,14 @@ fn parse_tail_only_duration(s: &str) -> Result<Duration> {
             s
         );
     }
-    let n: u64 = num_part
-        .parse()
-        .map_err(|_| anyhow!("--since `{}` has an unparseable numeric prefix", s))?;
+    // trace:BUG-1622 | ai:claude
+    let n: u64 = num_part.parse().map_err(|e: std::num::ParseIntError| {
+        if matches!(e.kind(), std::num::IntErrorKind::PosOverflow) {
+            anyhow::Error::new(TailOutOfRange(s.to_string()))
+        } else {
+            anyhow!("--since `{}` has an unparseable numeric prefix", s)
+        }
+    })?;
     let unit_secs: u64 = match unit_part {
         "" | "s" | "sec" | "secs" | "second" | "seconds" => 1,
         "m" | "min" | "mins" | "minute" | "minutes" => 60,
@@ -999,9 +1009,22 @@ fn parse_tail_only_duration(s: &str) -> Result<Duration> {
     // trace:TASK-1509 | ai:claude
     let secs = n
         .checked_mul(unit_secs)
-        .ok_or_else(|| anyhow!("--since `{}` is out of range", s))?;
+        .ok_or_else(|| anyhow::Error::new(TailOutOfRange(s.to_string())))?;
     Ok(Duration::from_secs(secs))
 }
+
+/// A tail-only `--since` form whose number is too large to represent.
+// trace:BUG-1622 | ai:claude
+#[derive(Debug)]
+struct TailOutOfRange(String);
+
+impl std::fmt::Display for TailOutOfRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "`{}` is out of range", self.0)
+    }
+}
+
+impl std::error::Error for TailOutOfRange {}
 
 /// `aida headless tail --list` output uses these column derivations; this
 /// helper is exposed for the tests so the same code path is verified.

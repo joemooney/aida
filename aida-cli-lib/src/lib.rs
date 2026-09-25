@@ -69,6 +69,8 @@ mod drain_caps;
 mod drain_cmd;
 mod drain_lock;
 mod freshness_gate;
+// trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
+mod git_arg_guard;
 mod git_backend_cmd;
 mod machine_readiness;
 mod mcp_cmd;
@@ -24430,7 +24432,10 @@ fn scan_completed_without_commit_with_options(
     }
 
     // ---- Optional legacy-exemption cutoff. ----
-    let cutoff = since.and_then(|s| resolve_completed_since_cutoff(project_root, s));
+    // `aida doctor` validates `--since` up front and fails on a bad value;
+    // this scan also backs `aida status`, which stays best-effort.
+    // trace:BUG-1622 | ai:claude
+    let cutoff = since.and_then(|s| resolve_completed_since_cutoff(project_root, s).ok());
 
     let mut findings = Vec::new();
     let mut hidden_older = 0;
@@ -24944,45 +24949,68 @@ fn criterion_trace_suffix(suffix: &str) -> bool {
 /// time-bound grammar (a relative duration, an ISO date at local midnight, a
 /// zone-less ISO datetime, or RFC3339); failing that, try it as a git
 /// ref/tag and take that commit's committer date. The grammar goes first so
-/// a duration such as `500d` is never read as an abbreviated commit ID. None
-/// if it resolves to neither, or if it matches the grammar but cannot be
-/// resolved (a DST gap/overlap, an out-of-range duration).
+/// a duration such as `500d` is never read as an abbreviated commit ID. An
+/// error names `--since` when the value resolves to neither, when it matches
+/// the grammar but cannot be resolved (a DST gap/overlap, an out-of-range
+/// duration), or when it starts with `-` and so could reach git as an option.
 /// trace:TASK-673 | ai:claude
 // trace:TASK-1509 | ai:claude
+// trace:BUG-1622 | ai:claude
 fn resolve_completed_since_cutoff(
     project_root: &std::path::Path,
     since: &str,
-) -> Option<chrono::DateTime<chrono::Utc>> {
+) -> Result<chrono::DateTime<chrono::Utc>> {
     resolve_completed_since_cutoff_at(project_root, since, chrono::Utc::now(), &chrono::Local)
 }
 
 /// [`resolve_completed_since_cutoff`] against an explicit `now` and timezone.
 // trace:TASK-1509 | ai:claude
+// trace:BUG-1622 | ai:claude
 fn resolve_completed_since_cutoff_at<Tz: chrono::TimeZone>(
     project_root: &std::path::Path,
     since: &str,
     now: chrono::DateTime<chrono::Utc>,
     tz: &Tz,
-) -> Option<chrono::DateTime<chrono::Utc>> {
+) -> Result<chrono::DateTime<chrono::Utc>> {
     use std::process::Command as PCmd;
+    let since = since.trim();
     match queue_cmd::parse_since_arg_at(since, now, tz) {
-        Ok(t) => return Some(t),
-        Err(e) if queue_cmd::is_definitive_time_bound_error(&e) => return None,
+        Ok(t) => return Ok(t),
+        Err(e) if queue_cmd::is_definitive_time_bound_error(&e) => {
+            anyhow::bail!("invalid --since value: {e}")
+        }
         Err(_) => {}
     }
-    let out = PCmd::new("git")
+    // Two guards before the value reaches git: refuse a leading dash, and
+    // put `--end-of-options` ahead of the revision so git never parses it
+    // as an option (e.g. `--output=<path>`). trace:BUG-1622 | ai:claude
+    git_arg_guard::reject_option_like("--since", since)?;
+    let resolved = PCmd::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", "-1", "--format=%cI", since.trim(), "--"])
+        .args([
+            "log",
+            "-1",
+            "--format=%cI",
+            git_arg_guard::END_OF_OPTIONS,
+            since,
+            "--",
+        ])
         .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    chrono::DateTime::parse_from_rfc3339(&s)
         .ok()
-        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .filter(|out| out.status.success())
+        .and_then(|out| {
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            chrono::DateTime::parse_from_rfc3339(&s).ok()
+        })
+        .map(|dt| dt.with_timezone(&chrono::Utc));
+    resolved.ok_or_else(|| {
+        anyhow::anyhow!(
+            "invalid --since value `{since}`: not a relative duration (e.g. `7d`, `2w`, \
+             `24 hours ago`), an ISO date (`YYYY-MM-DD`, local midnight), a zone-less ISO \
+             datetime (local time), RFC3339, or a known git ref/tag"
+        )
+    })
 }
 
 /// One-line bubblewrap (`bwrap`) OS-sandbox availability status, shared by
@@ -31264,6 +31292,11 @@ fn session_harness_worktree_register(
     scope: Option<&str>,
 ) -> Result<()> {
     let cwd = std::path::PathBuf::from(cwd);
+    // The lease branch later reaches `git log` / `git diff` / `git cherry`;
+    // never store one git would read as an option. trace:BUG-1622 | ai:claude
+    if let Some(b) = branch {
+        git_arg_guard::reject_option_like("--branch", b)?;
+    }
     let branch = session_harness_branch(&cwd, branch)?;
     let payload = worktree_lease::SubagentPayload {
         agent_id: agent_id.to_string(),
@@ -34901,7 +34934,14 @@ fn align_reused_pr_branch_with_status(
             let status = std::process::Command::new("git")
                 .arg("-C")
                 .arg(project_root)
-                .args(["branch", "-f", branch, &format!("origin/{branch}")])
+                // trace:BUG-1622 | ai:claude
+                .args([
+                    "branch",
+                    "-f",
+                    git_arg_guard::END_OF_OPTIONS,
+                    branch,
+                    &format!("origin/{branch}"),
+                ])
                 .status()?;
             if !status.success() {
                 anyhow::bail!("could not fast-forward local branch `{branch}` to `origin/{branch}`");
@@ -35510,6 +35550,13 @@ fn session_start(
     // (~/ai/aida-pr-9-epic-20 instead of ~/ai/aida-epic-20).
     // trace:BUG-75 | ai:claude
     let project_root = find_main_worktree_root()?;
+    // A dash-led branch or base would reach `git worktree add` / `git
+    // rev-parse` as an option. trace:BUG-1622 | ai:claude
+    for (flag, value) in [("--branch", branch), ("--base", base)] {
+        if let Some(v) = value {
+            git_arg_guard::reject_option_like(flag, v)?;
+        }
+    }
     // Stakeholder personas are conversations, not build seats. Launch them in
     // the current checkout with the shared persona envelope and never create a
     // spec worktree or lease. trace:TASK-1261 | ai:codex
@@ -36025,9 +36072,12 @@ fn session_start(
         let res = std::process::Command::new("git")
             .arg("-C")
             .arg(&project_root)
+            // `--` ends options: the path and branch that follow are
+            // positional even when dash-led. trace:BUG-1622 | ai:claude
             .args([
                 "worktree",
                 "add",
+                "--",
                 worktree_path.to_str().unwrap(),
                 branch_name.as_str(),
             ])
@@ -36104,9 +36154,12 @@ fn session_start(
         let res = std::process::Command::new("git")
             .arg("-C")
             .arg(&project_root)
+            // `--` ends options: the path and branch that follow are
+            // positional even when dash-led. trace:BUG-1622 | ai:claude
             .args([
                 "worktree",
                 "add",
+                "--",
                 worktree_path.to_str().unwrap(),
                 branch_name.as_str(),
             ])
@@ -36214,11 +36267,14 @@ fn session_start(
                 format!("prepare submodules in worktree {}", worktree_path.display())
             })?;
         } else {
+            // `--` ends options: the path and base that follow are
+            // positional even when dash-led. trace:BUG-1622 | ai:claude
             let mut args = vec![
                 "worktree",
                 "add",
                 "-b",
                 branch_name.as_str(),
+                "--",
                 worktree_path.to_str().unwrap(),
             ];
             if let Some(rb) = resolved_base.as_deref() {
@@ -36812,7 +36868,16 @@ fn branch_unshipped_patch_count_default(repo: &std::path::Path, branch: &str) ->
     let tree_diff = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["diff", "--quiet", &default_ref, branch])
+        // The branch can come from a registered lease, so keep it from
+        // reading as an option. trace:BUG-1622 | ai:claude
+        .args([
+            "diff",
+            "--quiet",
+            git_arg_guard::END_OF_OPTIONS,
+            &default_ref,
+            branch,
+            "--",
+        ])
         .status()
         .ok()?;
     match tree_diff.code() {
@@ -36824,7 +36889,13 @@ fn branch_unshipped_patch_count_default(repo: &std::path::Path, branch: &str) ->
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["cherry", &default_ref, branch])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "cherry",
+            git_arg_guard::END_OF_OPTIONS,
+            &default_ref,
+            branch,
+        ])
         .output()
         .ok()?;
     if !out.status.success() {
@@ -37747,12 +37818,16 @@ fn recent_files_for_branch(
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
+        // Options first, then `--end-of-options` so a lease branch is
+        // always a revision. trace:BUG-1622 | ai:claude
         .args([
             "log",
-            branch,
             &format!("--since={}", since),
             "--name-only",
             "--pretty=format:",
+            git_arg_guard::END_OF_OPTIONS,
+            branch,
+            "--",
         ])
         .output();
     let Ok(out) = out else { return Vec::new() };
@@ -61751,13 +61826,17 @@ fn ensure_epic_worktree_core(
         std::fs::create_dir_all(parent).ok();
     }
 
+    // `--` ends options: the path and branch/base that follow are
+    // positional even when dash-led. trace:BUG-1622 | ai:claude
     let mut args: Vec<String> = vec!["worktree".into(), "add".into()];
     if branch_exists {
+        args.push("--".into());
         args.push(path_str.clone());
         args.push(branch.clone());
     } else {
         args.push("-b".into());
         args.push(branch.clone());
+        args.push("--".into());
         args.push(path_str.clone());
         args.push(base_ref.clone());
     }
@@ -71720,7 +71799,14 @@ fn handle_db_reconcile_status(
         "--pretty=format:%H%x1f%B".to_string(),
     ];
     match since {
-        Some(s) => log_args.push(format!("{}..HEAD", s)),
+        Some(s) => {
+            // A dash-led `--since` would otherwise reach git as an option
+            // (`--output=<path>..HEAD` writes a file). trace:BUG-1622 | ai:claude
+            git_arg_guard::reject_option_like("--since", s)?;
+            log_args.push(git_arg_guard::END_OF_OPTIONS.to_string());
+            log_args.push(format!("{}..HEAD", s));
+            log_args.push("--".to_string());
+        }
         None => {
             log_args.push("--max-count=200".to_string());
             log_args.push("HEAD".to_string());
@@ -83217,7 +83303,15 @@ fn read_commits_in_range(
     let output = PCmd::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", "--no-merges", "--pretty=format:%h\x1f%s", range])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "log",
+            "--no-merges",
+            "--pretty=format:%h\x1f%s",
+            git_arg_guard::END_OF_OPTIONS,
+            range,
+            "--",
+        ])
         .output();
     match output {
         Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout)
@@ -83652,6 +83746,10 @@ fn ensure_pr_open_spec_attribution(
 fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    // trace:BUG-1622 | ai:claude
+    if let Some(r) = range {
+        git_arg_guard::reject_option_like("--range", r)?;
+    }
     let range = resolve_gate_range(&project_root, range);
 
     let commits = read_commits_in_range(&project_root, &range)?;
@@ -84265,7 +84363,16 @@ fn read_diff_for_range(project_root: &std::path::Path, range: &str) -> Result<St
     let output = PCmd::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["diff", "-M", "-w", "--unified=0", range])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "diff",
+            "-M",
+            "-w",
+            "--unified=0",
+            git_arg_guard::END_OF_OPTIONS,
+            range,
+            "--",
+        ])
         .output();
     match output {
         Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout).to_string()),
@@ -84325,10 +84432,12 @@ where
         let covered = PCmd::new("git")
             .arg("-C")
             .arg(project_root)
+            // trace:BUG-1622 | ai:claude
             .args([
                 "log",
                 "--no-merges",
                 "--pretty=format:%s",
+                git_arg_guard::END_OF_OPTIONS,
                 range,
                 "--",
                 file,
@@ -84360,6 +84469,10 @@ where
 fn handle_trace_coverage(range: Option<&str>, json: bool, block: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    // trace:BUG-1622 | ai:claude
+    if let Some(r) = range {
+        git_arg_guard::reject_option_like("--range", r)?;
+    }
     let range = resolve_gate_range(&project_root, range);
 
     let diff = read_diff_for_range(&project_root, &range)?;
@@ -84664,7 +84777,15 @@ fn specs_referenced_in_range(
     if let Ok(out) = PCmd::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", "--no-merges", "--pretty=format:%s", range])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "log",
+            "--no-merges",
+            "--pretty=format:%s",
+            git_arg_guard::END_OF_OPTIONS,
+            range,
+            "--",
+        ])
         .output()
     {
         if out.status.success() {
@@ -84701,6 +84822,10 @@ fn handle_doc_suggest(range: Option<&str>, json: bool) -> Result<()> {
 
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    // trace:BUG-1622 | ai:claude
+    if let Some(r) = range {
+        git_arg_guard::reject_option_like("--range", r)?;
+    }
     let range = resolve_gate_range(&project_root, range);
 
     let diff = read_diff_for_range(&project_root, &range)?;
@@ -106929,3 +107054,9 @@ mod bug_1486_stakeholder_db_verb_tests;
 #[cfg(test)]
 #[path = "tests/epic_72_exposition_tests.rs"]
 mod epic_72_exposition_tests;
+
+// Git option injection through user-supplied refs, ranges and branches.
+// trace:BUG-1622 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1622_git_option_injection_tests.rs"]
+mod bug_1622_git_option_injection_tests;
