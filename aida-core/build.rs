@@ -26,6 +26,12 @@ fn main() {
     // Skills
     embed_directory(&mut code, "templates/skills", "skills");
 
+    // Vendor-neutral skill bodies for the curated Codex / Antigravity packs.
+    // Kept outside templates/skills/ so `make sync-templates` never links them
+    // into .claude/skills/ and the Claude catch-all loop never scaffolds them.
+    // trace:STORY-1475 | ai:claude
+    embed_directory(&mut code, "templates/skills-portable", "skills-portable");
+
     // Commands
     embed_directory(&mut code, "templates/commands", "commands");
 
@@ -103,6 +109,7 @@ fn main() {
     code.push_str(
         "    (\"skills\", \"Claude Code Skills - Requirements-driven development workflows\"),\n",
     );
+    code.push_str("    (\"skills-portable\", \"Vendor-neutral skill bodies for the Codex and Antigravity packs\"),\n");
     code.push_str("    (\"commands\", \"Slash Commands - Quick actions for common tasks\"),\n");
     code.push_str("    (\"hooks\", \"Hooks - Git and Claude Code integration hooks\"),\n");
     code.push_str("    (\"settings.json\", \"Settings - Claude Code configuration\"),\n");

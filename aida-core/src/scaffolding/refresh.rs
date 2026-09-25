@@ -140,6 +140,10 @@ pub enum RefreshOutcome {
     /// Unmarked, but the caller opted into adopting the pack into
     /// edit-tracking; the previous content was saved alongside first.
     Adopted(PathBuf),
+    /// Absent, and the caller chose to deliver it as a newly shipped file
+    /// into a pack the project already has installed.
+    // trace:STORY-1475 | ai:claude
+    Installed,
 }
 
 /// Overlay `expected` onto `dest` if and only if `dest` is an existing,
@@ -185,6 +189,9 @@ pub fn refresh_file(dest: &Path, expected: &str, adopt_unmarked: bool) -> Result
 pub struct RefreshReport {
     pub refreshed: Vec<PathBuf>,
     pub adopted: Vec<PathBuf>,
+    /// Newly shipped files delivered into an already-installed pack.
+    // trace:STORY-1475 | ai:claude
+    pub installed: Vec<PathBuf>,
     pub kept_edited: Vec<PathBuf>,
     pub kept_unmarked: Vec<PathBuf>,
     pub skipped_symlink: Vec<PathBuf>,
@@ -200,6 +207,7 @@ impl RefreshReport {
             RefreshOutcome::Unchanged => self.unchanged += 1,
             RefreshOutcome::Refreshed => self.refreshed.push(path.to_path_buf()),
             RefreshOutcome::Adopted(_) => self.adopted.push(path.to_path_buf()),
+            RefreshOutcome::Installed => self.installed.push(path.to_path_buf()),
             RefreshOutcome::KeptEdited => self.kept_edited.push(path.to_path_buf()),
             RefreshOutcome::KeptUnmarked => self.kept_unmarked.push(path.to_path_buf()),
             RefreshOutcome::SkippedSymlink(_) => self.skipped_symlink.push(path.to_path_buf()),
@@ -208,13 +216,14 @@ impl RefreshReport {
 
     /// How many files this pass actually rewrote.
     pub fn changed(&self) -> usize {
-        self.refreshed.len() + self.adopted.len()
+        self.refreshed.len() + self.adopted.len() + self.installed.len()
     }
 
     /// Merge another pack's tallies into this one.
     pub fn absorb(&mut self, other: &RefreshReport) {
         self.refreshed.extend(other.refreshed.iter().cloned());
         self.adopted.extend(other.adopted.iter().cloned());
+        self.installed.extend(other.installed.iter().cloned());
         self.kept_edited.extend(other.kept_edited.iter().cloned());
         self.kept_unmarked
             .extend(other.kept_unmarked.iter().cloned());

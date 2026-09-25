@@ -749,6 +749,10 @@ pub struct ScaffoldConfig {
     /// Include aida-backlog-groom skill for curating Approved work onto the
     /// queue with risk + conflict heuristics. trace:STORY-444
     pub include_aida_backlog_groom_skill: bool,
+    /// Include the vendor-neutral aida-orchestrate skill in the Codex and
+    /// Antigravity packs. The Claude pack keeps its own subagent-tool version.
+    // trace:STORY-1475 | ai:claude
+    pub include_aida_orchestrate_skill: bool,
     /// Generate git hooks for traceability validation
     pub generate_git_hooks: bool,
     /// Include commit-msg hook for AI attribution validation
@@ -839,6 +843,8 @@ impl Default for ScaffoldConfig {
             include_aida_digest_skill: true,
             // trace:STORY-444
             include_aida_backlog_groom_skill: true,
+            // trace:STORY-1475 | ai:claude
+            include_aida_orchestrate_skill: true,
             generate_git_hooks: true,
             include_commit_msg_hook: true,
             include_pre_commit_hook: true,  // Enabled by default
@@ -1991,6 +1997,11 @@ aida show <SPEC-ID>
                     "aida-backlog-groom",
                     self.config.include_aida_backlog_groom_skill,
                 ),
+                // trace:STORY-1475 | ai:claude
+                (
+                    "aida-orchestrate",
+                    self.config.include_aida_orchestrate_skill,
+                ),
             ];
 
             for (name, enabled) in codex_skill_defs {
@@ -2066,6 +2077,11 @@ aida show <SPEC-ID>
                 (
                     "aida-backlog-groom",
                     self.config.include_aida_backlog_groom_skill,
+                ),
+                // trace:STORY-1475 | ai:claude
+                (
+                    "aida-orchestrate",
+                    self.config.include_aida_orchestrate_skill,
                 ),
             ];
 
@@ -3157,9 +3173,15 @@ Use this skill when:
     fn generate_codex_skill(&self, skill_name: &str) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
 
+        // A vendor-neutral body under `skills-portable/` wins over the Claude
+        // master: those skills drive Claude-only harness tools in their Claude
+        // form, so the Codex / Antigravity packs ship the portable variant.
+        // trace:STORY-1475 | ai:claude
+        let portable = format!("skills-portable/{}.md", skill_name);
         let key = format!("skills/{}.md", skill_name);
         EMBEDDED_TEMPLATES
-            .get(key.as_str())
+            .get(portable.as_str())
+            .or_else(|| EMBEDDED_TEMPLATES.get(key.as_str()))
             .map(|s| s.to_string())
             .unwrap_or_else(|| format!("# {}\n\n(template not found)", skill_name))
     }
@@ -4112,6 +4134,129 @@ mod tests {
 
         scaffolder.apply(&preview).expect("scaffolding apply");
         assert!(!temp_dir.path().join(".antigravity").exists());
+    }
+
+    /// The Codex and Antigravity packs ship the vendor-neutral
+    /// aida-orchestrate body; the Claude pack keeps the subagent-tool master.
+    // trace:STORY-1475 | ai:claude
+    #[test]
+    fn orchestrate_skill_is_portable_in_vendor_packs_and_claude_pack_unchanged() {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        let portable = EMBEDDED_TEMPLATES
+            .get("skills-portable/aida-orchestrate.md")
+            .expect("portable aida-orchestrate body is embedded");
+        let claude_master = EMBEDDED_TEMPLATES
+            .get("skills/aida-orchestrate.md")
+            .expect("claude aida-orchestrate master is embedded");
+        assert_ne!(portable, claude_master);
+        // The scaffold header lands inside the frontmatter, so compare bodies.
+        let body_of = |s: &'static str| s.split_once("\n---\n").map_or(s, |(_, b)| b);
+        let (portable, claude_master) = (body_of(portable), body_of(claude_master));
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut scaffolder =
+            Scaffolder::new(temp_dir.path().to_path_buf(), ScaffoldConfig::default());
+        let preview = scaffolder.preview(&create_test_store());
+        let content_of = |path: &str| {
+            preview
+                .artifacts
+                .iter()
+                .find(|a| a.path == Path::new(path))
+                .unwrap_or_else(|| panic!("{path} should be scaffolded"))
+                .content
+                .clone()
+        };
+
+        for pack in [".codex/skills", ".antigravity/skills"] {
+            let body = content_of(&format!("{pack}/aida-orchestrate/SKILL.md"));
+            assert!(
+                body.contains(portable),
+                "{pack} must ship the portable body"
+            );
+            assert!(
+                !body.contains("SendMessage"),
+                "{pack} leaked the Claude body"
+            );
+        }
+
+        let claude = content_of(".claude/skills/aida-orchestrate/SKILL.md");
+        assert!(
+            claude.contains(claude_master),
+            "the Claude pack keeps the subagent-tool version"
+        );
+        assert!(!claude.contains(portable));
+        assert!(
+            !preview
+                .artifacts
+                .iter()
+                .any(|a| a.path.to_string_lossy().contains("skills-portable")),
+            "the portable source is never scaffolded as its own file"
+        );
+    }
+
+    /// The include flag drops aida-orchestrate from both vendor packs and
+    /// leaves the Claude pack alone.
+    // trace:STORY-1475 | ai:claude
+    #[test]
+    fn orchestrate_skill_include_flag_gates_vendor_packs() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig {
+            include_aida_orchestrate_skill: false,
+            ..Default::default()
+        };
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let preview = scaffolder.preview(&create_test_store());
+        let paths: Vec<PathBuf> = preview.artifacts.iter().map(|a| a.path.clone()).collect();
+        assert!(!paths.contains(&PathBuf::from(".codex/skills/aida-orchestrate/SKILL.md")));
+        assert!(!paths.contains(&PathBuf::from(
+            ".antigravity/skills/aida-orchestrate/SKILL.md"
+        )));
+        assert!(paths.contains(&PathBuf::from(".claude/skills/aida-orchestrate/SKILL.md")));
+    }
+
+    /// The portable body names no Claude-only harness tool, and keeps every
+    /// gate and guardrail of the Claude version.
+    // trace:STORY-1475 | ai:claude
+    #[test]
+    fn portable_orchestrate_body_has_no_claude_only_tools() {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        let body = EMBEDDED_TEMPLATES
+            .get("skills-portable/aida-orchestrate.md")
+            .expect("portable body embedded");
+        for tool in [
+            "SendMessage",
+            "TaskStop",
+            "run_in_background",
+            "PushNotification",
+        ] {
+            assert!(!body.contains(tool), "portable body names `{tool}`");
+        }
+        let has_word = |w: &str| {
+            body.split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                .any(|t| t == w)
+        };
+        assert!(!has_word("Agent"), "portable body names the `Agent` tool");
+        assert!(!body.contains("allowed-tools"));
+        for gate in [
+            "PROXY DECISION",
+            "aida queue add",
+            "SKETCH (awaiting advisor signoff):",
+            "ADVISOR SIGNOFF: APPROVED",
+            "separate sessions",
+            "Never review",
+            "VERDICT: APPROVE",
+            "Batched integration",
+            "--match-head-commit",
+            "gh pr view N --json state",
+            "Never merge as proxy",
+            "--admin",
+            "Deferral never counts",
+            "Honest reporting",
+            "aida session handoff --seat orchestrator --write",
+            "--no-human",
+        ] {
+            assert!(body.contains(gate), "portable body lost `{gate}`");
+        }
     }
 
     // STORY-1129: default scaffolding keeps CLI-capable agents on the

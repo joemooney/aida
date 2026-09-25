@@ -14,7 +14,7 @@
 
 use std::path::{Path, PathBuf};
 
-use aida_core::scaffolding::refresh::{refresh_file, RefreshReport};
+use aida_core::scaffolding::refresh::{refresh_file, RefreshOutcome, RefreshReport};
 use colored::Colorize;
 
 /// One pack's refresh result, labelled for the summary.
@@ -35,9 +35,43 @@ const PROJECT_PACKS: &[(&str, &str)] = &[
     (".antigravity/skills/", "Antigravity skills"),
 ];
 
+/// Curated vendor packs whose skill list is governed by `include_*_skill`
+/// flags. When one is already installed, refresh also delivers a skill the
+/// binary newly ships into it: the skill's own directory must be absent, so a
+/// file the user moved or edited is never touched.
+// trace:STORY-1475 | ai:claude
+const ADDITIVE_PACKS: &[&str] = &[".codex/skills/", ".antigravity/skills/"];
+
+/// Deliver `artifact` into an installed curated pack when its skill directory
+/// does not exist yet. Returns `None` when the pack is not installed or the
+/// skill directory already exists (the caller keeps the `Missing` outcome).
+// trace:STORY-1475 | ai:claude
+fn install_new_pack_skill(
+    project_root: &Path,
+    pack_prefix: &str,
+    artifact_path: &Path,
+    content: &str,
+) -> Option<std::io::Result<()>> {
+    if !ADDITIVE_PACKS.contains(&pack_prefix) {
+        return None;
+    }
+    let pack_root = project_root.join(pack_prefix.trim_end_matches('/'));
+    if !pack_root.is_dir() {
+        return None;
+    }
+    let dest = project_root.join(artifact_path);
+    let skill_dir = dest.parent()?;
+    if skill_dir == pack_root || skill_dir.symlink_metadata().is_ok() {
+        return None;
+    }
+    Some(std::fs::create_dir_all(skill_dir).and_then(|()| std::fs::write(&dest, content)))
+}
+
 /// Refresh every installed agent pack under `project_root`. Only files that already exist are
 /// touched — installing a pack the project opted out of stays `aida init`'s
 /// job, so a Claude-only project never grows a `.codex/` tree from a refresh.
+/// The one addition: an installed Codex or Antigravity pack receives a newly
+/// shipped skill (see [`ADDITIVE_PACKS`]).
 ///
 /// `codex_prompts_dest` overrides the machine-global `~/.codex/prompts`
 /// location for the deprecation notice (mirrors `scaffold codex-prompts --dest`).
@@ -92,6 +126,28 @@ fn refresh_agent_packs_at(
         };
         let dest = project_root.join(&artifact.path);
         match refresh_file(&dest, &artifact.content, false) {
+            // trace:STORY-1475 | ai:claude
+            Ok(RefreshOutcome::Missing) => {
+                let outcome = match install_new_pack_skill(
+                    project_root,
+                    PROJECT_PACKS[idx].0,
+                    &artifact.path,
+                    &artifact.content,
+                ) {
+                    None => RefreshOutcome::Missing,
+                    Some(Ok(())) => RefreshOutcome::Installed,
+                    Some(Err(e)) => {
+                        eprintln!(
+                            "  {} could not install {}: {}",
+                            "Warning:".yellow(),
+                            artifact.path.display(),
+                            e
+                        );
+                        RefreshOutcome::Missing
+                    }
+                };
+                packs[idx].report.record(&artifact.path, outcome);
+            }
             Ok(outcome) => packs[idx].report.record(&artifact.path, outcome),
             Err(e) => eprintln!(
                 "  {} could not refresh {}: {}",
@@ -344,6 +400,19 @@ pub(crate) fn print_refresh_summary(packs: &[PackRefresh]) {
         );
         println!("      {}", pack.location.dimmed());
     }
+    // trace:STORY-1475 | ai:claude
+    if !total.installed.is_empty() {
+        println!(
+            "    {} newly shipped skill(s) added to installed packs: {}",
+            total.installed.len(),
+            total
+                .installed
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
     if !total.adopted.is_empty() {
         println!(
             "    {} file(s) that predate edit-tracking were brought current; the previous copies are saved alongside as .aida-bak",
@@ -510,6 +579,53 @@ global = true
         // Nothing that was not already installed gets created.
         assert!(!root.join(".codex").exists());
         assert!(!root.join(".antigravity").exists());
+    }
+
+    /// A refresh delivers a newly shipped skill (the portable aida-orchestrate)
+    /// into installed Codex and Antigravity packs, never touches a skill
+    /// directory that already exists, and never creates an uninstalled pack.
+    // trace:STORY-1475 | ai:claude
+    #[test]
+    fn refresh_delivers_new_skill_into_installed_vendor_packs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".codex/skills")).unwrap();
+        std::fs::create_dir_all(root.join(".antigravity/skills")).unwrap();
+        // A skill directory the user already has (even emptied) is left alone.
+        std::fs::create_dir_all(root.join(".codex/skills/aida-req")).unwrap();
+
+        let packs = refresh_agent_packs_at(root, None, None);
+        let portable = aida_core::templates::EMBEDDED_TEMPLATES
+            .get("skills-portable/aida-orchestrate.md")
+            .expect("portable body embedded");
+        // The scaffold header lands inside the frontmatter, so compare bodies.
+        let portable = portable.split_once("\n---\n").map_or(*portable, |(_, b)| b);
+        for (pack, label) in [
+            (".codex/skills", "Codex skills"),
+            (".antigravity/skills", "Antigravity skills"),
+        ] {
+            let installed = root.join(pack).join("aida-orchestrate/SKILL.md");
+            let body = std::fs::read_to_string(&installed)
+                .unwrap_or_else(|_| panic!("{pack} should receive aida-orchestrate"));
+            assert!(body.contains(portable), "{pack} got the portable body");
+            let report = &packs
+                .iter()
+                .find(|p| p.label == label)
+                .expect("pack reported")
+                .report;
+            assert!(report
+                .installed
+                .contains(&PathBuf::from(format!("{pack}/aida-orchestrate/SKILL.md"))));
+        }
+        assert!(!root.join(".codex/skills/aida-req/SKILL.md").exists());
+        assert!(!root.join(".claude").exists(), "no Claude pack is created");
+
+        // Second run: the delivered file is now pristine and current.
+        let again = refresh_agent_packs_at(root, None, None);
+        assert!(
+            again.iter().all(|p| p.report.installed.is_empty()),
+            "a second refresh installs nothing new"
+        );
     }
 
     #[test]
