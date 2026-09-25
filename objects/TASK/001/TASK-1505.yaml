@@ -3,12 +3,12 @@ spec_id: TASK-1505
 agreed_id: TASK-1505
 title: Add a separate rebuildable SQLite cache for history events
 description: Add a derived SQLite history cache, separate from the requirements query cache, to make aida history and shipped-event queries fast and reduce cache contention. Store decoded Git event fields such as timestamp, commit SHA, spec ID, event kind, status transition, author, and shipped marker, with indexes supporting time windows, shipped filtering, spec lookup, and author/type filters. Git/aida-store remains canonical; the history database must be disposable and record schema version, source store HEAD, and indexed progress. Prefer incremental updates from the last indexed store commit, rebuild safely when missing or incompatible, and fall back to the existing Git scan when the history cache is stale or unavailable. Expose cache freshness or rebuild activity in diagnostics so stale results are not mistaken for current history.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T06:31:24.916031923Z
-modified_at: 2026-09-25T06:34:30.995898395Z
+modified_at: 2026-09-25T08:03:07.081558311Z
 req_type: Task
 tags:
 - cache
