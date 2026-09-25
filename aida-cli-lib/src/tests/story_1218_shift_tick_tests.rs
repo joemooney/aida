@@ -71,6 +71,10 @@ fn probes(candidates: Vec<Candidate>) -> Probes {
         held: BTreeSet::new(),
         redrive_history: Ok(events::RedriveHistory::default()),
         mail: Ok(BTreeMap::new()),
+        mail_known: ["advisor", "product"]
+            .into_iter()
+            .map(String::from)
+            .collect(),
     }
 }
 
@@ -2111,8 +2115,129 @@ fn shift_mail_latency_escalates_once_per_episode_and_rearms() {
         Some("[shift]\nmail_latency = \"2m\"\n"),
         Some(&format!("[repo.\"{REPO}\"]\nenabled = true\n")),
     );
-    let plan = mail_escalations(tight.mail_latency_secs, &over, &BTreeMap::new(), now());
+    let plan = mail_escalations(
+        tight.mail_latency_secs,
+        &over,
+        &p.mail_known,
+        &BTreeMap::new(),
+        now(),
+    );
     assert_eq!(plan.escalate, vec!["advisor", "product"]);
+}
+
+// Mail latency pages only for KNOWN recipients: junk addresses such as a
+// stray number, a spec prefix or a file name never escalate, however old.
+// trace:TASK-1492 | ai:claude
+#[test]
+fn shift_mail_latency_ignores_unknown_recipients() {
+    let cfg = cfg_on();
+    let mail: BTreeMap<_, _> = [
+        ("33492".to_string(), unread(3, 600)),
+        ("SPEC".to_string(), unread(1, 900)),
+        ("main.rs".to_string(), unread(2, 120)),
+    ]
+    .into_iter()
+    .collect();
+    let mut p = probes(Vec::new());
+    p.mail = Ok(mail.clone());
+
+    let plan = mail_escalations(
+        cfg.mail_latency_secs,
+        &mail,
+        &p.mail_known,
+        &BTreeMap::new(),
+        now(),
+    );
+    assert!(plan.escalate.is_empty(), "{plan:?}");
+    assert!(plan.verdicts.is_empty(), "{plan:?}");
+    assert_eq!(plan.unknown, vec!["33492", "SPEC", "main.rs"]);
+
+    let mut state = ShiftState::default();
+    let (r, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert!(mock.notifies.is_empty(), "{:?}", mock.notifies);
+    assert!(r.mail_escalated.is_empty());
+    assert!(state.mail_episodes.is_empty());
+    assert!(
+        r.mail_latency.contains("3 unknown recipient(s) ignored"),
+        "{}",
+        r.mail_latency
+    );
+
+    // An episode left open for an address that is no longer known re-arms.
+    state.mail_episodes.insert("33492".to_string(), now());
+    let (_, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert!(mock.notifies.is_empty());
+    assert!(state.mail_episodes.is_empty());
+}
+
+// A known recipient over the threshold escalates even when junk addresses
+// share the mailbox; matching is case-insensitive.
+// trace:TASK-1492 | ai:claude
+#[test]
+fn shift_mail_latency_known_recipient_over_threshold_escalates() {
+    let cfg = cfg_on();
+    let mut p = probes(Vec::new());
+    p.mail_known = ["advisor", "claude-impl-7"]
+        .into_iter()
+        .map(String::from)
+        .collect();
+    p.mail = Ok([
+        ("Claude-Impl-7".to_string(), unread(4, 45)),
+        ("main.rs".to_string(), unread(1, 500)),
+        ("advisor".to_string(), unread(1, 10)),
+    ]
+    .into_iter()
+    .collect());
+    let mut state = ShiftState::default();
+    let (r, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert_eq!(mock.notifies.len(), 1);
+    let (rule, _, message) = &mock.notifies[0];
+    assert_eq!(rule, "mail-latency");
+    assert!(
+        message.contains("Claude-Impl-7: 4 unread, oldest 45m old"),
+        "{message}"
+    );
+    assert!(!message.contains("main.rs"), "{message}");
+    assert!(!message.contains("advisor"), "{message}");
+    assert_eq!(r.mail_escalated, vec!["Claude-Impl-7"]);
+    assert!(state.mail_episodes.contains_key("Claude-Impl-7"));
+}
+
+// One notification names at most MAIL_NOTIFY_MAX_NAMES recipients, then
+// "+N more"; every recipient still gets its episode.
+// trace:TASK-1492 | ai:claude
+#[test]
+fn shift_mail_latency_notification_caps_names_with_more() {
+    let cfg = cfg_on();
+    let names: Vec<String> = (1..=8).map(|i| format!("seat-{i}")).collect();
+    let mut p = probes(Vec::new());
+    p.mail_known = names.iter().cloned().collect();
+    p.mail = Ok(names.iter().map(|n| (n.clone(), unread(1, 60))).collect());
+    let mut state = ShiftState::default();
+    let (r, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert_eq!(mock.notifies.len(), 1);
+    let (_, _, message) = &mock.notifies[0];
+    for n in &names[..MAIL_NOTIFY_MAX_NAMES] {
+        assert!(message.contains(&format!("{n}: 1 unread")), "{message}");
+    }
+    for n in &names[MAIL_NOTIFY_MAX_NAMES..] {
+        assert!(!message.contains(n.as_str()), "{message}");
+    }
+    assert!(message.contains("+3 more"), "{message}");
+    assert!(
+        r.mail_latency
+            .contains("notified for seat-1, seat-2, seat-3, seat-4, seat-5, +3 more"),
+        "{}",
+        r.mail_latency
+    );
+    assert_eq!(r.mail_escalated.len(), 8);
+    assert_eq!(state.mail_episodes.len(), 8);
+
+    assert_eq!(cap_list(&names[..2], 5, ", "), "seat-1, seat-2");
+    assert_eq!(
+        cap_list(&names[..6], 5, ", "),
+        "seat-1, seat-2, seat-3, seat-4, seat-5, +1 more"
+    );
 }
 
 #[test]

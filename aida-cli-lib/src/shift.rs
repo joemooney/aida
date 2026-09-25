@@ -36,10 +36,13 @@
 //!   from `SpecReDriven` events in the live stream AND its rotated archive).
 //!   A park at the cap is reclassified to needs-human. No re-drive at all
 //!   when the attempt evidence cannot be read (`redrive-evidence`);
-//! - **mail latency**: per recipient, the age of the oldest unread message;
-//!   above `[shift] mail_latency` the operator is notified through
-//!   `aida notify` (never the mailbox or chat), once per episode per
-//!   recipient, re-armed when the age drops back under the threshold.
+//! - **mail latency**: per KNOWN recipient (a seat or role in the agent
+//!   registry, a team roster member or an active session identity), the age
+//!   of the oldest unread message; above `[shift] mail_latency` the operator
+//!   is notified through `aida notify` (never the mailbox or chat), once per
+//!   episode per recipient, re-armed when the age drops back under the
+//!   threshold. Mail to unknown addresses never pages; a notification names
+//!   at most five recipients, then "+N more".
 //!
 //! Not yet here: headless cold-boot of a seat for an overdue seat job.
 //!
@@ -836,6 +839,11 @@ pub(crate) struct Probes {
     pub redrive_history: std::result::Result<events::RedriveHistory, String>,
     /// Unread mail per recipient; `Err` = the mailbox could not be read.
     pub mail: std::result::Result<BTreeMap<String, crate::mailbox_store::RecipientUnread>, String>,
+    /// Lower-cased recipients the mail step may page for: roles and seats in
+    /// the agent registry, team roster members and active session
+    /// identities. Mail to any other address never escalates.
+    // trace:TASK-1492 | ai:claude
+    pub mail_known: BTreeSet<String>,
 }
 
 /// Per-tick context the shell supplies.
@@ -1268,20 +1276,57 @@ pub(crate) struct MailPlan {
     pub escalate: Vec<String>,
     /// Open episode, now back under the threshold (or read): re-arm.
     pub rearm: Vec<String>,
+    /// Recipients with unread mail that match no known seat, role, roster
+    /// member or session. Never escalated.
+    pub unknown: Vec<String>,
 }
 
-/// PURE: once per episode per recipient. A recipient over the threshold with
-/// no open episode escalates; one with an open episode stays quiet; an open
-/// episode whose recipient is back under the threshold re-arms.
+/// At most this many recipient names in one mail-latency notification or
+/// report line; the rest are summarized as "+N more".
+// trace:TASK-1492 | ai:claude
+pub(crate) const MAIL_NOTIFY_MAX_NAMES: usize = 5;
+
+/// Join at most `max` items, then "+N more" for the rest.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn cap_list(items: &[String], max: usize, sep: &str) -> String {
+    let mut out = items
+        .iter()
+        .take(max)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(sep);
+    if items.len() > max {
+        out.push_str(&format!("{sep}+{} more", items.len() - max));
+    }
+    out
+}
+
+/// Is `recipient` a known seat, role, roster member or session identity?
+// trace:TASK-1492 | ai:claude
+fn is_known_recipient(known: &BTreeSet<String>, recipient: &str) -> bool {
+    known.contains(&recipient.trim().to_lowercase())
+}
+
+/// PURE: once per episode per recipient. Only KNOWN recipients (`known`,
+/// lower-cased) are considered; mail to any other address (a typo, a stray
+/// number, a file name) is listed in `unknown` and never escalates. A known
+/// recipient over the threshold with no open episode escalates; one with an
+/// open episode stays quiet; an open episode whose recipient is back under
+/// the threshold, or no longer known, re-arms.
 // trace:TASK-1492 | ai:claude
 pub(crate) fn mail_escalations(
     threshold_secs: i64,
     unread: &BTreeMap<String, crate::mailbox_store::RecipientUnread>,
+    known: &BTreeSet<String>,
     episodes: &BTreeMap<String, DateTime<Utc>>,
     now: DateTime<Utc>,
 ) -> MailPlan {
     let mut plan = MailPlan::default();
     for (recipient, u) in unread {
+        if !is_known_recipient(known, recipient) {
+            plan.unknown.push(recipient.clone());
+            continue;
+        }
         let age = ((now.timestamp_millis() - u.oldest_ts) / 1000).max(0);
         let over = age > threshold_secs;
         let open = episodes.contains_key(recipient);
@@ -1497,32 +1542,49 @@ fn mail_step(
             return;
         }
     };
-    let plan = mail_escalations(cfg.mail_latency_secs, unread, &state.mail_episodes, ctx.now);
+    let plan = mail_escalations(
+        cfg.mail_latency_secs,
+        unread,
+        &p.mail_known,
+        &state.mail_episodes,
+        ctx.now,
+    );
     report.mail = plan.verdicts.clone();
-    let over: Vec<&MailVerdict> = plan.verdicts.iter().filter(|v| v.over).collect();
+    let over: Vec<String> = plan
+        .verdicts
+        .iter()
+        .filter(|v| v.over)
+        .map(|v| {
+            format!(
+                "{} {}",
+                v.recipient,
+                human_age(Duration::seconds(v.oldest_age_secs))
+            )
+        })
+        .collect();
+    let escalate_names = cap_list(&plan.escalate, MAIL_NOTIFY_MAX_NAMES, ", ");
     report.mail_latency = if over.is_empty() {
         format!("ok (nothing unread past {})", cfg.mail_latency)
     } else {
         format!(
             "{} over {}{}",
-            over.iter()
-                .map(|v| format!(
-                    "{} {}",
-                    v.recipient,
-                    human_age(Duration::seconds(v.oldest_age_secs))
-                ))
-                .collect::<Vec<_>>()
-                .join(", "),
+            cap_list(&over, MAIL_NOTIFY_MAX_NAMES, ", "),
             cfg.mail_latency,
             if plan.escalate.is_empty() {
                 " — already notified this episode".to_string()
             } else if live {
                 String::new()
             } else {
-                format!(" — would notify for {}", plan.escalate.join(", "))
+                format!(" — would notify for {escalate_names}")
             }
         )
     };
+    if !plan.unknown.is_empty() {
+        report.mail_latency.push_str(&format!(
+            " ({} unknown recipient(s) ignored)",
+            plan.unknown.len()
+        ));
+    }
     if !live || !ctx.optional_ok() {
         return;
     }
@@ -1548,7 +1610,7 @@ fn mail_step(
     let message = format!(
         "Mail is waiting longer than {}:\n{}\n",
         cfg.mail_latency,
-        lines.join("\n")
+        cap_list(&lines, MAIL_NOTIFY_MAX_NAMES, "\n")
     );
     match exec.notify("mail-latency", "AIDA: mail waiting", &message) {
         Ok(true) => {
@@ -1558,7 +1620,7 @@ fn mail_step(
             report.mail_escalated = plan.escalate.clone();
             report
                 .mail_latency
-                .push_str(&format!(" — notified for {}", plan.escalate.join(", ")));
+                .push_str(&format!(" — notified for {escalate_names}"));
         }
         Ok(false) => report
             .mail_latency
@@ -2110,6 +2172,11 @@ fn gather_probes(
         &project_root.join(".aida-store"),
     )
     .map_err(|e| format!("{e:#}"));
+    let mail_known = if mail.as_ref().is_ok_and(|m| !m.is_empty()) {
+        known_mail_recipients(project_root)
+    } else {
+        BTreeSet::new()
+    };
     Probes {
         lock,
         lock_holder,
@@ -2138,7 +2205,38 @@ fn gather_probes(
         held,
         redrive_history,
         mail,
+        mail_known,
     }
+}
+
+/// The recipients the mail-latency step may page for, lower-cased. Reuses
+/// the existing identity lookups: the mailbox's known identities (built-in
+/// roles, role files and the agent registry's seats), the team roster
+/// (`registry/team.toml` members and their roles) and the active work
+/// session leases (owner and role).
+// trace:TASK-1492 | ai:claude
+fn known_mail_recipients(project_root: &Path) -> BTreeSet<String> {
+    let mut known: BTreeSet<String> = crate::known_mailbox_identities(project_root)
+        .into_iter()
+        .collect();
+    let mut add = |s: &str| {
+        let t = s.trim().to_lowercase();
+        if !t.is_empty() {
+            known.insert(t);
+        }
+    };
+    let roster = crate::team::TeamRoster::load(&project_root.join(".aida-store"));
+    for (user, role) in &roster.members {
+        add(user);
+        add(&crate::canonical_role_name(role));
+    }
+    for lease in crate::list_leases(project_root) {
+        add(&lease.owner);
+        if let Some(role) = &lease.role {
+            add(&crate::canonical_role_name(role));
+        }
+    }
+    known
 }
 
 fn try_shift_lock(project_root: &Path) -> Result<Option<std::fs::File>> {

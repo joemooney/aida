@@ -1378,12 +1378,17 @@ What one tick does, in order:
    --max-tokens T --max-runtime 3h` in its own session with its output in
    `.aida/shift-wave-<stamp>.log`, and records the pid. A tick killed between
    tagging and spawning leaves an intent the next tick reuses.
-7. **Mail latency.** For each mail recipient, the age of the oldest unread
-   message (the same local + canonical mailbox read and read-watermarks as the
-   `mail.oldest_unread_age` schedule predicate). Above `[shift] mail_latency`
+7. **Mail latency.** For each known mail recipient, the age of the oldest
+   unread message (the same local + canonical mailbox read and read-watermarks
+   as the `mail.oldest_unread_age` schedule predicate). A recipient is known
+   when it is a seat or role in the agent registry, a team roster member
+   (`registry/team.toml`) or an active work session's owner or role. Mail to
+   any other address (a typo, a stray number, a file name) never pages; the
+   tick only counts it as ignored. Above `[shift] mail_latency`
    (default `30m`) the operator is notified through `aida notify` (rule
    `mail-latency`), once per episode per recipient; the episode re-arms when
-   that recipient's oldest unread age drops back under the threshold. It
+   that recipient's oldest unread age drops back under the threshold. One
+   notification names at most five recipients, then "+N more". It
    never writes to the mailbox or to a chat. `[notify]`'s own `min_interval`
    and quiet hours still apply, and with no `[notify] command` configured
    nothing is sent and no episode is opened. Skipped past the tick deadline.
