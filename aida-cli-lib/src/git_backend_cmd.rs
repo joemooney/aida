@@ -610,8 +610,13 @@ fn list_proxy_approvals(
     json: bool,
 ) -> Result<()> {
     // trace:STORY-1173 | ai:codex
-    let since = since.map(parse_since_arg).transpose()?;
-    let until = until.map(parse_since_arg).transpose()?;
+    // trace:TASK-1509 | ai:claude — label errors with the flag that failed.
+    let now = chrono::Utc::now();
+    let bound = |raw: &str, flag: &str| {
+        crate::queue_cmd::parse_time_bound_at(raw, flag, now, &chrono::Local)
+    };
+    let since = since.map(|raw| bound(raw, "--since")).transpose()?;
+    let until = until.map(|raw| bound(raw, "--until")).transpose()?;
     let store = backend.load()?;
     let mut entries = Vec::new();
     for req in &store.requirements {

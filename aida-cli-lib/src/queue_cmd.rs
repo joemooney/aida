@@ -6848,10 +6848,12 @@ pub(crate) fn status_is_shelved(status: &aida_core::RequirementStatus) -> bool {
 /// local time that falls in a DST gap or overlap is rejected rather than
 /// guessed.
 ///
-/// Shared by `aida archive --older-than`, `aida queue progress --since`,
-/// the proxy-approvals and review-classes `--since`/`--until` filters,
-/// `aida status --activity --since`, and `aida history --since`/`--until`.
+/// Every time-bound flag in the CLI resolves through this grammar (history,
+/// queue progress, archive, approvals, review/findings classes, status,
+/// digest, doctor, calibration, tail, usage, metrics, mailbox). The list is
+/// enforced by `tests/time_bound_flags_tests.rs`, which walks the clap tree.
 // trace:TASK-1502 | ai:claude
+// trace:TASK-1509 | ai:claude
 pub(crate) fn parse_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
     parse_since_arg_at(raw, chrono::Utc::now(), &chrono::Local)
 }
@@ -6949,18 +6951,98 @@ pub(crate) fn parse_since_arg_at<Tz: chrono::TimeZone>(
         split_last_char(trimmed)
     };
     let n: i64 = num_str.parse().map_err(|_| invalid())?;
+    // Checked arithmetic: a huge count is refused, never a panic.
+    // trace:TASK-1509 | ai:claude
     let delta = match unit {
-        "d" => chrono::Duration::days(n),
-        "h" => chrono::Duration::hours(n),
-        "m" => chrono::Duration::minutes(n),
-        "w" => chrono::Duration::weeks(n),
+        "d" => chrono::Duration::try_days(n),
+        "h" => chrono::Duration::try_hours(n),
+        "m" => chrono::Duration::try_minutes(n),
+        "w" => chrono::Duration::try_weeks(n),
         _ => anyhow::bail!(
             "invalid --since unit `{}`: use m/h/d/w, `<N> <unit>s ago`, an ISO \
              date or datetime, or RFC3339",
             unit
         ),
     };
-    Ok(now - delta)
+    delta
+        .and_then(|d| now.checked_sub_signed(d))
+        .ok_or_else(|| anyhow::Error::new(TimeBoundOutOfRange(trimmed.to_string())))
+}
+
+/// A relative duration too large to resolve to a representable instant
+/// (e.g. `99999999999999d`). Kept as a distinct error type, like
+/// [`AmbiguousLocalTime`], so callers surface it verbatim instead of
+/// retrying the value as something else.
+// trace:TASK-1509 | ai:claude
+#[derive(Debug)]
+pub(crate) struct TimeBoundOutOfRange(pub String);
+
+impl std::fmt::Display for TimeBoundOutOfRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "`{}` is out of range: the duration reaches too far back to \
+             resolve to a date",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for TimeBoundOutOfRange {}
+
+/// True when a [`parse_since_arg_at`] error is a definitive answer about a
+/// value that does match the grammar (a DST gap/overlap, or an out-of-range
+/// duration), rather than "not this grammar". Callers with a fallback (git
+/// ref, tail-only units) must report these instead of retrying the value.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn is_definitive_time_bound_error(e: &anyhow::Error) -> bool {
+    e.is::<AmbiguousLocalTime>() || e.is::<TimeBoundOutOfRange>()
+}
+
+/// [`parse_since_arg_at`] with an error labeled for the flag that produced
+/// it (`parse_since_arg_at`'s own message always says `--since`, which would
+/// misname a bad `--until` or `--older-than`). A DST gap/overlap error is kept
+/// verbatim so the caller learns why the value was refused; so is an
+/// out-of-range duration.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_time_bound_at<Tz: chrono::TimeZone>(
+    raw: &str,
+    flag: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<chrono::DateTime<chrono::Utc>> {
+    parse_since_arg_at(raw, now, tz).map_err(|e| {
+        if is_definitive_time_bound_error(&e) {
+            return anyhow::anyhow!("invalid {flag} value: {e}");
+        }
+        anyhow::anyhow!(
+            "invalid {flag} value `{raw}` — expected a relative duration \
+             (e.g. `5h`, `7d`, `30m`, `2w`, `24 hours ago`), an ISO date \
+             (`2026-05-01`, local midnight), a zone-less ISO datetime \
+             (`2026-05-01T10:00`, local time), or RFC3339"
+        )
+    })
+}
+
+/// A time bound expressed as a lookback: how far before `now` the bound
+/// resolved by [`parse_time_bound_at`] lies. For the commands whose filters
+/// take a window length rather than an instant (usage, metrics, calibration,
+/// mailbox archive). A bound in the future yields a negative duration.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_lookback_at<Tz: chrono::TimeZone>(
+    raw: &str,
+    flag: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<chrono::Duration> {
+    let at = parse_time_bound_at(raw, flag, now, tz)?;
+    Ok(now.signed_duration_since(at))
+}
+
+/// [`parse_lookback_at`] against the wall clock and the system timezone.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_lookback(raw: &str, flag: &str) -> Result<chrono::Duration> {
+    parse_lookback_at(raw, flag, chrono::Utc::now(), &chrono::Local)
 }
 
 pub(crate) fn handle_queue_progress(
@@ -7388,6 +7470,11 @@ pub(crate) fn handle_queue_progress(
 #[cfg(test)]
 #[path = "tests/queue_progress_tests.rs"]
 mod queue_progress_tests;
+
+// trace:TASK-1509 | ai:claude
+#[cfg(test)]
+#[path = "tests/time_bound_flags_tests.rs"]
+mod time_bound_flags_tests;
 
 /// trace:BUG-225 | ai:claude
 #[cfg(test)]

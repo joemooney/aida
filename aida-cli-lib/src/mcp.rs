@@ -5443,7 +5443,9 @@ impl<'a> McpServer<'a> {
 
         // --unused: commands not seen since the cutoff.
         if let Some(raw) = unused_raw {
-            let cutoff_window = crate::parse_days_arg(raw).map_err(|e| e.to_string())?;
+            // trace:TASK-1509 | ai:claude
+            let cutoff_window =
+                crate::queue_cmd::parse_lookback(raw, "unused").map_err(|e| e.to_string())?;
             let cutoff = now - cutoff_window;
             let mut last_seen: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> =
                 std::collections::HashMap::new();
@@ -8292,8 +8294,9 @@ fn workflow_tool_descriptors() -> Value {
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "since": { "type": "string", "description": "Window for the aggregation, e.g. `30d`, `90d` (default `30d`).", "example": "30d" },
-                    "unused": { "type": "string", "description": "Instead of top commands, list commands NOT used within this window (deprecation candidates).", "example": "30d" },
+                    // trace:TASK-1509 | ai:claude
+                    "since": { "type": "string", "description": "Window start for the aggregation (default `30d`): a relative duration (`30d`, `12h`, `2w`, `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a zone-less ISO datetime (local time), or RFC3339.", "example": "30d" },
+                    "unused": { "type": "string", "description": "Instead of top commands, list commands NOT used since this point (deprecation candidates). Same forms as `since`.", "example": "30d" },
                     "errors": { "type": "boolean", "description": "Show only commands with errors, ranked by error rate.", "example": false },
                     "limit": { "type": "integer", "description": "Cap the number of rows returned (default 20).", "example": 20 }
                 }

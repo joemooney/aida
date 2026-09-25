@@ -928,10 +928,47 @@ fn finish(mut out: std::io::StdoutLock<'_>) -> Result<()> {
     Ok(())
 }
 
-/// Parse `--since` values like `10m`, `5s`, `2h`, `1d`, or a bare integer
-/// (interpreted as seconds). Returns an explicit `Duration` rather than a
-/// chrono::Duration so the caller can reuse it across stdlib APIs.
+/// Parse a tail `--since` value into how far back to start. Accepts the
+/// shared time-bound grammar (`10m`, `2h`, `1d`, `2w`, `24 hours ago`, an ISO
+/// date at local midnight, a zone-less ISO datetime in local time, or
+/// RFC3339), plus the tail-only forms kept for compatibility: seconds (`30s`),
+/// a bare integer meaning seconds (`30`), and spelled-out units (`10min`,
+/// `2hours`). Returns an explicit `Duration` rather than a chrono::Duration
+/// so the caller can reuse it across stdlib APIs. A bound in the future
+/// clamps to zero.
+// trace:TASK-1509 | ai:claude
 pub fn parse_since(s: &str) -> Result<Duration> {
+    parse_since_at(s, chrono::Utc::now(), &chrono::Local)
+}
+
+/// [`parse_since`] against an explicit `now` and timezone, for tests.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_since_at<Tz: chrono::TimeZone>(
+    s: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<Duration> {
+    match crate::queue_cmd::parse_since_arg_at(s, now, tz) {
+        Ok(at) => Ok((now - at).to_std().unwrap_or(Duration::ZERO)),
+        Err(e) if crate::queue_cmd::is_definitive_time_bound_error(&e) => {
+            Err(anyhow!("invalid --since value: {e}"))
+        }
+        Err(_) => parse_tail_only_duration(s).map_err(|_| {
+            anyhow!(
+                "invalid --since value `{}` — expected a relative duration \
+                 (e.g. `30s`, `10m`, `2h`, `1d`, `2w`, `24 hours ago`; a bare \
+                 number is seconds), an ISO date (`2026-05-01`, local \
+                 midnight), a zone-less ISO datetime (`2026-05-01T10:00`, \
+                 local time), or RFC3339",
+                s.trim()
+            )
+        }),
+    }
+}
+
+/// The tail-only duration forms the shared grammar does not cover: seconds,
+/// a bare integer (seconds), and spelled-out units such as `10min`.
+fn parse_tail_only_duration(s: &str) -> Result<Duration> {
     let s = s.trim();
     if s.is_empty() {
         bail!("--since value is empty");
@@ -949,16 +986,20 @@ pub fn parse_since(s: &str) -> Result<Duration> {
     let n: u64 = num_part
         .parse()
         .map_err(|_| anyhow!("--since `{}` has an unparseable numeric prefix", s))?;
-    let secs = match unit_part {
-        "" | "s" | "sec" | "secs" | "second" | "seconds" => n,
-        "m" | "min" | "mins" | "minute" | "minutes" => n * 60,
-        "h" | "hr" | "hrs" | "hour" | "hours" => n * 3600,
-        "d" | "day" | "days" => n * 86400,
+    let unit_secs: u64 = match unit_part {
+        "" | "s" | "sec" | "secs" | "second" | "seconds" => 1,
+        "m" | "min" | "mins" | "minute" | "minutes" => 60,
+        "h" | "hr" | "hrs" | "hour" | "hours" => 3600,
+        "d" | "day" | "days" => 86400,
         other => bail!(
             "--since unit `{}` is not recognized (use s/m/h/d, e.g. `10m`)",
             other
         ),
     };
+    // trace:TASK-1509 | ai:claude
+    let secs = n
+        .checked_mul(unit_secs)
+        .ok_or_else(|| anyhow!("--since `{}` is out of range", s))?;
     Ok(Duration::from_secs(secs))
 }
 

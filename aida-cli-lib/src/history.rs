@@ -291,17 +291,9 @@ pub(crate) fn parse_history_bound<Tz: chrono::TimeZone>(
     now: chrono::DateTime<chrono::Utc>,
     tz: &Tz,
 ) -> Result<chrono::DateTime<chrono::Utc>> {
-    crate::queue_cmd::parse_since_arg_at(raw, now, tz).map_err(|e| {
-        if let Some(dst) = e.downcast_ref::<crate::queue_cmd::AmbiguousLocalTime>() {
-            return anyhow::anyhow!("invalid {flag} value: {dst}");
-        }
-        anyhow::anyhow!(
-            "invalid {flag} value `{raw}` — expected a relative duration \
-             (e.g. `5h`, `7d`, `30m`, `2w`, `24 hours ago`), an ISO date \
-             (`2026-05-01`, local midnight), a zone-less ISO datetime \
-             (`2026-05-01T10:00`, local time), or RFC3339"
-        )
-    })
+    // trace:TASK-1509 | ai:claude — the relabeling now lives beside the
+    // shared parser so every time-bound flag reports errors the same way.
+    crate::queue_cmd::parse_time_bound_at(raw, flag, now, tz)
 }
 
 /// Renders `d` in timezone `tz` with an explicit numeric zone (`%z`) taken
