@@ -2628,7 +2628,14 @@ pub enum SuperviseCommand {
     /// and surface only the items that need a human. Reads the substrate
     /// (events + store + queue) so it is safe to run with no agent awake; it
     /// never drives or merges. Default is a dry-run report; pass --execute to act.
-    // trace:STORY-1096 | ai:claude
+    ///
+    /// The redrive reflex is the night shift's re-drive step. It is off unless
+    /// this clone turns it on (`redrive = true` for this repo in
+    /// ~/.aida/shift-local.toml), keeps the shift's floors, and only puts
+    /// transient parks back in the queue for the next drain wave. While a live
+    /// --execute pass re-drives it holds the night-shift lock, so a check that
+    /// fires at that moment is skipped, so avoid very short --interval values.
+    // trace:STORY-1096 trace:BUG-1621 | ai:claude
     Watch {
         /// The objective to keep work aligned to (an epic id). When omitted,
         /// falls back to the `[oversight] objective` config value.
