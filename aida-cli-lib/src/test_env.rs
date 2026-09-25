@@ -210,6 +210,55 @@ impl Drop for EnvVarGuard {
     }
 }
 
+/// BUG-1618: a hermetic ambient context for tests that exercise the
+/// advisor-authority checks (`has_advisor_authority` and friends). Those checks
+/// read ambient process state — the project root discovered from cwd (whose
+/// `.aida-store` roster and drain state then decide the role and orchestrator
+/// carve-outs), stdin TTY-ness, and the role / identity / orchestrator env
+/// vars. Inside a leased `aida worktree add` checkout the cwd walk reaches a
+/// `.aida-store` symlink to the live store, whose roster can make the
+/// invoking user an advisor, so refusal tests silently gained authority.
+///
+/// This guard pins every one of those inputs for its lifetime:
+/// - the project root to `root` (a per-thread override, no global `chdir`),
+/// - stdin to "not a terminal",
+/// - `AIDA_USER` to a fixed test identity absent from any roster,
+/// - `AIDA_ROLE_INSTANCE`, `AIDA_AUTO_COMPLETE`, `AIDA_AUTO_COMPLETE_TOKEN`
+///   cleared, and `AIDA_SESSION_ROLE` set to `role` (or cleared on `None`).
+///
+/// Holds `ENV_LOCK` like the other guards: do not nest another env guard
+/// under it; drop it before constructing the next one.
+// trace:BUG-1618 | ai:claude
+pub(crate) struct AmbientGuard {
+    prev: Option<crate::test_ambient::Ambient>,
+    // Field order: the thread-local is restored in `Drop`, then `_env`
+    // restores the env vars and releases ENV_LOCK last.
+    _env: EnvVarsGuard,
+}
+
+impl AmbientGuard {
+    pub(crate) fn hermetic(root: &std::path::Path, role: Option<&str>) -> Self {
+        let env = EnvVarsGuard::apply(&[
+            ("AIDA_SESSION_ROLE", role),
+            ("AIDA_USER", Some("bug-1618-hermetic-test-user")),
+            ("AIDA_ROLE_INSTANCE", None),
+            ("AIDA_AUTO_COMPLETE", None),
+            ("AIDA_AUTO_COMPLETE_TOKEN", None),
+        ]);
+        let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+            project_root: root.to_path_buf(),
+            stdin_is_terminal: false,
+        }));
+        Self { prev, _env: env }
+    }
+}
+
+impl Drop for AmbientGuard {
+    fn drop(&mut self) {
+        crate::test_ambient::replace(self.prev.take());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -98,8 +98,9 @@ pub(crate) fn may_clear_escalation(human_present: bool) -> bool {
 /// The same decision for the running process: stdin is a terminal. Always
 /// false for the MCP server, whose stdin is the protocol pipe.
 pub(crate) fn caller_may_clear_escalation() -> bool {
-    use std::io::IsTerminal;
-    may_clear_escalation(std::io::stdin().is_terminal())
+    // BUG-1618: via the authority TTY seam so tests can pin it.
+    // trace:BUG-1618 | ai:claude
+    may_clear_escalation(crate::authority_stdin_is_terminal())
 }
 
 /// Clear the markers a shelve, punt or escalation left on `req`, so a spec
