@@ -1598,6 +1598,11 @@ fn task_1507_connection_close_skips_the_wal_checkpoint() {
     );
     // A fresh connection still sees every committed row.
     assert_eq!(test_support::meta(&fx.db, "tip_sha"), Some(fx.head()));
+    // A bulk build leaves no WAL behind for later processes to re-read and
+    // re-checkpoint.
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    assert_eq!(wal.metadata().map(|m| m.len()).unwrap_or(0), 0);
+    assert_parity(&fx, &opts(), "after rebuild");
 }
 
 #[test]

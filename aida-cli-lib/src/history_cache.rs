@@ -65,6 +65,11 @@ const MAX_BOUNDARY_PROBES: usize = 32;
 /// falls back to the git walk instead.
 const BUSY_LADDER_MS: [u64; 3] = [0, 50, 100];
 
+/// WAL size past which the indexer checkpoints and truncates it (see
+/// `HistoryCache::bound_wal`); about 1,000 pages, SQLite's usual
+/// auto-checkpoint point.
+const WAL_TRUNCATE_BYTES: u64 = 4 * 1024 * 1024;
+
 /// Marker that starts each commit header in the batched `git log` output.
 const HEADER_MARK: char = '\u{1e}';
 
@@ -942,18 +947,37 @@ impl HistoryCache {
         Ok(HistoryCache { conn })
     }
 
-    /// Skip the WAL checkpoint (and its fsyncs) when the connection closes.
-    /// Nearly every query is a small catch-up, and the close-time
-    /// checkpoint dominated its cost. Crash safety is unchanged: every
-    /// write is a WAL transaction with its meta in the same transaction,
-    /// and SQLite's auto-checkpoint still folds the WAL back once it grows.
+    /// Skip the WAL checkpoint (and its fsyncs) when the connection closes,
+    /// and SQLite's automatic checkpoint too. Nearly every query is a small
+    /// catch-up, and the close-time checkpoint dominated its cost. The
+    /// automatic one is off because a fresh process re-reads a WAL it
+    /// never reset as un-checkpointed, so it would copy the whole WAL
+    /// again on every commit once past its threshold; instead the indexer
+    /// truncates the WAL itself when it grows ([`Self::bound_wal`]).
+    /// Crash safety is unchanged: every write is a WAL transaction with its
+    /// meta in the same transaction.
     // trace:TASK-1507 | ai:claude
     fn no_checkpoint_on_close(conn: &Connection) -> Result<()> {
         conn.set_db_config(
             rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE,
             true,
         )?;
+        conn.pragma_update(None, "wal_autocheckpoint", 0)?;
         Ok(())
+    }
+
+    /// Fold the WAL back into the database and truncate it once it is
+    /// larger than `limit` bytes (always, with `limit == 0`). Only the lock
+    /// holder calls this. Best effort: a busy reader just defers it.
+    // trace:TASK-1507 | ai:claude
+    fn bound_wal(&self, db_path: &Path, limit: u64) {
+        let wal = PathBuf::from(format!("{}-wal", db_path.display()));
+        let size = std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0);
+        if size > limit {
+            let _ = self
+                .conn
+                .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()));
+        }
     }
 
     fn open_existing(path: &Path) -> Result<Self> {
@@ -1584,6 +1608,9 @@ pub(crate) fn serve_at(
         }
     }
     let answer = cache.query(opts, &head);
+    if locked {
+        cache.bound_wal(db_path, WAL_TRUNCATE_BYTES);
+    }
     drop(cache);
     drop(lock);
     answer.map_err(|e| heal(e, locked))
@@ -1629,6 +1656,7 @@ pub(crate) fn rebuild_full_at(store: &Path, db_path: &Path) -> Result<RebuildRep
     }
     let commits = cache.count("commits")?;
     let events = cache.count("events")?;
+    cache.bound_wal(db_path, 0);
     let pruned = prune_other_versions(db_path);
     Ok(RebuildReport {
         path: db_path.to_path_buf(),
