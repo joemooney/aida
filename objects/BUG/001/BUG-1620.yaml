@@ -3,12 +3,12 @@ spec_id: BUG-1620
 agreed_id: BUG-1620
 title: aida history --id hides TREESAME merged side-branch commits (git log path simplification) while plain history events shows them
 description: 'Found while ruling on TASK-1505''s OQ3/N1b. For --id, the walk runs ''git log -- <path>''. Git''s default history simplification drops merged side branches that end up unchanged at the merge, for example the side branch of the 2026-06-30 ''-s ours'' merge. So BUG-15.yaml shows 7 commits under --id, but plain ''history events'' shows the side commits too. Decide whether --id should use --full-history so both views agree. Acceptance: --id and unfiltered events agree for a spec that was touched on a merged side branch, with a regression test using an -s ours merge. Coordinate with the TASK-1505 index routing (N1b).'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:30:03.452544442Z
-modified_at: 2026-09-25T12:30:03.452544442Z
+modified_at: 2026-09-25T12:30:23.892033961Z
 req_type: Bug
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
