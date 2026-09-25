@@ -43,6 +43,11 @@ This skill composes existing surfaces rather than restating them:
   is empty".
 - Without that delegation, triage with the operator and ask before deciding.
 
+The `disable-model-invocation` line in this file's frontmatter is honoured only
+by Claude Code. In Codex and Antigravity nothing stops this skill from being
+loaded, so **the delegation rule above is the real gate**: without the
+operator's explicit delegation in their own words, do not act as proxy.
+
 ## Skip if
 
 - Fanning implementers out over the already-queued ready set, without triaging
@@ -58,16 +63,16 @@ AIDA provides every mechanic you need.
 
 | Need | Command |
 |---|---|
-| Start an implementer headless (no terminal needed) | `aida queue work <SPEC> --vendor <claude\|codex\|agy> --no-human` |
+| Start an implementer headless (no terminal needed; the spec must be queued) | `aida queue work <SPEC> --vendor <claude\|codex\|agy> --no-human --strict` |
 | Start an interactive seat in another terminal | `aida agent new <claude\|codex\|antigravity> --role <implementer\|reviewer\|advisor> --spec <SPEC> --prompt "<brief>"` |
-| Start a reviewer that holds no lease | `aida agent new <vendor> --role reviewer --prompt "<review brief>"` |
+| Start a reviewer that holds no lease | `aida agent new <claude\|codex\|antigravity> --role reviewer --prompt "<review brief>"` |
 | Hand a session its brief or findings | `aida brief <agent> <SPEC> --note - --notify` (the note is read from stdin) |
 | Message a named agent | `aida mailbox send --to <agent> --subject "<SPEC> findings" --stdin` |
 | Type into a live interactive session | `aida session send <session-or-SPEC> "<text>" --enter` |
 | See what is running | `aida ps` (add `--json` for machine output), `aida agent ls` |
 | Read what one session is doing | `aida tail <SPEC-or-session-id> --no-follow -n 40` |
 | Stop a stuck session | `aida agent stop <name>`, else the harness's own job control or `kill <pid>` from `aida ps` |
-| Close a finished session's worktree and lease | `aida session end <id>` |
+| Close a finished session's worktree and lease | `aida session end <id> -y` |
 
 Rules for these mechanics:
 
@@ -87,13 +92,18 @@ Rules for these mechanics:
 - **Leases.** `aida agent new --spec <SPEC>` refuses while another session
   holds that spec's lease. Launch a reviewer **without** `--spec` (it holds no
   lease) and have it check the branch out in a scratch worktree, or end the
-  implementer session first with `aida session end <id>`.
+  implementer session first with `aida session end <id> -y`.
+- **Ending sessions.** `aida session end` needs `-y` when there is no
+  terminal to confirm on. It refuses while agent processes are still running
+  inside the worktree, and while the worktree has uncommitted changes. Stop the
+  session first (`aida agent stop <name>`); use `--force` only after you have
+  checked that nothing in the worktree needs keeping.
 - **Roles.** `aida agent new --role` accepts only `implementer`, `advisor`,
   `reviewer` and `integrator` (see `aida agent list-roles`).
 - **Session context.** Only Claude sessions resume a conversation
   (`aida queue work <SPEC> --resume`). For Codex and Antigravity, a session
   that exited is re-started with the findings in its brief:
-  `aida agent new <vendor> --resume latest` reopens the latest ended matching
+  `aida agent new <claude|codex|antigravity> --resume latest` reopens the latest ended matching
   session, where the vendor supports it.
 
 ### Vendor limits (state them honestly)
@@ -117,9 +127,20 @@ Rules for these mechanics:
 - **`aida session send`** needs the target session to be in a supported
   terminal. If it reports no terminal adapter, use `aida brief ... --notify` or
   the mailbox.
-- **Headless `aida queue work` follows the project's standard pickup flow.**
-  If an implementer opens a PR anyway, fold that PR into the batch instead of
-  opening a second one.
+- **Headless `aida queue work` always opens a PR.** It runs the standard pickup
+  flow, which ends with the PR step, so the "don't open a PR" line in the brief
+  does not hold for these sessions. Treat that PR as follows:
+  - The branch still gets a fresh review (step 5). An implementer's PR is
+    never evidence of review.
+  - When the branch is folded into the integration branch, close the
+    implementer's PR with a note that links the batch PR
+    (`gh pr close N --comment "Folded into batch PR #M"`). Never merge it on
+    its own.
+  - If you use that PR as the batch PR instead, every step 7 gate still
+    applies: required checks, exact-sha merge, no `--admin`, verify MERGED.
+  - Do not run `aida queue integrate` alongside this orchestrator on those
+    specs. It would drive the same PRs to merge on its own, outside your
+    batches and review gates.
 - If only one session is available (no second vendor, no second terminal, no
   headless launch), stop at pushed branches and report. Never review your own
   diff.
@@ -217,11 +238,17 @@ aida brief <agent> <SPEC> --note - <<'EOF'
 EOF
 ```
 
-Then launch the session. Pick the vendor per spec:
+Then launch the session. Pick the vendor per spec.
+
+`aida queue work` works only on a **queued** spec. In this skill, queueing is
+the sign-off (step 2), so dispatch only specs you have queued with
+`aida queue add <SPEC>`. Without `--strict`, `aida queue work` silently queues
+an approved but unqueued spec itself, which would skip that sign-off, so
+always pass `--strict`.
 
 ```bash
-# headless, no terminal needed (the spec must be approved or queued)
-aida queue work <SPEC> --vendor codex --no-human
+# headless, no terminal needed (the spec must already be queued)
+aida queue work <SPEC> --vendor codex --no-human --strict
 # or an interactive seat in another terminal; --spec creates the worktree and lease
 aida agent new claude --role implementer --spec <SPEC> --prompt "<short pickup line>"
 ```
@@ -284,13 +311,30 @@ The review brief must include:
   with `aida review record <SPEC> --verdict approved|request-changes --sha <full-sha> --branch <branch> --summary "<one line>"`.
   Only real correctness, integrity or safety problems count as blockers.
 
-On `REQUEST_CHANGES`, send the findings back to the **same implementer** so it
-keeps its context: `aida session send <SPEC> "<findings>" --enter` while its
-session is live, otherwise `aida brief <agent> <SPEC> --note - --notify` or
-`aida mailbox send --to <agent> --stdin`, and re-start the implementer on the
-same branch (`aida queue work <SPEC> --resume` for Claude). Include a PROXY
-DECISION on any routine design question. Then re-review with a **new**
+On `REQUEST_CHANGES`, send the findings back to the implementer. Include a
+PROXY DECISION on any routine design question. Then re-review with a **new**
 reviewer.
+
+- **Implementer session still live:** `aida session send <SPEC> "<findings>" --enter`,
+  or `aida brief <agent> <SPEC> --note - --notify`, or
+  `aida mailbox send --to <agent> --stdin`. It keeps its context.
+- **Implementer session has exited** (always the case for headless runs):
+  re-drive the spec on the same branch.
+
+  ```bash
+  aida queue rework <SPEC> --reason "<findings>"   # records the findings, re-queues the spec
+  aida queue work <SPEC> --vendor codex --no-human --strict --branch <implementer-branch>
+  ```
+
+  Use `--vendor codex` or `--vendor agy` (agy only for bounded, non-strict
+  work). Pass `--branch` with the implementer's existing branch. Without it
+  the new session does **not** reliably reuse that branch: `aida queue work`
+  reuses an open PR's branch only when the spec is still In Progress or Done,
+  and `aida queue rework` moves a Done spec back to Approved. The new session
+  would otherwise fork a fresh branch from `origin/main` without the earlier
+  commits. The new session starts cold; the findings reach it through the
+  spec comment that `--reason` writes. For Claude only, `--resume` continues
+  the earlier conversation instead.
 
 Any code you write yourself, even a small integration fix, is reviewed by
 someone else.
@@ -340,7 +384,7 @@ Put the approved branches into one integration branch based on
   After a network error, re-check instead of assuming.
 - Run `aida pull` and confirm the specs auto-completed. `closure:pending` specs
   correctly stay at Done.
-- Clean up with `aida session end <id>` for each finished session, and remove
+- Clean up with `aida session end <id> -y` for each finished session, and remove
   merged branches. Keep any branch that a stacked follow-up still builds on.
 
 ### 8. Post-merge live actions

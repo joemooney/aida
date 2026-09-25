@@ -28,6 +28,80 @@
 
 use std::path::{Path, PathBuf};
 
+/// Curated vendor packs (relative to the project root) that keep a
+/// [`DELIVERED_MANIFEST`] and may receive a [`REFRESH_DELIVERED_SKILLS`] entry
+/// on refresh.
+// trace:STORY-1475 | ai:claude
+pub const DELIVERY_TRACKED_PACKS: &[&str] = &[".codex/skills", ".antigravity/skills"];
+
+/// The ONLY skills refresh may create in an installed Codex/Antigravity pack.
+///
+/// Refresh's contract (TASK-1170) is edit-preserving: it never creates a file,
+/// because a missing skill looks the same as one the user deleted on purpose.
+/// These names are the exception, and only ONCE per pack: refresh creates one
+/// only when the pack's [`DELIVERED_MANIFEST`] has never recorded it. Every
+/// write (by `aida init` / `scaffold apply` or by refresh) and every refresh
+/// that finds the skill present records the name, so a delivered skill the
+/// user later deletes stays deleted. The general mechanism for all skills is
+/// tracked in TASK-1503; do not add names here without the manifest guarantee.
+// trace:STORY-1475 | ai:claude
+pub const REFRESH_DELIVERED_SKILLS: &[&str] = &["aida-orchestrate"];
+
+/// Pack-local file (one skill name per line) listing every
+/// [`REFRESH_DELIVERED_SKILLS`] entry AIDA has delivered into that pack.
+// trace:STORY-1475 | ai:claude
+pub const DELIVERED_MANIFEST: &str = ".aida-delivered";
+
+/// If `rel` is `<tracked pack>/<allow-listed skill>/SKILL.md`, return the
+/// pack directory and the skill name.
+// trace:STORY-1475 | ai:claude
+pub fn delivery_tracked_skill(rel: &Path) -> Option<(&'static str, String)> {
+    let pack = DELIVERY_TRACKED_PACKS
+        .iter()
+        .find(|p| rel.starts_with(Path::new(p)))?;
+    let rest = rel.strip_prefix(pack).ok()?;
+    let mut parts = rest.components();
+    let name = parts.next()?.as_os_str().to_str()?.to_string();
+    let file = parts.next()?.as_os_str().to_str()?;
+    if parts.next().is_some() || file != "SKILL.md" {
+        return None;
+    }
+    REFRESH_DELIVERED_SKILLS
+        .contains(&name.as_str())
+        .then_some((*pack, name))
+}
+
+/// Names recorded in `pack_dir`'s [`DELIVERED_MANIFEST`] (empty when absent).
+// trace:STORY-1475 | ai:claude
+pub fn delivered_skills(pack_dir: &Path) -> Vec<String> {
+    std::fs::read_to_string(pack_dir.join(DELIVERED_MANIFEST))
+        .map(|s| {
+            s.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Record `name` in `pack_dir`'s [`DELIVERED_MANIFEST`]. Idempotent.
+// trace:STORY-1475 | ai:claude
+pub fn record_delivered_skill(pack_dir: &Path, name: &str) -> std::io::Result<()> {
+    let mut names = delivered_skills(pack_dir);
+    if names.iter().any(|n| n == name) {
+        return Ok(());
+    }
+    names.push(name.to_string());
+    names.sort();
+    let body = format!(
+        "# Skills AIDA has delivered into this pack. A listed skill is never\n\
+         # re-created by `aida scaffold refresh`, so deleting it sticks.\n{}\n",
+        names.join("\n")
+    );
+    std::fs::write(pack_dir.join(DELIVERED_MANIFEST), body)
+}
+
 use anyhow::{Context, Result};
 
 use super::{checksum_for_stored_header, normalize_lf, symlink_target};

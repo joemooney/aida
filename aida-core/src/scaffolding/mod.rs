@@ -2743,6 +2743,19 @@ aida show <SPEC-ID>
                 message: e.to_string(),
             })?;
 
+            // Record a refresh-deliverable skill as delivered, so a later
+            // refresh never re-creates it after the user deletes it.
+            // trace:STORY-1475 | ai:claude
+            if let Some((pack, name)) = refresh::delivery_tracked_skill(&artifact.path) {
+                let pack_dir = resolve_artifact_path(&self.project_root, Path::new(pack));
+                refresh::record_delivered_skill(&pack_dir, &name).map_err(|e| {
+                    ScaffoldError::IoError {
+                        path: pack_dir.join(refresh::DELIVERED_MANIFEST),
+                        message: e.to_string(),
+                    }
+                })?;
+            }
+
             // Make git hooks and Claude Code hooks executable on Unix
             #[cfg(unix)]
             if artifact.path.starts_with(".git/hooks/")
@@ -3992,7 +4005,13 @@ mod tests {
         // The AIDA header must be inserted after the frontmatter, not before
         // it, so Codex sees `---` at byte 0 of SKILL.md.
         for entry in std::fs::read_dir(temp_dir.path().join(".codex/skills")).unwrap() {
-            let skill_path = entry.unwrap().path().join("SKILL.md");
+            let entry = entry.unwrap();
+            // The pack-local delivered-skills manifest is not a skill.
+            // trace:STORY-1475 | ai:claude
+            if !entry.path().is_dir() {
+                continue;
+            }
+            let skill_path = entry.path().join("SKILL.md");
             let content = std::fs::read_to_string(&skill_path).unwrap();
             assert!(
                 content.starts_with("---\nname:"),
@@ -4008,7 +4027,13 @@ mod tests {
         // TASK-457: .antigravity/skills/ is scaffolded alongside .codex/skills/.
         assert!(temp_dir.path().join(".antigravity/skills").exists());
         for entry in std::fs::read_dir(temp_dir.path().join(".antigravity/skills")).unwrap() {
-            let skill_path = entry.unwrap().path().join("SKILL.md");
+            let entry = entry.unwrap();
+            // The pack-local delivered-skills manifest is not a skill.
+            // trace:STORY-1475 | ai:claude
+            if !entry.path().is_dir() {
+                continue;
+            }
+            let skill_path = entry.path().join("SKILL.md");
             let content = std::fs::read_to_string(&skill_path).unwrap();
             assert!(
                 content.starts_with("---\nname:"),

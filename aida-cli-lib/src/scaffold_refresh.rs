@@ -14,7 +14,10 @@
 
 use std::path::{Path, PathBuf};
 
-use aida_core::scaffolding::refresh::{refresh_file, RefreshOutcome, RefreshReport};
+use aida_core::scaffolding::refresh::{
+    delivered_skills, delivery_tracked_skill, record_delivered_skill, refresh_file, RefreshOutcome,
+    RefreshReport,
+};
 use colored::Colorize;
 
 /// One pack's refresh result, labelled for the summary.
@@ -35,58 +38,55 @@ const PROJECT_PACKS: &[(&str, &str)] = &[
     (".antigravity/skills/", "Antigravity skills"),
 ];
 
-/// Curated vendor packs that may receive a skill from
-/// [`REFRESH_DELIVERED_SKILLS`] on refresh.
-// trace:STORY-1475 | ai:claude
-const ADDITIVE_PACKS: &[&str] = &[".codex/skills/", ".antigravity/skills/"];
-
-/// The ONLY skills refresh may create in an installed Codex/Antigravity pack.
+/// Deliver an allow-listed skill ([`aida_core::scaffolding::refresh::REFRESH_DELIVERED_SKILLS`]) into an
+/// installed Codex/Antigravity pack, at most once per pack.
 ///
-/// Refresh's contract (TASK-1170) is edit-preserving: it never creates a file,
-/// because a missing skill is indistinguishable from one the user deleted on
-/// purpose, and recreating it would undo that deletion. `aida-orchestrate` is
-/// the single exception: its Codex/Antigravity form first shipped after those
-/// packs existed, so no installed pack can have held and then deleted it. A
-/// general "deliver skills new since install, never resurrect deleted ones"
-/// mechanism (a delivered-skills manifest) is tracked in TASK-1503; until
-/// then, do not add names here without that same never-shipped-before proof.
-// trace:STORY-1475 | ai:claude
-const REFRESH_DELIVERED_SKILLS: &[&str] = &["aida-orchestrate"];
-
-/// Deliver `artifact` into an installed curated pack when it is an allow-listed
-/// skill ([`REFRESH_DELIVERED_SKILLS`]) whose directory does not exist yet.
-/// Returns `None` otherwise (the caller keeps the `Missing` outcome).
+/// Returns `None` (the caller keeps `Missing`) when the path is not an
+/// allow-listed skill, the pack is not installed, the pack's
+/// [`aida_core::scaffolding::refresh::DELIVERED_MANIFEST`] already records the name (it was delivered and the
+/// user deleted it), or the skill directory exists. Whenever the skill is
+/// found present or is written, the name is recorded.
 // trace:STORY-1475 | ai:claude
 fn install_new_pack_skill(
     project_root: &Path,
-    pack_prefix: &str,
     artifact_path: &Path,
     content: &str,
 ) -> Option<std::io::Result<()>> {
-    if !ADDITIVE_PACKS.contains(&pack_prefix) {
-        return None;
-    }
-    let pack_root = project_root.join(pack_prefix.trim_end_matches('/'));
-    if !pack_root.is_dir() {
+    let (pack, name) = delivery_tracked_skill(artifact_path)?;
+    let pack_dir = project_root.join(pack);
+    if !pack_dir.is_dir() || delivered_skills(&pack_dir).contains(&name) {
         return None;
     }
     let dest = project_root.join(artifact_path);
     let skill_dir = dest.parent()?;
-    let skill_name = skill_dir.file_name()?.to_str()?;
-    if !REFRESH_DELIVERED_SKILLS.contains(&skill_name) {
+    if skill_dir.symlink_metadata().is_ok() {
+        // Present in some form the user owns: remember it, never write it.
+        let _ = record_delivered_skill(&pack_dir, &name);
         return None;
     }
-    if skill_dir == pack_root || skill_dir.symlink_metadata().is_ok() {
-        return None;
+    Some(
+        std::fs::create_dir_all(skill_dir)
+            .and_then(|()| std::fs::write(&dest, content))
+            .and_then(|()| record_delivered_skill(&pack_dir, &name)),
+    )
+}
+
+/// A refresh that finds an allow-listed skill installed records it as
+/// delivered, so deleting it later sticks even for a pack written before the
+/// manifest existed.
+// trace:STORY-1475 | ai:claude
+fn note_present_delivered_skill(project_root: &Path, artifact_path: &Path) {
+    if let Some((pack, name)) = delivery_tracked_skill(artifact_path) {
+        let _ = record_delivered_skill(&project_root.join(pack), &name);
     }
-    Some(std::fs::create_dir_all(skill_dir).and_then(|()| std::fs::write(&dest, content)))
 }
 
 /// Refresh every installed agent pack under `project_root`. Only files that already exist are
 /// touched — installing a pack the project opted out of stays `aida init`'s
 /// job, so a Claude-only project never grows a `.codex/` tree from a refresh.
-/// The one exception: an installed Codex or Antigravity pack receives the
-/// allow-listed skills in [`REFRESH_DELIVERED_SKILLS`].
+/// The one exception: an installed Codex or Antigravity pack receives each
+/// skill in [`aida_core::scaffolding::refresh::REFRESH_DELIVERED_SKILLS`] once, tracked by the pack's
+/// [`aida_core::scaffolding::refresh::DELIVERED_MANIFEST`]; a delivered skill the user deletes stays deleted.
 ///
 /// `codex_prompts_dest` overrides the machine-global `~/.codex/prompts`
 /// location for the deprecation notice (mirrors `scaffold codex-prompts --dest`).
@@ -143,27 +143,26 @@ fn refresh_agent_packs_at(
         match refresh_file(&dest, &artifact.content, false) {
             // trace:STORY-1475 | ai:claude
             Ok(RefreshOutcome::Missing) => {
-                let outcome = match install_new_pack_skill(
-                    project_root,
-                    PROJECT_PACKS[idx].0,
-                    &artifact.path,
-                    &artifact.content,
-                ) {
-                    None => RefreshOutcome::Missing,
-                    Some(Ok(())) => RefreshOutcome::Installed,
-                    Some(Err(e)) => {
-                        eprintln!(
-                            "  {} could not install {}: {}",
-                            "Warning:".yellow(),
-                            artifact.path.display(),
-                            e
-                        );
-                        RefreshOutcome::Missing
-                    }
-                };
+                let outcome =
+                    match install_new_pack_skill(project_root, &artifact.path, &artifact.content) {
+                        None => RefreshOutcome::Missing,
+                        Some(Ok(())) => RefreshOutcome::Installed,
+                        Some(Err(e)) => {
+                            eprintln!(
+                                "  {} could not install {}: {}",
+                                "Warning:".yellow(),
+                                artifact.path.display(),
+                                e
+                            );
+                            RefreshOutcome::Missing
+                        }
+                    };
                 packs[idx].report.record(&artifact.path, outcome);
             }
-            Ok(outcome) => packs[idx].report.record(&artifact.path, outcome),
+            Ok(outcome) => {
+                note_present_delivered_skill(project_root, &artifact.path);
+                packs[idx].report.record(&artifact.path, outcome)
+            }
             Err(e) => eprintln!(
                 "  {} could not refresh {}: {}",
                 "Warning:".yellow(),
@@ -638,7 +637,7 @@ global = true
             let entries: Vec<_> = std::fs::read_dir(root.join(pack))
                 .unwrap()
                 .map(|e| e.unwrap().file_name().into_string().unwrap())
-                .filter(|n| n != "aida-req")
+                .filter(|n| n != "aida-req" && !n.starts_with('.'))
                 .collect();
             assert_eq!(entries, vec!["aida-orchestrate".to_string()], "{pack}");
         }
@@ -650,6 +649,61 @@ global = true
             again.iter().all(|p| p.report.installed.is_empty()),
             "a second refresh installs nothing new"
         );
+    }
+
+    /// Once delivered, a deleted aida-orchestrate stays deleted: the pack's
+    /// delivered manifest records it, so the next refresh does not recreate it.
+    // trace:STORY-1475 | ai:claude
+    #[test]
+    fn refresh_does_not_recreate_deleted_delivered_skill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".codex/skills")).unwrap();
+
+        refresh_agent_packs_at(root, None, None);
+        let skill_dir = root.join(".codex/skills/aida-orchestrate");
+        assert!(
+            skill_dir.join("SKILL.md").exists(),
+            "first refresh delivers"
+        );
+        assert!(
+            delivered_skills(&root.join(".codex/skills")).contains(&"aida-orchestrate".to_string())
+        );
+
+        std::fs::remove_dir_all(&skill_dir).unwrap();
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert!(
+            !skill_dir.exists(),
+            "a deleted delivered skill is not recreated"
+        );
+        assert!(packs.iter().all(|p| p.report.installed.is_empty()));
+    }
+
+    /// `aida init` / `scaffold apply` records the delivery too, so a user who
+    /// deletes the skill right after init is not overridden by refresh.
+    // trace:STORY-1475 | ai:claude
+    #[test]
+    fn apply_records_delivery_so_refresh_respects_deletion() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut scaffolder = aida_core::scaffolding::Scaffolder::new(
+            root.to_path_buf(),
+            aida_core::scaffolding::ScaffoldConfig::default(),
+        );
+        let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
+        scaffolder.apply(&preview).expect("apply");
+        for pack in [".codex/skills", ".antigravity/skills"] {
+            let dir = root.join(pack);
+            assert!(delivered_skills(&dir).contains(&"aida-orchestrate".to_string()));
+            assert!(dir
+                .join(aida_core::scaffolding::refresh::DELIVERED_MANIFEST)
+                .is_file());
+            std::fs::remove_dir_all(dir.join("aida-orchestrate")).unwrap();
+        }
+        refresh_agent_packs_at(root, None, None);
+        for pack in [".codex/skills", ".antigravity/skills"] {
+            assert!(!root.join(pack).join("aida-orchestrate").exists(), "{pack}");
+        }
     }
 
     /// A skill the user deleted from an installed vendor pack stays deleted:
