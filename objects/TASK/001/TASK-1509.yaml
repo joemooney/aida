@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:37:41.846102430Z
-modified_at: 2026-09-25T12:01:42.656312526Z
+modified_at: 2026-09-25T12:44:36.997183982Z
 req_type: Task
 comments:
 - id: 01a0d7ed-aab4-7302-bc92-8efe9c7d1d84
@@ -34,6 +34,20 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): accept the review. Rework: (1) doctor --since parses the time grammar first and falls back to a git ref, the same order as digest. Add a regression test with a hex-looking duration such as 500d, and fix the test comment. (2) Remove the check-removed-flags hit in time_bound_flags_tests.rs; build the string so the literal doesn''t appear. (3) The usage header must render sensibly for every form, e.g. ''since <resolved local time>'' or ''in the last N days'' only for durations. (4) Pin doctor''s default cutoff to 2026-06-01T00:00:00Z, so counts don''t depend on the machine''s timezone. (5) Use overflow-checked duration arithmetic in the shared parser: huge values are refused with a clear error, not a panic. Add a test.'
   created_at: 2026-09-25T12:01:42.656312526Z
   modified_at: 2026-09-25T12:01:42.656312526Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d898-a305-7450-91c5-a3f2d2c58170
+  author: joe
+  content: |-
+    Re-review: APPROVE — fresh independent review of claude/task-1509 @ 0869a05a50 (rebased on main). All five rework items are verified. Tests: time_bound 7/7, doctor 150, usage 59, digest 33, tail 94, calibration 49, history 57, all pass. verify-manual.py passes 4/4 against the branch debug binary.
+    (1) Doctor order is fixed. lib.rs:24968-24986 tries parse_since_arg_at first and only then runs git log. Live in this repo: --since 500d, 499d, 501d and 1000d now all give total 719; before this, 500d gave 565 as a SHA hit. The regression test a_duration_that_is_also_a_git_ref_resolves_as_a_duration uses a real 500d branch and a 2w tag in a hermetic scratch repo, and covers both doctor and digest.
+    (2) check-removed-flags output is byte-identical to origin/main's: the same 4 CHANGELOG graph --tree/--impact hits, rc=1 on both. The concat! split in time_bound_flags_tests.rs removes the new hit.
+    (3) Usage headers read sensibly for every form: 'top commands in the last 7d' and '... in the last 2w'; 'since 2026-09-11 05:42 -07:00' for '2 weeks ago'; 'since 2026-09-01 00:00 -07:00' for an ISO date; 'with errors since ...' for RFC3339; 'NOT used in the last 30d' for both --unused and 'usage unused'; 'slowest commands since ...' and 'recent events since ...'.
+    (4) The doctor cutoff is pinned to 2026-06-01T00:00:00Z (doctor_cmd.rs:2884). The default count is 406/313 under TZ=UTC, America/Denver and Pacific/Kiritimati alike.
+    (5) Duration arithmetic is checked: try_days etc. plus checked_sub_signed in queue_cmd.rs, and checked_mul in tail at headless_tail.rs:999. 'usage --since 99999999999999d' exits 1 with 'out of range', with no panic. digest, archive --older-than and tail give the same clear error, and no command retries the value as a ref.
+    Regression sweep: tail 30s, 30, 10min and 2hours all parse (unit test and live). digest v0.15.0 resolves as a tag; 7d, 500d and 2026-09-01 resolve as time; a bogus ref gets the widened error. approvals --since/--until and archive --older-than errors name the right flag. The classification guard still walks the clap tree.
+    NON-BLOCKING follow-ups: (a) doctor --since silently ignores a value it can't resolve. That covers both an out-of-range duration and garbage: lib.rs:24970 returns None, lib.rs:24433 then applies no cutoff, and the command exits 0 with no warning. The test exempts doctor at time_bound_flags_tests.rs:316. This fails safe, since it shows more findings rather than fewer, and it is pre-existing for garbage; before this change the out-of-range case panicked. Still, surface an error or warning in a follow-up. (b) Pre-existing on main, not new: the doctor and digest git-ref fallbacks pass the raw value where git can read it as an option (lib.rs:24976, digest.rs:135). I confirmed that '--since=--output=<path>' makes git write a file. It is CLI-only (not on MCP), but add --end-of-options. (c) Nit: the doctor help at cli.rs:11380 lists 'git ref/tag' first, but the grammar now wins. (d) Nit: tail's own overflow ('999999999999999999min') is reported through the generic 'expected a relative duration' message instead of 'out of range' (headless_tail.rs:956).
+  created_at: 2026-09-25T12:44:36.997183982Z
+  modified_at: 2026-09-25T12:44:36.997183982Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
