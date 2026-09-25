@@ -742,25 +742,36 @@ enabled = true
 // Pure finding assembly (PRIN-5: unknown evidence must never render as ok)
 // ---------------------------------------------------------------------------
 
+/// A cron-only status (a platform without systemd): the pre-TASK-1491 shape.
+fn cron_only(cron: CronDriverStatus) -> crate::schedule_driver::DriverStatus {
+    crate::schedule_driver::DriverStatus {
+        cron,
+        systemd: crate::schedule_driver::SystemdDriverStatus::Unsupported,
+    }
+}
+
 fn at(hour: u32) -> chrono::DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 9, 22, hour, 0, 0).unwrap()
 }
 
 #[test]
 fn no_finding_when_no_enabled_substrate_jobs() {
-    let findings = build_scheduler_driver_findings(0, CronDriverStatus::Missing, &[], at(12));
+    let findings =
+        build_scheduler_driver_findings(0, &cron_only(CronDriverStatus::Missing), &[], at(12));
     assert!(findings.is_empty());
 }
 
 #[test]
 fn no_finding_when_driver_installed_and_nothing_overdue() {
-    let findings = build_scheduler_driver_findings(2, CronDriverStatus::Installed, &[], at(12));
+    let findings =
+        build_scheduler_driver_findings(2, &cron_only(CronDriverStatus::Installed), &[], at(12));
     assert!(findings.is_empty());
 }
 
 #[test]
 fn finding_when_enabled_jobs_but_no_driver_installed() {
-    let findings = build_scheduler_driver_findings(2, CronDriverStatus::Missing, &[], at(12));
+    let findings =
+        build_scheduler_driver_findings(2, &cron_only(CronDriverStatus::Missing), &[], at(12));
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].category, "scheduler-driver");
     assert_eq!(findings[0].id, "scheduler-tick-not-installed");
@@ -773,7 +784,9 @@ fn finding_when_enabled_jobs_but_no_driver_installed() {
 fn finding_says_unknown_not_ok_when_driver_status_cannot_be_determined() {
     let findings = build_scheduler_driver_findings(
         1,
-        CronDriverStatus::Unknown("no crontab on Windows".to_string()),
+        &cron_only(CronDriverStatus::Unknown(
+            "no crontab on Windows".to_string(),
+        )),
         &[],
         at(12),
     );
@@ -795,8 +808,12 @@ fn finding_when_a_substrate_job_is_overdue_even_with_driver_installed() {
         interval: Duration::hours(6),
         last_run: at(12) - Duration::hours(20),
     }];
-    let findings =
-        build_scheduler_driver_findings(1, CronDriverStatus::Installed, &overdue, at(12));
+    let findings = build_scheduler_driver_findings(
+        1,
+        &cron_only(CronDriverStatus::Installed),
+        &overdue,
+        at(12),
+    );
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].id, "scheduler-job-overdue");
     assert!(findings[0].summary.contains("performance-guard"));
@@ -810,7 +827,8 @@ fn both_findings_can_fire_together() {
         interval: Duration::hours(6),
         last_run: at(12) - Duration::hours(20),
     }];
-    let findings = build_scheduler_driver_findings(1, CronDriverStatus::Missing, &overdue, at(12));
+    let findings =
+        build_scheduler_driver_findings(1, &cron_only(CronDriverStatus::Missing), &overdue, at(12));
     let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
     assert_eq!(
         ids,

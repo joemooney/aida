@@ -1,8 +1,9 @@
 //! The night shift (STORY-1218 slice 1): `aida shift tick`.
 //!
 //! A deterministic, LLM-free step that runs as the `night-shift` substrate job
-//! of `aida schedule tick` (the cron driver that is already installed). Each
-//! tick:
+//! of `aida schedule tick`, driven by whichever scheduler driver this repo
+//! has: the crontab entry or the systemd user timer (`aida shift install
+//! --systemd-user|--cron`, slice 2 — see `schedule_driver.rs`). Each tick:
 //!
 //! 1. does nothing unless THIS clone's local layer enables it
 //!    (`~/.aida/shift-local.toml`, keyed by the canonical repo path — never
@@ -26,8 +27,8 @@
 //! internal error (unreadable state, failed spawn, failed store write) exits
 //! non-zero.
 //!
-//! Out of this slice: re-drive of parked specs, the systemd driver, mailbox
-//! latency escalation and headless cold-boot.
+//! Not yet here: re-drive of parked specs, mailbox latency escalation and
+//! headless cold-boot (slice 3).
 //!
 //! Every side effect goes through [`ShiftExec`], so the tick core is tested
 //! with a recording mock: no test launches a drain.
@@ -1860,11 +1861,8 @@ fn status_command(
     let state = state_result.as_ref().cloned().unwrap_or_default();
     let report = run_tick(project_root, backend, true)?.unwrap_or_default();
     let now = Utc::now();
-    let driver = match crate::maintenance_schedule::cron_driver_installed(project_root) {
-        Some(true) => "cron (installed)",
-        Some(false) => "none installed (`aida schedule install-cron`)",
-        None => "unknown",
-    };
+    // trace:TASK-1491 | ai:claude
+    let driver = crate::schedule_driver::driver_status(project_root).label();
     let jobs = crate::maintenance_schedule::jobs_running_command(project_root, TICK_COMMAND);
     let job = if jobs.iter().any(|(_, enabled)| *enabled) {
         "registered"
@@ -2002,6 +2000,41 @@ fn enable_command(project_root: &Path, layer: &Path, op: &mut Operator<'_>) -> R
         println!("night shift: not enabled (declined).");
         return Ok(());
     }
+    apply_enable(project_root, layer, true)
+}
+
+/// `aida shift install --systemd-user|--cron`: enable + install that driver,
+/// behind ONE gate and ONE yes. Installing a scheduled unattended driver is
+/// the same human floor as enabling. The driver switch installs and
+/// verifies the new driver before removing this repo's other one (A13a).
+// trace:TASK-1491 | ai:claude
+pub(crate) fn install_command(
+    project_root: &Path,
+    layer: &Path,
+    driver: crate::schedule_driver::Driver,
+    op: &mut Operator<'_>,
+    host: &mut dyn crate::schedule_driver::DriverHost,
+) -> Result<Option<crate::schedule_driver::SwitchReport>> {
+    let key = repo_key(project_root);
+    let question = format!(
+        "Let the scheduler launch unattended drain waves for {key} while nobody is at the keyboard, \
+         and install a {} to run the check? [y/N] ",
+        driver.label()
+    );
+    if !operator_approves("install", &question, op)? {
+        println!("night shift: not enabled and no driver installed (declined).");
+        return Ok(None);
+    }
+    apply_enable(project_root, layer, false)?;
+    let inv = crate::schedule_driver::real_tick_invocation(project_root)?;
+    let report = crate::schedule_driver::switch_driver(host, &inv, driver)?;
+    crate::schedule_driver::print_switch_report(&report, Path::new(&inv.exe));
+    Ok(Some(report))
+}
+
+/// The writes behind an approved `enable` / `install`.
+fn apply_enable(project_root: &Path, layer: &Path, hint_driver: bool) -> Result<()> {
+    let key = repo_key(project_root);
     write_local_enabled(layer, &key, true)?;
     println!("night shift: on for {key}");
     println!(
@@ -2037,8 +2070,11 @@ fn enable_command(project_root: &Path, layer: &Path, op: &mut Operator<'_>) -> R
     {
         println!("  needed: an enabled `watchdog` job (`command = \"{WATCHDOG_COMMAND}\"`) — without its spend evidence the tick refuses");
     }
-    if crate::maintenance_schedule::cron_driver_installed(project_root) != Some(true) {
-        println!("  needed: a scheduler driver — `aida schedule install-cron`");
+    // trace:TASK-1491 | ai:claude
+    if hint_driver && !crate::schedule_driver::driver_status(project_root).any_installed() {
+        println!(
+            "  needed: a scheduler driver — `aida shift install --systemd-user` (Linux) or `--cron`"
+        );
     }
     println!("  preflight: `aida shift tick --dry-run`");
     Ok(())
@@ -2124,6 +2160,25 @@ pub(crate) fn handle_shift_command(
             disable_command(project_root, &layer)?
         }
         ShiftCommand::Resume => real_operator_gate(|op| resume_command(project_root, op))?,
+        // trace:TASK-1491 | ai:claude
+        ShiftCommand::Install { systemd_user, cron } => {
+            let driver = if *systemd_user && !*cron {
+                crate::schedule_driver::Driver::Systemd
+            } else {
+                crate::schedule_driver::Driver::Cron
+            };
+            let layer = local_layer_path().context("could not resolve the home directory")?;
+            real_operator_gate(|op| {
+                install_command(
+                    project_root,
+                    &layer,
+                    driver,
+                    op,
+                    &mut crate::schedule_driver::RealDriverHost,
+                )
+                .map(|_| ())
+            })?
+        }
     }
     Ok(())
 }
