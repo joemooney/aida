@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T04:44:59.122261809Z
-modified_at: 2026-09-24T08:12:29.326968501Z
+modified_at: 2026-09-25T01:15:59.318575579Z
 req_type: ChangeRequest
 tags:
 - cross-vendor
@@ -49,4 +49,10 @@ comments:
   content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Incident-driven. The plan is docs/plans/2026-09-22-seat-wake-cross-harness.md, which must be committed first. Scope: the Stop-hook waiter.'
   created_at: 2026-09-24T08:12:29.326968501Z
   modified_at: 2026-09-24T08:12:29.326968501Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d622-2dd6-72a3-971e-e0b9e264239b
+  author: joe
+  content: 'The plan file is now tracked on main (#2171, docs/plans/2026-09-22-seat-wake-cross-harness.md). Next step: advisor grooming and signoff of the plan, decomposing it into the child specs it proposes. Item 1 is a live multi-harness spike, which needs interactive TUIs.'
+  created_at: 2026-09-25T01:15:59.318575579Z
+  modified_at: 2026-09-25T01:15:59.318575579Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
