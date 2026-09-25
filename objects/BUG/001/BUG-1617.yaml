@@ -14,11 +14,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:14:53.498604363Z
-modified_at: 2026-09-25T08:50:14.040188804Z
+modified_at: 2026-09-25T09:09:45.301920683Z
 req_type: Bug
 tags:
 - history
 - ux
+comments:
+- id: 01a0d7d3-ecd5-71c3-a0ed-092f95dbde4f
+  author: joe
+  content: 'Review: APPROVE. The reviewer''s off-by-one was fixed in 5cf9795024 (fetch max_commits+1, capped iff len > max, then truncate), which I verified, and exact-cap and cap+1 tests were added. Queued for the history batch together with BUG-1616 and TASK-1502.'
+  created_at: 2026-09-25T09:09:45.301920683Z
+  modified_at: 2026-09-25T09:09:45.301920683Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
   branch: main
