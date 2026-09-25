@@ -380,6 +380,13 @@ struct State {
     // trace:TASK-1473 | ai:claude
     #[serde(default)]
     consecutive_blind: u64,
+    /// When the last run finished, and its verdict. Read by the night-shift
+    /// tick's budget-evidence guard: an old or blind run is not evidence.
+    // trace:STORY-1218 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_run_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_verdict: Option<String>,
 }
 
 fn load_state(path: Option<&Path>) -> State {
@@ -1137,10 +1144,49 @@ pub(crate) fn scan(
         tripped_ids.clone()
     };
     state.version = STATE_VERSION;
+    // trace:STORY-1218 | ai:claude
+    state.last_run_at = Some(now);
+    state.last_verdict = Some(verdict.to_string());
     save_state(sources.state_path.as_deref(), &state);
 
     coverage.verdict = verdict.into();
     (findings, coverage)
+}
+
+/// What the persisted watchdog aggregates say about spend, for the
+/// night-shift budget guards. Reads the state file only: no rescan, no
+/// transcript read, zero tokens.
+// trace:STORY-1218 | ai:claude
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BudgetEvidence {
+    /// Tokens in the trailing 24h across every session the watchdog saw.
+    pub(crate) spent_24h: u64,
+    /// When the watchdog last ran (`None` for a state file written before
+    /// this field existed).
+    pub(crate) last_run_at: Option<DateTime<Utc>>,
+    /// That run's verdict (`ok`, `tripped`, `degraded`, `unknown`).
+    pub(crate) last_verdict: Option<String>,
+}
+
+/// `None` when the state file is missing, unreadable or of another version.
+// trace:STORY-1218 | ai:claude
+pub(crate) fn budget_evidence(state_path: &Path, now: DateTime<Utc>) -> Option<BudgetEvidence> {
+    let body = fs::read_to_string(state_path).ok()?;
+    let state = serde_json::from_str::<State>(&body)
+        .ok()
+        .filter(|s| s.version == STATE_VERSION)?;
+    let day_start = minute_of(now - Duration::minutes(DAY_MINUTES));
+    let spent_24h = state
+        .sessions
+        .values()
+        .flat_map(|s| s.minutes.range(day_start..))
+        .map(|(_, b)| b.tokens)
+        .sum();
+    Some(BudgetEvidence {
+        spent_24h,
+        last_run_at: state.last_run_at,
+        last_verdict: state.last_verdict,
+    })
 }
 
 /// Text rendering of the coverage block, printed under the doctor report.
@@ -1817,5 +1863,36 @@ mod tests {
             assert_eq!(coverage.verdict, "unknown");
             assert!(findings.is_empty());
         }
+    }
+
+    /// STORY-1218: the night-shift budget guard reads spend and freshness
+    /// from the persisted aggregates alone.
+    // trace:STORY-1218 | ai:claude
+    #[test]
+    fn budget_evidence_reads_trailing_day_and_last_verdict() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(
+            &tmp.path().join("claude"),
+            "s.jsonl",
+            &ordinary_transcript("s", 2),
+        );
+        let src = sources(tmp.path());
+        let state_path = src.state_path.clone().unwrap();
+        assert_eq!(budget_evidence(&state_path, t0()), None, "no state yet");
+        let now = t0() + Duration::minutes(150);
+        let (_, cov) = scan(
+            "aida",
+            &src,
+            &WatchdogPolicy::default(),
+            now,
+            &HashMap::new(),
+        );
+        let ev = budget_evidence(&state_path, now).expect("state written");
+        assert!(ev.spent_24h > 0, "{ev:?}");
+        assert_eq!(ev.last_run_at, Some(now));
+        assert_eq!(ev.last_verdict.as_deref(), Some(cov.verdict.as_str()));
+        // Two days later the same aggregates fall out of the trailing day.
+        let later = budget_evidence(&state_path, now + Duration::days(2)).unwrap();
+        assert_eq!(later.spent_24h, 0);
     }
 }

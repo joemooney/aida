@@ -37,10 +37,11 @@ pub struct UsageEvent {
     pub scope: Option<String>,
     /// BUG-1600: which driver invoked `schedule tick` — `"hook"` (the
     /// per-turn hook, `--hook`), `"cron"` (the installed crontab entry,
-    /// `AIDA_SCHEDULE_INVOKER=cron`), or `"manual"` (neither — a human or
-    /// script ran it directly). `None` for every other command; older
-    /// records predate this field and also read back as `None`.
-    // trace:BUG-1600 | ai:claude
+    /// `AIDA_SCHEDULE_INVOKER=cron`), `"systemd"` (a systemd user timer,
+    /// `AIDA_SCHEDULE_INVOKER=systemd` — STORY-1218), or `"manual"` (neither
+    /// — a human or script ran it directly). `None` for every other command;
+    /// older records predate this field and also read back as `None`.
+    // trace:BUG-1600 trace:STORY-1218 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schedule_source: Option<String>,
 }
@@ -345,7 +346,8 @@ pub fn count_args(argv: &[String]) -> usize {
 /// `schedule_source`. `None` for anything that isn't `schedule tick` — the
 /// field only has meaning there. Checked in this order:
 ///   1. `AIDA_SCHEDULE_INVOKER` env var — set by the generated crontab entry
-///      (`"cron"`); the one explicit, forgeable-by-nobody-else signal.
+///      (`"cron"`) or a systemd user timer unit (`"systemd"`, STORY-1218);
+///      the one explicit, forgeable-by-nobody-else signal.
 ///   2. `--hook` on argv — the per-turn hook's own flag, already
 ///      self-identifying (see `MaintenanceScheduleCommand::Tick`).
 ///   3. neither — `"manual"` (an operator or script ran it directly).

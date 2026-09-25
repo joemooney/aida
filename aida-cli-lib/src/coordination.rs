@@ -857,6 +857,43 @@ pub(crate) fn acquire_lock_claim(
     )
 }
 
+/// STORY-1218 (A10): read-only view of the shared per-repo process lock for
+/// a launcher that must not start a drain while ANOTHER clone holds one.
+/// Reads the local `.aida-store` checkout only (no pull, no write) and applies
+/// the same [`decide_claim`] rules the acquire path uses: our own clone's
+/// claim is not foreign, a dead same-host pid or an aged-out heartbeat is not
+/// live. Returns the live foreign holder, if any.
+// trace:STORY-1218 | ai:claude
+pub(crate) fn live_foreign_lock_claim(
+    store_root: &Path,
+    kind: LockKind,
+    clone_path: &Path,
+    now: DateTime<Utc>,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
+) -> Option<Claim> {
+    let holder = read_claim(&lock_claim_path(store_root, kind))?;
+    let ours = Claim {
+        scope: kind.label().to_string(),
+        node_id: String::new(),
+        clone_path: canonical_clone_path(clone_path),
+        host: hostname(),
+        pid: std::process::id(),
+        pid_start_time: None,
+        agent: String::new(),
+        started_at: now.to_rfc3339(),
+        heartbeat_at: now.to_rfc3339(),
+        ttl_secs: 0,
+        process_backed: true,
+        review_verb: false,
+        authorized_by: None,
+    };
+    let our_host = ours.host.clone();
+    match decide_claim(Some(&holder), &ours, now, &our_host, is_alive) {
+        ClaimDecision::Refuse { holder } => Some(*holder),
+        ClaimDecision::Acquire | ClaimDecision::Reclaim { .. } => None,
+    }
+}
+
 /// Compose the refusal message naming the holder of a process lock.
 fn lock_refusal_message(kind: LockKind, holder: &Claim, path: &Path) -> String {
     let age = DateTime::parse_from_rfc3339(&holder.started_at)

@@ -1012,6 +1012,27 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
     Ok(())
 }
 
+/// STORY-1218: the night-shift tick's reap — the same scan and the same
+/// per-lease reap as `aida session reap --yes`, returning the reaped count and
+/// printing nothing. A live process is never touched (the predicate requires
+/// an exited process); the worktree-gc predicate is unchanged.
+// trace:STORY-1218 | ai:claude
+pub(crate) fn reap_quiet(project_root: &std::path::Path) -> usize {
+    let _ = agent_registry::gc_dead_agents(project_root, false, None);
+    let report = scan_reapable(project_root);
+    if report.reapable.is_empty() {
+        return 0;
+    }
+    let leases = list_leases(project_root);
+    report
+        .reapable
+        .iter()
+        .filter_map(|row| leases.iter().find(|l| l.id == row.session))
+        .map(|lease| reap_one(project_root, lease))
+        .filter(|outcome| outcome.starts_with("reaped"))
+        .count()
+}
+
 // The reapable-predicate matrix + the process-exited derivation.
 // trace:TASK-1177 | ai:claude
 #[cfg(test)]
