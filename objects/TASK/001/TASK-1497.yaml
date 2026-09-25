@@ -1,0 +1,29 @@
+id: 01a0d668-3ada-7450-8713-fe4e422276b2
+spec_id: TASK-1497
+agreed_id: TASK-1497
+title: 'Shift tick: persist the wave pid before emitting the event, and count a pid-less wave once its drain lock is observed'
+description: |-
+  Follow-up from the STORY-1218 slice 1 re-review. A scheduler kill landing between spawn_wave and the post-pid state save leaves a running wave that is not counted toward waves-per-day, the per-spec cap, or the no-progress breaker. The drain lock still prevents concurrency.
+
+  ## Acceptance
+  - State is saved immediately after the pid is recorded, before the ShiftTick event is emitted.
+  - A pending intent with no pid whose drain lock is observed live is counted as launched.
+  - A test covers the kill-after-spawn window being counted.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T02:32:30.170344847Z
+modified_at: 2026-09-25T02:32:30.170344847Z
+req_type: Task
+tags:
+- papercut
+- shift
+filed_at:
+  code_sha: 010221fdf3c730a0d802d04a26b267e1a068d79a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c7d35baa35
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
