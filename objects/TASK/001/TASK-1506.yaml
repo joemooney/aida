@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T07:22:26.359799020Z
-modified_at: 2026-09-25T10:24:15.941289634Z
+modified_at: 2026-09-25T10:24:39.312820487Z
 req_type: Task
 tags:
 - concurrency
@@ -52,6 +52,12 @@ comments:
   content: 'Strict review round 3: APPROVE — reviewed ed05637574 (rework d8afaa46d5..ed05637574) plus the whole branch diff against origin/main. (B) is correct: edit_rebase.rs:118 refuses when status_set && fresh != read && fresh != planned. It runs before the merge, and the same-value allowance is kept. CLI wiring at git_backend_cmd.rs:6058 uses the shadowed status (5253), so the --superseded-by implied status is covered too. Status only changes through that branch (5780/5857). It also closes the TASK-47 reopen race, where a concurrent move to Completed plus --status in_progress now refuses. (S) is correct: write_edit_atomically runs gate(cur) first inside the locked closure (edit_rebase.rs:290-294). The production closure at git_backend_cmd.rs:6063-6065 is the real enforce_protected_spec_gate(cur.tags.iter(), *force), so --force still bypasses. The gate does only plain file reads (TeamRoster::load, TeamPermissions::load, orchestrator::detect), with no store-lock re-entry. The read-copy gate at 5380 is kept. A refusal returns before *cur is mutated. git_backend.rs:1031 short-circuits on an unchanged serialization, so nothing is staged or committed. EditMerge {..opts} still derives leaving_needs_attention from leave (edit_rebase.rs:284-287). The supervisor path does not use EditMerge, so it is unaffected. Earlier fixes are intact: the --tags replace refusal (111), strict NeedsAttention exit (96-108) and ATOMIC_FIELDS (48). Mutation tests: switching off the status_set check fails probe_same_value_status_edit_refuses_a_concurrent_status_move and status_set_allows_...; switching off the fresh-copy gate fails probe_protected_tag_added_concurrently_blocks_the_edit; switching off the tags, leave-NA and ATOMIC_FIELDS checks each fails at least one test. Tests: edit_rebase 13/13, supervisor 11/11, bug_1611 6/6, requeue 32/32, protected 9/9, bug_1252_structural_tags 2/2, tests/test_distributed.sh all passed, fmt clean. Non-blocking: (1) the CLI wiring (status_set: status.is_some(), and the gate closure) still has no test that covers it. Unit tests call write_edit_atomically directly, so a regression that sets it to false/no-op in git_backend_cmd.rs would pass CI. (2) protected_gate_message (edit_rebase.rs:257) says ''is now protected'' even when the fresh gate fails because the caller''s roster role changed. The wording is slightly misleading, but the refusal is correct. (3) clippy nonminimal_bool at edit_rebase.rs:217, a warning only; CI denies only correctness. (4) The earlier notes still stand: the rollup refresh after a refused edit (BUG-1612), list-removal loss, and cosmetic events on a same-value concurrent status.'
   created_at: 2026-09-25T10:24:15.941289634Z
   modified_at: 2026-09-25T10:24:15.941289634Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d818-7f90-7373-b429-2c6ac6642f31
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): round 3 approved. It goes into the next integration batch, together with TASK-1491 if that clears. Accepted as-is, not filed: the missing CLI-wiring test, the gate-message wording and the clippy nonminimal_bool warning. All are low-risk, and the revert tests prove the logic.'
+  created_at: 2026-09-25T10:24:39.312820487Z
+  modified_at: 2026-09-25T10:24:39.312820487Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 84aa1380788e41afce75bef08b0b983f2151da66
