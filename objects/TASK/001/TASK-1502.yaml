@@ -3,12 +3,12 @@ spec_id: TASK-1502
 agreed_id: TASK-1502
 title: Support relative durations for aida history time bounds
 description: Allow aida history --since and --until to accept compact relative durations such as 5h and 7d, interpreted relative to the current time. For example, --since 7d --until 5h selects history from seven days ago through five hours ago. Preserve existing absolute date/time forms, validate units and ordering, and show the resolved time window in verbose or human-readable output so the interpretation is unambiguous.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:58:16.548025058Z
-modified_at: 2026-09-25T10:15:40.698878203Z
+modified_at: 2026-09-25T10:50:03.328834214Z
 req_type: Task
 tags:
 - cli
@@ -62,6 +62,20 @@ comments:
   created_at: 2026-09-25T10:15:40.698878203Z
   modified_at: 2026-09-25T10:15:40.698878203Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d82f-c0af-7571-a569-46102ae30f56
+  author: aida-auto-bump
+  timestamp: 2026-09-25T10:50:03.311571958Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d82f-c0c0-73b2-aa24-5d72a46e0af1
+  timestamp: 2026-09-25T10:50:03.328832124Z
+  agent: implementer
+  commit_sha: 021f4aa48e6433031b99158fe32315a21c3ea631
+  summary: Completed via merge 021f4aa4
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
   branch: main
@@ -69,3 +83,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: cb07ece7f0
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T10:50:03.311564584Z
+  completion_sha: 021f4aa48e6433031b99158fe32315a21c3ea631
