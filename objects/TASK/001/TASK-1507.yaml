@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T08:15:16.919901362Z
+modified_at: 2026-09-25T08:15:34.952917194Z
 req_type: Task
 tags:
 - cache
@@ -26,6 +26,10 @@ relationships:
 - rel_type: BlockedBy
   target_id: 01a0d7a1-8b46-7c81-acf2-46978c1f9114
   created_at: 2026-09-25T08:15:16.919895124Z
+  created_by: joe
+- rel_type: Parent
+  target_id: 01a0d742-f5f4-7a03-b805-b2e5ed5906b7
+  created_at: 2026-09-25T08:15:34.952914605Z
   created_by: joe
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
