@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:37:41.846102430Z
-modified_at: 2026-09-25T12:01:19.793406621Z
+modified_at: 2026-09-25T12:01:42.656312526Z
 req_type: Task
 comments:
 - id: 01a0d7ed-aab4-7302-bc92-8efe9c7d1d84
@@ -28,6 +28,12 @@ comments:
     NITS: the guard (every_time_bound_flag_is_classified) is real for flags named since/until/older-than/unused/duration; I checked that a new such flag changes 'found' and fails the assert_eq. It is blind to other names (--before/--after/--window/--max-age), and the flag-to-parser mapping is hand-maintained: approvals and archive map to 'shared', not the parse_time_bound_at they call, contrary to the :9 doc claim. Clock and zone injection is hermetic (fixed now, FixedOffset). The git-fallback test uses Utc::now() and the ambient global git config (commit.gpgsign would break it). Pre-existing and not new here: 'usage --since 99999999999999d' panics in chrono TimeDelta::days, which the shared parser now exposes on more flags; worth a checked_ follow-up. Value name Nd->WINDOW: verify-manual checks flags, not metavars (passes), and check-removed-flags matches literal flag spellings, so the rename breaks neither.
   created_at: 2026-09-25T12:01:19.793406621Z
   modified_at: 2026-09-25T12:01:19.793406621Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d871-5b00-70c0-bd99-a4ee9afc6447
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept the review. Rework: (1) doctor --since parses the time grammar first and falls back to a git ref, the same order as digest. Add a regression test with a hex-looking duration such as 500d, and fix the test comment. (2) Remove the check-removed-flags hit in time_bound_flags_tests.rs; build the string so the literal doesn''t appear. (3) The usage header must render sensibly for every form, e.g. ''since <resolved local time>'' or ''in the last N days'' only for durations. (4) Pin doctor''s default cutoff to 2026-06-01T00:00:00Z, so counts don''t depend on the machine''s timezone. (5) Use overflow-checked duration arithmetic in the shared parser: huge values are refused with a clear error, not a panic. Add a test.'
+  created_at: 2026-09-25T12:01:42.656312526Z
+  modified_at: 2026-09-25T12:01:42.656312526Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
