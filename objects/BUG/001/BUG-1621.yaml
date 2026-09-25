@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:32:48.018202563Z
-modified_at: 2026-09-25T16:34:25.974290550Z
+modified_at: 2026-09-25T16:48:59.820779443Z
 req_type: Bug
 comments:
 - id: 01a0d88d-fe97-73f2-a6ea-ccf801b6f1f3
@@ -28,6 +28,34 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): accept the design. Q1: the manual ''aida supervise redrive --execute'' keeps --force-claim, since a human runs it at a TTY; no bug filed. Q2: redrive=true alone is enough, because the watch path only re-queues and nothing moves without a drain; no shift-enabled requirement. Q3: accept that watch --execute no longer launches, but the strict review must check every consumer of ''watch --json'' (the aida-oversee skill, scripts, MCP) for the shape change, and fix or version it.'
   created_at: 2026-09-25T16:34:25.974290550Z
   modified_at: 2026-09-25T16:34:25.974290550Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d978-5fac-7870-8a8e-a105f05efb31
+  author: joe
+  content: |-
+    Strict review: REQUEST CHANGES — reviewed bd8f2e5971. The design is sound and the code path is right: watch --execute now re-drives only through the tick's own redrive_step, behind the local-only opt-in, with no launch and no --force-claim. Two things block approval, both small.
+
+    BLOCKERS
+    B1 (breaker floor weaker than the tick's, and it fails open): the tick runs settle_last_wave (shift.rs:1862) BEFORE redrive_step, so the second zero-progress wave trips the breaker and the same tick holds re-drive. The watch pass (run_redrive_pass_with, shift.rs:2418) reads the persisted state raw. last_wave_is_alive (shift.rs:2149) is false for a wave that is dead but not yet settled, so redrive-lock-free passes, and state.breaker is still None until the next tick settles it. In the window between that wave's exit and the next tick, with consecutive_zero_progress=1, watch --execute re-queues (and spends attempts on) parks that the tick itself would hold. Fix: in the watch path, treat a launched wave with outcome None as held (for example 'a shift wave awaits settlement by the next check'), or run settle_last_wave on a scratch copy of the state first. Add a test.
+    B2 (the watch-path wiring is not proven; the acceptance says 'a test proves each floor holds on the watch path'): I ran mutations in a throwaway worktree with the bug_1621 filter. Three wiring mutants SURVIVE (12/12 pass): (a) last_wave_is_alive(&state) -> false at shift.rs:2478, so the wave-live floor is dropped on the watch path; (b) foreign_claim -> None at shift.rs:2474-2477, so the foreign-drain floor is dropped; (c) run_redrive_pass(project_root, backend, !execute) -> false at supervise_cmd.rs:491, so plain 'aida supervise watch', the documented dry-run that the oversee skill runs every pass, would re-queue for real. The floor tests at bug_1621_watch_redrive_tests.rs:261 set Probes fields by hand, and the only check on run_watch_pass is a string search (:450). No test in the crate calls run_watch_pass. Fix: extend the real-store test (:612) with a live wave in the state file (a pid of this test process with its start time) and a live foreign drain claim in the tempdir .aida-store. Also add a behavioural dry-run test through the watch pass (or a small seam that takes execute), showing a dry run leaves the park NeedsAttention with nothing queued.
+    Killed mutants (the tests do catch these): keystone floor off (1 FAIL), breaker guard forced to pass (2 FAIL), drain lock forced Free on the watch path (1 FAIL).
+
+    MINOR
+    m1 cli.rs:2625: the watch help still says 'fire the redrive + nudge reflexes' and does not mention the per-clone redrive opt-in.
+    m2 supervise_cmd.rs:122 (pre-existing): with --json --execute, the nudge prints plain text to stdout after the JSON line, so stdout is not pure JSON.
+    m3: in a held pass, redrive_plan still lists 'would-re-drive' actions. A JSON reader has to check the redrive line, or the guards, to know nothing will happen.
+    m4: the pass takes shift.lock whenever redrive=true and --execute is set. A tick that fires during a pass exits quietly as contended and skips that whole tick (reap, mail and launch as well as re-drive). The pass is short, so this is low risk; worth a doc line for small --interval values.
+
+    VERIFIED OK
+    1. Floors: every floor is the tick's own code: the evidence, lock-free (this clone's drain lock, a foreign claim, a live wave), breaker, state and deadline guards, plus the plan_redrives floors (drain_mode_only, exclude_keystone, merge-held, attention_reason and needs-human). The off path returns before probing anything. The manual handle_supervise_command (floors: None) is gone from run_watch_pass. No --force-claim remains on this path: apply_requeue goes to queue_add and nothing is launched. Only the manual 'supervise redrive' launch (supervisor.rs:760) still uses it, which the proxy accepted.
+    2. Opt-in: redrive is read only from local_repo in build_config. A committed [shift] redrive is ignored and flagged. No env var or flag enables it (AIDA_HOME only relocates the local layer, which is the same trust as A1). Tested for committed-ignored and default-off.
+    3. shift.lock: taken with try_lock (never blocks) after the opt-in check, and only on a live pass. The probes and the history are read after the lock is taken, so a tick and a watch pass cannot both re-drive from the same view. A contended lock re-drives nothing. There is no nested lock, so no deadlock: the order is shift.lock then the store lock, the same as the tick. A race with the manual verb can only over-count, because of the status-checked write.
+    4. Attempt first: RealExec::requeue -> apply_requeue (emit_recorded before return_to_flight). HELD_UNRECORDED holds the rest of the pass. Tested with a mock and on a real store (SpecReDriven comes before SpecRequeued; an events.jsonl that is a directory holds the pass).
+    5. watch --json: before this branch, a --json pass printed the WatchReport line and then a pretty-printed decision array from the supervisor, as two separate JSON documents. Now it prints one line with the new fields redrive, redriven, reclassified and redrive_plan. I checked every consumer. The oversee skill, its template and command, and the .claude mirrors (symlinks) never use --json. No MCP tool, script, CI job, test (story_1096 does not call run_watch_pass) or doc parses the output, and docs/cli-format-json-audit.md lists it as COULD NOT VERIFY. Nothing still parses the old decision list.
+    6. Template: aida-core/templates/skills/aida-oversee.md is the master. .claude/skills/aida-oversee/SKILL.md is a symlink to it. make check-templates reports 'All templates OK!', and make sync-templates produces no diff.
+    7. Tests (CARGO_BUILD_JOBS=3, timeout 900, one cargo at a time): bug_1621 12, supervis 68, watch 68, shift 65, requeue 38, all pass.
+    8. Isolation: I ran the bug_1621 tests under strace with a fake empty HOME. Nothing was created in HOME, nothing was written outside /tmp, and the only commands run were git rev-parse and git status. There was no crontab or systemctl call and no ~/.aida access. The config is injected, and the stores are tempdir stores.
+  created_at: 2026-09-25T16:48:59.820779443Z
+  modified_at: 2026-09-25T16:48:59.820779443Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
