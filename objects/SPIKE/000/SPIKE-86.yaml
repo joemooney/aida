@@ -45,12 +45,12 @@ description: |-
   METHOD AND CONSTRAINT: dated competitive-analysis snapshots and dated plans stay FROZEN. Append a new dated read; do not rewrite history. Source the evidence from the spec corpus and the code, not from the existing positioning docs, which are the thing under review.
 
   NON-GOAL: rewriting README/OVERVIEW/CLAUDE.md in this spike. Reach the decision first; the doc edits are separate filings against it.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:38:32.393127411Z
-modified_at: 2026-09-24T15:03:47.658406562Z
+modified_at: 2026-09-25T01:10:55.097714880Z
 req_type: Spike
 tags:
 - architecture
