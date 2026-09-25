@@ -67,7 +67,8 @@ while true; do
   #    piped output otherwise auto-switches to TOON, whose data rows are
   #    indented (`  TASK-1,…`) and never matched a start-of-line id — a
   #    non-empty queue read as empty. Match an (optionally indented) spec id.
-  if ! aida queue list --format toon 2>/dev/null | grep -qE '^[[:space:]]*[A-Z]+-[0-9]+,'; then
+  queue_out="$(aida queue list --format toon 2>/dev/null)"
+  if ! grep -qE '^[[:space:]]*[A-Z]+-[0-9]+,' <<<"$queue_out"; then
     log "queue dry — idling ${IDLE}s"
     sleep "$IDLE"
     continue

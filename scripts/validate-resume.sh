@@ -31,7 +31,8 @@ if ! command -v "$AIDA" >/dev/null 2>&1 && [ ! -x "$AIDA" ]; then
   echo "✗ '$AIDA' not found — set AIDA=path/to/aida" >&2
   exit 1
 fi
-if ! "$AIDA" queue work --help 2>&1 | grep -q -- '--resume-drain'; then
+help_out="$("$AIDA" queue work --help 2>&1)"
+if ! grep -q -- '--resume-drain' <<<"$help_out"; then
   echo "✗ this build has no --resume-drain — build from the STORY-492 branch" >&2
   exit 1
 fi
