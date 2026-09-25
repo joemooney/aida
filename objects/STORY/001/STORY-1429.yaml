@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:50:20.038947417Z
-modified_at: 2026-09-25T01:16:40.657367499Z
+modified_at: 2026-09-25T01:44:23.155815220Z
 req_type: Story
 tags:
 - aida:queue
@@ -38,6 +38,10 @@ relationships:
 - rel_type: References
   target_id: 01a0c001-1e2d-76b2-95a1-a46f86e24287
   created_at: 2026-09-21T19:10:57.180499073Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0d63b-e2e0-7313-8a11-17f048405bdc
+  created_at: 2026-09-25T01:44:23.155808714Z
   created_by: joe
 comments:
 - id: 01a0cced-ffd1-7990-9b38-030a957f57fe
