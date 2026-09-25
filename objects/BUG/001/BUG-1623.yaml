@@ -3,12 +3,12 @@ spec_id: BUG-1623
 agreed_id: BUG-1623
 title: Notify timeout path follow-ups after TASK-1492 (error-path cleanup, stdin bound, macOS waitid, docs)
 description: 'Non-blocking items from the TASK-1492 final review: m1 notify.rs ~733: if exited_unreaped errors, still kill the group and reap. m2 ~704: bound the stdin write, or write it inside the timeout loop. m3: fix the comment about the reader thread. m4: check waitid behaviour on macOS, or restrict the path to Linux. m5: add a test for apply_requeue_with queuing approved specs before a store error. m6: document in docs/autonomous-drain.md that notify background children are killed on exit.'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T15:30:53.823179350Z
-modified_at: 2026-09-25T15:30:53.823179350Z
+modified_at: 2026-09-25T15:31:07.947951463Z
 req_type: Bug
 filed_at:
   code_sha: b821736ce75455f3858816002777b451fd4aaf03
