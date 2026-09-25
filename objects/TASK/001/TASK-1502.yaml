@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:58:16.548025058Z
-modified_at: 2026-09-25T08:03:01.054768669Z
+modified_at: 2026-09-25T08:03:02.729860174Z
 req_type: Task
 tags:
 - cli
@@ -21,6 +21,12 @@ comments:
   content: 'Broaden scope: audit every command exposing temporal --since/--until bounds and apply the same relative-duration grammar consistently, rather than implementing history-only parsing. Existing non-temporal --until uses (for example, defer revisit triggers) are not time bounds and must retain their current semantics. Prefer a shared parser/resolution path and document supported units, absolute forms, and ordering.'
   created_at: 2026-09-25T05:01:10.144027597Z
   modified_at: 2026-09-25T05:01:10.144027597Z
+- id: 01a0d796-d9c9-7bf0-872e-675b5de80285
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved and queued (sign-off). Concrete, bounded and testable.'
+  created_at: 2026-09-25T08:03:02.729860174Z
+  modified_at: 2026-09-25T08:03:02.729860174Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
   branch: main
