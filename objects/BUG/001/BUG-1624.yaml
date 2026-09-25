@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T15:52:33.233412803Z
-modified_at: 2026-09-25T15:52:38.178862941Z
+modified_at: 2026-09-25T15:52:41.400414755Z
 req_type: Bug
+comments:
+- id: 01a0d944-d2b8-7893-b058-c72cdf4cce92
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved at high priority because it is an injection class. Dispatch it after BUG-1622 lands, and give it a strict security review.'
+  created_at: 2026-09-25T15:52:41.400414755Z
+  modified_at: 2026-09-25T15:52:41.400414755Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b821736ce75455f3858816002777b451fd4aaf03
   branch: main
