@@ -1362,9 +1362,15 @@ What one tick does, in order:
 3. Settles the previous shift wave: when its pid is dead, a `QueueDrained`
    after the launch with shipped + shelved > 0 is progress; anything else,
    including no `QueueDrained` at all, is zero progress.
-4. Evaluates every guard (see `aida shift tick --dry-run`); any failure means
+   <!-- trace:TASK-1492 | ai:claude -->
+   A breaker trip is also sent to the operator through `aida notify` (rule
+   `shift-breaker`).
+4. **Re-drive (opt-in, off by default).** Only when this clone's local layer
+   sets `redrive = true` (see "Re-drive" below). Re-queued specs go to the
+   head of the queue and join this tick's wave.
+5. Evaluates every guard (see `aida shift tick --dry-run`); any failure means
    no launch and exit 0.
-5. Records the launch intent in `.aida/shift-state.json`, tags the next
+6. Records the launch intent in `.aida/shift-state.json`, tags the next
    explicit-`drain` queue slice `batch:shift-YYYYMMDD-HHMM` (replacing any
    older shift tag on those specs), spawns one detached
    `aida queue work --batch … --auto-complete --no-human=both --escalate-blocks
@@ -1372,8 +1378,81 @@ What one tick does, in order:
    --max-tokens T --max-runtime 3h` in its own session with its output in
    `.aida/shift-wave-<stamp>.log`, and records the pid. A tick killed between
    tagging and spawning leaves an intent the next tick reuses.
-6. Emits one `ShiftTick` event only when it acted or its refusing-guard set
-   changed. It wakes a supervisor only for a breaker trip or an escalation.
+7. **Mail latency.** For each known mail recipient, the age of the oldest
+   unread message (the same local + canonical mailbox read and read-watermarks
+   as the `mail.oldest_unread_age` schedule predicate). A recipient is known
+   when it is a seat or role in the agent registry, a team roster member
+   (`registry/team.toml`) or an active work session's owner or role. Mail to
+   any other address (a typo, a stray number, a file name) never pages; the
+   tick only counts it as ignored. Above `[shift] mail_latency`
+   (default `30m`) the operator is notified through `aida notify` (rule
+   `mail-latency`), once per episode per recipient; the episode re-arms when
+   that recipient's oldest unread age drops back under the threshold. One
+   notification names at most five recipients, then "+N more". It
+   never writes to the mailbox or to a chat. `[notify]`'s own `min_interval`
+   and quiet hours still apply: an episode opens only when the message was
+   sent or queued for the end of quiet hours, so a message `min_interval`
+   dropped is retried on a later check. With no `[notify] command` configured
+   nothing is sent and no episode is opened. The notify command may run for
+   at most 15s, less when the tick deadline is closer; a command still
+   running then is killed and logged to `.aida/notify.log`. Skipped past the
+   tick deadline.
+8. Emits one `ShiftTick` event only when it acted or its refusing-guard set
+   changed; it names re-queued specs (`redriven`), capped parks
+   (`reclassified`), mail escalations (`mail_escalated`) and a re-drive held
+   because an attempt could not be recorded (`redrive_held`). It wakes a
+   supervisor only for a breaker trip, an escalation or a `redrive_held` (a capped park also
+   emits its own `ReclassifiedNeedsHuman`, which does wake one).
+
+### Re-drive (opt-in)
+<!-- trace:TASK-1492 | ai:claude -->
+
+The tick can re-drive transient parks itself, the same decision `aida
+supervise` makes, but it is **off by default** (ADR-26): enabling the shift
+does not enable it, and `aida shift tick --dry-run` prints `re-drive: off
+(ADR-26 default)`. Turn it on for this clone only after watching real parks,
+by adding `redrive = true` next to `enabled = true` under this repo's
+`[repo."<path>"]` table in `~/.aida/shift-local.toml`. A `redrive` key in the
+committed `.aida/config.toml` is ignored.
+
+When on, and only while no drain is running (no live lock in this clone, no
+other clone draining, no shift wave still alive) and the no-progress breaker
+is closed:
+
+- It considers only parks whose spec has an explicit `execution_mode =
+  drain`, is not keystone-class and has no live merge hold. A park with an
+  attention reason, a `needs-human` tag, or a non-transient failure
+  (`ci-red`, `request-changes`, …) is left for a human.
+- It keeps the ADR-26 cap: at most 3 supervised re-drives per spec, waiting
+  2m / 8m / 30m before each, counted from the `SpecReDriven` events in
+  `.aida/events.jsonl` **and** its rotated archive `.aida/events.jsonl.1`,
+  so a rotation never resets the count. At most `[shift]
+  max_redrives_per_tick` (default 3) per tick.
+- Limits of that count: the event stream is **per clone** (it is not in the
+  substrate), so two clones that both turn re-drive on each count their own
+  attempts, and a spec can be re-driven up to 3 times from each. Only one
+  archive generation is kept (`events.jsonl` + `.1`), so a park that stays
+  parked through two rotations of the stream loses its older attempts. Turn
+  re-drive on in one clone per repository.
+- The attempt is recorded first: `SpecReDriven` is appended **before** the
+  spec leaves `NeedsAttention`. If that append fails (full disk, a read-only
+  or replaced `events.jsonl`), the spec stays parked, nothing further is
+  re-queued that tick, and the tick reports `held: attempt-record` with the
+  reason (also in the `ShiftTick` event's `redrive_held`, which wakes a
+  supervisor). If the record lands but the spec moves before the status
+  change, the attempt still counts: the cap is reached sooner, never later.
+- A re-driven spec goes back to Approved (`SpecReDriven`, `SpecRequeued`)
+  and is put at the **head** of the implementer queue, oldest-parked first,
+  so the wave actually sees it. It is never force-claimed; a spec that cannot
+  be claimed without force parks again for a human.
+- A spec at the cap is tagged `needs-human`, `ReclassifiedNeedsHuman` is
+  emitted and a cap finding is filed, so it never sits silently parked.
+- `redrive-evidence` fails closed — no re-drive, no reclassification that
+  tick — when `AIDA_EVENTS_DISABLE` is set in the tick's environment or the
+  event stream cannot be read. A held re-drive never blocks the wave launch.
+
+`aida shift tick --dry-run` lists every transient park with its attempt count
+and what the tick would do with it.
 
 Safety floors that hold in every configuration:
 
@@ -1424,6 +1503,9 @@ few shift nights.
   says "both installed" if there are two.
 - [ ] **Preflight:** `aida shift tick --dry-run`. Read every `FAIL` line, the
   exact wave command and the specs it would include. It writes nothing.
+- [ ] Optional: configure `[notify] command` (`aida notify test`) so mail
+  latency and a breaker trip reach you. Optional, and only after watching real
+  parks: `redrive = true` in the local layer (see "Re-drive").
 - [ ] In the morning: `aida shift status`, `aida history events --kind
   shift-tick`, then triage shelves and escalations as usual. The tick never
   merges, never clears a merge hold and never approves work — held PRs wait
@@ -1431,8 +1513,7 @@ few shift nights.
 - [ ] `aida shift disable` to stop. A wave already running finishes its
   current spec; stop it the usual way if it must end now.
 
-Not in this cut: re-driving parked specs, mailbox-latency escalation and
-headless cold-boot of overdue seat jobs.
+Not in this cut: headless cold-boot of overdue seat jobs.
 
 ## Limits of this cut
 

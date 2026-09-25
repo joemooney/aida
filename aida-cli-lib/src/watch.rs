@@ -540,6 +540,10 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             refused,
             breaker,
             escalated,
+            redriven,
+            reclassified,
+            mail_escalated,
+            redrive_held,
             ..
         } => (
             "shift-tick",
@@ -547,8 +551,24 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 format!("night shift stopped launching: {b}")
             } else if !escalated.is_empty() {
                 format!("night shift escalated {}", escalated.join(", "))
+            // trace:TASK-1492 | ai:claude
+            } else if let Some(h) = redrive_held {
+                format!("night shift held re-drive: {h}")
+            // trace:TASK-1492 | ai:claude
+            } else if !reclassified.is_empty() {
+                format!(
+                    "night shift left {} for a human (re-drive cap reached)",
+                    reclassified.join(", ")
+                )
             } else if let Some(l) = launched {
                 format!("night shift launched {} spec(s)", l.specs.len())
+            } else if !redriven.is_empty() {
+                format!("night shift re-queued {}", redriven.join(", "))
+            } else if !mail_escalated.is_empty() {
+                format!(
+                    "night shift flagged slow mail for {}",
+                    mail_escalated.join(", ")
+                )
             } else if !refused.is_empty() {
                 format!("night shift holding: {}", refused.join(", "))
             } else {

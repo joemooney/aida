@@ -53,6 +53,9 @@ pub(crate) struct SuperviseOpts {
     /// Cap on how many specs to re-drive in a single run (`None` = no cap).
     pub(crate) max: Option<usize>,
     pub(crate) json: bool,
+    /// Extra floors an unattended caller (the night shift) applies before
+    /// anything else. `None` = the manual verb's behaviour.
+    pub(crate) floors: Option<RedriveFloors>,
 }
 
 impl Default for SuperviseOpts {
@@ -63,8 +66,33 @@ impl Default for SuperviseOpts {
             backoff: DEFAULT_BACKOFF.to_vec(),
             max: None,
             json: false,
+            floors: None,
         }
     }
+}
+
+/// The night shift's re-drive floors: it touches only parks it could also
+/// launch. A park outside them is left exactly as it is (no re-drive, no cap
+/// reclassification) for a human or the manual verb.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct RedriveFloors {
+    /// Only an EXPLICIT `execution_mode = drain` park.
+    pub(crate) drain_mode_only: bool,
+    /// Never a keystone-class spec (the one keystone classifier).
+    pub(crate) exclude_keystone: bool,
+    /// Upper-cased spec ids that carry a live merge hold.
+    pub(crate) held: std::collections::BTreeSet<String>,
+}
+
+/// Where a re-driven spec is put back in the queue.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QueueTarget {
+    /// Queue file owner (the user the wave drains as).
+    pub(crate) user: String,
+    /// `for_role` routing (the wave's role).
+    pub(crate) role: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -82,14 +110,19 @@ pub(crate) struct SuperviseDecision {
     /// Supervised re-drives already spent (from the event log).
     pub(crate) attempts: u32,
     /// What the supervisor did / would do: re-drive, backoff-wait,
-    /// reclassify-needs-human, leave-for-human, skip-max-this-run.
+    /// reclassify-needs-human, leave-for-human, skip-max-this-run (and, under
+    /// the night shift's floors, leave-not-drain-mode / leave-keystone /
+    /// leave-merge-held).
     pub(crate) action: String,
+    /// The spec's store id, for the targeted write that applies the decision.
+    #[serde(skip)]
+    pub(crate) id: Option<uuid::Uuid>,
 }
 
-/// The `aida supervise` entry point. Pure-ish: reads the store + event log,
-/// decides per park, and (when `execute`) mutates the store and launches the
-/// re-drives.
-// trace:STORY-1051 | ai:claude
+/// The `aida supervise` entry point. Plans over the store + event log with
+/// [`plan_redrives`], and (when `execute`) applies each decision with a
+/// targeted write and launches the re-drives in the foreground.
+// trace:STORY-1051 trace:TASK-1492 | ai:claude
 pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
     backend: &B,
     project_root: &std::path::Path,
@@ -102,66 +135,151 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
     // spec).
     // trace:STORY-1429 | ai:claude
     let store = backend.load()?;
-    let mut decisions = Vec::new();
+    // Attempts come from the event log, archive included, so a rotation of
+    // `events.jsonl` never resets the ADR-26 count (fork B).
+    let history = events::RedriveHistory::from_events(&events::read_all_with_archive(project_root));
+    // `--max` counts APPLIED re-drives (the manual verb's behaviour before
+    // the plan/apply split): a spec that moved meanwhile does not use up a
+    // slot. A dry run can only count planned ones.
+    // trace:TASK-1492 | ai:claude
+    let plan_opts = if opts.execute {
+        SuperviseOpts {
+            max: None,
+            ..opts.clone()
+        }
+    } else {
+        opts.clone()
+    };
+    let mut decisions = plan_redrives(
+        &store.requirements,
+        &history,
+        &plan_opts,
+        chrono::Utc::now(),
+    );
+    let launches = if opts.execute {
+        apply_decisions(backend, project_root, &mut decisions, &opts)?
+    } else {
+        Vec::new()
+    };
+
+    render_decisions(&decisions, opts.json)?;
+
+    for spec in launches {
+        launch_redrive(project_root, &spec)?;
+    }
+    Ok(())
+}
+
+/// The manual verb's apply pass over a plan made WITHOUT `--max`: the cap
+/// branch, then re-drives in plan order until `opts.max` of them have
+/// actually been applied (a spec that moved meanwhile does not use up a
+/// slot). After an attempt that could not be recorded nothing further is
+/// re-driven (ADR-26 fail closed). Returns the specs to launch.
+// trace:TASK-1492 | ai:claude
+fn apply_decisions<B: DatabaseBackend>(
+    backend: &B,
+    project_root: &std::path::Path,
+    decisions: &mut [SuperviseDecision],
+    opts: &SuperviseOpts,
+) -> Result<Vec<String>> {
     let mut launches: Vec<String> = Vec::new();
-    let mut cap_findings: Vec<(String, String, u32)> = Vec::new();
-    let mut launched = 0usize;
-    let now = chrono::Utc::now();
+    let mut unrecorded: Option<String> = None;
+    for decision in decisions.iter_mut() {
+        match decision.action.as_str() {
+            "reclassify-needs-human" => {
+                if !apply_cap(backend, project_root, decision, opts.max_attempts)? {
+                    decision.action = "skip-status-moved".to_string();
+                }
+            }
+            "would-re-drive" => {
+                let skip = if unrecorded.is_some() {
+                    Some(HELD_UNRECORDED)
+                } else if opts.max.is_some_and(|m| launches.len() >= m) {
+                    Some("skip-max-this-run")
+                } else {
+                    None
+                };
+                if let Some(action) = skip {
+                    decision.action = action.to_string();
+                    decision.attempts = decision.attempts.saturating_sub(1);
+                    continue;
+                }
+                // The supervisor is never a human at a terminal, so it
+                // never clears an escalation (STORY-1429).
+                let outcome = apply_requeue(
+                    backend,
+                    project_root,
+                    std::slice::from_ref(decision),
+                    opts.max_attempts,
+                    None,
+                )?;
+                if let Some(reason) = outcome.unrecorded {
+                    decision.action = HELD_UNRECORDED.to_string();
+                    decision.attempts = decision.attempts.saturating_sub(1);
+                    unrecorded = Some(reason);
+                } else if outcome.applied.is_empty() {
+                    decision.action = "skip-status-moved".to_string();
+                    decision.attempts = decision.attempts.saturating_sub(1);
+                } else {
+                    decision.action = "re-drive".to_string();
+                    launches.push(decision.spec.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(reason) = &unrecorded {
+        eprintln!("supervisor: re-drive held for the rest of this run: {reason}");
+    }
+    Ok(launches)
+}
 
-    // Oldest-parked first, so the longest-stuck spec is recovered first.
-    let mut parked: Vec<usize> = store
-        .requirements
+/// Plan one supervisor pass over the parked specs, oldest-parked first, so
+/// the longest-stuck spec is recovered first. Pure over its inputs: the
+/// attempt count and last re-drive time come from `history` (ADR-26 fork B).
+/// Actions: `would-re-drive` (attempts already advanced to the attempt it
+/// would be), `reclassify-needs-human` (cap reached), `backoff-wait`,
+/// `skip-max-this-run`, `leave-for-human`, and the floor refusals.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn plan_redrives(
+    requirements: &[Requirement],
+    history: &events::RedriveHistory,
+    opts: &SuperviseOpts,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Vec<SuperviseDecision> {
+    let mut parked: Vec<&Requirement> = requirements
         .iter()
-        .enumerate()
-        .filter_map(|(idx, r)| matches!(r.status, RequirementStatus::NeedsAttention).then_some(idx))
+        .filter(|r| matches!(r.status, RequirementStatus::NeedsAttention))
         .collect();
-    parked.sort_by(|a, b| {
-        store.requirements[*a]
-            .modified_at
-            .cmp(&store.requirements[*b].modified_at)
-    });
+    parked.sort_by_key(|r| r.modified_at);
 
-    for idx in parked {
-        let spec = store.requirements[idx].display_id();
-        // Attempt count + last re-drive time come from the event log (fork B).
-        let (attempts, last_redrive) = events::supervisor_redrive_state(project_root, &spec);
-        let mut decision = classify_requirement(&store.requirements[idx], attempts);
+    let mut decisions = Vec::new();
+    let mut planned = 0usize;
+    for req in parked {
+        let spec = req.display_id();
+        let (attempts, last_redrive) = history.get(&spec);
+        let mut decision = classify_requirement(req, attempts);
 
+        if let Some(floors) = &opts.floors {
+            if let Some(action) = floor_refusal(req, &spec, floors) {
+                decision.action = action.to_string();
+                decisions.push(decision);
+                continue;
+            }
+        }
         if decision.class == ParkClass::NeedsHuman {
             decisions.push(decision);
             continue;
         }
-
         // Transient. Cap reached → reclassify to needs-human and stop.
         if attempts >= opts.max_attempts {
-            if opts.execute {
-                let id = store.requirements[idx].id;
-                if !reclassify_needs_human_atomically(backend, id, opts.max_attempts)? {
-                    decision.action = "skip-status-moved".to_string();
-                    decisions.push(decision);
-                    continue;
-                }
-                cap_findings.push((spec.clone(), decision.reason.clone(), attempts));
-                events::emit(
-                    project_root,
-                    &events::Event::new(
-                        Some(spec.clone()),
-                        "",
-                        events::EventKind::ReclassifiedNeedsHuman {
-                            kind: decision.reason.clone(),
-                            attempts,
-                        },
-                    ),
-                );
-            }
             decision.action = "reclassify-needs-human".to_string();
             decisions.push(decision);
             continue;
         }
-
-        // Backoff: wait `backoff[attempts]` since the last re-drive (or since the
-        // spec was parked, for the first re-drive) before trying again.
-        let since = last_redrive.unwrap_or(store.requirements[idx].modified_at);
+        // Backoff: wait `backoff[attempts]` since the last re-drive (or since
+        // the spec was parked, for the first re-drive) before trying again.
+        let since = last_redrive.unwrap_or(req.modified_at);
         let wait = backoff_for(&opts.backoff, attempts);
         let elapsed = (now - since).to_std().unwrap_or(Duration::ZERO);
         if elapsed < wait {
@@ -169,73 +287,228 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
             decisions.push(decision);
             continue;
         }
-
         // Per-run cap on how many we re-drive.
-        if opts.max.is_some_and(|m| launched >= m) {
+        if opts.max.is_some_and(|m| planned >= m) {
             decision.action = "skip-max-this-run".to_string();
             decisions.push(decision);
             continue;
         }
-
-        // Re-drive: re-queue (status → Approved, clear the failure) and emit the
-        // event that IS the attempt record. The actual drive is launched after
-        // the write lands. STORY-1429: the transition goes through the one
-        // owner with one targeted single-spec write; a spec that moved in
-        // the meantime (a human triaged it, a drain claimed it) is skipped. The
-        // supervisor is never a human at a terminal, so it never clears an
-        // escalation.
-        // trace:STORY-1429 | ai:claude
-        let next_attempt = attempts + 1;
-        if opts.execute {
-            match supervisor_requeue(
-                backend,
-                project_root,
-                store.requirements[idx].id,
-                &spec,
-                &decision.reason,
-                next_attempt,
-                opts.max_attempts,
-            )? {
-                true => {
-                    launches.push(spec.clone());
-                    launched += 1;
-                }
-                false => {
-                    decision.action = "skip-status-moved".to_string();
-                    decisions.push(decision);
-                    continue;
-                }
-            }
-        }
-        decision.attempts = next_attempt;
-        decision.action = if opts.execute {
-            "re-drive".to_string()
-        } else {
-            "would-re-drive".to_string()
-        };
+        planned += 1;
+        decision.attempts = attempts + 1;
+        decision.action = "would-re-drive".to_string();
         decisions.push(decision);
     }
-
-    for (spec, kind, attempts) in cap_findings {
-        backend.add_requirement(cap_finding(&spec, &kind, attempts))?;
-    }
-
-    render_decisions(&decisions, opts.json)?;
-
-    if opts.execute {
-        for spec in launches {
-            launch_redrive(project_root, &spec)?;
-        }
-    }
-    Ok(())
+    decisions
 }
 
-/// One supervised re-drive's store transition: the owner runs on the copy
-/// read inside the backend's atomic write. On success emits `SpecReDriven`
-/// (the attempt record `supervisor_redrive_state` counts) and `SpecRequeued`
-/// (the requeue trail, which it does not count). Returns false when the spec
-/// was no longer parked, in which case nothing was written or emitted.
-// trace:STORY-1429 | ai:claude
+/// The night shift's floors, checked before any other decision.
+// trace:TASK-1492 | ai:claude
+fn floor_refusal(req: &Requirement, spec: &str, floors: &RedriveFloors) -> Option<&'static str> {
+    if floors.drain_mode_only && req.execution_mode != Some(aida_core::ExecutionMode::Drain) {
+        return Some("leave-not-drain-mode");
+    }
+    if floors.exclude_keystone
+        && crate::presence::is_keystone_class(
+            &req.req_type.to_string(),
+            req.tags.iter().map(|t| t.as_str()),
+        )
+    {
+        return Some("leave-keystone");
+    }
+    if floors.held.contains(&spec.to_ascii_uppercase()) {
+        return Some("leave-merge-held");
+    }
+    None
+}
+
+/// The action a `would-re-drive` decision gets when its attempt could not be
+/// recorded (or an earlier one in the same run could not): nothing re-queued.
+// trace:TASK-1492 | ai:claude
+pub(crate) const HELD_UNRECORDED: &str = "held-attempt-unrecorded";
+
+/// What [`apply_requeue`] did.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct RequeueOutcome {
+    /// Specs re-queued, in decision order.
+    pub(crate) applied: Vec<String>,
+    /// Set when a re-drive attempt could not be recorded: that spec and every
+    /// later decision were left parked (ADR-26 fail closed).
+    pub(crate) unrecorded: Option<String>,
+    /// The specs left parked because of it (the failing one and every later
+    /// `would-re-drive` decision).
+    pub(crate) held: Vec<String>,
+}
+
+/// Apply the `would-re-drive` decisions: each spec goes back to Approved
+/// through the one requeue owner, after its attempt record (`SpecReDriven`)
+/// is written. With a `queue` target, every re-queued spec is then (re-)added
+/// at the HEAD of that queue in the decisions' order (oldest-parked first):
+/// the implementer dequeues at pickup, so a parked spec is usually not queued
+/// any more, and a status change alone would never reach a wave. A spec that
+/// moved meanwhile is skipped. The first attempt that cannot be recorded
+/// stops the pass: that spec and the rest stay parked, and the reason is
+/// returned in [`RequeueOutcome::unrecorded`].
+// trace:TASK-1492 | ai:claude
+pub(crate) fn apply_requeue<B: DatabaseBackend>(
+    backend: &B,
+    project_root: &std::path::Path,
+    decisions: &[SuperviseDecision],
+    max_attempts: u32,
+    queue: Option<&QueueTarget>,
+) -> Result<RequeueOutcome> {
+    apply_requeue_with(
+        backend,
+        decisions,
+        max_attempts,
+        queue,
+        &mut |ev| events::emit_recorded(project_root, ev),
+        &mut |spec, ctx, outcome| crate::requeue::emit_requeued(project_root, spec, ctx, outcome),
+    )
+}
+
+/// [`apply_requeue`] with the attempt recorder and the requeue-trail emitter
+/// injected (the test seam for a write that fails once and then works). A
+/// store error part-way through is returned only AFTER the specs already
+/// moved to Approved got their queue entry, so none is left Approved but
+/// unqueued (A7).
+// trace:TASK-1492 | ai:claude
+fn apply_requeue_with<B: DatabaseBackend>(
+    backend: &B,
+    decisions: &[SuperviseDecision],
+    max_attempts: u32,
+    queue: Option<&QueueTarget>,
+    record: &mut dyn FnMut(&events::Event) -> std::result::Result<(), String>,
+    trail: &mut dyn FnMut(&str, &crate::requeue::ReturnCtx, &crate::requeue::ReturnOutcome),
+) -> Result<RequeueOutcome> {
+    let mut applied: Vec<(String, uuid::Uuid)> = Vec::new();
+    let mut unrecorded = None;
+    let mut held = Vec::new();
+    let mut failed: Option<anyhow::Error> = None;
+    for d in decisions.iter().filter(|d| d.action == "would-re-drive") {
+        if unrecorded.is_some() {
+            held.push(d.spec.clone());
+            continue;
+        }
+        let Some(id) = d.id else { continue };
+        let result = supervisor_requeue_with(
+            backend,
+            id,
+            &d.spec,
+            &d.reason,
+            d.attempts,
+            max_attempts,
+            record,
+            trail,
+        );
+        match result {
+            Ok(RedriveApply::Applied) => applied.push((d.spec.clone(), id)),
+            Ok(RedriveApply::Moved) => {}
+            Ok(RedriveApply::Unrecorded(reason)) => {
+                unrecorded = Some(format!(
+                    "cannot record the re-drive attempt for {}: {reason}",
+                    d.spec
+                ));
+                held.push(d.spec.clone());
+            }
+            Err(e) => {
+                failed = Some(e);
+                break;
+            }
+        }
+    }
+    if let (Some(q), false) = (queue, applied.is_empty()) {
+        let ids: Vec<uuid::Uuid> = applied.iter().map(|(_, id)| *id).collect();
+        let head = backend
+            .queue_list(&q.user, false)?
+            .iter()
+            .filter(|e| !ids.contains(&e.requirement_id) && e.position != i64::MAX)
+            .map(|e| e.position)
+            .min()
+            .unwrap_or(0);
+        let n = ids.len() as i64;
+        for (i, id) in ids.iter().enumerate() {
+            backend.queue_add(aida_core::QueueEntry {
+                user_id: q.user.clone(),
+                requirement_id: *id,
+                position: head.saturating_sub((n - i as i64).saturating_mul(1000)),
+                added_by: "night-shift".to_string(),
+                note: Some("re-queued after a transient park".to_string()),
+                added_at: chrono::Utc::now(),
+                for_role: Some(q.role.clone()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })?;
+        }
+    }
+    if let Some(e) = failed {
+        return Err(e);
+    }
+    Ok(RequeueOutcome {
+        applied: applied.into_iter().map(|(spec, _)| spec).collect(),
+        unrecorded,
+        held,
+    })
+}
+
+/// Apply a `reclassify-needs-human` decision (the ADR-26 cap branch):
+/// tag needs-human with one targeted write while the spec is still parked,
+/// emit `ReclassifiedNeedsHuman`, and file the cap finding. Returns false
+/// when the spec had moved, in which case nothing was written or emitted.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn apply_cap<B: DatabaseBackend>(
+    backend: &B,
+    project_root: &std::path::Path,
+    decision: &SuperviseDecision,
+    max_attempts: u32,
+) -> Result<bool> {
+    let Some(id) = decision.id else {
+        return Ok(false);
+    };
+    if !reclassify_needs_human_atomically(backend, id, max_attempts)? {
+        return Ok(false);
+    }
+    events::emit(
+        project_root,
+        &events::Event::new(
+            Some(decision.spec.clone()),
+            "",
+            events::EventKind::ReclassifiedNeedsHuman {
+                kind: decision.reason.clone(),
+                attempts: decision.attempts,
+            },
+        ),
+    );
+    backend.add_requirement(cap_finding(
+        &decision.spec,
+        &decision.reason,
+        decision.attempts,
+    ))?;
+    Ok(true)
+}
+
+/// The result of one supervised re-drive.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RedriveApply {
+    /// Attempt recorded and the spec is back in Approved.
+    Applied,
+    /// The spec was no longer parked; nothing moved.
+    Moved,
+    /// The attempt record could not be written, so the spec was NOT moved.
+    Unrecorded(String),
+}
+
+/// One supervised re-drive. ADR-26 fail closed: the attempt record
+/// (`SpecReDriven`, which the cap counts) is written with a fallible append
+/// BEFORE the status change, and a failed append leaves the spec parked. A
+/// spec that is already out of `NeedsAttention` is left alone without a
+/// record. If the record lands but the spec moves before the atomic
+/// status-checked write, the attempt stays counted: an over-count only
+/// reaches the cap sooner, never later. On success also emits
+/// `SpecRequeued` (the requeue trail, which the cap does not count).
+// trace:STORY-1429 trace:TASK-1492 | ai:claude
 pub(crate) fn supervisor_requeue<B: DatabaseBackend>(
     backend: &B,
     project_root: &std::path::Path,
@@ -244,7 +517,48 @@ pub(crate) fn supervisor_requeue<B: DatabaseBackend>(
     cause: &str,
     attempt: u32,
     max_attempts: u32,
-) -> Result<bool> {
+) -> Result<RedriveApply> {
+    supervisor_requeue_with(
+        backend,
+        id,
+        spec,
+        cause,
+        attempt,
+        max_attempts,
+        &mut |ev| events::emit_recorded(project_root, ev),
+        &mut |spec, ctx, outcome| crate::requeue::emit_requeued(project_root, spec, ctx, outcome),
+    )
+}
+
+// trace:TASK-1492 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn supervisor_requeue_with<B: DatabaseBackend>(
+    backend: &B,
+    id: uuid::Uuid,
+    spec: &str,
+    cause: &str,
+    attempt: u32,
+    max_attempts: u32,
+    record: &mut dyn FnMut(&events::Event) -> std::result::Result<(), String>,
+    trail: &mut dyn FnMut(&str, &crate::requeue::ReturnCtx, &crate::requeue::ReturnOutcome),
+) -> Result<RedriveApply> {
+    let parked = backend
+        .get_requirement(&id)?
+        .is_some_and(|r| r.status == RequirementStatus::NeedsAttention);
+    if !parked {
+        return Ok(RedriveApply::Moved);
+    }
+    if let Err(reason) = record(&events::Event::new(
+        Some(spec.to_string()),
+        "",
+        events::EventKind::SpecReDriven {
+            cause: cause.to_string(),
+            attempt,
+            max: max_attempts,
+        },
+    )) {
+        return Ok(RedriveApply::Unrecorded(reason));
+    }
     let ctx = crate::requeue::ReturnCtx {
         via: "the re-drive supervisor".to_string(),
         via_slug: "supervisor",
@@ -262,22 +576,10 @@ pub(crate) fn supervisor_requeue<B: DatabaseBackend>(
         &ctx,
     )?;
     if !outcome.applied() {
-        return Ok(false);
+        return Ok(RedriveApply::Moved);
     }
-    events::emit(
-        project_root,
-        &events::Event::new(
-            Some(spec.to_string()),
-            "",
-            events::EventKind::SpecReDriven {
-                cause: cause.to_string(),
-                attempt,
-                max: max_attempts,
-            },
-        ),
-    );
-    crate::requeue::emit_requeued(project_root, spec, &ctx, &outcome);
-    Ok(true)
+    trail(spec, &ctx, &outcome);
+    Ok(RedriveApply::Applied)
 }
 
 /// Reclassify a capped transient park to needs-human with one targeted write,
@@ -309,12 +611,14 @@ fn reclassify_needs_human_atomically<B: DatabaseBackend>(
 // trace:STORY-1051 | ai:claude
 pub(crate) fn classify_requirement(req: &Requirement, attempts: u32) -> SuperviseDecision {
     let spec = req.display_id();
+    let id = Some(req.id);
     let human = |reason: &str| SuperviseDecision {
         spec: spec.clone(),
         class: ParkClass::NeedsHuman,
         reason: reason.to_string(),
         attempts,
         action: "leave-for-human".to_string(),
+        id,
     };
     if req.tags.contains(NEEDS_HUMAN_TAG) {
         return human(NEEDS_HUMAN_TAG);
@@ -332,6 +636,7 @@ pub(crate) fn classify_requirement(req: &Requirement, attempts: u32) -> Supervis
             reason: fr.kind.clone(),
             attempts,
             action: "would-re-drive".to_string(),
+            id,
         }
     } else {
         // ci-red on a real test failure, request-changes on substance,
@@ -588,7 +893,10 @@ mod tests {
         store.requirements.push(req);
         backend.save(&store).unwrap();
 
-        assert!(supervisor_requeue(&backend, tmp.path(), id, "STORY-1", "watchdog", 1, 3).unwrap());
+        assert_eq!(
+            supervisor_requeue(&backend, tmp.path(), id, "STORY-1", "watchdog", 1, 3).unwrap(),
+            RedriveApply::Applied
+        );
         let after = backend.get_requirement(&id).unwrap().unwrap();
         assert_eq!(after.status, RequirementStatus::Approved);
         assert!(after.attention_reason.is_none());
@@ -604,8 +912,9 @@ mod tests {
         assert_eq!(events::supervisor_redrive_state(tmp.path(), "STORY-1").0, 1);
 
         // Under-the-write check: no longer parked, so nothing happens.
-        assert!(
-            !supervisor_requeue(&backend, tmp.path(), id, "STORY-1", "watchdog", 2, 3).unwrap()
+        assert_eq!(
+            supervisor_requeue(&backend, tmp.path(), id, "STORY-1", "watchdog", 2, 3).unwrap(),
+            RedriveApply::Moved
         );
         assert_eq!(events::read_all(tmp.path()).len(), 2);
         assert_eq!(
@@ -691,5 +1000,250 @@ mod tests {
         assert!(done.tags.contains(NEEDS_HUMAN_TAG));
         assert_eq!(done.owner, "someone");
         assert_eq!(done.comments.len(), 1);
+    }
+
+    /// A parked spec stored in a fresh temp store, parked `mins_ago`.
+    // trace:TASK-1492 | ai:claude
+    fn stored_park(backend: &aida_core::GitBackend, spec: &str, mins_ago: i64) -> Requirement {
+        let mut req = req_with_failure("watchdog");
+        req.spec_id = Some(spec.to_string());
+        req.modified_at = chrono::Utc::now() - chrono::Duration::minutes(mins_ago);
+        backend.add_requirement(req).unwrap()
+    }
+
+    // B1: the attempt record is written BEFORE the status change. When it
+    // cannot be written the spec stays parked and no requeue trail appears;
+    // the ADR-26 cap can never be bypassed by a failed append.
+    // trace:TASK-1492 | ai:claude
+    #[test]
+    fn supervisor_requeue_unrecordable_attempt_leaves_spec_parked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+        let parked = stored_park(&backend, "STORY-1", 60);
+        let still_parked = |backend: &aida_core::GitBackend| {
+            let r = backend.get_requirement(&parked.id).unwrap().unwrap();
+            r.status == RequirementStatus::NeedsAttention && r.comments.is_empty()
+        };
+        {
+            // Events disabled in this process: nothing would be recorded.
+            let _env =
+                crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, Some("1"))]);
+            match supervisor_requeue(&backend, tmp.path(), parked.id, "STORY-1", "watchdog", 1, 3)
+                .unwrap()
+            {
+                RedriveApply::Unrecorded(r) => {
+                    assert!(r.contains(events::EVENTS_DISABLE_ENV), "{r}")
+                }
+                other => panic!("expected Unrecorded, got {other:?}"),
+            }
+            assert!(still_parked(&backend));
+        }
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+        let aida = tmp.path().join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        // A read-only events file (skipped where permissions do not bind,
+        // e.g. when the tests run as root).
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let file = aida.join("events.jsonl");
+            std::fs::write(&file, "").unwrap();
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o444)).unwrap();
+            let binds = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&file)
+                .is_err();
+            if binds {
+                assert!(matches!(
+                    supervisor_requeue(
+                        &backend,
+                        tmp.path(),
+                        parked.id,
+                        "STORY-1",
+                        "watchdog",
+                        1,
+                        3
+                    )
+                    .unwrap(),
+                    RedriveApply::Unrecorded(_)
+                ));
+                assert!(still_parked(&backend));
+            }
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+            std::fs::remove_file(&file).unwrap();
+        }
+        // An events path that cannot be appended to at all (replaced by a
+        // directory): fails for every user.
+        std::fs::create_dir(aida.join("events.jsonl")).unwrap();
+        match supervisor_requeue(&backend, tmp.path(), parked.id, "STORY-1", "watchdog", 1, 3)
+            .unwrap()
+        {
+            RedriveApply::Unrecorded(r) => assert!(r.contains("cannot append"), "{r}"),
+            other => panic!("expected Unrecorded, got {other:?}"),
+        }
+        assert!(still_parked(&backend));
+        std::fs::remove_dir(aida.join("events.jsonl")).unwrap();
+
+        // Writable again: the attempt is recorded first, then the move.
+        assert_eq!(
+            supervisor_requeue(&backend, tmp.path(), parked.id, "STORY-1", "watchdog", 1, 3)
+                .unwrap(),
+            RedriveApply::Applied
+        );
+        let kinds: Vec<&str> = events::read_all(tmp.path())
+            .iter()
+            .map(|e| e.kind.name())
+            .collect();
+        assert_eq!(kinds, vec!["SpecReDriven", "SpecRequeued"]);
+    }
+
+    // B1 hold: once one attempt cannot be recorded, apply_requeue re-queues
+    // nothing further in the pass, and the manual verb holds the rest of
+    // its run the same way.
+    // trace:TASK-1492 | ai:claude
+    #[test]
+    fn unrecorded_attempt_holds_the_rest_of_the_pass() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+        let tmp = tempfile::tempdir().unwrap();
+        let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+        stored_park(&backend, "STORY-1", 90);
+        stored_park(&backend, "STORY-2", 60);
+        std::fs::create_dir_all(tmp.path().join(".aida").join("events.jsonl")).unwrap();
+        let store = backend.load().unwrap();
+        let opts = SuperviseOpts {
+            execute: true,
+            ..Default::default()
+        };
+        let plan = plan_redrives(
+            &store.requirements,
+            &events::RedriveHistory::default(),
+            &opts,
+            chrono::Utc::now(),
+        );
+        let out = apply_requeue(&backend, tmp.path(), &plan, 3, None).unwrap();
+        assert!(out.applied.is_empty());
+        assert!(out.unrecorded.as_deref().unwrap().contains("STORY-1"));
+        assert_eq!(out.held, vec!["STORY-1", "STORY-2"]);
+
+        let mut decisions = plan.clone();
+        let launches = apply_decisions(&backend, tmp.path(), &mut decisions, &opts).unwrap();
+        assert!(launches.is_empty());
+        assert!(decisions
+            .iter()
+            .all(|d| d.action == HELD_UNRECORDED && d.attempts == 0));
+        for r in backend.load().unwrap().requirements {
+            assert_eq!(r.status, RequirementStatus::NeedsAttention);
+        }
+    }
+
+    // M3: manual `aida supervise --max N` counts APPLIED re-drives: a spec
+    // that moved meanwhile does not use up a slot.
+    // trace:TASK-1492 | ai:claude
+    #[test]
+    fn manual_max_counts_applied_redrives_not_planned_ones() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+        let tmp = tempfile::tempdir().unwrap();
+        let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+        let moved = stored_park(&backend, "STORY-1", 120);
+        stored_park(&backend, "STORY-2", 90);
+        stored_park(&backend, "STORY-3", 60);
+        // The plan's snapshot still sees STORY-1 parked...
+        let snapshot = backend.load().unwrap();
+        // ...but it moved before the apply.
+        let mut m = backend.get_requirement(&moved.id).unwrap().unwrap();
+        m.status = RequirementStatus::InProgress;
+        backend.update_requirement(&m).unwrap();
+
+        let opts = SuperviseOpts {
+            execute: true,
+            max: Some(1),
+            ..Default::default()
+        };
+        let mut decisions = plan_redrives(
+            &snapshot.requirements,
+            &events::RedriveHistory::default(),
+            &SuperviseOpts {
+                max: None,
+                ..opts.clone()
+            },
+            chrono::Utc::now(),
+        );
+        let launches = apply_decisions(&backend, tmp.path(), &mut decisions, &opts).unwrap();
+        assert_eq!(launches, vec!["STORY-2"]);
+        let action = |spec: &str| {
+            decisions
+                .iter()
+                .find(|d| d.spec == spec)
+                .map(|d| (d.action.clone(), d.attempts))
+                .unwrap()
+        };
+        assert_eq!(action("STORY-1"), ("skip-status-moved".to_string(), 0));
+        assert_eq!(action("STORY-2"), ("re-drive".to_string(), 1));
+        assert_eq!(action("STORY-3"), ("skip-max-this-run".to_string(), 0));
+    }
+
+    // B1 direct: the first attempt record fails, the next one would work.
+    // The pass still holds: the later specs are never tried, stay parked,
+    // and nothing is queued. A failure on the second spec keeps the first
+    // re-queued and holds the rest.
+    // trace:TASK-1492 | ai:claude
+    #[test]
+    fn a_failed_record_holds_the_pass_even_when_the_next_write_would_succeed() {
+        for fail_at in [0usize, 1] {
+            let tmp = tempfile::tempdir().unwrap();
+            let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+            stored_park(&backend, "STORY-1", 120);
+            stored_park(&backend, "STORY-2", 90);
+            stored_park(&backend, "STORY-3", 60);
+            let store = backend.load().unwrap();
+            let plan = plan_redrives(
+                &store.requirements,
+                &events::RedriveHistory::default(),
+                &SuperviseOpts::default(),
+                chrono::Utc::now(),
+            );
+            let queue = QueueTarget {
+                user: "joe".to_string(),
+                role: "implementer".to_string(),
+            };
+            let mut calls = 0usize;
+            let mut recorded: Vec<String> = Vec::new();
+            let mut record = |ev: &events::Event| {
+                let n = calls;
+                calls += 1;
+                if n == fail_at {
+                    Err("transient write error".to_string())
+                } else {
+                    recorded.push(ev.spec.clone().unwrap_or_default());
+                    Ok(())
+                }
+            };
+            let out = apply_requeue_with(
+                &backend,
+                &plan,
+                3,
+                Some(&queue),
+                &mut record,
+                &mut |_, _, _| {},
+            )
+            .unwrap();
+            let expect_applied: Vec<&str> = ["STORY-1", "STORY-2", "STORY-3"][..fail_at].to_vec();
+            let expect_held: Vec<&str> = ["STORY-1", "STORY-2", "STORY-3"][fail_at..].to_vec();
+            assert_eq!(out.applied, expect_applied, "fail_at {fail_at}");
+            assert_eq!(out.held, expect_held, "fail_at {fail_at}");
+            assert!(out.unrecorded.as_deref().unwrap().contains(expect_held[0]));
+            assert_eq!(calls, fail_at + 1, "no record is tried after the failure");
+            assert_eq!(recorded, expect_applied);
+            let queued = backend.queue_list("joe", false).unwrap();
+            assert_eq!(queued.len(), fail_at);
+            for r in backend.load().unwrap().requirements {
+                let want = if expect_applied.contains(&r.display_id().as_str()) {
+                    RequirementStatus::Approved
+                } else {
+                    RequirementStatus::NeedsAttention
+                };
+                assert_eq!(r.status, want, "{} fail_at {fail_at}", r.display_id());
+            }
+        }
     }
 }

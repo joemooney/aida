@@ -436,6 +436,25 @@ pub enum EventKind {
         /// Specs excluded from further shift waves and escalated, once each.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         escalated: Vec<String>,
+        /// Transient parks this tick put back in the queue (opt-in re-drive).
+        // trace:TASK-1492 | ai:claude
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        redriven: Vec<String>,
+        /// Transient parks that hit the re-drive cap this tick and were
+        /// reclassified to needs-human (each also emits
+        /// `ReclassifiedNeedsHuman`).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        reclassified: Vec<String>,
+        /// Mail recipients whose oldest unread message crossed the latency
+        /// threshold this tick; the operator was notified once per episode.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        mail_escalated: Vec<String>,
+        /// Why the re-drive step stopped this tick: a re-drive attempt could
+        /// not be recorded, so nothing further was re-queued (ADR-26 fail
+        /// closed).
+        // trace:TASK-1492 | ai:claude
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        redrive_held: Option<String>,
     },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
@@ -495,8 +514,11 @@ impl EventKind {
             | EventKind::GateHeld { .. } => false,
             // STORY-1218: a tick wakes only for what needs a human.
             EventKind::ShiftTick {
-                breaker, escalated, ..
-            } => breaker.is_some() || !escalated.is_empty(),
+                breaker,
+                escalated,
+                redrive_held,
+                ..
+            } => breaker.is_some() || !escalated.is_empty() || redrive_held.is_some(),
             // Real decision points — wake the supervisor.
             EventKind::ReclassifiedNeedsHuman { .. }
             | EventKind::CiTerminal { .. }
@@ -991,6 +1013,26 @@ pub fn emit(project_root: &Path, ev: &Event) {
     let _ = try_emit(project_root, ev);
 }
 
+/// Append one event and REPORT whether it landed: the fail-closed sibling of
+/// [`emit`] for a record a safety cap is counted from (the ADR-26 re-drive
+/// attempt). `Err` with the reason when events are disabled in this process
+/// (nothing would be written) or the append fails (full disk, a read-only or
+/// replaced `events.jsonl`, a permission error).
+// trace:TASK-1492 | ai:claude
+pub fn emit_recorded(project_root: &Path, ev: &Event) -> Result<(), String> {
+    if events_disabled() {
+        return Err(format!(
+            "{EVENTS_DISABLE_ENV} is set in this process, so the event is not recorded"
+        ));
+    }
+    try_emit(project_root, ev).map_err(|e| {
+        format!(
+            "cannot append to {}: {e}",
+            events_path(project_root).display()
+        )
+    })
+}
+
 /// The fallible body of [`emit`]; kept separate so the happy path reads as a
 /// normal `?`-chain while [`emit`] discards the result.
 fn try_emit(project_root: &Path, ev: &Event) -> std::io::Result<()> {
@@ -1161,6 +1203,70 @@ pub fn read_all_with_archive(project_root: &Path) -> Vec<Event> {
     let mut out = parse(events_archive_path(project_root));
     out.extend(parse(events_path(project_root)));
     out
+}
+
+/// Per-spec supervised re-drive history: `(attempts, last re-drive)` from
+/// `SpecReDriven` events.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RedriveHistory(std::collections::BTreeMap<String, (u32, Option<DateTime<Utc>>)>);
+
+impl RedriveHistory {
+    /// Fold an oldest-first event stream.
+    pub fn from_events<'a>(events: impl IntoIterator<Item = &'a Event>) -> Self {
+        let mut out = std::collections::BTreeMap::new();
+        for ev in events {
+            let (Some(spec), EventKind::SpecReDriven { .. }) = (&ev.spec, &ev.kind) else {
+                continue;
+            };
+            let slot: &mut (u32, Option<DateTime<Utc>>) = out.entry(spec.clone()).or_default();
+            slot.0 += 1;
+            if slot.1.is_none_or(|t| ev.ts > t) {
+                slot.1 = Some(ev.ts);
+            }
+        }
+        Self(out)
+    }
+
+    /// `(attempts, last re-drive)` for `spec`; `(0, None)` when never re-driven.
+    pub fn get(&self, spec: &str) -> (u32, Option<DateTime<Utc>>) {
+        self.0.get(spec).copied().unwrap_or((0, None))
+    }
+}
+
+/// The re-drive history as an unattended caller must see it (ADR-26 cap
+/// evidence): the rotated archive AND the live stream, so a rotation never
+/// resets the attempt count. Fails closed — `Err` with the reason — when
+/// events are disabled in this process (nothing this process does would be
+/// recorded, so the count cannot be trusted), when a present file cannot be
+/// read, or when neither file exists.
+// trace:TASK-1492 | ai:claude
+pub fn read_redrive_history_strict(project_root: &Path) -> Result<RedriveHistory, String> {
+    if events_disabled() {
+        return Err(format!(
+            "{EVENTS_DISABLE_ENV} is set in this process, so re-drive attempts are not recorded"
+        ));
+    }
+    let mut events = Vec::new();
+    let mut found = false;
+    for path in [events_archive_path(project_root), events_path(project_root)] {
+        match std::fs::read_to_string(&path) {
+            Ok(body) => {
+                found = true;
+                events.extend(
+                    body.lines()
+                        .filter(|l| !l.trim().is_empty())
+                        .filter_map(|l| serde_json::from_str::<Event>(l).ok()),
+                );
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("cannot read {}: {e}", path.display())),
+        }
+    }
+    if !found {
+        return Err("no event stream (.aida/events.jsonl) to count re-drive attempts from".into());
+    }
+    Ok(RedriveHistory::from_events(&events))
 }
 
 /// Parse a `--since`/`--until` bound: RFC 3339, or a bare `YYYY-MM-DD`

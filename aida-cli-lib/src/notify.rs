@@ -117,6 +117,37 @@ pub(crate) struct DirectNotifyOutcome {
     pub(crate) pending: usize,
 }
 
+/// What [`send_direct`] actually did with one message.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DirectDelivery {
+    /// `[notify] command` is unset; nothing was sent.
+    NotConfigured,
+    /// The command ran and succeeded.
+    Sent,
+    /// Quiet hours: queued, and sent by the next `aida notify check` after
+    /// they end.
+    Deferred,
+    /// The rule fired within its `min_interval`; dropped, not queued.
+    Suppressed,
+}
+
+impl DirectNotifyOutcome {
+    /// The single-message outcome.
+    // trace:TASK-1492 | ai:claude
+    pub(crate) fn delivery(&self) -> DirectDelivery {
+        if !self.configured {
+            DirectDelivery::NotConfigured
+        } else if self.sent > 0 {
+            DirectDelivery::Sent
+        } else if self.pending > 0 {
+            DirectDelivery::Deferred
+        } else {
+            DirectDelivery::Suppressed
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 struct CheckOutcome {
     configured: bool,
@@ -130,6 +161,20 @@ pub(crate) fn send_direct(
     rule: &str,
     title: &str,
     message: &str,
+) -> Result<DirectNotifyOutcome> {
+    send_direct_bounded(project_root, rule, title, message, None)
+}
+
+/// [`send_direct`] with a bound on how long the notify command may run: a
+/// caller with a deadline (the night-shift tick) passes one, and a command
+/// still running at the bound is killed and reported as a failure.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn send_direct_bounded(
+    project_root: &Path,
+    rule: &str,
+    title: &str,
+    message: &str,
+    timeout: Option<Duration>,
 ) -> Result<DirectNotifyOutcome> {
     let Some(config) = NotifyConfig::load(project_root)? else {
         return Ok(DirectNotifyOutcome::default());
@@ -159,7 +204,7 @@ pub(crate) fn send_direct(
         return Ok(outcome);
     }
 
-    match run_command(project_root, &config, rule, title, message) {
+    match run_command_bounded(project_root, &config, rule, title, message, timeout) {
         Ok(()) => {
             mark_sent(&mut state, rule, now);
             outcome.sent += 1;
@@ -604,6 +649,21 @@ fn run_command(
     title: &str,
     message: &str,
 ) -> Result<()> {
+    run_command_bounded(project_root, config, rule, title, message, None)
+}
+
+/// Run the notify command; with `timeout`, a command still running at the
+/// bound is killed and the send fails, so a hung command cannot hold its
+/// caller past a deadline.
+// trace:TASK-1492 | ai:claude
+fn run_command_bounded(
+    project_root: &Path,
+    config: &NotifyConfig,
+    rule: &str,
+    title: &str,
+    message: &str,
+    timeout: Option<Duration>,
+) -> Result<()> {
     // Substituted values are spliced into a shell command line, and spec
     // titles carry shell-active characters (backticks, quotes, $). Quote them
     // so title content is data, never code.
@@ -612,15 +672,25 @@ fn run_command(
         .replace("{title}", &shell_quote(title))
         .replace("{rule}", &shell_quote(rule));
     #[cfg(unix)]
-    let mut child = Command::new("sh")
-        .arg("-c")
-        .arg(&command)
-        .current_dir(project_root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("spawn notify command `{command}`"))?;
+    let mut child = {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c")
+            .arg(&command)
+            .current_dir(project_root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped());
+        // A bounded run gets its own process group, so a timeout can end
+        // the whole command (a compound command or a pipeline forks
+        // grandchildren that a signal to `sh` alone would orphan).
+        // trace:TASK-1492 | ai:claude
+        if timeout.is_some() {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+        cmd.spawn()
+            .with_context(|| format!("spawn notify command `{command}`"))?
+    };
     #[cfg(windows)]
     let mut child = Command::new("cmd")
         .arg("/C")
@@ -640,16 +710,104 @@ fn run_command(
             other => other?,
         }
     }
-    let output = child.wait_with_output()?;
-    if output.status.success() {
-        Ok(())
-    } else {
+    let Some(timeout) = timeout else {
+        let output = child.wait_with_output()?;
+        if output.status.success() {
+            return Ok(());
+        }
         anyhow::bail!(
             "notify command exited {}: {}",
             output.status,
             String::from_utf8_lossy(&output.stderr).trim()
         )
+    };
+    // stderr is drained on a thread so a chatty command cannot block on a
+    // full pipe. The thread ends when every holder of the pipe is gone,
+    // which the group kill below guarantees.
+    // trace:TASK-1492 | ai:claude
+    let (tx, rx) = std::sync::mpsc::channel();
+    let reader = child.stderr.take().map(|mut stderr| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = std::io::Read::read_to_string(&mut stderr, &mut buf);
+            let _ = tx.send(buf);
+        })
+    });
+    let started = std::time::Instant::now();
+    let timed_out = loop {
+        if exited_unreaped(&mut child)? {
+            break false;
+        }
+        if started.elapsed() >= timeout {
+            break true;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    // The shell is not reaped yet, so its pid is still the live group id:
+    // end every process the command started (a timed-out one, or a
+    // background leftover holding stderr), then reap the shell.
+    kill_group(&mut child);
+    let status = child.wait()?;
+    let stderr = rx.recv_timeout(Duration::from_secs(1)).unwrap_or_default();
+    if let Some(reader) = reader {
+        if reader.is_finished() {
+            let _ = reader.join();
+        }
     }
+    if timed_out {
+        anyhow::bail!(
+            "notify command `{command}` still running after {}s; killed",
+            timeout.as_secs_f32()
+        );
+    }
+    if status.success() {
+        return Ok(());
+    }
+    anyhow::bail!("notify command exited {status}: {}", stderr.trim())
+}
+
+/// Has the child exited? Unix: checked WITHOUT reaping it (`WNOWAIT`), so
+/// its pid stays reserved as the process-group id until [`kill_group`] ran.
+// trace:TASK-1492 | ai:claude
+#[cfg(unix)]
+fn exited_unreaped(child: &mut std::process::Child) -> std::io::Result<bool> {
+    // SAFETY: waitid only writes the zeroed siginfo we own.
+    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+    let rc = unsafe {
+        libc::waitid(
+            libc::P_PID,
+            child.id() as libc::id_t,
+            &mut info,
+            libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+        )
+    };
+    if rc != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // SAFETY: si_pid is valid for a waitid result; 0 means still running.
+    Ok(unsafe { info.si_pid() } != 0)
+}
+
+#[cfg(windows)]
+fn exited_unreaped(child: &mut std::process::Child) -> std::io::Result<bool> {
+    Ok(child.try_wait()?.is_some())
+}
+
+/// SIGKILL the command's whole process group (its pgid is the unreaped
+/// shell's pid). Windows: the child only.
+// trace:TASK-1492 | ai:claude
+#[cfg(unix)]
+fn kill_group(child: &mut std::process::Child) {
+    // SAFETY: plain syscall; the group is ours (process_group(0) at spawn)
+    // and the leader is unreaped, so the id cannot have been reused.
+    unsafe {
+        libc::killpg(child.id() as libc::pid_t, libc::SIGKILL);
+    }
+}
+
+#[cfg(windows)]
+fn kill_group(child: &mut std::process::Child) {
+    let _ = child.kill();
 }
 
 fn load_state(project_root: &Path) -> Result<NotifyState> {
@@ -883,5 +1041,181 @@ mod tests {
             "backticks in a title must not execute inside the notify shell"
         );
         assert_eq!(std::fs::read_to_string(capture).unwrap(), title);
+    }
+
+    // A hung notify command is killed at the bound instead of holding the
+    // caller (the night-shift tick) past its deadline.
+    // trace:TASK-1492 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn notify_bounded_command_is_killed_at_the_timeout() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = NotifyConfig {
+            command: "sleep 5".to_string(),
+            min_interval: Duration::from_secs(0),
+            quiet_hours: None,
+            rules: NotifyRules::default(),
+        };
+        let started = std::time::Instant::now();
+        let err = run_command_bounded(
+            dir.path(),
+            &cfg,
+            "mail-latency",
+            "t",
+            "m\n",
+            Some(Duration::from_millis(300)),
+        )
+        .unwrap_err();
+        assert!(started.elapsed() < Duration::from_secs(10), "{err:#}");
+        assert!(format!("{err:#}").contains("killed"), "{err:#}");
+        // A command that finishes inside the bound still succeeds or fails
+        // on its own exit status.
+        let ok = NotifyConfig {
+            command: "cat >/dev/null".to_string(),
+            ..cfg.clone()
+        };
+        run_command_bounded(
+            dir.path(),
+            &ok,
+            "r",
+            "t",
+            "m\n",
+            Some(Duration::from_secs(10)),
+        )
+        .unwrap();
+        let bad = NotifyConfig {
+            command: "echo boom >&2; exit 3".to_string(),
+            ..cfg
+        };
+        let err = run_command_bounded(
+            dir.path(),
+            &bad,
+            "r",
+            "t",
+            "m\n",
+            Some(Duration::from_secs(10)),
+        )
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("boom"), "{err:#}");
+    }
+
+    // N1: a timed-out compound command or pipeline leaves no process of its
+    // group behind (a signal to `sh` alone would orphan the grandchildren),
+    // and the call returns within the bound.
+    // trace:TASK-1492 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn notify_timeout_kills_the_whole_process_group() {
+        let dir = tempfile::tempdir().unwrap();
+        for (i, body) in ["sleep 7.123 ; true", "sleep 7.321 | cat ; true"]
+            .iter()
+            .enumerate()
+        {
+            let pidfile = dir.path().join(format!("pgid-{i}"));
+            let cfg = NotifyConfig {
+                command: format!("echo $$ > {} ; {body}", pidfile.display()),
+                min_interval: Duration::from_secs(0),
+                quiet_hours: None,
+                rules: NotifyRules::default(),
+            };
+            let started = std::time::Instant::now();
+            let err = run_command_bounded(
+                dir.path(),
+                &cfg,
+                "r",
+                "t",
+                "m\n",
+                Some(Duration::from_millis(500)),
+            )
+            .unwrap_err();
+            assert!(
+                started.elapsed() < Duration::from_secs(3),
+                "{body}: {:?}",
+                started.elapsed()
+            );
+            assert!(format!("{err:#}").contains("killed"), "{err:#}");
+            let pgid: libc::pid_t = std::fs::read_to_string(&pidfile)
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap();
+            // Killed members are reaped by their new parent shortly after;
+            // poll until the group is empty (bounded).
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                // SAFETY: signal 0 only probes for group members.
+                let alive = unsafe { libc::killpg(pgid, 0) } == 0;
+                if !alive {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "{body}: process group {pgid} still has members"
+                );
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+
+    // send_direct reports what really happened: a message dropped by the
+    // rule's min_interval is Suppressed, not Sent, and a timed-out command is
+    // an error that leaves the rule unmarked.
+    // trace:TASK-1492 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn notify_send_direct_reports_the_real_delivery() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        assert_eq!(
+            send_direct(root, "mail-latency", "t", "m")
+                .unwrap()
+                .delivery(),
+            DirectDelivery::NotConfigured
+        );
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida").join("config.toml"),
+            "[notify]\ncommand = \"cat >/dev/null\"\nmin_interval = \"30m\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            send_direct(root, "mail-latency", "t", "m")
+                .unwrap()
+                .delivery(),
+            DirectDelivery::Sent
+        );
+        assert_eq!(
+            send_direct(root, "mail-latency", "t", "m")
+                .unwrap()
+                .delivery(),
+            DirectDelivery::Suppressed
+        );
+        let deferred = DirectNotifyOutcome {
+            configured: true,
+            pending: 1,
+            ..Default::default()
+        };
+        assert_eq!(deferred.delivery(), DirectDelivery::Deferred);
+
+        std::fs::write(
+            root.join(".aida").join("config.toml"),
+            "[notify]\ncommand = \"sleep 5\"\nmin_interval = \"0s\"\n",
+        )
+        .unwrap();
+        let started = std::time::Instant::now();
+        assert!(send_direct_bounded(
+            root,
+            "other-rule",
+            "t",
+            "m",
+            Some(Duration::from_millis(300))
+        )
+        .is_err());
+        assert!(started.elapsed() < Duration::from_secs(10));
+        let state = load_state(root).unwrap();
+        assert!(state
+            .rules
+            .get("other-rule")
+            .is_none_or(|r| r.last_fire.is_none()));
     }
 }

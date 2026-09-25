@@ -66,6 +66,15 @@ fn probes(candidates: Vec<Candidate>) -> Probes {
         last_wave_alive: false,
         queue_drained: Vec::new(),
         finished_specs: BTreeSet::new(),
+        // trace:TASK-1492 | ai:claude
+        parked: Vec::new(),
+        held: BTreeSet::new(),
+        redrive_history: Ok(events::RedriveHistory::default()),
+        mail: Ok(BTreeMap::new()),
+        mail_known: ["advisor", "product"]
+            .into_iter()
+            .map(String::from)
+            .collect(),
     }
 }
 
@@ -89,6 +98,17 @@ struct Mock {
     saves: Vec<ShiftState>,
     events: Vec<EventKind>,
     reap_count: usize,
+    // trace:TASK-1492 | ai:claude
+    requeued: Vec<(Vec<String>, crate::supervisor::QueueTarget)>,
+    reclassified: Vec<String>,
+    notifies: Vec<(String, String, String)>,
+    notify_unconfigured: bool,
+    /// Outcomes the notify seam returns in turn; `Sent` once exhausted.
+    notify_outcomes: std::collections::VecDeque<crate::notify::DirectDelivery>,
+    /// The timeout each notify call was given.
+    notify_timeouts: Vec<StdDuration>,
+    /// The attempt record fails from this would-re-drive index on.
+    unrecorded_from: Option<usize>,
 }
 
 impl ShiftExec for Mock {
@@ -114,6 +134,58 @@ impl ShiftExec for Mock {
     fn emit(&mut self, kind: EventKind) {
         self.calls.push("emit".into());
         self.events.push(kind);
+    }
+    fn requeue(
+        &mut self,
+        decisions: &[crate::supervisor::SuperviseDecision],
+        queue: &crate::supervisor::QueueTarget,
+    ) -> Result<crate::supervisor::RequeueOutcome> {
+        let mut specs: Vec<String> = decisions
+            .iter()
+            .filter(|d| d.action == "would-re-drive")
+            .map(|d| d.spec.clone())
+            .collect();
+        let mut out = crate::supervisor::RequeueOutcome::default();
+        if let Some(i) = self.unrecorded_from.filter(|i| *i < specs.len()) {
+            out.held = specs.split_off(i);
+            out.unrecorded = Some(format!(
+                "cannot record the re-drive attempt for {}: disk full",
+                out.held[0]
+            ));
+        }
+        if !specs.is_empty() {
+            self.calls.push("requeue".into());
+            self.requeued.push((specs.clone(), queue.clone()));
+        }
+        out.applied = specs;
+        Ok(out)
+    }
+    fn reclassify(&mut self, decision: &crate::supervisor::SuperviseDecision) -> Result<bool> {
+        self.calls.push("reclassify".into());
+        self.reclassified.push(decision.spec.clone());
+        Ok(true)
+    }
+    fn notify(
+        &mut self,
+        rule: &str,
+        title: &str,
+        message: &str,
+        timeout: StdDuration,
+    ) -> Result<crate::notify::DirectDelivery> {
+        self.calls.push("notify".into());
+        self.notify_timeouts.push(timeout);
+        if self.notify_unconfigured {
+            return Ok(crate::notify::DirectDelivery::NotConfigured);
+        }
+        let outcome = self
+            .notify_outcomes
+            .pop_front()
+            .unwrap_or(crate::notify::DirectDelivery::Sent);
+        if outcome == crate::notify::DirectDelivery::Sent {
+            self.notifies
+                .push((rule.to_string(), title.to_string(), message.to_string()));
+        }
+        Ok(outcome)
     }
 }
 
@@ -956,7 +1028,7 @@ fn shift_dry_run_on_fixture_queue_prints_argv_specs_guards_mail_and_writes_nothi
     add("TASK-1", Some(ExecutionMode::Drain), Some("implementer"));
     add("TASK-2", Some(ExecutionMode::Drive), Some("implementer"));
     add("TASK-3", Some(ExecutionMode::Drain), Some("reviewer"));
-    let candidates = gather_candidates(tmp.path(), &backend, "joe");
+    let candidates = gather_candidates(&backend, "joe", &BTreeSet::new());
     let specs: Vec<&str> = candidates.iter().map(|c| c.spec.as_str()).collect();
     assert!(
         specs.contains(&"TASK-1") && specs.contains(&"TASK-2"),
@@ -992,7 +1064,8 @@ fn shift_dry_run_on_fixture_queue_prints_argv_specs_guards_mail_and_writes_nothi
         "pass enabled",
         "skip TASK-2: execution mode drive",
         "mail latency:",
-        "re-drive: off",
+        // trace:TASK-1492 | ai:claude — A5: off by default, and says why.
+        "re-drive: off (ADR-26 default)",
     ] {
         assert!(text.contains(needle), "missing {needle:?} in:\n{text}");
     }
@@ -1315,6 +1388,25 @@ fn shift_deadline_rechecked_after_reap_before_spawn() {
         fn emit(&mut self, k: EventKind) {
             self.0.emit(k)
         }
+        fn requeue(
+            &mut self,
+            d: &[crate::supervisor::SuperviseDecision],
+            q: &crate::supervisor::QueueTarget,
+        ) -> Result<crate::supervisor::RequeueOutcome> {
+            self.0.requeue(d, q)
+        }
+        fn reclassify(&mut self, d: &crate::supervisor::SuperviseDecision) -> Result<bool> {
+            self.0.reclassify(d)
+        }
+        fn notify(
+            &mut self,
+            r: &str,
+            t: &str,
+            m: &str,
+            timeout: StdDuration,
+        ) -> Result<crate::notify::DirectDelivery> {
+            self.0.notify(r, t, m, timeout)
+        }
     }
     let c = TickCtx::from_clock(
         now(),
@@ -1404,6 +1496,25 @@ fn shift_deadline_rechecked_between_tag_and_spawn() {
         }
         fn emit(&mut self, k: EventKind) {
             self.0.emit(k)
+        }
+        fn requeue(
+            &mut self,
+            d: &[crate::supervisor::SuperviseDecision],
+            q: &crate::supervisor::QueueTarget,
+        ) -> Result<crate::supervisor::RequeueOutcome> {
+            self.0.requeue(d, q)
+        }
+        fn reclassify(&mut self, d: &crate::supervisor::SuperviseDecision) -> Result<bool> {
+            self.0.reclassify(d)
+        }
+        fn notify(
+            &mut self,
+            r: &str,
+            t: &str,
+            m: &str,
+            timeout: StdDuration,
+        ) -> Result<crate::notify::DirectDelivery> {
+            self.0.notify(r, t, m, timeout)
         }
     }
     let c = TickCtx::from_clock(
@@ -1512,4 +1623,1074 @@ fn shift_pid_less_intent_not_adopted_by_a_foreign_drain_lock() {
         assert_eq!(state.waves_in_day(now()), 0);
         assert!(state.spec_waves.is_empty());
     }
+}
+
+// ---------------------------------------------------------------------------
+// Slice 3: opt-in re-drive (A5, A6, A7) and mail-latency escalation
+// trace:TASK-1492 | ai:claude
+// ---------------------------------------------------------------------------
+
+fn cfg_redrive_on() -> ShiftConfig {
+    cfg_with(
+        None,
+        Some(&format!(
+            "[repo.\"{REPO}\"]\nenabled = true\nredrive = true\n"
+        )),
+    )
+}
+
+fn park(
+    spec: &str,
+    kind: &str,
+    mode: Option<ExecutionMode>,
+    mins_ago: i64,
+) -> aida_core::Requirement {
+    let mut r = aida_core::Requirement::new(spec.to_string(), "parked".to_string());
+    r.spec_id = Some(spec.to_string());
+    r.status = RequirementStatus::NeedsAttention;
+    r.execution_mode = mode;
+    r.modified_at = now() - Duration::minutes(mins_ago);
+    r.failure_reason = Some(aida_core::FailureReason {
+        phase: "implementer".to_string(),
+        phase_index: 1,
+        kind: kind.to_string(),
+        detail: "failed".to_string(),
+        recovery_hint: None,
+        shelved_by: None,
+        shelved_at: now() - Duration::minutes(mins_ago),
+    });
+    r
+}
+
+fn drain_park(spec: &str, mins_ago: i64) -> aida_core::Requirement {
+    park(spec, "watchdog", Some(ExecutionMode::Drain), mins_ago)
+}
+
+fn redrive_event(spec: &str, attempt: u32, at: DateTime<Utc>) -> events::Event {
+    let mut ev = events::Event::new(
+        Some(spec.to_string()),
+        "",
+        EventKind::SpecReDriven {
+            cause: "watchdog".to_string(),
+            attempt,
+            max: 3,
+        },
+    );
+    ev.ts = at;
+    ev
+}
+
+fn redrive_guard<'a>(r: &'a TickReport, name: &str) -> &'a GuardVerdict {
+    r.redrive_guards
+        .iter()
+        .find(|g| g.name == name)
+        .unwrap_or_else(|| panic!("no re-drive guard {name}"))
+}
+
+#[test]
+fn shift_redrive_is_off_by_default_even_with_the_shift_enabled() {
+    // A5: the shift is on, a transient drain-mode park is waiting, and
+    // re-drive stays off until the local layer turns it on.
+    let mut p = probes(vec![drain("TASK-1")]);
+    p.parked = vec![drain_park("TASK-9", 60)];
+    let (r, mock) = run(&cfg_on(), &p, &mut ShiftState::default(), &ctx());
+    assert!(mock.requeued.is_empty() && mock.reclassified.is_empty());
+    assert_eq!(r.redrive, "off (ADR-26 default)");
+    assert!(r.redriven.is_empty());
+    assert_eq!(r.launched.unwrap().specs, vec!["TASK-1"]);
+
+    // A committed `redrive = true` is ignored: the switch is per clone.
+    let committed = cfg_with(
+        Some("[shift]\nredrive = true\n"),
+        Some(&format!("[repo.\"{REPO}\"]\nenabled = true\n")),
+    );
+    assert!(!committed.redrive && committed.committed_redrive_ignored);
+    let mut c = ctx();
+    c.dry_run = true;
+    let (r, mock) = run(&committed, &p, &mut ShiftState::default(), &c);
+    assert!(mock.calls.is_empty());
+    assert!(
+        render_report(&r).contains("re-drive: off (ADR-26 default; the committed"),
+        "{}",
+        render_report(&r)
+    );
+    assert!(cfg_redrive_on().redrive);
+    assert_eq!(cfg_redrive_on().max_redrives_per_tick, 3);
+}
+
+#[test]
+fn shift_tick_redrives_transient_park_without_seat() {
+    // No seat is involved: the tick re-queues the parks itself, oldest-parked
+    // first, at the head of the queue, and they ride this tick's wave (A7).
+    let mut p = probes(vec![drain("TASK-1")]);
+    p.parked = vec![drain_park("TASK-9", 30), drain_park("TASK-8", 90)];
+    let mut state = ShiftState::default();
+    let (r, mock) = run(&cfg_redrive_on(), &p, &mut state, &ctx());
+    assert_eq!(r.redriven, vec!["TASK-8", "TASK-9"]);
+    assert_eq!(mock.requeued.len(), 1);
+    let (specs, queue) = &mock.requeued[0];
+    assert_eq!(specs, &vec!["TASK-8".to_string(), "TASK-9".to_string()]);
+    assert_eq!(queue.user, "joe");
+    assert_eq!(queue.role, "implementer");
+    let launched = r.launched.clone().expect("the wave launches");
+    assert_eq!(launched.specs, vec!["TASK-8", "TASK-9", "TASK-1"]);
+    assert_eq!(mock.tags[0].1, launched.specs);
+    let pos = |c: &str| mock.calls.iter().position(|x| x == c).unwrap();
+    assert!(pos("requeue") < pos("tag") && pos("tag") < pos("spawn"));
+    // The wave argv never carries a force flag for a re-driven spec.
+    for flag in ["--force-claim", "--steal", "--force"] {
+        assert!(!mock.spawns[0].iter().any(|a| a == flag), "{flag}");
+    }
+    match mock.events.last().unwrap() {
+        EventKind::ShiftTick { redriven, .. } => {
+            assert_eq!(redriven, &vec!["TASK-8".to_string(), "TASK-9".to_string()])
+        }
+        other => panic!("expected ShiftTick, got {other:?}"),
+    }
+    assert!(
+        r.redrive.starts_with("on — re-queued TASK-8, TASK-9"),
+        "{}",
+        r.redrive
+    );
+
+    // Backoff: a park younger than the first 2m step waits.
+    let mut young = probes(Vec::new());
+    young.parked = vec![drain_park("TASK-7", 1)];
+    let (r, mock) = run(
+        &cfg_redrive_on(),
+        &young,
+        &mut ShiftState::default(),
+        &ctx(),
+    );
+    assert!(mock.requeued.is_empty());
+    assert_eq!(r.redrive_plan[0].action, "backoff-wait");
+
+    // `max_redrives_per_tick` caps the step.
+    let capped = cfg_with(
+        Some("[shift]\nmax_redrives_per_tick = 1\n"),
+        Some(&format!(
+            "[repo.\"{REPO}\"]\nenabled = true\nredrive = true\n"
+        )),
+    );
+    let (r, _) = run(&capped, &p, &mut ShiftState::default(), &ctx());
+    assert_eq!(r.redriven, vec!["TASK-8"]);
+
+    // A dry run previews the re-drive and writes nothing.
+    let mut c = ctx();
+    c.dry_run = true;
+    let (r, mock) = run(&cfg_redrive_on(), &p, &mut ShiftState::default(), &c);
+    assert!(mock.calls.is_empty(), "{:?}", mock.calls);
+    assert_eq!(r.specs, vec!["TASK-8", "TASK-9", "TASK-1"]);
+    assert!(render_report(&r).contains("re-drive: on — would re-queue TASK-8, TASK-9"));
+}
+
+#[test]
+fn shift_tick_skips_redrive_while_drain_live() {
+    let parked = vec![drain_park("TASK-9", 60)];
+    // A drain holds this clone's lock.
+    let mut p = probes(Vec::new());
+    p.parked = parked.clone();
+    p.lock = LockView::Running(77);
+    let (r, mock) = run(&cfg_redrive_on(), &p, &mut ShiftState::default(), &ctx());
+    assert!(mock.requeued.is_empty() && mock.reclassified.is_empty());
+    assert!(!redrive_guard(&r, "redrive-lock-free").pass);
+    assert!(
+        r.redrive.starts_with("held: redrive-lock-free"),
+        "{}",
+        r.redrive
+    );
+    // Another clone is draining.
+    let mut p = probes(Vec::new());
+    p.parked = parked.clone();
+    p.foreign_claim = Some("another clone is draining".to_string());
+    let (_, mock) = run(&cfg_redrive_on(), &p, &mut ShiftState::default(), &ctx());
+    assert!(mock.requeued.is_empty());
+    // A shift wave of ours is still alive before it wrote the lock.
+    let mut p = probes(Vec::new());
+    p.parked = parked.clone();
+    p.last_wave_alive = true;
+    let mut state = ShiftState {
+        waves: vec![launched_wave(now() - Duration::minutes(1), &["TASK-1"])],
+        ..Default::default()
+    };
+    let (_, mock) = run(&cfg_redrive_on(), &p, &mut state, &ctx());
+    assert!(mock.requeued.is_empty());
+    // A tripped no-progress breaker: re-queueing would look like a queue
+    // change and silently resume launches, so no re-drive.
+    let mut p = probes(Vec::new());
+    p.parked = parked;
+    let mut state = ShiftState {
+        breaker: Some(Breaker {
+            tripped_at: now(),
+            reason: "2 consecutive shift waves made no progress".to_string(),
+            queue_fingerprint: Vec::new(),
+        }),
+        ..Default::default()
+    };
+    let (r, mock) = run(&cfg_redrive_on(), &p, &mut state, &ctx());
+    assert!(mock.requeued.is_empty());
+    assert!(!redrive_guard(&r, "redrive-breaker").pass);
+    assert!(state.breaker.is_some(), "the breaker stays tripped");
+}
+
+#[test]
+fn shift_tick_never_redrives_merge_hold_or_non_drain_park() {
+    let mut held = drain_park("TASK-1", 60);
+    held.spec_id = Some("TASK-1".to_string());
+    let drive = park("TASK-2", "watchdog", Some(ExecutionMode::Drive), 60);
+    let no_mode = park("TASK-3", "watchdog", None, 60);
+    let mut attention = drain_park("TASK-4", 60);
+    attention.attention_reason = Some(aida_core::AttentionReason {
+        category: aida_core::PuntCategory::DesignFork,
+        detail: "pick one".to_string(),
+        lean: None,
+        raised_by: None,
+        raised_at: now(),
+    });
+    let mut keystone = drain_park("TASK-5", 60);
+    keystone.tags.insert("keystone".to_string());
+    let ci_red = park("TASK-6", "ci-red", Some(ExecutionMode::Drain), 60);
+    let mut p = probes(Vec::new());
+    p.parked = vec![held, drive, no_mode, attention, keystone, ci_red];
+    p.held = ["TASK-1".to_string()].into_iter().collect();
+    // Even at the cap, a floored park is left exactly as it is.
+    p.redrive_history = Ok(events::RedriveHistory::from_events(&[
+        redrive_event("TASK-2", 1, now() - Duration::hours(3)),
+        redrive_event("TASK-2", 2, now() - Duration::hours(2)),
+        redrive_event("TASK-2", 3, now() - Duration::hours(1)),
+    ]));
+    let (r, mock) = run(&cfg_redrive_on(), &p, &mut ShiftState::default(), &ctx());
+    assert!(mock.requeued.is_empty(), "{:?}", mock.requeued);
+    assert!(mock.reclassified.is_empty(), "{:?}", mock.reclassified);
+    let action = |spec: &str| {
+        r.redrive_plan
+            .iter()
+            .find(|d| d.spec == spec)
+            .map(|d| d.action.clone())
+            .unwrap()
+    };
+    assert_eq!(action("TASK-1"), "leave-merge-held");
+    assert_eq!(action("TASK-2"), "leave-not-drain-mode");
+    assert_eq!(action("TASK-3"), "leave-not-drain-mode");
+    assert_eq!(action("TASK-4"), "leave-for-human");
+    assert_eq!(action("TASK-5"), "leave-keystone");
+    assert_eq!(action("TASK-6"), "leave-for-human");
+    assert_eq!(r.redrive, "on — nothing to re-drive");
+}
+
+#[test]
+fn shift_redrive_cap_survives_event_rotation() {
+    // A6: three supervised re-drives are in the rotated archive and the live
+    // stream is empty. The spec must NOT be re-driven a fourth time; the
+    // tick takes the cap branch instead.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    let aida = tmp.path().join(".aida");
+    std::fs::create_dir_all(&aida).unwrap();
+    let archive: String = (1..=3)
+        .map(|n| {
+            serde_json::to_string(&redrive_event(
+                "TASK-9",
+                n,
+                now() - Duration::hours(4 - n as i64),
+            ))
+            .unwrap()
+                + "\n"
+        })
+        .collect();
+    std::fs::write(aida.join("events.jsonl.1"), archive).unwrap();
+    std::fs::write(aida.join("events.jsonl"), "").unwrap();
+    // The live stream alone would reset the count.
+    assert_eq!(events::supervisor_redrive_state(tmp.path(), "TASK-9").0, 0);
+    let history = events::read_redrive_history_strict(tmp.path()).expect("readable");
+    assert_eq!(history.get("TASK-9").0, 3);
+
+    let mut p = probes(Vec::new());
+    p.parked = vec![drain_park("TASK-9", 30)];
+    p.redrive_history = Ok(history);
+    let (r, mock) = run(&cfg_redrive_on(), &p, &mut ShiftState::default(), &ctx());
+    assert!(mock.requeued.is_empty(), "never a fourth re-drive");
+    assert_eq!(mock.reclassified, vec!["TASK-9"]);
+    assert_eq!(r.reclassified, vec!["TASK-9"]);
+    assert!(r.specs.is_empty(), "a capped park never joins the wave");
+    match mock.events.last().unwrap() {
+        EventKind::ShiftTick { reclassified, .. } => {
+            assert_eq!(reclassified, &vec!["TASK-9".to_string()])
+        }
+        other => panic!("expected ShiftTick, got {other:?}"),
+    }
+}
+
+#[test]
+fn shift_redrive_evidence_fails_closed() {
+    let tmp = tempfile::tempdir().unwrap();
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+        // No stream at all: nothing to count from.
+        assert!(events::read_redrive_history_strict(tmp.path()).is_err());
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(tmp.path().join(".aida").join("events.jsonl"), "").unwrap();
+        assert!(events::read_redrive_history_strict(tmp.path()).is_ok());
+    }
+    {
+        // Events disabled in the tick process: attempts would not be
+        // recorded, so the count cannot hold.
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, Some("1"))]);
+        let err = events::read_redrive_history_strict(tmp.path()).unwrap_err();
+        assert!(err.contains(events::EVENTS_DISABLE_ENV), "{err}");
+    }
+    let mut p = probes(vec![drain("TASK-1")]);
+    p.parked = vec![drain_park("TASK-9", 60)];
+    p.redrive_history = Err("AIDA_EVENTS_DISABLE is set".to_string());
+    let (r, mock) = run(&cfg_redrive_on(), &p, &mut ShiftState::default(), &ctx());
+    assert!(mock.requeued.is_empty() && mock.reclassified.is_empty());
+    assert!(!redrive_guard(&r, "redrive-evidence").pass);
+    assert_eq!(r.redrive, "held: redrive-evidence");
+    // A held re-drive never blocks the launch.
+    assert_eq!(r.launched.unwrap().specs, vec!["TASK-1"]);
+}
+
+#[test]
+fn shift_redrive_requeue_puts_parks_at_the_queue_head_and_the_next_wave_selects_them() {
+    // A7 on a real store: the parks were dequeued at pickup; after the
+    // re-drive they are back in the queue at the head, oldest-parked first,
+    // routed to the wave's role, and the wave's own queue view selects them.
+    use aida_core::DatabaseBackend;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path().join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let backend =
+        aida_core::CachedGitBackend::open(&store, &tmp.path().join(".aida").join("cache.db"))
+            .unwrap();
+    let queued = |spec: &str, position: i64| {
+        let mut r = aida_core::Requirement::new(spec.to_string(), "d".to_string());
+        r.spec_id = Some(spec.to_string());
+        r.status = RequirementStatus::Approved;
+        r.execution_mode = Some(ExecutionMode::Drain);
+        let r = backend.add_requirement(r).unwrap();
+        backend
+            .queue_add(aida_core::QueueEntry {
+                user_id: "joe".into(),
+                requirement_id: r.id,
+                position,
+                added_by: "joe".into(),
+                note: None,
+                added_at: Utc::now(),
+                for_role: Some("implementer".into()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })
+            .unwrap();
+    };
+    queued("TASK-1", 1000);
+    queued("TASK-2", 2000);
+    let mut older = drain_park("TASK-8", 90);
+    older.modified_at = Utc::now() - Duration::minutes(90);
+    let mut newer = drain_park("TASK-9", 30);
+    newer.modified_at = Utc::now() - Duration::minutes(30);
+    backend.add_requirement(newer).unwrap();
+    backend.add_requirement(older).unwrap();
+
+    let parked: Vec<aida_core::Requirement> = backend
+        .load()
+        .unwrap()
+        .requirements
+        .into_iter()
+        .filter(|r| r.status == RequirementStatus::NeedsAttention)
+        .collect();
+    let opts = crate::supervisor::SuperviseOpts {
+        floors: Some(crate::supervisor::RedriveFloors {
+            drain_mode_only: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let plan = crate::supervisor::plan_redrives(
+        &parked,
+        &events::RedriveHistory::default(),
+        &opts,
+        Utc::now(),
+    );
+    let queue = crate::supervisor::QueueTarget {
+        user: "joe".to_string(),
+        role: "implementer".to_string(),
+    };
+    let applied =
+        crate::supervisor::apply_requeue(&backend, tmp.path(), &plan, 3, Some(&queue)).unwrap();
+    assert_eq!(applied.applied, vec!["TASK-8", "TASK-9"]);
+    assert!(applied.unrecorded.is_none());
+
+    let entries = backend.queue_list("joe", false).unwrap();
+    let order: Vec<String> = entries
+        .iter()
+        .map(|e| {
+            backend
+                .get_requirement(&e.requirement_id)
+                .unwrap()
+                .unwrap()
+                .display_id()
+        })
+        .collect();
+    assert_eq!(order, vec!["TASK-8", "TASK-9", "TASK-1", "TASK-2"]);
+    assert!(entries
+        .iter()
+        .all(|e| e.for_role.as_deref() == Some("implementer")));
+    let history = events::read_redrive_history_strict(tmp.path()).unwrap();
+    assert_eq!(history.get("TASK-8").0, 1);
+    assert_eq!(history.get("TASK-9").0, 1);
+
+    // The next wave: the wave's own queue view selects them first.
+    let candidates = gather_candidates(&backend, "joe", &BTreeSet::new());
+    let sel = select_wave(&cfg_on(), &candidates, &ShiftState::default(), now());
+    assert_eq!(sel.specs, vec!["TASK-8", "TASK-9", "TASK-1", "TASK-2"]);
+    let argv = build_wave_argv(&cfg_on(), sel.batch.as_deref().unwrap(), 1);
+    assert!(!argv.iter().any(|a| a == "--force-claim"));
+
+    // A second apply finds them no longer parked: nothing moves.
+    let again =
+        crate::supervisor::apply_requeue(&backend, tmp.path(), &plan, 3, Some(&queue)).unwrap();
+    assert!(again.applied.is_empty() && again.unrecorded.is_none());
+}
+
+fn unread(count: i64, mins_old: i64) -> crate::mailbox_store::RecipientUnread {
+    crate::mailbox_store::RecipientUnread {
+        count,
+        oldest_ts: (now() - Duration::minutes(mins_old)).timestamp_millis(),
+    }
+}
+
+#[test]
+fn shift_mail_latency_escalates_once_per_episode_and_rearms() {
+    let cfg = cfg_on();
+    assert_eq!(cfg.mail_latency, "30m");
+    let over: BTreeMap<_, _> = [
+        ("advisor".to_string(), unread(2, 47)),
+        ("product".to_string(), unread(1, 5)),
+    ]
+    .into_iter()
+    .collect();
+    let mut state = ShiftState::default();
+
+    // First tick over the threshold: one notification, advisor only.
+    let mut p = probes(Vec::new());
+    p.mail = Ok(over.clone());
+    let (r, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert_eq!(mock.notifies.len(), 1);
+    let (rule, _, message) = &mock.notifies[0];
+    assert_eq!(rule, "mail-latency");
+    assert!(
+        message.contains("advisor: 2 unread, oldest 47m old"),
+        "{message}"
+    );
+    assert!(!message.contains("product"), "{message}");
+    assert_eq!(r.mail_escalated, vec!["advisor"]);
+    assert!(state.mail_episodes.contains_key("advisor"));
+    match mock.events.last().unwrap() {
+        EventKind::ShiftTick { mail_escalated, .. } => {
+            assert_eq!(mail_escalated, &vec!["advisor".to_string()])
+        }
+        other => panic!("expected ShiftTick, got {other:?}"),
+    }
+
+    // Still over on the next tick: the same episode, no second notification.
+    let (r, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert!(mock.notifies.is_empty());
+    assert!(r.mail_escalated.is_empty());
+    assert!(
+        r.mail_latency.contains("already notified"),
+        "{}",
+        r.mail_latency
+    );
+
+    // The mail was read: the episode closes and re-arms, quietly.
+    let mut read = probes(Vec::new());
+    read.mail = Ok(BTreeMap::new());
+    let (_, mock) = run(&cfg, &read, &mut state, &ctx());
+    assert!(mock.notifies.is_empty());
+    assert!(state.mail_episodes.is_empty());
+
+    // Over again: a new episode, a new notification.
+    let (_, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert_eq!(mock.notifies.len(), 1);
+
+    // An unreadable mailbox changes no episode and notifies nobody.
+    let mut broken = probes(Vec::new());
+    broken.mail = Err("permission denied".to_string());
+    let before = state.mail_episodes.clone();
+    let (r, mock) = run(&cfg, &broken, &mut state, &ctx());
+    assert!(mock.notifies.is_empty());
+    assert_eq!(state.mail_episodes, before);
+    assert!(r.mail_latency.contains("unreadable"));
+
+    // No notify command configured: no episode opens, so the operator is
+    // notified once one is configured.
+    let mut fresh = ShiftState::default();
+    let mut mock = Mock {
+        notify_unconfigured: true,
+        ..Default::default()
+    };
+    let r = tick_core(&cfg, &p, &mut fresh, &ctx(), &mut mock).unwrap();
+    assert!(fresh.mail_episodes.is_empty());
+    assert!(r.mail_escalated.is_empty());
+    assert!(
+        r.mail_latency.contains("no notify command"),
+        "{}",
+        r.mail_latency
+    );
+
+    // A dry run reports the verdict and notifies nobody.
+    let mut c = ctx();
+    c.dry_run = true;
+    let (r, mock) = run(&cfg, &p, &mut ShiftState::default(), &c);
+    assert!(mock.calls.is_empty());
+    assert!(
+        r.mail_latency.contains("would notify for advisor"),
+        "{}",
+        r.mail_latency
+    );
+
+    // A custom threshold.
+    let tight = cfg_with(
+        Some("[shift]\nmail_latency = \"2m\"\n"),
+        Some(&format!("[repo.\"{REPO}\"]\nenabled = true\n")),
+    );
+    let plan = mail_escalations(
+        tight.mail_latency_secs,
+        &over,
+        &p.mail_known,
+        &BTreeMap::new(),
+        now(),
+    );
+    assert_eq!(plan.escalate, vec!["advisor", "product"]);
+}
+
+// Mail latency pages only for KNOWN recipients: junk addresses such as a
+// stray number, a spec prefix or a file name never escalate, however old.
+// trace:TASK-1492 | ai:claude
+#[test]
+fn shift_mail_latency_ignores_unknown_recipients() {
+    let cfg = cfg_on();
+    let mail: BTreeMap<_, _> = [
+        ("33492".to_string(), unread(3, 600)),
+        ("SPEC".to_string(), unread(1, 900)),
+        ("main.rs".to_string(), unread(2, 120)),
+    ]
+    .into_iter()
+    .collect();
+    let mut p = probes(Vec::new());
+    p.mail = Ok(mail.clone());
+
+    let plan = mail_escalations(
+        cfg.mail_latency_secs,
+        &mail,
+        &p.mail_known,
+        &BTreeMap::new(),
+        now(),
+    );
+    assert!(plan.escalate.is_empty(), "{plan:?}");
+    assert!(plan.verdicts.is_empty(), "{plan:?}");
+    assert_eq!(plan.unknown, vec!["33492", "SPEC", "main.rs"]);
+
+    let mut state = ShiftState::default();
+    let (r, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert!(mock.notifies.is_empty(), "{:?}", mock.notifies);
+    assert!(r.mail_escalated.is_empty());
+    assert!(state.mail_episodes.is_empty());
+    assert!(
+        r.mail_latency.contains("3 unknown recipient(s) ignored"),
+        "{}",
+        r.mail_latency
+    );
+
+    // An episode left open for an address that is no longer known re-arms.
+    state.mail_episodes.insert("33492".to_string(), now());
+    let (_, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert!(mock.notifies.is_empty());
+    assert!(state.mail_episodes.is_empty());
+}
+
+// A known recipient over the threshold escalates even when junk addresses
+// share the mailbox; matching is case-insensitive.
+// trace:TASK-1492 | ai:claude
+#[test]
+fn shift_mail_latency_known_recipient_over_threshold_escalates() {
+    let cfg = cfg_on();
+    let mut p = probes(Vec::new());
+    p.mail_known = ["advisor", "claude-impl-7"]
+        .into_iter()
+        .map(String::from)
+        .collect();
+    p.mail = Ok([
+        ("Claude-Impl-7".to_string(), unread(4, 45)),
+        ("main.rs".to_string(), unread(1, 500)),
+        ("advisor".to_string(), unread(1, 10)),
+    ]
+    .into_iter()
+    .collect());
+    let mut state = ShiftState::default();
+    let (r, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert_eq!(mock.notifies.len(), 1);
+    let (rule, _, message) = &mock.notifies[0];
+    assert_eq!(rule, "mail-latency");
+    assert!(
+        message.contains("Claude-Impl-7: 4 unread, oldest 45m old"),
+        "{message}"
+    );
+    assert!(!message.contains("main.rs"), "{message}");
+    assert!(!message.contains("advisor"), "{message}");
+    assert_eq!(r.mail_escalated, vec!["Claude-Impl-7"]);
+    assert!(state.mail_episodes.contains_key("Claude-Impl-7"));
+}
+
+// One notification names at most MAIL_NOTIFY_MAX_NAMES recipients, then
+// "+N more"; every recipient still gets its episode.
+// trace:TASK-1492 | ai:claude
+#[test]
+fn shift_mail_latency_notification_caps_names_with_more() {
+    let cfg = cfg_on();
+    let names: Vec<String> = (1..=8).map(|i| format!("seat-{i}")).collect();
+    let mut p = probes(Vec::new());
+    p.mail_known = names.iter().cloned().collect();
+    p.mail = Ok(names.iter().map(|n| (n.clone(), unread(1, 60))).collect());
+    let mut state = ShiftState::default();
+    let (r, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert_eq!(mock.notifies.len(), 1);
+    let (_, _, message) = &mock.notifies[0];
+    for n in &names[..MAIL_NOTIFY_MAX_NAMES] {
+        assert!(message.contains(&format!("{n}: 1 unread")), "{message}");
+    }
+    for n in &names[MAIL_NOTIFY_MAX_NAMES..] {
+        assert!(!message.contains(n.as_str()), "{message}");
+    }
+    assert!(message.contains("+3 more"), "{message}");
+    assert!(
+        r.mail_latency
+            .contains("notified for seat-1, seat-2, seat-3, seat-4, seat-5, +3 more"),
+        "{}",
+        r.mail_latency
+    );
+    assert_eq!(r.mail_escalated.len(), 8);
+    assert_eq!(state.mail_episodes.len(), 8);
+
+    assert_eq!(cap_list(&names[..2], 5, ", "), "seat-1, seat-2");
+    assert_eq!(
+        cap_list(&names[..6], 5, ", "),
+        "seat-1, seat-2, seat-3, seat-4, seat-5, +1 more"
+    );
+}
+
+#[test]
+fn shift_breaker_trip_notifies_the_operator_once() {
+    // A8(b) routed through notify: the tick that trips the breaker notifies.
+    let mut state = ShiftState {
+        waves: vec![launched_wave(now() - Duration::hours(2), &["TASK-1"])],
+        consecutive_zero_progress: 1,
+        ..Default::default()
+    };
+    let p = probes(vec![drain("TASK-1")]);
+    let (r, mock) = run(&cfg_on(), &p, &mut state, &ctx());
+    assert!(r.breaker.is_some());
+    let rules: Vec<&str> = mock.notifies.iter().map(|(r, _, _)| r.as_str()).collect();
+    assert_eq!(rules, vec!["shift-breaker"]);
+    let (_, mock) = run(&cfg_on(), &p, &mut state, &ctx());
+    assert!(
+        mock.notifies.is_empty(),
+        "a held breaker does not notify again"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// TASK-1492 rework: fail-closed attempt recording, real notify outcome,
+// bounded notify, probe wiring and the real cap branch.
+// trace:TASK-1492 | ai:claude
+// ---------------------------------------------------------------------------
+
+// B1 hold: the second re-drive's attempt cannot be recorded. The first stays
+// re-queued; the second and every later one stay parked for this tick, the
+// report says why, and the ShiftTick event carries the reason (and wakes).
+#[test]
+fn shift_redrive_unrecorded_attempt_holds_the_rest_of_the_tick() {
+    let mut p = probes(vec![drain("TASK-1")]);
+    p.parked = vec![
+        drain_park("TASK-7", 120),
+        drain_park("TASK-8", 90),
+        drain_park("TASK-9", 30),
+    ];
+    let mut mock = Mock {
+        unrecorded_from: Some(1),
+        ..Default::default()
+    };
+    let r = tick_core(
+        &cfg_redrive_on(),
+        &p,
+        &mut ShiftState::default(),
+        &ctx(),
+        &mut mock,
+    )
+    .unwrap();
+    assert_eq!(r.redriven, vec!["TASK-7"]);
+    let reason = r.redrive_held.clone().expect("the hold is reported");
+    assert!(reason.contains("TASK-8"), "{reason}");
+    let action = |spec: &str| {
+        r.redrive_plan
+            .iter()
+            .find(|d| d.spec == spec)
+            .map(|d| d.action.clone())
+            .unwrap()
+    };
+    assert_eq!(action("TASK-7"), "re-drive");
+    assert_eq!(action("TASK-8"), crate::supervisor::HELD_UNRECORDED);
+    assert_eq!(action("TASK-9"), crate::supervisor::HELD_UNRECORDED);
+    assert!(
+        r.redrive.starts_with("held: attempt-record"),
+        "{}",
+        r.redrive
+    );
+    assert!(r.redrive.contains("re-queued TASK-7"), "{}", r.redrive);
+    assert!(render_report(&r).contains("held: attempt-record"));
+    // Held parks never join the wave; the one re-queued does.
+    assert_eq!(r.launched.unwrap().specs, vec!["TASK-7", "TASK-1"]);
+    let ev = mock.events.last().unwrap();
+    match ev {
+        EventKind::ShiftTick { redrive_held, .. } => {
+            assert_eq!(redrive_held.as_deref(), Some(reason.as_str()))
+        }
+        other => panic!("expected ShiftTick, got {other:?}"),
+    }
+    assert!(
+        ev.is_actionable(),
+        "a fail-closed hold wakes the supervisor"
+    );
+
+    // Nothing recordable at all: nothing re-queued, the launch still runs.
+    let mut mock = Mock {
+        unrecorded_from: Some(0),
+        ..Default::default()
+    };
+    let r = tick_core(
+        &cfg_redrive_on(),
+        &p,
+        &mut ShiftState::default(),
+        &ctx(),
+        &mut mock,
+    )
+    .unwrap();
+    assert!(r.redriven.is_empty() && mock.requeued.is_empty());
+    assert!(r.redrive_held.is_some());
+    assert_eq!(r.launched.unwrap().specs, vec!["TASK-1"]);
+}
+
+// B1 on a real store: an events file that cannot be appended to means no
+// spec leaves NeedsAttention and nothing is queued.
+#[test]
+fn shift_redrive_unwritable_events_file_requeues_nothing() {
+    use aida_core::DatabaseBackend;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path().join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let backend =
+        aida_core::CachedGitBackend::open(&store, &tmp.path().join(".aida").join("cache.db"))
+            .unwrap();
+    for (spec, mins) in [("TASK-8", 90), ("TASK-9", 30)] {
+        let mut r = drain_park(spec, mins);
+        r.modified_at = Utc::now() - Duration::minutes(mins);
+        backend.add_requirement(r).unwrap();
+    }
+    // The events path is a directory: every append fails, for every user.
+    std::fs::create_dir_all(tmp.path().join(".aida").join("events.jsonl")).unwrap();
+    let parked: Vec<aida_core::Requirement> = backend
+        .load()
+        .unwrap()
+        .requirements
+        .into_iter()
+        .filter(|r| r.status == RequirementStatus::NeedsAttention)
+        .collect();
+    let plan = crate::supervisor::plan_redrives(
+        &parked,
+        &events::RedriveHistory::default(),
+        &crate::supervisor::SuperviseOpts::default(),
+        Utc::now(),
+    );
+    let queue = crate::supervisor::QueueTarget {
+        user: "joe".to_string(),
+        role: "implementer".to_string(),
+    };
+    let out =
+        crate::supervisor::apply_requeue(&backend, tmp.path(), &plan, 3, Some(&queue)).unwrap();
+    assert!(out.applied.is_empty());
+    assert_eq!(out.held, vec!["TASK-8", "TASK-9"]);
+    assert!(out.unrecorded.unwrap().contains("cannot append"));
+    assert!(backend.queue_list("joe", false).unwrap().is_empty());
+    assert!(backend
+        .load()
+        .unwrap()
+        .requirements
+        .iter()
+        .all(|r| r.status == RequirementStatus::NeedsAttention));
+}
+
+// M4: an events file that exists but cannot be read fails closed.
+#[test]
+fn shift_redrive_evidence_unreadable_present_file_fails_closed() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    let aida = tmp.path().join(".aida");
+    std::fs::create_dir_all(&aida).unwrap();
+    // EACCES (skipped where permissions do not bind, e.g. as root).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let file = aida.join("events.jsonl");
+        std::fs::write(&file, "").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read(&file).is_err() {
+            let err = events::read_redrive_history_strict(tmp.path()).unwrap_err();
+            assert!(err.starts_with("cannot read"), "{err}");
+        }
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+        std::fs::remove_file(&file).unwrap();
+    }
+    // Present but unreadable as a file, for every user: the archive and the
+    // live stream are each checked.
+    std::fs::write(aida.join("events.jsonl"), "").unwrap();
+    std::fs::create_dir(aida.join("events.jsonl.1")).unwrap();
+    let err = events::read_redrive_history_strict(tmp.path()).unwrap_err();
+    assert!(
+        err.starts_with("cannot read") && err.contains("events.jsonl.1"),
+        "{err}"
+    );
+    std::fs::remove_dir(aida.join("events.jsonl.1")).unwrap();
+    std::fs::remove_file(aida.join("events.jsonl")).unwrap();
+    std::fs::create_dir(aida.join("events.jsonl")).unwrap();
+    assert!(events::read_redrive_history_strict(tmp.path())
+        .unwrap_err()
+        .starts_with("cannot read"));
+}
+
+// M4: the probe wiring. Re-drive off reads nothing; on, the parks and the
+// strict history (archive + live) are what the tick gets; a missing stream
+// or disabled events is an Err the redrive-evidence guard refuses on.
+#[test]
+fn shift_redrive_probes_wire_the_strict_history_only_when_on() {
+    use aida_core::DatabaseBackend;
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+    backend.add_requirement(drain_park("TASK-9", 60)).unwrap();
+    let mut approved = drain_park("TASK-1", 60);
+    approved.status = RequirementStatus::Approved;
+    backend.add_requirement(approved).unwrap();
+
+    let (parked, history) = redrive_probes(tmp.path(), &backend, &cfg_on());
+    assert!(parked.is_empty());
+    assert_eq!(history.unwrap_err(), "re-drive is off");
+
+    let env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+    // On, but no stream to count from.
+    let (parked, history) = redrive_probes(tmp.path(), &backend, &cfg_redrive_on());
+    assert_eq!(
+        parked.iter().map(|r| r.display_id()).collect::<Vec<_>>(),
+        vec!["TASK-9"]
+    );
+    assert!(history.is_err());
+
+    let aida = tmp.path().join(".aida");
+    std::fs::create_dir_all(&aida).unwrap();
+    let line = |n: u32| {
+        serde_json::to_string(&redrive_event("TASK-9", n, now() - Duration::hours(3))).unwrap()
+            + "\n"
+    };
+    std::fs::write(aida.join("events.jsonl.1"), line(1)).unwrap();
+    std::fs::write(aida.join("events.jsonl"), line(2)).unwrap();
+    let (_, history) = redrive_probes(tmp.path(), &backend, &cfg_redrive_on());
+    assert_eq!(history.unwrap().get("TASK-9").0, 2);
+
+    // One env guard at a time: `EnvVarsGuard` holds the global env lock,
+    // which is not re-entrant, so a second guard while the first is alive
+    // deadlocks this test and every env-guarded test after it.
+    drop(env);
+    let _off = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, Some("1"))]);
+    let (_, history) = redrive_probes(tmp.path(), &backend, &cfg_redrive_on());
+    assert!(history.unwrap_err().contains(events::EVENTS_DISABLE_ENV));
+}
+
+// M4: the REAL cap branch, driven from the tick through RealExec on a temp
+// store and a temp event stream (no mock): a park with three recorded
+// re-drives is tagged needs-human, the cap finding is filed, the events are
+// written, and no fourth attempt is recorded. Nothing launches: the queue is
+// empty, and the reap and mail steps are off (optional steps disallowed).
+#[test]
+fn shift_redrive_real_cap_branch_from_the_tick() {
+    use aida_core::DatabaseBackend;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path().join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let backend =
+        aida_core::CachedGitBackend::open(&store, &tmp.path().join(".aida").join("cache.db"))
+            .unwrap();
+    let park = backend.add_requirement(drain_park("TASK-9", 30)).unwrap();
+    let aida = tmp.path().join(".aida");
+    std::fs::create_dir_all(&aida).unwrap();
+    let archive: String = (1..=3)
+        .map(|n| {
+            serde_json::to_string(&redrive_event(
+                "TASK-9",
+                n,
+                now() - Duration::hours(4 - n as i64),
+            ))
+            .unwrap()
+                + "\n"
+        })
+        .collect();
+    std::fs::write(aida.join("events.jsonl.1"), archive).unwrap();
+    std::fs::write(aida.join("events.jsonl"), "").unwrap();
+
+    let cfg = cfg_redrive_on();
+    let (parked, history) = redrive_probes(tmp.path(), &backend, &cfg);
+    let mut p = probes(Vec::new());
+    p.parked = parked;
+    p.redrive_history = history;
+    let mut c = ctx();
+    c.optional_allowed = false;
+    let mut exec = RealExec {
+        project_root: tmp.path().to_path_buf(),
+        backend: &backend,
+    };
+    let mut state = ShiftState::default();
+    let r = tick_core(&cfg, &p, &mut state, &c, &mut exec).unwrap();
+    assert_eq!(r.reclassified, vec!["TASK-9"]);
+    assert!(r.redriven.is_empty() && r.launched.is_none());
+
+    let after = backend.get_requirement(&park.id).unwrap().unwrap();
+    assert_eq!(after.status, RequirementStatus::NeedsAttention);
+    assert!(after.tags.contains("needs-human"));
+    let reqs = backend.load().unwrap().requirements;
+    assert!(reqs.iter().any(|r| r.tags.contains("kind:supervisor-cap")
+        && r.tags.contains("linked:TASK-9")
+        && r.status == RequirementStatus::Draft));
+    let live = events::read_all(tmp.path());
+    let kinds: Vec<&str> = live.iter().map(|e| e.kind.name()).collect();
+    assert!(kinds.contains(&"ReclassifiedNeedsHuman"), "{kinds:?}");
+    assert!(
+        !kinds.contains(&"SpecReDriven"),
+        "no fourth attempt: {kinds:?}"
+    );
+    assert!(kinds.contains(&"ShiftTick"), "{kinds:?}");
+    assert!(state_path(tmp.path()).starts_with(tmp.path()));
+
+    // The next tick sees the needs-human tag and leaves it alone.
+    let (parked, history) = redrive_probes(tmp.path(), &backend, &cfg);
+    let mut p = probes(Vec::new());
+    p.parked = parked;
+    p.redrive_history = history;
+    let r = tick_core(&cfg, &p, &mut state, &c, &mut exec).unwrap();
+    assert!(r.reclassified.is_empty());
+    assert_eq!(r.redrive_plan[0].action, "leave-for-human");
+}
+
+// B2: a notification the rule's min_interval suppressed opens no episode.
+// Seat B crossing within the interval of seat A's page is retried on a
+// later check and notified then; a quiet-hours deferral does open one.
+#[test]
+fn shift_mail_latency_suppressed_notify_is_not_an_episode() {
+    use crate::notify::DirectDelivery;
+    let cfg = cfg_on();
+    let mut state = ShiftState::default();
+    state.mail_episodes.insert("advisor".to_string(), now());
+    let mut p = probes(Vec::new());
+    p.mail = Ok([
+        ("advisor".to_string(), unread(2, 47)),
+        ("product".to_string(), unread(1, 40)),
+    ]
+    .into_iter()
+    .collect());
+
+    let mut mock = Mock {
+        notify_outcomes: [DirectDelivery::Suppressed].into_iter().collect(),
+        ..Default::default()
+    };
+    let r = tick_core(&cfg, &p, &mut state, &ctx(), &mut mock).unwrap();
+    assert_eq!(mock.calls.iter().filter(|c| *c == "notify").count(), 1);
+    assert!(r.mail_escalated.is_empty(), "{:?}", r.mail_escalated);
+    assert!(!state.mail_episodes.contains_key("product"));
+    assert!(
+        r.mail_latency.contains("min_interval"),
+        "{}",
+        r.mail_latency
+    );
+    assert!(
+        !r.mail_latency.contains("notified for"),
+        "{}",
+        r.mail_latency
+    );
+    assert!(mock.events.iter().all(|e| !matches!(
+        e,
+        EventKind::ShiftTick { mail_escalated, .. } if !mail_escalated.is_empty()
+    )));
+
+    // A later check: the interval has passed and the send goes through.
+    let (r, mock) = run(&cfg, &p, &mut state, &ctx());
+    assert_eq!(mock.notifies.len(), 1);
+    assert!(
+        mock.notifies[0].2.contains("product"),
+        "{:?}",
+        mock.notifies
+    );
+    assert_eq!(r.mail_escalated, vec!["product"]);
+    assert!(state.mail_episodes.contains_key("product"));
+
+    // Deferred to quiet hours: the operator will get it, so the episode opens.
+    let mut fresh = ShiftState::default();
+    let mut mock = Mock {
+        notify_outcomes: [DirectDelivery::Deferred].into_iter().collect(),
+        ..Default::default()
+    };
+    let r = tick_core(&cfg, &p, &mut fresh, &ctx(), &mut mock).unwrap();
+    assert_eq!(r.mail_escalated, vec!["advisor", "product"]);
+    assert!(r.mail_latency.contains("queued"), "{}", r.mail_latency);
+}
+
+// M1 through the seam: the notify command is bounded by what is left on the
+// tick deadline, capped at NOTIFY_TIMEOUT, never zero.
+#[test]
+fn shift_notify_timeout_fits_inside_the_tick_deadline() {
+    let mut p = probes(Vec::new());
+    p.mail = Ok([("advisor".to_string(), unread(2, 47))]
+        .into_iter()
+        .collect());
+
+    // No live clock: the cap.
+    let (_, mock) = run(&cfg_on(), &p, &mut ShiftState::default(), &ctx());
+    assert_eq!(mock.notify_timeouts, vec![NOTIFY_TIMEOUT]);
+
+    // 80s into a 90s deadline: at most the 10s left.
+    let started = Instant::now()
+        .checked_sub(StdDuration::from_secs(80))
+        .expect("monotonic clock past 80s");
+    let mut c = ctx();
+    c.clock = Some((started, TICK_DEADLINE));
+    let (_, mock) = run(&cfg_on(), &p, &mut ShiftState::default(), &c);
+    let t = mock.notify_timeouts[0];
+    assert!(
+        t <= StdDuration::from_secs(10) && t >= StdDuration::from_secs(1),
+        "{t:?}"
+    );
+    assert!(
+        StdDuration::from_secs(80) + t < StdDuration::from_secs(120),
+        "the notify ends before the scheduler's kill"
+    );
+
+    // Past the deadline: the floor, still inside the kill.
+    let late = Instant::now()
+        .checked_sub(StdDuration::from_secs(95))
+        .expect("monotonic clock past 95s");
+    let c = TickCtx {
+        clock: Some((late, TICK_DEADLINE)),
+        ..ctx()
+    };
+    assert_eq!(c.notify_timeout(), StdDuration::from_secs(1));
+    assert!(TICK_DEADLINE + NOTIFY_TIMEOUT < StdDuration::from_secs(120));
 }

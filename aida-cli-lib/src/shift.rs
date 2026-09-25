@@ -27,8 +27,24 @@
 //! internal error (unreadable state, failed spawn, failed store write) exits
 //! non-zero.
 //!
-//! Not yet here: re-drive of parked specs, mailbox latency escalation and
-//! headless cold-boot (slice 3).
+//! Slice 3 adds two steps (TASK-1492):
+//!
+//! - **re-drive** (opt-in, OFF by default per ADR-26 fork C — enabling the
+//!   shift does not enable it): while no drain is live, transient parks of
+//!   explicit drain-mode specs go back to Approved and to the HEAD of the
+//!   queue, within the ADR-26 cap (3 attempts, 2m/8m/30m backoff, counted
+//!   from `SpecReDriven` events in the live stream AND its rotated archive).
+//!   A park at the cap is reclassified to needs-human. No re-drive at all
+//!   when the attempt evidence cannot be read (`redrive-evidence`);
+//! - **mail latency**: per KNOWN recipient (a seat or role in the agent
+//!   registry, a team roster member or an active session identity), the age
+//!   of the oldest unread message; above `[shift] mail_latency` the operator
+//!   is notified through `aida notify` (never the mailbox or chat), once per
+//!   episode per recipient, re-armed when the age drops back under the
+//!   threshold. Mail to unknown addresses never pages; a notification names
+//!   at most five recipients, then "+N more".
+//!
+//! Not yet here: headless cold-boot of a seat for an overdue seat job.
 //!
 //! Every side effect goes through [`ShiftExec`], so the tick core is tested
 //! with a recording mock: no test launches a drain.
@@ -58,6 +74,11 @@ pub(crate) const TICK_DEADLINE: StdDuration = StdDuration::from_secs(90);
 /// A launch (record intent, tag, spawn, record pid) is not started with less
 /// than this left on the deadline.
 const LAUNCH_RESERVE: StdDuration = StdDuration::from_secs(30);
+/// The longest a tick waits on the operator's notify command. With the time
+/// left on [`TICK_DEADLINE`] as a further bound, a hung command ends the tick
+/// well inside the scheduler's 120s kill.
+// trace:TASK-1492 | ai:claude
+pub(crate) const NOTIFY_TIMEOUT: StdDuration = StdDuration::from_secs(15);
 
 /// The role whose queue view the wave drains. The wave passes `--role` with
 /// it, and selection reads the same role-routed view.
@@ -126,6 +147,20 @@ pub(crate) struct ShiftConfig {
     pub load_per_cpu: f64,
     /// Vendors allowed to run although the watchdog cannot see their spend.
     pub allow_uncovered_vendors: Vec<String>,
+    /// Automatic re-drive of transient parks. OFF unless THIS clone's local
+    /// layer sets `redrive = true` (ADR-26 fork C; enabling the shift does
+    /// not enable it).
+    // trace:TASK-1492 | ai:claude
+    pub redrive: bool,
+    /// Where the re-drive switch was read from.
+    pub redrive_source: String,
+    /// The committed config says `redrive = true`; it is ignored.
+    pub committed_redrive_ignored: bool,
+    /// Re-drives per tick. Default 3.
+    pub max_redrives_per_tick: usize,
+    /// Oldest-unread age above which the operator is notified. Default 30m.
+    pub mail_latency: String,
+    pub mail_latency_secs: i64,
 }
 
 const DEFAULT_WAVE_SIZE: usize = 6;
@@ -134,6 +169,9 @@ const DEFAULT_BUDGET_STOP_PCT: u64 = 80;
 const DEFAULT_MAX_RUNTIME: &str = "3h";
 const DEFAULT_MAX_WAVES_PER_DAY: usize = 8;
 const DEFAULT_LOAD_PER_CPU: f64 = 1.5;
+// trace:TASK-1492 | ai:claude
+const DEFAULT_MAX_REDRIVES_PER_TICK: usize = 3;
+const DEFAULT_MAIL_LATENCY: &str = "30m";
 
 fn positive_int(v: Option<&toml::Value>) -> Option<u64> {
     v.and_then(|v| v.as_integer())
@@ -217,6 +255,34 @@ pub(crate) fn build_config(
                 .collect()
         })
         .unwrap_or_default();
+    // trace:TASK-1492 | ai:claude — the re-drive switch lives only in the
+    // local layer, next to `enabled` (A5).
+    let redrive = local_repo
+        .and_then(|t| t.get("redrive"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let redrive_source = if local_repo.and_then(|t| t.get("redrive")).is_some() {
+        format!("{local_path} [repo.\"{repo_key}\"]")
+    } else {
+        "ADR-26 default (off)".to_string()
+    };
+    let committed_redrive_ignored = committed_shift
+        .and_then(|t| t.get("redrive"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let max_redrives_per_tick = positive_int(get("max_redrives_per_tick"))
+        .map(|n| n as usize)
+        .unwrap_or(DEFAULT_MAX_REDRIVES_PER_TICK);
+    let mail_latency = get("mail_latency")
+        .and_then(|v| v.as_str())
+        .filter(|s| {
+            crate::maintenance_schedule::parse_duration(s).is_ok_and(|d| d > Duration::zero())
+        })
+        .unwrap_or(DEFAULT_MAIL_LATENCY)
+        .to_string();
+    let mail_latency_secs = crate::maintenance_schedule::parse_duration(&mail_latency)
+        .map(|d| d.num_seconds())
+        .unwrap_or(30 * 60);
     ShiftConfig {
         enabled,
         enabled_source,
@@ -232,6 +298,12 @@ pub(crate) fn build_config(
         max_waves_per_day,
         load_per_cpu,
         allow_uncovered_vendors,
+        redrive,
+        redrive_source,
+        committed_redrive_ignored,
+        max_redrives_per_tick,
+        mail_latency,
+        mail_latency_secs,
     }
 }
 
@@ -360,6 +432,12 @@ pub(crate) struct ShiftState {
     /// A8(c): specs already escalated for hitting the wave cap.
     #[serde(default)]
     pub escalated: BTreeSet<String>,
+    /// Mail latency: recipients whose open over-threshold episode was
+    /// already escalated, with when. Removed (re-armed) once the recipient's
+    /// oldest unread age drops back under the threshold.
+    // trace:TASK-1492 | ai:claude
+    #[serde(default)]
+    pub mail_episodes: BTreeMap<String, DateTime<Utc>>,
 }
 
 impl ShiftState {
@@ -756,6 +834,21 @@ pub(crate) struct Probes {
     pub queue_drained: Vec<(DateTime<Utc>, usize, usize)>,
     /// Specs of the last launched wave that have since finished.
     pub finished_specs: BTreeSet<String>,
+    /// NeedsAttention specs (read only when re-drive is on).
+    // trace:TASK-1492 | ai:claude
+    pub parked: Vec<aida_core::Requirement>,
+    /// Upper-cased spec ids with a live merge hold.
+    pub held: BTreeSet<String>,
+    /// ADR-26 attempt evidence from the live stream and its archive; `Err`
+    /// = unreadable or not recorded, so no re-drive this tick.
+    pub redrive_history: std::result::Result<events::RedriveHistory, String>,
+    /// Unread mail per recipient; `Err` = the mailbox could not be read.
+    pub mail: std::result::Result<BTreeMap<String, crate::mailbox_store::RecipientUnread>, String>,
+    /// Lower-cased recipients the mail step may page for: roles and seats in
+    /// the agent registry, team roster members and active session
+    /// identities. Mail to any other address never escalates.
+    // trace:TASK-1492 | ai:claude
+    pub mail_known: BTreeSet<String>,
 }
 
 /// Per-tick context the shell supplies.
@@ -779,12 +872,36 @@ pub(crate) struct TickCtx {
 }
 
 impl TickCtx {
+    /// May an optional step (mail latency) still run? The static flag AND
+    /// the live clock.
+    // trace:TASK-1492 | ai:claude
+    pub(crate) fn optional_ok(&self) -> bool {
+        self.optional_allowed
+            && self
+                .clock
+                .is_none_or(|(started, deadline)| started.elapsed() < deadline)
+    }
+
     /// May a launch still start? The static flag AND the live clock.
     pub(crate) fn launch_ok(&self) -> bool {
         self.launch_allowed
             && self
                 .clock
                 .is_none_or(|(started, deadline)| started.elapsed() + LAUNCH_RESERVE <= deadline)
+    }
+
+    /// How long a notify command may run this tick: [`NOTIFY_TIMEOUT`], cut
+    /// to the time left on the deadline (at least one second, so a message
+    /// that is due still gets a chance). The deadline plus the cap stays well
+    /// inside the scheduler's kill.
+    // trace:TASK-1492 | ai:claude
+    pub(crate) fn notify_timeout(&self) -> StdDuration {
+        match self.clock {
+            None => NOTIFY_TIMEOUT,
+            Some((started, deadline)) => deadline
+                .saturating_sub(started.elapsed())
+                .clamp(StdDuration::from_secs(1), NOTIFY_TIMEOUT),
+        }
     }
 
     pub(crate) fn from_clock(
@@ -1047,11 +1164,35 @@ pub(crate) trait ShiftExec {
     fn spawn_wave(&mut self, argv: &[String], log: &Path) -> Result<(u32, Option<String>)>;
     fn save_state(&mut self, state: &ShiftState) -> Result<()>;
     fn emit(&mut self, kind: EventKind);
+    /// Re-queue the `would-re-drive` decisions (`SpecReDriven` recorded
+    /// first, then status back to Approved and a queue entry at the head).
+    /// Returns the specs applied, and why the pass stopped when an attempt
+    /// could not be recorded.
+    // trace:TASK-1492 | ai:claude
+    fn requeue(
+        &mut self,
+        decisions: &[crate::supervisor::SuperviseDecision],
+        queue: &crate::supervisor::QueueTarget,
+    ) -> Result<crate::supervisor::RequeueOutcome>;
+    /// The ADR-26 cap branch for one decision; false when the spec moved.
+    fn reclassify(&mut self, decision: &crate::supervisor::SuperviseDecision) -> Result<bool>;
+    /// Notify the operator through `aida notify` (its own min_interval and
+    /// quiet hours apply), waiting at most `timeout` for the command.
+    /// Returns what really happened: sent, deferred to quiet hours,
+    /// suppressed by the rule's min_interval, or no command configured.
+    // trace:TASK-1492 | ai:claude
+    fn notify(
+        &mut self,
+        rule: &str,
+        title: &str,
+        message: &str,
+        timeout: StdDuration,
+    ) -> Result<crate::notify::DirectDelivery>;
 }
 
 pub(crate) struct RealExec<'a> {
     pub project_root: PathBuf,
-    pub backend: &'a dyn DatabaseBackend,
+    pub backend: &'a aida_core::CachedGitBackend,
 }
 
 impl ShiftExec for RealExec<'_> {
@@ -1077,6 +1218,39 @@ impl ShiftExec for RealExec<'_> {
         let mut ev = events::Event::new(None, "", kind);
         ev.seat = Some("night-shift".to_string());
         events::emit(&self.project_root, &ev);
+    }
+    // trace:TASK-1492 | ai:claude
+    fn requeue(
+        &mut self,
+        decisions: &[crate::supervisor::SuperviseDecision],
+        queue: &crate::supervisor::QueueTarget,
+    ) -> Result<crate::supervisor::RequeueOutcome> {
+        crate::supervisor::apply_requeue(
+            self.backend,
+            &self.project_root,
+            decisions,
+            crate::supervisor::DEFAULT_MAX_ATTEMPTS,
+            Some(queue),
+        )
+    }
+    fn reclassify(&mut self, decision: &crate::supervisor::SuperviseDecision) -> Result<bool> {
+        crate::supervisor::apply_cap(
+            self.backend,
+            &self.project_root,
+            decision,
+            crate::supervisor::DEFAULT_MAX_ATTEMPTS,
+        )
+    }
+    // trace:TASK-1492 | ai:claude
+    fn notify(
+        &mut self,
+        rule: &str,
+        title: &str,
+        message: &str,
+        timeout: StdDuration,
+    ) -> Result<crate::notify::DirectDelivery> {
+        crate::notify::send_direct_bounded(&self.project_root, rule, title, message, Some(timeout))
+            .map(|o| o.delivery())
     }
 }
 
@@ -1106,6 +1280,425 @@ pub(crate) struct TickReport {
     pub event_emitted: bool,
     pub redrive: String,
     pub mail_latency: String,
+    /// Re-drive step verdicts (separate from the launch guards: a held
+    /// re-drive never blocks a launch).
+    // trace:TASK-1492 | ai:claude
+    pub redrive_guards: Vec<GuardVerdict>,
+    pub redrive_plan: Vec<crate::supervisor::SuperviseDecision>,
+    pub redriven: Vec<String>,
+    pub reclassified: Vec<String>,
+    /// Set when a re-drive attempt could not be recorded: the step stopped
+    /// and re-queued nothing further this tick (ADR-26 fail closed).
+    pub redrive_held: Option<String>,
+    pub mail: Vec<MailVerdict>,
+    pub mail_escalated: Vec<String>,
+    /// Notifications that failed to send (never fatal to the tick).
+    pub notify_errors: Vec<String>,
+}
+
+/// One recipient's mail-latency reading.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct MailVerdict {
+    pub recipient: String,
+    pub unread: i64,
+    pub oldest_age_secs: i64,
+    pub over: bool,
+    /// Already escalated in the current episode.
+    pub escalated_earlier: bool,
+}
+
+/// What the mail step does this tick.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct MailPlan {
+    pub verdicts: Vec<MailVerdict>,
+    /// Over the threshold with no open episode: notify now.
+    pub escalate: Vec<String>,
+    /// Open episode, now back under the threshold (or read): re-arm.
+    pub rearm: Vec<String>,
+    /// Recipients with unread mail that match no known seat, role, roster
+    /// member or session. Never escalated.
+    pub unknown: Vec<String>,
+}
+
+/// At most this many recipient names in one mail-latency notification or
+/// report line; the rest are summarized as "+N more".
+// trace:TASK-1492 | ai:claude
+pub(crate) const MAIL_NOTIFY_MAX_NAMES: usize = 5;
+
+/// Join at most `max` items, then "+N more" for the rest.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn cap_list(items: &[String], max: usize, sep: &str) -> String {
+    let mut out = items
+        .iter()
+        .take(max)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(sep);
+    if items.len() > max {
+        out.push_str(&format!("{sep}+{} more", items.len() - max));
+    }
+    out
+}
+
+/// Is `recipient` a known seat, role, roster member or session identity?
+// trace:TASK-1492 | ai:claude
+fn is_known_recipient(known: &BTreeSet<String>, recipient: &str) -> bool {
+    known.contains(&recipient.trim().to_lowercase())
+}
+
+/// PURE: once per episode per recipient. Only KNOWN recipients (`known`,
+/// lower-cased) are considered; mail to any other address (a typo, a stray
+/// number, a file name) is listed in `unknown` and never escalates. A known
+/// recipient over the threshold with no open episode escalates; one with an
+/// open episode stays quiet; an open episode whose recipient is back under
+/// the threshold, or no longer known, re-arms.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn mail_escalations(
+    threshold_secs: i64,
+    unread: &BTreeMap<String, crate::mailbox_store::RecipientUnread>,
+    known: &BTreeSet<String>,
+    episodes: &BTreeMap<String, DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> MailPlan {
+    let mut plan = MailPlan::default();
+    for (recipient, u) in unread {
+        if !is_known_recipient(known, recipient) {
+            plan.unknown.push(recipient.clone());
+            continue;
+        }
+        let age = ((now.timestamp_millis() - u.oldest_ts) / 1000).max(0);
+        let over = age > threshold_secs;
+        let open = episodes.contains_key(recipient);
+        if over && !open {
+            plan.escalate.push(recipient.clone());
+        }
+        plan.verdicts.push(MailVerdict {
+            recipient: recipient.clone(),
+            unread: u.count,
+            oldest_age_secs: age,
+            over,
+            escalated_earlier: over && open,
+        });
+    }
+    for recipient in episodes.keys() {
+        let still_over = plan
+            .verdicts
+            .iter()
+            .any(|v| &v.recipient == recipient && v.over);
+        if !still_over {
+            plan.rearm.push(recipient.clone());
+        }
+    }
+    plan
+}
+
+/// The re-drive step's own guards. Evaluated only when re-drive is on.
+// trace:TASK-1492 | ai:claude
+fn redrive_guards(p: &Probes, state: &ShiftState, ctx: &TickCtx) -> Vec<GuardVerdict> {
+    let wave_live = state
+        .last_launched()
+        .is_some_and(|w| w.outcome.is_none() && p.last_wave_alive);
+    let lock_live = match p.lock {
+        LockView::Running(pid) => Some(format!("a drain holds the lock (pid {pid})")),
+        _ if p.foreign_claim.is_some() => p.foreign_claim.clone(),
+        _ if wave_live => Some("a shift wave is still running".to_string()),
+        _ => None,
+    };
+    vec![
+        verdict(
+            "redrive-evidence",
+            p.redrive_history.is_ok(),
+            match &p.redrive_history {
+                Ok(_) => "attempts counted from the event stream and its archive".to_string(),
+                Err(e) => format!("cannot count attempts: {e}"),
+            },
+        ),
+        verdict(
+            "redrive-lock-free",
+            lock_live.is_none(),
+            lock_live.unwrap_or_else(|| "no drain is running".to_string()),
+        ),
+        verdict(
+            "redrive-breaker",
+            state.breaker.is_none(),
+            match &state.breaker {
+                Some(b) => format!("launches are stopped ({})", b.reason),
+                None => "breaker closed".to_string(),
+            },
+        ),
+        verdict(
+            "redrive-state",
+            ctx.state_error.is_none(),
+            ctx.state_error.clone().unwrap_or_else(|| "ok".to_string()),
+        ),
+        verdict(
+            "redrive-deadline",
+            ctx.launch_ok(),
+            if ctx.launch_ok() {
+                "time to re-drive"
+            } else {
+                "too close to the tick deadline"
+            },
+        ),
+    ]
+}
+
+/// Step 3b: plan (and, live, apply) the opt-in re-drive. Returns the
+/// candidates the re-queued specs become, head first, so they join this
+/// tick's wave selection.
+// trace:TASK-1492 | ai:claude
+fn redrive_step(
+    cfg: &ShiftConfig,
+    p: &Probes,
+    state: &ShiftState,
+    ctx: &TickCtx,
+    live: bool,
+    report: &mut TickReport,
+    exec: &mut dyn ShiftExec,
+) -> Result<Vec<Candidate>> {
+    use crate::supervisor::{plan_redrives, QueueTarget, RedriveFloors, SuperviseOpts};
+    if !cfg.redrive {
+        report.redrive = if cfg.committed_redrive_ignored {
+            "off (ADR-26 default; the committed `redrive = true` is ignored — the switch is per clone)".to_string()
+        } else {
+            "off (ADR-26 default)".to_string()
+        };
+        return Ok(Vec::new());
+    }
+    report.redrive_guards = redrive_guards(p, state, ctx);
+    let Ok(history) = &p.redrive_history else {
+        report.redrive = "held: redrive-evidence".to_string();
+        return Ok(Vec::new());
+    };
+    let opts = SuperviseOpts {
+        max: Some(cfg.max_redrives_per_tick),
+        floors: Some(RedriveFloors {
+            drain_mode_only: true,
+            exclude_keystone: true,
+            held: p.held.clone(),
+        }),
+        ..Default::default()
+    };
+    let mut plan = plan_redrives(&p.parked, history, &opts, ctx.now);
+    let held: Vec<&str> = report
+        .redrive_guards
+        .iter()
+        .filter(|g| !g.pass)
+        .map(|g| g.name)
+        .collect();
+    let would: Vec<String> = plan
+        .iter()
+        .filter(|d| d.action == "would-re-drive")
+        .map(|d| d.spec.clone())
+        .collect();
+    let capped: Vec<String> = plan
+        .iter()
+        .filter(|d| d.action == "reclassify-needs-human")
+        .map(|d| d.spec.clone())
+        .collect();
+    if !held.is_empty() {
+        report.redrive = format!("held: {}", held.join(", "));
+        report.redrive_plan = plan;
+        return Ok(Vec::new());
+    }
+    let requeued: Vec<String> = if live {
+        for d in plan
+            .iter_mut()
+            .filter(|d| d.action == "reclassify-needs-human")
+        {
+            if exec.reclassify(d)? {
+                report.reclassified.push(d.spec.clone());
+            } else {
+                d.action = "skip-status-moved".to_string();
+            }
+        }
+        let queue = QueueTarget {
+            user: p.queue_user.clone(),
+            role: WAVE_ROLE.to_string(),
+        };
+        let outcome = exec.requeue(&plan, &queue)?;
+        let applied = outcome.applied;
+        // ADR-26 fail closed: after an attempt that could not be recorded,
+        // every spec not yet re-queued stays parked for this tick.
+        for d in plan.iter_mut().filter(|d| d.action == "would-re-drive") {
+            d.action = if applied.contains(&d.spec) {
+                "re-drive".to_string()
+            } else if outcome.held.contains(&d.spec) {
+                crate::supervisor::HELD_UNRECORDED.to_string()
+            } else {
+                "skip-status-moved".to_string()
+            };
+            if d.action != "re-drive" {
+                d.attempts = d.attempts.saturating_sub(1);
+            }
+        }
+        report.redrive_held = outcome.unrecorded;
+        report.redriven = applied.clone();
+        applied
+    } else {
+        would.clone()
+    };
+    let verb = if live { "re-queued" } else { "would re-queue" };
+    let mut parts = Vec::new();
+    if !requeued.is_empty() {
+        parts.push(format!("{verb} {}", requeued.join(", ")));
+    }
+    let left: &[String] = if live { &report.reclassified } else { &capped };
+    if !left.is_empty() {
+        parts.push(format!(
+            "{} {} for a human (re-drive cap reached)",
+            if live { "left" } else { "would leave" },
+            left.join(", ")
+        ));
+    }
+    report.redrive = if let Some(reason) = &report.redrive_held {
+        let mut line =
+            format!("held: attempt-record — {reason}; nothing more re-queued this check");
+        if !parts.is_empty() {
+            line.push_str(&format!(" ({})", parts.join("; ")));
+        }
+        line
+    } else if parts.is_empty() {
+        "on — nothing to re-drive".to_string()
+    } else {
+        format!("on — {}", parts.join("; "))
+    };
+    report.redrive_plan = plan;
+    Ok(requeued
+        .iter()
+        .filter_map(|spec| p.parked.iter().find(|r| &r.display_id() == spec))
+        .map(|r| Candidate {
+            spec: r.display_id(),
+            status: RequirementStatus::Approved,
+            execution_mode: r.execution_mode,
+            req_type: r.req_type.to_string(),
+            tags: r.tags.iter().cloned().collect(),
+            merge_held: false,
+        })
+        .collect())
+}
+
+/// Step 6b: mail latency. Reads are reported on dry runs; notifications and
+/// episode changes happen only on a live tick with time left.
+// trace:TASK-1492 | ai:claude
+fn mail_step(
+    cfg: &ShiftConfig,
+    p: &Probes,
+    state: &mut ShiftState,
+    ctx: &TickCtx,
+    live: bool,
+    report: &mut TickReport,
+    exec: &mut dyn ShiftExec,
+) {
+    let unread = match &p.mail {
+        Ok(u) => u,
+        Err(e) => {
+            report.mail_latency = format!("mailbox unreadable, not checked: {e}");
+            return;
+        }
+    };
+    let plan = mail_escalations(
+        cfg.mail_latency_secs,
+        unread,
+        &p.mail_known,
+        &state.mail_episodes,
+        ctx.now,
+    );
+    report.mail = plan.verdicts.clone();
+    let over: Vec<String> = plan
+        .verdicts
+        .iter()
+        .filter(|v| v.over)
+        .map(|v| {
+            format!(
+                "{} {}",
+                v.recipient,
+                human_age(Duration::seconds(v.oldest_age_secs))
+            )
+        })
+        .collect();
+    let escalate_names = cap_list(&plan.escalate, MAIL_NOTIFY_MAX_NAMES, ", ");
+    report.mail_latency = if over.is_empty() {
+        format!("ok (nothing unread past {})", cfg.mail_latency)
+    } else {
+        format!(
+            "{} over {}{}",
+            cap_list(&over, MAIL_NOTIFY_MAX_NAMES, ", "),
+            cfg.mail_latency,
+            if plan.escalate.is_empty() {
+                " — already notified this episode".to_string()
+            } else if live {
+                String::new()
+            } else {
+                format!(" — would notify for {escalate_names}")
+            }
+        )
+    };
+    if !plan.unknown.is_empty() {
+        report.mail_latency.push_str(&format!(
+            " ({} unknown recipient(s) ignored)",
+            plan.unknown.len()
+        ));
+    }
+    if !live || !ctx.optional_ok() {
+        return;
+    }
+    for r in &plan.rearm {
+        state.mail_episodes.remove(r);
+    }
+    if plan.escalate.is_empty() {
+        return;
+    }
+    let lines: Vec<String> = plan
+        .verdicts
+        .iter()
+        .filter(|v| plan.escalate.contains(&v.recipient))
+        .map(|v| {
+            format!(
+                "{}: {} unread, oldest {} old",
+                v.recipient,
+                v.unread,
+                human_age(Duration::seconds(v.oldest_age_secs))
+            )
+        })
+        .collect();
+    let message = format!(
+        "Mail is waiting longer than {}:\n{}\n",
+        cfg.mail_latency,
+        cap_list(&lines, MAIL_NOTIFY_MAX_NAMES, "\n")
+    );
+    // An episode opens only when the operator will actually get the
+    // message: sent now, or queued for the end of quiet hours. A message the
+    // rule's min_interval dropped opens nothing, so a later check retries.
+    // trace:TASK-1492 | ai:claude
+    use crate::notify::DirectDelivery;
+    match exec.notify(
+        "mail-latency",
+        "AIDA: mail waiting",
+        &message,
+        ctx.notify_timeout(),
+    ) {
+        Ok(delivery @ (DirectDelivery::Sent | DirectDelivery::Deferred)) => {
+            for r in &plan.escalate {
+                state.mail_episodes.insert(r.clone(), ctx.now);
+            }
+            report.mail_escalated = plan.escalate.clone();
+            report.mail_latency.push_str(&if delivery == DirectDelivery::Sent {
+                format!(" — notified for {escalate_names}")
+            } else {
+                format!(" — notification for {escalate_names} queued until quiet hours end")
+            });
+        }
+        Ok(DirectDelivery::Suppressed) => report.mail_latency.push_str(&format!(
+            " — notification for {escalate_names} held by `[notify] min_interval`; retried on a later check"
+        )),
+        Ok(DirectDelivery::NotConfigured) => report
+            .mail_latency
+            .push_str(" — no notify command configured (`[notify] command`)"),
+        Err(e) => report.notify_errors.push(format!("mail-latency: {e:#}")),
+    }
 }
 
 impl TickReport {
@@ -1240,8 +1833,8 @@ pub(crate) fn tick_core(
         queue_user: probes.queue_user.clone(),
         queue_role: WAVE_ROLE.to_string(),
         vendor: probes.vendor.clone(),
-        redrive: "off (not part of this tick yet)".to_string(),
-        mail_latency: "not checked by the tick yet".to_string(),
+        redrive: "off (ADR-26 default)".to_string(),
+        mail_latency: "not checked".to_string(),
         ..Default::default()
     };
     let live = cfg.enabled && !ctx.dry_run;
@@ -1287,8 +1880,24 @@ pub(crate) fn tick_core(
     }
     state.last_stale_pid = stale_pid;
 
+    // 3b. Opt-in re-drive (ADR-26 default off). Re-queued specs join this
+    // tick's selection at the head, oldest-parked first (A7).
+    // trace:TASK-1492 | ai:claude
+    let redriven = redrive_step(cfg, probes, state, ctx, live, &mut report, exec)?;
+    let candidates: Vec<Candidate> = redriven
+        .iter()
+        .cloned()
+        .chain(
+            probes
+                .candidates
+                .iter()
+                .filter(|c| !redriven.iter().any(|r| r.spec == c.spec))
+                .cloned(),
+        )
+        .collect();
+
     // 4. Select and guard.
-    let sel = select_wave(cfg, &probes.candidates, state, now);
+    let sel = select_wave(cfg, &candidates, state, now);
     let mut escalated_now = Vec::new();
     for spec in &sel.capped {
         if state.escalated.insert(spec.clone()) {
@@ -1362,13 +1971,41 @@ pub(crate) fn tick_core(
         }
     }
 
+    // 5b. A breaker trip reaches the operator through notify (A8(b)), and
+    // the mail-latency step runs.
+    // trace:TASK-1492 | ai:claude
+    if live {
+        if let Some(reason) = &report.breaker {
+            let message = format!(
+                "The night shift stopped launching drain waves: {reason}.\n\
+                 It launches again after `aida shift resume` or a change to the queue.\n"
+            );
+            match exec.notify(
+                "shift-breaker",
+                "AIDA: night shift stopped",
+                &message,
+                ctx.notify_timeout(),
+            ) {
+                Ok(_) => {}
+                Err(e) => report.notify_errors.push(format!("shift-breaker: {e:#}")),
+            }
+        }
+    }
+    if cfg.enabled || ctx.dry_run {
+        mail_step(cfg, probes, state, ctx, live, &mut report, exec);
+    }
+
     // 6. One event, only when the tick acted or its verdicts changed.
     let refused = report.refused();
     let acted = report.launched.is_some()
         || report.reaped > 0
         || report.recovered_stale_pid.is_some()
         || report.breaker.is_some()
-        || !report.escalated.is_empty();
+        || !report.escalated.is_empty()
+        || !report.redriven.is_empty()
+        || !report.reclassified.is_empty()
+        || !report.mail_escalated.is_empty()
+        || report.redrive_held.is_some();
     if live && (acted || refused != state.last_refused) {
         exec.emit(EventKind::ShiftTick {
             launched: report.launched.clone(),
@@ -1377,6 +2014,10 @@ pub(crate) fn tick_core(
             refused: refused.clone(),
             breaker: report.breaker.clone(),
             escalated: report.escalated.clone(),
+            redriven: report.redriven.clone(),
+            reclassified: report.reclassified.clone(),
+            mail_escalated: report.mail_escalated.clone(),
+            redrive_held: report.redrive_held.clone(),
         });
         report.event_emitted = true;
     }
@@ -1438,11 +2079,10 @@ fn held_specs(project_root: &Path) -> BTreeSet<String> {
 }
 
 fn gather_candidates(
-    project_root: &Path,
     backend: &aida_core::CachedGitBackend,
     user: &str,
+    held: &BTreeSet<String>,
 ) -> Vec<Candidate> {
-    let held = held_specs(project_root);
     let Ok(entries) = crate::queue_role_fallback::queue_list_with_role_fallback(
         backend,
         user,
@@ -1553,7 +2193,8 @@ fn gather_probes(
         }
     });
     let queue_user = crate::current_user_id(None);
-    let candidates = gather_candidates(project_root, backend, &queue_user);
+    let held = held_specs(project_root);
+    let candidates = gather_candidates(backend, &queue_user, &held);
     let mut queue_fingerprint: Vec<String> = candidates.iter().map(|c| c.spec.clone()).collect();
     queue_fingerprint.sort();
     let last = state.waves.iter().rev().find(|w| w.pid.is_some());
@@ -1589,6 +2230,17 @@ fn gather_probes(
         }
     }
     let (wave_vendor, wave_vendor_error) = resolve_wave_vendor(project_root);
+    let (parked, redrive_history) = redrive_probes(project_root, backend, cfg);
+    let mail = crate::mailbox_store::oldest_unread_by_recipient(
+        project_root,
+        &project_root.join(".aida-store"),
+    )
+    .map_err(|e| format!("{e:#}"));
+    let mail_known = if mail.as_ref().is_ok_and(|m| !m.is_empty()) {
+        known_mail_recipients(project_root)
+    } else {
+        BTreeSet::new()
+    };
     Probes {
         lock,
         lock_holder,
@@ -1613,7 +2265,73 @@ fn gather_probes(
         last_wave_alive,
         queue_drained,
         finished_specs,
+        parked,
+        held,
+        redrive_history,
+        mail,
+        mail_known,
     }
+}
+
+/// The re-drive inputs, read only when re-drive is on: the parked specs and
+/// the strict (fail-closed) attempt history from the live stream and its
+/// archive.
+// trace:TASK-1492 | ai:claude
+pub(crate) type RedriveProbes = (
+    Vec<aida_core::Requirement>,
+    std::result::Result<events::RedriveHistory, String>,
+);
+
+// trace:TASK-1492 | ai:claude
+pub(crate) fn redrive_probes<B: aida_core::DatabaseBackend>(
+    project_root: &Path,
+    backend: &B,
+    cfg: &ShiftConfig,
+) -> RedriveProbes {
+    if !cfg.redrive {
+        return (Vec::new(), Err("re-drive is off".to_string()));
+    }
+    match backend.load() {
+        Ok(store) => (
+            store
+                .requirements
+                .into_iter()
+                .filter(|r| r.status == RequirementStatus::NeedsAttention)
+                .collect(),
+            events::read_redrive_history_strict(project_root),
+        ),
+        Err(e) => (Vec::new(), Err(format!("cannot read the store: {e:#}"))),
+    }
+}
+
+/// The recipients the mail-latency step may page for, lower-cased. Reuses
+/// the existing identity lookups: the mailbox's known identities (built-in
+/// roles, role files and the agent registry's seats), the team roster
+/// (`registry/team.toml` members and their roles) and the active work
+/// session leases (owner and role).
+// trace:TASK-1492 | ai:claude
+fn known_mail_recipients(project_root: &Path) -> BTreeSet<String> {
+    let mut known: BTreeSet<String> = crate::known_mailbox_identities(project_root)
+        .into_iter()
+        .collect();
+    let mut add = |s: &str| {
+        let t = s.trim().to_lowercase();
+        if !t.is_empty() {
+            known.insert(t);
+        }
+    };
+    let roster = crate::team::TeamRoster::load(&project_root.join(".aida-store"));
+    for (user, role) in &roster.members {
+        add(user);
+        add(&crate::canonical_role_name(role));
+    }
+    for lease in crate::list_leases(project_root) {
+        add(&lease.owner);
+        if let Some(role) = &lease.role {
+            add(&crate::canonical_role_name(role));
+        }
+    }
+    known
 }
 
 fn try_shift_lock(project_root: &Path) -> Result<Option<std::fs::File>> {
@@ -1746,8 +2464,29 @@ pub(crate) fn render_report(r: &TickReport) -> String {
     if !r.argv.is_empty() {
         out.push_str(&format!("  command: aida {}\n", r.argv.join(" ")));
     }
+    // trace:TASK-1492 | ai:claude
     out.push_str(&format!("  re-drive: {}\n", r.redrive));
+    for g in r.redrive_guards.iter().filter(|g| !g.pass) {
+        out.push_str(&format!("    FAIL {:<16} {}\n", g.name, g.detail));
+    }
+    for d in r
+        .redrive_plan
+        .iter()
+        .filter(|d| d.class == crate::supervisor::ParkClass::Transient)
+    {
+        out.push_str(&format!(
+            "    {} ({}, {} of {} attempts): {}\n",
+            d.spec,
+            d.reason,
+            d.attempts,
+            crate::supervisor::DEFAULT_MAX_ATTEMPTS,
+            d.action
+        ));
+    }
     out.push_str(&format!("  mail latency: {}\n", r.mail_latency));
+    for e in &r.notify_errors {
+        out.push_str(&format!("  notify failed: {e}\n"));
+    }
     if let Some(l) = &r.launched {
         out.push_str(&format!(
             "  launched batch:{} ({} specs, pid {})\n",
@@ -1887,6 +2626,11 @@ fn status_command(
             "breaker": state.breaker,
             "escalated": state.escalated,
             "guards": report.guards,
+            // trace:TASK-1492 | ai:claude
+            "redrive": report.redrive,
+            "redrive_guards": report.redrive_guards,
+            "mail_latency": report.mail_latency,
+            "mail_episodes": state.mail_episodes,
             "config": cfg,
         });
         println!("{}", serde_json::to_string_pretty(&body)?);
@@ -1948,6 +2692,9 @@ fn status_command(
             g.detail
         );
     }
+    // trace:TASK-1492 | ai:claude
+    println!("  re-drive: {}", report.redrive);
+    println!("  mail latency: {}", report.mail_latency);
     Ok(())
 }
 
