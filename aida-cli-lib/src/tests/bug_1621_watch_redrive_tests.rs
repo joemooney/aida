@@ -196,6 +196,14 @@ fn action(r: &crate::shift::TickReport, spec: &str) -> String {
         .unwrap_or_else(|| panic!("no decision for {spec}: {:?}", r.redrive_plan))
 }
 
+fn guard_detail(r: &crate::shift::TickReport, name: &str) -> String {
+    r.redrive_guards
+        .iter()
+        .find(|g| g.name == name && !g.pass)
+        .map(|g| g.detail.clone())
+        .unwrap_or_default()
+}
+
 fn failing_guard(r: &crate::shift::TickReport, name: &str) -> bool {
     r.redrive_guards.iter().any(|g| g.name == name && !g.pass)
 }
@@ -298,6 +306,21 @@ fn watch_redrive_held_while_a_drain_or_wave_is_live() {
     let (r, rec) = run(&cfg_redrive_on(), &p, &state, false);
     assert!(rec.calls.is_empty());
     assert!(failing_guard(&r, "redrive-lock-free"));
+
+    // B1: the same wave has exited but no tick has settled it yet. Its
+    // outcome, and so the zero-progress breaker, is unknown: held.
+    let mut p = probes(vec![drain_park("TASK-9", 60)]);
+    p.last_wave_alive = false;
+    let unsettled = ShiftState {
+        consecutive_zero_progress: 1,
+        ..state
+    };
+    let (r, rec) = run(&cfg_redrive_on(), &p, &unsettled, false);
+    assert!(rec.calls.is_empty(), "{:?}", rec.calls);
+    assert!(guard_detail(&r, "redrive-lock-free").contains("wave unsettled"));
+    // A held pass lists nothing as about to happen.
+    assert_eq!(action(&r, "TASK-9"), crate::shift::REDRIVE_HELD);
+    assert_eq!(r.redrive_plan[0].attempts, 0);
 }
 
 #[test]
@@ -494,15 +517,19 @@ fn watch_redrive_never_uses_force_claim_or_a_foreground_drive() {
     // floored pass, never through the manual verb (whose foreground launch
     // is `queue work --force-claim`).
     let src = include_str!("../supervise_cmd.rs");
-    let watch = fn_body(src, "run_watch_pass");
-    assert!(watch.contains("crate::shift::run_redrive_pass("), "{watch}");
-    for banned in [
-        "handle_supervise_command",
-        "launch_redrive",
-        "--force-claim",
-        "floors: None",
-    ] {
-        assert!(!watch.contains(banned), "watch pass uses `{banned}`");
+    let pass = fn_body(src, "run_watch_pass");
+    let core = fn_body(src, "watch_pass_core");
+    assert!(pass.contains("watch_pass_core("), "{pass}");
+    assert!(core.contains("crate::shift::run_redrive_pass("), "{core}");
+    for watch in [pass, core] {
+        for banned in [
+            "handle_supervise_command",
+            "launch_redrive",
+            "--force-claim",
+            "floors: None",
+        ] {
+            assert!(!watch.contains(banned), "watch pass uses `{banned}`");
+        }
     }
     assert!(!src.contains("\"--force-claim\""));
     let shell = fn_body(include_str!("../shift.rs"), "run_redrive_pass_with");
@@ -684,6 +711,85 @@ fn watch_redrive_real_floors_merge_hold_breaker_drain_lock_and_shift_lock() {
     assert!(parked(&backend));
     std::fs::remove_file(state_path(root)).unwrap();
 
+    // 3b. A live shift wave in the state file (this test process, with its
+    // real start identity): held as a running wave.
+    let me = std::process::id();
+    let wave = |pid: u32, pid_start: Option<String>| WaveRecord {
+        batch: "shift-20260925-0250".to_string(),
+        specs: vec!["TASK-5".to_string()],
+        at: Utc::now() - Duration::minutes(10),
+        argv: Vec::new(),
+        pid: Some(pid),
+        pid_start,
+        log: None,
+        outcome: None,
+    };
+    let live = ShiftState {
+        waves: vec![wave(me, crate::process_probe::process_start_identity(me))],
+        ..Default::default()
+    };
+    std::fs::write(state_path(root), serde_json::to_string(&live).unwrap()).unwrap();
+    let r = run_redrive_pass_with(root, &backend, &cfg_redrive_on(), false).unwrap();
+    assert!(
+        guard_detail(&r, "redrive-lock-free").contains("still running"),
+        "{:?}",
+        r.redrive_guards
+    );
+    assert!(parked(&backend));
+
+    // 3c. B1: a wave that exited but was never settled, one zero-progress
+    // wave already counted. The breaker is unknown until the next tick
+    // settles it, so the watch pass holds.
+    let mut dead = std::process::Command::new("true").spawn().unwrap();
+    let dead_pid = dead.id();
+    dead.wait().unwrap();
+    let unsettled = ShiftState {
+        waves: vec![wave(dead_pid, Some("not-a-real-start".to_string()))],
+        consecutive_zero_progress: 1,
+        ..Default::default()
+    };
+    std::fs::write(state_path(root), serde_json::to_string(&unsettled).unwrap()).unwrap();
+    let r = run_redrive_pass_with(root, &backend, &cfg_redrive_on(), false).unwrap();
+    assert!(
+        guard_detail(&r, "redrive-lock-free").contains("wave unsettled"),
+        "{:?}",
+        r.redrive_guards
+    );
+    assert!(r.redrive_plan.iter().all(|d| d.action != "would-re-drive"));
+    assert!(parked(&backend));
+    std::fs::remove_file(state_path(root)).unwrap();
+
+    // 3d. A live drain claim held by another clone in the shared store.
+    let claim = crate::coordination::Claim {
+        scope: "drain".to_string(),
+        node_id: "2".to_string(),
+        clone_path: "/elsewhere/other-clone".to_string(),
+        host: crate::coordination::hostname(),
+        pid: me,
+        pid_start_time: crate::process_probe::process_start_identity(me),
+        agent: "queue work --auto-complete".to_string(),
+        started_at: Utc::now().to_rfc3339(),
+        heartbeat_at: Utc::now().to_rfc3339(),
+        ttl_secs: 3600,
+        process_backed: true,
+        review_verb: false,
+        authorized_by: None,
+    };
+    let claim_path = crate::coordination::lock_claim_path(
+        &root.join(".aida-store"),
+        crate::coordination::LockKind::Drain,
+    );
+    std::fs::create_dir_all(claim_path.parent().unwrap()).unwrap();
+    std::fs::write(&claim_path, toml::to_string(&claim).unwrap()).unwrap();
+    let r = run_redrive_pass_with(root, &backend, &cfg_redrive_on(), false).unwrap();
+    assert!(
+        guard_detail(&r, "redrive-lock-free").contains("another clone is draining"),
+        "{:?}",
+        r.redrive_guards
+    );
+    assert!(parked(&backend));
+    std::fs::remove_file(&claim_path).unwrap();
+
     // 4. A real merge hold on TASK-1: only TASK-2 is re-driven.
     let mut hold = crate::merge_hold::typed_hold(
         41,
@@ -698,4 +804,74 @@ fn watch_redrive_real_floors_merge_hold_breaker_drain_lock_and_shift_lock() {
     assert_eq!(r.redriven, vec!["TASK-2"]);
     assert_eq!(status(&backend, held), RequirementStatus::NeedsAttention);
     assert_eq!(status(&backend, free), RequirementStatus::Approved);
+}
+
+// ---------------------------------------------------------------------------
+// The watch pass itself (B2): `aida supervise watch` without --execute is a
+// dry run that writes nothing; with it, the same park is re-queued. The
+// config comes from a temp AIDA_HOME local layer, so nothing reads ~/.aida.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn watch_pass_dry_run_queues_nothing_and_execute_requeues() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("repo");
+    std::fs::create_dir_all(&root).unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::write(
+        home.join(".aida").join("shift-local.toml"),
+        format!(
+            "[repo.\"{}\"]\nredrive = true\n",
+            crate::shift::repo_key(&root)
+        ),
+    )
+    .unwrap();
+    let home_s = home.display().to_string();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        (events::EVENTS_DISABLE_ENV, None),
+        ("AIDA_USER", Some("joe")),
+        ("AIDA_HOME", Some(home_s.as_str())),
+    ]);
+    assert!(
+        crate::shift::load_config(&root).redrive,
+        "opt-in read from the temp layer"
+    );
+    let backend = temp_store(&root);
+    let mut epic = aida_core::Requirement::new("EPIC-1".to_string(), "objective".to_string());
+    epic.spec_id = Some("EPIC-1".to_string());
+    epic.req_type = aida_core::RequirementType::Epic;
+    backend.add_requirement(epic).unwrap();
+    let id = add_park(&backend, "TASK-9", 60);
+    std::fs::write(root.join(".aida").join("events.jsonl"), "").unwrap();
+    let queued = std::collections::HashSet::new();
+    let mut adds: Vec<String> = Vec::new();
+
+    let report = super::watch_pass_core(&backend, &root, "EPIC-1", false, &queued, &mut |s| {
+        adds.push(s.to_string());
+        true
+    })
+    .unwrap();
+    assert!(
+        report.redrive.starts_with("on — would re-queue TASK-9"),
+        "{}",
+        report.redrive
+    );
+    assert!(report.redriven.is_empty());
+    assert_eq!(status(&backend, id), RequirementStatus::NeedsAttention);
+    assert!(backend.queue_list("joe", false).unwrap().is_empty());
+    assert!(
+        events::read_all(&root).is_empty(),
+        "a dry run records nothing"
+    );
+
+    let report = super::watch_pass_core(&backend, &root, "EPIC-1", true, &queued, &mut |s| {
+        adds.push(s.to_string());
+        true
+    })
+    .unwrap();
+    assert_eq!(report.redriven, vec!["TASK-9"]);
+    assert_eq!(status(&backend, id), RequirementStatus::Approved);
+    assert_eq!(backend.queue_list("joe", false).unwrap().len(), 1);
+    assert!(adds.is_empty(), "no objective drift to realign: {adds:?}");
 }

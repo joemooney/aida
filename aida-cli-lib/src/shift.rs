@@ -1397,13 +1397,20 @@ pub(crate) fn mail_escalations(
 /// The re-drive step's own guards. Evaluated only when re-drive is on.
 // trace:TASK-1492 | ai:claude
 fn redrive_guards(p: &Probes, state: &ShiftState, ctx: &TickCtx) -> Vec<GuardVerdict> {
-    let wave_live = state
-        .last_launched()
-        .is_some_and(|w| w.outcome.is_none() && p.last_wave_alive);
+    let wave_open = state.last_launched().is_some_and(|w| w.outcome.is_none());
     let lock_live = match p.lock {
         LockView::Running(pid) => Some(format!("a drain holds the lock (pid {pid})")),
         _ if p.foreign_claim.is_some() => p.foreign_claim.clone(),
-        _ if wave_live => Some("a shift wave is still running".to_string()),
+        _ if wave_open && p.last_wave_alive => Some("a shift wave is still running".to_string()),
+        // A launched wave that has exited but was never settled: its
+        // outcome (and so the zero-progress breaker) is still unknown. The
+        // tick settles before this step, so only an out-of-tick caller
+        // (`supervise watch --execute`) can see one; it holds until the next
+        // tick settles the wave (BUG-1621 B1).
+        // trace:BUG-1621 | ai:claude
+        _ if wave_open => {
+            Some("wave unsettled: a shift wave awaits settlement by the next check".to_string())
+        }
         _ => None,
     };
     vec![
@@ -1444,6 +1451,10 @@ fn redrive_guards(p: &Probes, state: &ShiftState, ctx: &TickCtx) -> Vec<GuardVer
         ),
     ]
 }
+
+/// The plan action of a re-drive or cap decision on a held pass.
+// trace:BUG-1621 | ai:claude
+pub(crate) const REDRIVE_HELD: &str = "held";
 
 /// Step 3b: plan (and, live, apply) the opt-in re-drive. Returns the
 /// candidates the re-queued specs become, head first, so they join this
@@ -1500,6 +1511,17 @@ fn redrive_step(
         .collect();
     if !held.is_empty() {
         report.redrive = format!("held: {}", held.join(", "));
+        // Nothing is applied on a held pass, so the plan says so instead of
+        // listing actions that will not happen.
+        // trace:BUG-1621 | ai:claude
+        for d in plan.iter_mut() {
+            if d.action == "would-re-drive" {
+                d.attempts = d.attempts.saturating_sub(1);
+                d.action = REDRIVE_HELD.to_string();
+            } else if d.action == "reclassify-needs-human" {
+                d.action = REDRIVE_HELD.to_string();
+            }
+        }
         report.redrive_plan = plan;
         return Ok(Vec::new());
     }

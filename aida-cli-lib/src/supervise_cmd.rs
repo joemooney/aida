@@ -431,6 +431,48 @@ fn run_watch_pass(
     execute: bool,
     json: bool,
 ) -> Result<()> {
+    let queued = queued_spec_ids();
+    let report = watch_pass_core(
+        backend,
+        project_root,
+        objective,
+        execute,
+        &queued,
+        &mut queue_add_implementer,
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string(&report)?);
+    } else {
+        print_watch_report(&report, execute);
+    }
+
+    // Compose the other shipped reflex: nudge advisor stalls.
+    // Nudge sends a real mailbox message / notification, so it only fires under
+    // --execute; a dry-run pass has no side effects.
+    if execute {
+        let _ = handle_supervise_nudge(backend, store_path);
+    }
+
+    // Surface only human-decision items.
+    if !json {
+        print_awaiting_surface();
+    }
+    Ok(())
+}
+
+/// One watch pass without its subprocess reads and its output: realign
+/// (through `queue_add`) and the re-drive reflex. `execute = false` is a
+/// dry run that writes nothing. Split out so tests drive the real wiring.
+// trace:BUG-1621 | ai:claude
+fn watch_pass_core(
+    backend: &aida_core::CachedGitBackend,
+    project_root: &Path,
+    objective: &str,
+    execute: bool,
+    queued: &std::collections::HashSet<String>,
+    queue_add: &mut dyn FnMut(&str) -> bool,
+) -> Result<WatchReport> {
     use aida_core::models::{RelationshipType, RequirementStatus};
 
     let store = backend.load()?;
@@ -467,15 +509,14 @@ fn run_watch_pass(
         .count();
 
     // Drift = Approved, not archived, not deferred, not already queued.
-    let queued = queued_spec_ids();
-    let drift = compute_drift(&children, &queued);
+    let drift = compute_drift(&children, queued);
 
     // Realign: queue each drifted child for the implementer (idempotent — the
     // Approved filter + queue-add dupe tolerance keep it safe to re-run).
     let mut realigned: Vec<String> = Vec::new();
     if execute {
         for spec in &drift {
-            if queue_add_implementer(spec) {
+            if queue_add(spec) {
                 realigned.push(spec.clone());
             }
         }
@@ -506,36 +547,17 @@ fn run_watch_pass(
         Err(e) => (format!("error: {e:#}"), Vec::new(), Vec::new(), Vec::new()),
     };
 
-    let report = WatchReport {
-        objective: obj_display.clone(),
+    Ok(WatchReport {
+        objective: obj_display,
         total_children: total,
         done_children: done,
-        drift: drift.clone(),
-        realigned: realigned.clone(),
+        drift,
+        realigned,
         redrive: redrive_line,
         redriven,
         reclassified,
         redrive_plan,
-    };
-
-    if json {
-        println!("{}", serde_json::to_string(&report)?);
-    } else {
-        print_watch_report(&report, execute);
-    }
-
-    // Compose the other shipped reflex: nudge advisor stalls.
-    // Nudge sends a real mailbox message / notification, so it only fires under
-    // --execute; a dry-run pass has no side effects.
-    if execute {
-        let _ = handle_supervise_nudge(backend, store_path);
-    }
-
-    // Surface only human-decision items.
-    if !json {
-        print_awaiting_surface();
-    }
-    Ok(())
+    })
 }
 
 fn print_watch_report(report: &WatchReport, execute: bool) {
