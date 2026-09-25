@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:32:48.018202563Z
-modified_at: 2026-09-25T16:19:59.703872539Z
+modified_at: 2026-09-25T16:34:03.867995794Z
 req_type: Bug
 comments:
 - id: 01a0d88d-fe97-73f2-a6ea-ccf801b6f1f3
@@ -16,6 +16,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved, high priority, because it is an unattended path with no floors. Implement it after TASK-1492 merges, so it can reuse the new pipeline. It needs a strict review.'
   created_at: 2026-09-25T12:32:59.543325411Z
   modified_at: 2026-09-25T12:32:59.543325411Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d96a-b3dc-7201-8333-8333737eb1f6
+  author: joe
+  content: 'Implemented on claude/bug-1621 at bd8f2e5971. watch --execute now runs the night shift''s own re-drive step (shift::run_redrive_pass -> redrive_step: plan_redrives -> apply_requeue with the attempt recorded first -> apply_cap), with the same guards and floors. It takes shift.lock, only re-queues, and never launches or uses --force-claim. Opt-in decision: it REQUIRES the per-clone redrive = true, because watch --execute is run by the aida-oversee agent seat and on --interval loops, so a human caller cannot be assumed. The manual ''aida supervise redrive --execute'' is unchanged and still launches with --force-claim; that is out of scope here.'
+  created_at: 2026-09-25T16:34:03.867995794Z
+  modified_at: 2026-09-25T16:34:03.867995794Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
