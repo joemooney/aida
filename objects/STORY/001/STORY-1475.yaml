@@ -29,12 +29,12 @@ description: |-
     - handoff.
   - Every command used is verified against --help. Vendor limits are stated honestly, for example Antigravity's interactive-launch refusal.
   - aida scaffold refresh delivers it. Tests cover codex and antigravity pack contents, the Claude pack being unchanged, and a no-Claude-tool-names check on the portable body.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:02:30.145878720Z
-modified_at: 2026-09-25T06:20:49.205460886Z
+modified_at: 2026-09-25T07:04:58.900543645Z
 req_type: Story
 tags:
 - antigravity
@@ -51,6 +51,20 @@ comments:
   created_at: 2026-09-25T06:20:49.205460886Z
   modified_at: 2026-09-25T06:20:49.205460886Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d761-b10a-7001-a4ad-af48034d6196
+  author: aida-auto-bump
+  timestamp: 2026-09-25T07:04:58.890800401Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d761-b114-7af0-af03-c55f63468c9d
+  timestamp: 2026-09-25T07:04:58.900541037Z
+  agent: aida
+  commit_sha: 84aa1380788e41afce75bef08b0b983f2151da66
+  summary: Completed via merge 84aa1380
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
   branch: main
@@ -59,3 +73,7 @@ filed_at:
   aida_build_sha: cb07ece7f0
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T07:04:58.890768742Z
+  completion_sha: 84aa1380788e41afce75bef08b0b983f2151da66
