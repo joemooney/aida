@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T11:51:20.049274559Z
+modified_at: 2026-09-25T12:22:41.463993580Z
 req_type: Task
 tags:
 - cache
@@ -52,6 +52,42 @@ comments:
     Budgeted first build (index deleted, default 1.5 s budget, `--since 1d -n 50`): each query took 2.1-2.5 s (budget plus rev-list and the chunk granularity) and back-filled about 4,350 of the newest commits over three queries. `cache status` reported FILLING, with the index reaching back to 2026-09-20. Queries whose window falls inside the indexed range are served from the index. The others fall back to the git walk.
   created_at: 2026-09-25T11:51:20.049274559Z
   modified_at: 2026-09-25T11:51:20.049274559Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d884-9038-7a13-8a56-ce7556360a32
+  author: joe
+  content: |-
+    Strict review: REQUEST CHANGES — reviewed bad3a0f52c (independent reviewer, throwaway worktree, since removed).
+
+    BLOCKER
+    B1. The history index can serve a --since answer that is missing commits when the history has merges and the index is only partly built. history_cache.rs:1177 (older_than_since = floor_ts < since) assumes every commit not yet indexed is older than the floor. The back-fill runs in topo order from the anchor (history_cache.rs:1010), and topo order lists a merge's second-parent line before its first-parent line. So the floor can land on an old side-branch commit while newer first-parent commits are still unindexed. Reproduced: base, then a side branch with old dates, then 4 main commits with newer dates, then a merge. With a partial build of chunk 2 or 3, --since <any main commit ts> is SERVED with 0 events where the git walk returns 1-4 (8 wrong answers out of 49 probes). This is not clock skew. The live store has 6 merges whose side branches interleave in date, including two multi-hub reconciles on 2026-09-18 and a -s ours merge on 06-30 with 33 side commits dated before 2,756 mainline ones. A budgeted first build will pass through those regions. Suggested fix: use git rev-list --topo-order --timestamp <anchor> (the same call), and in the same transaction as each chunk, store max(commit_ts) of the commits still to back-fill in meta. Then serve on since only when since > that value. This is exact and needs no extra git call. Add the probe as a regression test.
+
+    NON-BLOCKING
+    N1 (advisor attention). OQ3 assumed 'with 6 merges the difference is theoretical' and required the same SET of events on merges. With seq, which is topo order, as the authority, any -n / --max-commits / limit cut that crosses an interleaved merge returns a different set from the git walk, even on a complete index. Only order was supposed to differ. The fallback walk returns the other set, so an answer can change with the index state. The only merge parity test (tests:532) uses an unbounded window, so it never exercises this. Recent multi-hub merges show merges keep happening. The advisor should re-affirm OQ3 or choose a date-priority order.
+    N2. history_cache.rs:833-846: a reader whose HEAD is an ancestor of the indexed tip (a store worktree behind a shared index, or an undo) truncates the whole shared index. Fall back without resetting when is_ancestor(head, tip).
+    N3. Catch-up cost from the fsync when the connection closes (measured at 0.65-3.5 s for 1 new commit, against a 0.49 s walk for --id). Nearly every query in an active session is a catch-up. Consider SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE or leaving checkpoints to autocheckpoint. The 1.5 s default budget on the MCP path is acceptable: queries measured at 2.1-2.5 s during the fill, which is one-time and well under the 19 s walk. Budget checks happen only between 128-commit chunks, so one bulk commit can overrun the budget.
+    N4. prune_other_versions (history_cache.rs:1330) also deletes other versions' .lock files, which may be held.
+    N5. The aida history events CLI still reads cache.db for archived sets (git_backend_cmd.rs:7821). This was already the case and the sketch accepted it, so the lock isolation is complete in history_cache only, not end-to-end.
+
+    VERIFIED OK
+    - tip == HEAD is checked inside one read transaction.
+    - Budgeted catch-up only commits a chunk at an ancestor-closed boundary: tip..C is a subset of the prefix and the counts are equal, which proves they are the same set.
+    - Back-fill resumes from a pinned anchor through an exclusion set, complete=1 is set on exhaustion, and there are no duplicate rows.
+    - Sorted root set. Reset on non-ancestor, root, or version change. A crash cannot leave a partial transaction, because meta moves in the same transaction.
+    - window_exhausted uses the same over-fetch-by-one semantics as BUG-1617.
+    - A7 counts post-filter matches. The A5 author filter is exact.
+    - It never opens cache.db or store_lock. AIDA_HISTORY_CACHE=0 returns before any file is touched.
+    - Tests use TempDir, cfg(test) turns serve off by default, and nothing leaked into /tmp.
+    - Mutation checks: turning off the coverage gate fails partial_backfill_falls_back; dropping tip==head fails 2 tests; capped >= fails 3 tests.
+    - Tests: task_1507 24/24, history 81/81, cache 45/45.
+
+    DEVIATIONS
+    - touches keyed by path, not spec_id: equivalent to the walk's pathspec, so not architectural.
+    - Events joined to commits: a schema normalization, not architectural.
+    - Merge parity compared per commit: within OQ3, but see N1.
+    - rev-list per query: about 0.22 s, and only while the index is incomplete. Fine.
+    None of these needs re-signoff. The B1 fix only tightens the A7 rule, so it needs no re-signoff, but record it on TASK-1505. N1 needs the advisor to re-affirm OQ3.
+  created_at: 2026-09-25T12:22:41.463993580Z
+  modified_at: 2026-09-25T12:22:41.463993580Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
