@@ -34101,7 +34101,65 @@ fn ambiguous_id_in_chain(
 }
 
 pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
+    // BUG-1618: a test that pinned a hermetic project root (see
+    // `test_env::AmbientGuard`) resolves here instead of walking up from the
+    // process cwd, which inside a leased `aida worktree add` checkout reaches a
+    // `.aida-store` symlink to the LIVE store (its team roster, drain state).
+    // Compiled out of release builds. trace:BUG-1618 | ai:claude
+    #[cfg(test)]
+    if let Some(root) = test_ambient::project_root() {
+        return Ok(root);
+    }
     find_project_root_from(&std::env::current_dir()?)
+}
+
+/// BUG-1618: whether stdin is an interactive terminal, as the advisor-authority
+/// checks see it. Production reads the real stdin; a test that pinned a
+/// hermetic ambient context gets its injected answer, so running `cargo test`
+/// from an interactive shell cannot grant the TTY carve-out to a test that
+/// asserts a refusal.
+// trace:BUG-1618 | ai:claude
+pub(crate) fn authority_stdin_is_terminal() -> bool {
+    #[cfg(test)]
+    if let Some(tty) = test_ambient::stdin_is_terminal() {
+        return tty;
+    }
+    std::io::stdin().is_terminal()
+}
+
+/// BUG-1618: test-only, per-thread override of the ambient inputs the
+/// authority checks read (project root discovered from cwd, stdin TTY-ness).
+/// Thread-local, so a test pinning it never leaks into a sibling test running
+/// on another libtest thread, and no process-global `chdir` is needed. Set
+/// through `test_env::AmbientGuard`, never directly.
+// trace:BUG-1618 | ai:claude
+#[cfg(test)]
+pub(crate) mod test_ambient {
+    use std::cell::RefCell;
+    use std::path::PathBuf;
+
+    #[derive(Clone, Debug)]
+    pub(crate) struct Ambient {
+        pub(crate) project_root: PathBuf,
+        pub(crate) stdin_is_terminal: bool,
+    }
+
+    thread_local! {
+        static AMBIENT: RefCell<Option<Ambient>> = const { RefCell::new(None) };
+    }
+
+    /// Install `next`, returning the previous value for the caller to restore.
+    pub(crate) fn replace(next: Option<Ambient>) -> Option<Ambient> {
+        AMBIENT.with(|a| a.replace(next))
+    }
+
+    pub(crate) fn project_root() -> Option<PathBuf> {
+        AMBIENT.with(|a| a.borrow().as_ref().map(|x| x.project_root.clone()))
+    }
+
+    pub(crate) fn stdin_is_terminal() -> Option<bool> {
+        AMBIENT.with(|a| a.borrow().as_ref().map(|x| x.stdin_is_terminal))
+    }
 }
 
 /// [`find_project_root`] from an explicit start directory: the nearest
@@ -49480,7 +49538,7 @@ fn authority_carveout_active() -> bool {
             )
         })
         .unwrap_or(false);
-    std::io::stdin().is_terminal() || orchestrated
+    authority_stdin_is_terminal() || orchestrated // trace:BUG-1618 | ai:claude
 }
 
 /// STORY-647: the protected-spec variant of [`enforce_team_gate`] — gates
@@ -49801,7 +49859,7 @@ fn has_advisor_authority() -> bool {
     // store resolve identically to the pre-646 env-only behavior.
     advisor_authority_from(
         &effective_role_with_roster().0,
-        std::io::stdin().is_terminal(),
+        authority_stdin_is_terminal(), // trace:BUG-1618 | ai:claude
         orchestrated,
     )
 }
@@ -49824,7 +49882,7 @@ fn has_dispatch_authority() -> bool {
 
 // trace:STORY-1353 | ai:codex
 fn has_integrity_floor_authority() -> bool {
-    integrity_floor_authority_from(std::io::stdin().is_terminal())
+    integrity_floor_authority_from(authority_stdin_is_terminal()) // trace:BUG-1618 | ai:claude
 }
 
 /// TASK-754: why `aida add --queue` would refuse to enqueue the freshly-filed

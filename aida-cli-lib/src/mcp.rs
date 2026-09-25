@@ -10498,6 +10498,9 @@ mod tests {
     #[test]
     fn mcp_update_requirement_gates_advisor_and_merge_driven_statuses() {
         let dir = tempdir().unwrap();
+        // BUG-1618: pin the ambient project root / TTY / identity so a leased
+        // worktree's live roster cannot grant the refusal paths advisor authority.
+        let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None); // trace:BUG-1618 | ai:claude
         let server = mk_server(dir.path());
         let added = server
             .tool_add_requirement(&json!({
@@ -10570,6 +10573,10 @@ mod tests {
     #[test]
     fn mcp_update_requirement_gates_draft_into_pipeline() {
         let dir = tempdir().unwrap();
+        // BUG-1618: this asserts MCP refusals, which resolve advisor authority
+        // from the process-global AIDA_SESSION_ROLE; a leased agent session
+        // inherits `advisor`. Pin a hermetic, role-less ambient context.
+        let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None); // trace:BUG-1618 | ai:claude
         let server = mk_server(dir.path());
         let added = server
             .tool_add_requirement(&json!({
@@ -10627,6 +10634,10 @@ mod tests {
     #[test]
     fn mcp_triage_finding_promote_is_advisor_gated() {
         let dir = tempdir().unwrap();
+        // BUG-1618: this asserts MCP refusals, which resolve advisor authority
+        // from the process-global AIDA_SESSION_ROLE; a leased agent session
+        // inherits `advisor`. Pin a hermetic, role-less ambient context.
+        let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None); // trace:BUG-1618 | ai:claude
         let server = mk_server(dir.path());
         let filed = server
             .tool_file_finding(&json!({
@@ -12827,6 +12838,11 @@ mod tests {
     #[test]
     fn mcp_authority_gate_honors_advisor_role() {
         use RequirementStatus::*;
+        // BUG-1618: the env-resolving wrapper assertions below need a session with
+        // no advisor role entered; a leased agent session inherits one
+        // (AIDA_SESSION_ROLE=advisor). Pin a hermetic, role-less ambient context.
+        let dir = tempdir().unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None); // trace:BUG-1618 | ai:claude
 
         // ---- Status gate: advisor-gated transitions ----
         // The advisor-authority transitions the bug names.

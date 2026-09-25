@@ -527,7 +527,11 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
     // removed call site in handle_queue_rework); that duplicate silently
     // upgraded the pinned no-op contract to a hard failure.
     {
-        let _role = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
+        // BUG-1618: pin the WHOLE ambient authority context, not just the
+        // role env var — cwd-discovered roster/drain state and stdin TTY-ness
+        // otherwise grant authority inside a leased worktree or a terminal.
+        // trace:BUG-1618 | ai:claude
+        let _ambient = crate::test_env::AmbientGuard::hermetic(tmp.path(), None);
         rework(&storage).expect("a refused rework is a no-op, not an error");
         let parked = storage.load().unwrap();
         assert_eq!(
@@ -550,7 +554,7 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
     // BUG-1056 half, preserved: WITH advisor authority the punted spec resumes
     // and becomes the pickable queue head. STORY-1353 gates this transition; it
     // does not remove it.
-    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    let _ambient = crate::test_env::AmbientGuard::hermetic(tmp.path(), Some("advisor")); // trace:BUG-1618 | ai:claude
     rework(&storage).unwrap();
 
     let updated = storage.load().unwrap();
@@ -605,7 +609,11 @@ fn work_rework_of_needs_attention_spec_is_refused_without_advisor_authority() {
         Some(RequirementStatus::InProgress)
     );
 
-    let _role = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
+    // BUG-1618: hermetic ambient context. Without it, a leased worktree's
+    // live-store roster granted authority, the gate passed, and `--work`
+    // went on to resolve `BUG-1494` against the LIVE store via cwd.
+    // trace:BUG-1618 | ai:claude
+    let _ambient = crate::test_env::AmbientGuard::hermetic(tmp.path(), None);
     handle_queue_rework(
         &storage,
         "BUG-1494",
@@ -1017,8 +1025,11 @@ fn rework_explicit_user_still_overrides_role_default() {
 // trace:BUG-1470 | ai:claude
 #[test]
 fn metadata_rework_of_a_draft_is_refused_without_advisor_authority() {
-    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
     let tmp = tempfile::tempdir().unwrap();
+    // BUG-1618: pin the whole ambient authority context (project root, stdin
+    // TTY, identity and orchestrator env), not just the role env var.
+    // trace:BUG-1618 | ai:claude
+    let _ambient = crate::test_env::AmbientGuard::hermetic(tmp.path(), Some("implementer"));
     let store_root = tmp.path().join(".aida-store");
     // BUG-1598: anchor cache-path resolution to this tempdir so
     // `Storage::resolve_queued_requirement`'s `default_cache_path` walk-up
@@ -1103,7 +1114,10 @@ fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
     store.requirements.push(req);
     backend.save(&store).unwrap();
 
-    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    // BUG-1618: the test's premise is a NON-TTY advisor; pin it rather than
+    // inherit whatever stdin `cargo test` was launched with.
+    // trace:BUG-1618 | ai:claude
+    let _ambient = crate::test_env::AmbientGuard::hermetic(tmp.path(), Some("advisor"));
     handle_queue_rework(
         &storage,
         "BUG-13110",
