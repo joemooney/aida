@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:44:52.921456265Z
-modified_at: 2026-09-25T10:36:23.218359592Z
+modified_at: 2026-09-25T12:02:34.963868452Z
 req_type: Bug
 tags:
 - flaky
@@ -30,6 +30,12 @@ comments:
   content: 'Additional evidence (TASK-1502 implementer): in a leased worktree, run alone with --test-threads=1, these tests fail on a network `git pull --rebase` against the shared aida-store remote. The test path therefore reaches the real store remote, which is a hermeticity leak beyond the authority resolution. The fix must keep these tests entirely local (a fixture store with no network remote).'
   created_at: 2026-09-25T08:53:39.208078510Z
   modified_at: 2026-09-25T08:53:39.208078510Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d872-2753-7981-8628-c202b7d7ef19
+  author: joe
+  content: 'Strict review: REQUEST CHANGES — release authority behaviour is UNCHANGED (safe); change requested only for incomplete acceptance item 3. Reviewed 6eef612800. (1) Gating: test_ambient mod is #[cfg(test)] (aida-cli-lib/src/lib.rs:34068); both override reads are #[cfg(test)] statements (lib.rs:34041, 34055); AmbientGuard lives in the #[cfg(test)] mod test_env (lib.rs:315). No env var, feature or debug_assertions path reaches it; build.rs and .cargo/config.toml add no --cfg test. cfg(test) does NOT propagate to dependencies, so downstream crates'' tests link the release-shaped lib. cargo build --release -p aida-cli succeeded, and the binary has 0 hits for test_ambient/AmbientGuard/the hermetic user id. (2) Release semantics: authority_stdin_is_terminal() reduces to std::io::stdin().is_terminal(), the same stream and call as before; find_project_root reduces to find_project_root_from(current_dir). All 4 call sites are verbatim substitutions: authority_carveout_active lib.rs:49303, has_advisor_authority 49624, has_integrity_floor_authority 49647, requeue::caller_may_clear_escalation requeue.rs:103. No other logic changed. (3) Floors: the integrity floor is unaffected in release, and no other TTY/merge-hold site was touched. (4) Test quality: AmbientGuard holds ENV_LOCK, and Drop restores the thread-local before _env restores the env and releases the lock. Thread-local scope does not follow spawned threads, but none of the guarded tests needs it to. Empirically I simulated a leased worktree with a fake .aida-store (roster joe=advisor; not the live store). With the branch tests all 4 pass, also under a pty. With main''s test file (guards removed) 3 fail at queue_rework_tests.rs:533, 1055 and 624, so the fix is load-bearing. The requested filters pass: queue_rework 50, requeue 32, bug_1611 6, story_1428 7. (5) Nothing weakened. BLOCKER (acceptance 3, ''grep for other authority tests… fix them the same way''): mcp::tests::mcp_update_requirement_gates_advisor_and_merge_driven_statuses (aida-cli-lib/src/mcp.rs:10423) has the same leak. It fails at mcp.rs:10476 under the same simulated leased roster, with or without a TTY, and passes from a plain checkout. Wrap it in AmbientGuard::hermetic, and sweep the rest of the suite under the simulated roster: I only swept the authority/advisor/escalat filters.'
+  created_at: 2026-09-25T12:02:34.963868452Z
+  modified_at: 2026-09-25T12:02:34.963868452Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
