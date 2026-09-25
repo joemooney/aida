@@ -19,12 +19,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T01:20:51.335669387Z
-modified_at: 2026-09-25T01:47:27.707435985Z
+modified_at: 2026-09-25T01:58:54.605339446Z
 req_type: Bug
 tags:
 - authority
 - lifecycle
 - security
+comments:
+- id: 01a0d649-798d-7a73-9e8e-57854fb54ba3
+  author: joe
+  content: 'Strict review: APPROVE (fresh Opus reviewer). Every transition_guard and queue-done caller was traced; drains, the merge auto-bump, reconcile-status, supervisor re-drive, reviewer and integrator flows are unaffected. Non-blocking: the old AIDA_SESSION_ROLE=advisor hints still appear on the newly gated reopen paths (that cleanup belongs to STORY-1473), and the MCP fallback wording for closed specs could be clearer. Queued for batch 61.'
+  created_at: 2026-09-25T01:58:54.605339446Z
+  modified_at: 2026-09-25T01:58:54.605339446Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 9154924fd2cb9ea6a0ce0b0cfe737ee6474e9dfe
   branch: main
