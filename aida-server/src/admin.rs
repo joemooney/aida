@@ -538,23 +538,20 @@ async fn run_build(
             );
 
             // Build the replacement command with --force to reclaim ports
-            let binary_str = binary_path.to_string_lossy().to_string();
             let mut all_args = args.clone();
             if !all_args.iter().any(|a| a == "--force" || a == "-f") {
                 all_args.push("--force".to_string());
             }
-            let args_str = all_args
-                .iter()
-                .map(|a| shell_escape(a))
-                .collect::<Vec<_>>()
-                .join(" ");
-
             // Use setsid to start a new session so the child survives parent exit.
             // sleep gives time for the current process to exit and release ports.
-            let shell_cmd = format!("sleep 2 && exec {} {}", shell_escape(&binary_str), args_str);
-
+            // The binary path and arguments are passed as positional
+            // parameters ("$@"), never spliced into the shell text: the old
+            // hand-rolled escaper left `;`, `$` and backticks live.
+            // trace:BUG-1624 | ai:claude
             std::process::Command::new("setsid")
-                .args(["sh", "-c", &shell_cmd])
+                .args(["sh", "-c", "sleep 2 && exec \"$@\"", "sh"])
+                .arg(&binary_path)
+                .args(&all_args)
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
@@ -573,13 +570,4 @@ async fn run_build(
     }
 
     Ok(())
-}
-
-/// Simple shell escaping for arguments
-fn shell_escape(s: &str) -> String {
-    if s.contains(' ') || s.contains('\'') || s.contains('"') || s.contains('\\') {
-        format!("'{}'", s.replace('\'', "'\\''"))
-    } else {
-        s.to_string()
-    }
 }

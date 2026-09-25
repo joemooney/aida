@@ -260,10 +260,30 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     }
 }
 
+/// Refuse a dash-led `value` that git would read as an option. Used where
+/// `--end-of-options` is not honored end to end, e.g. `git pull`, which
+/// forwards its remote and branch to `git fetch` without the marker.
+/// Mirrors `aida-cli-lib`'s `git_arg_guard::reject_option_like`.
+// trace:BUG-1624 | ai:claude
+pub fn reject_option_like(what: &str, value: &str) -> Result<()> {
+    if value.trim_start().starts_with('-') {
+        anyhow::bail!(
+            "invalid {what} value `{}`: it starts with `-`, so git would read it as an option",
+            value.trim()
+        );
+    }
+    Ok(())
+}
+
 /// Pull with rebase from remote.
 pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
-    // `--end-of-options` keeps a dash-led remote or branch from reading as
-    // an option. trace:BUG-1622 | ai:claude
+    // `--end-of-options` only ends `git pull`'s own option parsing: pull
+    // hands the remote and branch to `git fetch` without the marker, so a
+    // dash-led value such as `--upload-pack=<cmd>` would still be read as a
+    // fetch option. Refuse it before git runs; the marker stays for pull's
+    // own parser. trace:BUG-1622 trace:BUG-1624 | ai:claude
+    reject_option_like("remote", remote)?;
+    reject_option_like("branch", branch)?;
     let result = git(
         repo,
         &["pull", "--rebase", "--end-of-options", remote, branch],
@@ -316,8 +336,13 @@ pub enum StorePullOutcome {
 /// unknown files and never corrupt the store. trace:STORY-641 | ai:claude
 #[cfg(feature = "native")]
 pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result<StorePullOutcome> {
-    // `--end-of-options` keeps a dash-led remote or branch from reading as
-    // an option. trace:BUG-1622 | ai:claude
+    // `--end-of-options` only ends `git pull`'s own option parsing: pull
+    // hands the remote and branch to `git fetch` without the marker, so a
+    // dash-led value such as `--upload-pack=<cmd>` would still be read as a
+    // fetch option. Refuse it before git runs; the marker stays for pull's
+    // own parser. trace:BUG-1622 trace:BUG-1624 | ai:claude
+    reject_option_like("remote", remote)?;
+    reject_option_like("branch", branch)?;
     let result = git(
         repo,
         &["pull", "--rebase", "--end-of-options", remote, branch],
@@ -977,8 +1002,13 @@ pub fn pick_last_writer(ours: Option<&str>, theirs: Option<&str>) -> (&'static s
     note = "use pull_rebase — bare `git pull` fails on divergent branches without pull.rebase config"
 )]
 pub fn pull(repo: &Path, remote: &str, branch: &str) -> Result<()> {
-    // `--end-of-options` keeps a dash-led remote or branch from reading as
-    // an option. trace:BUG-1622 | ai:claude
+    // `--end-of-options` only ends `git pull`'s own option parsing: pull
+    // hands the remote and branch to `git fetch` without the marker, so a
+    // dash-led value such as `--upload-pack=<cmd>` would still be read as a
+    // fetch option. Refuse it before git runs; the marker stays for pull's
+    // own parser. trace:BUG-1622 trace:BUG-1624 | ai:claude
+    reject_option_like("remote", remote)?;
+    reject_option_like("branch", branch)?;
     let result = git(repo, &["pull", "--end-of-options", remote, branch])?;
     if !result.success {
         anyhow::bail!("git pull failed: {}", result.stderr);
@@ -5922,5 +5952,52 @@ mod tests {
         // trace:BUG-1283 | ai:claude
         let restored_blob = git(&second, &["show", "HEAD:shared.yaml"]).unwrap().stdout;
         assert_eq!(restored_blob, "value: local");
+    }
+
+    /// `git pull` forwards its remote and branch to `git fetch` without
+    /// `--end-of-options`, so the pull helpers refuse a dash-led value before
+    /// git runs: an `--upload-pack=<cmd>` payload in either slot runs nothing.
+    // trace:BUG-1624 | ai:claude
+    #[test]
+    #[allow(deprecated)]
+    fn pull_helpers_refuse_option_like_remote_or_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+        git(&repo, &["checkout", "-b", "aida-store"]).unwrap();
+        std::fs::write(repo.join("a.yaml"), "a: 1\n").unwrap();
+        add(&repo, &["a.yaml"]).unwrap();
+        commit(&repo, "seed").unwrap();
+        git(&repo, &["remote", "add", "origin", "."]).unwrap();
+        let before = head_sha(&repo).unwrap();
+
+        let payload = "--upload-pack=touch pwned;false";
+        let padded = "  --upload-pack=touch pwned;false";
+        for (remote, branch) in [
+            ("origin", payload),
+            (payload, "aida-store"),
+            ("origin", padded),
+        ] {
+            let errs = vec![
+                pull_rebase(&repo, remote, branch).unwrap_err().to_string(),
+                pull(&repo, remote, branch).unwrap_err().to_string(),
+                #[cfg(feature = "native")]
+                pull_rebase_auto_merge(&repo, remote, branch)
+                    .unwrap_err()
+                    .to_string(),
+            ];
+            for err in errs {
+                assert!(err.contains("starts with `-`"), "{err}");
+            }
+            assert!(
+                !repo.join("pwned").exists(),
+                "git ran the upload-pack payload"
+            );
+        }
+        assert_eq!(head_sha(&repo).unwrap(), before);
+        // An ordinary pull still works.
+        pull_rebase(&repo, "origin", "aida-store").unwrap();
+        assert!(reject_option_like("branch", "main").is_ok());
     }
 }
