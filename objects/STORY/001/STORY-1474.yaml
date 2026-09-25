@@ -1,0 +1,54 @@
+id: 01a0d6e0-eea0-7670-b852-af13654903dd
+spec_id: STORY-1474
+agreed_id: STORY-1474
+title: '/aida-orchestrate skill: drive the open spec list to merged as the operator''s proxy (triage, sketch-gate, fan out implementers, fresh review, batched integration, verified merge)'
+description: |-
+  Capture the orchestration loop proven in the 2026-09-24 session: batches 47-63, about 45 specs merged in one day, with every branch reviewed by a fresh agent. Make it a reusable skill that any AIDA project gets through `aida init` / `aida scaffold refresh`.
+
+  The skill composes existing surfaces (`aida list`, add, edit, comment, defer and rel; worktrees; /aida-integrate; the CI gates) and does not re-implement them. It differs from /aida-drain-queue, a headless `queue work --drain` goal prompt; from /aida-integrate, which only merges; and from /aida-oversee, which watches a drain. It is an interactive, operator-proxy orchestrator that uses subagents.
+
+  ## Acceptance
+  - A master template exists at aida-core/templates/skills/aida-orchestrate.md, with a command twin, synced to .claude/skills and .claude/commands through make sync-templates, and shipped by the scaffold.
+  - It encodes the loop:
+    - triage drafts as the proxy, recording PROXY DECISION comments (approve, reject duplicates, defer with triggers, leave as draft what needs the operator);
+    - a sketch and independent advisor signoff before architecture work;
+    - an implementer subagent per spec in its own worktree;
+    - a fresh reviewer per branch, strict for integrity, drain, merge, authority and identity code;
+    - REQUEST_CHANGES loops;
+    - batched integration on origin/main with a full local preflight;
+    - exact-sha CI waits in a background shell;
+    - squash-merge with --match-head-commit, then verify MERGED, then aida pull and complete;
+    - closure:pending for partial slices;
+    - cleanup.
+  - It encodes the guardrails:
+    - never force-push the default branch;
+    - never bypass the human-TTY floors (merge-hold, shift enable);
+    - no model-side polling;
+    - stop stuck self-matching pgrep waiters;
+    - run Python only via python3;
+    - no mail storms;
+    - verify after a network error;
+    - write a handoff note at the context ceiling.
+  - It states honestly when the goal cannot be met unattended: items that need humans, a live run, or an operator decision are reported, not faked.
+  - It is vendor-aware: it names the subagent, background-shell and stop primitives it needs, and degrades gracefully where a harness lacks them.
+  - A skill lint / plan-verify pass and the template consistency checks pass.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T04:44:20.512933062Z
+modified_at: 2026-09-25T04:44:20.512933062Z
+req_type: Story
+tags:
+- autonomy
+- orchestrator
+- scaffolding-pack
+- skill
+filed_at:
+  code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
