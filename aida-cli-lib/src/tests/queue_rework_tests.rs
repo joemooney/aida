@@ -1151,3 +1151,537 @@ fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
     let entries = storage.queue_list("codex", true).unwrap();
     assert_eq!(entries.len(), 1, "requeued onto the queue");
 }
+
+// ── STORY-1429: requeue races, lease gate, single reason, triage loop ──
+// trace:STORY-1429 | ai:claude
+
+/// A git-canonical store under a temp project root (`<tmp>/.aida-store`), so
+/// the leases, drain lock and event log a requeue reads live in `<tmp>/.aida`.
+fn story_1429_fixture(reqs: Vec<aida_core::Requirement>) -> (tempfile::TempDir, Storage) {
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements = reqs;
+    backend.save(&store).unwrap();
+    (tmp, storage)
+}
+
+fn parked(spec_id: &str) -> aida_core::Requirement {
+    let mut r = req_for_test(spec_id, RequirementStatus::NeedsAttention);
+    r.failure_reason = Some(aida_core::FailureReason {
+        phase: "ci".into(),
+        phase_index: 2,
+        kind: "ci-red".into(),
+        detail: "clippy failed".into(),
+        recovery_hint: None,
+        shelved_by: None,
+        shelved_at: chrono::Utc::now(),
+    });
+    r
+}
+
+fn lease_for(scope: &str, active_pid: Option<u32>) -> crate::SessionLease {
+    crate::SessionLease {
+        id: format!("lease-{}-0000", scope.to_ascii_lowercase()),
+        scope: scope.to_string(),
+        slug: scope.to_ascii_lowercase(),
+        owner: "tester".into(),
+        worktree_path: std::path::PathBuf::from(format!(
+            "/nonexistent/aida-{}",
+            scope.to_ascii_lowercase()
+        )),
+        branch: scope.to_ascii_lowercase(),
+        started_at: chrono::Utc::now(),
+        hostname: "h".into(),
+        role: Some("implementer".into()),
+        creator_pid: None,
+        creator_pid_start_time: None,
+        active_pid,
+        active_pid_start_time: None,
+        cargo_target_dir: None,
+        parent_project_root: None,
+        pr_head_sha: None,
+        pr_base_sha: None,
+        pr_base_ref: None,
+        zen_intent_token: None,
+        escalated_to_human: None,
+        parent_branch: None,
+        parent_branch_sha: None,
+        review_verb: false,
+        claim_verb: false,
+        manual_enter_at: None,
+    }
+}
+
+fn write_lease(root: &std::path::Path, lease: &crate::SessionLease) {
+    let dir = root.join(".aida").join("sessions");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(format!("{}.toml", lease.id)),
+        toml::to_string(lease).unwrap(),
+    )
+    .unwrap();
+}
+
+/// A pid above the kernel's pid_max: never alive.
+const DEAD_PID: u32 = 99_999_999;
+
+#[allow(clippy::too_many_arguments)]
+fn rework_as(storage: &Storage, id: &str, reason: Option<&str>, force: bool) -> anyhow::Result<()> {
+    handle_queue_rework(
+        storage,
+        id,
+        false,
+        Some("implementer"),
+        false,
+        None,
+        reason,
+        false,
+        force,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+}
+
+fn status_of(storage: &Storage, id: &str) -> RequirementStatus {
+    storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id(id)
+        .unwrap()
+        .status
+        .clone()
+}
+
+#[test]
+fn rework_refuses_while_other_session_lease_is_live() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9101")]);
+    // The test process itself is the live holder.
+    write_lease(tmp.path(), &lease_for("BUG-9101", Some(std::process::id())));
+    for force in [false, true] {
+        let err = rework_as(&storage, "BUG-9101", None, force)
+            .expect_err("a live claim by another session must refuse");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("aida session end lease-bu") && msg.contains("--force does not"),
+            "{msg}"
+        );
+        assert_eq!(
+            status_of(&storage, "BUG-9101"),
+            RequirementStatus::NeedsAttention,
+            "refused before any write (force={force})"
+        );
+        assert!(storage
+            .queue_list("codex", true)
+            .unwrap_or_default()
+            .is_empty());
+    }
+}
+
+#[test]
+fn rework_proceeds_over_dead_lease() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9102")]);
+    write_lease(tmp.path(), &lease_for("BUG-9102", Some(DEAD_PID)));
+    rework_as(&storage, "BUG-9102", None, false).expect("a dead claim does not block");
+    assert_eq!(status_of(&storage, "BUG-9102"), RequirementStatus::Approved);
+    assert_eq!(storage.queue_list("codex", true).unwrap().len(), 1);
+}
+
+#[test]
+fn rework_fails_closed_on_unknown_lease_state() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    // (1) A lease that does not parse.
+    let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9103")]);
+    let dir = tmp.path().join(".aida").join("sessions");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("broken.toml"), "scope = [unterminated").unwrap();
+    let err = rework_as(&storage, "BUG-9103", None, true).expect_err("unparseable lease");
+    assert!(err.to_string().contains("does not parse"), "{err}");
+    assert_eq!(
+        status_of(&storage, "BUG-9103"),
+        RequirementStatus::NeedsAttention
+    );
+
+    // (2) A lease directory that cannot be read.
+    let (tmp2, storage2) = story_1429_fixture(vec![parked("BUG-9104")]);
+    std::fs::write(tmp2.path().join(".aida").join("sessions"), "not a dir").unwrap();
+    let err = rework_as(&storage2, "BUG-9104", None, false).expect_err("unreadable lease dir");
+    assert!(err.to_string().contains("unreadable"), "{err}");
+    assert_eq!(
+        status_of(&storage2, "BUG-9104"),
+        RequirementStatus::NeedsAttention
+    );
+
+    // (3) A liveness probe that errors, on a lease that claims the spec.
+    let check = crate::requeue_lease_gate_from(
+        Ok(vec![lease_for("BUG-9105", None)]),
+        None,
+        &["BUG-9105"],
+        |_| Err("probe failed".to_string()),
+    );
+    assert!(
+        matches!(check, crate::RequeueLeaseCheck::Unknown(_)),
+        "{check:?}"
+    );
+    assert!(check.refusal("BUG-9105").unwrap().contains("cannot tell"));
+    // A probe error on a lease for a DIFFERENT spec is irrelevant.
+    let other = crate::requeue_lease_gate_from(
+        Ok(vec![lease_for("BUG-OTHER", None)]),
+        None,
+        &["BUG-9105"],
+        |_| Err("probe failed".to_string()),
+    );
+    assert_eq!(other, crate::RequeueLeaseCheck::Clear);
+    // The caller's own lease never blocks.
+    let own = lease_for("BUG-9105", None);
+    let selfcheck =
+        crate::requeue_lease_gate_from(Ok(vec![own.clone()]), Some(&own), &["BUG-9105"], |_| {
+            Ok(true)
+        });
+    assert_eq!(selfcheck, crate::RequeueLeaseCheck::Clear);
+}
+
+#[test]
+fn rework_in_progress_metadata_only_refuses_over_live_lease() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    let (tmp, storage) = story_1429_fixture(vec![req_for_test(
+        "BUG-9106",
+        RequirementStatus::InProgress,
+    )]);
+    write_lease(tmp.path(), &lease_for("BUG-9106", Some(std::process::id())));
+    let err = rework_as(&storage, "BUG-9106", None, true)
+        .expect_err("metadata-only rework must not reset a live session's spec");
+    assert!(err.to_string().contains("claimed by live session"), "{err}");
+    assert_eq!(
+        status_of(&storage, "BUG-9106"),
+        RequirementStatus::InProgress
+    );
+}
+
+/// The reason goes into the audit note once, not also as a second comment.
+#[test]
+fn rework_reason_is_recorded_once_and_emits_spec_requeued() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", Some("advisor")),
+        (crate::events::EVENTS_DISABLE_ENV, None),
+    ]);
+    let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9107")]);
+    rework_as(&storage, "BUG-9107", Some("fixed on main"), false).unwrap();
+    let store = storage.load().unwrap();
+    let r = store.get_requirement_by_spec_id("BUG-9107").unwrap();
+    assert_eq!(r.status, RequirementStatus::Approved);
+    let with_reason = r
+        .comments
+        .iter()
+        .filter(|c| c.content.contains("fixed on main"))
+        .count();
+    assert_eq!(with_reason, 1, "{:#?}", r.comments);
+    assert!(r.failure_reason.is_none());
+
+    // A second requeue of the now-Approved spec writes no second audit note.
+    rework_as(&storage, "BUG-9107", None, false).unwrap();
+    let store = storage.load().unwrap();
+    let r = store.get_requirement_by_spec_id("BUG-9107").unwrap();
+    let notes = r
+        .comments
+        .iter()
+        .filter(|c| c.content.starts_with("Returned from NeedsAttention"))
+        .count();
+    assert_eq!(notes, 1);
+
+    let evs = crate::events::read_all(tmp.path());
+    let requeued: Vec<_> = evs
+        .iter()
+        .filter(|e| matches!(e.kind, crate::events::EventKind::SpecRequeued { .. }))
+        .collect();
+    assert_eq!(requeued.len(), 1, "{evs:?}");
+    assert!(matches!(
+        &requeued[0].kind,
+        crate::events::EventKind::SpecRequeued { via, .. } if via == "queue-rework"
+    ));
+    assert!(
+        !evs.iter()
+            .any(|e| matches!(e.kind, crate::events::EventKind::SpecReDriven { .. })),
+        "a human requeue is not a supervised re-drive"
+    );
+}
+
+/// The Storage door (CLI and MCP) checks the status on the copy read inside
+/// `update_atomically`, not on the caller's earlier read.
+#[test]
+fn storage_door_status_check_happens_under_the_write() {
+    let (_tmp, storage) = story_1429_fixture(vec![req_for_test(
+        "BUG-9108",
+        RequirementStatus::InProgress,
+    )]);
+    let id = storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-9108")
+        .unwrap()
+        .id;
+    let ctx = crate::requeue::ReturnCtx {
+        via: "test".into(),
+        via_slug: "queue-rework",
+        author: "t".into(),
+        clear_escalation: true,
+        reason: None,
+    };
+    // The caller believed it was NeedsAttention; the store says InProgress.
+    let (outcome, _) = crate::requeue::return_to_flight_in_storage(
+        &storage,
+        id,
+        &RequirementStatus::NeedsAttention,
+        &RequirementStatus::Approved,
+        &ctx,
+    )
+    .unwrap();
+    assert!(matches!(
+        outcome,
+        crate::requeue::ReturnOutcome::StatusMoved { .. }
+    ));
+    let r = storage.load().unwrap();
+    let r = r.get_requirement_by_spec_id("BUG-9108").unwrap();
+    assert_eq!(r.status, RequirementStatus::InProgress);
+    assert!(r.comments.is_empty());
+}
+
+/// The backend door (`aida edit`, the supervisor) checks the same way.
+#[test]
+fn backend_door_status_check_happens_under_the_write() {
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+    let r = req_for_test("BUG-9109", RequirementStatus::Approved);
+    let id = r.id;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(r);
+    backend.save(&store).unwrap();
+    let ctx = crate::requeue::ReturnCtx {
+        via: "`aida edit --status`".into(),
+        via_slug: "edit",
+        author: "t".into(),
+        clear_escalation: true,
+        reason: None,
+    };
+    let (outcome, _) = crate::requeue::return_to_flight_in_backend(
+        &backend,
+        id,
+        &RequirementStatus::NeedsAttention,
+        &RequirementStatus::Approved,
+        &ctx,
+    )
+    .unwrap();
+    assert!(matches!(
+        outcome,
+        crate::requeue::ReturnOutcome::AlreadyInFlight { .. }
+    ));
+    let (outcome, _) = crate::requeue::return_to_flight_in_backend(
+        &backend,
+        id,
+        &RequirementStatus::NeedsAttention,
+        &RequirementStatus::Rejected,
+        &ctx,
+    )
+    .unwrap();
+    assert!(matches!(
+        outcome,
+        crate::requeue::ReturnOutcome::StatusMoved { .. }
+    ));
+    let after = backend.load().unwrap();
+    assert!(after.requirements[0].comments.is_empty());
+
+    // And a real exit to Rejected goes through the owner (the target is a
+    // parameter, not always Approved).
+    let parked_req = parked("BUG-9110");
+    let pid = parked_req.id;
+    let mut store = backend.load().unwrap();
+    store.requirements.push(parked_req);
+    backend.save(&store).unwrap();
+    let (outcome, copy) = crate::requeue::return_to_flight_in_backend(
+        &backend,
+        pid,
+        &RequirementStatus::NeedsAttention,
+        &RequirementStatus::Rejected,
+        &ctx,
+    )
+    .unwrap();
+    assert!(outcome.applied());
+    let copy = copy.unwrap();
+    assert_eq!(copy.status, RequirementStatus::Rejected);
+    assert!(copy.failure_reason.is_none(), "failure cleared on disk too");
+}
+
+#[test]
+fn triage_loop_without_tty_prints_hints_and_never_prompts() {
+    let (_tmp, storage) = story_1429_fixture(vec![parked("BUG-9111")]);
+    let mut input = std::io::Cursor::new(b"r\n".to_vec());
+    crate::queue_cmd::rework_triage_loop(
+        &storage,
+        false,
+        false,
+        Some("codex"),
+        false,
+        &mut input,
+        &mut |_| panic!("no decide without a terminal"),
+        &mut |_| panic!("no show without a terminal"),
+    )
+    .unwrap();
+    assert_eq!(input.position(), 0, "the loop must not read input");
+    assert_eq!(
+        status_of(&storage, "BUG-9111"),
+        RequirementStatus::NeedsAttention
+    );
+    assert!(storage
+        .queue_list("codex", true)
+        .unwrap_or_default()
+        .is_empty());
+}
+
+#[test]
+fn triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", Some("advisor")),
+        (crate::events::EVENTS_DISABLE_ENV, None),
+    ]);
+    let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9112")]);
+    let mut input = std::io::Cursor::new(b"r\n".to_vec());
+    crate::queue_cmd::rework_triage_loop(
+        &storage,
+        true,
+        false,
+        Some("codex"),
+        false,
+        &mut input,
+        &mut |_| panic!("no decision is pending"),
+        &mut |_| panic!("show not pressed"),
+    )
+    .unwrap();
+    assert_eq!(status_of(&storage, "BUG-9112"), RequirementStatus::Approved);
+    let entries = storage.queue_list("codex", true).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].for_role.as_deref(), Some("implementer"));
+    let evs = crate::events::read_all(tmp.path());
+    assert!(
+        evs.iter().any(|e| e.spec.as_deref() == Some("BUG-9112")
+            && matches!(e.kind, crate::events::EventKind::SpecRequeued { .. })),
+        "{evs:?}"
+    );
+}
+
+/// `[d]` hands the one spec to the existing decision path, then the loop
+/// comes back to the same spec with the requeue now offered.
+#[test]
+fn triage_loop_d_decides_then_returns_to_the_same_spec() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    let mut r = parked("BUG-9113");
+    r.decision_request = Some(aida_core::DecisionRequest {
+        question: "which fork?".into(),
+        choices: Vec::new(),
+        recommended: None,
+        rationale: None,
+        answered: None,
+        note: None,
+        asked_at: None,
+        answered_at: None,
+    });
+    let (_tmp, storage) = story_1429_fixture(vec![r]);
+    // `r` first is not offered (decision pending) and is an unknown key; then
+    // `d` answers; then `r` requeues.
+    let mut input = std::io::Cursor::new(b"r\nd\nr\n".to_vec());
+    let mut decided = Vec::new();
+    crate::queue_cmd::rework_triage_loop(
+        &storage,
+        true,
+        false,
+        Some("codex"),
+        false,
+        &mut input,
+        &mut |spec| {
+            decided.push(spec.to_string());
+            storage.update_atomically(|s| {
+                if let Some(r) = s
+                    .requirements
+                    .iter_mut()
+                    .find(|r| r.spec_id.as_deref() == Some(spec))
+                {
+                    if let Some(d) = r.decision_request.as_mut() {
+                        d.answered = Some(0);
+                    }
+                }
+            })?;
+            Ok(())
+        },
+        &mut |_| Ok(()),
+    )
+    .unwrap();
+    assert_eq!(decided, vec!["BUG-9113".to_string()]);
+    assert_eq!(status_of(&storage, "BUG-9113"), RequirementStatus::Approved);
+}
+
+#[test]
+fn rework_without_id_rejects_spec_scoped_flags() {
+    let (_tmp, storage) = story_1429_fixture(vec![parked("BUG-9114")]);
+    for flags in [
+        crate::queue_cmd::ReworkFlags {
+            work: true,
+            ..Default::default()
+        },
+        crate::queue_cmd::ReworkFlags {
+            status: Some("approved"),
+            ..Default::default()
+        },
+        crate::queue_cmd::ReworkFlags {
+            reason: Some("x"),
+            ..Default::default()
+        },
+        crate::queue_cmd::ReworkFlags {
+            resume: true,
+            ..Default::default()
+        },
+        crate::queue_cmd::ReworkFlags {
+            for_role: Some("reviewer"),
+            ..Default::default()
+        },
+    ] {
+        let err = crate::queue_cmd::handle_rework_entry(&storage, None, &flags)
+            .expect_err("a spec-scoped flag needs an ID");
+        assert!(err.to_string().contains("aida rework <ID>"), "{err}");
+    }
+    assert_eq!(
+        status_of(&storage, "BUG-9114"),
+        RequirementStatus::NeedsAttention
+    );
+}
+
+#[test]
+fn drain_running_answers_only_when_the_lock_is_definite() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+    assert_eq!(
+        crate::queue_cmd::drain_running(tmp.path()),
+        crate::queue_cmd::DrainRunning::No
+    );
+    assert!(crate::queue_cmd::drain_running_notice(tmp.path()).contains("aida drain start"));
+    std::fs::write(crate::drain_lock::drain_lock_path(tmp.path()), "{not json").unwrap();
+    assert_eq!(
+        crate::queue_cmd::drain_running(tmp.path()),
+        crate::queue_cmd::DrainRunning::CannotTell
+    );
+    assert!(crate::queue_cmd::drain_running_notice(tmp.path()).contains("cannot tell"));
+}
+
+#[test]
+fn findings_tip_points_at_the_loop() {
+    assert_eq!(
+        crate::findings_triage_tip(3),
+        "3 parked · `aida rework` to triage them one keystroke each"
+    );
+    assert!(crate::findings_triage_tip(1).contains("triage it"));
+}

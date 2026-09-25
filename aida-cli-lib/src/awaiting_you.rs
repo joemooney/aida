@@ -1927,15 +1927,16 @@ impl AwaitingReport {
                 overflow += 1;
             } else {
                 // TASK-1311: name the one-keystroke requeue next to the
-                // shelved count, with the status it lands in.
-                // trace:TASK-1311 | ai:claude
+                // shelved count, with the status it lands in. STORY-1429:
+                // point at the triage loop, which previews each requeue.
+                // trace:TASK-1311 trace:STORY-1429 | ai:claude
                 writeln!(
                     w,
-                    "  {} {} shelved item{} in rework — `{}` · requeue each with `{}` (to Approved)",
+                    "  {} {} shelved item{} in rework — triage one keystroke each with `{}` (to Approved) · or `{}`",
                     crate::glyph(crate::glyphs::Glyph::Pause).blue(),
                     self.shelved_total,
                     if self.shelved_total == 1 { "" } else { "s" },
-                    "aida findings list".cyan(),
+                    "aida rework".cyan(),
                     crate::requeue::requeue_command("<ID>").cyan(),
                 )?;
                 budget -= 1;

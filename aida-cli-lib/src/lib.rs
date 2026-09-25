@@ -5932,20 +5932,23 @@ fn run() -> Result<()> {
             no_pull,
             user,
         } => {
-            handle_queue_rework(
+            // STORY-1429: an omitted ID opens the triage loop. trace:STORY-1429 | ai:claude
+            crate::queue_cmd::handle_rework_entry(
                 &storage,
-                id,
-                *work,
-                r#for.as_deref(),
-                *tail,
-                status.as_deref(),
-                reason.as_deref(),
-                *resume,
-                *force,
-                *steal,
-                permission_mode.as_deref(),
-                *no_pull,
-                user.as_deref(),
+                id.as_deref(),
+                &crate::queue_cmd::ReworkFlags {
+                    work: *work,
+                    for_role: r#for.as_deref(),
+                    tail: *tail,
+                    status: status.as_deref(),
+                    reason: reason.as_deref(),
+                    resume: *resume,
+                    force: *force,
+                    steal: *steal,
+                    permission_mode: permission_mode.as_deref(),
+                    no_pull: *no_pull,
+                    user: user.as_deref(),
+                },
             )?;
         }
         Command::Search {
@@ -6205,6 +6208,15 @@ fn render_advisor_decisions_footer(project_root: &std::path::Path) -> Option<Str
     Some(out.trim_end().to_string())
 }
 
+/// The `aida findings list` tip that points at the interactive requeue loop.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn findings_triage_tip(parked: usize) -> String {
+    format!(
+        "{parked} parked · `aida rework` to triage {} one keystroke each",
+        if parked == 1 { "it" } else { "them" }
+    )
+}
+
 fn handle_findings_command(
     cmd: &FindingsCommand,
     backend: &aida_core::CachedGitBackend,
@@ -6358,6 +6370,15 @@ fn handle_findings_command(
                 return Ok(());
             }
 
+            // STORY-1429: one store load + queue handle for the requeue
+            // previews under the parked rows (only when there are parks).
+            // trace:STORY-1429 | ai:claude
+            let preview_store = if punts.is_empty() && shelved.is_empty() {
+                None
+            } else {
+                backend.load().ok()
+            };
+            let route_storage = Storage::new(store_path);
             println!("{}", format!("Findings awaiting triage ({total})").bold());
             for section in &sections {
                 println!();
@@ -6410,7 +6431,7 @@ fn handle_findings_command(
                         // status set by hand rather than via `aida punt`.
                         None => println!("  {:<20} {:<14} {}", "(no reason)", did, r.title),
                     }
-                    print_requeue_hint_row(r, did);
+                    print_requeue_hint_row(r, did, preview_store.as_ref(), &route_storage);
                 }
             }
             // EPIC-28: failures the orchestrator shelved — phase failures the
@@ -6450,7 +6471,7 @@ fn handle_findings_command(
                         }
                         None => println!("  {:<20} {:<14} {}", "(no reason)", did, r.title),
                     }
-                    print_requeue_hint_row(r, did);
+                    print_requeue_hint_row(r, did, preview_store.as_ref(), &route_storage);
                 }
             }
 
@@ -6467,7 +6488,7 @@ fn handle_findings_command(
                 println!(
                     "{}",
                     "Punts: `aida show <ID>` for the fork · decide it, then requeue with \
-                     `aida queue rework <ID>` (to Approved, back on the queue) · drop with \
+                     `aida rework <ID>` (to Approved, back on the queue) · drop with \
                      `aida edit <ID> --status rejected`"
                         .dimmed()
                 );
@@ -6477,10 +6498,16 @@ fn handle_findings_command(
                 println!(
                     "{}",
                     "Failures: read the recovery hint · fix the underlying issue · \
-                     requeue with `aida queue rework <ID>` (to Approved, back on the queue) · \
+                     requeue with `aida rework <ID>` (to Approved, back on the queue) · \
                      drop with `aida edit <ID> --status rejected`"
                         .dimmed()
                 );
+            }
+            // STORY-1429: the one-line tip into the interactive loop. The
+            // listing itself never prompts. trace:STORY-1429 | ai:claude
+            let parked = punts.len() + shelved.len();
+            if parked > 0 {
+                println!("{}", findings_triage_tip(parked).dimmed());
             }
             // STORY-306: the overnight-advisor audit footer.
             if let Some(footer) = &advisor_footer {
@@ -32368,6 +32395,163 @@ fn live_spec_claim_by_other<'a>(
     })
 }
 
+/// What the requeue lease gate found for a spec.
+// trace:STORY-1429 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RequeueLeaseCheck {
+    /// No other session holds a live lease on the spec.
+    Clear,
+    /// Another session holds a live lease: requeueing would reset work a
+    /// running session owns.
+    HeldByOther {
+        session: String,
+        started: String,
+        worktree: String,
+    },
+    /// The lease state could not be established. Missing evidence is not good
+    /// evidence, so this refuses exactly like a live lease.
+    Unknown(String),
+}
+
+impl RequeueLeaseCheck {
+    /// The refusal text for `id`, or `None` when the gate is clear. It names
+    /// the holder and the command that releases it. `--force` does not
+    /// override it.
+    pub(crate) fn refusal(&self, id: &str) -> Option<String> {
+        match self {
+            RequeueLeaseCheck::Clear => None,
+            RequeueLeaseCheck::HeldByOther {
+                session,
+                started,
+                worktree,
+            } => Some(format!(
+                "{id} is claimed by live session {session} (started {started}, worktree \
+                 {worktree}); requeueing it would reset work that session owns. If that \
+                 session is abandoned, end it with `aida session end {session}` and requeue \
+                 again. --force does not override a live claim."
+            )),
+            RequeueLeaseCheck::Unknown(why) => Some(format!(
+                "cannot tell whether another session is working on {id} ({why}); refusing to \
+                 requeue it. Fix the session leases (`aida session leases`) and requeue again."
+            )),
+        }
+    }
+}
+
+/// Lease listing that reports every read failure instead of skipping it: an
+/// unreadable lease directory, an unreadable file, or a lease that does not
+/// parse. A missing directory is a definite "no leases".
+// trace:STORY-1429 | ai:claude
+fn list_leases_strict(project_root: &std::path::Path) -> Result<Vec<SessionLease>, String> {
+    let dir = leases_dir(project_root);
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let entries = std::fs::read_dir(&dir)
+        .map_err(|e| format!("the lease directory {} is unreadable: {e}", dir.display()))?;
+    let mut out = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("reading {}: {e}", dir.display()))?;
+        let p = entry.path();
+        if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+            continue;
+        }
+        let content = std::fs::read_to_string(&p)
+            .map_err(|e| format!("the lease {} is unreadable: {e}", p.display()))?;
+        let lease = toml::from_str::<SessionLease>(&content)
+            .map_err(|e| format!("the lease {} does not parse: {e}", p.display()))?;
+        out.push(lease);
+    }
+    out.sort_by_key(|l| l.started_at);
+    Ok(out)
+}
+
+/// The requeue lease gate, pure over a lease listing and a FALLIBLE liveness
+/// probe. The BUG-637 predicate cannot say "unknown", so the fail-closed
+/// handling lives here: a listing error, or a probe error on a lease that
+/// claims one of `spec_ids`, is [`RequeueLeaseCheck::Unknown`]. Dead or stale
+/// claims do not block (pickup reclaims them). The caller's own lease never
+/// blocks. Only leases in this clone are visible.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn requeue_lease_gate_from(
+    listed: Result<Vec<SessionLease>, String>,
+    self_lease: Option<&SessionLease>,
+    spec_ids: &[&str],
+    is_live: impl Fn(&SessionLease) -> Result<bool, String>,
+) -> RequeueLeaseCheck {
+    let leases = match listed {
+        Ok(leases) => leases,
+        Err(why) => return RequeueLeaseCheck::Unknown(why),
+    };
+    for l in &leases {
+        if self_lease.is_some_and(|s| s.id == l.id) {
+            continue;
+        }
+        if !spec_ids
+            .iter()
+            .any(|id| !id.is_empty() && l.scope.eq_ignore_ascii_case(id))
+        {
+            continue;
+        }
+        match is_live(l) {
+            Ok(true) => {
+                return RequeueLeaseCheck::HeldByOther {
+                    session: l.id.chars().take(8).collect(),
+                    started: l
+                        .started_at
+                        .with_timezone(&chrono::Local)
+                        .format("%Y-%m-%d %H:%M")
+                        .to_string(),
+                    worktree: l.worktree_path.display().to_string(),
+                }
+            }
+            Ok(false) => {}
+            Err(why) => {
+                return RequeueLeaseCheck::Unknown(format!(
+                    "the liveness of session {} could not be checked: {why}",
+                    l.id.chars().take(8).collect::<String>()
+                ))
+            }
+        }
+    }
+    RequeueLeaseCheck::Clear
+}
+
+/// Production liveness for the requeue gate. On Linux the process table is
+/// the evidence; when `/proc` cannot be read, liveness is unknown rather than
+/// "dead".
+// trace:STORY-1429 | ai:claude
+fn requeue_lease_liveness(
+    l: &SessionLease,
+    live_sessions: &std::cell::OnceCell<Vec<process_probe::LiveSession>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<bool, String> {
+    #[cfg(target_os = "linux")]
+    if std::fs::read_dir("/proc").is_err() {
+        return Err("the process table (/proc) is not readable".to_string());
+    }
+    let live = live_sessions.get_or_init(process_probe::probe_live_claude_sessions);
+    Ok(matches!(lease_state_for(l, live, now), LeaseState::Live))
+}
+
+/// Run the requeue lease gate for `spec_ids` against the leases under
+/// `project_root`.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn requeue_lease_gate(
+    project_root: &std::path::Path,
+    spec_ids: &[&str],
+) -> RequeueLeaseCheck {
+    let listed = list_leases_strict(project_root);
+    let self_lease = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(project_root, &cwd));
+    let now = chrono::Utc::now();
+    let live = std::cell::OnceCell::new();
+    requeue_lease_gate_from(listed, self_lease.as_ref(), spec_ids, |l| {
+        requeue_lease_liveness(l, &live, now)
+    })
+}
+
 fn lease_owning_spec(
     leases: &[SessionLease],
     self_lease: Option<&SessionLease>,
@@ -45518,13 +45702,22 @@ fn cleanup_escalated_leases_for_spec(project_root: &std::path::Path, spec_id: &s
 /// TASK-1311: the per-row requeue affordance under a NeedsAttention spec in
 /// `aida findings list`. It shows the one command that returns the spec to
 /// flight and the status it lands in, and puts an open decision first.
-// trace:TASK-1311 | ai:claude
-fn print_requeue_hint_row(r: &aida_core::Requirement, did: &str) {
-    let pending = r
-        .decision_request
-        .as_ref()
-        .map(|d| d.is_pending())
-        .unwrap_or(false);
+/// STORY-1429: rendered from the same `requeue_preview` the interactive
+/// `aida rework` loop shows, so the hint and the keystroke cannot disagree.
+// trace:TASK-1311 trace:STORY-1429 | ai:claude
+fn print_requeue_hint_row(
+    r: &aida_core::Requirement,
+    did: &str,
+    store: Option<&aida_core::RequirementsStore>,
+    storage: &Storage,
+) {
+    let route = queue_cmd::current_queue_route(storage, r.id);
+    let preview = requeue::requeue_preview(
+        r,
+        store,
+        route.as_deref(),
+        requeue::caller_may_clear_escalation(),
+    );
     println!(
         "  {:<20} {:<14} {}",
         "",
@@ -45532,7 +45725,7 @@ fn print_requeue_hint_row(r: &aida_core::Requirement, did: &str) {
         format!(
             "{} {}",
             crate::glyph(crate::glyphs::Glyph::SubArrow),
-            requeue::requeue_hint(did, pending)
+            requeue::requeue_hint(did, &preview)
         )
         .dimmed()
     );

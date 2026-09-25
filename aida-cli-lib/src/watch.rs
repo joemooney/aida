@@ -368,6 +368,11 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 cause, attempt, max
             ),
         ),
+        // trace:STORY-1429 | ai:claude
+        EventKind::SpecRequeued { via, from, to, .. } => (
+            "spec-requeued",
+            format!("requeued {from} -> {to} via {via}"),
+        ),
         // trace:STORY-1051 | ai:claude
         EventKind::ReclassifiedNeedsHuman { kind, attempts } => (
             "reclassified-needs-human",

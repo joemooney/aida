@@ -6588,20 +6588,23 @@ pub(crate) fn handle_queue_command(
                      integrator role, or a live orchestrator)"
                 );
             }
-            handle_queue_rework(
+            // STORY-1429: an omitted ID opens the triage loop. trace:STORY-1429 | ai:claude
+            crate::queue_cmd::handle_rework_entry(
                 storage,
-                id,
-                *work,
-                r#for.as_deref(),
-                *tail,
-                status.as_deref(),
-                reason.as_deref(),
-                *resume,
-                *force,
-                *steal,
-                permission_mode.as_deref(),
-                *no_pull,
-                user.as_deref(),
+                id.as_deref(),
+                &crate::queue_cmd::ReworkFlags {
+                    work: *work,
+                    for_role: r#for.as_deref(),
+                    tail: *tail,
+                    status: status.as_deref(),
+                    reason: reason.as_deref(),
+                    resume: *resume,
+                    force: *force,
+                    steal: *steal,
+                    permission_mode: permission_mode.as_deref(),
+                    no_pull: *no_pull,
+                    user: user.as_deref(),
+                },
             )?;
         }
         // STORY-384: failed-phase-1 recovery wizard — inspect state, recommend a
@@ -7322,6 +7325,372 @@ pub(crate) fn clear_failure_reason_targeted(storage: &Storage, spec_id: &str) {
     }
 }
 
+/// The project root whose `.aida/` holds the leases, drain lock and event
+/// log for `storage`: the store's parent directory, falling back to the
+/// discovered project root.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn requeue_project_root(storage: &Storage) -> std::path::PathBuf {
+    storage
+        .path()
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(std::path::Path::to_path_buf)
+        .or_else(|| find_project_root().ok())
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+}
+
+/// The queue route (`for_role`) the spec currently holds on any queue, if
+/// any. Rework keeps this route, so the requeue preview names it.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn current_queue_route(storage: &Storage, req_id: uuid::Uuid) -> Option<String> {
+    let users = storage.queue_users().ok()?;
+    users.into_iter().find_map(|u| {
+        storage
+            .queue_list(&u, true)
+            .ok()?
+            .into_iter()
+            .find(|e| e.requirement_id == req_id)
+            .and_then(|e| e.for_role)
+            .filter(|r| !r.trim().is_empty())
+            .map(|r| canonical_role_name(&r))
+    })
+}
+
+/// Whether a drain is running, as far as the drain lock can say.
+// trace:STORY-1429 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DrainRunning {
+    Yes,
+    No,
+    CannotTell,
+}
+
+/// Read the drain lock for a definite answer. A missing lock, or one whose
+/// process is dead, is a definite "no". A lock file that exists but cannot be
+/// read or parsed is "cannot tell".
+// trace:STORY-1429 | ai:claude
+pub(crate) fn drain_running(project_root: &Path) -> DrainRunning {
+    let path = crate::drain_lock::drain_lock_path(project_root);
+    match std::fs::metadata(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return DrainRunning::No,
+        Err(_) => return DrainRunning::CannotTell,
+        Ok(_) => {}
+    }
+    match crate::drain_lock::probe_lock(project_root) {
+        crate::drain_lock::LockStatus::Running(_) => DrainRunning::Yes,
+        crate::drain_lock::LockStatus::Stale(_) => DrainRunning::No,
+        // The file exists but did not parse.
+        crate::drain_lock::LockStatus::None => DrainRunning::CannotTell,
+    }
+}
+
+/// The one line a requeue prints about the drain that will pick the spec up.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn drain_running_notice(project_root: &Path) -> String {
+    match drain_running(project_root) {
+        DrainRunning::Yes => {
+            "a drain is running; it picks this spec up on its next head".to_string()
+        }
+        DrainRunning::No => "no drain is running; start one with `aida drain start`".to_string(),
+        DrainRunning::CannotTell => {
+            "cannot tell whether a drain is running (the drain lock is unreadable); check \
+             with `aida drain status`"
+                .to_string()
+        }
+    }
+}
+
+/// The flags `aida rework` / `aida queue rework` accept. Only `--tail` and
+/// `--user` make sense without a spec ID; the rest act on one spec.
+// trace:STORY-1429 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ReworkFlags<'a> {
+    pub work: bool,
+    pub for_role: Option<&'a str>,
+    pub tail: bool,
+    pub status: Option<&'a str>,
+    pub reason: Option<&'a str>,
+    pub resume: bool,
+    pub force: bool,
+    pub steal: bool,
+    pub permission_mode: Option<&'a str>,
+    pub no_pull: bool,
+    pub user: Option<&'a str>,
+}
+
+impl ReworkFlags<'_> {
+    /// The spec-scoped flags that were passed, as their CLI spellings.
+    pub(crate) fn spec_scoped(&self) -> Vec<&'static str> {
+        let mut v = Vec::new();
+        if self.work {
+            v.push("--work");
+        }
+        if self.for_role.is_some() {
+            v.push("--for");
+        }
+        if self.status.is_some() {
+            v.push("--status");
+        }
+        if self.reason.is_some() {
+            v.push("--reason");
+        }
+        if self.resume {
+            v.push("--resume");
+        }
+        if self.force {
+            v.push("--force");
+        }
+        if self.steal {
+            v.push("--steal");
+        }
+        if self.permission_mode.is_some() {
+            v.push("--permission-mode");
+        }
+        if self.no_pull {
+            v.push("--no-pull");
+        }
+        v
+    }
+}
+
+/// `aida rework [ID]` / `aida queue rework [ID]`. With an ID, the one-spec
+/// rework. Without one, the triage loop over the NeedsAttention parks: at a
+/// terminal it asks one keystroke per spec; without a terminal it prints the
+/// requeue hints and exits 0, so agents keep the command form. A spec-scoped
+/// flag without an ID is a usage error.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn handle_rework_entry(
+    storage: &Storage,
+    id: Option<&str>,
+    flags: &ReworkFlags<'_>,
+) -> Result<()> {
+    if let Some(id) = id {
+        return handle_queue_rework(
+            storage,
+            id,
+            flags.work,
+            flags.for_role,
+            flags.tail,
+            flags.status,
+            flags.reason,
+            flags.resume,
+            flags.force,
+            flags.steal,
+            flags.permission_mode,
+            flags.no_pull,
+            flags.user,
+        );
+    }
+    let scoped = flags.spec_scoped();
+    if !scoped.is_empty() {
+        anyhow::bail!(
+            "{} {} a spec: pass its ID (`aida rework <ID> {}`), or run bare `aida rework` to \
+             triage the parked specs one keystroke each",
+            scoped.join(", "),
+            if scoped.len() == 1 {
+                "acts on"
+            } else {
+                "act on"
+            },
+            scoped.join(" ")
+        );
+    }
+    use std::io::IsTerminal;
+    let tty = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    let stdin = std::io::stdin();
+    let mut input = stdin.lock();
+    rework_triage_loop(
+        storage,
+        tty,
+        flags.tail,
+        flags.user,
+        crate::requeue::caller_may_clear_escalation(),
+        &mut input,
+        &mut |spec| run_aida_interactive(&["decide", spec]),
+        &mut |spec| run_aida_interactive(&["show", spec]),
+    )
+}
+
+/// Run `aida <args>` with the terminal attached (the `[d]` and `[o]` keys).
+fn run_aida_interactive(args: &[&str]) -> Result<()> {
+    let status = std::process::Command::new(crate::aida_exe_path())
+        .args(args)
+        .status()?;
+    anyhow::ensure!(status.success(), "`aida {}` failed", args.join(" "));
+    Ok(())
+}
+
+/// Every spec parked in NeedsAttention, most recently parked first (the
+/// `aida findings list` order).
+// trace:STORY-1429 | ai:claude
+pub(crate) fn needs_attention_parks(store: &aida_core::RequirementsStore) -> Vec<Requirement> {
+    let mut parks: Vec<Requirement> = store
+        .requirements
+        .iter()
+        .filter(|r| r.status == RequirementStatus::NeedsAttention && !r.archived)
+        .cloned()
+        .collect();
+    parks.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+    parks
+}
+
+/// One line saying why a spec is parked: the shelve's failure, the punt, or
+/// the escalation.
+fn park_reason_line(r: &Requirement) -> String {
+    if let Some(fr) = &r.failure_reason {
+        let detail = fr.detail.lines().next().unwrap_or("").trim();
+        return format!("shelved {}/{}: {detail}", fr.phase, fr.kind);
+    }
+    if let Some(a) = &r.attention_reason {
+        let detail = a.detail.lines().next().unwrap_or("").trim();
+        return format!("punted ({}): {detail}", a.category);
+    }
+    if r.tags.iter().any(|t| t.eq_ignore_ascii_case("needs-human")) {
+        return "escalated to a human".to_string();
+    }
+    "parked with no recorded reason".to_string()
+}
+
+/// The triage loop body, with its input and the `[d]`/`[o]` hand-offs
+/// injected so it can be driven without a terminal.
+///
+/// Keys: `[r]` requeue (shown only when the preview says it is offerable),
+/// `[s]` skip, `[o]` show the spec, `[d]` answer its open decision (only when
+/// one is pending; returns to the same spec afterwards), `[q]` quit. `[r]`
+/// runs the same one-spec rework as `aida rework <ID>` with no status flag,
+/// so the resulting status is the preview's by construction.
+// trace:STORY-1429 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn rework_triage_loop(
+    storage: &Storage,
+    tty: bool,
+    tail: bool,
+    user: Option<&str>,
+    clear_escalation: bool,
+    input: &mut dyn std::io::BufRead,
+    decide: &mut dyn FnMut(&str) -> Result<()>,
+    show: &mut dyn FnMut(&str) -> Result<()>,
+) -> Result<()> {
+    use crate::requeue::{requeue_hint, requeue_preview, NotOfferable};
+    use std::io::Write;
+    let store = storage.load()?;
+    let parks = needs_attention_parks(&store);
+    if parks.is_empty() {
+        println!("{}", "Nothing is parked in Needs Attention.".dimmed());
+        return Ok(());
+    }
+    if !tty {
+        // No terminal: never prompt. Print the command form for each park.
+        println!(
+            "{}",
+            format!("Parked in Needs Attention ({})", parks.len()).bold()
+        );
+        for r in &parks {
+            let did = r.display_id();
+            let route = current_queue_route(storage, r.id);
+            let preview = requeue_preview(r, Some(&store), route.as_deref(), clear_escalation);
+            println!("  {:<14} {}", did, park_reason_line(r));
+            println!("  {:<14} {}", "", requeue_hint(&did, &preview).dimmed());
+        }
+        println!(
+            "{}",
+            "Run `aida rework` at a terminal to triage them one keystroke each.".dimmed()
+        );
+        return Ok(());
+    }
+
+    let total = parks.len();
+    let (mut requeued, mut skipped) = (0usize, 0usize);
+    'specs: for (i, park) in parks.iter().enumerate() {
+        let did = park.display_id();
+        let mut current = park.clone();
+        loop {
+            let fresh_store = storage.load()?;
+            if let Some(r) = fresh_store.requirements.iter().find(|r| r.id == park.id) {
+                current = r.clone();
+            }
+            let route = current_queue_route(storage, current.id);
+            let preview = requeue_preview(
+                &current,
+                Some(&fresh_store),
+                route.as_deref(),
+                clear_escalation,
+            );
+            if matches!(preview.not_offerable, Some(NotOfferable::NotParked(_))) {
+                println!(
+                    "  {} {did} is {} now; nothing to triage",
+                    "·".dimmed(),
+                    current.status
+                );
+                continue 'specs;
+            }
+            println!();
+            println!(
+                "{} {} {}",
+                format!("[{}/{}]", i + 1, total).dimmed(),
+                did.bold(),
+                current.title
+            );
+            println!("  {}", park_reason_line(&current));
+            let pending = matches!(preview.not_offerable, Some(NotOfferable::PendingDecision));
+            let mut keys = Vec::new();
+            if preview.offerable() {
+                keys.push(format!("[r] requeue {}", preview.summary()));
+            } else {
+                println!("  {}", requeue_hint(&did, &preview).dimmed());
+            }
+            if pending {
+                keys.push("[d] decide".to_string());
+            }
+            keys.push("[s] skip".to_string());
+            keys.push("[o] show".to_string());
+            keys.push("[q] quit".to_string());
+            print!("  {} > ", keys.join("   "));
+            std::io::stdout().flush()?;
+            let mut line = String::new();
+            if input.read_line(&mut line)? == 0 {
+                println!();
+                break 'specs;
+            }
+            match line.trim().to_ascii_lowercase().as_str() {
+                "r" if preview.offerable() => {
+                    match handle_queue_rework(
+                        storage, &did, false, None, tail, None, None, false, false, false, None,
+                        false, user,
+                    ) {
+                        Ok(()) => requeued += 1,
+                        Err(e) => println!("  {} {e}", "error:".red()),
+                    }
+                    continue 'specs;
+                }
+                "d" if pending => {
+                    if let Err(e) = decide(&did) {
+                        println!("  {} {e}", "error:".red());
+                    }
+                    // Back to the same spec with its preview recomputed.
+                }
+                "o" => {
+                    if let Err(e) = show(&did) {
+                        println!("  {} {e}", "error:".red());
+                    }
+                }
+                "s" | "" => {
+                    skipped += 1;
+                    continue 'specs;
+                }
+                "q" => break 'specs,
+                other => println!("  {} unknown key `{other}`", "·".dimmed()),
+            }
+        }
+    }
+    println!();
+    println!(
+        "{} {requeued} requeued, {skipped} skipped.",
+        "Done.".green().bold()
+    );
+    Ok(())
+}
+
 /// TASK-218: shared implementation backing both `aida queue rework SPEC`
 /// and the top-level `aida rework SPEC` alias. Encapsulates the three-
 /// command rework sequence (status flip + queue add + optional session
@@ -7406,6 +7775,25 @@ pub(crate) fn handle_queue_rework(
             display_id
         );
     }
+    // STORY-1429: the lease gate. Moving a NeedsAttention or InProgress spec
+    // while another session holds a LIVE lease on it would reset work that
+    // session owns, so it refuses under every flag, `--force` included
+    // (`--force` keeps its meaning: the Completed/Rejected guard above). An
+    // unknown lease state refuses too. Runs before any write.
+    // trace:STORY-1429 | ai:claude
+    let flips = target_status.as_ref().is_some_and(|t| t != &current_status);
+    if flips
+        && matches!(
+            current_status,
+            RequirementStatus::NeedsAttention | RequirementStatus::InProgress
+        )
+    {
+        let root = requeue_project_root(storage);
+        let check = crate::requeue_lease_gate(&root, &[spec_id.as_str(), display_id.as_str()]);
+        if let Some(msg) = check.refusal(&display_id) {
+            anyhow::bail!(msg);
+        }
+    }
     if matches!(current_status, RequirementStatus::InProgress) && !force {
         if work {
             eprintln!(
@@ -7464,59 +7852,96 @@ pub(crate) fn handle_queue_rework(
         }
     }
 
-    // Status flip (if any). update_atomically works for both SQLite and
-    // git-canonical paths; queue done uses the same approach.
+    // Status flip (if any). STORY-1429: the target was computed from a status
+    // read before this point, so the write re-checks it on the copy read
+    // inside `update_atomically` (compare-and-swap) and changes nothing when
+    // the spec moved in between. Leaving NeedsAttention goes through the one
+    // owner, `requeue::return_to_flight`, which also clears the shelve
+    // markers and writes the single audit note that carries `--reason`.
+    // trace:STORY-1429 trace:TASK-1311 | ai:claude
+    let mut reason_recorded = false;
+    let mut left_attention = false;
     if let Some(ref new_status) = target_status {
         if new_status != &current_status {
-            let new_status = new_status.clone();
-            let now = chrono::Utc::now();
-            // TASK-1311: leaving NeedsAttention returns the spec to flight the
-            // same way `aida edit --status` does: clear the punt / shelve
-            // metadata and the machine-written `needs-human` parking tag, and
-            // record why it came back. Without this the requeued spec kept a
-            // parking tag and the drain never picked it up again.
-            // trace:TASK-1311 | ai:claude
-            let leaving_attention = current_status == RequirementStatus::NeedsAttention
-                && new_status != RequirementStatus::NeedsAttention;
-            let mut cleared = crate::requeue::ClearedMarkers::default();
-            storage.update_atomically(|s| {
-                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    r.set_status_from_str(&format!("{:?}", new_status));
-                    r.modified_at = now;
-                    // TASK-1477: `queue rework` can reopen a Completed spec
-                    // (Completed -> InProgress is `rework_smart_target`'s
-                    // default) — clear the stale completed_at so the next
-                    // completion stamps a fresh date. trace:TASK-1477 | ai:claude
-                    crate::completion::clear_completed_at_on_reopen(r, &current_status);
-                    if leaving_attention {
-                        // Only a human at a terminal may undo the advisor's
-                        // escalation to a human. trace:TASK-1311 | ai:claude
-                        cleared = crate::requeue::clear_shelve_markers(
-                            r,
-                            crate::requeue::caller_may_clear_escalation(),
+            if current_status == RequirementStatus::NeedsAttention {
+                let ctx = crate::requeue::ReturnCtx {
+                    via: "`aida queue rework`".to_string(),
+                    via_slug: "queue-rework",
+                    author: get_default_author(),
+                    // Only a human at a terminal may undo the advisor's
+                    // escalation to a human. trace:TASK-1311 | ai:claude
+                    clear_escalation: crate::requeue::caller_may_clear_escalation(),
+                    reason: reason.map(str::to_string),
+                };
+                let (outcome, _) = crate::requeue::return_to_flight_in_storage(
+                    storage,
+                    req_id,
+                    &current_status,
+                    new_status,
+                    &ctx,
+                )?;
+                match &outcome {
+                    crate::requeue::ReturnOutcome::Returned { cleared, .. } => {
+                        reason_recorded = true;
+                        left_attention = true;
+                        crate::requeue::emit_requeued(
+                            &requeue_project_root(storage),
+                            &display_id,
+                            &ctx,
+                            &outcome,
                         );
-                        let note = cleared.audit_note(
-                            "`aida queue rework`",
-                            &new_status.to_string(),
-                            reason,
-                        );
-                        r.add_comment(aida_core::Comment::new(get_default_author(), note));
+                        if !cleared.removed_tags.is_empty() {
+                            println!(
+                                "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
+                                "·".dimmed(),
+                                cleared.removed_tags.join(", ")
+                            );
+                        }
+                        if let Some(w) =
+                            crate::requeue::kept_escalation_warning(&display_id, cleared)
+                        {
+                            println!(
+                                "  {} {w}",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                            );
+                        }
+                    }
+                    crate::requeue::ReturnOutcome::AlreadyInFlight { .. } => {
+                        if let Some(msg) = crate::requeue::unchanged_message(&display_id, &outcome)
+                        {
+                            println!("  {} {msg}", "·".dimmed());
+                        }
+                        return Ok(());
+                    }
+                    _ => {
+                        let msg = crate::requeue::unchanged_message(&display_id, &outcome)
+                            .unwrap_or_default();
+                        anyhow::bail!(msg);
                     }
                 }
-            })?;
-            if leaving_attention {
-                clear_failure_reason_targeted(storage, &spec_id);
-                if !cleared.removed_tags.is_empty() {
-                    println!(
-                        "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
-                        "·".dimmed(),
-                        cleared.removed_tags.join(", ")
-                    );
-                }
-                if let Some(w) = crate::requeue::kept_escalation_warning(&display_id, &cleared) {
-                    println!(
-                        "  {} {w}",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+            } else {
+                let new_status = new_status.clone();
+                let now = chrono::Utc::now();
+                let mut moved_to: Option<RequirementStatus> = None;
+                storage.update_atomically(|s| {
+                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                        if r.status != current_status {
+                            moved_to = Some(r.status.clone());
+                            return;
+                        }
+                        r.set_status_from_str(&format!("{:?}", new_status));
+                        r.modified_at = now;
+                        // TASK-1477: `queue rework` can reopen a Completed spec
+                        // (Completed -> InProgress is `rework_smart_target`'s
+                        // default) — clear the stale completed_at so the next
+                        // completion stamps a fresh date. trace:TASK-1477 | ai:claude
+                        crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                    }
+                })?;
+                if let Some(actual) = moved_to {
+                    anyhow::bail!(
+                        "{display_id} moved from {current_status} to {actual} while this command \
+                         ran; nothing was changed. Re-check it with `aida show {display_id}`"
                     );
                 }
             }
@@ -7533,8 +7958,10 @@ pub(crate) fn handle_queue_rework(
     }
 
     // Optional audit comment. Mirrors `aida comment add` path so the
-    // entry shows up in `aida show <spec>` history.
-    if let Some(reason_text) = reason {
+    // entry shows up in `aida show <spec>` history. STORY-1429: when the
+    // spec left NeedsAttention the reason is already in the audit note, so
+    // it is not written a second time.
+    if let Some(reason_text) = reason.filter(|_| !reason_recorded) {
         let author = get_default_author();
         let comment = aida_core::Comment::new(author, reason_text.to_string());
         storage.update_atomically(|s| {
@@ -7544,6 +7971,12 @@ pub(crate) fn handle_queue_rework(
         })?;
         println!(
             "  {} reason captured as comment ({} chars)",
+            "·".dimmed(),
+            reason_text.chars().count()
+        );
+    } else if let Some(reason_text) = reason {
+        println!(
+            "  {} reason captured in the audit note ({} chars)",
             "·".dimmed(),
             reason_text.chars().count()
         );
@@ -7752,6 +8185,17 @@ pub(crate) fn handle_queue_rework(
         true,
     );
     print_queue_mutation_destination("rework", &display_id, Some(&title), &summary, &details)?;
+
+    // STORY-1429: a requeued park re-enters a running drain on its next head
+    // pick. Say whether one is running only when the drain lock answers
+    // definitely; never launch one. trace:STORY-1429 | ai:claude
+    if left_attention && !work {
+        println!(
+            "  {} {}",
+            "·".dimmed(),
+            drain_running_notice(&requeue_project_root(storage))
+        );
+    }
 
     // Optional --work chain. We don't run this in a sub-process — call
     // `handle_queue_work` directly with the same storage handle so any

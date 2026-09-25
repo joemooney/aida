@@ -4336,64 +4336,114 @@ impl<'a> McpServer<'a> {
             }
         }
 
-        let mut summary = String::new();
-        let mut kept_warning: Option<String> = None;
-        if let Some(ref new_status) = target_status {
-            if new_status != &current_status {
-                let new_status = new_status.clone();
-                let now = chrono::Utc::now();
-                // TASK-1311: mirror the CLI rework — leaving NeedsAttention
-                // clears the shelve markers so the drain picks the spec up.
-                // trace:TASK-1311 | ai:claude
-                let leaving_attention = current_status == RequirementStatus::NeedsAttention
-                    && new_status != RequirementStatus::NeedsAttention;
-                self.storage
-                    .update_atomically(|s| {
-                        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                            r.set_status_from_str(&format!("{:?}", new_status));
-                            r.modified_at = now;
-                            // TASK-1477: the `queue_rework` MCP tool can also
-                            // reopen a Completed spec — clear the stale
-                            // completed_at so the next completion stamps a
-                            // fresh date. trace:TASK-1477 | ai:claude
-                            crate::completion::clear_completed_at_on_reopen(r, &current_status);
-                            if leaving_attention {
-                                // An MCP caller is never a human at a
-                                // terminal, so it never clears the advisor's
-                                // escalation to a human. trace:TASK-1311
-                                let cleared = crate::requeue::clear_shelve_markers(r, false);
-                                kept_warning =
-                                    crate::requeue::kept_escalation_warning(&display, &cleared);
-                                let note = cleared.audit_note(
-                                    "the `queue_rework` MCP tool",
-                                    &new_status.to_string(),
-                                    reason,
-                                );
-                                r.add_comment(aida_core::Comment::new(
-                                    crate::get_default_author(),
-                                    note,
-                                ));
-                            }
-                        }
-                    })
-                    .map_err(|e| e.to_string())?;
-                if leaving_attention {
-                    crate::queue_cmd::clear_failure_reason_targeted(&self.storage, &spec_id);
-                }
-                crate::record_role_activity(&spec_id, "rework");
-                crate::update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
-                summary.push_str(&format!(
-                    "{} status: {} → {}\n",
-                    display, current_status, new_status
-                ));
-                if let Some(w) = &kept_warning {
-                    summary.push_str(&format!("Warning: {w}\n"));
-                }
+        // STORY-1429: the lease gate, identical to the CLI door. A live lease
+        // held by another session refuses even with `force: true`; an unknown
+        // lease state refuses too. Runs before any write.
+        // trace:STORY-1429 | ai:claude
+        let flips = target_status.as_ref().is_some_and(|t| t != &current_status);
+        let project_root = crate::queue_cmd::requeue_project_root(self.storage);
+        if flips
+            && matches!(
+                current_status,
+                RequirementStatus::NeedsAttention | RequirementStatus::InProgress
+            )
+        {
+            let check =
+                crate::requeue_lease_gate(&project_root, &[spec_id.as_str(), display.as_str()]);
+            if let Some(msg) = check.refusal(&display) {
+                return Err(msg);
             }
         }
 
-        // Optional audit comment.
-        if let Some(reason_text) = reason {
+        let mut summary = String::new();
+        let mut reason_recorded = false;
+        if let Some(ref new_status) = target_status {
+            if new_status != &current_status {
+                if current_status == RequirementStatus::NeedsAttention {
+                    // STORY-1429: the one owner, run on the copy read inside
+                    // the atomic write. An MCP caller is never a human at a
+                    // terminal, so it never clears the advisor's escalation to
+                    // a human. trace:STORY-1429 trace:TASK-1311 | ai:claude
+                    let ctx = crate::requeue::ReturnCtx {
+                        via: "the `queue_rework` MCP tool".to_string(),
+                        via_slug: "mcp",
+                        author: crate::get_default_author(),
+                        clear_escalation: false,
+                        reason: reason.map(str::to_string),
+                    };
+                    let (outcome, _) = crate::requeue::return_to_flight_in_storage(
+                        self.storage,
+                        req_id,
+                        &current_status,
+                        new_status,
+                        &ctx,
+                    )
+                    .map_err(|e| e.to_string())?;
+                    match &outcome {
+                        crate::requeue::ReturnOutcome::Returned { cleared, .. } => {
+                            reason_recorded = true;
+                            crate::requeue::emit_requeued(&project_root, &display, &ctx, &outcome);
+                            summary.push_str(&format!(
+                                "{} status: {} → {}\n",
+                                display, current_status, new_status
+                            ));
+                            if let Some(w) =
+                                crate::requeue::kept_escalation_warning(&display, cleared)
+                            {
+                                summary.push_str(&format!("Warning: {w}\n"));
+                            }
+                        }
+                        crate::requeue::ReturnOutcome::AlreadyInFlight { .. } => {
+                            return Ok(crate::requeue::unchanged_message(&display, &outcome)
+                                .unwrap_or_default());
+                        }
+                        _ => {
+                            return Err(crate::requeue::unchanged_message(&display, &outcome)
+                                .unwrap_or_default());
+                        }
+                    }
+                } else {
+                    let new_status = new_status.clone();
+                    let now = chrono::Utc::now();
+                    let mut moved_to: Option<RequirementStatus> = None;
+                    self.storage
+                        .update_atomically(|s| {
+                            if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                                // STORY-1429: compare-and-swap on the copy read
+                                // under the write. trace:STORY-1429 | ai:claude
+                                if r.status != current_status {
+                                    moved_to = Some(r.status.clone());
+                                    return;
+                                }
+                                r.set_status_from_str(&format!("{:?}", new_status));
+                                r.modified_at = now;
+                                // TASK-1477: the `queue_rework` MCP tool can also
+                                // reopen a Completed spec — clear the stale
+                                // completed_at so the next completion stamps a
+                                // fresh date. trace:TASK-1477 | ai:claude
+                                crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                            }
+                        })
+                        .map_err(|e| e.to_string())?;
+                    if let Some(actual) = moved_to {
+                        return Err(format!(
+                            "{display} moved from {current_status} to {actual} while this \
+                             request ran; nothing was changed"
+                        ));
+                    }
+                    summary.push_str(&format!(
+                        "{} status: {} → {}\n",
+                        display, current_status, new_status
+                    ));
+                }
+                crate::record_role_activity(&spec_id, "rework");
+                crate::update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
+            }
+        }
+
+        // Optional audit comment. STORY-1429: a reason already carried by the
+        // NeedsAttention audit note is not written a second time.
+        if let Some(reason_text) = reason.filter(|_| !reason_recorded) {
             let author = crate::get_default_author();
             let comment = aida_core::Comment::new(author, reason_text.to_string());
             self.storage

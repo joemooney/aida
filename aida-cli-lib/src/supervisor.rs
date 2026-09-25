@@ -95,11 +95,15 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
     project_root: &std::path::Path,
     opts: SuperviseOpts,
 ) -> Result<()> {
-    let mut store = backend.load()?;
+    // STORY-1429: `store` is a read-only snapshot for classification. Every
+    // write below is a per-spec atomic write that re-checks the status on the
+    // copy read under that write, instead of one whole-store save of this
+    // snapshot (which could revert a concurrent triage).
+    // trace:STORY-1429 | ai:claude
+    let store = backend.load()?;
     let mut decisions = Vec::new();
     let mut launches: Vec<String> = Vec::new();
     let mut cap_findings: Vec<(String, String, u32)> = Vec::new();
-    let mut changed = false;
     let mut launched = 0usize;
     let now = chrono::Utc::now();
 
@@ -130,7 +134,12 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
         // Transient. Cap reached → reclassify to needs-human and stop.
         if attempts >= opts.max_attempts {
             if opts.execute {
-                reclassify_needs_human(&mut store.requirements[idx], opts.max_attempts);
+                let id = store.requirements[idx].id;
+                if !reclassify_needs_human_atomically(backend, id, opts.max_attempts)? {
+                    decision.action = "skip-status-moved".to_string();
+                    decisions.push(decision);
+                    continue;
+                }
                 cap_findings.push((spec.clone(), decision.reason.clone(), attempts));
                 events::emit(
                     project_root,
@@ -143,7 +152,6 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
                         },
                     ),
                 );
-                changed = true;
             }
             decision.action = "reclassify-needs-human".to_string();
             decisions.push(decision);
@@ -170,28 +178,33 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
 
         // Re-drive: re-queue (status → Approved, clear the failure) and emit the
         // event that IS the attempt record. The actual drive is launched after
-        // the store is saved.
+        // the write lands. STORY-1429: the transition goes through the one
+        // owner on the copy read inside the atomic write; a spec that moved in
+        // the meantime (a human triaged it, a drain claimed it) is skipped. The
+        // supervisor is never a human at a terminal, so it never clears an
+        // escalation.
+        // trace:STORY-1429 | ai:claude
         let next_attempt = attempts + 1;
         if opts.execute {
-            let req = &mut store.requirements[idx];
-            req.status = RequirementStatus::Approved;
-            req.failure_reason = None;
-            req.modified_at = now;
-            changed = true;
-            events::emit(
+            match supervisor_requeue(
+                backend,
                 project_root,
-                &events::Event::new(
-                    Some(spec.clone()),
-                    "",
-                    events::EventKind::SpecReDriven {
-                        cause: decision.reason.clone(),
-                        attempt: next_attempt,
-                        max: opts.max_attempts,
-                    },
-                ),
-            );
-            launches.push(spec.clone());
-            launched += 1;
+                store.requirements[idx].id,
+                &spec,
+                &decision.reason,
+                next_attempt,
+                opts.max_attempts,
+            )? {
+                true => {
+                    launches.push(spec.clone());
+                    launched += 1;
+                }
+                false => {
+                    decision.action = "skip-status-moved".to_string();
+                    decisions.push(decision);
+                    continue;
+                }
+            }
         }
         decision.attempts = next_attempt;
         decision.action = if opts.execute {
@@ -203,10 +216,7 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
     }
 
     for (spec, kind, attempts) in cap_findings {
-        file_cap_finding(&mut store, &spec, &kind, attempts);
-    }
-    if changed {
-        backend.save(&store)?;
+        backend.update_atomically(|s| file_cap_finding(s, &spec, &kind, attempts))?;
     }
 
     render_decisions(&decisions, opts.json)?;
@@ -217,6 +227,76 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
         }
     }
     Ok(())
+}
+
+/// One supervised re-drive's store transition: the owner runs on the copy
+/// read inside the backend's atomic write. On success emits `SpecReDriven`
+/// (the attempt record `supervisor_redrive_state` counts) and `SpecRequeued`
+/// (the requeue trail, which it does not count). Returns false when the spec
+/// was no longer parked, in which case nothing was written or emitted.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn supervisor_requeue<B: DatabaseBackend>(
+    backend: &B,
+    project_root: &std::path::Path,
+    id: uuid::Uuid,
+    spec: &str,
+    cause: &str,
+    attempt: u32,
+    max_attempts: u32,
+) -> Result<bool> {
+    let ctx = crate::requeue::ReturnCtx {
+        via: "the re-drive supervisor".to_string(),
+        via_slug: "supervisor",
+        author: "supervisor".to_string(),
+        clear_escalation: false,
+        reason: Some(format!(
+            "supervised re-drive {attempt}/{max_attempts} after transient `{cause}`"
+        )),
+    };
+    let (outcome, _) = crate::requeue::return_to_flight_in_backend(
+        backend,
+        id,
+        &RequirementStatus::NeedsAttention,
+        &RequirementStatus::Approved,
+        &ctx,
+    )?;
+    if !outcome.applied() {
+        return Ok(false);
+    }
+    events::emit(
+        project_root,
+        &events::Event::new(
+            Some(spec.to_string()),
+            "",
+            events::EventKind::SpecReDriven {
+                cause: cause.to_string(),
+                attempt,
+                max: max_attempts,
+            },
+        ),
+    );
+    crate::requeue::emit_requeued(project_root, spec, &ctx, &outcome);
+    Ok(true)
+}
+
+/// Reclassify a capped transient park to needs-human under an atomic write,
+/// only while it is still parked. Returns false when it moved.
+// trace:STORY-1429 | ai:claude
+fn reclassify_needs_human_atomically<B: DatabaseBackend>(
+    backend: &B,
+    id: uuid::Uuid,
+    max_attempts: u32,
+) -> Result<bool> {
+    let mut applied = false;
+    backend.update_atomically(|s| {
+        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == id) {
+            if r.status == RequirementStatus::NeedsAttention {
+                reclassify_needs_human(r, max_attempts);
+                applied = true;
+            }
+        }
+    })?;
+    Ok(applied)
 }
 
 /// Classify one parked spec. Transient iff it carries a typed transient
@@ -480,5 +560,99 @@ mod tests {
         // past the schedule → clamp to the last entry.
         assert_eq!(backoff_for(&s, 9), Duration::from_secs(1800));
         assert_eq!(backoff_for(&[], 0), Duration::ZERO);
+    }
+
+    // STORY-1429: the supervisor's re-drive runs through the one owner, on the
+    // copy read inside a per-spec atomic write. It clears the attention and
+    // failure markers, records one audit note, and emits both the attempt
+    // record (SpecReDriven) and the requeue trail (SpecRequeued). A second
+    // call finds the spec no longer parked and changes nothing.
+    // trace:STORY-1429 | ai:claude
+    #[test]
+    fn supervisor_redrive_routes_through_return_to_flight_and_clears_attention_reason() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+        let tmp = tempfile::tempdir().unwrap();
+        let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+        let mut req = req_with_failure("watchdog");
+        req.attention_reason = Some(aida_core::AttentionReason {
+            category: PuntCategory::DesignFork,
+            detail: "stale".into(),
+            lean: None,
+            raised_by: None,
+            raised_at: chrono::Utc::now(),
+        });
+        let id = req.id;
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(req);
+        backend.save(&store).unwrap();
+
+        assert!(supervisor_requeue(&backend, tmp.path(), id, "STORY-1", "watchdog", 1, 3).unwrap());
+        let after = backend.get_requirement(&id).unwrap().unwrap();
+        assert_eq!(after.status, RequirementStatus::Approved);
+        assert!(after.attention_reason.is_none());
+        assert!(after.failure_reason.is_none());
+        assert_eq!(after.comments.len(), 1);
+        assert!(after.comments[0]
+            .content
+            .contains("via the re-drive supervisor"));
+
+        let evs = events::read_all(tmp.path());
+        let kinds: Vec<&str> = evs.iter().map(|e| e.kind.name()).collect();
+        assert_eq!(kinds, vec!["SpecReDriven", "SpecRequeued"]);
+        assert_eq!(events::supervisor_redrive_state(tmp.path(), "STORY-1").0, 1);
+
+        // Under-the-write check: no longer parked, so nothing happens.
+        assert!(
+            !supervisor_requeue(&backend, tmp.path(), id, "STORY-1", "watchdog", 2, 3).unwrap()
+        );
+        assert_eq!(events::read_all(tmp.path()).len(), 2);
+        assert_eq!(
+            backend
+                .get_requirement(&id)
+                .unwrap()
+                .unwrap()
+                .comments
+                .len(),
+            1
+        );
+    }
+
+    // STORY-1429 (A2): a human requeue neither advances nor resets the
+    // supervisor's attempt count. trace:STORY-1429 | ai:claude
+    #[test]
+    fn human_requeue_neither_advances_nor_resets_supervisor_attempts() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        events::emit(
+            root,
+            &events::Event::new(
+                Some("STORY-7".into()),
+                "",
+                events::EventKind::SpecReDriven {
+                    cause: "watchdog".into(),
+                    attempt: 1,
+                    max: 3,
+                },
+            ),
+        );
+        let before = events::supervisor_redrive_state(root, "STORY-7");
+        assert_eq!(before.0, 1);
+        events::emit(
+            root,
+            &events::Event::new(
+                Some("STORY-7".into()),
+                "",
+                events::EventKind::SpecRequeued {
+                    via: "queue-rework".into(),
+                    actor: Some("human".into()),
+                    from: "Needs Attention".into(),
+                    to: "Approved".into(),
+                    cleared_tags: vec!["needs-human".into()],
+                    kept_tags: Vec::new(),
+                },
+            ),
+        );
+        assert_eq!(events::supervisor_redrive_state(root, "STORY-7"), before);
     }
 }
