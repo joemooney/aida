@@ -8,8 +8,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:49:03.555549390Z
-modified_at: 2026-09-25T09:49:20.595162706Z
+modified_at: 2026-09-25T16:19:29.021890403Z
 req_type: Task
+relationships:
+- rel_type: Supersedes
+  target_id: 01a0d64f-6f85-7483-8add-7ce3280ec125
+  created_at: 2026-09-25T16:19:29.021882791Z
+  created_by: joe
 comments:
 - id: 01a0d7f8-2b53-7c91-8d18-198b43b8afa4
   author: joe
