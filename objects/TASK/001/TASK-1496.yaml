@@ -3,12 +3,12 @@ spec_id: TASK-1496
 agreed_id: TASK-1496
 title: Per-wave `systemd-run --user` transient unit (non-binding A12 note)
 description: ''
-status: Draft
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:05:25.253633460Z
-modified_at: 2026-09-25T02:07:13.320498986Z
+modified_at: 2026-09-25T16:19:23.753635523Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-24-shift-tick.md
