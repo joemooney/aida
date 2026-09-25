@@ -10,12 +10,12 @@ description: |-
   - A concurrent add of a different spec between load and save is never deleted (test with two writers).
   - A concurrent modification of the same spec is detected, and the operation retries or refuses; it never silently clobbers.
   - Audit every caller of update_atomically and save() on the git store, and list any remaining whole-store writers with their justification.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:51:09.557186527Z
-modified_at: 2026-09-25T02:51:09.557186527Z
+modified_at: 2026-09-25T02:51:51.758624975Z
 req_type: Bug
 tags:
 - concurrency
