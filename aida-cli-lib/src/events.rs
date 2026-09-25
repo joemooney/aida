@@ -449,6 +449,12 @@ pub enum EventKind {
         /// threshold this tick; the operator was notified once per episode.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         mail_escalated: Vec<String>,
+        /// Why the re-drive step stopped this tick: a re-drive attempt could
+        /// not be recorded, so nothing further was re-queued (ADR-26 fail
+        /// closed).
+        // trace:TASK-1492 | ai:claude
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        redrive_held: Option<String>,
     },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
@@ -508,8 +514,11 @@ impl EventKind {
             | EventKind::GateHeld { .. } => false,
             // STORY-1218: a tick wakes only for what needs a human.
             EventKind::ShiftTick {
-                breaker, escalated, ..
-            } => breaker.is_some() || !escalated.is_empty(),
+                breaker,
+                escalated,
+                redrive_held,
+                ..
+            } => breaker.is_some() || !escalated.is_empty() || redrive_held.is_some(),
             // Real decision points — wake the supervisor.
             EventKind::ReclassifiedNeedsHuman { .. }
             | EventKind::CiTerminal { .. }
@@ -1002,6 +1011,26 @@ pub fn emit(project_root: &Path, ev: &Event) {
         return;
     }
     let _ = try_emit(project_root, ev);
+}
+
+/// Append one event and REPORT whether it landed: the fail-closed sibling of
+/// [`emit`] for a record a safety cap is counted from (the ADR-26 re-drive
+/// attempt). `Err` with the reason when events are disabled in this process
+/// (nothing would be written) or the append fails (full disk, a read-only or
+/// replaced `events.jsonl`, a permission error).
+// trace:TASK-1492 | ai:claude
+pub fn emit_recorded(project_root: &Path, ev: &Event) -> Result<(), String> {
+    if events_disabled() {
+        return Err(format!(
+            "{EVENTS_DISABLE_ENV} is set in this process, so the event is not recorded"
+        ));
+    }
+    try_emit(project_root, ev).map_err(|e| {
+        format!(
+            "cannot append to {}: {e}",
+            events_path(project_root).display()
+        )
+    })
 }
 
 /// The fallible body of [`emit`]; kept separate so the happy path reads as a

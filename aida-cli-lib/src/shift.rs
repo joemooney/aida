@@ -74,6 +74,11 @@ pub(crate) const TICK_DEADLINE: StdDuration = StdDuration::from_secs(90);
 /// A launch (record intent, tag, spawn, record pid) is not started with less
 /// than this left on the deadline.
 const LAUNCH_RESERVE: StdDuration = StdDuration::from_secs(30);
+/// The longest a tick waits on the operator's notify command. With the time
+/// left on [`TICK_DEADLINE`] as a further bound, a hung command ends the tick
+/// well inside the scheduler's 120s kill.
+// trace:TASK-1492 | ai:claude
+pub(crate) const NOTIFY_TIMEOUT: StdDuration = StdDuration::from_secs(15);
 
 /// The role whose queue view the wave drains. The wave passes `--role` with
 /// it, and selection reads the same role-routed view.
@@ -885,6 +890,20 @@ impl TickCtx {
                 .is_none_or(|(started, deadline)| started.elapsed() + LAUNCH_RESERVE <= deadline)
     }
 
+    /// How long a notify command may run this tick: [`NOTIFY_TIMEOUT`], cut
+    /// to the time left on the deadline (at least one second, so a message
+    /// that is due still gets a chance). The deadline plus the cap stays well
+    /// inside the scheduler's kill.
+    // trace:TASK-1492 | ai:claude
+    pub(crate) fn notify_timeout(&self) -> StdDuration {
+        match self.clock {
+            None => NOTIFY_TIMEOUT,
+            Some((started, deadline)) => deadline
+                .saturating_sub(started.elapsed())
+                .clamp(StdDuration::from_secs(1), NOTIFY_TIMEOUT),
+        }
+    }
+
     pub(crate) fn from_clock(
         now: DateTime<Utc>,
         dry_run: bool,
@@ -1145,19 +1164,30 @@ pub(crate) trait ShiftExec {
     fn spawn_wave(&mut self, argv: &[String], log: &Path) -> Result<(u32, Option<String>)>;
     fn save_state(&mut self, state: &ShiftState) -> Result<()>;
     fn emit(&mut self, kind: EventKind);
-    /// Re-queue the `would-re-drive` decisions (status back to Approved,
-    /// `SpecReDriven`, queue entry at the head). Returns the specs applied.
+    /// Re-queue the `would-re-drive` decisions (`SpecReDriven` recorded
+    /// first, then status back to Approved and a queue entry at the head).
+    /// Returns the specs applied, and why the pass stopped when an attempt
+    /// could not be recorded.
     // trace:TASK-1492 | ai:claude
     fn requeue(
         &mut self,
         decisions: &[crate::supervisor::SuperviseDecision],
         queue: &crate::supervisor::QueueTarget,
-    ) -> Result<Vec<String>>;
+    ) -> Result<crate::supervisor::RequeueOutcome>;
     /// The ADR-26 cap branch for one decision; false when the spec moved.
     fn reclassify(&mut self, decision: &crate::supervisor::SuperviseDecision) -> Result<bool>;
     /// Notify the operator through `aida notify` (its own min_interval and
-    /// quiet hours apply). `Ok(false)` = no notify command is configured.
-    fn notify(&mut self, rule: &str, title: &str, message: &str) -> Result<bool>;
+    /// quiet hours apply), waiting at most `timeout` for the command.
+    /// Returns what really happened: sent, deferred to quiet hours,
+    /// suppressed by the rule's min_interval, or no command configured.
+    // trace:TASK-1492 | ai:claude
+    fn notify(
+        &mut self,
+        rule: &str,
+        title: &str,
+        message: &str,
+        timeout: StdDuration,
+    ) -> Result<crate::notify::DirectDelivery>;
 }
 
 pub(crate) struct RealExec<'a> {
@@ -1194,7 +1224,7 @@ impl ShiftExec for RealExec<'_> {
         &mut self,
         decisions: &[crate::supervisor::SuperviseDecision],
         queue: &crate::supervisor::QueueTarget,
-    ) -> Result<Vec<String>> {
+    ) -> Result<crate::supervisor::RequeueOutcome> {
         crate::supervisor::apply_requeue(
             self.backend,
             &self.project_root,
@@ -1211,8 +1241,16 @@ impl ShiftExec for RealExec<'_> {
             crate::supervisor::DEFAULT_MAX_ATTEMPTS,
         )
     }
-    fn notify(&mut self, rule: &str, title: &str, message: &str) -> Result<bool> {
-        crate::notify::send_direct(&self.project_root, rule, title, message).map(|o| o.configured)
+    // trace:TASK-1492 | ai:claude
+    fn notify(
+        &mut self,
+        rule: &str,
+        title: &str,
+        message: &str,
+        timeout: StdDuration,
+    ) -> Result<crate::notify::DirectDelivery> {
+        crate::notify::send_direct_bounded(&self.project_root, rule, title, message, Some(timeout))
+            .map(|o| o.delivery())
     }
 }
 
@@ -1249,6 +1287,9 @@ pub(crate) struct TickReport {
     pub redrive_plan: Vec<crate::supervisor::SuperviseDecision>,
     pub redriven: Vec<String>,
     pub reclassified: Vec<String>,
+    /// Set when a re-drive attempt could not be recorded: the step stopped
+    /// and re-queued nothing further this tick (ADR-26 fail closed).
+    pub redrive_held: Option<String>,
     pub mail: Vec<MailVerdict>,
     pub mail_escalated: Vec<String>,
     /// Notifications that failed to send (never fatal to the tick).
@@ -1477,14 +1518,23 @@ fn redrive_step(
             user: p.queue_user.clone(),
             role: WAVE_ROLE.to_string(),
         };
-        let applied = exec.requeue(&plan, &queue)?;
+        let outcome = exec.requeue(&plan, &queue)?;
+        let applied = outcome.applied;
+        // ADR-26 fail closed: after an attempt that could not be recorded,
+        // every spec not yet re-queued stays parked for this tick.
         for d in plan.iter_mut().filter(|d| d.action == "would-re-drive") {
             d.action = if applied.contains(&d.spec) {
                 "re-drive".to_string()
+            } else if outcome.held.contains(&d.spec) {
+                crate::supervisor::HELD_UNRECORDED.to_string()
             } else {
                 "skip-status-moved".to_string()
             };
+            if d.action != "re-drive" {
+                d.attempts = d.attempts.saturating_sub(1);
+            }
         }
+        report.redrive_held = outcome.unrecorded;
         report.redriven = applied.clone();
         applied
     } else {
@@ -1503,7 +1553,14 @@ fn redrive_step(
             left.join(", ")
         ));
     }
-    report.redrive = if parts.is_empty() {
+    report.redrive = if let Some(reason) = &report.redrive_held {
+        let mut line =
+            format!("held: attempt-record — {reason}; nothing more re-queued this check");
+        if !parts.is_empty() {
+            line.push_str(&format!(" ({})", parts.join("; ")));
+        }
+        line
+    } else if parts.is_empty() {
         "on — nothing to re-drive".to_string()
     } else {
         format!("on — {}", parts.join("; "))
@@ -1612,17 +1669,32 @@ fn mail_step(
         cfg.mail_latency,
         cap_list(&lines, MAIL_NOTIFY_MAX_NAMES, "\n")
     );
-    match exec.notify("mail-latency", "AIDA: mail waiting", &message) {
-        Ok(true) => {
+    // An episode opens only when the operator will actually get the
+    // message: sent now, or queued for the end of quiet hours. A message the
+    // rule's min_interval dropped opens nothing, so a later check retries.
+    // trace:TASK-1492 | ai:claude
+    use crate::notify::DirectDelivery;
+    match exec.notify(
+        "mail-latency",
+        "AIDA: mail waiting",
+        &message,
+        ctx.notify_timeout(),
+    ) {
+        Ok(delivery @ (DirectDelivery::Sent | DirectDelivery::Deferred)) => {
             for r in &plan.escalate {
                 state.mail_episodes.insert(r.clone(), ctx.now);
             }
             report.mail_escalated = plan.escalate.clone();
-            report
-                .mail_latency
-                .push_str(&format!(" — notified for {escalate_names}"));
+            report.mail_latency.push_str(&if delivery == DirectDelivery::Sent {
+                format!(" — notified for {escalate_names}")
+            } else {
+                format!(" — notification for {escalate_names} queued until quiet hours end")
+            });
         }
-        Ok(false) => report
+        Ok(DirectDelivery::Suppressed) => report.mail_latency.push_str(&format!(
+            " — notification for {escalate_names} held by `[notify] min_interval`; retried on a later check"
+        )),
+        Ok(DirectDelivery::NotConfigured) => report
             .mail_latency
             .push_str(" — no notify command configured (`[notify] command`)"),
         Err(e) => report.notify_errors.push(format!("mail-latency: {e:#}")),
@@ -1908,7 +1980,12 @@ pub(crate) fn tick_core(
                 "The night shift stopped launching drain waves: {reason}.\n\
                  It launches again after `aida shift resume` or a change to the queue.\n"
             );
-            match exec.notify("shift-breaker", "AIDA: night shift stopped", &message) {
+            match exec.notify(
+                "shift-breaker",
+                "AIDA: night shift stopped",
+                &message,
+                ctx.notify_timeout(),
+            ) {
                 Ok(_) => {}
                 Err(e) => report.notify_errors.push(format!("shift-breaker: {e:#}")),
             }
@@ -1927,7 +2004,8 @@ pub(crate) fn tick_core(
         || !report.escalated.is_empty()
         || !report.redriven.is_empty()
         || !report.reclassified.is_empty()
-        || !report.mail_escalated.is_empty();
+        || !report.mail_escalated.is_empty()
+        || report.redrive_held.is_some();
     if live && (acted || refused != state.last_refused) {
         exec.emit(EventKind::ShiftTick {
             launched: report.launched.clone(),
@@ -1939,6 +2017,7 @@ pub(crate) fn tick_core(
             redriven: report.redriven.clone(),
             reclassified: report.reclassified.clone(),
             mail_escalated: report.mail_escalated.clone(),
+            redrive_held: report.redrive_held.clone(),
         });
         report.event_emitted = true;
     }
@@ -2151,22 +2230,7 @@ fn gather_probes(
         }
     }
     let (wave_vendor, wave_vendor_error) = resolve_wave_vendor(project_root);
-    // trace:TASK-1492 | ai:claude — re-drive inputs only when it is on.
-    let (parked, redrive_history) = if cfg.redrive {
-        match backend.load() {
-            Ok(store) => (
-                store
-                    .requirements
-                    .into_iter()
-                    .filter(|r| r.status == RequirementStatus::NeedsAttention)
-                    .collect(),
-                events::read_redrive_history_strict(project_root),
-            ),
-            Err(e) => (Vec::new(), Err(format!("cannot read the store: {e:#}"))),
-        }
-    } else {
-        (Vec::new(), Err("re-drive is off".to_string()))
-    };
+    let (parked, redrive_history) = redrive_probes(project_root, backend, cfg);
     let mail = crate::mailbox_store::oldest_unread_by_recipient(
         project_root,
         &project_root.join(".aida-store"),
@@ -2206,6 +2270,37 @@ fn gather_probes(
         redrive_history,
         mail,
         mail_known,
+    }
+}
+
+/// The re-drive inputs, read only when re-drive is on: the parked specs and
+/// the strict (fail-closed) attempt history from the live stream and its
+/// archive.
+// trace:TASK-1492 | ai:claude
+pub(crate) type RedriveProbes = (
+    Vec<aida_core::Requirement>,
+    std::result::Result<events::RedriveHistory, String>,
+);
+
+// trace:TASK-1492 | ai:claude
+pub(crate) fn redrive_probes<B: aida_core::DatabaseBackend>(
+    project_root: &Path,
+    backend: &B,
+    cfg: &ShiftConfig,
+) -> RedriveProbes {
+    if !cfg.redrive {
+        return (Vec::new(), Err("re-drive is off".to_string()));
+    }
+    match backend.load() {
+        Ok(store) => (
+            store
+                .requirements
+                .into_iter()
+                .filter(|r| r.status == RequirementStatus::NeedsAttention)
+                .collect(),
+            events::read_redrive_history_strict(project_root),
+        ),
+        Err(e) => (Vec::new(), Err(format!("cannot read the store: {e:#}"))),
     }
 }
 

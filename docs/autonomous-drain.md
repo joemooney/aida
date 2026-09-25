@@ -1390,12 +1390,18 @@ What one tick does, in order:
    that recipient's oldest unread age drops back under the threshold. One
    notification names at most five recipients, then "+N more". It
    never writes to the mailbox or to a chat. `[notify]`'s own `min_interval`
-   and quiet hours still apply, and with no `[notify] command` configured
-   nothing is sent and no episode is opened. Skipped past the tick deadline.
+   and quiet hours still apply: an episode opens only when the message was
+   sent or queued for the end of quiet hours, so a message `min_interval`
+   dropped is retried on a later check. With no `[notify] command` configured
+   nothing is sent and no episode is opened. The notify command may run for
+   at most 15s, less when the tick deadline is closer; a command still
+   running then is killed and logged to `.aida/notify.log`. Skipped past the
+   tick deadline.
 8. Emits one `ShiftTick` event only when it acted or its refusing-guard set
    changed; it names re-queued specs (`redriven`), capped parks
-   (`reclassified`) and mail escalations (`mail_escalated`). It wakes a
-   supervisor only for a breaker trip or an escalation (a capped park also
+   (`reclassified`), mail escalations (`mail_escalated`) and a re-drive held
+   because an attempt could not be recorded (`redrive_held`). It wakes a
+   supervisor only for a breaker trip, an escalation or a `redrive_held` (a capped park also
    emits its own `ReclassifiedNeedsHuman`, which does wake one).
 
 ### Re-drive (opt-in)
@@ -1422,6 +1428,19 @@ is closed:
   `.aida/events.jsonl` **and** its rotated archive `.aida/events.jsonl.1`,
   so a rotation never resets the count. At most `[shift]
   max_redrives_per_tick` (default 3) per tick.
+- Limits of that count: the event stream is **per clone** (it is not in the
+  substrate), so two clones that both turn re-drive on each count their own
+  attempts, and a spec can be re-driven up to 3 times from each. Only one
+  archive generation is kept (`events.jsonl` + `.1`), so a park that stays
+  parked through two rotations of the stream loses its older attempts. Turn
+  re-drive on in one clone per repository.
+- The attempt is recorded first: `SpecReDriven` is appended **before** the
+  spec leaves `NeedsAttention`. If that append fails (full disk, a read-only
+  or replaced `events.jsonl`), the spec stays parked, nothing further is
+  re-queued that tick, and the tick reports `held: attempt-record` with the
+  reason (also in the `ShiftTick` event's `redrive_held`, which wakes a
+  supervisor). If the record lands but the spec moves before the status
+  change, the attempt still counts: the cap is reached sooner, never later.
 - A re-driven spec goes back to Approved (`SpecReDriven`, `SpecRequeued`)
   and is put at the **head** of the implementer queue, oldest-parked first,
   so the wave actually sees it. It is never force-claimed; a spec that cannot
