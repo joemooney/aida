@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T07:22:26.359799020Z
-modified_at: 2026-09-25T09:52:27.941654142Z
+modified_at: 2026-09-25T09:52:46.031584050Z
 req_type: Task
 tags:
 - concurrency
@@ -40,6 +40,12 @@ comments:
     Notes (non-blocking): (a) a refused edit is a no-op closure, but CachedGitBackend::update_spec_atomically_with_subject still upserts the cache and runs refresh_parent_epic_status, so a stale epic rollup can still be written. This is BUG-1612 behaviour that predates this branch. (b) Reclassify re-checks only status == NeedsAttention under the lock, not the classification. The semantics are the same as before, and it is otherwise correct. (c) In a list merge, removing an item that the other writer modified is silently lost (edit_rebase.rs:199-202); no current edit flag hits this. (d) The CLI wiring (tags.is_some() -> tags_replaced, pending_leave -> leaving_needs_attention) is only covered through direct write_edit_atomically calls. (e) The commit subject '<subject>: update 1 requirement' matches bulk_update, and bug_1252 passes.
   created_at: 2026-09-25T09:52:27.941654142Z
   modified_at: 2026-09-25T09:52:27.941654142Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d7fb-4dcf-70d3-bc95-f24c83023cf5
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept the re-review. Rework: (B) when --status is passed, refuse if fresh.status differs from both read.status and the requested status; keep the same-value allowance. (S) Re-run enforce_protected_spec_gate on the fresh copy inside the write_edit_atomically closure. Add probe tests for both. Leave the rollup refresh after a refused edit and the list-removal edge alone; list removal is noted, and no flag hits it today.'
+  created_at: 2026-09-25T09:52:46.031584050Z
+  modified_at: 2026-09-25T09:52:46.031584050Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 84aa1380788e41afce75bef08b0b983f2151da66
