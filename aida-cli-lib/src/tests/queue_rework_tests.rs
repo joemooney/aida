@@ -1520,6 +1520,10 @@ fn backend_door_status_check_happens_under_the_write() {
 
 #[test]
 fn triage_loop_without_tty_prints_hints_and_never_prompts() {
+    // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+    // lock (pinned unset) so a sibling test that sets it cannot race.
+    // trace:STORY-1429 | ai:claude
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
     let (_tmp, storage) = story_1429_fixture(vec![parked("BUG-9111")]);
     let mut input = std::io::Cursor::new(b"r\n".to_vec());
     crate::queue_cmd::rework_triage_loop(
@@ -1627,6 +1631,10 @@ fn triage_loop_d_decides_then_returns_to_the_same_spec() {
 
 #[test]
 fn rework_without_id_rejects_spec_scoped_flags() {
+    // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+    // lock (pinned unset) so a sibling test that sets it cannot race.
+    // trace:STORY-1429 | ai:claude
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
     let (_tmp, storage) = story_1429_fixture(vec![parked("BUG-9114")]);
     for flags in [
         crate::queue_cmd::ReworkFlags {
@@ -1687,9 +1695,8 @@ fn findings_tip_points_at_the_loop() {
 }
 
 /// Review blocker: the sessions directory also holds `<id>.activity.toml`,
-/// `<id>.manifest.toml` companions, `write_atomic` staging files and
-/// `mcp-claim.<spec>.toml` markers. None of them is a session lease, so none
-/// may make the gate "unknown": the requeue proceeds.
+/// `<id>.manifest.toml` companions and `write_atomic` staging files. None of
+/// them is a lease, so none may make the gate "unknown": the requeue proceeds.
 #[test]
 fn rework_proceeds_with_companion_files_in_the_lease_dir() {
     let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
@@ -1701,11 +1708,6 @@ fn rework_proceeds_with_companion_files_in_the_lease_dir() {
     std::fs::write(
         dir.join(format!("{}.manifest.toml", dead.id)),
         "[[items]]\nspec = \"BUG-9115\"\n",
-    )
-    .unwrap();
-    std::fs::write(
-        dir.join("mcp-claim.bug-9115.toml"),
-        "id = \"abc\"\nscope = \"BUG-9115\"\nmcp_claim = true\n",
     )
     .unwrap();
     std::fs::write(dir.join(format!("{}.tmp.1.2", dead.id)), "id = \"half").unwrap();
@@ -1786,4 +1788,53 @@ fn rework_ignores_unparseable_lease_for_another_spec() {
     .unwrap();
     rework_as(&storage, "BUG-9117", None, false).expect("another spec's lease is irrelevant");
     assert_eq!(status_of(&storage, "BUG-9117"), RequirementStatus::Approved);
+}
+
+/// A realistic MCP `claim_task` claim, in the exact shape that tool writes.
+fn write_mcp_claim(root: &std::path::Path, spec: &str, worktree: &str) {
+    let dir = root.join(".aida").join("sessions");
+    std::fs::create_dir_all(&dir).unwrap();
+    let body = format!(
+        "id = \"0196aaaabbbb\"\nscope = \"{spec}\"\nslug = \"{spec}\"\nowner = \"agent\"\n\
+         worktree_path = \"{worktree}\"\nbranch = \"main\"\n\
+         started_at = \"2026-09-24T01:02:03.456789+00:00\"\nhostname = \"h\"\n\
+         role = \"implementer\"\nmcp_claim = true\n"
+    );
+    std::fs::write(
+        dir.join(format!("mcp-claim.{}.toml", spec.to_ascii_lowercase())),
+        body,
+    )
+    .unwrap();
+}
+
+/// Review round 2: the requeue gate reads `mcp-claim.*` claims the way the
+/// pickup gate does. A live claim refuses; a worktree-less claim is Stale
+/// through the same liveness check, so the requeue proceeds.
+#[test]
+fn requeue_gate_reads_mcp_claims_like_pickup() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+
+    // Live claim (a real worktree; liveness injected as the pickup gate's
+    // predicate would report a live session there): refuses.
+    let (tmp, _storage) = story_1429_fixture(vec![parked("BUG-9118")]);
+    let wt = tmp.path().join("wt");
+    std::fs::create_dir_all(&wt).unwrap();
+    write_mcp_claim(tmp.path(), "BUG-9118", &wt.display().to_string());
+    let leases = crate::list_leases_strict(tmp.path(), &["BUG-9118"]).unwrap();
+    assert_eq!(leases.len(), 1, "the mcp-claim parses as a lease");
+    assert_eq!(leases[0].scope, "BUG-9118");
+    let check = crate::requeue_lease_gate_from(Ok(leases), None, &["BUG-9118"], |_| Ok(true));
+    assert!(
+        matches!(check, crate::RequeueLeaseCheck::HeldByOther { .. }),
+        "{check:?}"
+    );
+
+    // Worktree-less claim (the MCP default): Stale, the requeue proceeds.
+    let (tmp2, storage2) = story_1429_fixture(vec![parked("BUG-9119")]);
+    write_mcp_claim(tmp2.path(), "BUG-9119", "");
+    rework_as(&storage2, "BUG-9119", None, false).expect("a worktree-less claim is not live");
+    assert_eq!(
+        status_of(&storage2, "BUG-9119"),
+        RequirementStatus::Approved
+    );
 }

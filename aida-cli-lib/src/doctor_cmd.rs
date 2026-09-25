@@ -7652,6 +7652,11 @@ hostname = "localhost"
     // spec is no longer in the store. trace:TASK-570 | ai:claude
     #[test]
     fn doctor_detects_orphan_queue_entries() {
+        // STORY-1429: `current_user_id` reads AIDA_USER, which sibling tests
+        // set under the test env lock; hold it so the queue key cannot change
+        // between this test's write and the doctor's read.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::env_lock();
         let dir = tempfile::tempdir().unwrap();
         let project_root = dir.path();
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
@@ -7693,6 +7698,8 @@ hostname = "localhost"
     // queue is a no-op (skipped). trace:TASK-570 | ai:claude
     #[test]
     fn doctor_heals_orphan_queue_entries() {
+        // Same AIDA_USER race as the detect test above. trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::env_lock();
         let dir = tempfile::tempdir().unwrap();
         let project_root = dir.path();
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();

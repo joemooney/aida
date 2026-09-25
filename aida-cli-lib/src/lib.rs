@@ -32440,18 +32440,21 @@ impl RequeueLeaseCheck {
     }
 }
 
-/// Whether `name` is a real session lease file: `<id>.toml` with no dot in the
-/// stem, the same rule `lease_ids_in` (BUG-114) uses. That excludes the
-/// `<id>.activity.toml` / `<id>.manifest.toml` companions, `write_atomic`
-/// staging files, and the `mcp-claim.<spec>.toml` markers the MCP `claim_task`
-/// tool writes. An MCP claim is an advisory marker with no liveness signal
-/// that every other AIDA command (the BUG-637 pickup gate included) ignores;
-/// a claim left behind by a dead MCP server would otherwise block requeues
-/// of its spec forever.
+/// Whether `name` is a lease file the requeue gate reads: a session lease
+/// `<id>.toml` (no dot in the stem, the same rule `lease_ids_in` (BUG-114)
+/// uses), or an MCP `claim_task` claim `mcp-claim.<spec>.toml`. That excludes
+/// the `<id>.activity.toml` / `<id>.manifest.toml` companions and the
+/// `write_atomic` staging files. An MCP claim parses as a `SessionLease` and
+/// the BUG-637 pickup gate evaluates it, so the requeue gate does too: a claim
+/// with a real worktree and a live session is Live and refuses, while a dead or
+/// worktree-less claim comes out Stale through the same liveness check.
 // trace:STORY-1429 | ai:claude
 fn is_session_lease_file(name: &str) -> bool {
-    name.strip_suffix(".toml")
-        .is_some_and(|stem| !stem.is_empty() && !stem.contains('.'))
+    let Some(stem) = name.strip_suffix(".toml") else {
+        return false;
+    };
+    let stem = stem.strip_prefix("mcp-claim.").unwrap_or(stem);
+    !stem.is_empty() && !stem.contains('.')
 }
 
 /// What one lease file told the requeue gate.
@@ -32528,7 +32531,7 @@ pub(crate) fn read_lease_file_for_gate(
 /// missing one is a definite "no leases". A lease that stays unparseable after
 /// one retry is an error only when it could name one of `spec_ids`.
 // trace:STORY-1429 | ai:claude
-fn list_leases_strict(
+pub(crate) fn list_leases_strict(
     project_root: &std::path::Path,
     spec_ids: &[&str],
 ) -> Result<Vec<SessionLease>, String> {

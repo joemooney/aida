@@ -5826,7 +5826,9 @@ pub(crate) fn handle_git_backend_command(
                     let spec_label = req.spec_id.clone().unwrap_or_else(|| id.to_string());
                     let lease_root = store_path
                         .parent()
+                        .filter(|p| !p.as_os_str().is_empty())
                         .map(std::path::Path::to_path_buf)
+                        .or_else(|| find_project_root().ok())
                         .unwrap_or_else(|| std::path::PathBuf::from("."));
                     let display = req.display_id();
                     let check = crate::requeue_lease_gate(

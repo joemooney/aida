@@ -12471,6 +12471,10 @@ mod tests {
 
     #[test]
     fn queue_add_list_remove_roundtrip() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
 
@@ -12504,6 +12508,10 @@ mod tests {
 
     #[test]
     fn queue_add_refuses_terminal_without_force() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let spec = seed_req(&server, "Terminal spec");
@@ -12523,6 +12531,10 @@ mod tests {
 
     #[test]
     fn queue_next_and_work_peek_the_head() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let u = "queue-peek-user";
@@ -12564,6 +12576,10 @@ mod tests {
 
     #[test]
     fn queue_done_flips_to_done_and_dequeues() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let u = "queue-done-user";
@@ -12603,6 +12619,10 @@ mod tests {
     // trace:BUG-1611 | ai:claude
     #[test]
     fn queue_done_refuses_a_closed_spec_without_writing() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let u = "queue-done-closed-user";
@@ -12627,6 +12647,10 @@ mod tests {
 
     #[test]
     fn queue_rework_flips_status_and_requeues() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let u = "queue-rework-user";
@@ -12657,6 +12681,10 @@ mod tests {
 
     #[test]
     fn queue_rework_refuses_terminal_without_force() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let spec = seed_req(&server, "Closed spec");
@@ -12677,6 +12705,10 @@ mod tests {
     // trace:BUG-480 | ai:claude
     #[test]
     fn mcp_queue_add_and_rework_are_advisor_gated() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let spec = seed_req(&server, "Authority-gated queue target");
@@ -12834,6 +12866,10 @@ mod tests {
 
     #[test]
     fn queue_move_reorders() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let u = "queue-move-user";
