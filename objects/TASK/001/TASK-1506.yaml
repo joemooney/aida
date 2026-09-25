@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - Both paths apply their field edits on the copy read under the store lock, via update_spec_atomically, and keep their existing refusals and messages.
   - Tests show that a concurrent change between read and write is detected, and that no edit is lost.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T07:22:26.359799020Z
-modified_at: 2026-09-25T07:22:26.359799020Z
+modified_at: 2026-09-25T08:03:54.882429761Z
 req_type: Task
 tags:
 - concurrency
