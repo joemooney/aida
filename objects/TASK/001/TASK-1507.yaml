@@ -13,10 +13,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T23:08:26.911362518Z
+modified_at: 2026-09-25T23:09:11.047472202Z
 req_type: Task
 tags:
 - cache
+- docs:impacted
 - history
 - parent:TASK-1505
 relationships:
