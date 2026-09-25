@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:04:13.382715808Z
-modified_at: 2026-09-25T12:05:38.486510218Z
+modified_at: 2026-09-25T12:32:09.984705139Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -53,6 +53,34 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): accept deferring cold-boot. It is split into TASK-1511, a draft awaiting Joe because of the authority question. TASK-1492''s scope is now re-drive plus mail-latency escalation. Mail latency: limit escalation to KNOWN recipients (seats and roles registered in the agent registry, the team roster or active sessions) so junk addresses never page the operator, and cap each notification at a reasonable number of names with ''+N more''. The keystone skip floor is accepted. Enabling re-drive by editing the local file by hand is fine for now.'
   created_at: 2026-09-25T12:05:38.486510218Z
   modified_at: 2026-09-25T12:05:38.486510218Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d88d-3d00-7162-9650-9b5f3e418f12
+  author: joe
+  content: |-
+    Strict review: REQUEST CHANGES — reviewed ed3c4f9c54 (887e222a9b + ed3c4f9c54). Tests: shift 54, supervis 52, requeue 33, events 64, mailbox 47, all pass. Mutation checks in a throwaway copy: (M1) redrive_step treats an Err history as empty -> shift_redrive_evidence_fails_closed FAILS; (M2) the AIDA_EVENTS_DISABLE check removed -> the same test FAILS; (M3) strict read of the live file only -> shift_redrive_cap_survives_event_rotation FAILS. The tests do catch these regressions.
+
+    BLOCKERS
+    B1 (A6 fail-closed, the cap can silently fail open): the attempt record is best-effort. supervisor.rs:390-411 writes the status first (NeedsAttention->Approved) and then calls events::emit, which throws away write errors (events.rs:1004, let _ = try_emit). The redrive-evidence guard (events.rs:1215) proves only that the stream can be READ. If the append fails (disk full, a read-only or replaced events.jsonl), the spec is still re-queued, no SpecReDriven is recorded, and the ADR-26 cap never trips. The only bound left is A8(c) (2 waves per 24h), which resets daily. Fix: record the attempt fallibly (try_emit or equivalent) and treat a failed append as a failed re-drive that holds the step for the rest of the tick. Or preflight writability as part of redrive-evidence. Add a test with a non-writable stream.
+    B2 (mail latency: the 'once per episode' check can end up firing zero times): RealExec::notify returns o.configured (shift.rs:1215). send_direct returns configured=true when it SUPPRESSES under the per-rule min_interval (default 30m, notify.rs:144-147). mail_step (shift.rs:1616) then opens the episode, puts the recipient in mail_escalated, and reports 'notified for X'. If seat B crosses the threshold within 30m of seat A's page, B is silently never notified for its whole episode, while the event says it was. Fix: open an episode only when the notification was sent or queued for quiet hours (sent+pending > 0). Make the Mock able to return 'suppressed', and test it. The Mock currently always reports success, which hides this.
+
+    SHOULD-FIX / MINOR
+    M1: notify::run_command waits with no timeout (notify.rs:643). The tick is now a caller with a deadline, so a hung notify command runs past the 90s internal deadline into the 120s scheduler kill on every tick (CronJobFailed storm, the BUG-1589 shape). The episode is never saved, so it repeats each time. Bound the wait, or check optional_ok() around it with a timeout.
+    M2: attempt counting is per clone. events.jsonl is per clone and not in the substrate, so two clones that both opt in give an effective cap of 3 per clone. Either document it in the A5 runbook text or refuse re-drive when a foreign clone also has it enabled. The one-generation rotation (only .1 is kept) likewise resets the count if a park lives through two rotations. This is rare on this box (1.4 MB since June), but worth a doc line.
+    M3: manual 'aida supervise --max N' now counts PLANNED re-drives (supervisor.rs:205/244), not ones actually applied. A skip-status-moved now uses up a slot that the old loop gave to the next spec. This is a small behaviour change against 'manual path unchanged'.
+    M4: coverage gaps: no test for an unreadable (EACCES) events file, for the gather_probes wiring (cfg.redrive -> read_redrive_history_strict), or for real apply_cap (ReclassifiedNeedsHuman + finding) driven from the tick (the Mock stands in).
+    M5: apply_requeue's queue_add upsert (git_backend retain-by-id) overwrites any existing entry's for_role/for_session for that user with implementer. This is probably fine, but note it.
+    Pre-existing, not introduced here: 'aida supervise watch --execute' (supervise_cmd.rs:~488) is an unattended loop that re-drives with floors: None, no evidence guard and the foreground --force-claim launch. Consider filing a follow-up.
+
+    VERIFIED OK
+    A5: redrive is read only from the local layer [repo.<canonical>] (shift.rs build_config). A committed redrive=true is ignored and flagged. No env var or flag enables it, except AIDA_HOME relocating the local layer, which is the same trust as A1. Dry-run and status report 'off (ADR-26 default)'.
+    A6: the archive and the live file are both read. A disabled, missing or unreadable stream means held: redrive-evidence. The cap branch reclassifies, emits ReclassifiedNeedsHuman and files the finding (apply_cap). Clock skew gives backoff-wait. Live ticks run under shift.lock, and supervisor_requeue is an atomic status-checked write, so a race with manual supervise cannot double-count.
+    A7: queue order is oldest-parked first at the head (tested on a real CachedGitBackend). There is no --force-claim. The upsert means no double-queue for the user, and candidates are de-duplicated.
+    Floors: re-drive is blocked by a Running lock, a foreign claim, a live wave, a tripped breaker, a state error or the deadline. It skips non-explicit-drain, keystone, merge-held and attention_reason/needs-human specs. The new code has no merge, approve, hold-clear or authority path. The only processes spawned are the configured notify command and the existing wave launch.
+    Supervisor split: plan_redrives, apply_requeue and apply_cap. Manual behaviour is otherwise preserved, and it now also counts the archive.
+    Mail: known-recipient filtering, re-arm, the 5-name cap with +N more, unknown recipients never paging and a no-notify-command config opening no episode are all correct. The breaker notifies once, on the trip tick.
+    Tests use tempdirs and mocks only. None touch ~/.aida, the live store, crontab or systemd.
+  created_at: 2026-09-25T12:32:09.984705139Z
+  modified_at: 2026-09-25T12:32:09.984705139Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
