@@ -1,0 +1,32 @@
+id: 01a0da6d-00f2-78d1-b6d2-e9efaa797be1
+spec_id: BUG-1631
+agreed_id: BUG-1631
+title: aida history --full (multi-spec feed) omits the spec ID from every event block
+description: |
+  In the default/`--full` human rendering of the multi-spec events feed, each block has a `commit <sha> (<date>, by <author>)` header and the event line underneath, but **the spec ID is never shown**. So a feed that spans many specs (`aida history --full --since 2h`) reads as `added (Bug, High) Auto-complete phase 1 refuses…` or `status: Draft → Approved` with no way to tell which spec it refers to. `--oneline` does include the spec ID, so the data is already there and only the block renderer drops it.
+
+  Observed 2026-09-25: `aida history --full --since 2h` in this repo. Every block lacked its spec ID, including BUG-1629, BUG-1628 and TASK-1512.
+
+  ## Acceptance
+  - In multi-spec human output (no `--id`/positional SPEC-ID), every event block shows the spec ID. Proposed header: `commit <sha>  SPEC-ID  (<date>, by <author>)`.
+  - In the single-spec view (`--id X --full`), the ID may stay implicit (it is already in the heading).
+  - Status, relationship and comment events also show the spec ID. For `relationships: +1 added`, show the edge as well (e.g. `TASK-1512 → references → TASK-1505`), not just a count.
+  - toon/json output already carry the spec ID. Add a test asserting that the human, toon and json renderings agree on which spec each event belongs to.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T21:16:11.890546672Z
+modified_at: 2026-09-25T21:16:11.890546672Z
+req_type: Bug
+tags:
+- aida:history
+- cli
+filed_at:
+  code_sha: 5b98d7cfb3485889468fe1fa78a09924b04f49af
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: claude
+  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
