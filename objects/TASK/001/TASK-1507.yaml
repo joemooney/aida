@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T22:29:45.385422834Z
+modified_at: 2026-09-25T23:08:26.911362518Z
 req_type: Task
 tags:
 - cache
@@ -279,6 +279,45 @@ comments:
     VERDICT: the correctness bar is met: 0 mismatches in about 161k served comparisons. Fix B6 (one condition) and add T3 and T4. A re-review can be limited to that diff.
   created_at: 2026-09-25T22:29:45.385422834Z
   modified_at: 2026-09-25T22:29:45.385422834Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dad3-c59f-7e73-9945-fc18a6001fef
+  author: joe
+  content: |-
+    Strict review round 6 (delta): APPROVE — reviewed only e44a53bfe1 as an independent reviewer, in a throwaway worktree that has since been removed.
+
+    SUITES: task_1507 54 passed, 0 failed, 1 ignored. The ignored sweep run as CI runs it (cargo test -p aida-cli-lib --lib task_1507_random_dag_sweep -- --ignored) passes in 61 s. cargo fmt --check is clean. The workflow parses with yaml.safe_load (actionlint is not installed).
+
+    B6 (history_cache.rs:1276-1289): correct.
+    - No B4 regression. The new condition only adds a conjunct (raw.parents.len() > 1) to the N6 commit test. The is_desc and count(tip..C) == indexed checks are unchanged, so the set of commits that can be committed can only shrink, and a tip that does not descend from the old tip cannot be committed.
+    - Exactness, by induction. Suppose a valid non-merge C has parent P. Then the indexed set before C is ancestors(P) minus ancestors(tip), so P was appended immediately before C, descends from the tip, and is valid. Probing is contiguous once the budget has expired, so P was either one of the 32 pre-cap probes, which would have returned, or an N6 commit. Recurse along the non-merge chain. It ends at a pre-cap probe or at an N6 merge that was probed. So the first valid N6 boundary is a merge, or HEAD through the indexed == total path.
+    - Cost: O(descendant merges x range) plus one --ancestry-path. The K=500 fixture takes 532 probes without the fix, and the test bounds it at 40 or fewer.
+
+    T3 (tests:2688, comment :1714-1719): the fixture pins N1b. The corrected comment accurately says the merge-in-range rule alone does not cover the +1 candidate.
+
+    T4 (tests:2764): the first zero-budget call is asserted to leave tip_sha == the merge, with 5 commits after it.
+
+    MUTANTS (each run against the task_1507 filter, sweep skipped)
+    - Dropping the merges-only condition is KILLED by task_1507_catch_up_past_the_probe_cap_probes_only_merges ('532 boundary probes for 500').
+    - Turning global merge_paths off (if false && across_merge, :1580) is KILLED by task_1507_id_plus_one_probe_below_an_ours_merge.
+    - Rolling back at the N6 boundary (drop(tx) instead of commit) is KILLED by task_1507_long_side_branch_commits_at_the_merge_before_head (the tip stayed at the old tip, not the merge).
+
+    SWEEP JOB (cross-platform.yml:219-232): acceptable.
+    - Triggers: the job runs on schedule and workflow_dispatch only. Its if: guard is identical to the one on gitlab-forge-smoke. PRs that touch .github/workflows/** start the workflow, but this job is skipped.
+    - Required checks are only merge-hold-gate and Build (ubuntu-latest), both from ci.yml, so they are unaffected.
+    - The job adds no needs: edges, so existing jobs are unchanged.
+    - Toolchain: rustup stable minimal, the same as the gitlab smoke, which builds aida-cli-lib green on ubuntu without apt or protoc.
+    - RUST_MIN_STACK comes from .cargo/config.toml [env] (8 MiB).
+    - A 30-minute timeout is sufficient for a cold debug build plus the roughly 60 s test.
+
+    NON-BLOCKING
+    (a) The job has no Swatinem/rust-cache, so each night is a cold build. This matches the gitlab-smoke precedent.
+    (b) notify-failure and notify-recovery depend only on build, so a red sweep shows only as a failed nightly run and opens no tracking issue. That is acceptable for an informational parity sweep. Do not add the job to notify-recovery's needs, because that would change the recovery semantics.
+    (c) N6 cost in histories with many merges is O(descendant merges x range). Sync-heavy stores have many merges, so this stays bounded but is not linear. Revisit only if it is measured.
+    N7 is still accepted as speed only.
+
+    VERDICT: all four round-5 asks are met, every mutant is killed, and there is no correctness regression. APPROVE.
+  created_at: 2026-09-25T23:08:26.911362518Z
+  modified_at: 2026-09-25T23:08:26.911362518Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
