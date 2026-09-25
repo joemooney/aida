@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:32:48.018202563Z
-modified_at: 2026-09-25T16:48:59.820779443Z
+modified_at: 2026-09-25T17:19:26.881306660Z
 req_type: Bug
 comments:
 - id: 01a0d88d-fe97-73f2-a6ea-ccf801b6f1f3
@@ -56,6 +56,44 @@ comments:
     8. Isolation: I ran the bug_1621 tests under strace with a fake empty HOME. Nothing was created in HOME, nothing was written outside /tmp, and the only commands run were git rev-parse and git status. There was no crontab or systemctl call and no ~/.aida access. The config is injected, and the stores are tempdir stores.
   created_at: 2026-09-25T16:48:59.820779443Z
   modified_at: 2026-09-25T16:48:59.820779443Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d994-40a1-77f2-9a80-f6a36c270af6
+  author: joe
+  content: |-
+    Strict re-review: APPROVE — reviewed cbadd42a52 (delta from bd8f2e5971, plus the whole branch against origin/main; it merges cleanly and is 1 commit behind).
+
+    B1 FIXED. redrive_guards (shift.rs:1400-1415) now holds redrive-lock-free when the last launched wave has outcome None, whether or not its pid is alive. The tick is unchanged: settle_last_wave (shift.rs:1738) runs before redrive_step (shift.rs:1884 -> 1908) and settles the same wave last_launched() finds (the last one with a pid). If the pid is dead the wave is settled, so wave_open is false. If it is alive, it hits the pre-existing 'still running' arm. The adopt path forces alive=true. The shift tests pass (65). Other cases on the watch path:
+    - A reused pid: both the alive and the dead branch now hold, so pid reuse cannot open the gate.
+    - A missing state file gives the default state, the same as the tick.
+    - An unparseable state file trips the redrive-state guard, the same as the tick.
+    - A stale breaker is read raw. The tick clears it when the queue fingerprint changes, so the watch path is stricter here and fails closed.
+    - A pid-less intent with no drain lock passes both paths the same way. This was already true in the tick.
+    I found no case where the watch path re-drives while the tick would hold.
+
+    B2 FIXED. watch_pass_core (supervise_cmd.rs:469) is extracted, and run_watch_pass is now only I/O. I re-ran the mutations in a throwaway worktree with the bug_1621 filter, and all were killed:
+    - (a) last_wave_is_alive -> false (shift.rs:2500) fails real_floors 3b.
+    - (b) foreign_claim -> None (shift.rs:2499) fails real_floors 3d.
+    - (c) run_redrive_pass(.., !execute) -> false (supervise_cmd.rs:532) fails watch_pass_dry_run_queues_nothing_and_execute_requeues.
+    - (d) B1 arm disabled (shift.rs:1411) fails held_while_a_drain_or_wave_is_live (:310) and real_floors 3c (:740).
+    Mutant (a) is caught only on the guard's detail text. With B1 in place, dropping the alive probe still holds (as 'unsettled'), so this is not a safety gap.
+
+    ISOLATION OK. The dry-run test (:816) uses EnvVarsGuard::apply, which holds ENV_LOCK for its whole life and restores or removes each key on drop. It is dropped before the tempdir. I ran it under strace with a fake empty HOME:
+    - HOME stayed empty, and there was no ~/.aida access.
+    - shift-local.toml was read only from /tmp/.tmp*/home/.aida.
+    - The only writes were under /tmp (plus /dev/null).
+    - The only commands run were git rev-parse and git status (read-only).
+
+    HELD PLAN / HELP OK. On a held pass, would-re-drive and reclassify actions become 'held', and attempts are rolled back to the prior count (plan_redrives adds 1 at supervisor.rs:297). Only the tick's text printer (shift.rs:2674) reads these actions. The help (cli.rs:2629-2635) and the oversee skill describe the per-clone opt-in, the floors, only re-queuing, and the shift.lock skip.
+
+    TESTS (CARGO_BUILD_JOBS=3, timeout 900, one at a time): bug_1621 13, supervis 69, watch 69, shift 65, requeue 39, all pass.
+
+    MINOR (non-blocking):
+    - n1: If the shift is disabled after it launched a wave, run_tick returns early (shift.rs:2564) and never settles that wave. watch --execute then holds forever, and its text says 'awaits settlement by the next check'. It fails closed, but the message is wrong in that case. Suggest naming the remedy, such as enabling the shift or running aida shift tick.
+    - n2: the --execute flag doc (cli.rs:2643) still says only 'Actually realign the queue'. It should mention the re-drive and nudge reflexes.
+    - n3 (pre-existing m2, still open): with --json --execute, the nudge prints text after the JSON line.
+    - n4: the help sentence at cli.rs:2634-2635 has two 'so' clauses and reads awkwardly.
+  created_at: 2026-09-25T17:19:26.881306660Z
+  modified_at: 2026-09-25T17:19:26.881306660Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
