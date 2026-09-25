@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T06:31:24.916031923Z
-modified_at: 2026-09-25T08:03:08.286095519Z
+modified_at: 2026-09-25T08:10:31.430165381Z
 req_type: Task
 tags:
 - cache
@@ -32,6 +32,134 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved. It adds a new derived database, so it is architecture-class: it needs a sketch and independent advisor signoff before implementation, and is queued only after that signoff.'
   created_at: 2026-09-25T08:03:08.286095519Z
   modified_at: 2026-09-25T08:03:08.286095519Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d79d-b286-72d0-a0bd-b1dba68524cc
+  author: claude
+  content: |
+    SKETCH (awaiting advisor signoff): TASK-1505 separate rebuildable history-event cache
+
+    Baseline (measured 2026-09-25, AIDA store = 37,612 commits, 6 merges): the events walk spawns 1 `git show --name-status` per commit + 2 `git show <rev>:<path>` per changed object, about 38 ms/commit. `history events --since <1 day> -n 50` = 7.3 s; `--shipped -n 10 --max-commits 3000` = 113 s. The default `--shipped -n 10` (window 50 commits) returned only 4 ships: the window cut them off with no warning. MCP `history` tool defaults to a 500-commit window, about 19 s. Digest mode (`aida history`, 0.12 s) is already fast.
+
+    1. LOCATION
+    - `history.db` sits beside the query cache: `CachedGitBackend::default_cache_path(store).with_file_name("history.db")`, giving `<project>/.aida/history.db` plus `-wal`/`-shm`, with the indexer lock at `.aida/history.db.lock`.
+    - These files are gitignored by the existing deny-by-default `.aida/*` rule, so no .gitignore change is needed. The no-`.aida` fallback resolves to a sibling `.aida-store.history.db`, the same as the cache.db fallback.
+    - It never lives inside `.aida-store/`, which would pollute the orphan branch. It is a separate SQLite file, so it has its own WAL and its own write lock. It never shares a connection or lock with cache.db.
+
+    2. SCHEMA (HISTORY_SCHEMA_VERSION = 1, HISTORY_DECODER_VERSION = 1)
+    - `meta(key PK, value)` holds: schema_version, decoder_version, store_root_sha (the store's identity), tip_sha (newest indexed commit), floor_sha (oldest indexed commit), complete (0/1: whether the floor has reached the root), built_at, updated_at, and indexer_pid/indexer_started_at (diagnostic only).
+    - `commits(seq INTEGER PK, sha TEXT UNIQUE, commit_ts INTEGER, author_iso TEXT, git_author TEXT, subject TEXT)`.
+      - seq keeps git-walk order. Catch-up rows get seq = max+1.., assigned oldest to newest. Backfill rows get seq = min-1...
+      - commit_ts is the committer date in unix seconds, which is what `git log --since/--until` filters on. author_iso is the raw %aI value; `human_timestamp()` is applied at render time, never stored.
+      - Every commit is recorded, including commits that touch no objects, so a `--max-commits N` window is reproducible as "the newest N rows by seq".
+    - `events(id INTEGER PK, commit_seq INTEGER, ordinal INTEGER, sha TEXT, commit_ts INTEGER, spec_id TEXT, req_type TEXT, kind TEXT, status_from TEXT, status_to TEXT, author TEXT, is_ship INTEGER, is_comment INTEGER, is_meta INTEGER, kind_json TEXT)`.
+      - ordinal preserves the event order within a commit.
+      - author is the already-resolved `pick_author` value.
+      - kind_json is a serde round-trip of `EventKind`, so rendering is byte-identical to the walk.
+    - Indexes:
+      - `(commit_seq DESC, ordinal)` for newest-first scans and the limit
+      - `(commit_ts, commit_seq)` for since/until windows
+      - partial `(commit_seq) WHERE is_ship=1` for `--shipped`
+      - `(spec_id COLLATE NOCASE, commit_seq)` for `--id` and the progression view
+      - `(req_type COLLATE NOCASE, commit_seq)`
+      - `(kind, commit_seq)` for `--status-changes` and `--comments`
+      - `(author, commit_seq)` for exact author matches. `--author` is a substring match today, so it runs as LIKE over rows the other indexes have already narrowed.
+    - The archived and deferred spec sets stay as Rust post-filters on spec_id, applied while streaming rows before `take(limit)`. Those sets come from the caller, as they do today.
+
+    3. INDEXING (the indexer takes a flock on history.db.lock, non-blocking)
+    - Batched decoder: `git log --no-abbrev --raw --no-renames --diff-merges=cc --format=%H%x09%ct%x09%aI%x09%ae%x09%s <range>` plus one long-lived `git cat-file --batch` for blob contents. For a merge, the before blob is the first parent's OID, which matches today's `git show <merge>` (cc) plus `<sha>^` semantics. Each (commit, path, before, after) goes through the existing `decode_into_events`, so there is one decoder and no drift.
+    - Catch-up: if tip_sha is an ancestor of HEAD, index `tip..HEAD` in one transaction and move tip_sha in the same transaction, so a crash leaves the db at the old tip and never half-indexed.
+    - Backfill (first build, or after a reset): walk newest-first from floor_sha^ (or HEAD when the db is empty) in chunks of about 2,000 commits. Each chunk is one transaction that also moves floor_sha, which makes the backfill resumable. complete=1 once the root commit is indexed.
+    - Truncate and restart the backfill when any of these hold:
+      - tip_sha is missing or is not an ancestor of HEAD (force-push, rebase, `store compact --squash`)
+      - store_root_sha differs (a different store now sits at this path)
+      - schema_version or decoder_version differs. The decoder version is bumped whenever `decode_into_events`, `diff_modified` or `EventKind` changes meaning.
+      - the file is corrupt (NotADatabase/Corrupt): delete it and its sidecars, as BUG-683 does.
+    - Read-path budget: `AIDA_HISTORY_INDEX_BUDGET_MS` (default 1500) caps the inline indexing work per query. Explicit `aida cache rebuild --history` runs a full build with no budget.
+
+    4. CONSISTENCY AND STALENESS
+    - Each query reads `git_ops::head_sha(store)` once, catches up within the budget, then answers inside one SQLite read transaction (a WAL snapshot). The result is stamped with the tip it was served from.
+    - Coverage rule: the cache answers only when it provably holds the whole answer. All three must hold:
+      - (a) tip_sha == HEAD after catch-up
+      - (b) one of: complete=1; or the since-bound predates the floor's commit_ts; or `limit` matches were found at or above the floor. The scan is newest-first, so those matches are exactly the newest ones.
+      - (c) the `max_commits` window lies inside the indexed seq range
+    - If any of these fail, the query falls back to the git walk (section 6). The cache never returns a partial answer.
+    - Commits that git-canonical writes make to the store never touch history.db. The next reader sees HEAD moved and catches up. Staleness always comes from comparing HEAD shas, never from timestamps.
+
+    5. CONCURRENCY
+    - The history path never takes the BUG-1612 store write lock (`store_lock::acquire`). It only reads immutable objects by SHA plus one HEAD ref. If a writer races it, the indexer lands on the older HEAD, and the next query catches up.
+    - It never opens cache.db and never writes the TASK-1484 `cache.db.lock-info` sidecar, so a cache rebuild, a long `aida edit` or a drain holding the query cache cannot slow history down, and history cannot slow them down. That is the point of the spec.
+    - Indexer exclusion is `fs2` `try_lock_exclusive` on `history.db.lock`. The kernel releases it if the process crashes, so a stale-lock heal is not needed.
+      - If another process holds it, this reader does not wait. It serves the committed snapshot when coverage holds, and otherwise falls back to the git walk.
+      - SQLite runs with busy_timeout=0 and the short BUG-681-style ladder (50/100 ms). A reader never sits on the 25 s cache ladder.
+    - History-db retries use their own ladder. `AIDA_CACHE_RETRY_*` stays scoped to cache.db.
+
+    6. FAIL-OPEN READS
+    - Any error falls back to the git walk: open, pragma, schema drift (`no such column/table`), a lock, disk full, a read-only filesystem, a decode error, or a coverage miss.
+    - The fallback is today's `collect_filtered_events` body, renamed `collect_filtered_events_git` and left unchanged. It is also the oracle in the parity tests.
+    - `AIDA_HISTORY_CACHE=0` disables the cache. Errors are logged once to stderr only under `AIDA_DEBUG`. For humans, a dim footer "(history index catching up — scanned git log)" appears only on a fallback. JSON and MCP output gain an additive field, `source: "history-cache"|"git-walk"`, plus `index_tip`.
+
+    7. CONSUMERS AND EXPECTED SPEEDUPS (warm, tip == HEAD)
+    Every caller of `collect_filtered_events` uses the cache.
+    - `aida history events`, including `--since/--until/--type/--author/--status-changes/--comments/--oneline`: 7.3 s to under 100 ms
+    - `--shipped`: 1-113 s to under 50 ms. It can now find the real last N ships (see OQ2).
+    - `aida history <ID>` progression view and `--id --full`: already pathspec-scoped (TASK-1055), so the gain is about 10x on specs with many edits
+    - `collect_event_records`, used by MCP `history` tool (about 19 s to under 100 ms) and `status_cmd::collect_absence_change_digest` (a 2,000-commit window, about 75 s worst case, to under 100 ms)
+    - Catch-up costs about 1-3 ms per new commit. The one-time full build is estimated at 1-3 min for 37k commits with the batched decoder, against about 24 min with today's per-blob spawns.
+
+    8. FILES / SYMBOLS
+    - NEW `aida-cli-lib/src/history_cache.rs`. It sits next to its only decoder, so no aida-core API change is needed.
+      - `HistoryCache::{open, path_for_store, ensure_fresh(budget), query(&HistoryOpts) -> Option<(Vec<Event>, usize)>, status() -> HistoryCacheStatus, rebuild_full}`
+      - `index_range`, `BatchedBlobReader` (cat-file --batch), `Coverage`
+      - `HISTORY_SCHEMA_VERSION`, `HISTORY_DECODER_VERSION`
+    - `aida-cli-lib/src/history.rs`:
+      - `EventKind` and `Event` become `pub(crate)` with `Serialize`/`Deserialize`
+      - split `collect_filtered_events` into a cache-first wrapper plus `collect_filtered_events_git`
+      - lift the filter chain into `fn apply_event_filters` so both paths share it
+      - `run` and `run_single_spec_progress` print the fallback footer
+    - `aida-core/src/git_ops.rs`: `root_commit(repo)` and `rev_list_count(repo, range)`. `head_sha` and `is_ancestor` are reused.
+    - `aida-cli-lib/src/cli.rs`: `CacheCommand::Rebuild { history: bool }`. Update the match at lib.rs:14910 to fit.
+    - `aida-cli-lib/src/cache_cmd.rs`: `Status` prints a History section (path, versions, tip vs HEAD, floor/complete, event count, updated_at, current indexer). `Rebuild --history` runs the full build.
+    - `aida-cli-lib/src/doctor_cmd.rs`: an informational history-index freshness line in the Cache check. It never fails doctor.
+    - `aida-cli-lib/src/mcp.rs` (history tool): the additive `source` and `index_tip` fields.
+    - `aida-cli-lib/src/lib.rs`: `mod history_cache;`
+
+    9. TESTS (aida-cli-lib/src/tests/task_1505_history_cache_tests.rs)
+    - history_cache_parity_with_git_walk_all_filters: a fixture store with add/modify/delete/status/comment/tag/META plus a merge. The cache and the git walk must return equal `HistoryEventRecord`s for every filter combination and limit.
+    - history_cache_merge_commit_decodes_like_git_show_cc
+    - history_cache_max_commits_window_parity
+    - history_cache_incremental_catch_up_from_tip
+    - history_cache_rebuilds_on_non_ancestor_tip (amend or force-reset the store)
+    - history_cache_rebuilds_after_store_compact_squash
+    - history_cache_rebuilds_on_schema_or_decoder_version_bump
+    - history_cache_rebuilds_on_foreign_store_root
+    - history_cache_partial_backfill_serves_covered_window_only
+    - history_cache_partial_backfill_falls_back_when_uncovered
+    - history_cache_corrupt_file_self_heals_and_falls_back
+    - history_cache_unwritable_dir_falls_back_to_git_walk
+    - history_cache_ignores_requirements_cache_and_store_locks: another thread holds the cache.db write transaction, the lock-info sidecar and `store_lock::acquire`; the history query still finishes in under 1 s.
+    - history_cache_concurrent_indexer_serves_snapshot_or_falls_back
+    - history_cache_disabled_by_env
+    - cache_status_reports_history_freshness
+    - mcp_history_reports_source_field
+
+    10. OUT OF SCOPE
+    - Digest mode (`build_digest_rows`), which is already fast.
+    - Code-repo `git log` walks (changelog, review, trace, pr).
+    - Speeding up the fallback walk itself. It stays the unchanged oracle and could move to the batched decoder in a follow-up.
+    - Background or scheduled warming of the index (a `schedule tick` hook).
+    - Keeping pre-squash history after `store compact --squash`. The cache mirrors git and stays disposable.
+    - Sharing one history.db across sibling worktrees.
+    - Moving the decoder into aida-core.
+
+    11. OPEN QUESTIONS FOR ADVISOR
+    - OQ1 Location: per-project `.aida/history.db` (proposed), or per-store under the store's git-common-dir so sibling session worktrees share one index instead of each paying the first build?
+    - OQ2 `--max-commits` semantics: keep the default window for byte-parity (proposed: cache honors the window exactly), or let the cache ignore the implicit 5x-limit default so that `--shipped -n 10` returns the true last 10? The second is a visible behavior fix and arguably a separate BUG.
+    - OQ3 Ordering: the walk emits git's default commit-date order. The cache orders by seq, which is walk order at catch-up time. Does the advisor accept "equal on the linear fixture plus the merge fixture" as the parity bar, or should both paths switch to `--topo-order`?
+    - OQ4 First build: inline with the 1.5 s budget plus resumable newest-first backfill (proposed), or only on explicit `aida cache rebuild --history` or a warm-up during `aida sync`?
+    - OQ5 Should plain `aida cache rebuild` also reset history.db (simpler for users), or stay requirements-only (keeps the decoupling explicit)?
+    - OQ6 Keep the module in aida-cli-lib (proposed, least churn), or move the decoder and cache into aida-core now so non-CLI surfaces can reuse them?
+  created_at: 2026-09-25T08:10:31.430165381Z
+  modified_at: 2026-09-25T08:10:31.430165381Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: dce27130ca391f4e587993afadb05b1447a6643f
