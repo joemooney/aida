@@ -13,12 +13,19 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T07:22:26.359799020Z
-modified_at: 2026-09-25T08:58:33.811307190Z
+modified_at: 2026-09-25T09:20:21.401986096Z
 req_type: Task
 tags:
 - concurrency
 - papercut
 - store
+comments:
+- id: 01a0d7dd-a19a-76b3-9240-0d3ceec39b1d
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): the strict review asks for changes and I accept its narrowed scope. Field-level merge stays only for edit-local fields: title, description, owner, priority, feature, type, narrative, weight, origin, mode, --add-tag/--remove-tag, refs, comments and carve-outs. Refuse with a conflict, writing nothing, if any concurrent change hits an edit that (1) uses --tags replace, when current.tags != read.tags; (2) changes status; or (3) leaves NeedsAttention, when the fresh copy differs from the read copy on anything but modified_at. Add regression tests for both review probes. Also: a struct-valued field that both sides changed is a conflict, not a key-wise merge.'
+  created_at: 2026-09-25T09:20:21.401986096Z
+  modified_at: 2026-09-25T09:20:21.401986096Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 84aa1380788e41afce75bef08b0b983f2151da66
   branch: main
