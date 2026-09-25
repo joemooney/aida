@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - REST add-comment stores content as content and author as author (the gRPC path is checked for the same swap).
   - A test posts a comment and asserts both fields.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:05:57.530829138Z
-modified_at: 2026-09-25T08:08:39.120854538Z
+modified_at: 2026-09-25T10:05:45.019489260Z
 req_type: Bug
 tags:
 - bug
@@ -31,6 +31,20 @@ comments:
   created_at: 2026-09-25T08:08:39.120854538Z
   modified_at: 2026-09-25T08:08:39.120854538Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d807-2f85-7972-95a1-03a0df54ce5e
+  author: aida-auto-bump
+  timestamp: 2026-09-25T10:05:44.709389600Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d807-30bb-7783-9284-e0ce479d54e8
+  timestamp: 2026-09-25T10:05:45.019485088Z
+  agent: implementer
+  commit_sha: ddb82d40b95d7b8764ff6318c215df791196ee8e
+  summary: Completed via merge ddb82d40
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
   branch: main
@@ -39,3 +53,7 @@ filed_at:
   aida_build_sha: cb07ece7f0
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T10:05:44.709365363Z
+  completion_sha: ddb82d40b95d7b8764ff6318c215df791196ee8e
