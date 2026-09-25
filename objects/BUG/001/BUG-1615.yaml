@@ -1,0 +1,30 @@
+id: 01a0d744-22ae-7c90-851a-7dab0941c042
+spec_id: BUG-1615
+agreed_id: BUG-1615
+title: 'test_distributed.sh: ''aida list | grep -q'' under pipefail fails on SIGPIPE (rc=141), a false data-loss alarm'
+description: |-
+  Found by the BUG-1612 round-3 review. tests/test_distributed.sh uses `aida list | grep -q "$SPEC"` under `set -euo pipefail` (the BUG-610 step around line 203, and the STORY-674 step). grep -q exits on the first match; aida then writes more lines, gets SIGPIPE (rc=141, since aida restores default SIGPIPE per BUG-99), and pipefail fails the step. It reads as 'refusal destroyed repo-a's spec' although the spec is present. The step fails about 1 in 25-40 runs on main and on branches alike.
+
+  ## Acceptance
+  - Every `aida ... | grep -q` in tests/*.sh captures output first (`out=$(aida list)`, then grep the variable) or otherwise tolerates SIGPIPE.
+  - A grep across tests/ and scripts/ finds no remaining `| grep -q` after an aida command under pipefail.
+  - test_distributed.sh passes 20 consecutive runs under load.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T06:32:41.902621659Z
+modified_at: 2026-09-25T06:32:41.902621659Z
+req_type: Bug
+tags:
+- ci
+- flaky
+- test
+filed_at:
+  code_sha: dce27130ca391f4e587993afadb05b1447a6643f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
