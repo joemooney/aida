@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:37:34.819007356Z
-modified_at: 2026-09-25T04:37:34.819007356Z
+modified_at: 2026-09-25T08:03:11.609899573Z
 req_type: Task
 tags:
 - agent-launch
@@ -23,3 +23,16 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: cb07ece7f0
   vendor: codex
+decision_request:
+  question: Should AIDA add an init-time setting for prompting before YOLO/autonomous agent mode? It changes the agent permission posture.
+  choices:
+  - label: Approve as specced
+    consequence: The setting is persisted in project config and visible in diagnostics
+    resolution: Orchestrator implements it
+  - label: Reject
+    consequence: YOLO stays env-only
+    resolution: Close the spec
+  - label: Defer
+    consequence: Revisit with the STORY-1473 seat-authority work
+    resolution: Defer until STORY-1473 is decided
+  asked_at: 2026-09-25T08:03:11.609899573Z
