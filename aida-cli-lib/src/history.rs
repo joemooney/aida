@@ -9,7 +9,7 @@
 
 use anyhow::{Context, Result};
 use colored::Colorize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 use serde_yaml::Value;
 use std::collections::BTreeSet;
@@ -67,18 +67,18 @@ pub struct HistoryOpts {
 }
 
 #[derive(Debug, Clone)]
-struct CommitMeta {
-    sha: String,
-    iso_timestamp: String,
+pub(crate) struct CommitMeta {
+    pub(crate) sha: String,
+    pub(crate) iso_timestamp: String,
     /// Author email from `git log %ae`. We prefer the YAML's
     /// `last_modified_by` field at event-rendering time, but the git
     /// author is the fallback when the YAML doesn't have one.
-    git_author: String,
+    pub(crate) git_author: String,
 }
 
 /// TASK-507: is this event the Done→Completed ship transition (merge-to-default
 /// branch)? The `--shipped` view keeps only these. trace:TASK-507 | ai:claude
-fn is_ship_event(kind: &EventKind) -> bool {
+pub(crate) fn is_ship_event(kind: &EventKind) -> bool {
     matches!(
         kind,
         EventKind::StatusChange { from, to }
@@ -103,8 +103,12 @@ fn event_kind_allowed(kind: &EventKind, opts: &HistoryOpts) -> bool {
     (opts.status_changes_only && is_status) || (opts.comments_only && is_comment)
 }
 
-#[derive(Debug, Clone)]
-enum EventKind {
+/// Serializable so the history index can store each decoded event and
+/// render it byte-identically to a fresh git walk. Any change to this
+/// shape must bump `history_cache::HISTORY_DECODER_VERSION`.
+// trace:TASK-1507 | ai:claude
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) enum EventKind {
     Added {
         title: String,
         req_type: String,
@@ -152,16 +156,16 @@ enum EventKind {
     },
 }
 
-#[derive(Debug, Clone)]
-struct Event {
-    sha: String,
-    timestamp: String,
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Event {
+    pub(crate) sha: String,
+    pub(crate) timestamp: String,
     /// Resolved author — YAML's `last_modified_by` if present, else git
     /// committer email's local-part.
-    author: String,
-    spec_id: String,
-    req_type: String,
-    kind: EventKind,
+    pub(crate) author: String,
+    pub(crate) spec_id: String,
+    pub(crate) req_type: String,
+    pub(crate) kind: EventKind,
 }
 
 /// Structured event record for MCP and other programmatic consumers.
@@ -624,7 +628,30 @@ pub fn collect_event_records(
 /// `max_commits` commits long, or shorter, is NOT exhaustion — there was
 /// nothing more to find regardless of window size.
 // trace:BUG-1617 | ai:claude
+// trace:TASK-1507 | ai:claude
 fn collect_filtered_events(
+    store_path: &Path,
+    opts: &HistoryOpts,
+) -> Result<(Vec<Event>, usize, bool)> {
+    // The history index answers only when it provably holds the whole
+    // answer; on a miss, an error, or when disabled it returns `None` and
+    // the git walk below (the canonical source) answers instead.
+    if let Some(answer) = crate::history_cache::serve(store_path, opts) {
+        return Ok((
+            answer.events,
+            answer.hidden_archived,
+            answer.window_exhausted,
+        ));
+    }
+    collect_filtered_events_git(store_path, opts)
+}
+
+/// The git-walk implementation of [`collect_filtered_events`]: the
+/// canonical answer, used whenever the history index cannot serve a query,
+/// and the oracle the index's parity tests compare against.
+// trace:BUG-1617 | ai:claude
+// trace:TASK-1507 | ai:claude
+pub(crate) fn collect_filtered_events_git(
     store_path: &Path,
     opts: &HistoryOpts,
 ) -> Result<(Vec<Event>, usize, bool)> {
@@ -743,41 +770,7 @@ fn collect_filtered_events(
     // narrows to only those. trace:STORY-441 | ai:claude
     let mut filtered: Vec<Event> = events
         .into_iter()
-        .filter(|e| match &opts.id_filter {
-            Some(id) => e.spec_id.eq_ignore_ascii_case(id),
-            None => true,
-        })
-        .filter(|e| match &opts.type_filter {
-            Some(t) => e.req_type.eq_ignore_ascii_case(t),
-            None => true,
-        })
-        // STORY-737 (delight #4): drop stateless META prompt-template rows from
-        // the default view. trace:STORY-737 | ai:claude
-        .filter(|e| !opts.exclude_meta || !e.req_type.eq_ignore_ascii_case("meta"))
-        .filter(|e| match &opts.author_filter {
-            Some(a) => e.author.contains(a),
-            None => true,
-        })
-        .filter(|e| event_kind_allowed(&e.kind, opts))
-        .filter(|e| {
-            // TASK-507: `--shipped` keeps only the Done→Completed transition —
-            // the merge-to-default ship event. trace:TASK-507 | ai:claude
-            if !opts.shipped_only {
-                return true;
-            }
-            is_ship_event(&e.kind)
-        })
-        .filter(|e| !opts.archived_specs.contains(&e.spec_id))
-        .filter(|e| match &opts.archived_only_specs {
-            Some(only) => only.contains(&e.spec_id),
-            None => true,
-        })
-        // STORY-584: same shape on the defer axis. trace:STORY-584 | ai:claude
-        .filter(|e| !opts.deferred_specs.contains(&e.spec_id))
-        .filter(|e| match &opts.deferred_only_specs {
-            Some(only) => only.contains(&e.spec_id),
-            None => true,
-        })
+        .filter(|e| event_passes_filters(e, opts))
         .collect();
 
     // BUG-1617: `commit_walk_capped` (computed above, right after the log
@@ -790,6 +783,65 @@ fn collect_filtered_events(
     filtered.truncate(opts.limit);
 
     Ok((filtered, opts.archived_specs.len(), window_exhausted))
+}
+
+/// Every in-memory filter `aida history events` applies after decoding,
+/// shared by the git walk and the history index so the two paths cannot
+/// drift. `--since`/`--until`/`--max-commits` are commit-level bounds and
+/// are applied before decoding, not here.
+// trace:TASK-1507 | ai:claude
+pub(crate) fn event_passes_filters(e: &Event, opts: &HistoryOpts) -> bool {
+    if let Some(id) = &opts.id_filter {
+        if !e.spec_id.eq_ignore_ascii_case(id) {
+            return false;
+        }
+    }
+    if let Some(t) = &opts.type_filter {
+        if !e.req_type.eq_ignore_ascii_case(t) {
+            return false;
+        }
+    }
+    // STORY-737 (delight #4): drop stateless META prompt-template rows from
+    // the default view. trace:STORY-737 | ai:claude
+    if opts.exclude_meta && e.req_type.eq_ignore_ascii_case("meta") {
+        return false;
+    }
+    // A case-sensitive substring match, deliberately (see the history index,
+    // which must match it exactly).
+    if let Some(a) = &opts.author_filter {
+        if !e.author.contains(a.as_str()) {
+            return false;
+        }
+    }
+    if !event_kind_allowed(&e.kind, opts) {
+        return false;
+    }
+    // TASK-507: `--shipped` keeps only the Done→Completed transition — the
+    // merge-to-default ship event. trace:TASK-507 | ai:claude
+    if opts.shipped_only && !is_ship_event(&e.kind) {
+        return false;
+    }
+    // STORY-441: archive filtering. `archived_specs` (non-empty for the
+    // default non-archived view) hides those specs; `archived_only_specs`
+    // (Some for `--archived`) narrows to them. trace:STORY-441 | ai:claude
+    if opts.archived_specs.contains(&e.spec_id) {
+        return false;
+    }
+    if let Some(only) = &opts.archived_only_specs {
+        if !only.contains(&e.spec_id) {
+            return false;
+        }
+    }
+    // STORY-584: same shape on the defer axis. trace:STORY-584 | ai:claude
+    if opts.deferred_specs.contains(&e.spec_id) {
+        return false;
+    }
+    if let Some(only) = &opts.deferred_only_specs {
+        if !only.contains(&e.spec_id) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Digest mode (default): one row per recently-touched requirement, sorted
@@ -1334,7 +1386,7 @@ fn git_show_blob(cwd: &Path, rev: &str, path: &str) -> Result<String> {
 
 /// Decode one (commit, path) tuple into zero or more events and append
 /// them to `out`. `status` is the git `--name-status` letter (A/M/D/...).
-fn decode_into_events(
+pub(crate) fn decode_into_events(
     commit: &CommitMeta,
     status: &str,
     path: &str,
@@ -1568,7 +1620,7 @@ fn yaml_array_len(v: &Value, key: &str) -> usize {
 /// (`Z` suffix on YAML modified_at) and showing them raw made timestamps
 /// look up to 12 hours in the future on west-of-UTC machines.
 /// trace:FR-1-037 | ai:claude
-fn human_timestamp(iso: &str) -> String {
+pub(crate) fn human_timestamp(iso: &str) -> String {
     use chrono::{DateTime, FixedOffset, Local};
     let Ok(dt_offset) = iso.parse::<DateTime<FixedOffset>>() else {
         return iso.to_string();
@@ -1589,7 +1641,7 @@ fn format_oneline(e: &Event) -> String {
     format!("{}  {}", head, format_event_body(e))
 }
 
-fn event_record(e: &Event) -> HistoryEventRecord {
+pub(crate) fn event_record(e: &Event) -> HistoryEventRecord {
     let (kind, summary, detail) = event_kind_record(&e.kind);
     HistoryEventRecord {
         sha: e.sha.clone(),

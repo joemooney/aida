@@ -2772,7 +2772,12 @@ pub enum DevCommand {
 #[derive(Subcommand, Debug)]
 pub enum CacheCommand {
     /// Force a full rebuild of the cache from the git store
-    Rebuild,
+    // trace:TASK-1507 | ai:claude
+    Rebuild {
+        /// Rebuild the history index (used by `aida history`) instead of the requirements cache
+        #[clap(long)]
+        history: bool,
+    },
 
     /// Show cache state (HEAD comparison, requirement count, last build time)
     Status,

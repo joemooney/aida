@@ -1077,6 +1077,41 @@ pub fn is_ancestor(repo: &Path, ancestor: &str, descendant: &str) -> Result<bool
     Ok(result.success)
 }
 
+/// The root commits (commits with no parent) reachable from `rev`, sorted.
+///
+/// A store can carry more than one root after syncs join unrelated
+/// histories, so identity is the whole sorted set, not a single SHA.
+// trace:TASK-1507 | ai:claude
+pub fn root_commits(repo: &Path, rev: &str) -> Result<Vec<String>> {
+    let result = git(repo, &["rev-list", "--max-parents=0", rev])?;
+    if !result.success {
+        anyhow::bail!("git rev-list --max-parents=0 failed: {}", result.stderr);
+    }
+    let mut roots: Vec<String> = result
+        .stdout
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+    roots.sort();
+    Ok(roots)
+}
+
+/// Number of commits in a revision range such as `A..B`.
+// trace:TASK-1507 | ai:claude
+pub fn rev_list_count(repo: &Path, range: &str) -> Result<usize> {
+    let result = git(repo, &["rev-list", "--count", range])?;
+    if !result.success {
+        anyhow::bail!("git rev-list --count {range} failed: {}", result.stderr);
+    }
+    result
+        .stdout
+        .trim()
+        .parse::<usize>()
+        .with_context(|| format!("unexpected rev-list --count output: {}", result.stdout))
+}
+
 /// List the spec-object YAML files that changed between `from` and `to`,
 /// restricted to the `objects/` tree, as `(change, repo-relative path)` pairs.
 ///

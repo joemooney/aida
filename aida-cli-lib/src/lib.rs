@@ -173,6 +173,8 @@ mod health_cmd;
 mod health_metrics;
 mod health_vitals_cmd;
 mod history;
+// trace:TASK-1507 | ai:claude
+mod history_cache;
 mod human_audit;
 mod human_cmd;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
@@ -12888,6 +12890,11 @@ mod bug_588_history_id_resolves_uuid_tests;
 #[cfg(test)]
 #[path = "tests/task_1480_history_id_alias_tests.rs"]
 mod task_1480_history_id_alias_tests;
+
+// trace:TASK-1507 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1507_history_cache_tests.rs"]
+mod task_1507_history_cache_tests;
 
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
