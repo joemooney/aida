@@ -672,15 +672,25 @@ fn run_command_bounded(
         .replace("{title}", &shell_quote(title))
         .replace("{rule}", &shell_quote(rule));
     #[cfg(unix)]
-    let mut child = Command::new("sh")
-        .arg("-c")
-        .arg(&command)
-        .current_dir(project_root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("spawn notify command `{command}`"))?;
+    let mut child = {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c")
+            .arg(&command)
+            .current_dir(project_root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped());
+        // A bounded run gets its own process group, so a timeout can end
+        // the whole command (a compound command or a pipeline forks
+        // grandchildren that a signal to `sh` alone would orphan).
+        // trace:TASK-1492 | ai:claude
+        if timeout.is_some() {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+        cmd.spawn()
+            .with_context(|| format!("spawn notify command `{command}`"))?
+    };
     #[cfg(windows)]
     let mut child = Command::new("cmd")
         .arg("/C")
@@ -712,37 +722,92 @@ fn run_command_bounded(
         )
     };
     // stderr is drained on a thread so a chatty command cannot block on a
-    // full pipe; it is read only as long as the bound allows.
+    // full pipe. The thread ends when every holder of the pipe is gone,
+    // which the group kill below guarantees.
+    // trace:TASK-1492 | ai:claude
     let (tx, rx) = std::sync::mpsc::channel();
-    if let Some(mut stderr) = child.stderr.take() {
+    let reader = child.stderr.take().map(|mut stderr| {
         std::thread::spawn(move || {
             let mut buf = String::new();
             let _ = std::io::Read::read_to_string(&mut stderr, &mut buf);
             let _ = tx.send(buf);
-        });
-    }
+        })
+    });
     let started = std::time::Instant::now();
-    let status = loop {
-        if let Some(status) = child.try_wait()? {
-            break status;
+    let timed_out = loop {
+        if exited_unreaped(&mut child)? {
+            break false;
         }
         if started.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            anyhow::bail!(
-                "notify command `{command}` still running after {}s; killed",
-                timeout.as_secs_f32()
-            );
+            break true;
         }
         std::thread::sleep(Duration::from_millis(20));
     };
+    // The shell is not reaped yet, so its pid is still the live group id:
+    // end every process the command started (a timed-out one, or a
+    // background leftover holding stderr), then reap the shell.
+    kill_group(&mut child);
+    let status = child.wait()?;
+    let stderr = rx.recv_timeout(Duration::from_secs(1)).unwrap_or_default();
+    if let Some(reader) = reader {
+        if reader.is_finished() {
+            let _ = reader.join();
+        }
+    }
+    if timed_out {
+        anyhow::bail!(
+            "notify command `{command}` still running after {}s; killed",
+            timeout.as_secs_f32()
+        );
+    }
     if status.success() {
         return Ok(());
     }
-    let stderr = rx
-        .recv_timeout(Duration::from_millis(200))
-        .unwrap_or_default();
     anyhow::bail!("notify command exited {status}: {}", stderr.trim())
+}
+
+/// Has the child exited? Unix: checked WITHOUT reaping it (`WNOWAIT`), so
+/// its pid stays reserved as the process-group id until [`kill_group`] ran.
+// trace:TASK-1492 | ai:claude
+#[cfg(unix)]
+fn exited_unreaped(child: &mut std::process::Child) -> std::io::Result<bool> {
+    // SAFETY: waitid only writes the zeroed siginfo we own.
+    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+    let rc = unsafe {
+        libc::waitid(
+            libc::P_PID,
+            child.id() as libc::id_t,
+            &mut info,
+            libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+        )
+    };
+    if rc != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // SAFETY: si_pid is valid for a waitid result; 0 means still running.
+    Ok(unsafe { info.si_pid() } != 0)
+}
+
+#[cfg(windows)]
+fn exited_unreaped(child: &mut std::process::Child) -> std::io::Result<bool> {
+    Ok(child.try_wait()?.is_some())
+}
+
+/// SIGKILL the command's whole process group (its pgid is the unreaped
+/// shell's pid). Windows: the child only.
+// trace:TASK-1492 | ai:claude
+#[cfg(unix)]
+fn kill_group(child: &mut std::process::Child) {
+    // SAFETY: plain syscall; the group is ours (process_group(0) at spawn)
+    // and the leader is unreaped, so the id cannot have been reused.
+    unsafe {
+        libc::killpg(child.id() as libc::pid_t, libc::SIGKILL);
+    }
+}
+
+#[cfg(windows)]
+fn kill_group(child: &mut std::process::Child) {
+    let _ = child.kill();
 }
 
 fn load_state(project_root: &Path) -> Result<NotifyState> {
@@ -1032,6 +1097,64 @@ mod tests {
         )
         .unwrap_err();
         assert!(format!("{err:#}").contains("boom"), "{err:#}");
+    }
+
+    // N1: a timed-out compound command or pipeline leaves no process of its
+    // group behind (a signal to `sh` alone would orphan the grandchildren),
+    // and the call returns within the bound.
+    // trace:TASK-1492 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn notify_timeout_kills_the_whole_process_group() {
+        let dir = tempfile::tempdir().unwrap();
+        for (i, body) in ["sleep 7.123 ; true", "sleep 7.321 | cat ; true"]
+            .iter()
+            .enumerate()
+        {
+            let pidfile = dir.path().join(format!("pgid-{i}"));
+            let cfg = NotifyConfig {
+                command: format!("echo $$ > {} ; {body}", pidfile.display()),
+                min_interval: Duration::from_secs(0),
+                quiet_hours: None,
+                rules: NotifyRules::default(),
+            };
+            let started = std::time::Instant::now();
+            let err = run_command_bounded(
+                dir.path(),
+                &cfg,
+                "r",
+                "t",
+                "m\n",
+                Some(Duration::from_millis(500)),
+            )
+            .unwrap_err();
+            assert!(
+                started.elapsed() < Duration::from_secs(3),
+                "{body}: {:?}",
+                started.elapsed()
+            );
+            assert!(format!("{err:#}").contains("killed"), "{err:#}");
+            let pgid: libc::pid_t = std::fs::read_to_string(&pidfile)
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap();
+            // Killed members are reaped by their new parent shortly after;
+            // poll until the group is empty (bounded).
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                // SAFETY: signal 0 only probes for group members.
+                let alive = unsafe { libc::killpg(pgid, 0) } == 0;
+                if !alive {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "{body}: process group {pgid} still has members"
+                );
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
     }
 
     // send_direct reports what really happened: a message dropped by the

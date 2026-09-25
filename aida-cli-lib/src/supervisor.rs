@@ -357,32 +357,63 @@ pub(crate) fn apply_requeue<B: DatabaseBackend>(
     max_attempts: u32,
     queue: Option<&QueueTarget>,
 ) -> Result<RequeueOutcome> {
+    apply_requeue_with(
+        backend,
+        decisions,
+        max_attempts,
+        queue,
+        &mut |ev| events::emit_recorded(project_root, ev),
+        &mut |spec, ctx, outcome| crate::requeue::emit_requeued(project_root, spec, ctx, outcome),
+    )
+}
+
+/// [`apply_requeue`] with the attempt recorder and the requeue-trail emitter
+/// injected (the test seam for a write that fails once and then works). A
+/// store error part-way through is returned only AFTER the specs already
+/// moved to Approved got their queue entry, so none is left Approved but
+/// unqueued (A7).
+// trace:TASK-1492 | ai:claude
+fn apply_requeue_with<B: DatabaseBackend>(
+    backend: &B,
+    decisions: &[SuperviseDecision],
+    max_attempts: u32,
+    queue: Option<&QueueTarget>,
+    record: &mut dyn FnMut(&events::Event) -> std::result::Result<(), String>,
+    trail: &mut dyn FnMut(&str, &crate::requeue::ReturnCtx, &crate::requeue::ReturnOutcome),
+) -> Result<RequeueOutcome> {
     let mut applied: Vec<(String, uuid::Uuid)> = Vec::new();
     let mut unrecorded = None;
     let mut held = Vec::new();
+    let mut failed: Option<anyhow::Error> = None;
     for d in decisions.iter().filter(|d| d.action == "would-re-drive") {
         if unrecorded.is_some() {
             held.push(d.spec.clone());
             continue;
         }
         let Some(id) = d.id else { continue };
-        match supervisor_requeue(
+        let result = supervisor_requeue_with(
             backend,
-            project_root,
             id,
             &d.spec,
             &d.reason,
             d.attempts,
             max_attempts,
-        )? {
-            RedriveApply::Applied => applied.push((d.spec.clone(), id)),
-            RedriveApply::Moved => {}
-            RedriveApply::Unrecorded(reason) => {
+            record,
+            trail,
+        );
+        match result {
+            Ok(RedriveApply::Applied) => applied.push((d.spec.clone(), id)),
+            Ok(RedriveApply::Moved) => {}
+            Ok(RedriveApply::Unrecorded(reason)) => {
                 unrecorded = Some(format!(
                     "cannot record the re-drive attempt for {}: {reason}",
                     d.spec
                 ));
                 held.push(d.spec.clone());
+            }
+            Err(e) => {
+                failed = Some(e);
+                break;
             }
         }
     }
@@ -410,6 +441,9 @@ pub(crate) fn apply_requeue<B: DatabaseBackend>(
                 added_by_machine: None,
             })?;
         }
+    }
+    if let Some(e) = failed {
+        return Err(e);
     }
     Ok(RequeueOutcome {
         applied: applied.into_iter().map(|(spec, _)| spec).collect(),
@@ -484,24 +518,45 @@ pub(crate) fn supervisor_requeue<B: DatabaseBackend>(
     attempt: u32,
     max_attempts: u32,
 ) -> Result<RedriveApply> {
+    supervisor_requeue_with(
+        backend,
+        id,
+        spec,
+        cause,
+        attempt,
+        max_attempts,
+        &mut |ev| events::emit_recorded(project_root, ev),
+        &mut |spec, ctx, outcome| crate::requeue::emit_requeued(project_root, spec, ctx, outcome),
+    )
+}
+
+// trace:TASK-1492 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn supervisor_requeue_with<B: DatabaseBackend>(
+    backend: &B,
+    id: uuid::Uuid,
+    spec: &str,
+    cause: &str,
+    attempt: u32,
+    max_attempts: u32,
+    record: &mut dyn FnMut(&events::Event) -> std::result::Result<(), String>,
+    trail: &mut dyn FnMut(&str, &crate::requeue::ReturnCtx, &crate::requeue::ReturnOutcome),
+) -> Result<RedriveApply> {
     let parked = backend
         .get_requirement(&id)?
         .is_some_and(|r| r.status == RequirementStatus::NeedsAttention);
     if !parked {
         return Ok(RedriveApply::Moved);
     }
-    if let Err(reason) = events::emit_recorded(
-        project_root,
-        &events::Event::new(
-            Some(spec.to_string()),
-            "",
-            events::EventKind::SpecReDriven {
-                cause: cause.to_string(),
-                attempt,
-                max: max_attempts,
-            },
-        ),
-    ) {
+    if let Err(reason) = record(&events::Event::new(
+        Some(spec.to_string()),
+        "",
+        events::EventKind::SpecReDriven {
+            cause: cause.to_string(),
+            attempt,
+            max: max_attempts,
+        },
+    )) {
         return Ok(RedriveApply::Unrecorded(reason));
     }
     let ctx = crate::requeue::ReturnCtx {
@@ -523,7 +578,7 @@ pub(crate) fn supervisor_requeue<B: DatabaseBackend>(
     if !outcome.applied() {
         return Ok(RedriveApply::Moved);
     }
-    crate::requeue::emit_requeued(project_root, spec, &ctx, &outcome);
+    trail(spec, &ctx, &outcome);
     Ok(RedriveApply::Applied)
 }
 
@@ -1125,5 +1180,70 @@ mod tests {
         assert_eq!(action("STORY-1"), ("skip-status-moved".to_string(), 0));
         assert_eq!(action("STORY-2"), ("re-drive".to_string(), 1));
         assert_eq!(action("STORY-3"), ("skip-max-this-run".to_string(), 0));
+    }
+
+    // B1 direct: the first attempt record fails, the next one would work.
+    // The pass still holds: the later specs are never tried, stay parked,
+    // and nothing is queued. A failure on the second spec keeps the first
+    // re-queued and holds the rest.
+    // trace:TASK-1492 | ai:claude
+    #[test]
+    fn a_failed_record_holds_the_pass_even_when_the_next_write_would_succeed() {
+        for fail_at in [0usize, 1] {
+            let tmp = tempfile::tempdir().unwrap();
+            let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+            stored_park(&backend, "STORY-1", 120);
+            stored_park(&backend, "STORY-2", 90);
+            stored_park(&backend, "STORY-3", 60);
+            let store = backend.load().unwrap();
+            let plan = plan_redrives(
+                &store.requirements,
+                &events::RedriveHistory::default(),
+                &SuperviseOpts::default(),
+                chrono::Utc::now(),
+            );
+            let queue = QueueTarget {
+                user: "joe".to_string(),
+                role: "implementer".to_string(),
+            };
+            let mut calls = 0usize;
+            let mut recorded: Vec<String> = Vec::new();
+            let mut record = |ev: &events::Event| {
+                let n = calls;
+                calls += 1;
+                if n == fail_at {
+                    Err("transient write error".to_string())
+                } else {
+                    recorded.push(ev.spec.clone().unwrap_or_default());
+                    Ok(())
+                }
+            };
+            let out = apply_requeue_with(
+                &backend,
+                &plan,
+                3,
+                Some(&queue),
+                &mut record,
+                &mut |_, _, _| {},
+            )
+            .unwrap();
+            let expect_applied: Vec<&str> = ["STORY-1", "STORY-2", "STORY-3"][..fail_at].to_vec();
+            let expect_held: Vec<&str> = ["STORY-1", "STORY-2", "STORY-3"][fail_at..].to_vec();
+            assert_eq!(out.applied, expect_applied, "fail_at {fail_at}");
+            assert_eq!(out.held, expect_held, "fail_at {fail_at}");
+            assert!(out.unrecorded.as_deref().unwrap().contains(expect_held[0]));
+            assert_eq!(calls, fail_at + 1, "no record is tried after the failure");
+            assert_eq!(recorded, expect_applied);
+            let queued = backend.queue_list("joe", false).unwrap();
+            assert_eq!(queued.len(), fail_at);
+            for r in backend.load().unwrap().requirements {
+                let want = if expect_applied.contains(&r.display_id().as_str()) {
+                    RequirementStatus::Approved
+                } else {
+                    RequirementStatus::NeedsAttention
+                };
+                assert_eq!(r.status, want, "{} fail_at {fail_at}", r.display_id());
+            }
+        }
     }
 }
