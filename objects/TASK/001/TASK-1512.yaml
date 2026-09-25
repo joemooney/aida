@@ -21,12 +21,12 @@ description: |
   - MCP `history` tool schema gains matching `to`/`from`/`created` parameters (CLI↔MCP parity).
   - Works on the current git-log walk; must not be gated on TASK-1505 (history-events cache), which should make it fast once it lands.
   - Tests cover each filter, the combination rules, and alias handling.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:07:50.565068549Z
-modified_at: 2026-09-25T21:08:29.140470070Z
+modified_at: 2026-09-25T22:31:53.465724003Z
 req_type: Task
 tags:
 - aida:history
