@@ -3,12 +3,12 @@ spec_id: TASK-1502
 agreed_id: TASK-1502
 title: Support relative durations for aida history time bounds
 description: Allow aida history --since and --until to accept compact relative durations such as 5h and 7d, interpreted relative to the current time. For example, --since 7d --until 5h selects history from seven days ago through five hours ago. Preserve existing absolute date/time forms, validate units and ordering, and show the resolved time window in verbose or human-readable output so the interpretation is unambiguous.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:58:16.548025058Z
-modified_at: 2026-09-25T08:03:02.729860174Z
+modified_at: 2026-09-25T08:04:08.673648677Z
 req_type: Task
 tags:
 - cli
