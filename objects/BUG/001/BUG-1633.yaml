@@ -3,12 +3,12 @@ spec_id: BUG-1633
 agreed_id: BUG-1633
 title: 'Pull reconcile follow-ups after BUG-1625: persist scan start after a store failure, --code-only safety, followup false match'
 description: 'From BUG-1625''s strict review. (2) A retry after a store-pull failure falls back to scanning the last 50 commits (lib.rs ~71237), so it can miss bumps when more came in. Persist the scan start, or point the note at ''aida reconcile-status''. (3) Test the failed-add-counts-as-already-filed path through extract_plan_followups, and add an end-to-end pull test for remote-only followups. followup_filed_in_store (lib.rs ~43929) matches any same-titled spec with any followup tag; tighten it to this plan. (4) --code-only reconciles against a possibly stale store: warn, or skip followup extraction in that mode.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T23:05:05.919232561Z
-modified_at: 2026-09-25T23:05:05.919232561Z
+modified_at: 2026-09-25T23:05:42.569710851Z
 req_type: Bug
 filed_at:
   code_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
