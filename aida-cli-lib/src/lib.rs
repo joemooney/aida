@@ -48830,6 +48830,81 @@ pub(crate) fn status_advance_requires_advisor_authority(
         == GuardKind::RequiresAdvisorAuthority
 }
 
+/// BUG-1611: why `aida queue done` refuses a spec on lifecycle grounds.
+/// `queue done` is an execution flip: its legal predecessors are the states a
+/// spec reaches only after passing the approval gate (`Approved`, `Planned`,
+/// `InProgress`, and an idempotent `Done`). Anything else is refused through
+/// the existing lifecycle guard rather than a new rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum QueueDoneLifecycleRefusal {
+    /// `Draft` / `NeedsAttention`: never approved, or punted back for triage.
+    /// The lifecycle guard marks `→ Done` from these as an advisor-authority
+    /// act, and the caller does not hold that authority.
+    NotApproved,
+    /// `Rejected` / `Completed` / `Superseded`: closed. `queue done` is not a
+    /// reopen verb, so it refuses whatever the caller's authority.
+    Closed,
+}
+
+/// BUG-1611: the lifecycle/authority decision for `aida queue done`, shared by
+/// the CLI handler and the MCP `queue_done` tool so the two surfaces cannot
+/// drift. `has_advisor_authority` is the caller's resolved authority (CLI:
+/// [`has_advisor_authority`]; MCP: the server's role). `None` = proceed.
+/// `--force` deliberately has no say here.
+// trace:BUG-1611 | ai:claude
+pub(crate) fn queue_done_lifecycle_refusal(
+    from: &RequirementStatus,
+    has_advisor_authority: bool,
+) -> Option<QueueDoneLifecycleRefusal> {
+    if is_terminal_status(from) {
+        return Some(QueueDoneLifecycleRefusal::Closed);
+    }
+    if status_advance_requires_advisor_authority(from, &RequirementStatus::Done)
+        && !has_advisor_authority
+    {
+        return Some(QueueDoneLifecycleRefusal::NotApproved);
+    }
+    None
+}
+
+/// BUG-1611: the operator-facing refusal line for
+/// [`queue_done_lifecycle_refusal`]. Neutral guidance only: it names the
+/// legitimate route (approval, or a reopen that is itself authority-gated) and
+/// never suggests an environment-variable role override.
+// trace:BUG-1611 | ai:claude
+pub(crate) fn queue_done_lifecycle_refusal_message(
+    display_id: &str,
+    from: &RequirementStatus,
+    refusal: QueueDoneLifecycleRefusal,
+) -> String {
+    match refusal {
+        QueueDoneLifecycleRefusal::NotApproved => format!(
+            "queue done refused: {display_id} is {from} and has not passed the approval \
+             gate, so marking it done would skip triage. Ask an advisor to approve it \
+             (`aida edit {display_id} --status approved`), then work it and mark it done."
+        ),
+        QueueDoneLifecycleRefusal::Closed => format!(
+            "queue done refused: {display_id} is already {from} (closed), and marking it \
+             done would reopen it. To redo the work, have an advisor reopen it \
+             (`aida edit {display_id} --status approved --force`) or file a new spec."
+        ),
+    }
+}
+
+/// BUG-1611: whether `aida zen`'s autopilot approve-gate may flip this spec to
+/// `Approved`. `[autopilot] approve = "auto"` is a policy knob in an
+/// agent-writable config file, so it cannot stand in for approval authority:
+/// the auto-approve runs the same (source → Approved) lifecycle guard every
+/// other approval path runs.
+// trace:BUG-1611 | ai:claude
+pub(crate) fn zen_auto_approve_authorized(
+    from: &RequirementStatus,
+    has_advisor_authority: bool,
+) -> bool {
+    !status_advance_requires_advisor_authority(from, &RequirementStatus::Approved)
+        || has_advisor_authority
+}
+
 /// A manual `aida edit <epic> --status <X>` is forbidden — an epic's status is a
 /// read-only rollup of its children. This generalizes the earlier "epics cannot
 /// be promoted to Approved" rule to EVERY transition; `--force` is the recovery
@@ -80685,6 +80760,12 @@ mod task_1488_related_edge_migration_widen_tests;
 #[path = "tests/bug_1602_rel_remove_handler_tests.rs"]
 mod bug_1602_rel_remove_handler_tests;
 
+// BUG-1611: lifecycle authority guard at queue done, the forced reopen, and
+// zen auto-approve. trace:BUG-1611 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1611_lifecycle_authority_tests.rs"]
+mod bug_1611_lifecycle_authority_tests;
+
 // trace:TASK-1468 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_1468_ambiguous_write_ids_tests.rs"]
@@ -96270,6 +96351,27 @@ fn run_zen_drive(
             };
             let env = load_autopilot_envelope(project_root.as_deref());
             match zen_drive::run_draft_gate(&env, &display, &req_type, &tags) {
+                zen_drive::DraftGate::AutoApprove
+                    if !zen_auto_approve_authorized(&req.status, has_advisor_authority()) =>
+                {
+                    // BUG-1611: `approve = "auto"` without approval authority
+                    // routes to the advisor exactly like the propose policy —
+                    // the knob cannot approve on its own. trace:BUG-1611 | ai:claude
+                    println!(
+                        "{display} is a draft — auto-approval needs approval authority this \
+                         session does not hold; routed to the advisor for approval."
+                    );
+                    if !dry_run {
+                        if let Some(pr) = project_root.as_deref() {
+                            zen_surface_to_advisor(pr, &store, req, &display);
+                        }
+                    }
+                    println!(
+                        "  Once an advisor approves it (aida edit {display} --status approved), \
+                         re-run aida zen {display}."
+                    );
+                    return Ok(());
+                }
                 zen_drive::DraftGate::AutoApprove => {
                     if dry_run {
                         println!(
@@ -96277,7 +96379,7 @@ fn run_zen_drive(
                              auto-approve it (status → Approved) and drive."
                         );
                     } else {
-                        zen_auto_approve(store_path, req)?;
+                        zen_auto_approve(store_path, req, has_advisor_authority())?;
                         // TASK-1018: the ONLY wired `Execute` outcome today —
                         // so it gets the durable record + the one-command
                         // reversal, right where the side effect lands. Prior
@@ -96515,7 +96617,21 @@ fn load_autopilot_envelope(
 /// backend, the way `aida groom --apply` / the answer path do. Only reached when
 /// the autopilot approve-gate returned `Execute`.
 // trace:TASK-1037 | ai:claude
-fn zen_auto_approve(store_path: &std::path::Path, req: &Requirement) -> Result<()> {
+fn zen_auto_approve(
+    store_path: &std::path::Path,
+    req: &Requirement,
+    has_advisor_authority: bool,
+) -> Result<()> {
+    // BUG-1611: defense in depth at the write itself — the approval authority
+    // predicate runs here too, so no future caller can reach the flip on the
+    // autopilot policy alone. trace:BUG-1611 | ai:claude
+    if !zen_auto_approve_authorized(&req.status, has_advisor_authority) {
+        anyhow::bail!(
+            "{} is {}: auto-approval needs approval authority. Ask an advisor to approve it.",
+            req.display_id(),
+            req.status
+        );
+    }
     let dispenser = load_dispenser(store_path)?;
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
     let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);

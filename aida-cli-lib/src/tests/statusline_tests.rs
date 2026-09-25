@@ -1332,7 +1332,10 @@ fn status_advance_requires_advisor_authority_parity_with_oracle() {
     use super::status_advance_requires_advisor_authority as gate;
     use aida_core::models::RequirementStatus as S;
     fn oracle(from: &S, to: &S) -> bool {
-        matches!(from, S::Draft | S::NeedsAttention)
+        // BUG-1611: a closed source reopened into the pipeline is gated too
+        // (idempotent terminal self-edges excepted). trace:BUG-1611 | ai:claude
+        (matches!(from, S::Draft | S::NeedsAttention)
+            || (matches!(from, S::Completed | S::Rejected | S::Superseded) && from != to))
             && matches!(
                 to,
                 S::Approved | S::Planned | S::InProgress | S::Done | S::Completed
@@ -1346,6 +1349,7 @@ fn status_advance_requires_advisor_authority_parity_with_oracle() {
         S::Done,
         S::Completed,
         S::Rejected,
+        S::Superseded,
         S::NeedsAttention,
     ];
     for from in &all {
