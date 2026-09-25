@@ -1,0 +1,64 @@
+id: 01a0d981-21fb-7593-8f45-6e2bf40e7ecb
+spec_id: BUG-1625
+agreed_id: BUG-1625
+title: aida pull reconciles code against stale store before store pull, regressing Completed specs and retrying duplicate followups
+description: |
+  Observed on 2026-09-25 while running `aida pull` in the AIDA repository.
+
+  ## Reproduction
+
+  1. Let `origin/aida-store` contain `BUG-1607` through `BUG-1610` at Completed, including completion history and implementation metadata.
+  2. Keep the local orphan store behind so those specs still appear Draft and STORY-1218 cannot see previously filed followups (`TASK-1493` through `TASK-1496`).
+  3. Pull a code branch containing trailered commit `a052add` for the four bugs.
+  4. Run `aida pull`.
+
+  ## Observed
+
+  The code leg runs auto-bump against the stale local store before the store leg synchronizes. It writes Draft -> Done updates for `BUG-1607` through `BUG-1610`, even though the remote canonical objects are already Completed. Plan-followup extraction likewise cannot see the existing tasks and invokes four new `aida add` subprocesses. Each add repeatedly conflicts while replaying the stale `BUG-1607` update. The later store pull semantically auto-merges the objects, but last-writer-wins selects the newer local Done scalar over remote Completed, producing Completed -> Done regressions.
+
+  No duplicate tasks are ultimately filed, but all four failures are recorded as declined, obscuring that they were already filed.
+
+  Concrete evidence:
+  - Conflicting local commit: `232c4eed37 update BUG-1607`, generated Draft -> Done at 2026-09-25T16:46:29Z.
+  - Remote BUG-1607 was already Completed at 2026-09-25T01:08:27Z via `a052add`.
+  - Rebased semantic-merge commit: `53c0ac7489 update BUG-1607`, preserving both histories but selecting Done.
+  - The same pattern affected BUG-1608, BUG-1609, and BUG-1610.
+  - STORY-1218 already recorded `filed 4 task(s): TASK-1493, TASK-1494, TASK-1495, TASK-1496`, but the stale pre-store-pull view attempted all four again.
+
+  ## Root cause
+
+  `handle_pull_command` performs the code pull and calls `auto_bump_done_to_completed` before the store leg calls `pull_rebase_auto_merge`. Auto-bump loads and writes the unsynchronized local store, and its Step 7 followup extraction and deduplication use that same stale snapshot.
+
+  ## Expected
+
+  `aida pull` synchronizes the canonical store before any code-derived status reconciliation, closure processing, archival sweep, or plan-followup extraction that reads or mutates requirements. A remote terminal status must never regress because a stale local snapshot generated a later status event.
+
+  ## Acceptance
+
+  - A regression test starts with local Draft and remote Completed versions of the same trailered spec, then runs the equivalent full pull flow; final status remains Completed and no Draft -> Done event is added.
+  - A regression test starts with followup tasks present only in the remote store; after full pull, extraction recognizes and skips them without invoking `aida add` or recording them as declined.
+  - Code-pull failure semantics remain unchanged: no reconciliation occurs when the code leg fails.
+  - Store-pull failure leaves code-derived reconciliation unapplied and reports a clear retry path.
+  - Pull output distinguishes already-filed followups from genuine filing failures.
+  - Existing same-spec semantic merge behavior remains intact for legitimate concurrent edits.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T16:58:33.851363516Z
+modified_at: 2026-09-25T16:58:33.851363516Z
+req_type: Bug
+tags:
+- autobump
+- followups
+- pull
+- regression
+- severity:major
+- store
+filed_at:
+  code_sha: ac9803a159e1871122232d6e6512ca668da96446
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: ac9803a159
+  vendor: codex
