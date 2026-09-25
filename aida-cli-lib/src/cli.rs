@@ -999,7 +999,9 @@ pub enum ReviewCommand {
     // trace:STORY-1417 | ai:claude
     Classes {
         /// Only count rounds recorded since this point: a relative window
-        /// (`30d`, `12h`, `45m`) or an RFC3339 timestamp.
+        /// (`45m`, `12h`, `30d`, `2w`, or `24 hours ago`), an ISO date
+        /// (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or an RFC3339 timestamp.
         #[clap(long, value_name = "WHEN")]
         since: Option<String>,
 
@@ -6581,7 +6583,9 @@ pub enum QueueCommand {
         #[clap(long, value_name = "NAME", conflicts_with = "session")]
         batch: Option<String>,
         /// Filter items to those modified after this timestamp
-        /// (RFC3339 or `<N>{d,h,m}` ago, e.g. `2d`, `12h`). Useful for
+        /// (RFC3339, an ISO date interpreted as local midnight, a zone-less
+        /// ISO datetime in local time, or `<N>{m,h,d,w}` ago, e.g. `2d`,
+        /// `12h`, `2w`, `24 hours ago`). Useful for
         /// "what changed since yesterday" snapshots when no manifest
         /// or batch tag applies.
         // trace:TASK-232 | ai:claude
@@ -7058,7 +7062,9 @@ pub enum FindingsCommand {
     // trace:STORY-1417 | ai:claude
     Classes {
         /// Only count rounds recorded since this point: a relative window
-        /// (`30d`, `12h`, `45m`) or an RFC3339 timestamp.
+        /// (`45m`, `12h`, `30d`, `2w`, or `24 hours ago`), an ISO date
+        /// (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or an RFC3339 timestamp.
         #[clap(long, value_name = "WHEN")]
         since: Option<String>,
 
@@ -9351,12 +9357,14 @@ pub enum Command {
     /// spec comment remains the git-canonical audit source.
     // trace:STORY-1173 | ai:codex
     Approvals {
-        /// Only entries at or after this time. Accepts RFC3339 or relative
-        /// windows like `7d`, `12h`, `45m`.
+        /// Only entries at or after this time. Accepts a relative window
+        /// (`45m`, `12h`, `7d`, `2w`, or `24 hours ago`), an ISO date
+        /// (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or RFC3339.
         #[clap(long)]
         since: Option<String>,
 
-        /// Only entries before this time. Accepts RFC3339 or relative windows.
+        /// Only entries before this time. Same forms as `--since`.
         #[clap(long)]
         until: Option<String>,
 
@@ -9873,7 +9881,8 @@ pub enum Command {
         id: Option<String>,
 
         /// Bulk-archive every spec last touched before this duration
-        /// (e.g. `30d`, `12h`, or RFC3339). Pairs with `--status`.
+        /// (e.g. `30d`, `12h`, `2w`, an ISO date interpreted as local
+        /// midnight, or RFC3339). Pairs with `--status`.
         // trace:STORY-441 | ai:claude
         #[clap(long, value_name = "DURATION", conflicts_with = "id")]
         older_than: Option<String>,
@@ -10165,8 +10174,10 @@ pub enum Command {
         // trace:STORY-405 | ai:codex
         #[clap(long, conflicts_with_all = ["queue", "ci", "short", "cleanup", "awaiting"])]
         activity: bool,
-        /// With `--activity`, only show events after this relative duration
-        /// (`30m`, `12h`, `2d`) or RFC3339 timestamp.
+        /// With `--activity`, only show events after this point: a relative
+        /// duration (`30m`, `12h`, `2d`, `2w`, or `24 hours ago`), an ISO
+        /// date (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or an RFC3339 timestamp.
         // trace:STORY-405 | ai:codex
         #[clap(long, requires = "activity")]
         since: Option<String>,
@@ -12742,11 +12753,19 @@ pub enum Command {
         #[clap(long, global = true)]
         author: Option<String>,
 
-        /// Only show events after this date (ISO 8601, e.g. 2026-05-01).
+        /// Only show events after this point. Accepts a relative duration
+        /// meaning "that far before now" (`30m`, `5h`, `7d`, `2w`, or
+        /// `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a
+        /// zone-less ISO datetime (`2026-05-01T10:00`, local time), or a
+        /// full RFC3339 timestamp. The resolved window prints at the top of
+        /// human output so a relative form is never ambiguous.
+        // trace:TASK-1502 | ai:claude
         #[clap(long, global = true)]
         since: Option<String>,
 
-        /// Only show events before this date (ISO 8601).
+        /// Only show events before this point. Same forms as `--since`. Rejected if
+        /// it resolves earlier than `--since`.
+        // trace:TASK-1502 | ai:claude
         #[clap(long, global = true)]
         until: Option<String>,
 
