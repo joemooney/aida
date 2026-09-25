@@ -27,7 +27,7 @@
 use anyhow::{Context, Result};
 use fs2::FileExt;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -36,8 +36,10 @@ use std::time::{Duration, Instant};
 use crate::history::{self, CommitMeta, Event, EventKind, HistoryOpts};
 
 /// Bump when the tables or their meaning change.
+/// v2: date-priority order (`events.commit_ts`), the `unfilled_max_ts`
+/// back-fill watermark, and the `merges`, `merge_paths` and `skew` tables.
 // trace:TASK-1507 | ai:claude
-pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 1;
+pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 2;
 
 /// Bump whenever `decode_into_events`, `diff_modified` or `EventKind`
 /// changes meaning or serialized shape. A bump gives the index a new file
@@ -317,9 +319,11 @@ CREATE TABLE IF NOT EXISTS commits (
     commit_ts  INTEGER NOT NULL,
     author_iso TEXT NOT NULL,
     git_author TEXT NOT NULL,
-    subject    TEXT NOT NULL
+    subject    TEXT NOT NULL,
+    is_merge   INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS commits_ts ON commits(commit_ts, seq);
+CREATE INDEX IF NOT EXISTS commits_merge ON commits(seq) WHERE is_merge = 1;
 CREATE TABLE IF NOT EXISTS touches (
     path       TEXT NOT NULL,
     commit_seq INTEGER NOT NULL,
@@ -329,6 +333,7 @@ CREATE INDEX IF NOT EXISTS touches_seq ON touches(commit_seq);
 CREATE TABLE IF NOT EXISTS events (
     id          INTEGER PRIMARY KEY,
     commit_seq  INTEGER NOT NULL,
+    commit_ts   INTEGER NOT NULL,
     ordinal     INTEGER NOT NULL,
     path        TEXT NOT NULL,
     spec_id     TEXT NOT NULL,
@@ -343,11 +348,27 @@ CREATE TABLE IF NOT EXISTS events (
     kind_json   TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS events_order ON events(commit_seq DESC, ordinal);
-CREATE INDEX IF NOT EXISTS events_ship ON events(commit_seq) WHERE is_ship = 1;
+CREATE INDEX IF NOT EXISTS events_time ON events(commit_ts, commit_seq, ordinal);
+CREATE INDEX IF NOT EXISTS events_ship ON events(commit_ts, commit_seq) WHERE is_ship = 1;
 CREATE INDEX IF NOT EXISTS events_spec ON events(spec_id COLLATE NOCASE, commit_seq);
 CREATE INDEX IF NOT EXISTS events_type ON events(req_type COLLATE NOCASE, commit_seq);
 CREATE INDEX IF NOT EXISTS events_kind ON events(kind, commit_seq);
 CREATE INDEX IF NOT EXISTS events_author ON events(author, commit_seq);
+CREATE TABLE IF NOT EXISTS merges (
+    seq      INTEGER PRIMARY KEY,
+    merge_ts INTEGER NOT NULL,
+    base_ts  INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS merge_paths (
+    path TEXT PRIMARY KEY
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS skew (
+    child_sha  TEXT NOT NULL,
+    parent_sha TEXT NOT NULL,
+    child_ts   INTEGER NOT NULL,
+    parent_ts  INTEGER NOT NULL,
+    PRIMARY KEY (child_sha, parent_sha)
+) WITHOUT ROWID;
 ";
 
 fn now_rfc3339() -> String {
@@ -654,15 +675,16 @@ fn decode_commit(raw: &RawCommit, blobs: &mut BlobReader) -> Result<DecodedCommi
 
 fn insert_commit(conn: &Connection, seq: i64, raw: &RawCommit, dec: &DecodedCommit) -> Result<()> {
     conn.execute(
-        "INSERT INTO commits (seq, sha, commit_ts, author_iso, git_author, subject)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO commits (seq, sha, commit_ts, author_iso, git_author, subject, is_merge)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             seq,
             raw.sha,
             raw.commit_ts,
             raw.author_iso,
             raw.git_author,
-            raw.subject
+            raw.subject,
+            (raw.parents.len() > 1) as i64
         ],
     )?;
     let mut touch =
@@ -672,8 +694,9 @@ fn insert_commit(conn: &Connection, seq: i64, raw: &RawCommit, dec: &DecodedComm
     }
     let mut ev = conn.prepare_cached(
         "INSERT INTO events (commit_seq, ordinal, path, spec_id, req_type, kind,
-             status_from, status_to, author, is_ship, is_comment, is_meta, kind_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+             status_from, status_to, author, is_ship, is_comment, is_meta, kind_json,
+             commit_ts)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
     )?;
     for (ordinal, (path, e)) in dec.events.iter().enumerate() {
         let (from, to) = match &e.kind {
@@ -694,6 +717,7 @@ fn insert_commit(conn: &Connection, seq: i64, raw: &RawCommit, dec: &DecodedComm
             matches!(e.kind, EventKind::CommentsAdded { .. }) as i64,
             e.req_type.eq_ignore_ascii_case("meta") as i64,
             serde_json::to_string(&e.kind)?,
+            raw.commit_ts,
         ])?;
     }
     Ok(())
@@ -719,6 +743,142 @@ fn git_lines(store: &Path, args: &[&str]) -> Result<Vec<String>> {
         .filter(|l| !l.is_empty())
         .map(String::from)
         .collect())
+}
+
+/// Whether some other checkout of the store (a git worktree whose HEAD is
+/// not `head`) is at or past the indexed `tip`. That separates a reader on
+/// an older or diverged checkout, which must leave the shared index alone,
+/// from a real rewrite, where no checkout has the indexed tip any more.
+/// Any doubt (git failure, unknown object) answers `false`, which keeps the
+/// old reset-on-rewrite behavior.
+// trace:TASK-1507 | ai:claude
+fn tip_is_live_elsewhere(store: &Path, tip: &str, head: &str) -> bool {
+    let Ok(lines) = git_lines(store, &["worktree", "list", "--porcelain"]) else {
+        return false;
+    };
+    lines
+        .iter()
+        .filter_map(|l| l.strip_prefix("HEAD "))
+        .map(str::trim)
+        .filter(|h| *h != head)
+        .any(|h| aida_core::git_ops::is_ancestor(store, tip, h).unwrap_or(false))
+}
+
+/// Commit times for `shas`, read from git a batch at a time.
+// trace:TASK-1507 | ai:claude
+fn git_commit_times(store: &Path, shas: &[String]) -> Result<HashMap<String, i64>> {
+    let mut out = HashMap::new();
+    for chunk in shas.chunks(200) {
+        let mut args: Vec<&str> = vec!["show", "-s", "--format=%H %ct"];
+        args.extend(chunk.iter().map(String::as_str));
+        for line in git_lines(store, &args)? {
+            if let Some((sha, ts)) = line.split_once(' ') {
+                if let Ok(ts) = ts.trim().parse::<i64>() {
+                    out.insert(sha.to_string(), ts);
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Record a merge commit for the coverage rules:
+/// - `merges`: its time and the oldest merge-base time of its parents, so
+///   a cut whose boundary is a same-second tie inside the merge's parallel
+///   region falls back (R4). No merge base (joined histories) or any git
+///   failure records the most conservative region.
+/// - `merge_paths`: every path touched on either side since the base
+///   (`M^1...M^k`). `git log -- <path>` simplifies TREESAME side branches
+///   away and the index does not, so `--id` on these paths uses the walk
+///   (N1b).
+// trace:TASK-1507 | ai:claude
+fn record_merge(tx: &Connection, store: &Path, seq: i64, raw: &RawCommit) -> Result<()> {
+    if raw.parents.len() < 2 {
+        return Ok(());
+    }
+    let first = &raw.parents[0];
+    let mut base_ts = i64::MAX;
+    for other in &raw.parents[1..] {
+        let bases = git_lines(store, &["merge-base", "--all", first, other]).unwrap_or_default();
+        let times = git_commit_times(store, &bases).unwrap_or_default();
+        if bases.is_empty() || times.len() != bases.len() {
+            base_ts = i64::MIN;
+        } else if let Some(&t) = times.values().min() {
+            base_ts = base_ts.min(t);
+        }
+        let range = format!("{first}...{other}");
+        let paths = git_lines(
+            store,
+            &["log", "--format=", "--name-only", "--no-renames", &range],
+        )?;
+        let mut ins = tx.prepare_cached("INSERT OR IGNORE INTO merge_paths (path) VALUES (?1)")?;
+        for path in &paths {
+            ins.execute([path])?;
+        }
+    }
+    tx.execute(
+        "INSERT OR REPLACE INTO merges (seq, merge_ts, base_ts) VALUES (?1, ?2, ?3)",
+        params![seq, raw.commit_ts, base_ts],
+    )?;
+    Ok(())
+}
+
+/// Record every parent-to-child edge where the child is older than its
+/// parent (clock skew, R3). Such an edge makes git's date-priority walk
+/// differ from a pure date sort, so the query falls back near it.
+// trace:TASK-1507 | ai:claude
+fn record_skew(tx: &Connection, edges: &[(String, String, i64, i64)]) -> Result<()> {
+    let mut ins = tx.prepare_cached(
+        "INSERT OR IGNORE INTO skew (child_sha, parent_sha, child_ts, parent_ts)
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+    for (child, parent, child_ts, parent_ts) in edges {
+        if child_ts < parent_ts {
+            ins.execute(params![child, parent, child_ts, parent_ts])?;
+        }
+    }
+    Ok(())
+}
+
+/// Skew edges for commits appended by a catch-up: parent times come from
+/// the same batch, then the index, then git.
+// trace:TASK-1507 | ai:claude
+fn record_skew_for(
+    tx: &Connection,
+    store: &Path,
+    seen: &[(String, i64, Vec<String>)],
+) -> Result<()> {
+    let mut times: HashMap<String, i64> = seen.iter().map(|(s, t, _)| (s.clone(), *t)).collect();
+    let mut missing: Vec<String> = Vec::new();
+    for parent in seen.iter().flat_map(|(_, _, p)| p) {
+        if times.contains_key(parent) || missing.contains(parent) {
+            continue;
+        }
+        let known: Option<i64> = tx
+            .query_row(
+                "SELECT commit_ts FROM commits WHERE sha = ?1",
+                [parent],
+                |r| r.get(0),
+            )
+            .optional()?;
+        match known {
+            Some(t) => {
+                times.insert(parent.clone(), t);
+            }
+            None => missing.push(parent.clone()),
+        }
+    }
+    times.extend(git_commit_times(store, &missing)?);
+    let mut edges = Vec::new();
+    for (child, child_ts, parents) in seen {
+        for parent in parents {
+            let parent_ts = *times
+                .get(parent)
+                .with_context(|| format!("no commit time for parent {parent}"))?;
+            edges.push((child.clone(), parent.clone(), *child_ts, parent_ts));
+        }
+    }
+    record_skew(tx, &edges)
 }
 
 // ---------------------------------------------------------------------------
@@ -776,9 +936,24 @@ impl HistoryCache {
             conn.busy_timeout(Duration::from_millis(0))?;
             let _mode: String = conn.query_row("PRAGMA journal_mode=WAL", [], |r| r.get(0))?;
             conn.pragma_update(None, "synchronous", "NORMAL")?;
+            Self::no_checkpoint_on_close(&conn)?;
             Ok(conn)
         })?;
         Ok(HistoryCache { conn })
+    }
+
+    /// Skip the WAL checkpoint (and its fsyncs) when the connection closes.
+    /// Nearly every query is a small catch-up, and the close-time
+    /// checkpoint dominated its cost. Crash safety is unchanged: every
+    /// write is a WAL transaction with its meta in the same transaction,
+    /// and SQLite's auto-checkpoint still folds the WAL back once it grows.
+    // trace:TASK-1507 | ai:claude
+    fn no_checkpoint_on_close(conn: &Connection) -> Result<()> {
+        conn.set_db_config(
+            rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE,
+            true,
+        )?;
+        Ok(())
     }
 
     fn open_existing(path: &Path) -> Result<Self> {
@@ -787,6 +962,7 @@ impl HistoryCache {
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )?;
         conn.busy_timeout(Duration::from_millis(0))?;
+        Self::no_checkpoint_on_close(&conn)?;
         Ok(HistoryCache { conn })
     }
 
@@ -833,6 +1009,15 @@ impl HistoryCache {
             Some(tip) => {
                 if aida_core::git_ops::is_ancestor(store, &tip, head)? {
                     let _ = self.catch_up(store, &tip, head, budget)?;
+                } else if aida_core::git_ops::is_ancestor(store, head, &tip)?
+                    || tip_is_live_elsewhere(store, &tip, head)
+                {
+                    // trace:TASK-1507 | ai:claude
+                    // This reader is on an older or diverged checkout (a
+                    // store worktree behind the shared index, or an undo)
+                    // while the indexed tip is still what another checkout
+                    // has. The index stays as it is; this query falls back
+                    // to the git walk because the tip is not its HEAD.
                 } else {
                     let recorded = self.meta("store_root_sha")?.unwrap_or_default();
                     let current = aida_core::git_ops::root_commits(store, head)
@@ -861,7 +1046,8 @@ impl HistoryCache {
         let roots = aida_core::git_ops::root_commits(store, head)?.join(",");
         let tx = self.conn.transaction()?;
         tx.execute_batch(
-            "DELETE FROM events; DELETE FROM touches; DELETE FROM commits; DELETE FROM meta;",
+            "DELETE FROM events; DELETE FROM touches; DELETE FROM commits; DELETE FROM meta;
+             DELETE FROM merges; DELETE FROM merge_paths; DELETE FROM skew;",
         )?;
         let now = now_rfc3339();
         for (k, v) in [
@@ -871,6 +1057,9 @@ impl HistoryCache {
             ("tip_sha", head.to_string()),
             ("backfill_anchor", head.to_string()),
             ("floor_sha", String::new()),
+            // Unknown until the first back-fill chunk: `--since` is not
+            // served from a partial index before then.
+            ("unfilled_max_ts", String::new()),
             ("complete", "0".to_string()),
             ("built_at", now.clone()),
             ("updated_at", now.clone()),
@@ -911,9 +1100,13 @@ impl HistoryCache {
         let mut indexed = 0usize;
         let mut probes = 0usize;
         let mut new_root = false;
+        let mut seen: Vec<(String, i64, Vec<String>)> = Vec::new();
         while let Some(raw) = stream.next_commit()? {
             let dec = decode_commit(&raw, &mut blobs)?;
             insert_commit(&tx, next_seq, &raw, &dec)?;
+            // trace:TASK-1507 | ai:claude
+            record_merge(&tx, store, next_seq, &raw)?;
+            seen.push((raw.sha.clone(), raw.commit_ts, raw.parents.clone()));
             next_seq += 1;
             indexed += 1;
             new_root |= raw.parents.is_empty();
@@ -928,6 +1121,7 @@ impl HistoryCache {
                     aida_core::git_ops::rev_list_count(store, &format!("{tip}..{}", raw.sha))?
                         == indexed;
                 if closed {
+                    record_skew_for(&tx, store, &seen)?;
                     Self::finish_append(&tx, &raw, new_root.then_some(store))?;
                     tx.commit()?;
                     return Ok(false);
@@ -937,6 +1131,7 @@ impl HistoryCache {
                 if raw.sha != head {
                     anyhow::bail!("catch-up ended at {} instead of HEAD {head}", raw.sha);
                 }
+                record_skew_for(&tx, store, &seen)?;
                 Self::finish_append(&tx, &raw, new_root.then_some(store))?;
                 tx.commit()?;
                 return Ok(true);
@@ -965,7 +1160,7 @@ impl HistoryCache {
         let last: Option<String> = tx
             .query_row(
                 "SELECT c.author_iso FROM events e JOIN commits c ON c.seq = e.commit_seq
-                 ORDER BY e.commit_seq DESC LIMIT 1",
+                 ORDER BY e.commit_ts DESC, e.commit_seq DESC LIMIT 1",
                 [],
                 |r| r.get(0),
             )
@@ -1007,13 +1202,71 @@ impl HistoryCache {
             let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
             rows.collect::<std::result::Result<HashSet<String>, _>>()?
         };
-        let order = git_lines(store, &["rev-list", "--topo-order", &anchor])?;
-        let todo: Vec<&String> = order.iter().filter(|s| !indexed.contains(*s)).collect();
+        // trace:TASK-1507 | ai:claude
+        // `--timestamp --parents` gives each commit's time and parents in
+        // the same call. Topo order can emit an old side branch before
+        // newer main-line commits, so the oldest indexed commit is not a
+        // bound on what is missing: every chunk records the newest commit
+        // still left to fill (the watermark), and every skew edge among the
+        // anchor's ancestors is known before any of them is served.
+        struct Rev {
+            ts: i64,
+            sha: String,
+            parents: Vec<String>,
+        }
+        let order: Vec<Rev> = git_lines(
+            store,
+            &[
+                "rev-list",
+                "--topo-order",
+                "--timestamp",
+                "--parents",
+                &anchor,
+            ],
+        )?
+        .into_iter()
+        .map(|l| {
+            let mut parts = l.split(' ');
+            let ts = parts.next().unwrap_or_default();
+            let ts = ts
+                .parse::<i64>()
+                .with_context(|| format!("unexpected rev-list line {l}"))?;
+            let sha = parts
+                .next()
+                .with_context(|| format!("unexpected rev-list line {l}"))?
+                .to_string();
+            Ok(Rev {
+                ts,
+                sha,
+                parents: parts.map(String::from).collect(),
+            })
+        })
+        .collect::<Result<_>>()?;
+        let times: HashMap<&str, i64> = order.iter().map(|r| (r.sha.as_str(), r.ts)).collect();
+        let mut skew_edges = Vec::new();
+        for r in &order {
+            for p in &r.parents {
+                if let Some(&pt) = times.get(p.as_str()) {
+                    if r.ts < pt {
+                        skew_edges.push((r.sha.clone(), p.clone(), r.ts, pt));
+                    }
+                }
+            }
+        }
+        let todo: Vec<&Rev> = order.iter().filter(|r| !indexed.contains(&r.sha)).collect();
         if todo.is_empty() {
             let tx = self.conn.transaction()?;
+            record_skew(&tx, &skew_edges)?;
             Self::set_meta(&tx, "complete", "1")?;
+            Self::set_meta(&tx, "unfilled_max_ts", "")?;
             tx.commit()?;
             return Ok(());
+        }
+        // unfilled_after[i] = newest commit time among todo[i..].
+        let mut unfilled_after: Vec<Option<i64>> = vec![None; todo.len() + 1];
+        for i in (0..todo.len()).rev() {
+            let t = todo[i].ts;
+            unfilled_after[i] = Some(unfilled_after[i + 1].map_or(t, |m| m.max(t)));
         }
         let mut blobs = BlobReader::spawn(store)?;
         let chunk_count = todo.len().div_ceil(chunk_size);
@@ -1021,7 +1274,7 @@ impl HistoryCache {
             if budget.expired() || max_chunks.is_some_and(|m| ci >= m) {
                 break;
             }
-            let stdin: String = chunk.iter().map(|s| format!("{s}\n")).collect();
+            let stdin: String = chunk.iter().map(|r| format!("{}\n", r.sha)).collect();
             let mut stream = LogStream::spawn(
                 store,
                 &["--no-walk=unsorted".into(), "--stdin".into()],
@@ -1032,14 +1285,18 @@ impl HistoryCache {
                 tx.query_row("SELECT COALESCE(MIN(seq) - 1, 0) FROM commits", [], |r| {
                     r.get(0)
                 })?;
+            if ci == 0 {
+                record_skew(&tx, &skew_edges)?;
+            }
             let mut last: Option<RawCommit> = None;
             let mut i = 0usize;
             while let Some(raw) = stream.next_commit()? {
-                if chunk.get(i).map(|s| s.as_str()) != Some(raw.sha.as_str()) {
+                if chunk.get(i).map(|r| r.sha.as_str()) != Some(raw.sha.as_str()) {
                     anyhow::bail!("back-fill order mismatch at {}", raw.sha);
                 }
                 let dec = decode_commit(&raw, &mut blobs)?;
                 insert_commit(&tx, next_seq, &raw, &dec)?;
+                record_merge(&tx, store, next_seq, &raw)?;
                 next_seq -= 1;
                 i += 1;
                 last = Some(raw);
@@ -1050,6 +1307,9 @@ impl HistoryCache {
             let last = last.context("empty back-fill chunk")?;
             let now = now_rfc3339();
             Self::set_meta(&tx, "floor_sha", &last.sha)?;
+            let rest = ((ci + 1) * chunk_size).min(todo.len());
+            let unfilled = unfilled_after[rest].map(|t| t.to_string());
+            Self::set_meta(&tx, "unfilled_max_ts", unfilled.as_deref().unwrap_or(""))?;
             Self::set_meta(&tx, "updated_at", &now)?;
             Self::set_meta(&tx, "indexer_pid", &std::process::id().to_string())?;
             if ci + 1 == chunk_count {
@@ -1062,16 +1322,25 @@ impl HistoryCache {
     }
 
     /// Answer `opts` from the index, or `Ok(None)` when the index cannot
-    /// prove it holds the whole answer. Runs inside one read transaction
-    /// so every read sees the same snapshot.
+    /// prove it holds the whole answer in the git walk's order. Runs inside
+    /// one read transaction so every read sees the same snapshot.
     ///
-    /// Coverage rules: the tip must equal `head`, and one of these holds:
-    /// the index reaches the root; the window of `max_commits` commits (and
-    /// one more, to tell a capped walk from a finished one) lies inside the
-    /// index; `limit` matches were found after every filter; or `--since`
-    /// is newer than the oldest indexed commit. `--since`/`--until` are
-    /// treated as pure commit-time filters (git's `--since` stops its walk
-    /// at the first older commit, which can differ only under clock skew).
+    /// Order (R1): commits newest first by `(commit_ts, seq)`, events by
+    /// ordinal within a commit. With no commit older than its parent, git's
+    /// default walk is a date-priority queue, so this is its order; `seq`
+    /// (topologically consistent) only breaks same-second ties.
+    ///
+    /// Coverage: the tip must equal `head`, and
+    /// - a partly built index serves only what lies strictly newer than the
+    ///   watermark (the newest commit not yet back-filled): the boundary of
+    ///   a cut (the last kept row of the `max_commits` window, or the
+    ///   commit of the `limit`-th match), or else `--since` (R2);
+    /// - no clock-skewed edge may reach into the served range (R3);
+    /// - a cut boundary may not be a same-second tie inside a merge's
+    ///   parallel region, where git's tie order is not `seq` (R4);
+    /// - `--id` on a path touched across a merge uses the walk, because
+    ///   `git log -- <path>` simplifies TREESAME side branches away (N1b).
+    // trace:TASK-1507 | ai:claude
     fn query(&self, opts: &HistoryOpts, head: &str) -> Result<Option<CacheAnswer>> {
         let tx = self.conn.unchecked_transaction()?;
         let versions_ok = self.meta("schema_version")?.as_deref()
@@ -1083,13 +1352,14 @@ impl HistoryCache {
             return Ok(None);
         }
         let complete = self.meta("complete")?.as_deref() == Some("1");
-        let floor_ts: Option<i64> = tx
-            .query_row(
-                "SELECT commit_ts FROM commits ORDER BY seq ASC LIMIT 1",
-                [],
-                |r| r.get(0),
-            )
-            .optional()?;
+        // The newest commit time among commits not yet back-filled, written
+        // in the same transaction as each chunk. Empty means unknown.
+        let unfilled_max_ts: Option<i64> = self
+            .meta("unfilled_max_ts")?
+            .and_then(|v| v.trim().parse::<i64>().ok());
+        if !complete && unfilled_max_ts.is_none() {
+            return Ok(None);
+        }
 
         let parse_bound = |raw: &Option<String>| -> Result<Option<i64>> {
             raw.as_deref()
@@ -1106,42 +1376,57 @@ impl HistoryCache {
             .id_filter
             .as_deref()
             .and_then(|id| aida_core::object_store::relative_object_path(id).ok());
+        if let Some(path) = &id_path {
+            let across_merge: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM merge_paths WHERE path = ?1)",
+                [path],
+                |r| r.get(0),
+            )?;
+            if across_merge {
+                return Ok(None);
+            }
+        }
 
+        // Candidate commits, newest first: (commit_ts, seq).
         let probe = i64::try_from(opts.max_commits.saturating_add(1)).unwrap_or(i64::MAX);
-        let candidates: Vec<i64> = if let Some(path) = &id_path {
+        let row = |r: &rusqlite::Row| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?));
+        let candidates: Vec<(i64, i64)> = if let Some(path) = &id_path {
             let mut stmt = tx.prepare(
-                "SELECT c.seq FROM touches t JOIN commits c ON c.seq = t.commit_seq
+                "SELECT c.commit_ts, c.seq FROM touches t JOIN commits c ON c.seq = t.commit_seq
                  WHERE t.path = ?1
                    AND (?2 IS NULL OR c.commit_ts >= ?2)
                    AND (?3 IS NULL OR c.commit_ts <= ?3)
-                 ORDER BY t.commit_seq DESC LIMIT ?4",
+                 ORDER BY c.commit_ts DESC, c.seq DESC LIMIT ?4",
             )?;
-            let rows = stmt.query_map(params![path, since_ts, until_ts, probe], |r| r.get(0))?;
-            rows.collect::<std::result::Result<Vec<i64>, _>>()?
+            let rows = stmt.query_map(params![path, since_ts, until_ts, probe], row)?;
+            rows.collect::<std::result::Result<Vec<_>, _>>()?
         } else {
             let mut stmt = tx.prepare(
-                "SELECT seq FROM commits
+                "SELECT commit_ts, seq FROM commits
                  WHERE (?1 IS NULL OR commit_ts >= ?1)
                    AND (?2 IS NULL OR commit_ts <= ?2)
-                 ORDER BY seq DESC LIMIT ?3",
+                 ORDER BY commit_ts DESC, seq DESC LIMIT ?3",
             )?;
-            let rows = stmt.query_map(params![since_ts, until_ts, probe], |r| r.get(0))?;
-            rows.collect::<std::result::Result<Vec<i64>, _>>()?
+            let rows = stmt.query_map(params![since_ts, until_ts, probe], row)?;
+            rows.collect::<std::result::Result<Vec<_>, _>>()?
         };
         let capped = candidates.len() > opts.max_commits;
         let window_len = candidates.len().min(opts.max_commits);
+        let window_low = window_len.checked_sub(1).map(|i| candidates[i]);
 
         let mut events: Vec<Event> = Vec::new();
-        if let Some(&low) = candidates[..window_len].last() {
+        let mut last_taken: Option<(i64, i64)> = None;
+        if let Some((low_ts, low_seq)) = window_low {
             // Pure narrowing: every filter is re-checked exactly in Rust by
             // the shared `event_passes_filters`.
             let mut sql = String::from(
-                "SELECT c.sha, c.author_iso, e.author, e.spec_id, e.req_type, e.kind_json
+                "SELECT c.sha, c.author_iso, e.author, e.spec_id, e.req_type, e.kind_json,
+                        e.commit_ts, e.commit_seq
                  FROM events e JOIN commits c ON c.seq = e.commit_seq
-                 WHERE e.commit_seq >= ?1
-                   AND (?2 IS NULL OR c.commit_ts >= ?2)
-                   AND (?3 IS NULL OR c.commit_ts <= ?3)
-                   AND (?4 IS NULL OR e.path = ?4)",
+                 WHERE (e.commit_ts > ?1 OR (e.commit_ts = ?1 AND e.commit_seq >= ?2))
+                   AND (?3 IS NULL OR e.commit_ts >= ?3)
+                   AND (?4 IS NULL OR e.commit_ts <= ?4)
+                   AND (?5 IS NULL OR e.path = ?5)",
             );
             if opts.shipped_only {
                 sql.push_str(" AND e.is_ship = 1");
@@ -1149,9 +1434,9 @@ impl HistoryCache {
             if opts.exclude_meta {
                 sql.push_str(" AND e.is_meta = 0");
             }
-            sql.push_str(" ORDER BY e.commit_seq DESC, e.ordinal ASC");
+            sql.push_str(" ORDER BY e.commit_ts DESC, e.commit_seq DESC, e.ordinal ASC");
             let mut stmt = tx.prepare(&sql)?;
-            let mut rows = stmt.query(params![low, since_ts, until_ts, id_path])?;
+            let mut rows = stmt.query(params![low_ts, low_seq, since_ts, until_ts, id_path])?;
             while let Some(row) = rows.next()? {
                 if events.len() >= opts.limit {
                     break;
@@ -1169,15 +1454,63 @@ impl HistoryCache {
                 };
                 if history::event_passes_filters(&e, opts) {
                     events.push(e);
+                    last_taken = Some((row.get(6)?, row.get(7)?));
                 }
             }
         }
 
         let limit_met = events.len() >= opts.limit;
-        let older_than_since = matches!((since_ts, floor_ts), (Some(s), Some(f)) if f < s);
-        if !(complete || capped || limit_met || older_than_since) {
+        // The cut boundary: the commit of the `limit`-th match, else the
+        // last row of a capped window. `None` with a cut means nothing is
+        // kept (`-n 0` / `--max-commits 0`), which needs no coverage.
+        let cut = limit_met || capped;
+        let boundary: Option<(i64, i64)> = if limit_met {
+            last_taken
+        } else if capped {
+            window_low
+        } else {
+            None
+        };
+
+        // R2: one watermark covers every cut and `--since`; ties fall back.
+        if let Some(u) = unfilled_max_ts.filter(|_| !complete) {
+            let covered = if cut {
+                boundary.is_none_or(|(ts, _)| ts > u)
+            } else {
+                since_ts.is_some_and(|s| s > u)
+            };
+            if !covered {
+                return Ok(None);
+            }
+        }
+        // R3: a child older than its parent reorders git's walk (and stops
+        // its `--since`) anywhere in [child_ts, parent_ts].
+        let lower = [boundary.map(|b| b.0), since_ts]
+            .into_iter()
+            .flatten()
+            .min();
+        let skewed: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM skew WHERE ?1 IS NULL OR parent_ts >= ?1)",
+            [lower],
+            |r| r.get(0),
+        )?;
+        if skewed {
             return Ok(None);
         }
+        // R4: a same-second tie at the boundary inside a merge's parallel
+        // region, where git's tie order need not follow `seq`.
+        if let Some((b_ts, b_seq)) = boundary {
+            let tied_in_merge: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM commits WHERE commit_ts = ?1 AND seq != ?2)
+                    AND EXISTS(SELECT 1 FROM merges WHERE base_ts <= ?1 AND ?1 <= merge_ts)",
+                params![b_ts, b_seq],
+                |r| r.get(0),
+            )?;
+            if tied_in_merge {
+                return Ok(None);
+            }
+        }
+
         let window_exhausted = capped && events.len() < opts.limit;
         events.truncate(opts.limit);
         Ok(Some(CacheAnswer {
@@ -1307,7 +1640,11 @@ pub(crate) fn rebuild_full_at(store: &Path, db_path: &Path) -> Result<RebuildRep
 }
 
 /// Remove history index files (and their sidecars/locks) for other
-/// schema/decoder versions next to `db_path`.
+/// schema/decoder versions next to `db_path`. A version whose indexer lock
+/// is held by another process (an older or newer `aida` still running) is
+/// left alone entirely; a free lock is taken first and its file removed
+/// while held, so no running indexer loses its lock file.
+// trace:TASK-1507 | ai:claude
 fn prune_other_versions(db_path: &Path) -> Vec<PathBuf> {
     let (Some(dir), Some(name)) = (
         db_path.parent(),
@@ -1323,16 +1660,34 @@ fn prune_other_versions(db_path: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return pruned;
     };
-    for entry in entries.flatten() {
-        let Some(other) = entry.file_name().to_str().map(String::from) else {
-            continue;
-        };
-        if other.starts_with(family) && !other.starts_with(name) {
-            let p = entry.path();
-            if std::fs::remove_file(&p).is_ok() {
-                pruned.push(p);
-            }
+    let others: Vec<(String, PathBuf)> = entries
+        .flatten()
+        .filter_map(|e| Some((e.file_name().to_str()?.to_string(), e.path())))
+        .filter(|(n, _)| n.starts_with(family) && !n.starts_with(name))
+        .collect();
+    let mut taken: Vec<(std::fs::File, PathBuf)> = Vec::new();
+    let mut busy: Vec<String> = Vec::new();
+    for (n, p) in others.iter().filter(|(n, _)| n.ends_with(".lock")) {
+        let base = n.trim_end_matches(".lock").to_string();
+        let file = std::fs::OpenOptions::new().write(true).open(p);
+        match file {
+            Ok(f) if f.try_lock_exclusive().is_ok() => taken.push((f, p.clone())),
+            _ => busy.push(base),
         }
+    }
+    for (n, p) in others.iter().filter(|(n, _)| !n.ends_with(".lock")) {
+        if busy.iter().any(|b| n.starts_with(b.as_str())) {
+            continue;
+        }
+        if std::fs::remove_file(p).is_ok() {
+            pruned.push(p.clone());
+        }
+    }
+    for (lock, p) in taken {
+        if std::fs::remove_file(&p).is_ok() {
+            pruned.push(p);
+        }
+        drop(lock);
     }
     pruned
 }

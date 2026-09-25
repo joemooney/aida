@@ -146,6 +146,28 @@ impl Fixture {
         self.git(&["rev-parse", "HEAD"]).trim().to_string()
     }
 
+    /// Commit with committer/author time exactly `ts`.
+    fn commit_at(&mut self, ts: i64, msg: &str) -> String {
+        self.clock = ts - 60;
+        self.commit(msg)
+    }
+
+    /// `git merge --no-ff <branch>` at time `ts`, with extra merge args.
+    fn merge_at(&mut self, ts: i64, branch: &str, extra: &[&str]) -> String {
+        self.clock = ts;
+        let mut args = vec!["merge", "-q", "--no-ff", "--no-edit"];
+        args.extend_from_slice(extra);
+        args.push(branch);
+        self.git(&args);
+        self.head()
+    }
+
+    fn drop_index(&self) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", self.db.display()));
+        }
+    }
+
     fn commit_ts(&self, rev: &str) -> i64 {
         self.git(&["show", "-s", "--format=%ct", rev])
             .trim()
@@ -537,6 +559,9 @@ fn history_cache_merge_commit_decodes_like_git_show_cc() {
     let got = serve(&fx, &o).expect("index serves a complete merged history");
     // On merge histories the index's topological order is authoritative;
     // the bar is the same events, in the same order within each commit.
+    // Date-priority order: the index reproduces the walk exactly, merges
+    // included.
+    assert_eq!(got.events, walk);
     assert_eq!(by_commit(&got.events), by_commit(&walk));
     let merges: Vec<String> = fx
         .git(&["rev-list", "--merges", "HEAD"])
@@ -1140,4 +1165,476 @@ fn history_decoder_version_matches_event_kind_shape() {
     // Round-trip: stored events decode back to the same values.
     let back: Vec<EventKind> = serde_json::from_str(&snapshot).unwrap();
     assert_eq!(back, kinds);
+}
+
+// ---------------------------------------------------------------------------
+// Rework: exact since-eligibility (B1), date-priority order and coverage
+// (R1-R5), merge side-branch paths (N1b), stale readers (N2), no
+// checkpoint on close (N3), lock-safe prune (N4).
+// trace:TASK-1507 | ai:claude
+// ---------------------------------------------------------------------------
+
+const STATUSES: [&str; 3] = ["Approved", "Done", "Draft"];
+
+/// Base commit, then a side branch and a main line with the given commit
+/// times (offsets from `BASE_TS`), a merge at `merge`, and main commits at
+/// `after`. Every commit decodes to events; side and main touch different
+/// specs so the merge is clean.
+fn build_dated_merge(fx: &mut Fixture, side: &[i64], main: &[i64], merge: i64, after: &[i64]) {
+    let base = Spec::new("EPIC-1", "Epic", "Base");
+    fx.put(&base);
+    fx.commit_at(BASE_TS, "add EPIC-1");
+    fx.git(&["checkout", "-q", "-b", "side"]);
+    let mut sb = Spec::new("BUG-2", "Bug", "Side work");
+    for (i, off) in side.iter().enumerate() {
+        if i > 0 {
+            sb.status = STATUSES[i % 3].into();
+        }
+        fx.put(&sb);
+        fx.commit_at(BASE_TS + off, "side: BUG-2");
+    }
+    fx.git(&["checkout", "-q", "aida-store"]);
+    let mut mf = Spec::new("FR-3", "Functional", "Main work");
+    for (i, off) in main.iter().enumerate() {
+        if i > 0 {
+            mf.status = STATUSES[i % 3].into();
+        }
+        fx.put(&mf);
+        fx.commit_at(BASE_TS + off, "main: FR-3");
+    }
+    fx.merge_at(BASE_TS + merge, "side", &[]);
+    for (i, off) in after.iter().enumerate() {
+        mf.status = STATUSES[(i + main.len()) % 3].into();
+        fx.put(&mf);
+        fx.commit_at(BASE_TS + off, "main: FR-3 again");
+    }
+}
+
+fn commit_times(fx: &Fixture) -> Vec<i64> {
+    fx.git(&["log", "--format=%ct", "HEAD"])
+        .lines()
+        .map(|l| l.trim().parse().unwrap())
+        .collect()
+}
+
+/// Every `--since` bound around every commit time, plus none.
+fn since_probes(fx: &Fixture) -> Vec<(String, HistoryOpts)> {
+    let mut out = vec![("no since".to_string(), opts())];
+    for ts in commit_times(fx) {
+        for t in [ts - 1, ts, ts + 1] {
+            let mut o = opts();
+            o.since = Some(rfc3339(t));
+            out.push((format!("since {t}"), o));
+        }
+    }
+    out
+}
+
+/// Every `-n` and every `--max-commits` cut (plus a few combined with a
+/// filter).
+fn cut_probes(fx: &Fixture) -> Vec<(String, HistoryOpts)> {
+    let commits = commit_times(fx).len();
+    let events = collect_filtered_events_git(&fx.store, &opts())
+        .unwrap()
+        .0
+        .len();
+    let mut out = Vec::new();
+    for n in 0..=events + 1 {
+        let mut o = opts();
+        o.limit = n;
+        out.push((format!("-n {n}"), o));
+    }
+    for m in 0..=commits + 1 {
+        let mut o = opts();
+        o.max_commits = m;
+        o.max_commits_explicit = true;
+        out.push((format!("--max-commits {m}"), o.clone()));
+        o.limit = 2;
+        out.push((format!("--max-commits {m} -n 2"), o.clone()));
+        o.limit = 1000;
+        o.status_changes_only = true;
+        out.push((format!("--max-commits {m} --status-changes"), o));
+    }
+    out
+}
+
+type Walked = (Vec<Event>, bool);
+
+fn walk_all(fx: &Fixture, probes: &[(String, HistoryOpts)]) -> Vec<Walked> {
+    probes
+        .iter()
+        .map(|(_, o)| {
+            let (e, _, x) = collect_filtered_events_git(&fx.store, o).unwrap();
+            (e, x)
+        })
+        .collect()
+}
+
+/// A served answer must equal the walk exactly (order included).
+fn assert_same(got: &history_cache::CacheAnswer, walk: &Walked, label: &str) {
+    assert_eq!(
+        got.events, walk.0,
+        "[{label}] served events differ from the walk"
+    );
+    assert_eq!(
+        got.window_exhausted, walk.1,
+        "[{label}] window_exhausted differs"
+    );
+}
+
+/// Build every partial index reachable with back-fill chunks of 1-3
+/// commits and check every probe against the walk: it must match or fall
+/// back. Returns (served, fell back).
+fn check_partial_states(fx: &Fixture, probes: &[(String, HistoryOpts)]) -> (usize, usize) {
+    let walks = walk_all(fx, probes);
+    let total = commit_times(fx).len();
+    let (mut served, mut fell_back) = (0, 0);
+    for chunk in 1..=3usize {
+        for chunks in 1..=total.div_ceil(chunk) {
+            fx.drop_index();
+            test_support::partial_build(&fx.store, &fx.db, chunk, chunks).unwrap();
+            for ((label, o), walk) in probes.iter().zip(&walks) {
+                let label = format!("chunk {chunk} x{chunks}: {label}");
+                match test_support::query_only(&fx.store, &fx.db, o).unwrap() {
+                    Some(got) => {
+                        assert_same(&got, walk, &label);
+                        served += 1;
+                    }
+                    None => fell_back += 1,
+                }
+            }
+        }
+    }
+    fx.drop_index();
+    (served, fell_back)
+}
+
+#[test]
+fn task_1507_since_on_partial_index_with_old_side_branch_matches_or_falls_back() {
+    // B1: the side branch predates every main-line commit, so topo-order
+    // back-fill indexes old side commits before newer main-line ones.
+    let mut fx = Fixture::new();
+    build_dated_merge(&mut fx, &[10, 20, 30], &[1000, 1100, 1200, 1300], 1400, &[]);
+    let probes = since_probes(&fx);
+    let (served, fell_back) = check_partial_states(&fx, &probes);
+    assert!(served > 0, "some partial states must serve");
+    assert!(fell_back > 0, "some partial states must fall back");
+
+    // The exact state the review reproduced: two chunks of two commits
+    // hold the merge and side commits only; `--since` at a main commit
+    // must fall back, not serve an empty answer.
+    test_support::partial_build(&fx.store, &fx.db, 2, 2).unwrap();
+    assert_eq!(
+        test_support::meta(&fx.db, "unfilled_max_ts"),
+        Some((BASE_TS + 1300).to_string())
+    );
+    let mut o = opts();
+    o.since = Some(rfc3339(BASE_TS + 1100));
+    assert!(test_support::query_only(&fx.store, &fx.db, &o)
+        .unwrap()
+        .is_none());
+    // Newer than every unfilled commit: served, and correct.
+    o.since = Some(rfc3339(BASE_TS + 1301));
+    let got = test_support::query_only(&fx.store, &fx.db, &o)
+        .unwrap()
+        .expect("covered since serves");
+    let (walk, _, x) = collect_filtered_events_git(&fx.store, &o).unwrap();
+    assert_same(&got, &(walk, x), "since after the watermark");
+}
+
+#[test]
+fn task_1507_interleaved_merge_every_cut_matches_walk_exactly() {
+    // R1/R5: side and main commit dates interleave across the merge.
+    let side = [150, 250, 350];
+    let main = [100, 200, 300, 400];
+    let after = [600, 700];
+
+    // (i) a complete index.
+    let mut fx = Fixture::new();
+    build_dated_merge(&mut fx, &side, &main, 500, &after);
+    let mut probes = cut_probes(&fx);
+    probes.extend(since_probes(&fx));
+    let walks = walk_all(&fx, &probes);
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    for ((label, o), walk) in probes.iter().zip(&walks) {
+        let got = test_support::query_only(&fx.store, &fx.db, o)
+            .unwrap()
+            .unwrap_or_else(|| panic!("[complete: {label}] did not serve"));
+        assert_same(&got, walk, &format!("complete: {label}"));
+    }
+
+    // (ii) an index built before the merge and caught up across it: the
+    // side commits get higher seq than newer main-line commits.
+    let mut fx = Fixture::new();
+    build_dated_merge(&mut fx, &side, &main, 500, &after);
+    let merged_head = fx.head();
+    fx.git(&["checkout", "-q", "-b", "pre-merge", "HEAD~3"]);
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    fx.git(&["checkout", "-q", "aida-store"]);
+    assert_eq!(fx.head(), merged_head);
+    for ((label, o), walk) in probes.iter().zip(&walks) {
+        let got = serve(&fx, o).unwrap_or_else(|| panic!("[catch-up: {label}] did not serve"));
+        assert_same(&got, walk, &format!("catch-up: {label}"));
+    }
+
+    // (iii) every partial back-fill state.
+    let (served, _) = check_partial_states(&fx, &probes);
+    assert!(served > 0);
+}
+
+#[test]
+fn task_1507_skewed_commit_falls_back_near_it_only() {
+    // R3: B is older than its parent A, so git's walk shows B before A.
+    let mut fx = Fixture::new();
+    let mut s = Spec::new("FR-1", "Functional", "Skew");
+    fx.put(&s);
+    fx.commit_at(BASE_TS, "add FR-1");
+    for (off, st) in [
+        (1000, "Approved"),
+        (500, "Done"),
+        (2000, "Draft"),
+        (2100, "Approved"),
+    ] {
+        s.status = st.into();
+        fx.put(&s);
+        fx.commit_at(BASE_TS + off, "update FR-1");
+    }
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    let run = |o: &HistoryOpts| test_support::query_only(&fx.store, &fx.db, o).unwrap();
+    let check = |o: &HistoryOpts, label: &str| {
+        let (walk, _, x) = collect_filtered_events_git(&fx.store, o).unwrap();
+        let got = run(o).unwrap_or_else(|| panic!("[{label}] did not serve"));
+        assert_same(&got, &(walk, x), label);
+    };
+
+    // Unbounded, or reaching the skewed range: fall back.
+    assert!(run(&opts()).is_none(), "unbounded");
+    let mut o = opts();
+    o.max_commits = 3;
+    assert!(run(&o).is_none(), "window reaching the skewed parent");
+    let mut o = opts();
+    o.since = Some(rfc3339(BASE_TS + 1000));
+    assert!(run(&o).is_none(), "since at the skewed parent");
+    // Clear of it: served, exactly.
+    let mut o = opts();
+    o.max_commits = 2;
+    check(&o, "window above the skew");
+    let mut o = opts();
+    o.limit = 1;
+    check(&o, "-n 1");
+    let mut o = opts();
+    o.since = Some(rfc3339(BASE_TS + 1500));
+    check(&o, "since above the skew");
+}
+
+#[test]
+fn task_1507_boundary_tie_inside_merge_region_falls_back() {
+    // R4: a side and a main commit in the same second inside the merge's
+    // parallel region; then a parent/child tie on one line after it.
+    let mut fx = Fixture::new();
+    build_dated_merge(&mut fx, &[300], &[300], 600, &[900, 900]);
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    let run = |o: &HistoryOpts| test_support::query_only(&fx.store, &fx.db, o).unwrap();
+    let check = |o: &HistoryOpts, label: &str| {
+        let (walk, _, x) = collect_filtered_events_git(&fx.store, o).unwrap();
+        let got = run(o).unwrap_or_else(|| panic!("[{label}] did not serve"));
+        assert_same(&got, &(walk, x), label);
+    };
+    // Order: 900 (child), 900 (parent), merge 600, then the 300 tie.
+    let mut o = opts();
+    o.max_commits = 4;
+    assert!(run(&o).is_none(), "window boundary on the cross-branch tie");
+    let mut o = opts();
+    o.max_commits = 1;
+    check(&o, "boundary on the same-line tie");
+    let mut o = opts();
+    o.max_commits = 3;
+    check(&o, "boundary on the merge");
+    // A limit cut landing on the cross-branch tie also falls back.
+    let events_above = collect_filtered_events_git(&fx.store, &{
+        let mut o = opts();
+        o.max_commits = 3;
+        o
+    })
+    .unwrap()
+    .0
+    .len();
+    let mut o = opts();
+    o.limit = events_above + 1;
+    assert!(run(&o).is_none(), "-n boundary on the cross-branch tie");
+}
+
+#[test]
+fn task_1507_id_on_a_path_touched_across_an_ours_merge_uses_the_walk() {
+    // N1b: `-s ours` discards the side branch's tree, so `git log -- <path>`
+    // prunes the side commits that touched it; the index has them.
+    let mut fx = Fixture::new();
+    let mut bug = Spec::new("BUG-70", "Bug", "Both sides");
+    let epic = Spec::new("EPIC-72", "Epic", "Untouched after the base");
+    fx.put(&bug);
+    fx.put(&epic);
+    fx.commit_at(BASE_TS, "add BUG-70 EPIC-72");
+    fx.git(&["checkout", "-q", "-b", "side"]);
+    for (off, st) in [(100, "Approved"), (200, "Done")] {
+        bug.status = st.into();
+        fx.put(&bug);
+        fx.commit_at(BASE_TS + off, "side: update BUG-70");
+    }
+    fx.git(&["checkout", "-q", "aida-store"]);
+    let mut fr = Spec::new("FR-71", "Functional", "Main");
+    fx.put(&fr);
+    fx.commit_at(BASE_TS + 150, "main: add FR-71");
+    fx.merge_at(BASE_TS + 300, "side", &["-s", "ours"]);
+    fr.status = "Approved".into();
+    fx.put(&fr);
+    fx.commit_at(BASE_TS + 400, "main: update FR-71");
+
+    let mut o = opts();
+    o.id_filter = Some("BUG-70".into());
+    let (walk, _, _) = collect_filtered_events_git(&fx.store, &o).unwrap();
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    assert!(
+        !walk.iter().any(|e| e.kind
+            == EventKind::StatusChange {
+                from: "Approved".into(),
+                to: "Done".into()
+            }),
+        "fixture: the walk simplifies the side branch away"
+    );
+    assert!(
+        serve(&fx, &o).is_none(),
+        "--id on a side-branch path must use the walk"
+    );
+    // A path untouched across the merge is still served, exactly.
+    let mut o = opts();
+    o.id_filter = Some("EPIC-72".into());
+    assert_parity(&fx, &o, "id untouched across the merge");
+}
+
+#[test]
+fn task_1507_stale_or_diverged_reader_falls_back_without_reset() {
+    // N2: a second checkout of the store behind the shared index.
+    let mut fx = Fixture::new();
+    build_linear(&mut fx);
+    assert_parity(&fx, &opts(), "initial");
+    let tip = fx.head();
+    let count = test_support::commit_count(&fx.db);
+    let built_at = test_support::meta(&fx.db, "built_at");
+    let old = fx.tmp.path().join("old-checkout");
+    fx.git(&[
+        "worktree",
+        "add",
+        "-q",
+        "--detach",
+        old.to_str().unwrap(),
+        "HEAD~3",
+    ]);
+
+    let unchanged = |label: &str| {
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha"),
+            Some(tip.clone()),
+            "[{label}]"
+        );
+        assert_eq!(test_support::commit_count(&fx.db), count, "[{label}]");
+        assert_eq!(
+            test_support::meta(&fx.db, "built_at"),
+            built_at,
+            "[{label}]"
+        );
+        assert_eq!(
+            test_support::meta(&fx.db, "last_reset_reason"),
+            None,
+            "[{label}]"
+        );
+    };
+    // Behind the tip.
+    assert!(history_cache::serve_at(&old, &fx.db, &opts(), GENEROUS)
+        .unwrap()
+        .is_none());
+    unchanged("behind");
+    // Diverged from the tip while the main checkout still has it.
+    let s = Spec::new("STORY-30", "Story", "On the old checkout");
+    let rel = aida_core::object_store::relative_object_path(s.id).unwrap();
+    std::fs::create_dir_all(old.join(&rel).parent().unwrap()).unwrap();
+    std::fs::write(old.join(&rel), s.yaml()).unwrap();
+    git_in(&old, &["add", "-A"], fx.clock + 60);
+    git_in(&old, &["commit", "-q", "-m", "diverge"], fx.clock + 60);
+    assert!(history_cache::serve_at(&old, &fx.db, &opts(), GENEROUS)
+        .unwrap()
+        .is_none());
+    unchanged("diverged");
+    // The main checkout is still served from the untouched index.
+    assert_parity(&fx, &opts(), "main checkout after stale readers");
+    unchanged("main served");
+
+    // A real rewrite (no checkout has the indexed tip any more) resets.
+    fx.git(&["reset", "-q", "--hard", "HEAD~2"]);
+    let s = Spec::new("STORY-31", "Story", "After a rewrite");
+    fx.put(&s);
+    fx.commit("add STORY-31");
+    assert_parity(&fx, &opts(), "after rewrite");
+    assert_eq!(
+        test_support::meta(&fx.db, "last_reset_reason").as_deref(),
+        Some("store history was rewritten")
+    );
+}
+
+#[test]
+fn task_1507_connection_close_skips_the_wal_checkpoint() {
+    // N3: the WAL is left for SQLite's auto-checkpoint, not folded back
+    // (with fsyncs) every time a query closes the connection.
+    let mut fx = Fixture::new();
+    build_linear(&mut fx);
+    assert_parity(&fx, &opts(), "initial");
+    let s = Spec::new("STORY-40", "Story", "One more");
+    fx.put(&s);
+    fx.commit("add STORY-40");
+    assert_parity(&fx, &opts(), "after a one-commit catch-up");
+    let wal = PathBuf::from(format!("{}-wal", fx.db.display()));
+    assert!(
+        wal.metadata().map(|m| m.len() > 0).unwrap_or(false),
+        "the WAL survives the close"
+    );
+    // A fresh connection still sees every committed row.
+    assert_eq!(test_support::meta(&fx.db, "tip_sha"), Some(fx.head()));
+}
+
+#[test]
+fn task_1507_prune_skips_other_versions_whose_lock_is_held() {
+    // N4: another `aida` version still indexing keeps its files.
+    use fs2::FileExt;
+    let mut fx = Fixture::new();
+    build_linear(&mut fx);
+    let dir = fx.db.parent().unwrap().to_path_buf();
+    for f in [
+        "history-v0-8.db",
+        "history-v0-8.db-wal",
+        "history-v0-8.db.lock",
+        "history-v0-9.db",
+        "history-v0-9.db.lock",
+    ] {
+        std::fs::write(dir.join(f), "old").unwrap();
+    }
+    let held = std::fs::OpenOptions::new()
+        .write(true)
+        .open(dir.join("history-v0-8.db.lock"))
+        .unwrap();
+    held.lock_exclusive().unwrap();
+    let report = history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    let mut pruned: Vec<String> = report
+        .pruned
+        .iter()
+        .map(|p| p.file_name().unwrap().to_str().unwrap().to_string())
+        .collect();
+    pruned.sort();
+    assert_eq!(pruned, vec!["history-v0-9.db", "history-v0-9.db.lock"]);
+    for f in [
+        "history-v0-8.db",
+        "history-v0-8.db-wal",
+        "history-v0-8.db.lock",
+    ] {
+        assert!(dir.join(f).exists(), "{f} belongs to a running indexer");
+    }
+    drop(held);
 }
