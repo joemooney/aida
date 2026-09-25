@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:04:13.382715808Z
-modified_at: 2026-09-25T15:10:59.631801331Z
+modified_at: 2026-09-25T15:30:31.218104073Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -108,6 +108,30 @@ comments:
     Minor, non-blocking: apply_requeue exits with ? at supervisor.rs (the loop) and skips the queue add for specs already moved to Approved when a later return_to_flight errors (an A7 gap on the error path).
   created_at: 2026-09-25T15:10:59.631801331Z
   modified_at: 2026-09-25T15:10:59.631801331Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d930-86b2-7a02-b0b4-2c883b4dbb98
+  author: joe
+  content: |-
+    Strict review (final delta): APPROVE — reviewed c45b5fb4a7 (delta from 2ebf5bcf58). N1 is resolved.
+
+    VERIFIED
+    killpg safety: the killpg target is always child.id() of a child that was spawned successfully. A spawn failure returns at the ? before any kill (notify.rs:691). A pid is never 0 or 1, so the call can never signal the tick's own group or init. The group exists only when timeout is Some (notify.rs:687). The None path returns through wait_with_output before kill_group (notify.rs:712-721), so non-timeout callers (aida notify check/test, send_direct, lib.rs:22952) are byte-for-byte unchanged: no process group and no group kill. Reuse race: exited_unreaped uses waitid(WEXITED|WNOHANG|WNOWAIT) (notify.rs:774), so the leader stays unreaped until child.wait() runs after killpg. The pid, and so the pgid, cannot be reused in that window. No code in aida-*/src sets SIGCHLD to SIG_IGN or does a waitpid(-1)/P_ALL reap that could reap the leader behind our back. I found no race.
+    Normal exit: a background leftover in the group is SIGKILLed. I accept this for the tick-only caller. Before this delta the same leftover held stderr and leaked a blocked reader thread on every tick. Desktop notifiers (notify-send via D-Bus, a dbus-activated daemon) are not children, and a properly daemonized process (setsid) leaves the group and survives. Only a naive 'cmd &' is killed.
+    Reader threads: once every holder of the pipe is SIGKILLed, the pipe hits EOF and the thread ends. recv_timeout(1s) bounds the wait, which is still within the 90s+15s<120s budget. The join happens only when the thread is_finished, so the call never blocks on it.
+    Tests (CARGO_BUILD_JOBS=3, timeout 600): notify 23, shift 64, supervis 56, all pass.
+    Mutations in a throwaway copy: (a) with process_group(0) removed, notify_timeout_kills_the_whole_process_group FAILS (on the elapsed bound, notify.rs:1131; killpg with no group is a no-op). (b) with the group kill replaced by child.kill() (the original N1 shape), the same test FAILS with 'process group ... still has members' (notify.rs:1151). The test catches both regressions. No stray sleep processes remain afterwards.
+    Isolation: the new tests use tempdir only (a pidfile and a GitBackend in a tempdir), with injected record/trail closures. There is no env mutation, and nothing touches ~/.aida, the live store, crontab or systemd.
+    Floors: the delta adds no merge, approve, hold-clear or authority path.
+
+    MINOR, NON-BLOCKING (follow-up candidates)
+    m1 notify.rs:733: the ? on exited_unreaped returns without kill_group or wait, which would leak the group and a zombie. It is practically unreachable (ECHILD/EINTR under WNOHANG). A best-effort kill_group+wait before propagating would be more robust.
+    m2 notify.rs:704: the stdin write_all still happens before the bounded loop. A message bigger than the pipe buffer, sent to a hung command that never reads stdin, would block with no bound. Today's messages are small (5-name cap). This is pre-existing.
+    m3 notify.rs:726 comment: 'the group kill guarantees' the reader ends. That is not true for a descendant that did setsid/setpgid while holding stderr. The thread is detached (not joined), so it leaks for that process's lifetime only. The overstatement is in the comment only.
+    m4 macOS: waitid+WNOWAIT and si_pid() compile against libc apple, but Darwin's waitid has known quirks (Go avoids it, golang/go#19314). If si_pid stays 0 there, every tick notify would read as a 15s timeout. Please run notify_timeout_kills_the_whole_process_group / notify_bounded_command_is_killed_at_the_timeout on the macos-latest CI leg, or gate the WNOWAIT path to linux.
+    m5 supervisor.rs (apply_requeue_with, Err branch): the new 'queue the already-approved specs, then return the store error' path has no test. Reverting it to 'Err(e) => return Err(e)' leaves all 56 supervis tests passing. The new test covers only the record-failure (Unrecorded) seam.
+    m6 docs/autonomous-drain.md:1397: this does not say that a notify command's leftover background processes are killed when it exits. Add one line.
+  created_at: 2026-09-25T15:30:31.218104073Z
+  modified_at: 2026-09-25T15:30:31.218104073Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
