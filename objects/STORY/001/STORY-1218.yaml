@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:20.548044413Z
-modified_at: 2026-09-25T02:04:44.952095547Z
+modified_at: 2026-09-25T02:05:44.019372526Z
 req_type: Story
 tags:
 - autonomy
@@ -324,4 +324,11 @@ comments:
   created_at: 2026-09-25T01:20:35.297747161Z
   modified_at: 2026-09-25T01:20:35.297747161Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d64f-ba28-7b32-8583-57d1511ea791
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-09-24-shift-tick.md
+    filed 4 task(s): TASK-1493, TASK-1494, TASK-1495, TASK-1496
+  created_at: 2026-09-25T02:05:44.360635477Z
+  modified_at: 2026-09-25T02:05:44.360635477Z
 execution_mode: guided
