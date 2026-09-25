@@ -47,6 +47,33 @@ pub struct GitBackend {
     oplog_enabled: bool,
 }
 
+/// What a whole-store `save()` left alone.
+// trace:BUG-1612 | ai:claude
+#[derive(Debug, Default, Clone)]
+pub(crate) struct SaveReport {
+    /// Objects absent from the saved store that were kept because the store
+    /// was not loaded with them (added concurrently, or no load snapshot).
+    pub(crate) kept_unloaded: Vec<String>,
+    /// Specs in the saved store that were NOT written (or deleted) because
+    /// their object changed on disk after the load; the in-memory copies are
+    /// stale for these.
+    pub(crate) not_written: Vec<String>,
+}
+
+/// What `update_atomically_tracked` wrote.
+// trace:BUG-1612 | ai:claude
+#[derive(Debug, Default, Clone)]
+pub(crate) struct AtomicWriteSummary {
+    /// Requirements whose object was written (modified or created), as written.
+    pub(crate) written: Vec<Requirement>,
+    /// Spec ids of the requirements the transaction created.
+    pub(crate) created: Vec<String>,
+    /// UUIDs of the requirements the transaction removed.
+    pub(crate) deleted: Vec<uuid::Uuid>,
+    /// Whether `metadata.yaml` changed.
+    pub(crate) metadata_changed: bool,
+}
+
 /// Metadata stored separately from requirements (the "store" fields).
 /// This is everything in RequirementsStore except the requirements themselves.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -471,6 +498,7 @@ impl GitBackend {
             store_version: 0,
             migrated_to: None,
             dispenser: self.dispenser.clone(),
+            loaded_objects: None,
         }
     }
 
@@ -673,6 +701,8 @@ impl GitBackend {
     /// no-op). trace:BUG-425 | ai:claude
     pub fn bulk_update(&self, requirements: &[Requirement], commit_subject: &str) -> Result<usize> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // trace:BUG-1612 | ai:claude — serialize with every other store writer.
+        let _lock = self.lock_store()?;
         let mut changed: Vec<String> = Vec::new();
         for requirement in requirements {
             if let Some(spec_id) = self.stage_requirement_update(requirement)? {
@@ -697,25 +727,21 @@ impl GitBackend {
         self.auto_commit_paths(&message, &path_refs);
         Ok(n)
     }
-}
 
-impl DatabaseBackend for GitBackend {
-    fn backend_type(&self) -> BackendType {
-        BackendType::Git
+    /// Acquire the store write lock (re-entrant per thread). Every write path
+    /// holds it across its read-modify-write window.
+    // trace:BUG-1612 | ai:claude
+    pub(crate) fn lock_store(&self) -> Result<super::store_lock::StoreWriteGuard> {
+        super::store_lock::acquire(&self.root)
     }
 
-    fn path(&self) -> &Path {
-        &self.root
-    }
-
-    fn load(&self) -> Result<RequirementsStore> {
-        let meta = self.load_metadata()?;
-        let requirements = object_store::load_all_objects(&self.objects_root)?;
-        Ok(self.assemble_store(meta, requirements))
-    }
-
-    fn save(&self, store: &RequirementsStore) -> Result<()> {
+    /// Whole-store save (the `DatabaseBackend::save` body), under the store
+    /// write lock, reporting the objects it kept because the store was not
+    /// loaded with them.
+    // trace:BUG-1612 | ai:claude
+    pub(crate) fn save_reporting(&self, store: &RequirementsStore) -> Result<SaveReport> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
+        let _lock = self.lock_store()?;
         // Save metadata
         let meta = Self::extract_metadata(store);
         self.save_metadata(&meta)?;
@@ -747,18 +773,41 @@ impl DatabaseBackend for GitBackend {
         // filing provenance. Captured lazily, once per save.
         // trace:CR-8 | ai:claude
         let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
+        // BUG-1612: with a load snapshot, this save is a per-spec
+        // compare-and-swap. A spec whose file changed on disk since the load
+        // (a concurrent edit, whatever its `modified_at`), or that appeared
+        // after the load, is not written: the in-memory copy predates it.
+        // trace:BUG-1612 | ai:claude
+        let snapshot = store.loaded_objects.as_deref();
+        let mut changed_since_load: Vec<String> = Vec::new();
         for req in &store.requirements {
             if let Some(ref spec_id) = req.spec_id {
                 current_specs.insert(spec_id.clone());
-                let req_to_write = match object_store::read_object(&self.objects_root, spec_id) {
-                    Ok(disk) => {
+                let disk_text = object_store::read_object_text(&self.objects_root, spec_id)?;
+                if let (Some(snapshot), Some(text)) = (snapshot, disk_text.as_deref()) {
+                    let unchanged = snapshot
+                        .get(spec_id)
+                        .is_some_and(|fp| *fp == object_store::content_fingerprint(text));
+                    if !unchanged {
+                        if serde_yaml::to_string(req)? != text {
+                            changed_since_load.push(spec_id.clone());
+                        }
+                        continue;
+                    }
+                }
+                let disk = disk_text
+                    .as_deref()
+                    .map(serde_yaml::from_str::<Requirement>);
+                let req_to_write = match disk {
+                    Some(Ok(disk)) => {
                         if disk.modified_at > req.modified_at {
                             stale_skipped.push(spec_id.clone());
                             continue;
                         }
                         Self::preserve_full_save_only_fields(req.clone(), &disk)
                     }
-                    Err(_) => {
+                    // Absent (or unparseable, as before): this save creates it.
+                    _ => {
                         let mut created = req.clone();
                         if created.filed_at.is_none() {
                             let p =
@@ -798,10 +847,32 @@ impl DatabaseBackend for GitBackend {
         // `aida add`). Skip-and-warn mirrors the load-side policy so the
         // file survives until a binary that *can* parse it runs.
         // trace:BUG-96 | ai:claude
+        //
+        // BUG-1612: never delete an object this store was not loaded with. A
+        // spec another writer added after the caller's `load()` is absent from
+        // the in-memory store but was never removed by the caller; deleting it
+        // silently destroys that writer's work. Only objects listed in the
+        // store's load snapshot (`loaded_objects`), unchanged since the load, are deletable; a store
+        // with no snapshot (built in memory, not loaded from this store)
+        // deletes nothing.
+        // trace:BUG-1612 | ai:claude
         let mut deleted_specs: Vec<String> = Vec::new();
         let mut preserved_unparseable: Vec<String> = Vec::new();
+        let mut kept_unloaded: Vec<String> = Vec::new();
         for spec_id in &existing_specs {
             if !current_specs.contains(spec_id) {
+                // Deletable only if loaded AND unchanged since the load.
+                let loaded_fp = snapshot.and_then(|s| s.get(spec_id));
+                let Some(loaded_fp) = loaded_fp else {
+                    kept_unloaded.push(spec_id.clone());
+                    continue;
+                };
+                let now_fp = object_store::read_object_text(&self.objects_root, spec_id)?
+                    .map(|t| object_store::content_fingerprint(&t));
+                if now_fp != Some(*loaded_fp) {
+                    changed_since_load.push(spec_id.clone());
+                    continue;
+                }
                 if object_store::read_object(&self.objects_root, spec_id).is_err() {
                     preserved_unparseable.push(spec_id.clone());
                     continue;
@@ -818,6 +889,22 @@ impl DatabaseBackend for GitBackend {
                 preserved_unparseable.join(", ")
             );
         }
+        if !changed_since_load.is_empty() {
+            eprintln!(
+                "Warning: skipped {} spec(s) during full-store save: {} \
+                 (changed on disk after this store was loaded — a concurrent \
+                 edit; re-load to pick it up)",
+                changed_since_load.len(),
+                changed_since_load.join(", ")
+            );
+        }
+        if !kept_unloaded.is_empty() && snapshot.is_some() {
+            eprintln!(
+                "Note: kept {} object(s) added after this store was loaded: {}",
+                kept_unloaded.len(),
+                kept_unloaded.join(", ")
+            );
+        }
 
         // Pick a commit message that reflects what actually changed instead
         // of the legacy generic "chore: update requirements store" used even
@@ -831,9 +918,307 @@ impl DatabaseBackend for GitBackend {
             (w, d) => format!("chore: update {} requirements, delete {}", w, d),
         };
         self.auto_commit(&message);
+        kept_unloaded.sort();
+        let mut not_written = changed_since_load;
+        not_written.extend(stale_skipped);
+        not_written.sort();
+        Ok(SaveReport {
+            kept_unloaded,
+            not_written,
+        })
+    }
+
+    /// Per-spec compare-and-swap update (the git-store `update_spec_atomically`).
+    ///
+    /// Under the store write lock: read ONLY `target`'s object file (located by
+    /// its `spec_id`, identity checked against its `id`), apply `update_fn`,
+    /// and write back only that object with a targeted commit. No other object
+    /// is read, written, or deleted. Just before the write the file is re-read
+    /// and compared with the bytes the update started from, so a writer that
+    /// bypasses the lock (an older binary, a hand edit) is detected and the
+    /// update is refused instead of silently clobbering it.
+    // trace:BUG-1612 | ai:claude
+    pub fn update_spec_atomically<F>(
+        &self,
+        target: &Requirement,
+        update_fn: F,
+    ) -> Result<Option<Requirement>>
+    where
+        F: FnOnce(&mut Requirement),
+    {
+        let spec_id = target.spec_id.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("Cannot update a requirement without a spec_id in the git store")
+        })?;
+        let spec_id = object_store::canonical_spec_id(spec_id);
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        let _lock = self.lock_store()?;
+
+        let path = object_store::object_path(&self.objects_root, &spec_id)?;
+        let before = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e).with_context(|| format!("Failed to read {}", path.display())),
+        };
+        let current: Requirement = serde_yaml::from_slice(&before)
+            .with_context(|| format!("Failed to parse {}", path.display()))?;
+        if current.id != target.id {
+            anyhow::bail!(
+                "{spec_id} now names a different requirement (uuid {} on disk, {} expected); \
+                 nothing was written",
+                current.id,
+                target.id
+            );
+        }
+
+        let mut next = current.clone();
+        update_fn(&mut next);
+        if next.id != current.id || next.spec_id != current.spec_id {
+            anyhow::bail!(
+                "update of {spec_id} tried to change its id or spec_id; nothing was written"
+            );
+        }
+        if serde_yaml::to_string(&next)? == serde_yaml::to_string(&current)? {
+            return Ok(Some(next));
+        }
+
+        self.ensure_object_unchanged(&spec_id, &path, &before)?;
+        if let Some(written) = self.stage_requirement_update(&next)? {
+            let rel = object_store::relative_object_path(written)?;
+            self.auto_commit_paths(&format!("update {}", written), &[&rel]);
+        }
+        Ok(Some(next))
+    }
+
+    /// Compare-and-swap check: the object at `path` must still hold `before`.
+    // trace:BUG-1612 | ai:claude
+    fn ensure_object_unchanged(&self, spec_id: &str, path: &Path, before: &[u8]) -> Result<()> {
+        let now = std::fs::read(path).ok();
+        if now.as_deref() != Some(before) {
+            anyhow::bail!(
+                "concurrent modification of {spec_id}: its object changed on disk while this \
+                 update held the store write lock (a writer that bypasses the lock). Nothing \
+                 was written; re-run the command to apply it to the current version."
+            );
+        }
         Ok(())
     }
 
+    /// Whole-store transaction, written per spec (the git-store
+    /// `update_atomically`).
+    ///
+    /// Under the store write lock: load the store, apply `update_fn`, then diff
+    /// the result against the loaded snapshot and write ONLY what the closure
+    /// changed: modified specs (targeted writes that record the same oplog ops
+    /// as `update_requirement`), specs it added, specs it removed from the
+    /// loaded store, and `metadata.yaml` when a store-level field changed. One
+    /// commit stages exactly those paths. An object the closure never saw (one
+    /// that failed to parse, or appeared after the load) is never touched, so
+    /// nothing is ever deleted that was absent from the snapshot.
+    ///
+    /// Every modified or removed spec is compare-and-swapped against its loaded
+    /// copy, and every added spec must not exist yet, all before anything is
+    /// written; a mismatch (a writer that bypassed the lock) refuses the whole
+    /// transaction.
+    // trace:BUG-1612 | ai:claude
+    pub(crate) fn update_atomically_tracked<F>(
+        &self,
+        update_fn: F,
+    ) -> Result<(RequirementsStore, AtomicWriteSummary)>
+    where
+        F: FnOnce(&mut RequirementsStore),
+    {
+        use std::collections::HashMap;
+
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        let _lock = self.lock_store()?;
+
+        let mut store = self.load()?;
+        let meta_before = serde_yaml::to_string(&Self::extract_metadata(&store))?;
+        let mut before: HashMap<String, (uuid::Uuid, String)> = HashMap::new();
+        for req in &store.requirements {
+            if let Some(sid) = req.spec_id.as_deref() {
+                before.insert(sid.to_string(), (req.id, serde_yaml::to_string(req)?));
+            }
+        }
+
+        update_fn(&mut store);
+
+        let meta_changed = serde_yaml::to_string(&Self::extract_metadata(&store))? != meta_before;
+        let mut changed: Vec<&Requirement> = Vec::new();
+        let mut created: Vec<&Requirement> = Vec::new();
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for req in &store.requirements {
+            let Some(sid) = req.spec_id.as_deref() else {
+                continue;
+            };
+            if !seen.insert(sid) {
+                anyhow::bail!(
+                    "update left two requirements with spec_id {sid}; nothing was written"
+                );
+            }
+            match before.get(sid) {
+                Some((_, yaml)) => {
+                    if &serde_yaml::to_string(req)? != yaml {
+                        changed.push(req);
+                    }
+                }
+                None => created.push(req),
+            }
+        }
+        let removed: Vec<(&String, uuid::Uuid)> = before
+            .iter()
+            .filter(|(sid, _)| !seen.contains(sid.as_str()))
+            .map(|(sid, (id, _))| (sid, *id))
+            .collect();
+
+        // Verify every precondition before the first write.
+        for sid in changed
+            .iter()
+            .filter_map(|r| r.spec_id.as_deref())
+            .chain(removed.iter().map(|(sid, _)| sid.as_str()))
+        {
+            let on_disk = object_store::read_object(&self.objects_root, sid)
+                .ok()
+                .and_then(|r| serde_yaml::to_string(&r).ok());
+            if on_disk.as_deref() != before.get(sid).map(|(_, y)| y.as_str()) {
+                anyhow::bail!(
+                    "concurrent modification of {sid}: its object changed on disk while this \
+                     update held the store write lock (a writer that bypasses the lock). \
+                     Nothing was written; re-run the command."
+                );
+            }
+        }
+        for req in &created {
+            let sid = req.spec_id.as_deref().unwrap_or_default();
+            if object_store::object_exists(&self.objects_root, sid)? {
+                anyhow::bail!(
+                    "{sid} already exists on disk but was not in the loaded store (a concurrent \
+                     add); nothing was written"
+                );
+            }
+        }
+
+        let mut summary = AtomicWriteSummary {
+            metadata_changed: meta_changed,
+            ..Default::default()
+        };
+        let mut paths: Vec<String> = Vec::new();
+        if meta_changed {
+            self.save_metadata(&Self::extract_metadata(&store))?;
+            paths.push("metadata.yaml".to_string());
+        }
+        for req in &changed {
+            if let Some(sid) = self.stage_requirement_update(req)? {
+                paths.push(object_store::relative_object_path(sid)?);
+                summary.written.push((*req).clone());
+            }
+        }
+        let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
+        for req in &created {
+            let mut new_req = (*req).clone();
+            if new_req.filed_at.is_none() {
+                let p = filing_provenance.get_or_insert_with(crate::provenance::capture);
+                crate::provenance::stamp_with(&mut new_req, p);
+            }
+            self.record_op(
+                new_req.id,
+                crate::oplog::OpKind::Create {
+                    title: new_req.title.clone(),
+                    description: new_req.description.clone(),
+                    req_type: format!("{:?}", new_req.req_type),
+                    status: new_req.effective_status(),
+                    priority: new_req.effective_priority(),
+                },
+            );
+            object_store::write_object(&self.objects_root, &new_req)?;
+            let sid = new_req.spec_id.clone().unwrap_or_default();
+            paths.push(object_store::relative_object_path(&sid)?);
+            summary.created.push(sid);
+            summary.written.push(new_req);
+        }
+        for (sid, id) in &removed {
+            object_store::delete_object(&self.objects_root, sid)?;
+            paths.push(object_store::relative_object_path(sid)?);
+            summary.deleted.push(*id);
+        }
+        // The in-memory copies of created specs carry the provenance stamp
+        // that was written to disk.
+        for written in &summary.written {
+            if let Some(slot) = store.requirements.iter_mut().find(|r| r.id == written.id) {
+                slot.filed_at = written.filed_at.clone();
+            }
+        }
+
+        if !paths.is_empty() {
+            let n_written = summary.written.len();
+            let n_deleted = summary.deleted.len();
+            let message = match (n_written, n_deleted) {
+                (0, 0) => "chore: update requirements store metadata".to_string(),
+                (1, 0) if summary.created.len() == 1 => {
+                    format!("add {} — {}", summary.created[0], summary.written[0].title)
+                }
+                (1, 0) => format!(
+                    "update {}",
+                    summary.written[0].spec_id.as_deref().unwrap_or("?")
+                ),
+                (0, 1) => format!("delete {}", removed[0].0),
+                (w, 0) => format!("chore: update {} requirements", w),
+                (0, d) => format!("chore: delete {} requirements", d),
+                (w, d) => format!("chore: update {} requirements, delete {}", w, d),
+            };
+            let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+            self.auto_commit_paths(&message, &path_refs);
+        }
+        Ok((store, summary))
+    }
+}
+
+impl DatabaseBackend for GitBackend {
+    fn backend_type(&self) -> BackendType {
+        BackendType::Git
+    }
+
+    fn path(&self) -> &Path {
+        &self.root
+    }
+
+    fn load(&self) -> Result<RequirementsStore> {
+        let meta = self.load_metadata()?;
+        // BUG-1612: remember which objects were on disk at load time, so a
+        // later whole-store save only deletes objects this caller loaded.
+        // trace:BUG-1612 | ai:claude
+        let (requirements, snapshot) =
+            object_store::load_all_objects_with_fingerprints(&self.objects_root)?;
+        let mut store = self.assemble_store(meta, requirements);
+        store.loaded_objects = Some(std::sync::Arc::new(snapshot));
+        Ok(store)
+    }
+
+    fn save(&self, store: &RequirementsStore) -> Result<()> {
+        self.save_reporting(store).map(|_| ())
+    }
+
+    /// Per-spec compare-and-swap.
+    // trace:BUG-1612 | ai:claude
+    fn update_spec_atomically<F>(
+        &self,
+        target: &Requirement,
+        update_fn: F,
+    ) -> Result<Option<Requirement>>
+    where
+        F: FnOnce(&mut Requirement),
+    {
+        GitBackend::update_spec_atomically(self, target, update_fn)
+    }
+
+    /// Whole-store transaction written per spec.
+    // trace:BUG-1612 | ai:claude
+    fn update_atomically<F>(&self, update_fn: F) -> Result<RequirementsStore>
+    where
+        F: FnOnce(&mut RequirementsStore),
+    {
+        Ok(self.update_atomically_tracked(update_fn)?.0)
+    }
     // Override individual CRUD for efficiency — don't reload everything each time
 
     fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
@@ -884,6 +1269,8 @@ impl DatabaseBackend for GitBackend {
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // trace:BUG-1612 | ai:claude — serialize with every other store writer.
+        let _lock = self.lock_store()?;
         // Record granular field ops + write the YAML via the shared helper,
         // then targeted-commit only the one YAML this op touched (when it
         // actually changed). The op-recording logic lives in
@@ -898,6 +1285,8 @@ impl DatabaseBackend for GitBackend {
 
     fn delete_requirement(&self, id: &uuid::Uuid) -> Result<()> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // trace:BUG-1612 | ai:claude — serialize with every other store writer.
+        let _lock = self.lock_store()?;
         if let Some(req) = object_store::find_by_uuid(&self.objects_root, id)? {
             if let Some(ref spec_id) = req.spec_id {
                 self.record_op(*id, crate::oplog::OpKind::Archive);
@@ -913,6 +1302,8 @@ impl DatabaseBackend for GitBackend {
 
     fn add_requirement(&self, requirement: Requirement) -> Result<Requirement> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // trace:BUG-1612 | ai:claude — serialize with every other store writer.
+        let _lock = self.lock_store()?;
         let mut req = requirement;
         // CR-8: stamp filing provenance at creation (write-once; a caller that
         // already stamped keeps its stamp). trace:CR-8 | ai:claude
@@ -1296,6 +1687,8 @@ impl<'a> BulkWriter<'a> {
     /// like "chore" or "feat(jira)".
     pub fn finish(self, commit_subject: &str) -> Result<usize> {
         crate::git_ops::ensure_store_write_safe(&self.backend.root)?;
+        // trace:BUG-1612 | ai:claude — serialize with every other store writer.
+        let _lock = self.backend.lock_store()?;
         // Persist all object YAMLs first (skipping unchanged just in case the
         // caller is re-running an idempotent import).
         let mut written: Vec<String> = Vec::new();
@@ -2105,7 +2498,16 @@ mod tests {
         assert!(root.join("objects/FR/000/FR-001.yaml").exists());
         assert!(root.join("objects/FR/000/FR-002.yaml").exists());
 
-        // Save again with only 1 requirement — FR-002 should be deleted
+        // BUG-1612: a store built in memory (no load snapshot) deletes
+        // nothing, even when objects on disk are absent from it.
+        store
+            .requirements
+            .retain(|r| r.spec_id.as_deref() == Some("FR-001"));
+        backend.save(&store).unwrap();
+        assert!(root.join("objects/FR/000/FR-002.yaml").exists());
+
+        // A caller that LOADED the store and removed FR-002 deletes it.
+        let mut store = backend.load().unwrap();
         store
             .requirements
             .retain(|r| r.spec_id.as_deref() == Some("FR-001"));
@@ -2567,5 +2969,395 @@ mod tests {
             new.filed_at.is_some(),
             "a spec created by a full-store save is stamped"
         );
+    }
+
+    // ---- BUG-1612: per-spec compare-and-swap, no whole-store rewrite -------
+
+    /// A git-initialized store with `n` seeded specs (TASK-1..TASK-n).
+    // trace:BUG-1612 | ai:claude
+    fn bug1612_git_store(n: usize) -> (tempfile::TempDir, PathBuf, GitBackend, Vec<Requirement>) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        for args in [
+            &["init", "-q"][..],
+            &["config", "user.email", "test@example.com"][..],
+            &["config", "user.name", "Test"][..],
+        ] {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .unwrap();
+        }
+        let mut seeded = Vec::new();
+        for i in 1..=n {
+            let mut r = Requirement::new(format!("Spec {i}"), format!("desc {i}"));
+            r.spec_id = Some(format!("TASK-{i}"));
+            seeded.push(backend.add_requirement(r).unwrap());
+        }
+        (dir, root, backend, seeded)
+    }
+
+    fn bug1612_head_files(root: &Path) -> Vec<String> {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args([
+                "show",
+                "--no-renames",
+                "--name-only",
+                "--pretty=format:",
+                "HEAD",
+            ])
+            .output()
+            .unwrap();
+        String::from_utf8(out.stdout)
+            .unwrap()
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(str::to_string)
+            .collect()
+    }
+
+    fn bug1612_external(title: &str, spec_id: &str) -> Requirement {
+        let mut r = Requirement::new(title.into(), "written by another writer".into());
+        r.spec_id = Some(spec_id.into());
+        r
+    }
+
+    /// Two writers: a spec added by another writer between the atomic
+    /// update's load and its write is NOT deleted, and a stale whole-store
+    /// save of a snapshot that predates the add does not delete it either.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_concurrent_add_between_load_and_atomic_update_is_not_deleted() {
+        let (_dir, root, backend, _) = bug1612_git_store(1);
+        let stale_snapshot = backend.load().unwrap();
+
+        let objects = root.join("objects");
+        backend
+            .update_atomically(|s| {
+                let r = s
+                    .requirements
+                    .iter_mut()
+                    .find(|r| r.spec_id.as_deref() == Some("TASK-1"))
+                    .unwrap();
+                r.title = "edited".into();
+                // Writer B lands while writer A is between load and write.
+                object_store::write_object(&objects, &bug1612_external("added by B", "TASK-2"))
+                    .unwrap();
+            })
+            .unwrap();
+
+        assert!(object_store::object_exists(&objects, "TASK-2").unwrap());
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-1").unwrap().title,
+            "edited"
+        );
+        // Targeted commit: only TASK-1's object (plus the oplog), never B's.
+        let files = bug1612_head_files(&root);
+        assert!(files.contains(&"objects/TASK/000/TASK-1.yaml".to_string()));
+        assert!(
+            !files.iter().any(|f| f.contains("TASK-2")),
+            "the atomic update must not stage another writer's object: {files:?}"
+        );
+
+        // A whole-store save of a snapshot loaded before B's add keeps it.
+        backend.save(&stale_snapshot).unwrap();
+        assert!(
+            object_store::object_exists(&objects, "TASK-2").unwrap(),
+            "a stale whole-store save must not delete a spec it never loaded"
+        );
+    }
+
+    /// Two real writer threads: A's atomic update holds the store lock while
+    /// B adds a spec. B blocks until A finishes; both writes survive.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_two_writer_threads_add_and_atomic_update_both_survive() {
+        let (_dir, root, backend, _) = bug1612_git_store(1);
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let root_b = root.clone();
+        let writer_b = std::thread::spawn(move || {
+            rx.recv().unwrap();
+            let b = GitBackend::new(&root_b).unwrap();
+            let mut r = Requirement::new("added by B".into(), "d".into());
+            r.spec_id = Some("TASK-2".into());
+            b.add_requirement(r).unwrap();
+        });
+        backend
+            .update_atomically(|s| {
+                tx.send(()).unwrap();
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                s.requirements[0].title = "edited by A".into();
+            })
+            .unwrap();
+        writer_b.join().unwrap();
+
+        let objects = root.join("objects");
+        assert!(object_store::object_exists(&objects, "TASK-2").unwrap());
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-1").unwrap().title,
+            "edited by A"
+        );
+    }
+
+    /// A concurrent modification of the SAME spec by a writer that bypasses
+    /// the lock is detected and refused, never silently clobbered — on both
+    /// the per-spec path and the whole-store transaction.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_concurrent_same_spec_modification_is_refused_not_clobbered() {
+        let (_dir, root, backend, seeded) = bug1612_git_store(1);
+        let objects = root.join("objects");
+        let target = seeded[0].clone();
+
+        let err = backend
+            .update_spec_atomically(&target, |r| {
+                let mut ext = r.clone();
+                ext.title = "external edit".into();
+                object_store::write_object(&objects, &ext).unwrap();
+                r.title = "my edit".into();
+            })
+            .unwrap_err();
+        assert!(err.to_string().contains("concurrent modification"), "{err}");
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-1").unwrap().title,
+            "external edit"
+        );
+
+        let err = backend
+            .update_atomically(|s| {
+                let mut ext = s.requirements[0].clone();
+                ext.title = "second external edit".into();
+                object_store::write_object(&objects, &ext).unwrap();
+                s.requirements[0].title = "my second edit".into();
+            })
+            .unwrap_err();
+        assert!(err.to_string().contains("concurrent modification"), "{err}");
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-1").unwrap().title,
+            "second external edit"
+        );
+    }
+
+    /// Lock-respecting concurrent writers of the same spec serialize: no
+    /// update is lost.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_concurrent_same_spec_updates_serialize_without_lost_writes() {
+        let (_dir, root, _backend, seeded) = bug1612_git_store(1);
+        let target = seeded[0].clone();
+        let per_thread = 8;
+        let handles: Vec<_> = (0..2)
+            .map(|t| {
+                let root = root.clone();
+                let target = target.clone();
+                std::thread::spawn(move || {
+                    let b = GitBackend::new(&root).unwrap().with_auto_commit(false);
+                    for i in 0..per_thread {
+                        b.update_spec_atomically(&target, |r| {
+                            r.tags.insert(format!("t{t}-{i}"));
+                        })
+                        .unwrap()
+                        .unwrap();
+                    }
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+        let after = object_store::read_object(&root.join("objects"), "TASK-1").unwrap();
+        assert_eq!(after.tags.len(), 2 * per_thread, "{:?}", after.tags);
+    }
+
+    /// The per-spec path reads and writes one object: it never lists (let
+    /// alone parses) the store, and its commit stages only that object.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_per_spec_update_does_not_scan_the_store() {
+        use crate::object_store::{FULL_SCAN_COUNT, OBJECT_LIST_COUNT};
+        let (_dir, root, backend, seeded) = bug1612_git_store(5);
+        let target = seeded[2].clone();
+
+        OBJECT_LIST_COUNT.with(|c| c.set(0));
+        FULL_SCAN_COUNT.with(|c| c.set(0));
+        let updated = backend
+            .update_spec_atomically(&target, |r| r.title = "targeted".into())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            OBJECT_LIST_COUNT.with(|c| c.get()),
+            0,
+            "per-spec path listed the store"
+        );
+        assert_eq!(
+            FULL_SCAN_COUNT.with(|c| c.get()),
+            0,
+            "per-spec path scanned by uuid"
+        );
+        assert_eq!(updated.title, "targeted");
+
+        let files = bug1612_head_files(&root);
+        let objects: Vec<&String> = files.iter().filter(|f| f.starts_with("objects/")).collect();
+        assert_eq!(objects, vec!["objects/TASK/000/TASK-3.yaml"], "{files:?}");
+
+        // A missing spec is Ok(None) and the closure does not run.
+        let mut ghost = target.clone();
+        ghost.spec_id = Some("TASK-99".into());
+        let mut ran = false;
+        assert!(backend
+            .update_spec_atomically(&ghost, |_| ran = true)
+            .unwrap()
+            .is_none());
+        assert!(!ran);
+
+        // A spec_id that now names a different uuid is refused.
+        let mut imposter = target.clone();
+        imposter.id = uuid::Uuid::now_v7();
+        assert!(backend.update_spec_atomically(&imposter, |_| {}).is_err());
+
+        // The closure may not rename the spec.
+        assert!(backend
+            .update_spec_atomically(&target, |r| r.spec_id = Some("TASK-50".into()))
+            .is_err());
+    }
+
+    /// The whole-store transaction still supports multi-spec edits, adds
+    /// and explicit removals — writing only those objects.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_atomic_transaction_writes_only_touched_objects() {
+        let (_dir, root, backend, _) = bug1612_git_store(4);
+        let objects = root.join("objects");
+        let store = backend
+            .update_atomically(|s| {
+                for r in s.requirements.iter_mut() {
+                    if r.spec_id.as_deref() == Some("TASK-1") {
+                        r.title = "one".into();
+                    }
+                }
+                s.requirements
+                    .retain(|r| r.spec_id.as_deref() != Some("TASK-2"));
+                let prefix = s.get_type_prefix(&crate::models::RequirementType::Task);
+                s.add_requirement_with_id(
+                    Requirement::new("fresh".into(), "d".into()),
+                    None,
+                    prefix.as_deref(),
+                );
+            })
+            .unwrap();
+        let fresh = store.requirements.last().unwrap().clone();
+        let fresh_sid = fresh.spec_id.clone().unwrap();
+
+        assert!(!object_store::object_exists(&objects, "TASK-2").unwrap());
+        assert!(object_store::object_exists(&objects, &fresh_sid).unwrap());
+        assert!(fresh.filed_at.is_some(), "a created spec is stamped");
+        let mut files: Vec<String> = bug1612_head_files(&root)
+            .into_iter()
+            .filter(|f| f.starts_with("objects/"))
+            .collect();
+        files.sort();
+        let mut expected = vec![
+            "objects/TASK/000/TASK-1.yaml".to_string(),
+            "objects/TASK/000/TASK-2.yaml".to_string(),
+            object_store::relative_object_path(&fresh_sid).unwrap(),
+        ];
+        expected.sort();
+        assert_eq!(files, expected);
+
+        // A no-op transaction writes and commits nothing.
+        let head = |root: &Path| {
+            String::from_utf8(
+                std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(root)
+                    .args(["rev-parse", "HEAD"])
+                    .output()
+                    .unwrap()
+                    .stdout,
+            )
+            .unwrap()
+        };
+        let before = head(&root);
+        backend.update_atomically(|_| {}).unwrap();
+        assert_eq!(head(&root), before);
+    }
+
+    /// The `Storage` façade on a directory store goes through the same
+    /// per-spec paths.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_storage_facade_uses_per_spec_paths() {
+        let (_dir, root, _backend, seeded) = bug1612_git_store(2);
+        let storage = crate::storage::Storage::new(&root);
+        let objects = root.join("objects");
+        storage
+            .update_atomically(|s| {
+                s.requirements[0].description = "facade edit".into();
+                object_store::write_object(&objects, &bug1612_external("late", "TASK-3")).unwrap();
+            })
+            .unwrap();
+        assert!(object_store::object_exists(&objects, "TASK-3").unwrap());
+
+        let updated = storage
+            .update_spec_atomically(&seeded[1], |r| r.title = "facade per-spec".into())
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.title, "facade per-spec");
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-2").unwrap().title,
+            "facade per-spec"
+        );
+    }
+
+    /// A whole-store save of a stale snapshot never reverts a concurrent edit
+    /// (even one that kept `modified_at`), never deletes a spec that was
+    /// concurrently edited, and still writes the caller's own changes.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_stale_save_is_compare_and_swap_per_spec() {
+        let (_dir, root, backend, seeded) = bug1612_git_store(3);
+        let objects = root.join("objects");
+        let mut stale = backend.load().unwrap();
+
+        // Concurrent edits after the load, modified_at untouched.
+        backend
+            .update_spec_atomically(&seeded[0], |r| r.title = "concurrent".into())
+            .unwrap();
+        backend
+            .update_spec_atomically(&seeded[1], |r| r.title = "concurrent 2".into())
+            .unwrap();
+
+        // The stale caller edits TASK-3, and removes TASK-2 (edited meanwhile).
+        for r in stale.requirements.iter_mut() {
+            if r.spec_id.as_deref() == Some("TASK-3") {
+                r.title = "mine".into();
+            }
+        }
+        stale
+            .requirements
+            .retain(|r| r.spec_id.as_deref() != Some("TASK-2"));
+        let report = backend.save_reporting(&stale).unwrap();
+
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-1").unwrap().title,
+            "concurrent",
+            "a stale save must not revert a concurrent edit"
+        );
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-2").unwrap().title,
+            "concurrent 2",
+            "a stale save must not delete a concurrently edited spec"
+        );
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-3").unwrap().title,
+            "mine"
+        );
+        assert_eq!(report.not_written, vec!["TASK-1", "TASK-2"]);
     }
 }

@@ -5093,13 +5093,9 @@ pub(crate) fn handle_queue_command(
                                         display_id, &lines,
                                     ),
                                 );
-                                let gate_req_id = req.id;
-                                storage.update_atomically(|s| {
-                                    if let Some(r) =
-                                        s.requirements.iter_mut().find(|r| r.id == gate_req_id)
-                                    {
-                                        r.add_comment(comment);
-                                    }
+                                // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+                                storage.update_spec_atomically(req, |r| {
+                                    r.add_comment(comment);
                                 })?;
                             } else {
                                 eprintln!(
@@ -5217,12 +5213,10 @@ pub(crate) fn handle_queue_command(
             // does not stack duplicate comments.
             // trace:TASK-1277 | ai:claude
             if let Some((author, body)) = protocol_ledger.take() {
-                let gate_req_id = req.id;
-                storage.update_atomically(|s| {
-                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == gate_req_id) {
-                        if !crate::protocol_gate::ledger_already_recorded(r, &body) {
-                            r.add_comment(aida_core::Comment::new(author, body));
-                        }
+                // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+                storage.update_spec_atomically(req, |r| {
+                    if !crate::protocol_gate::ledger_already_recorded(r, &body) {
+                        r.add_comment(aida_core::Comment::new(author, body));
                     }
                 })?;
             }
@@ -5281,25 +5275,24 @@ pub(crate) fn handle_queue_command(
             let now = chrono::Utc::now();
             let completer = get_default_author();
             let source_tool = std::env::var("AIDA_AI_TOOL").ok().filter(|s| !s.is_empty());
-            storage.update_atomically(|s| {
-                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    r.set_status_from_str("Done");
-                    r.modified_at = now;
-                    // Don't clobber prior `summary` / `risk_notes` /
-                    // `test_coverage_notes` if the user / `/aida-pr`
-                    // skill already populated them. We only set the
-                    // fields the queue-done path can know.
-                    let info = r
-                        .implementation_info
-                        .get_or_insert_with(aida_core::ImplementationInfo::default);
-                    info.implemented = true;
-                    info.implemented_at.get_or_insert(now);
-                    if info.implemented_by.is_none() {
-                        info.implemented_by = Some(completer.clone());
-                    }
-                    if let Some(ref tool) = source_tool {
-                        info.source_tool.get_or_insert_with(|| tool.clone());
-                    }
+            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+            storage.update_spec_atomically(req, |r| {
+                r.set_status_from_str("Done");
+                r.modified_at = now;
+                // Don't clobber prior `summary` / `risk_notes` /
+                // `test_coverage_notes` if the user / `/aida-pr`
+                // skill already populated them. We only set the
+                // fields the queue-done path can know.
+                let info = r
+                    .implementation_info
+                    .get_or_insert_with(aida_core::ImplementationInfo::default);
+                info.implemented = true;
+                info.implemented_at.get_or_insert(now);
+                if info.implemented_by.is_none() {
+                    info.implemented_by = Some(completer.clone());
+                }
+                if let Some(ref tool) = source_tool {
+                    info.source_tool.get_or_insert_with(|| tool.clone());
                 }
             })?;
             let done_remove_role = std::env::var("AIDA_SESSION_ROLE")
@@ -5385,7 +5378,7 @@ pub(crate) fn handle_queue_command(
             // trace:STORY-542 | ai:claude
             if let Err(e) = capture_interface_changes(
                 storage,
-                req_id,
+                req,
                 display_id,
                 interface_cli,
                 interface_mcp,
@@ -5409,7 +5402,7 @@ pub(crate) fn handle_queue_command(
             // here never blocks `queue done`. trace:STORY-698 | ai:claude
             if let Err(e) = capture_test_plan(
                 storage,
-                req_id,
+                req,
                 display_id,
                 test_plan,
                 *no_test_plan,
@@ -7940,10 +7933,9 @@ pub(crate) fn handle_queue_rework(
     if let Some(reason_text) = reason.filter(|_| !reason_recorded) {
         let author = get_default_author();
         let comment = aida_core::Comment::new(author, reason_text.to_string());
-        storage.update_atomically(|s| {
-            if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                r.add_comment(comment);
-            }
+        // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+        storage.update_spec_atomically(req, |r| {
+            r.add_comment(comment);
         })?;
         println!(
             "  {} reason captured as comment ({} chars)",
@@ -7970,12 +7962,11 @@ pub(crate) fn handle_queue_rework(
             // exists somewhere in history". A → B → A is progress, not a loop.
             // trace:BUG-1213 | ai:claude
             let mut recurred = false;
-            storage.update_atomically(|s| {
-                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    recurred = findings_recur_consecutively(&r.comments, &block);
-                    if !recurred {
-                        r.add_comment(comment);
-                    }
+            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+            storage.update_spec_atomically(req, |r| {
+                recurred = findings_recur_consecutively(&r.comments, &block);
+                if !recurred {
+                    r.add_comment(comment);
                 }
             })?;
             if !recurred {
@@ -7985,11 +7976,10 @@ pub(crate) fn handle_queue_rework(
                 // request-changes shelves. A third blind requeue is a loop, so
                 // return the spec to NeedsAttention and route an explicit
                 // advisor finding + brief instead.
-                storage.update_atomically(|s| {
-                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                        r.status = RequirementStatus::NeedsAttention;
-                        r.modified_at = chrono::Utc::now();
-                    }
+                // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+                storage.update_spec_atomically(req, |r| {
+                    r.status = RequirementStatus::NeedsAttention;
+                    r.modified_at = chrono::Utc::now();
                 })?;
                 let note = format!(
                     "Identical reviewer findings recurred twice for {display_id}; do not \

@@ -5134,6 +5134,21 @@ pub struct RequirementsStore {
     #[serde(skip)]
     #[ts(skip)]
     pub dispenser: Option<DispenserHandle>,
+
+    /// Load snapshot from a git-canonical backend: every object file that was
+    /// on disk when this store was loaded (parseable or not), keyed by object
+    /// id, with a fingerprint of the file's content at that moment.
+    ///
+    /// A whole-store `save()` uses it as a per-spec compare-and-swap: it
+    /// deletes an absent object ONLY when it is listed here unchanged (the
+    /// caller loaded it and then removed it), and it skips writing a spec
+    /// whose file changed on disk since the load (a concurrent edit it would
+    /// otherwise revert). `None` (a store not loaded from a git store) deletes
+    /// nothing. Runtime-only; never serialized.
+    // trace:BUG-1612 | ai:claude
+    #[serde(skip)]
+    #[ts(skip)]
+    pub loaded_objects: Option<std::sync::Arc<std::collections::BTreeMap<String, u64>>>,
 }
 
 /// Wrapper for Arc<dyn Dispenser> that implements Debug and Clone.
@@ -5211,6 +5226,7 @@ impl RequirementsStore {
             store_version: 1,
             migrated_to: None,
             dispenser: None,
+            loaded_objects: None,
         }
     }
 

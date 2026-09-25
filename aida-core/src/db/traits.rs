@@ -127,6 +127,37 @@ pub trait DatabaseBackend: Send + Sync {
         Ok(store)
     }
 
+    /// Atomically update ONE requirement: re-read it under the backend's write
+    /// lock, apply `update_fn` to it, and write only that requirement.
+    ///
+    /// `target` names the requirement: its `id` is the identity that must
+    /// match, and its `spec_id` locates the object on git stores without a
+    /// whole-store scan. Returns the updated requirement, or `None` when it no
+    /// longer exists (the closure is then not run). The closure must not
+    /// change the requirement's `id` or `spec_id`.
+    ///
+    /// The default goes through [`Self::update_atomically`]; the git backends
+    /// override it with a targeted per-spec compare-and-swap.
+    // trace:BUG-1612 | ai:claude
+    fn update_spec_atomically<F>(
+        &self,
+        target: &Requirement,
+        update_fn: F,
+    ) -> Result<Option<Requirement>>
+    where
+        F: FnOnce(&mut Requirement),
+        Self: Sized,
+    {
+        let mut updated = None;
+        self.update_atomically(|store| {
+            if let Some(r) = store.requirements.iter_mut().find(|r| r.id == target.id) {
+                update_fn(r);
+                updated = Some(r.clone());
+            }
+        })?;
+        Ok(updated)
+    }
+
     // =========================================================================
     // Requirement CRUD Operations
     // =========================================================================

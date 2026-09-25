@@ -4153,28 +4153,27 @@ impl<'a> McpServer<'a> {
             Some(test_plan.join("\n"))
         };
 
+        // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
         self.storage
-            .update_atomically(|s| {
-                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    r.set_status_from_str("Done");
-                    r.modified_at = now;
-                    let info = r
-                        .implementation_info
-                        .get_or_insert_with(aida_core::ImplementationInfo::default);
-                    info.implemented = true;
-                    info.implemented_at.get_or_insert(now);
-                    if info.implemented_by.is_none() {
-                        info.implemented_by = Some(completer.clone());
-                    }
-                    if let Some(ref tool) = source_tool {
-                        info.source_tool.get_or_insert_with(|| tool.clone());
-                    }
-                    if let Some(ref tp) = captured_test_plan {
-                        info.test_coverage_notes = Some(tp.clone());
-                    }
-                    if let Some(ref ic) = captured_ic {
-                        r.interface_changes = Some(ic.clone());
-                    }
+            .update_spec_atomically(req, |r| {
+                r.set_status_from_str("Done");
+                r.modified_at = now;
+                let info = r
+                    .implementation_info
+                    .get_or_insert_with(aida_core::ImplementationInfo::default);
+                info.implemented = true;
+                info.implemented_at.get_or_insert(now);
+                if info.implemented_by.is_none() {
+                    info.implemented_by = Some(completer.clone());
+                }
+                if let Some(ref tool) = source_tool {
+                    info.source_tool.get_or_insert_with(|| tool.clone());
+                }
+                if let Some(ref tp) = captured_test_plan {
+                    info.test_coverage_notes = Some(tp.clone());
+                }
+                if let Some(ref ic) = captured_ic {
+                    r.interface_changes = Some(ic.clone());
                 }
             })
             .map_err(|e| e.to_string())?;
@@ -4446,11 +4445,10 @@ impl<'a> McpServer<'a> {
         if let Some(reason_text) = reason.filter(|_| !reason_recorded) {
             let author = crate::get_default_author();
             let comment = aida_core::Comment::new(author, reason_text.to_string());
+            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
             self.storage
-                .update_atomically(|s| {
-                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                        r.add_comment(comment);
-                    }
+                .update_spec_atomically(req, |r| {
+                    r.add_comment(comment);
                 })
                 .map_err(|e| e.to_string())?;
         }

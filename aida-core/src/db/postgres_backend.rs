@@ -1130,6 +1130,7 @@ impl DatabaseBackend for PostgresBackend {
             store_version,
             migrated_to: None,
             dispenser: None,
+            loaded_objects: None,
         })
     }
 
@@ -1220,6 +1221,7 @@ impl DatabaseBackend for PostgresBackend {
             store_version,
             migrated_to: None,
             dispenser: None,
+            loaded_objects: None,
         };
 
         // Apply changes

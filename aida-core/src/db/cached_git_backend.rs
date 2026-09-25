@@ -761,12 +761,89 @@ impl DatabaseBackend for CachedGitBackend {
         // Bulk save: write through git, then full-rebuild the cache to
         // guarantee invariants (additions, modifications, deletions all
         // captured). Cheap enough for current scale.
-        self.inner.save(store)?;
+        //
+        // BUG-1612: the store lock is held across the cache rebuild, and when
+        // the save kept objects the in-memory store never had (added by another
+        // writer after the load), the cache is rebuilt from disk instead of
+        // from `store`, which would otherwise hide them. The same holds when
+        // it skipped specs that changed on disk after the load (the in-memory
+        // copies are stale).
+        // trace:BUG-1612 | ai:claude
+        let _lock = self.inner.lock_store()?;
+        let report = self.inner.save_reporting(store)?;
         let head = self.current_head_sha();
-        self.with_cache_schema_retry("rebuild cache after save", || {
-            self.cache.rebuild_from_store(store, &head)
-        })?;
+        if report.kept_unloaded.is_empty() && report.not_written.is_empty() {
+            self.with_cache_schema_retry("rebuild cache after save", || {
+                self.cache.rebuild_from_store(store, &head)
+            })?;
+        } else {
+            self.with_cache_schema_retry("rebuild cache after save", || self.full_rebuild(&head))?;
+        }
         Ok(())
+    }
+
+    /// Whole-store transaction written per spec, then the cache rows it
+    /// touched. Holds the store write lock across both.
+    // trace:BUG-1612 | ai:claude
+    fn update_atomically<F>(&self, update_fn: F) -> Result<RequirementsStore>
+    where
+        F: FnOnce(&mut RequirementsStore),
+    {
+        let _lock = self.inner.lock_store()?;
+        let pre_write_head = self.current_head_sha();
+        let (store, summary) = self.inner.update_atomically_tracked(update_fn)?;
+        if summary.written.is_empty() && summary.deleted.is_empty() && !summary.metadata_changed {
+            return Ok(store);
+        }
+        if summary.metadata_changed || !summary.deleted.is_empty() {
+            // Store-level fields or removals: re-project from the store this
+            // transaction loaded and wrote under the lock.
+            let head = self.current_head_sha();
+            self.with_cache_schema_retry("rebuild cache after atomic update", || {
+                self.cache.rebuild_from_store(&store, &head)
+            })?;
+            return Ok(store);
+        }
+        let mut cache_ok = true;
+        for req in &summary.written {
+            if let Err(e) = self.upsert_requirement_with_schema_retry(req) {
+                eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
+                cache_ok = false;
+                break;
+            }
+        }
+        if cache_ok {
+            let reqs: Vec<&Requirement> = summary.written.iter().collect();
+            self.refresh_epics_then_restamp(&reqs, &pre_write_head);
+        } else {
+            let _ = self.cache.set_source_head_sha("");
+        }
+        Ok(store)
+    }
+
+    /// Per-spec compare-and-swap, then that one cache row. Holds the store
+    /// write lock across both; never scans the store.
+    // trace:BUG-1612 | ai:claude
+    fn update_spec_atomically<F>(
+        &self,
+        target: &Requirement,
+        update_fn: F,
+    ) -> Result<Option<Requirement>>
+    where
+        F: FnOnce(&mut Requirement),
+    {
+        let _lock = self.inner.lock_store()?;
+        let pre_write_head = self.current_head_sha();
+        let Some(updated) = self.inner.update_spec_atomically(target, update_fn)? else {
+            return Ok(None);
+        };
+        if let Err(e) = self.upsert_requirement_with_schema_retry(&updated) {
+            let _ = self.cache.set_source_head_sha("");
+            eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
+        } else {
+            self.refresh_epics_then_restamp(&[&updated], &pre_write_head);
+        }
+        Ok(Some(updated))
     }
 
     // ---- single-row CRUD: write-through with cache upsert/delete ----------
@@ -1918,5 +1995,74 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(only.id, fixture.id);
+    }
+
+    /// BUG-1612: the cached per-spec update is a targeted write-through: the
+    /// row is refreshed without listing the store.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_cached_update_spec_atomically_refreshes_row_without_scan() {
+        use crate::object_store::{FULL_SCAN_COUNT, OBJECT_LIST_COUNT};
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let mut added = Vec::new();
+        for i in 1..=4 {
+            added.push(
+                backend
+                    .add_requirement(sample_req(&format!("TASK-{i}"), &format!("t{i}")))
+                    .unwrap(),
+            );
+        }
+        let target = added[1].clone();
+
+        OBJECT_LIST_COUNT.with(|c| c.set(0));
+        FULL_SCAN_COUNT.with(|c| c.set(0));
+        backend
+            .update_spec_atomically(&target, |r| {
+                r.status = crate::models::RequirementStatus::Completed;
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 0);
+        assert_eq!(FULL_SCAN_COUNT.with(|c| c.get()), 0);
+        assert_eq!(cached_status(&backend, target.id), "Completed");
+    }
+
+    /// BUG-1612: the cached whole-store transaction and save never delete a
+    /// spec another writer added after the load, and the cache still shows it.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_cached_atomic_update_and_stale_save_keep_concurrent_add() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let first = backend
+            .add_requirement(sample_req("TASK-1", "one"))
+            .unwrap();
+        let stale = backend.load().unwrap();
+        let objects = store_root.join("objects");
+
+        let late = sample_req("TASK-2", "late");
+        let late_id = late.id;
+        backend
+            .update_atomically(|s| {
+                s.requirements[0].title = "one edited".into();
+                crate::object_store::write_object(&objects, &late).unwrap();
+            })
+            .unwrap();
+        assert!(crate::object_store::object_exists(&objects, "TASK-2").unwrap());
+        assert_eq!(
+            backend.get_requirement(&first.id).unwrap().unwrap().title,
+            "one edited"
+        );
+
+        backend.save(&stale).unwrap();
+        assert!(crate::object_store::object_exists(&objects, "TASK-2").unwrap());
+        assert_eq!(cached_status(&backend, late_id), "Draft");
     }
 }

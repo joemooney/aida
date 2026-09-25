@@ -18,6 +18,8 @@ mod migration;
 mod postgres_backend;
 #[cfg(feature = "native")]
 mod sqlite_backend;
+#[cfg(feature = "native")]
+mod store_lock;
 mod traits;
 #[cfg(feature = "native")]
 mod yaml_backend;
