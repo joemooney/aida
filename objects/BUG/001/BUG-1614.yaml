@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - REST add-comment stores content as content and author as author (the gRPC path is checked for the same swap).
   - A test posts a comment and asserts both fields.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:05:57.530829138Z
-modified_at: 2026-09-25T05:05:57.530829138Z
+modified_at: 2026-09-25T05:31:35.887549645Z
 req_type: Bug
 tags:
 - bug
