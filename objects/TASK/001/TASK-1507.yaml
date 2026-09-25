@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - As listed in the TASK-1505 ADVISOR SIGNOFF for slice 1.
   - Commit trailers name this slice, not TASK-1505.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T08:15:34.952917194Z
+modified_at: 2026-09-25T10:52:02.254030020Z
 req_type: Task
 tags:
 - cache
