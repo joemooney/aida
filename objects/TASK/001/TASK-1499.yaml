@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-25T08:03:14.294698815Z
+modified_at: 2026-09-25T08:03:15.312836590Z
 req_type: Task
 tags:
 - agent-launch
@@ -27,6 +27,12 @@ comments:
   content: 'Permission clarification: scaffolding should authorize both target/debug and target/release under the resolved local AIDA checkout, rather than granting access only to whichever binary was detected at scaffold time. Switching between debug and release should therefore require no scaffold rerun; runtime resolution selects the available/desired executable and diagnostics show the choice.'
   created_at: 2026-09-25T04:32:59.490165542Z
   modified_at: 2026-09-25T04:32:59.490165542Z
+- id: 01a0d797-0af0-7e90-96d6-533ecae717b4
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): left as a draft for Joe. Part of it shapes the agent permission profile (authority). A decision question was recorded.'
+  created_at: 2026-09-25T08:03:15.312836590Z
+  modified_at: 2026-09-25T08:03:15.312836590Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
   branch: main
