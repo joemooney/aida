@@ -9,12 +9,12 @@ description: |-
   (3) shift.rs: 'scheduler driver is unchanged' is inaccurate when a repair rewrote the files before failing.
   (4) shift.rs: 'aida shift enable' prints 'needed: a scheduler driver' for Unknown. It should say unknown, like label().
   Acceptance: fake-host tests for each case. No real crontab or systemctl in tests.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T10:28:40.353023115Z
-modified_at: 2026-09-25T10:28:51.205199580Z
+modified_at: 2026-09-25T11:21:52.961277623Z
 req_type: Bug
 comments:
 - id: 01a0d81c-5785-76e0-85e6-8ad996f8bf6f
