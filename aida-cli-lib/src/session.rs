@@ -2778,7 +2778,9 @@ fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> R
     if let Some(start_time) = crate::process_probe::process_start_identity(pid) {
         doc["active_pid_start_time"] = value(start_time);
     }
-    std::fs::write(&path, doc.to_string())
+    // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
+    // trace:STORY-1429 | ai:claude
+    aida_core::write_atomic(&path, doc.to_string())
         .with_context(|| format!("writing lease {}", path.display()))?;
     Ok(())
 }

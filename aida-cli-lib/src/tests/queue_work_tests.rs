@@ -3624,3 +3624,99 @@ fn drain_preview_reports_blocked_dependent_as_skipped_not_a_member() {
     assert_eq!(member_ids, vec!["NFR-56", "TASK-60"]);
     assert!(skipped.is_empty());
 }
+
+/// STORY-1429: a spec requeued out of NeedsAttention re-enters the REAL
+/// queue-wide drain head on the very next pick (the resolver re-reads the
+/// store), with no drain restart.
+// trace:STORY-1429 | ai:claude
+#[test]
+fn requeued_spec_reenters_queue_wide_drain_head() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    let (dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    // Anchor the cache-path walk-up to this tempdir (BUG-1598).
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::NeedsAttention);
+    let (pick, _role, _blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert_eq!(
+        pick.map(|p| p.spec),
+        Some("TASK-60".to_string()),
+        "a parked spec is not the head"
+    );
+
+    handle_queue_rework(
+        &storage,
+        "STORY-52",
+        false,
+        None,
+        false,
+        None,
+        Some("triaged"),
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("u"),
+    )
+    .unwrap();
+
+    let (pick, _role, _blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert_eq!(pick.map(|p| p.spec), Some("STORY-52".to_string()));
+}
+
+/// STORY-1429: requeue does not bypass the dependency gate. A requeued
+/// dependent whose prerequisite is not Completed is still skipped by the
+/// BlockedBy gate, and its requeue preview said so before it was taken.
+// trace:STORY-1429 | ai:claude
+#[test]
+fn requeued_dependent_still_skipped_by_blocked_by_gate() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    let (dir, storage) = bug_1608_fixture(RequirementStatus::Approved, false);
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    bug_1608_set_status(&storage, "NFR-56", RequirementStatus::NeedsAttention);
+
+    let store = storage.load().unwrap();
+    let nfr = store.get_requirement_by_spec_id("NFR-56").unwrap();
+    let preview = crate::requeue::requeue_preview(nfr, Some(&store), Some("implementer"), true);
+    assert!(preview.offerable());
+    assert_eq!(
+        preview.waits_on.as_deref(),
+        Some("STORY-52 (Approved)"),
+        "the preview names the unmet dependency"
+    );
+
+    handle_queue_rework(
+        &storage,
+        "NFR-56",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("u"),
+    )
+    .unwrap();
+    let store = storage.load().unwrap();
+    assert_eq!(
+        store.get_requirement_by_spec_id("NFR-56").unwrap().status,
+        RequirementStatus::Approved
+    );
+
+    let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert_eq!(pick.map(|p| p.spec), Some("STORY-52".to_string()));
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::InProgress);
+    let (pick, _role, blocked_after) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert!(pick.is_none(), "the requeued dependent must not be picked");
+    assert!(
+        blocked
+            .iter()
+            .chain(blocked_after.iter())
+            .any(|(id, reason)| id == "NFR-56" && reason.starts_with("blocked-by STORY-52")),
+        "{blocked:?} {blocked_after:?}"
+    );
+}

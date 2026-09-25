@@ -170,6 +170,32 @@ pub enum EventKind {
         /// Supervised re-drive cap (default 3).
         max: u32,
     },
+    /// A spec left NeedsAttention and went back into flight (Approved, Planned
+    /// or In Progress; dropping it is not a requeue) through one of the
+    /// requeue doors (`aida queue rework`, `aida edit --status`, the
+    /// `queue_rework` MCP tool, or the re-drive supervisor). Distinct from
+    /// [`SpecReDriven`](Self::SpecReDriven), which is the supervisor's attempt
+    /// record and the only kind its attempt count reads: a human requeue must
+    /// neither advance nor reset that count. **Recovery trail.**
+    // trace:STORY-1429 | ai:claude
+    SpecRequeued {
+        /// The door: `queue-rework`, `edit`, `mcp`, or `supervisor`.
+        via: String,
+        /// Who performed it, when known.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        actor: Option<String>,
+        /// Status label before, e.g. `Needs Attention`.
+        from: String,
+        /// Status label after, e.g. `Approved`.
+        to: String,
+        /// Parking tags the requeue cleared.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        cleared_tags: Vec<String>,
+        /// Escalation tags kept because no human was at a terminal; the spec
+        /// stays parked until one clears them.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        kept_tags: Vec<String>,
+    },
     /// STORY-1051: the supervisor gave up on a transient park after the cap and
     /// reclassified it to needs-human triage. **Actionable.**
     // trace:STORY-1051 | ai:claude
@@ -462,6 +488,9 @@ impl EventKind {
             EventKind::RunStarted
             | EventKind::PhaseEntered { .. }
             | EventKind::SpecReDriven { .. }
+            // STORY-1429: a requeue is a triage act already taken, recorded
+            // for the trail, not a new decision point.
+            | EventKind::SpecRequeued { .. }
             // STORY-1436: a correct refusal is recorded for counting, not a wake.
             | EventKind::GateHeld { .. } => false,
             // STORY-1218: a tick wakes only for what needs a human.
@@ -525,6 +554,7 @@ impl EventKind {
             EventKind::SpecSkipped { .. } => "SpecSkipped",
             EventKind::SpecRetried { .. } => "SpecRetried",
             EventKind::SpecReDriven { .. } => "SpecReDriven",
+            EventKind::SpecRequeued { .. } => "SpecRequeued",
             EventKind::ReclassifiedNeedsHuman { .. } => "ReclassifiedNeedsHuman",
             EventKind::PuntFiled { .. } => "PuntFiled",
             EventKind::AdvisorEscalated { .. } => "AdvisorEscalated",
@@ -580,6 +610,7 @@ impl EventKind {
             "ExecutionModeChanged",
             "GateHeld",
             "ShiftTick",
+            "SpecRequeued",
         ]
     }
 }

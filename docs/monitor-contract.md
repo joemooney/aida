@@ -64,6 +64,16 @@ whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude /
 
 ## Migration notes
 
+- `1.5.0` — the new `SpecRequeued` event kind records a spec leaving
+  NeedsAttention and going back into flight (`via`, optional `actor`, `from`,
+  `to`, plus `cleared_tags`/`kept_tags` when present). Dropping a parked
+  spec (to Rejected, Superseded or Draft) is not a requeue and does not emit
+  it. Every requeue door emits it: `aida queue rework`, `aida edit --status`, the `queue_rework` MCP
+  tool, and the re-drive supervisor. It is separate from `SpecReDriven`, which
+  stays the supervisor's attempt record, so a human requeue neither advances
+  nor resets the supervisor's attempt count. `SpecRequeued` is not actionable
+  (absorbed by `aida watch`). An `aida watch` older than `1.5.0` reads it as
+  `Unknown`, which is actionable. Additive only. // trace:STORY-1429 | ai:claude
 - `1.4.0`: the new `ShiftTick` event kind records one night-shift tick that
   did something: a wave launched, a breaker tripped, a guard changed, or a
   spec was escalated. It is actionable only when a breaker tripped or a spec

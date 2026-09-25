@@ -5663,6 +5663,15 @@ pub(crate) fn handle_git_backend_command(
             // TASK-358: triage out of NeedsAttention — captured here, applied
             // after the backend save below. trace:TASK-358 | ai:claude
             let mut left_needs_attention = false;
+            // STORY-1429: an applied NeedsAttention exit, checked and reported
+            // around the targeted write below. trace:STORY-1429 | ai:claude
+            let mut pending_leave: Option<(
+                String,
+                std::path::PathBuf,
+                crate::requeue::ReturnCtx,
+                RequirementStatus,
+                crate::requeue::ReturnOutcome,
+            )> = None;
             if let Some(s) = status {
                 // BUG-751: type-aware — a decision spec (ADR) may be moved to
                 // its accepted state with the ADR-native verb `accepted`,
@@ -5805,35 +5814,49 @@ pub(crate) fn handle_git_backend_command(
                 // that, a triaged spec stayed out of the drain for good. The
                 // comment records why the spec came back (auditable re-entry).
                 // trace:TASK-1311 | ai:claude
+                //
+                // STORY-1429: the exit runs through the one owner,
+                // `requeue::return_to_flight`, on this one spec. The status is
+                // re-read and compared just before the single targeted write
+                // below, so a spec that moved in between (a concurrent requeue
+                // or a drain) is left alone. The requeue lease gate applies
+                // here too.
+                // trace:STORY-1429 | ai:claude
                 if was_needs_attention && !matches!(req.status, RequirementStatus::NeedsAttention) {
+                    let spec_label = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+                    let lease_root = store_path
+                        .parent()
+                        .filter(|p| !p.as_os_str().is_empty())
+                        .map(std::path::Path::to_path_buf)
+                        .or_else(|| find_project_root().ok())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    let display = req.display_id();
+                    let check = crate::requeue_lease_gate(
+                        &lease_root,
+                        &[spec_label.as_str(), display.as_str()],
+                    );
+                    if let Some(msg) = check.refusal(&spec_label) {
+                        anyhow::bail!(msg);
+                    }
                     // The escalation tag is a hand-off to a human; only a
                     // human at a terminal may clear it (not a non-TTY advisor
                     // agent, not an orchestrated phase).
-                    let cleared = crate::requeue::clear_shelve_markers(
+                    let ctx = crate::requeue::ReturnCtx {
+                        via: "`aida edit --status`".to_string(),
+                        via_slug: "edit",
+                        author: get_default_author(),
+                        clear_escalation: crate::requeue::caller_may_clear_escalation(),
+                        reason: None,
+                    };
+                    let target = req.status.clone();
+                    req.status = RequirementStatus::NeedsAttention;
+                    let outcome = crate::requeue::return_to_flight(
                         &mut req,
-                        crate::requeue::caller_may_clear_escalation(),
+                        &RequirementStatus::NeedsAttention,
+                        &target,
+                        &ctx,
                     );
-                    if cleared != crate::requeue::ClearedMarkers::default() {
-                        let note = cleared.audit_note(
-                            "`aida edit --status`",
-                            &req.status.to_string(),
-                            None,
-                        );
-                        req.add_comment(aida_core::Comment::new(get_default_author(), note));
-                    }
-                    if !cleared.removed_tags.is_empty() {
-                        eprintln!(
-                            "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
-                            "·".dimmed(),
-                            cleared.removed_tags.join(", ")
-                        );
-                    }
-                    if let Some(w) = crate::requeue::kept_escalation_warning(
-                        req.spec_id.as_deref().unwrap_or(id),
-                        &cleared,
-                    ) {
-                        eprintln!("  {} {w}", "Warning:".yellow().bold());
-                    }
+                    pending_leave = Some((spec_label, lease_root, ctx, target, outcome));
                     left_needs_attention = true;
                 }
                 changed = true;
@@ -5993,6 +6016,21 @@ pub(crate) fn handle_git_backend_command(
 
             if changed {
                 req.modified_at = chrono::Utc::now();
+                // STORY-1429: re-read and compare just before the one targeted
+                // write; nothing is written when the spec left NeedsAttention
+                // meanwhile. trace:STORY-1429 | ai:claude
+                if let Some((label, _, _, target, _)) = &pending_leave {
+                    let fresh = backend.get_requirement(&req.id)?;
+                    if let Some(moved) = crate::requeue::recheck_before_write(
+                        fresh.as_ref(),
+                        &RequirementStatus::NeedsAttention,
+                        target,
+                    ) {
+                        anyhow::bail!(
+                            crate::requeue::unchanged_message(label, &moved).unwrap_or_default()
+                        );
+                    }
+                }
                 if force_dropped_structural_tags.is_empty() {
                     backend.update_requirement(&req)?;
                 } else {
@@ -6004,6 +6042,23 @@ pub(crate) fn handle_git_backend_command(
                             force_dropped_structural_tags.join(", ")
                         ),
                     )?;
+                }
+                // STORY-1429: the exit landed; report what it cleared and
+                // record the requeue. trace:STORY-1429 | ai:claude
+                if let Some((label, root, ctx, _, outcome)) = &pending_leave {
+                    if let crate::requeue::ReturnOutcome::Returned { cleared, .. } = outcome {
+                        if !cleared.removed_tags.is_empty() {
+                            eprintln!(
+                                "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
+                                "·".dimmed(),
+                                cleared.removed_tags.join(", ")
+                            );
+                        }
+                        if let Some(w) = crate::requeue::kept_escalation_warning(label, cleared) {
+                            eprintln!("  {} {w}", "Warning:".yellow().bold());
+                        }
+                    }
+                    crate::requeue::emit_requeued(root, label, ctx, outcome);
                 }
                 // TASK-1450: a disposition (status) or execution_mode change
                 // made through `aida edit` is a coordination-seat decision —
@@ -6320,6 +6375,40 @@ pub(crate) fn handle_git_backend_command(
             };
             let cmd = findings_cmd.as_ref().unwrap_or(&default_list);
             handle_findings_command(cmd, &backend, store_path)?;
+            // STORY-1429: bare `aida findings` at a terminal offers the
+            // one-keystroke requeue loop when specs are parked, the way bare
+            // `aida questions` offers its answer loop. `findings list` never
+            // prompts. trace:STORY-1429 | ai:claude
+            use std::io::IsTerminal;
+            if findings_cmd.is_none()
+                && !output_format_is_json()
+                && std::io::stdin().is_terminal()
+                && std::io::stdout().is_terminal()
+            {
+                let parked = backend
+                    .list_summaries(&aida_core::ListFilter {
+                        status: Some("needs-attention".to_string()),
+                        ..Default::default()
+                    })
+                    .map(|v| v.len())
+                    .unwrap_or(0);
+                if parked > 0 {
+                    print!("\nTriage {parked} parked now? [Y/n] ");
+                    use std::io::Write;
+                    std::io::stdout().flush()?;
+                    let mut input = String::new();
+                    std::io::stdin().read_line(&mut input)?;
+                    let answer = input.trim();
+                    if answer.is_empty() || answer.eq_ignore_ascii_case("y") {
+                        let storage = Storage::new(store_path);
+                        crate::queue_cmd::handle_rework_entry(
+                            &storage,
+                            None,
+                            &crate::queue_cmd::ReworkFlags::default(),
+                        )?;
+                    }
+                }
+            }
         }
         Command::ImportPlan {
             file,
@@ -7550,20 +7639,23 @@ pub(crate) fn handle_git_backend_command(
             user,
         } => {
             let storage = Storage::new(store_path);
-            handle_queue_rework(
+            // STORY-1429: an omitted ID opens the triage loop. trace:STORY-1429 | ai:claude
+            crate::queue_cmd::handle_rework_entry(
                 &storage,
-                id,
-                *work,
-                r#for.as_deref(),
-                *tail,
-                status.as_deref(),
-                reason.as_deref(),
-                *resume,
-                *force,
-                *steal,
-                permission_mode.as_deref(),
-                *no_pull,
-                user.as_deref(),
+                id.as_deref(),
+                &crate::queue_cmd::ReworkFlags {
+                    work: *work,
+                    for_role: r#for.as_deref(),
+                    tail: *tail,
+                    status: status.as_deref(),
+                    reason: reason.as_deref(),
+                    resume: *resume,
+                    force: *force,
+                    steal: *steal,
+                    permission_mode: permission_mode.as_deref(),
+                    no_pull: *no_pull,
+                    user: user.as_deref(),
+                },
             )?;
         }
         Command::Review {

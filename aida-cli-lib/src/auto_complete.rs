@@ -4766,10 +4766,21 @@ struct InFlightMember {
 /// shelve, because `shelved + 1 > 0` already routes the first failure to the
 /// hard stop.
 // trace:BUG-1608 | ai:claude
-fn failure_budget_exhausted(shelved: usize, max_failures: Option<usize>) -> bool {
-    max_failures.is_some_and(|cap| shelved >= cap)
+///
+/// STORY-1429: the count is shelve EVENTS, not distinct shelved specs. A spec
+/// that is requeued and shelves again in the same drain spends the budget
+/// again: a second failure after triage is more evidence that something is
+/// wrong, and the budget is the drain's only automatic circuit breaker. The
+/// `shelved` list still reports FINAL dispositions (BUG-852).
+// trace:STORY-1429 | ai:claude
+fn failure_budget_exhausted(shelve_events: usize, max_failures: Option<usize>) -> bool {
+    max_failures.is_some_and(|cap| shelve_events >= cap)
 }
 
+// why: the drain's disposition buckets are threaded through as separate
+// `&mut` lists (the same shape `forget_batch_disposition` takes); STORY-1429
+// adds the shelve-event counter alongside them.
+#[allow(clippy::too_many_arguments)]
 fn apply_batch_result(
     head: String,
     result: OrchestrationResult,
@@ -4779,19 +4790,22 @@ fn apply_batch_result(
     shelved: &mut Vec<String>,
     skipped: &mut Vec<(String, String)>,
     max_failures: Option<usize>,
+    shelve_events: &mut usize,
 ) -> Option<BatchDrainResult> {
     if result.exit_code != 0 {
         let phase = result.failed_phase.unwrap_or(Phase::Implementer);
+        // STORY-1429: budget counts shelve events. trace:STORY-1429 | ai:claude
         let over_failure_budget = max_failures
-            .map(|cap| shelved.len() + 1 > cap)
+            .map(|cap| *shelve_events + 1 > cap)
             .unwrap_or(false);
         if result.shelved_reason.is_some() && !over_failure_budget {
             forget_batch_disposition(&head, shipped, punted, escalated, shelved, skipped);
             shelved.push(head.clone());
+            *shelve_events += 1;
             // BUG-1608: the budget is spent the moment the Nth shelve lands —
             // stop here, before the scheduler launches another member.
             // trace:BUG-1608 | ai:claude
-            if failure_budget_exhausted(shelved.len(), max_failures) {
+            if failure_budget_exhausted(*shelve_events, max_failures) {
                 return Some(BatchDrainResult {
                     shipped: shipped.clone(),
                     punted: punted.clone(),
@@ -4891,6 +4905,9 @@ pub(crate) fn drain_batch_pipelined_with_caps(
     let mut escalated = Vec::new();
     let mut shelved = Vec::new();
     let mut skipped = Vec::new();
+    // STORY-1429: monotonic shelve-event count for the failure budget.
+    // trace:STORY-1429 | ai:claude
+    let mut shelve_events = 0usize;
     let mut in_flight: std::collections::VecDeque<InFlightMember> =
         std::collections::VecDeque::new();
     let mut launched = 0usize;
@@ -5007,6 +5024,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 &mut shelved,
                 &mut skipped,
                 max_failures,
+                &mut shelve_events,
             ) {
                 return done;
             }
@@ -5022,6 +5040,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             &mut shelved,
             &mut skipped,
             max_failures,
+            &mut shelve_events,
         ) {
             return done;
         }
@@ -5084,6 +5103,10 @@ pub(crate) fn drain_batch_with_caps(
     let mut shelved: Vec<String> = Vec::new();
     let mut skipped: Vec<(String, String)> = Vec::new();
     let mut acted = 0usize;
+    // STORY-1429: monotonic shelve-event count for the failure budget; the
+    // `shelved` list keeps reporting final dispositions only.
+    // trace:STORY-1429 | ai:claude
+    let mut shelve_events = 0usize;
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
@@ -5207,7 +5230,7 @@ pub(crate) fn drain_batch_with_caps(
             // back to the historical `Failed` stop.
             // trace:EPIC-28 | ai:claude
             let over_failure_budget = max_failures
-                .map(|cap| shelved.len() + 1 > cap)
+                .map(|cap| shelve_events + 1 > cap)
                 .unwrap_or(false);
             if result.shelved_reason.is_some() && !over_failure_budget {
                 forget_batch_disposition(
@@ -5219,10 +5242,11 @@ pub(crate) fn drain_batch_with_caps(
                     &mut skipped,
                 );
                 shelved.push(head.clone());
+                shelve_events += 1;
                 // BUG-1608: stop as soon as the Nth shelve lands — never pick
                 // (let alone run) another head on a spent failure budget.
                 // trace:BUG-1608 | ai:claude
-                if failure_budget_exhausted(shelved.len(), max_failures) {
+                if failure_budget_exhausted(shelve_events, max_failures) {
                     return BatchDrainResult {
                         shipped,
                         punted,
@@ -11197,6 +11221,10 @@ mod tests {
         through_ci_by_spec: std::collections::HashMap<String, OrchestrationResult>,
         finish_by_spec: std::collections::HashMap<String, OrchestrationResult>,
         events: Vec<String>,
+        /// STORY-1429: specs that shelve through CI this many more times; each
+        /// shelve is requeued (put back at the head), as a triage would.
+        reshelve: std::collections::HashMap<String, usize>,
+        handle_spec: std::collections::HashMap<usize, String>,
     }
 
     impl MockPipelinedBatchDriver {
@@ -11209,7 +11237,16 @@ mod tests {
                 through_ci_by_spec: std::collections::HashMap::new(),
                 finish_by_spec: std::collections::HashMap::new(),
                 events: Vec::new(),
+                reshelve: std::collections::HashMap::new(),
+                handle_spec: std::collections::HashMap::new(),
             }
+        }
+
+        /// STORY-1429: `spec` shelves through CI `times` times, and each
+        /// shelve is requeued to the head of the queue.
+        fn shelving_and_requeued(mut self, spec: &str, times: usize) -> Self {
+            self.reshelve.insert(spec.to_string(), times);
+            self
         }
 
         fn shelving_through_ci(mut self, spec: &str, phase: Phase) -> Self {
@@ -11247,19 +11284,37 @@ mod tests {
             self.heads.retain(|h| h != spec);
             let handle = PipelinedHandle(self.next_handle);
             self.next_handle += 1;
-            let result = self
-                .through_ci_by_spec
-                .remove(spec)
-                .unwrap_or_else(ok_result);
+            let result = match self.reshelve.get_mut(spec) {
+                Some(n) if *n > 0 => {
+                    *n -= 1;
+                    shelve_result(Phase::Ci)
+                }
+                _ => self
+                    .through_ci_by_spec
+                    .remove(spec)
+                    .unwrap_or_else(ok_result),
+            };
             self.through_ci_results.insert(handle.0, result);
+            self.handle_spec.insert(handle.0, spec.to_string());
             handle
         }
 
         fn wait_spec_through_ci(&mut self, handle: PipelinedHandle) -> OrchestrationResult {
             self.events.push(format!("wait:{}", handle.0));
-            self.through_ci_results
+            let result = self
+                .through_ci_results
                 .remove(&handle.0)
-                .unwrap_or_else(|| OrchestrationResult::failed(Phase::Ci))
+                .unwrap_or_else(|| OrchestrationResult::failed(Phase::Ci));
+            // STORY-1429: a shelved spec with a pending requeue goes back to
+            // the head, as `aida rework` would put it.
+            if result.shelved_reason.is_some() {
+                if let Some(spec) = self.handle_spec.get(&handle.0).cloned() {
+                    if self.reshelve.contains_key(&spec) {
+                        self.heads.insert(0, spec);
+                    }
+                }
+            }
+            result
         }
 
         fn finish_spec_after_ci(&mut self, spec: &str) -> OrchestrationResult {
@@ -11704,6 +11759,70 @@ mod tests {
         assert_eq!(result.shipped, vec!["STORY-830"]);
         assert!(result.shelved.is_empty());
         assert_eq!(driver.runs, vec!["STORY-830", "STORY-830"]);
+    }
+
+    /// STORY-1429: the failure budget counts shelve EVENTS. A spec that shelves,
+    /// is requeued, and shelves again in the same drain spends the budget
+    /// twice: with `--max-failures 2` the drain stops on the second shelve
+    /// (the canonical hard-fail exit) before touching the next spec, and the
+    /// spec is still listed once in `shelved` (final dispositions, BUG-852).
+    // trace:STORY-1429 | ai:claude
+    #[test]
+    fn drain_batch_requeued_spec_reshelve_spends_budget_twice() {
+        let mut driver = MockBatchDriver::new(&["STORY-1", "STORY-2"])
+            .shelving_once_then_retry("STORY-1", Phase::Ci)
+            .shelving_once_then_retry("STORY-1", Phase::Ci);
+        let result = drain_batch(&mut driver, None, Some(2));
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.shelved, vec!["STORY-1"]);
+        assert_eq!(result.stopped_at.as_deref(), Some("STORY-1"));
+        assert_eq!(
+            driver.runs,
+            vec!["STORY-1", "STORY-1"],
+            "the spent budget must stop the drain before STORY-2"
+        );
+    }
+
+    /// STORY-1429: the pipelined twin. The re-shelved spec spends the budget
+    /// again, the drain stops, and `shelved` still lists it once.
+    // trace:STORY-1429 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_requeued_spec_reshelve_spends_budget_twice() {
+        let mut driver = MockPipelinedBatchDriver::new(&["STORY-1", "STORY-2", "STORY-3"], 2)
+            .shelving_and_requeued("STORY-1", 2);
+        let mut cap_stop = None;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            Some(2),
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut cap_stop,
+        );
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.shelved, vec!["STORY-1"]);
+        let starts = driver
+            .events
+            .iter()
+            .filter(|e| e.as_str() == "start:STORY-1")
+            .count();
+        assert_eq!(starts, 2, "requeued once, re-run once: {:?}", driver.events);
+    }
+
+    /// STORY-1429: without a cap a re-shelve changes nothing: the drain goes
+    /// on and reports the final disposition once.
+    // trace:STORY-1429 | ai:claude
+    #[test]
+    fn drain_batch_requeued_spec_reshelve_without_cap_reports_once() {
+        let mut driver = MockBatchDriver::new(&["STORY-1", "STORY-2"])
+            .shelving_once_then_retry("STORY-1", Phase::Ci)
+            .shelving("STORY-1", Phase::Ci);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(result.shelved, vec!["STORY-1"]);
+        assert_eq!(result.shipped, vec!["STORY-2"]);
     }
 
     /// EPIC-28: when a shelving event also makes a downstream member

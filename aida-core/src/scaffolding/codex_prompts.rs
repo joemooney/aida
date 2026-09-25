@@ -35,6 +35,11 @@ pub const CODEX_NONPORTABLE_COMMANDS: &[(&str, &str)] = &[
         "aida-solo",
         "drives Claude Code hooks and the Agent-tool subagent fan-out",
     ),
+    // trace:STORY-1474 | ai:claude
+    (
+        "aida-orchestrate",
+        "drives the Agent-tool subagent fan-out and SendMessage review loops",
+    ),
     (
         "aida-burndown",
         "fans out worktree-isolated subagents via the Claude Code Agent tool",

@@ -1192,6 +1192,17 @@ spec: with `--max-failures 1`, the first shelved failure ends the drain
 (exit `3`) and nothing else is dispatched. A member already running in a
 pipelined drain when the budget runs out is not interrupted.
 
+The cap counts shelve **events**, not distinct specs. If a spec shelves, is
+requeued (by a human, an advisor, or an automatic in-drain retry), and shelves
+again in the same drain, it spends the budget twice. A second failure after
+triage is more evidence that something is wrong, and the cap is the drain's
+only automatic circuit breaker: an advisor agent can requeue a shelve that was
+never escalated, so a spec counted only once could otherwise fail without
+limit. The drain summary still lists each spec once, under its final
+disposition. Requeueing a spec never refunds or resets the budget of a
+running drain, and a drain that already stopped on a spent budget stays
+stopped. <!-- trace:STORY-1429 | ai:claude -->
+
 ### Dependency-aware skip
 
 The skip falls out of the pickability gate (STORY-333). When B is
@@ -1237,14 +1248,42 @@ The same table is the doc-comment on `DRIVE_EXIT_CLEAN` / `DRIVE_EXIT_SHELVED` /
 ### Triage path
 
 ```bash
-aida findings list                       # show both punts and failures
+aida rework                              # triage every parked spec, one key each
+aida rework TASK-99                      # requeue one spec (to Approved, back on the queue)
+aida findings list                       # list punts and failures, with the requeue hint
 aida show TASK-99                        # detail on a shelved spec
-aida edit TASK-99 --status approved      # fix-and-re-queue
 aida edit TASK-99 --status rejected      # drop (was wrong direction)
 ```
 
-Triaging a spec out of `NeedsAttention` clears both `attention_reason`
-and `failure_reason`. The punt ledger entry stays — it's history.
+Bare `aida rework` at a terminal walks the parked specs. Each one shows what
+a requeue would do before you take it: the resulting status, the queue it
+lands on, any dependency it will still wait on, and whether a `needs-human`
+escalation keeps it parked. Then it takes one key: `[r]` requeue, `[s]` skip,
+`[o]` show, `[q]` quit. When the spec has an open decision, `[r]` is not
+offered; `[d]` hands that one spec to `aida decide` and then comes back to it.
+The resulting status is never a flag you pass, so it cannot be wrong. Without
+a terminal, `aida rework` prints the requeue command for each parked spec and
+exits 0. `aida findings list` never prompts; bare `aida findings` offers the
+loop when specs are parked.
+
+The drain does not requeue triaged specs on its own. The decision to resume
+belongs to someone who can see the findings: a human at a terminal, or the
+advisor seat. Only a human at a terminal can resume a spec an advisor
+escalated with `needs-human`. A requeued spec is Approved and back on its
+queue route. A running drain picks it up on its next head pick, and the
+requeue says whether a drain is running (it never starts one). Requeue does
+not bypass the dependency gate.
+
+Every way out of `NeedsAttention` (`aida rework`, `aida edit --status`, the
+`queue_rework` MCP tool, the re-drive supervisor) goes through one
+transition, applied to that one spec. The status is read again just before
+the single-spec write, so a spec that moved in the meantime is left alone. It clears `attention_reason`,
+`failure_reason` and the drain's parking tag, writes one audit note that
+carries the triage reason, and records a `SpecRequeued` event. `aida rework`,
+the MCP tool and `aida edit --status` refuse while another session holds a
+live claim on the spec, `--force` included, and they refuse when a claim that
+could be on the spec cannot be read. The punt
+ledger entry stays; it's history. <!-- trace:STORY-1429 | ai:claude -->
 
 ## Seat jobs — periodic duties per seat (STORY-1226)
 

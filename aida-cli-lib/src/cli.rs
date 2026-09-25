@@ -6631,7 +6631,14 @@ pub enum QueueCommand {
     ///   Completed and Rejected additionally require `--force`, since
     ///     re-opening closed work is usually a mistake.
     ///   Reworking an already-InProgress spec WARNS and proceeds; `--force`
-    ///     silences the warning. It is not refused.
+    ///     silences the warning. It is refused only while another session
+    ///     holds a live claim on the spec, and `--force` does not override that.
+    ///
+    /// With no ID, triage the specs parked in Needs Attention: at a terminal,
+    /// each one shows what a requeue would do, then takes one key:
+    /// [r] requeue, [s] skip, [o] show, [d] decide (only when a decision is
+    /// open), [q] quit. Without a terminal it prints the requeue command for
+    /// each parked spec and exits 0.
     ///
     // The doc block above is a TABLE plus a literal three-command sequence;
     // clap reflows doc comments by default, which ran the rows together into
@@ -6641,8 +6648,10 @@ pub enum QueueCommand {
     #[clap(verbatim_doc_comment)]
     // trace:TASK-218 | ai:claude
     Rework {
-        /// Requirement ID (UUID or SPEC-ID)
-        id: String,
+        /// Requirement ID (UUID or SPEC-ID). Omit it to triage the parked
+        /// specs one keystroke each.
+        // trace:STORY-1429 | ai:claude
+        id: Option<String>,
         /// Also launch a session for the spec (chains `aida queue work`).
         /// Without this, rework is metadata-only: reset to a claimable status
         /// and queue it. With this, the launched session owns InProgress.
@@ -12528,12 +12537,15 @@ pub enum Command {
     /// Top-level alias for `aida queue rework SPEC` — single verb for the
     /// recurring implementer → reviewer → fixup recovery sequence
     /// (status flip + queue add, with optional `--work` session launch).
+    /// With no ID, triage the specs parked in Needs Attention one keystroke
+    /// each (at a terminal; otherwise it prints the requeue commands).
     /// Mirrors `aida relations` → `aida rel list` discoverability pattern.
     /// See `aida queue rework --help` for the full flag set.
-    // trace:TASK-218 | ai:claude
+    // trace:TASK-218 trace:STORY-1429 | ai:claude
     Rework {
-        /// Requirement ID (UUID or SPEC-ID)
-        id: String,
+        /// Requirement ID (UUID or SPEC-ID). Omit it to triage the parked
+        /// specs one keystroke each.
+        id: Option<String>,
         /// Also launch a session for the spec.
         #[clap(long)]
         work: bool,
