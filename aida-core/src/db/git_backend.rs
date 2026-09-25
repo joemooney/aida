@@ -788,15 +788,16 @@ impl GitBackend {
 
         let snapshot = store.loaded_objects.as_ref();
         let mut current_specs = std::collections::HashSet::new();
-        let mut to_write: Vec<Requirement> = Vec::new();
+        // (what to write, fingerprint of the caller's in-memory copy)
+        let mut to_write: Vec<(Requirement, Option<u64>)> = Vec::new();
         let mut conflicts: Vec<String> = Vec::new();
         let mut stale_untouched: Vec<String> = Vec::new();
         // Specs whose in-memory copy already equals the (newer) disk copy.
-        let mut already_current: Vec<(String, u64)> = Vec::new();
-        // CR-8: a spec with no on-disk object is being CREATED by this save
-        // (findings / report / legacy full-store filing paths) — stamp its
-        // filing provenance. Captured lazily, once per save.
-        // trace:CR-8 | ai:claude
+        let mut already_current: Vec<(String, u64)> = Vec::new(); // (id, fingerprint)
+                                                                  // CR-8: a spec with no on-disk object is being CREATED by this save
+                                                                  // (findings / report / legacy full-store filing paths) — stamp its
+                                                                  // filing provenance. Captured lazily, once per save.
+                                                                  // trace:CR-8 | ai:claude
         let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
 
         for req in &store.requirements {
@@ -806,7 +807,7 @@ impl GitBackend {
             current_specs.insert(spec_id.clone());
             let disk_text = object_store::read_object_text(&self.objects_root, spec_id)?;
             if let Some(snapshot) = snapshot {
-                let loaded_fp = snapshot.get(spec_id);
+                let loaded_fp = snapshot.disk(spec_id);
                 let disk_fp = disk_text.as_deref().map(object_store::content_fingerprint);
                 let unchanged_since_load = match (loaded_fp, disk_fp) {
                     (Some(l), Some(d)) => l == d,
@@ -815,12 +816,14 @@ impl GitBackend {
                     _ => false,
                 };
                 if !unchanged_since_load {
-                    let mine = serde_yaml::to_string(req)?;
-                    if disk_text.as_deref() == Some(mine.as_str()) {
-                        already_current.push((spec_id.clone(), disk_fp.unwrap_or_default()));
-                    } else if loaded_fp
-                        .is_some_and(|l| l == object_store::content_fingerprint(&mine))
-                    {
+                    // "Touched" is judged against the caller baseline (the
+                    // in-memory copy as of the last load/save), never the disk
+                    // fingerprint: a save can write more than the in-memory
+                    // copy (provenance stamp, preserved fields).
+                    let mine_fp = object_store::content_fingerprint(&serde_yaml::to_string(req)?);
+                    if disk_fp == Some(mine_fp) {
+                        already_current.push((spec_id.clone(), mine_fp));
+                    } else if snapshot.baseline(spec_id) == Some(mine_fp) {
                         // Untouched by this caller; the disk copy is newer.
                         stale_untouched.push(spec_id.clone());
                     } else {
@@ -853,7 +856,13 @@ impl GitBackend {
                     created
                 }
             };
-            to_write.push(req_to_write);
+            let caller_fp = match snapshot {
+                Some(_) => Some(object_store::content_fingerprint(&serde_yaml::to_string(
+                    req,
+                )?)),
+                None => None,
+            };
+            to_write.push((req_to_write, caller_fp));
         }
 
         // Deletion plan. Safety: never delete a file we couldn't parse
@@ -868,7 +877,7 @@ impl GitBackend {
             if current_specs.contains(spec_id) {
                 continue;
             }
-            let Some(loaded_fp) = snapshot.and_then(|s| s.get(spec_id)) else {
+            let Some(loaded_fp) = snapshot.and_then(|s| s.disk(spec_id)) else {
                 kept_unloaded.push(spec_id.clone());
                 continue;
             };
@@ -895,20 +904,24 @@ impl GitBackend {
         let meta = Self::extract_metadata(store);
         self.save_metadata(&meta)?;
         let mut written_specs: Vec<String> = Vec::new();
-        for req in &to_write {
+        for (req, caller_fp) in &to_write {
             let spec_id = req.spec_id.as_deref().unwrap_or_default();
             if object_store::write_object_if_changed(&self.objects_root, req)? {
                 written_specs.push(spec_id.to_string());
             }
-            if let Some(snapshot) = snapshot {
+            if let (Some(snapshot), Some(caller_fp)) = (snapshot, caller_fp) {
                 if let Some(text) = object_store::read_object_text(&self.objects_root, spec_id)? {
-                    snapshot.set(spec_id, object_store::content_fingerprint(&text));
+                    snapshot.record(
+                        spec_id,
+                        object_store::content_fingerprint(&text),
+                        *caller_fp,
+                    );
                 }
             }
         }
         if let Some(snapshot) = snapshot {
             for (spec_id, fp) in &already_current {
-                snapshot.set(spec_id, *fp);
+                snapshot.record(spec_id, *fp, *fp);
             }
         }
         let mut deleted_specs: Vec<String> = Vec::new();
@@ -1193,12 +1206,16 @@ impl GitBackend {
         // Keep the returned store's load snapshot current, so a caller that
         // later saves it does not mistake these writes for concurrent edits.
         if let Some(snapshot) = store.loaded_objects.as_ref() {
-            for req in &summary.written {
-                let Some(sid) = req.spec_id.as_deref() else {
+            for written in &summary.written {
+                let Some(sid) = written.spec_id.as_deref() else {
                     continue;
                 };
+                let Some(mine) = store.requirements.iter().find(|r| r.id == written.id) else {
+                    continue;
+                };
+                let caller_fp = object_store::content_fingerprint(&serde_yaml::to_string(mine)?);
                 if let Some(text) = object_store::read_object_text(&self.objects_root, sid)? {
-                    snapshot.set(sid, object_store::content_fingerprint(&text));
+                    snapshot.record(sid, object_store::content_fingerprint(&text), caller_fp);
                 }
             }
             for (sid, _) in &removed {
@@ -3560,5 +3577,80 @@ mod tests {
             "the lock file must never be committed: {tracked}"
         );
         assert!(git(&["status", "--porcelain"]).trim().is_empty());
+    }
+
+    /// Review repro (a): a spec created through this store is stamped with
+    /// filing provenance on disk only. A later concurrent edit of it must not
+    /// make a save that does not touch it fail.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_created_spec_then_concurrent_edit_is_not_a_false_conflict() {
+        let (_dir, root, backend, _) = bug1612_git_store(1);
+        let objects = root.join("objects");
+        let mut store = backend.load().unwrap();
+        let mut fresh = Requirement::new("nine".into(), "d".into());
+        fresh.spec_id = Some("TASK-9".into());
+        store.requirements.push(fresh.clone());
+        backend.save(&store).unwrap();
+        assert!(object_store::read_object(&objects, "TASK-9")
+            .unwrap()
+            .filed_at
+            .is_some());
+
+        // Another writer edits TASK-9.
+        backend
+            .update_spec_atomically(&fresh, |r| r.title = "edited elsewhere".into())
+            .unwrap();
+
+        // This store edits only TASK-1 and saves: no conflict.
+        store.requirements[0].title = "mine".into();
+        let report = backend.save_reporting(&store).unwrap();
+        assert_eq!(report.stale_untouched, vec!["TASK-9"]);
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-1").unwrap().title,
+            "mine"
+        );
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-9").unwrap().title,
+            "edited elsewhere"
+        );
+    }
+
+    /// Review repro (b): a field the save preserves from disk (here
+    /// `risk_notes`, cleared in memory) must not make the spec look touched
+    /// afterwards.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_preserved_field_then_concurrent_edit_is_not_a_false_conflict() {
+        let (_dir, root, backend, seeded) = bug1612_git_store(1);
+        let objects = root.join("objects");
+        backend
+            .update_spec_atomically(&seeded[0], |r| r.risk_notes = Some("risky".into()))
+            .unwrap();
+        let mut store = backend.load().unwrap();
+        store.requirements[0].risk_notes = None;
+        backend.save(&store).unwrap();
+        // The whole-store save preserves the on-disk risk_notes (BUG-756).
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-1")
+                .unwrap()
+                .risk_notes
+                .as_deref(),
+            Some("risky")
+        );
+
+        backend
+            .update_spec_atomically(&seeded[0], |r| r.title = "edited elsewhere".into())
+            .unwrap();
+
+        let mut five = Requirement::new("five".into(), "d".into());
+        five.spec_id = Some("TASK-5".into());
+        store.requirements.push(five);
+        backend.save(&store).unwrap();
+        assert!(object_store::object_exists(&objects, "TASK-5").unwrap());
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-1").unwrap().title,
+            "edited elsewhere"
+        );
     }
 }

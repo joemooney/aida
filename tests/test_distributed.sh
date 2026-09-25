@@ -174,6 +174,9 @@ pass ".aida-store/ is a git worktree on orphan branch"
 # BUG-1612: the store write lock (.aida/store-write.lock) is taken by every
 # store write and must never be committed, even by a whole-tree `git add -A .`
 # (db sync / auto-push), in a freshly initialized store.
+# Exercise the no-.gitignore path too (the lock exclusion must then come from
+# the store worktree's info/exclude).
+rm -f "$PROJ_DIR/.aida-store/.gitignore"
 AIDA_SESSION_ROLE=advisor $AIDA add --title "lock staging probe" --type task --status approved >/dev/null 2>&1 || fail "BUG-1612: add failed"
 [ -f "$PROJ_DIR/.aida-store/.aida/store-write.lock" ] || fail "BUG-1612: store write lock was not taken"
 $AIDA db sync >/dev/null 2>&1 || true

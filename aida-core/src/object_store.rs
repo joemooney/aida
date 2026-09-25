@@ -357,10 +357,17 @@ pub fn load_all_objects(objects_root: &Path) -> Result<Vec<Requirement>> {
 /// Runtime-only (never persisted), so the hasher need not be stable across
 /// builds.
 // trace:BUG-1612 | ai:claude
+///
+/// Line endings are normalized first (a CRLF checkout of an object is the
+/// same content), matching `write_object_if_changed`'s comparison.
 pub fn content_fingerprint(text: &str) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    text.hash(&mut h);
+    if text.contains('\r') {
+        text.replace("\r\n", "\n").hash(&mut h);
+    } else {
+        text.hash(&mut h);
+    }
     h.finish()
 }
 
