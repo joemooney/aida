@@ -28,6 +28,87 @@
 
 use std::path::{Path, PathBuf};
 
+/// Curated vendor packs (relative to the project root) that keep a
+/// [`DELIVERED_MANIFEST`] and may receive a [`REFRESH_DELIVERED_SKILLS`] entry
+/// on refresh.
+// trace:STORY-1475 | ai:claude
+pub const DELIVERY_TRACKED_PACKS: &[&str] = &[".codex/skills", ".antigravity/skills"];
+
+/// The ONLY skills refresh may create in an installed Codex/Antigravity pack.
+///
+/// Refresh's contract (TASK-1170) is edit-preserving: it never creates a file,
+/// because a missing skill looks the same as one the user deleted on purpose.
+/// These names are the exception, and only ONCE per pack: refresh creates one
+/// only when the pack's [`DELIVERED_MANIFEST`] has never recorded it. Every
+/// write (by `aida init` / `scaffold apply` or by refresh) and every refresh
+/// that finds the skill present records the name, so a delivered skill the
+/// user later deletes stays deleted. The general mechanism for all skills is
+/// tracked in TASK-1503; do not add names here without the manifest guarantee.
+// trace:STORY-1475 | ai:claude
+pub const REFRESH_DELIVERED_SKILLS: &[&str] = &["aida-orchestrate"];
+
+/// Pack-local file (one skill name per line) listing every
+/// [`REFRESH_DELIVERED_SKILLS`] entry AIDA has delivered into that pack.
+// trace:STORY-1475 | ai:claude
+pub const DELIVERED_MANIFEST: &str = ".aida-delivered";
+
+/// If `rel` is `<tracked pack>/<allow-listed skill>/SKILL.md`, return the
+/// pack directory and the skill name.
+// trace:STORY-1475 | ai:claude
+pub fn delivery_tracked_skill(rel: &Path) -> Option<(&'static str, String)> {
+    let pack = DELIVERY_TRACKED_PACKS
+        .iter()
+        .find(|p| rel.starts_with(Path::new(p)))?;
+    let rest = rel.strip_prefix(pack).ok()?;
+    let mut parts = rest.components();
+    let name = parts.next()?.as_os_str().to_str()?.to_string();
+    let file = parts.next()?.as_os_str().to_str()?;
+    if parts.next().is_some() || file != "SKILL.md" {
+        return None;
+    }
+    REFRESH_DELIVERED_SKILLS
+        .contains(&name.as_str())
+        .then_some((*pack, name))
+}
+
+/// Names recorded in `pack_dir`'s [`DELIVERED_MANIFEST`].
+///
+/// Fails closed: only a missing manifest (`NotFound`) means "nothing
+/// delivered yet". Any other read failure (permissions, invalid UTF-8, a
+/// directory in its place) is an error, so callers never treat an unreadable
+/// manifest as empty and re-create a skill the user deleted.
+// trace:STORY-1475 | ai:claude
+pub fn delivered_skills(pack_dir: &Path) -> std::io::Result<Vec<String>> {
+    match std::fs::read_to_string(pack_dir.join(DELIVERED_MANIFEST)) {
+        Ok(s) => Ok(s
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(str::to_string)
+            .collect()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e),
+    }
+}
+
+/// Record `name` in `pack_dir`'s [`DELIVERED_MANIFEST`]. Idempotent. Never
+/// overwrites a manifest it could not read, and replaces it atomically.
+// trace:STORY-1475 | ai:claude
+pub fn record_delivered_skill(pack_dir: &Path, name: &str) -> std::io::Result<()> {
+    let mut names = delivered_skills(pack_dir)?;
+    if names.iter().any(|n| n == name) {
+        return Ok(());
+    }
+    names.push(name.to_string());
+    names.sort();
+    let body = format!(
+        "# Skills AIDA has delivered into this pack. A listed skill is never\n\
+         # re-created by `aida scaffold refresh`, so deleting it sticks.\n{}\n",
+        names.join("\n")
+    );
+    crate::write_atomic(&pack_dir.join(DELIVERED_MANIFEST), body)
+}
+
 use anyhow::{Context, Result};
 
 use super::{checksum_for_stored_header, normalize_lf, symlink_target};
@@ -140,6 +221,10 @@ pub enum RefreshOutcome {
     /// Unmarked, but the caller opted into adopting the pack into
     /// edit-tracking; the previous content was saved alongside first.
     Adopted(PathBuf),
+    /// Absent, and the caller chose to deliver it as a newly shipped file
+    /// into a pack the project already has installed.
+    // trace:STORY-1475 | ai:claude
+    Installed,
 }
 
 /// Overlay `expected` onto `dest` if and only if `dest` is an existing,
@@ -185,6 +270,9 @@ pub fn refresh_file(dest: &Path, expected: &str, adopt_unmarked: bool) -> Result
 pub struct RefreshReport {
     pub refreshed: Vec<PathBuf>,
     pub adopted: Vec<PathBuf>,
+    /// Newly shipped files delivered into an already-installed pack.
+    // trace:STORY-1475 | ai:claude
+    pub installed: Vec<PathBuf>,
     pub kept_edited: Vec<PathBuf>,
     pub kept_unmarked: Vec<PathBuf>,
     pub skipped_symlink: Vec<PathBuf>,
@@ -200,6 +288,7 @@ impl RefreshReport {
             RefreshOutcome::Unchanged => self.unchanged += 1,
             RefreshOutcome::Refreshed => self.refreshed.push(path.to_path_buf()),
             RefreshOutcome::Adopted(_) => self.adopted.push(path.to_path_buf()),
+            RefreshOutcome::Installed => self.installed.push(path.to_path_buf()),
             RefreshOutcome::KeptEdited => self.kept_edited.push(path.to_path_buf()),
             RefreshOutcome::KeptUnmarked => self.kept_unmarked.push(path.to_path_buf()),
             RefreshOutcome::SkippedSymlink(_) => self.skipped_symlink.push(path.to_path_buf()),
@@ -208,13 +297,14 @@ impl RefreshReport {
 
     /// How many files this pass actually rewrote.
     pub fn changed(&self) -> usize {
-        self.refreshed.len() + self.adopted.len()
+        self.refreshed.len() + self.adopted.len() + self.installed.len()
     }
 
     /// Merge another pack's tallies into this one.
     pub fn absorb(&mut self, other: &RefreshReport) {
         self.refreshed.extend(other.refreshed.iter().cloned());
         self.adopted.extend(other.adopted.iter().cloned());
+        self.installed.extend(other.installed.iter().cloned());
         self.kept_edited.extend(other.kept_edited.iter().cloned());
         self.kept_unmarked
             .extend(other.kept_unmarked.iter().cloned());
@@ -228,6 +318,33 @@ impl RefreshReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:STORY-1475 | ai:claude
+    #[test]
+    fn delivered_manifest_missing_is_empty_but_unreadable_is_an_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(delivered_skills(tmp.path()).unwrap().is_empty());
+
+        record_delivered_skill(tmp.path(), "aida-orchestrate").unwrap();
+        record_delivered_skill(tmp.path(), "aida-orchestrate").unwrap();
+        assert_eq!(
+            delivered_skills(tmp.path()).unwrap(),
+            vec!["aida-orchestrate".to_string()]
+        );
+
+        // Invalid UTF-8: an error, and never overwritten by a record.
+        let manifest = tmp.path().join(DELIVERED_MANIFEST);
+        std::fs::write(&manifest, [0xff, 0xfe, 0x00]).unwrap();
+        assert!(delivered_skills(tmp.path()).is_err());
+        assert!(record_delivered_skill(tmp.path(), "other").is_err());
+        assert_eq!(std::fs::read(&manifest).unwrap(), vec![0xff, 0xfe, 0x00]);
+
+        // A directory in the manifest's place: an error too.
+        let other = tempfile::tempdir().unwrap();
+        std::fs::create_dir(other.path().join(DELIVERED_MANIFEST)).unwrap();
+        assert!(delivered_skills(other.path()).is_err());
+        assert!(record_delivered_skill(other.path(), "aida-orchestrate").is_err());
+    }
     use crate::scaffolding::wrap_with_aida_header;
     use std::path::Path;
 

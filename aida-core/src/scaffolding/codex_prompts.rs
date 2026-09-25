@@ -36,9 +36,11 @@ pub const CODEX_NONPORTABLE_COMMANDS: &[(&str, &str)] = &[
         "drives Claude Code hooks and the Agent-tool subagent fan-out",
     ),
     // trace:STORY-1474 | ai:claude
+    // trace:STORY-1475 | ai:claude
     (
         "aida-orchestrate",
-        "drives the Agent-tool subagent fan-out and SendMessage review loops",
+        "drives the Agent-tool subagent fan-out and SendMessage review loops; \
+         Codex gets the vendor-neutral `.codex/skills/aida-orchestrate` skill instead",
     ),
     (
         "aida-burndown",
