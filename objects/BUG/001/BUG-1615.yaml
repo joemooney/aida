@@ -9,12 +9,12 @@ description: |-
   - Every `aida ... | grep -q` in tests/*.sh captures output first (`out=$(aida list)`, then grep the variable) or otherwise tolerates SIGPIPE.
   - A grep across tests/ and scripts/ finds no remaining `| grep -q` after an aida command under pipefail.
   - test_distributed.sh passes 20 consecutive runs under load.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T06:32:41.902621659Z
-modified_at: 2026-09-25T06:32:41.902621659Z
+modified_at: 2026-09-25T06:33:02.974918809Z
 req_type: Bug
 tags:
 - ci
