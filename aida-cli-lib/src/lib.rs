@@ -72165,6 +72165,9 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
         .args([
             "log",
             "--name-status",
+            // Separate D and A lines instead of an `R<score>` pair, which the
+            // one-tab parse below would skip. trace:BUG-1616 | ai:claude
+            "--no-renames",
             "--pretty=format:%H%x09%s",
             range.as_str(),
         ])

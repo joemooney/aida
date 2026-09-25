@@ -444,9 +444,15 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
         // events. The auto-commit "chore: update requirements store" still
         // gets walked because each individual file change inside it is
         // its own event.
+        // `--no-renames`: git's default rename detection pairs a delete plus
+        // a similar add into one `R<score>\told\tnew` line, which the
+        // single-path parse below cannot read, so both events were dropped.
+        // With renames off, git reports the separate D and A lines.
+        // trace:BUG-1616 | ai:claude
         let mut show_args: Vec<String> = vec![
             "show".into(),
             "--name-status".into(),
+            "--no-renames".into(),
             "--format=".into(),
             commit.sha.clone(),
         ];
@@ -711,6 +717,10 @@ fn build_digest_rows(
     let mut log_args: Vec<String> = vec![
         "log".into(),
         "--name-status".into(),
+        // Report a delete plus a similar add as separate D and A lines, not
+        // one `R<score>` line, so the digest's add/delete markers stay
+        // accurate. trace:BUG-1616 | ai:claude
+        "--no-renames".into(),
         "--pretty=format:%H%x09%aI%x09%ae%x09%s".into(),
         format!("-n{}", opts.max_commits),
     ];
@@ -1782,6 +1792,113 @@ mod tests {
         assert_eq!(status, "(deleted)");
         assert_eq!(title, "");
         assert_eq!(modified_at, None);
+    }
+
+    /// BUG-1616: a commit that deletes one spec and adds another with
+    /// near-identical content is paired by git's default rename detection
+    /// into a single `R<score>` line. The event walk and the digest must
+    /// still report the delete and the add as separate events.
+    // trace:BUG-1616 | ai:claude
+    #[test]
+    fn history_reports_delete_and_add_that_git_pairs_as_rename() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let git = |args: &[&str]| -> String {
+            let out = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8_lossy(&out.stdout).to_string()
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+
+        let a_path = "objects/BUG/000/BUG-389.yaml";
+        let b_path = "objects/BUG/000/BUG-390.yaml";
+        let body = |id: &str| {
+            format!(
+                "spec_id: {id}\ntitle: a long shared title so git scores the pair as a rename\n\
+                 status: Draft\npriority: high\nreq_type: bug\n\
+                 description: the same long description body in both files so the \
+                 similarity index stays well above the rename threshold\n"
+            )
+        };
+
+        std::fs::create_dir_all(root.join("objects/BUG/000")).unwrap();
+        std::fs::write(root.join(a_path), body("BUG-389")).unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "add BUG-389"]);
+
+        // One commit: delete BUG-389, add BUG-390 with near-identical content.
+        std::fs::remove_file(root.join(a_path)).unwrap();
+        std::fs::write(root.join(b_path), body("BUG-390")).unwrap();
+        git(&["add", "-A"]);
+        git(&[
+            "commit",
+            "-q",
+            "-m",
+            "chore: update 1 requirements, delete 1",
+        ]);
+
+        // Precondition: git's default detection does pair these as a rename,
+        // so the fixture really exercises the bug.
+        let default_status = git(&["show", "--name-status", "--format=", "-M", "HEAD"]);
+        assert!(
+            default_status.lines().any(|l| l.starts_with('R')),
+            "fixture must be a git rename pair, got: {default_status}"
+        );
+        let head = git(&["rev-parse", "HEAD"]).trim().to_string();
+
+        // Event walk: both the delete and the add from the rename commit.
+        let (events, _) = collect_filtered_events(root, &base_opts()).unwrap();
+        let in_head: Vec<&Event> = events.iter().filter(|e| e.sha == head).collect();
+        assert!(
+            in_head
+                .iter()
+                .any(|e| e.spec_id == "BUG-389" && matches!(e.kind, EventKind::Deleted { .. })),
+            "missing Deleted BUG-389, got: {:?}",
+            in_head
+                .iter()
+                .map(|e| (&e.spec_id, &e.kind))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            in_head
+                .iter()
+                .any(|e| e.spec_id == "BUG-390" && matches!(e.kind, EventKind::Added { .. })),
+            "missing Added BUG-390, got: {:?}",
+            in_head
+                .iter()
+                .map(|e| (&e.spec_id, &e.kind))
+                .collect::<Vec<_>>()
+        );
+
+        // Digest: BUG-389 marked deleted, BUG-390 marked added.
+        let digest_opts = HistoryOpts {
+            events_mode: false,
+            ..base_opts()
+        };
+        let (rows, _, _) = build_digest_rows(root, &digest_opts).unwrap();
+        let a = rows
+            .iter()
+            .find(|r| r.spec_id == "BUG-389")
+            .expect("BUG-389 row");
+        let b = rows
+            .iter()
+            .find(|r| r.spec_id == "BUG-390")
+            .expect("BUG-390 row");
+        assert!(a.had_delete, "digest must mark BUG-389 as deleted");
+        assert!(b.had_add, "digest must mark BUG-390 as added");
     }
 
     /// A `HistoryOpts` with every filter off — tests override the one field
