@@ -1,0 +1,46 @@
+id: 01a0d63b-e2e0-7313-8a11-17f048405bdc
+spec_id: ADR-58
+agreed_id: ADR-58
+title: 'NeedsAttention resume: one-keystroke requeue (b) over drain auto-resume (a)'
+description: |
+  DECISION: a triaged NeedsAttention spec resumes through a one-keystroke requeue (option b). The drain does not resume triaged specs on its own (option a is rejected).
+
+  CONTEXT: a drain parks a spec in NeedsAttention (a punt, an orchestrator shelve, or an advisor escalation) and moves on. Once someone has triaged it, nothing moved it back into flight. The two candidate owners of that transition were:
+    (a) THE DRAIN RE-DRIVES: triage becomes a state the orchestrator acts on, and a triaged spec re-enters the pipeline with no keystroke.
+    (b) THE SURFACE MAKES IT ONE KEYSTROKE: whoever triages the spec requeues it with one key, and sees the resulting status before taking it.
+
+  CHOSEN: (b).
+  - `aida rework` with no ID, at a terminal, walks every parked spec. Each one shows a preview (resulting status, queue route, any unmet dependency, whether a needs-human escalation keeps it parked), then takes one key: r requeue, s skip, o show, d decide (only when a decision is open), q quit. Without a terminal it prints the requeue commands and exits 0. `aida rework <ID>` is the one-spec form.
+  - The resulting status comes from the metadata-only rework target (Approved), never from a flag, so it is correct by construction.
+
+  WHO CAN RESUME (stated precisely, because it is not "always a human keystroke"):
+  - Resume authority is ADVISOR AUTHORITY: a human at an interactive terminal, or the advisor seat. A non-TTY advisor agent and an orchestrated drain phase also hold advisor authority, so an agent can requeue a shelve that was never escalated, with no human involved.
+  - A spec escalated to a human (tagged needs-human) can be resumed only by a human at a terminal. Any other caller gets the status change, but the tag stays and the spec stays parked.
+  - The re-drive supervisor keeps re-driving only TRANSIENT failure kinds, which are classified, not triaged. It is not a resume of a triaged spec.
+
+  WHY (a) WAS REJECTED: it gives the resume decision to whatever wrote the triage, which may be an agent that was wrong, with no audit or bounding step between the triage and the re-dispatch. Under PRIN-5 (missing evidence is not good evidence), the resume stays with someone who can see the findings, every resume leaves an audit note and a SpecRequeued event, and the failure budget bounds repeated failure.
+
+  CONSEQUENCES:
+  - One owner: every exit from NeedsAttention (queue rework, edit --status, the queue_rework MCP tool, the supervisor) runs one pure transition on the copy read inside that door's atomic write. If the status moved in between, nothing is written.
+  - The requeue lease gate refuses while another session holds a live lease on the spec, and --force does not override it. An unknown lease state (unreadable lease directory, unparseable lease, failing liveness probe) refuses too. The gate only sees leases in the local clone, so a concurrent requeue from another clone is the accepted case: the status writes converge on Approved, with at worst two audit comments.
+  - The --max-failures budget counts shelve EVENTS: a requeued spec that shelves again in the same drain spends the budget again. The drain's shelved list still reports final dispositions only.
+  - Auto-launching a drain after a requeue stays out of scope. The requeue says whether a drain is running only when the drain lock gives a definite answer.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T01:44:04.064616506Z
+modified_at: 2026-09-25T01:44:04.064616506Z
+req_type: Decision
+tags:
+- aida:queue
+- decision-record
+- orchestrator
+filed_at:
+  code_sha: 9154924fd2cb9ea6a0ce0b0cfe737ee6474e9dfe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c7d35baa35
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
