@@ -12,12 +12,12 @@ description: |
   - In the single-spec view (`--id X --full`), the ID may stay implicit (it is already in the heading).
   - Status, relationship and comment events also show the spec ID. For `relationships: +1 added`, show the edge as well (e.g. `TASK-1512 → references → TASK-1505`), not just a count.
   - toon/json output already carry the spec ID. Add a test asserting that the human, toon and json renderings agree on which spec each event belongs to.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:16:11.890546672Z
-modified_at: 2026-09-25T21:16:11.890546672Z
+modified_at: 2026-09-25T22:31:48.949043445Z
 req_type: Bug
 tags:
 - aida:history
