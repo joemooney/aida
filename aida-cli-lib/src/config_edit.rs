@@ -48,9 +48,46 @@ pub(crate) fn remove_keys(path: &Path, section: &str, keys: &[&str]) -> Result<(
     save_doc(path, &doc)
 }
 
+/// Append one `[[section.array]]` entry unless an existing entry already has
+/// `match_key = match_value`. Returns whether it appended. Preserves the rest
+/// of the file, comments included.
+// trace:STORY-1218 | ai:claude
+pub(crate) fn ensure_array_table_entry(
+    path: &Path,
+    section: &str,
+    array: &str,
+    match_key: &str,
+    match_value: &str,
+    pairs: &[(&str, Value)],
+) -> Result<bool> {
+    let mut doc = load_doc(path)?;
+    let tbl = table_mut(&mut doc, section);
+    if !tbl.contains_key(array) {
+        tbl.insert(array, Item::ArrayOfTables(toml_edit::ArrayOfTables::new()));
+    }
+    let arr = tbl[array]
+        .as_array_of_tables_mut()
+        .with_context(|| format!("[{section}] {array} is not an array of tables"))?;
+    let present = arr.iter().any(|t| {
+        t.get(match_key)
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| v.split_whitespace().collect::<Vec<_>>().join(" ") == match_value)
+    });
+    if present {
+        return Ok(false);
+    }
+    let mut entry = Table::new();
+    for (key, value) in pairs {
+        entry.insert(key, Item::Value(value.clone()));
+    }
+    arr.push(entry);
+    save_doc(path, &doc)?;
+    Ok(true)
+}
+
 /// Load a `config.toml` into an editable document, or a fresh empty one if the
 /// file is absent. Parse errors surface — never clobber a malformed file.
-fn load_doc(path: &Path) -> Result<DocumentMut> {
+pub(crate) fn load_doc(path: &Path) -> Result<DocumentMut> {
     match std::fs::read_to_string(path) {
         Ok(body) => body
             .parse::<DocumentMut>()
@@ -60,7 +97,7 @@ fn load_doc(path: &Path) -> Result<DocumentMut> {
     }
 }
 
-fn save_doc(path: &Path, doc: &DocumentMut) -> Result<()> {
+pub(crate) fn save_doc(path: &Path, doc: &DocumentMut) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;

@@ -1266,6 +1266,92 @@ overdue seat job (at most once per hour per seat) are the scheduler tick's
 business — STORY-1218 — which consults this same registry. Full reference:
 `docs/cli/03-work-autonomy.md` (`aida schedule`).
 
+## Night shift — `aida shift` (STORY-1218)
+
+The night shift keeps drain waves moving when no seat is awake. It is a
+deterministic, LLM-free check (`aida shift tick`) registered as the
+`night-shift` substrate job of `aida schedule tick`, so it runs on the cron
+driver `aida schedule install-cron` already installed (every 15 minutes; the
+job's own `every = "10m"` is capped by the driver's cadence). It is **off
+unless enabled for this clone**, and the switch never lives in committed
+config.
+
+What one tick does, in order:
+
+1. Takes `.aida/shift.lock` (a second concurrent tick is a no-op).
+2. Reaps finished sessions (the `aida session reap --yes` predicate; a live
+   process is never touched).
+3. Settles the previous shift wave: when its pid is dead, a `QueueDrained`
+   after the launch with shipped + shelved > 0 is progress; anything else,
+   including no `QueueDrained` at all, is zero progress.
+4. Evaluates every guard (see `aida shift tick --dry-run`); any failure means
+   no launch and exit 0.
+5. Records the launch intent in `.aida/shift-state.json`, tags the next
+   explicit-`drain` queue slice `batch:shift-YYYYMMDD-HHMM` (replacing any
+   older shift tag on those specs), spawns one detached
+   `aida queue work --batch … --auto-complete --no-human=both --escalate-blocks
+   --role implementer --max 6 --max-iterations 6 --max-failures 2
+   --max-tokens T --max-runtime 3h` in its own session with its output in
+   `.aida/shift-wave-<stamp>.log`, and records the pid. A tick killed between
+   tagging and spawning leaves an intent the next tick reuses.
+6. Emits one `ShiftTick` event only when it acted or its refusing-guard set
+   changed. It wakes a supervisor only for a breaker trip or an escalation.
+
+Safety floors that hold in every configuration:
+
+- Never launches over a live drain lock, in this clone or another one (the
+  shared drain claim on `aida-store`). A stale lock is reported and left for
+  the wave's own acquire to reclaim.
+- Only explicit `execution_mode = drain` specs are selected; drive, guided,
+  operator and decide specs, specs with no mode, keystone-class specs and
+  specs under a merge hold are never launched. A configured `[shift] batch`
+  with any such member refuses, naming it.
+- Never passes `--force-claim`, `--steal` or `--force`; the wave's environment
+  drops `AIDA_DRAIN_FORCE`, `AIDA_DRAIN_BORROW`, `AIDA_DRAIN_LOCK_STALE_SECS`,
+  `AIDA_EVENTS_DISABLE` and `AIDA_SCHEDULE_CHILD`. The tick never sets
+  `AIDA_NO_HUMAN_ACKNOWLEDGED`; it refuses until `aida no-human acknowledge`
+  has been run.
+- Budget: refuses at or above 80% of the daily token budget (the runaway-seat
+  watchdog's, 6B by default), and refuses when the watchdog's aggregates are
+  missing, more than an hour old, degraded or unknown, or blind to the wave's
+  vendor (Codex spend is not measured; a local
+  `allow_uncovered_vendors = ["codex"]` overrides that one case). Each wave is
+  also capped by `--max-tokens`, `--max-iterations` and `--max-runtime`.
+- Circuit breakers in `.aida/shift-state.json`: at most 8 waves per 24h; two
+  consecutive zero-progress waves stop launches until `aida shift resume` or a
+  change to the queue; a spec that rode two shift waves in 24h without
+  finishing is excluded and reported once. An unreadable state file blocks
+  launches and fails the job.
+- Load, memory and disk headroom must be readable and within bounds.
+
+`max_failures` defaults to 2 for shift waves. That is a deliberate choice,
+not a measured one: the SPIKE-82 window never ended a wave by exhausting its
+failure cap. Re-derive it from `ShiftTick` / `QueueDrained` outcomes after a
+few shift nights.
+
+### Runbook
+
+- [ ] Groom the implementer queue: set `execution_mode = drain` explicitly on
+  every spec that may run unattended; leave everything else in another mode.
+- [ ] `aida no-human acknowledge` (once per machine).
+- [ ] Confirm the `watchdog` job is enabled and has run in the last hour
+  (`aida schedule status`); the shift refuses without its evidence.
+- [ ] `aida schedule install-cron` if `aida shift status` shows no driver.
+- [ ] `aida shift enable` at your own terminal (it refuses in an agent
+  session or without a TTY, and asks y/N; writes `~/.aida/shift-local.toml` for this clone
+  and registers the `night-shift` job).
+- [ ] **Preflight:** `aida shift tick --dry-run`. Read every `FAIL` line, the
+  exact wave command and the specs it would include. It writes nothing.
+- [ ] In the morning: `aida shift status`, `aida history events --kind
+  shift-tick`, then triage shelves and escalations as usual. The tick never
+  merges, never clears a merge hold and never approves work — held PRs wait
+  for the morning gate.
+- [ ] `aida shift disable` to stop. A wave already running finishes its
+  current spec; stop it the usual way if it must end now.
+
+Not in this cut: re-driving parked specs, a systemd timer driver,
+mailbox-latency escalation and headless cold-boot of overdue seat jobs.
+
 ## Limits of this cut
 
 - There is no liveness watchdog yet: a genuinely stuck headless run is not

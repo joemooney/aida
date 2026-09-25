@@ -64,6 +64,13 @@ whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude /
 
 ## Migration notes
 
+- `1.4.0`: the new `ShiftTick` event kind records one night-shift tick that
+  did something: a wave launched, a breaker tripped, a guard changed, or a
+  spec was escalated. It is actionable only when a breaker tripped or a spec
+  was escalated for a human; a routine tick is absorbed by `aida watch`. An
+  `aida watch` older than `1.4.0` reads `ShiftTick` as `Unknown`, which is
+  actionable and wakes the supervisor, so upgrade those binaries. Additive
+  only. (STORY-1218) // trace:STORY-1218 | ai:claude
 - `1.3.0` — the new `GateHeld` event kind records a gate that REFUSED or
   HELD (`gate`, optional `pr`, `reason`, optional `actor`, plus `seat`):
   the merge-hold clear floor, the `aida pr ship` hold-release refusals, a
