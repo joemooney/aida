@@ -4212,6 +4212,9 @@ pub(crate) enum MrBasePreflight {
     MissingRemoteBase,
     /// The base and the source branch are the same ref.
     SourceEqualsBase,
+    /// `origin` could not be reached (offline, auth, hung connection), so
+    /// the base could not be verified either way. Fails closed: no offer.
+    OriginUnreachable,
 }
 
 /// Check whether `base` is a safe MR/PR target for `source_branch`: it must
@@ -4227,14 +4230,31 @@ pub(crate) fn preflight_mr_base(
     if base == source_branch {
         return MrBasePreflight::SourceEqualsBase;
     }
+    // Bounded the same way as `probe_branch_on_origin` (BUG-257): a hung
+    // HTTPS dial must not freeze `aida review`, and no credential prompt may
+    // block it. `--exit-code` exits 2 only when origin answered and has no
+    // such ref; any other failure means origin was not reached.
+    // trace:BUG-1610 | ai:claude
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["ls-remote", "--exit-code", "--heads", "origin", base])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .args([
+            "-c",
+            "http.lowSpeedLimit=1000",
+            "-c",
+            "http.lowSpeedTime=10",
+            "ls-remote",
+            "--exit-code",
+            "--heads",
+            "origin",
+            base,
+        ])
         .output();
     match out {
         Ok(o) if o.status.success() && !o.stdout.is_empty() => MrBasePreflight::Ok,
-        _ => MrBasePreflight::MissingRemoteBase,
+        Ok(o) if o.status.code() == Some(2) => MrBasePreflight::MissingRemoteBase,
+        _ => MrBasePreflight::OriginUnreachable,
     }
 }
 
@@ -4251,6 +4271,13 @@ pub(crate) fn mr_base_diagnosis_message(
     let change_noun = forge_kind.change_noun();
     let condition = match outcome {
         MrBasePreflight::Ok => return String::new(),
+        MrBasePreflight::OriginUnreachable => {
+            return format!(
+                "not offering a {change_noun} from `{source_branch}`: could not reach \
+                 `origin` to confirm that `{base}` exists there. Check the network or \
+                 credentials and run the command again."
+            );
+        }
         MrBasePreflight::MissingRemoteBase => format!(
             "the intended base `{base}` does not exist on `origin`. This usually \
              happens when the repository was initialized before `{base}` was pushed, \

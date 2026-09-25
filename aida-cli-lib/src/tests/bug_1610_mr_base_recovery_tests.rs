@@ -222,3 +222,37 @@ fn resolve_mr_target_branch_falls_back_to_default_when_nothing_saved() {
     let resolved = resolve_mr_target_branch(None, None, "main");
     assert_eq!(resolved, "main");
 }
+
+// An origin that cannot be reached is not reported as "base missing": the
+// preflight fails closed with its own outcome and a retry message instead of
+// a misleading recovery recipe.
+// trace:BUG-1610 | ai:claude
+#[test]
+fn unreachable_origin_is_distinguished_from_missing_base() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git")
+            .current_dir(&repo)
+            .args(args)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?} failed");
+    };
+    git(&["init", "-q"]);
+    // A path that does not exist: git cannot reach it and exits 128, not 2.
+    let missing = tmp.path().join("no-such-origin.git");
+    git(&["remote", "add", "origin", missing.to_str().unwrap()]);
+    let outcome = crate::pr_cmd::preflight_mr_base(&repo, "feature", "main");
+    assert_eq!(outcome, crate::pr_cmd::MrBasePreflight::OriginUnreachable);
+    let msg = crate::pr_cmd::mr_base_diagnosis_message(
+        crate::forge::ForgeKind::GitLab,
+        outcome,
+        "feature",
+        "main",
+    );
+    assert!(msg.contains("could not reach"), "{msg}");
+    assert!(!msg.contains("glab repo update"), "{msg}");
+}
