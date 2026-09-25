@@ -1,0 +1,29 @@
+id: 01a0d7a1-cfb9-7ed2-add8-b69091986e6d
+spec_id: TASK-1507
+agreed_id: TASK-1507
+title: 'TASK-1505 slice 1: history.db core, completeness rules, shared location, cache rebuild --history, parity tests, measurements'
+description: |-
+  Slice 1 of TASK-1505, per the signed-off sketch and the advisor amendments A2-A10 in TASK-1505's comments. Blocked by BUG-1616, the rename fix, so that the parity oracle is correct.
+
+  ## Acceptance
+  - As listed in the TASK-1505 ADVISOR SIGNOFF for slice 1.
+  - Commit trailers name this slice, not TASK-1505.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T08:15:01.049365852Z
+modified_at: 2026-09-25T08:15:01.049365852Z
+req_type: Task
+tags:
+- cache
+- history
+- parent:TASK-1505
+filed_at:
+  code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
