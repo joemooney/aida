@@ -14,11 +14,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:14:43.526012291Z
-modified_at: 2026-09-25T09:10:38.873871336Z
+modified_at: 2026-09-25T09:20:57.828097994Z
 req_type: Bug
 tags:
 - data-integrity
 - history
+comments:
+- id: 01a0d7de-2fe4-7071-b783-d3c8030ce1a9
+  author: joe
+  content: 'Review: APPROVE — claude/bug-1616 @16bf434aa1. (1) Coverage: every store-history name-status parser now disables renames: event walk history.rs:455 (git show), digest history.rs:723 (git log), print_pull_summary lib.rs:72170. The only other store name-status reader, aida-core git_ops.rs:1042 changed_object_files, already passes --no-renames (BUG-636). Remaining --name-only/--numstat callers (rebase.rs:163, field_study.rs:412, lib.rs:37549/51880/51911, pr_cmd, harvest) read the code repo, not aida-store, and do not emit spec events. No libgit2 diff/find_similar paths. digest.rs/digest_cmd.rs do not shell out to name-status. (2) Regression test history.rs:1803 verified in a scratch worktree: removing both flags fails (''missing Deleted BUG-389, got: []''); removing only the event-walk flag fails at the same assert; removing only the digest flag fails at the BUG-389 digest row expect (history.rs:1898). So both halves are guarded, and a precondition assert confirms the fixture really is an R pair. (3) Pull summary: correct. R lines have 2 tabs and were silently skipped by the tabs==1 branch; with --no-renames they come through as D/A rows and land in deleted/added. Minor, non-blocking: there is no unit test for the pull-summary path (it is a println function). (4) trace:BUG-1616 | ai:claude comments are present at all 3 sites and on the test. cargo test -p aida-cli-lib --lib history: 37 passed, 0 failed. cargo fmt --check is clean.'
+  created_at: 2026-09-25T09:20:57.828097994Z
+  modified_at: 2026-09-25T09:20:57.828097994Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
   branch: main
