@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:03:52.561229247Z
-modified_at: 2026-09-25T02:03:52.561229247Z
+modified_at: 2026-09-25T02:06:11.233689020Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -43,6 +43,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0b5e0-7244-7451-89a9-f8c561574633
   created_at: 2026-09-25T02:03:59.131134181Z
+- rel_type: Supersedes
+  target_id: 01a0d64e-d894-7290-a9c1-e7307efb0d08
+  created_at: 2026-09-25T02:06:11.233686089Z
+  created_by: joe
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
   branch: claude/story-1218
