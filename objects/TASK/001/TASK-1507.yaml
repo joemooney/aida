@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T10:52:02.254030020Z
+modified_at: 2026-09-25T11:51:20.049274559Z
 req_type: Task
 tags:
 - cache
@@ -31,6 +31,28 @@ relationships:
   target_id: 01a0d742-f5f4-7a03-b805-b2e5ed5906b7
   created_at: 2026-09-25T08:15:34.952914605Z
   created_by: joe
+comments:
+- id: 01a0d867-daf1-73a2-ab49-9ed21adae795
+  author: joe
+  content: |-
+    MEASUREMENTS (A8), slice 1, 2026-09-25. Release build of claude/task-1507. Store: a fresh clone of the live aida-store at HEAD 17309929 (37,721 commits); the live store and ~/.aida were not touched. Host was busy (load average 7-11), so wall times are noisy; each figure is one run unless noted.
+
+    Cold full build (`aida cache rebuild --history`): 21.2 s wall, 73 MB max RSS; a second run under heavier load took 43.9 s. Result: 37,721 commits, 25,730 events, 26 MB file. The sketch estimated 1-3 min.
+
+    Warm queries (index tip == HEAD). Each row: index-served / git walk (AIDA_HISTORY_CACHE=0). Output was byte-identical in every row.
+    - `history events --shipped -n 10` (default 50-commit window): 0.052 s / 0.45 s
+    - `history events --since 1d -n 50`: 0.053 s / 2.2 s
+    - MCP default shape (`--all -n 100 --max-commits 500`): 0.025 s / 4.7 s
+    - `--shipped -n 10 --max-commits 3000`: 0.054 s / 46.5 s
+    - `--id TASK-1505 -n 50`: 0.032 s / 0.49 s
+    - `--all -n 5000 --max-commits 5000` (10,500 output lines): 0.045 s / 59.9 s
+
+    Incremental catch-up of one new commit, plus the query: 0.65-3.5 s wall, with only about 0.05 s of CPU. strace shows the rest is I/O wait. Each SQLite fsync took 70-100 ms (four per run, during the WAL checkpoint when the connection closes), and the loaded disk added the variance. The git side of a one-commit catch-up takes about 30 ms. Warm queries after that: 0.04 s.
+
+    Budgeted first build (index deleted, default 1.5 s budget, `--since 1d -n 50`): each query took 2.1-2.5 s (budget plus rev-list and the chunk granularity) and back-filled about 4,350 of the newest commits over three queries. `cache status` reported FILLING, with the index reaching back to 2026-09-20. Queries whose window falls inside the indexed range are served from the index. The others fall back to the git walk.
+  created_at: 2026-09-25T11:51:20.049274559Z
+  modified_at: 2026-09-25T11:51:20.049274559Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
   branch: main
