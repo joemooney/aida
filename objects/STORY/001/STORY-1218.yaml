@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:20.548044413Z
-modified_at: 2026-09-25T01:20:29.419135402Z
+modified_at: 2026-09-25T01:20:35.297747161Z
 req_type: Story
 tags:
 - autonomy
@@ -297,5 +297,11 @@ comments:
     - If the canonical exe is under a `target/` directory that belongs to a git worktree, the installer should warn, because a drain rebuild will swap the binary under the timer.
   created_at: 2026-09-25T01:20:29.419135402Z
   modified_at: 2026-09-25T01:20:29.419135402Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d626-63e1-71c1-a4b4-bf0906a33b50
+  author: joe
+  content: 'Correction to the ADVISOR SIGNOFF comment above: the binding amendments are A1–A13, not A1–A16. The content is unchanged.'
+  created_at: 2026-09-25T01:20:35.297747161Z
+  modified_at: 2026-09-25T01:20:35.297747161Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
