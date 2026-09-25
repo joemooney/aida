@@ -3,12 +3,12 @@ spec_id: TASK-1509
 agreed_id: TASK-1509
 title: Unify digest, calibration/assess and tail --since/--until on the shared time-bound parser
 description: 'Follow-up to TASK-1502. digest, calibration/assess and tail still use their own --since/--until grammars. Move them onto queue_cmd::parse_since_arg (durations m/h/d/w, RFC3339, bare ISO date = local midnight, zone-less datetime = local, ''<N> <unit> ago''), and update the help and docs. Acceptance: every --since/--until flag in the CLI accepts the same grammar, and a test lists each flag.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:37:41.846102430Z
-modified_at: 2026-09-25T09:37:52.308049605Z
+modified_at: 2026-09-25T10:52:08.824629298Z
 req_type: Task
 comments:
 - id: 01a0d7ed-aab4-7302-bc92-8efe9c7d1d84
