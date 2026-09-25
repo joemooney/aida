@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T20:32:14.600361247Z
-modified_at: 2026-09-25T20:58:27.748794230Z
+modified_at: 2026-09-25T21:03:55.677090553Z
 req_type: Bug
 comments:
 - id: 01a0da45-114e-7d70-a786-6e90694da378
@@ -22,6 +22,12 @@ comments:
   content: 'Review: REQUEST CHANGES — small, one-line fix. The core resolution is correct and verified. Blocker: in a fresh linked worktree the 2nd build is still Dirty, because the build script''s own `git status --porcelain` (aida-cli-lib/build.rs:48-50) opportunistically rewrites the per-worktree index during the build (the index is racy right after `git worktree add`), and the index is watched (build.rs:~92). Observed on the real crate: build 1 compiled; build 2 Dirty ''index has changed (52ms after last build)'', lib recompiled; build 3 Fresh. That fails the acceptance literally in the exact worktree-per-spec scenario. Fix: `.args(["--no-optional-locks", "status", "--porcelain"])`. An A/B in a scratch crate (plain: Dirty on every rebuild; with the flag: Fresh from build 2) confirms it. Verified OK: rev-parse --absolute-git-dir / --git-common-dir (relative common dir joined to CARGO_MANIFEST_DIR = build-script cwd, correct); gitdir:/commondir fallback with no git on PATH (linked worktree resolved); no-.git tarball emits nothing and the 2nd build is Fresh; paths with spaces are fine; only existing paths are emitted. Stamp: detached HEAD + empty commit -> Dirty via HEAD, sha updated to the new commit, next build Fresh; on a branch, commit -> Dirty via logs/HEAD, sha updated, next Fresh. Checkout, reset, amend and rebase all touch HEAD and/or logs/HEAD. Fetch-only correctly does not rerun. packed-refs omission is justified (a branch update always writes a loose ref). Non-blocking edge (not a regression vs main): with core.logAllRefUpdates=false, no logs/HEAD, and a nested branch (a/b) whose ref is only packed, the parent dir refs/heads/a does not exist, so nothing catches the next commit. Reproduced: the stamp stayed stale. A suggested tweak is to watch the nearest existing ancestor of the loose ref instead of just parent() (build.rs:~113). Other build scripts (aida-core: templates/, aida-server: proto) do not reference git and need nothing. Hang risk: no network or credential paths; stdout is piped, so there is no pager. Minor note: inherited GIT_DIR/GIT_INDEX_FILE from a git hook would redirect resolution; that also applies pre-existing to the sha.'
   created_at: 2026-09-25T20:58:27.748794230Z
   modified_at: 2026-09-25T20:58:27.748794230Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0da61-c51d-7653-9d2d-d6f7b813c112
+  author: joe
+  content: 'Orchestrator delta check (984165fb8b): APPROVE. The delta is exactly the two changes the reviewer prescribed: --no-optional-locks on git status, and the nearest existing ancestor bounded to refs/. The implementer showed build 2 is Fresh in a brand-new worktree and the nested-ref stamp updates. Integrating.'
+  created_at: 2026-09-25T21:03:55.677090553Z
+  modified_at: 2026-09-25T21:03:55.677090553Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 99698621ba5890d30a9d128655537987cfd239d4
