@@ -15,12 +15,49 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:51:09.557186527Z
-modified_at: 2026-09-25T02:51:51.758624975Z
+modified_at: 2026-09-25T03:34:00.196954718Z
 req_type: Bug
 tags:
 - concurrency
 - integrity
 - store
+comments:
+- id: 01a0d6a0-8904-76c2-a1d3-019f10319467
+  author: joe
+  content: |-
+    BUG-1612 caller audit (branch claude/bug-1612)
+
+    DESIGN
+    - New store write lock: <store>/.aida/store-write.lock (fs2 flock, re-entrant per thread+store, 120s timeout via AIDA_STORE_LOCK_TIMEOUT_SECS). All GitBackend writers take it: save, update_requirement, add_requirement, delete_requirement, bulk_update, BulkWriter::finish, and the two atomic paths below. CachedGitBackend holds it across the cache upsert.
+    - New trait method DatabaseBackend::update_spec_atomically(target, |req|): the default goes through update_atomically. GitBackend, CachedGitBackend and Storage (dir stores) override it with a per-spec CAS. Under the lock it reads only target's object (located by spec_id, uuid checked), applies the closure, re-checks the file bytes just before writing (this catches writers that bypass the lock), then writes that one object with a targeted commit and upserts one cache row. It never lists or scans the store, and a test proves this.
+    - GitBackend/CachedGitBackend/Storage(dir) update_atomically: load under the lock, run the closure, diff against the loaded snapshot, and write only the modified, added and removed specs (plus metadata.yaml if it changed) in one targeted commit. Modified and removed specs are CAS-checked and added specs must not already exist; all checks run before the first write. A mismatch refuses the whole transaction. Objects the closure never saw are never touched.
+    - GitBackend::save (whole-store compat boundary): load() now records a snapshot (RequirementsStore.loaded_objects: object id to content fingerprint). save() is a per-spec CAS. It skips (and warns on) any spec whose file changed on disk after the load, whatever its modified_at. It deletes an absent object only when that object is in the snapshot and unchanged. A store with no snapshot (built in memory) deletes nothing. CachedGitBackend::save rebuilds the cache from disk when anything was kept or skipped.
+
+    update_atomically CALLERS
+    Migrated to update_spec_atomically (single spec, no scan):
+    - queue_cmd.rs handle_queue_command: force-override ledger comment, protocol ledger comment, queue done status + implementation_info
+    - queue_cmd.rs handle_queue_rework: status flip + shelve-marker clear, reason comment, review-findings comment, recurred-findings -> NeedsAttention
+    - lib.rs: capture_interface_changes, capture_test_plan (signature now takes &Requirement), extract_plan_followups marker comment, prepare_auto_complete_phase1_status
+    - mcp.rs: queue_done tool, queue_rework status flip, queue_rework reason comment
+    Kept on update_atomically (these need the whole store; they are now lock-protected, diff-written, CAS-checked and never delete unloaded objects):
+    - ID allocation via add_requirement_with_id, which needs the store's ID policy and counters: doc_cmd.rs (aida doc add); lib.rs findings add, gate-task find-or-create (scans for an existing gate), reviewer-verdict-unavailable finding, agent-gate warning finding, wave-integration-parked finding
+    - Multi-spec transactions: record_cmd.rs (aida record prune, all specs); lib.rs handle_db_reconcile_status (batch flips/holds)
+    - Legacy YAML/SQLite-only branches, which never reach a git store: lib.rs draft-landed flips, auto-bump flips, auto-complete-failure resolution, non-git bulk add
+    - Test fixtures: queue_work_tests.rs (2)
+
+    save() ON THE GIT STORE
+    Every one of these is covered by the CAS save above (lock + snapshot: no deletion of unloaded or changed objects, no revert of concurrent edits):
+    - Storage::save sites (dir store -> GitBackend::save): type_cmd (2), feature_cmd (3), backlog.rs batch tag, schedule_cmd, doctor_cmd (3), rel_def_cmd (3), config_cmd (4), trace_cmd (4), report_cmd, comment_cmd (5), relationship_cmd (2), mcp.rs (7), import_export_cmd, init_cmd (3), protocol_cmd (2), lib.rs (edit/tag/link paths, and aida del, which removes a spec it loaded, so the delete still works)
+    - Direct GitBackend::save: supervisor.rs (load, mutate, save); lib.rs agreed-id rename (old ids were loaded, so they are still deleted); db_cmd.rs and git_backend_cmd.rs migrate-into-target (no snapshot, so additive only and never wipes pre-existing target objects; this is safer than before); sandbox_cmd.rs and init_cmd seeding a fresh store (additive)
+    - Storage::save_with_commit_subject -> bulk_update (targeted, now locked)
+
+    REMAINING WHOLE-STORE WRITERS AND WHY
+    - GitBackend::save: the compatibility boundary for roughly 70 load/mutate/save callers. Migrating them all is out of scope. It is now CAS-safe per spec, but it still rewrites metadata.yaml from the caller's copy, so a concurrent metadata change (features, counters, users) can still be reverted. This is a follow-up candidate.
+    - BulkWriter::finish (imports): additive, never deletes, now locked. It has the same metadata.yaml caveat, because the counters were snapshotted at bulk_writer().
+    - update_atomically: loads the whole store (multi-spec closures need it) but writes only the diff.
+  created_at: 2026-09-25T03:34:00.196954718Z
+  modified_at: 2026-09-25T03:34:00.196954718Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b4984d495336027fed771caed71bc429dc1fd20c
   branch: main
