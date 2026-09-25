@@ -14,12 +14,12 @@ description: |-
   - zen auto-approve runs the approval authority predicate, and `[autopilot] approve = \"auto\"` cannot approve without it.
   - Refusal messages do not suggest re-running with an env-var role override.
   - A test covers each write site.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T01:20:51.335669387Z
-modified_at: 2026-09-25T01:58:54.605339446Z
+modified_at: 2026-09-25T02:46:22.100831356Z
 req_type: Bug
 tags:
 - authority
@@ -32,6 +32,20 @@ comments:
   created_at: 2026-09-25T01:58:54.605339446Z
   modified_at: 2026-09-25T01:58:54.605339446Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d674-ec8d-7c91-a377-bcd13b87c64a
+  author: aida-auto-bump
+  timestamp: 2026-09-25T02:46:22.093654024Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d674-ec94-7aa2-8644-3e9d45cf4108
+  timestamp: 2026-09-25T02:46:22.100830213Z
+  agent: aida
+  commit_sha: b4984d495336027fed771caed71bc429dc1fd20c
+  summary: Completed via merge b4984d49
 filed_at:
   code_sha: 9154924fd2cb9ea6a0ce0b0cfe737ee6474e9dfe
   branch: main
@@ -40,3 +54,7 @@ filed_at:
   aida_build_sha: c7d35baa35
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T02:46:22.093626500Z
+  completion_sha: b4984d495336027fed771caed71bc429dc1fd20c
