@@ -3,12 +3,12 @@ spec_id: BUG-1621
 agreed_id: BUG-1621
 title: aida supervise watch --execute re-drives unattended with no floors or evidence guard and uses --force-claim
 description: 'Found in TASK-1492''s strict review. supervise_cmd.rs (~488) ''aida supervise watch --execute'' re-drives parked specs unattended. It skips the TASK-1492 floors (live drain or wave, a tripped breaker, merge-hold, attention reason, non-drain mode, keystone), skips the A6 fail-closed redrive-evidence guard and the A5 default-off, and uses --force-claim. Acceptance: route watch --execute through the same plan_redrives/apply_requeue/apply_cap pipeline, with the same floors and evidence guard; no --force-claim; a test proves each floor holds on the watch path.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:32:48.018202563Z
-modified_at: 2026-09-25T12:32:59.543325411Z
+modified_at: 2026-09-25T16:19:59.703872539Z
 req_type: Bug
 comments:
 - id: 01a0d88d-fe97-73f2-a6ea-ccf801b6f1f3
