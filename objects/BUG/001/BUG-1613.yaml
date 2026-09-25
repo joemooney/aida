@@ -1,0 +1,30 @@
+id: 01a0d6bf-52da-79f1-9f43-1d4fe82a8f51
+spec_id: BUG-1613
+agreed_id: BUG-1613
+title: save() and BulkWriter write metadata.yaml wholesale and can revert a concurrent metadata change
+description: |-
+  Follow-up from BUG-1612 (review). GitBackend::save() rewrites metadata.yaml from the caller's in-memory store, and BulkWriter::finish writes the metadata snapshot taken at bulk_writer(). A concurrent change to store-level fields (features, id counters, users, teams, type definitions) that lands between the caller's load and its save is silently reverted. Counter reverts can re-issue IDs. Object writes are now a per-spec compare-and-swap (BUG-1612); metadata is not.
+
+  ## Acceptance
+  - A whole-store save and BulkWriter::finish write metadata.yaml only when a store-level field actually changed, and compare-and-swap it against the copy loaded (refuse with a typed conflict, as object writes do).
+  - ID counters are merged monotonically (max of disk and caller), never lowered.
+  - Tests: a concurrent feature add and a concurrent counter bump between load and save both survive.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T04:07:37.946734152Z
+modified_at: 2026-09-25T04:07:37.946734152Z
+req_type: Bug
+tags:
+- concurrency
+- integrity
+- store
+filed_at:
+  code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c7d35baa35
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
