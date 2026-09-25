@@ -3,12 +3,12 @@ spec_id: TASK-1509
 agreed_id: TASK-1509
 title: Unify digest, calibration/assess and tail --since/--until on the shared time-bound parser
 description: 'Follow-up to TASK-1502. digest, calibration/assess and tail still use their own --since/--until grammars. Move them onto queue_cmd::parse_since_arg (durations m/h/d/w, RFC3339, bare ISO date = local midnight, zone-less datetime = local, ''<N> <unit> ago''), and update the help and docs. Acceptance: every --since/--until flag in the CLI accepts the same grammar, and a test lists each flag.'
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:37:41.846102430Z
-modified_at: 2026-09-25T13:59:42.969671787Z
+modified_at: 2026-09-25T14:18:40.936490551Z
 req_type: Task
 tags:
 - docs:impacted
@@ -51,6 +51,20 @@ comments:
   created_at: 2026-09-25T12:44:36.997183982Z
   modified_at: 2026-09-25T12:44:36.997183982Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d8ee-c19c-7aa2-b717-048385fb9f02
+  author: aida-auto-bump
+  timestamp: 2026-09-25T14:18:40.924471209Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0d8ee-c1a8-79c1-b359-c174d81f7254
+  timestamp: 2026-09-25T14:18:40.936489127Z
+  agent: implementer
+  commit_sha: b821736ce75455f3858816002777b451fd4aaf03
+  summary: Completed via merge b821736c
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
   branch: main
@@ -59,3 +73,7 @@ filed_at:
   aida_build_sha: cb07ece7f0
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T14:18:40.924465843Z
+  completion_sha: b821736ce75455f3858816002777b451fd4aaf03
