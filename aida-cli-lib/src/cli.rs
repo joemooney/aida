@@ -12742,11 +12742,19 @@ pub enum Command {
         #[clap(long, global = true)]
         author: Option<String>,
 
-        /// Only show events after this date (ISO 8601, e.g. 2026-05-01).
+        /// Only show events after this point. Accepts a compact relative
+        /// duration meaning "that far before now" (`5h`, `7d`, `30m`, `2w`
+        /// — minutes/hours/days/weeks), an ISO date (`2026-05-01`), or a
+        /// full RFC3339 timestamp. The resolved window prints at the top of
+        /// human output so a relative form is never ambiguous.
+        // trace:TASK-1502 | ai:claude
         #[clap(long, global = true)]
         since: Option<String>,
 
-        /// Only show events before this date (ISO 8601).
+        /// Only show events before this point. Same forms as `--since`
+        /// (`5h`, `7d`, `30m`, `2w`, an ISO date, or RFC3339). Rejected if
+        /// it resolves earlier than `--since`.
+        // trace:TASK-1502 | ai:claude
         #[clap(long, global = true)]
         until: Option<String>,
 

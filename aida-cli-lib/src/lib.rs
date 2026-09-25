@@ -33786,18 +33786,41 @@ pub(crate) fn history_kind_report(
             events::EventKind::known_names().join(", ")
         );
     }
+    // TASK-1502: `--kind` shares `aida history`'s --since/--until flags, so
+    // it gets the same compact-relative-duration grammar
+    // (`queue_cmd::parse_since_arg_at`) as the digest/events views, instead
+    // of only the bare-date/RFC3339 forms `events::parse_time_bound` covers.
+    // trace:TASK-1502 | ai:claude
+    let now = chrono::Utc::now();
     let bound = |v: Option<&str>, flag: &str| -> Result<Option<chrono::DateTime<chrono::Utc>>> {
         v.map(|raw| {
-            events::parse_time_bound(raw).ok_or_else(|| {
-                anyhow::anyhow!("{flag} `{raw}` is not a date (YYYY-MM-DD) or RFC 3339 time")
+            queue_cmd::parse_since_arg_at(raw, now).map_err(|_| {
+                anyhow::anyhow!(
+                    "invalid {flag} value `{raw}` — expected a compact relative \
+                     duration (e.g. `5h`, `7d`, `30m`, `2w`), an ISO date \
+                     (`2026-05-01`), or RFC3339"
+                )
             })
         })
         .transpose()
     };
+    let since_at = bound(since, "--since")?;
+    let until_at = bound(until, "--until")?;
+    if let (Some(s), Some(u)) = (since_at, until_at) {
+        if s > u {
+            anyhow::bail!(
+                "--since resolves to {} which is later than --until's {} — \
+                 that window can never match anything; swap the bounds or \
+                 widen one",
+                s.format("%Y-%m-%d %H:%M UTC"),
+                u.format("%Y-%m-%d %H:%M UTC"),
+            );
+        }
+    }
     let query = events::KindQuery {
         kind: kind.to_string(),
-        since: bound(since, "--since")?,
-        until: bound(until, "--until")?,
+        since: since_at,
+        until: until_at,
         who: author.map(str::to_string),
         limit,
     };

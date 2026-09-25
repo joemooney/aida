@@ -81,6 +81,59 @@ fn parse_since_accepts_rfc3339() {
 }
 
 #[test]
+fn parse_since_accepts_bare_iso_date() {
+    // TASK-1502: `aida history --since 2026-05-01` (no time component) is
+    // the documented absolute form — must keep working.
+    let ts = parse_since_arg("2026-05-01").unwrap();
+    assert_eq!(
+        ts.format("%Y-%m-%d %H:%M:%S").to_string(),
+        "2026-05-01 00:00:00"
+    );
+}
+
+#[test]
+fn parse_since_accepts_relative_weeks_with_injected_now() {
+    // trace:TASK-1502 | ai:claude
+    let now = chrono::DateTime::parse_from_rfc3339("2026-09-25T12:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let two_weeks = parse_since_arg_at("2w", now).unwrap();
+    assert_eq!(two_weeks.format("%Y-%m-%d").to_string(), "2026-09-11");
+}
+
+#[test]
+fn parse_since_at_is_deterministic_across_every_unit() {
+    // TASK-1502: every unit, with an injected `now` so the test never
+    // flakes against the wall clock.
+    let now = chrono::DateTime::parse_from_rfc3339("2026-09-25T12:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    assert_eq!(
+        parse_since_arg_at("30m", now).unwrap(),
+        now - chrono::Duration::minutes(30)
+    );
+    assert_eq!(
+        parse_since_arg_at("5h", now).unwrap(),
+        now - chrono::Duration::hours(5)
+    );
+    assert_eq!(
+        parse_since_arg_at("7d", now).unwrap(),
+        now - chrono::Duration::days(7)
+    );
+    assert_eq!(
+        parse_since_arg_at("2w", now).unwrap(),
+        now - chrono::Duration::weeks(2)
+    );
+}
+
+#[test]
+fn parse_since_rejects_unknown_unit() {
+    // trace:TASK-1502 | ai:claude
+    assert!(parse_since_arg("5y").is_err());
+    assert!(parse_since_arg("3q").is_err());
+}
+
+#[test]
 fn parse_since_rejects_garbage() {
     // trace:TASK-232 | ai:claude
     assert!(parse_since_arg("").is_err());

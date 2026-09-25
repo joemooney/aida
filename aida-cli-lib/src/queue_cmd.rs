@@ -6831,10 +6831,28 @@ pub(crate) fn status_is_shelved(status: &aida_core::RequirementStatus) -> bool {
     matches!(status, aida_core::RequirementStatus::NeedsAttention)
 }
 
-/// Parse a `--since` value as either an RFC3339 timestamp or a relative
-/// `<N>{d,h,m}` expression (e.g. `2d`, `12h`, `45m`). Returns the
-/// resulting absolute UTC timestamp.
+/// Parse a `--since` value as either an RFC3339 timestamp, a bare ISO date
+/// (`YYYY-MM-DD`, midnight UTC), or a relative `<N>{d,h,m,w}` expression
+/// (e.g. `2d`, `12h`, `45m`, `2w`). Returns the resulting absolute UTC
+/// timestamp, resolved against the current wall-clock time.
+///
+/// Shared by `aida archive --older-than`, `aida queue progress --since`,
+/// the proxy-approvals `--since`/`--until` filters, and `aida history
+/// --since`/`--until` — one duration grammar for every "how far back" flag
+/// in the CLI rather than a parser per command.
+// trace:TASK-1502 | ai:claude
 pub(crate) fn parse_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
+    parse_since_arg_at(raw, chrono::Utc::now())
+}
+
+/// [`parse_since_arg`], but resolves relative durations against an explicit
+/// `now` instead of the wall clock. Lets callers get deterministic output in
+/// tests without mocking the system clock.
+// trace:TASK-1502 | ai:claude
+pub(crate) fn parse_since_arg_at(
+    raw: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<chrono::DateTime<chrono::Utc>> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         anyhow::bail!("--since cannot be empty");
@@ -6843,22 +6861,33 @@ pub(crate) fn parse_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>
     if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(trimmed) {
         return Ok(ts.with_timezone(&chrono::Utc));
     }
-    // Relative form: <number><unit>, unit ∈ {d,h,m}
+    // Bare ISO date (`YYYY-MM-DD`, no time component) — midnight UTC.
+    // trace:TASK-1502 | ai:claude
+    if let Ok(d) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        if let Some(dt) = d.and_hms_opt(0, 0, 0) {
+            return Ok(dt.and_utc());
+        }
+    }
+    // Relative form: <number><unit>, unit ∈ {d,h,m,w}
     // BUG-100: peel the last CHAR rather than the last BYTE so multi-byte
     // trailing units don't crash the process.
     let (num_str, unit) = split_last_char(trimmed);
     let n: i64 = num_str.parse().map_err(|_| {
         anyhow::anyhow!(
-            "invalid --since value `{}` (try `2d`, `12h`, or RFC3339)",
+            "invalid --since value `{}` (try `2d`, `12h`, `2w`, an ISO date, or RFC3339)",
             raw
         )
     })?;
-    let now = chrono::Utc::now();
     let delta = match unit {
         "d" => chrono::Duration::days(n),
         "h" => chrono::Duration::hours(n),
         "m" => chrono::Duration::minutes(n),
-        _ => anyhow::bail!("invalid --since unit `{}` — use d/h/m or RFC3339", unit),
+        // trace:TASK-1502 | ai:claude
+        "w" => chrono::Duration::weeks(n),
+        _ => anyhow::bail!(
+            "invalid --since unit `{}` — use d/h/m/w, an ISO date, or RFC3339",
+            unit
+        ),
     };
     Ok(now - delta)
 }
