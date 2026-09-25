@@ -1,0 +1,53 @@
+id: 01a0d6f1-8f01-7912-9fa3-39aece3a1884
+spec_id: STORY-1475
+agreed_id: STORY-1475
+title: 'Portable /aida-orchestrate for Codex and Antigravity: the same proxy orchestration loop driven through AIDA''s own session primitives instead of Claude-only subagent tools'
+description: |-
+  Follow-up to STORY-1474. The Claude /aida-orchestrate depends on the Agent, SendMessage and TaskStop tools, so it is excluded from the Codex prompt pack. The Codex and Antigravity skill packs (.codex/skills, .antigravity/skills) are curated lists built from the skill masters.
+
+  Provide a vendor-neutral variant that keeps the same loop, gates and guardrails, but implements the mechanics with AIDA CLI primitives that work from any harness:
+  - spawn implementers and reviewers as separate sessions: aida agent new / aida queue work, with --vendor codex|agy|claude;
+  - watch them: aida ps, aida tail;
+  - route findings: aida brief, mailbox;
+  - wait: harness background jobs, or bounded foreground waits.
+
+  ## Acceptance
+  - A portable skill body ships to .codex/skills/aida-orchestrate/ and .antigravity/skills/aida-orchestrate/ through the curated pack lists, behind an include flag. The Claude pack keeps the Agent-tool version.
+  - The portable variant's source cannot be picked up as a Claude skill by make sync-templates. Store it outside templates/skills/, for example templates/skills-portable/, embedded by build.rs.
+  - The portable body keeps every gate and guardrail of the Claude version:
+    - proxy triage;
+    - queue sign-off;
+    - sketch gate plus independent advisor;
+    - separate implementer and reviewer sessions;
+    - strict review classes;
+    - batched integration;
+    - exact-sha merge, then verify;
+    - no authority merges as proxy;
+    - no --admin;
+    - deferral does not count;
+    - honest reporting;
+    - handoff.
+  - Every command used is verified against --help. Vendor limits are stated honestly, for example Antigravity's interactive-launch refusal.
+  - aida scaffold refresh delivers it. Tests cover codex and antigravity pack contents, the Claude pack being unchanged, and a no-Claude-tool-names check on the portable body.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T05:02:30.145878720Z
+modified_at: 2026-09-25T05:02:30.145878720Z
+req_type: Story
+tags:
+- antigravity
+- codex
+- cross-vendor
+- orchestrator
+- scaffolding-pack
+- skill
+filed_at:
+  code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
