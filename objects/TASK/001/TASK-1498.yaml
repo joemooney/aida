@@ -1,0 +1,31 @@
+id: 01a0d6bd-c0e1-74c3-bc9f-79c0e5293a50
+spec_id: TASK-1498
+agreed_id: TASK-1498
+title: Add verbose launch diagnostics to aida agent new
+description: |-
+  Add an explicit `--verbose` mode to `aida agent new` for launches that will actually execute. `--no-exec` already provides a complete dry launch contract; verbose mode should provide useful launch-time diagnostics while preserving normal agent execution.
+
+  Verbose diagnostics should make visible, without exposing secrets: resolved vendor/client, model when explicitly requested or safely reported, role, spec/session/name, working directory or worktree, prompt source and whether context was injected, guidance files discovered, generated child argv with sensitive values redacted, process registration, and child exit/result information. Normal output remains concise, and machine-readable output remains stable.
+
+  ## Acceptance
+  - `aida agent new <vendor> --verbose` launches the agent and emits a documented diagnostic summary before/around spawn.
+  - The diagnostic contract is distinct from `--no-exec`: verbose executes; no-exec previews and exits.
+  - Secrets, tokens, full prompt contents, and sensitive environment values are never printed by default.
+  - Diagnostics identify the resolved model/client and prompt/context sources when available, with unknown values represented honestly.
+  - Child process registration, spawn failure, and exit status are reported clearly without changing launch semantics.
+  - TTY, TOON, and JSON/machine-readable behavior are documented and tested.
+  - Existing `--no-exec`, `--show-prompt`, and `--show-context` behavior remains compatible.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T04:05:55.041036347Z
+modified_at: 2026-09-25T04:05:55.041036347Z
+req_type: Task
+filed_at:
+  code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c7d35baa35
+  vendor: codex
