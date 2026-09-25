@@ -29,12 +29,12 @@ description: |-
     - handoff.
   - Every command used is verified against --help. Vendor limits are stated honestly, for example Antigravity's interactive-launch refusal.
   - aida scaffold refresh delivers it. Tests cover codex and antigravity pack contents, the Claude pack being unchanged, and a no-Claude-tool-names check on the portable body.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:02:30.145878720Z
-modified_at: 2026-09-25T05:02:30.145878720Z
+modified_at: 2026-09-25T05:02:57.841048833Z
 req_type: Story
 tags:
 - antigravity
