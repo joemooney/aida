@@ -14,12 +14,16 @@ description: |
   - The manifest covers the Claude, Codex and Antigravity skill packs, or the spec states and justifies which packs are left out.
   - `REFRESH_DELIVERED_SKILLS` is removed, and aida-orchestrate is delivered through the manifest.
   - Tests cover: a new skill delivered, a deleted skill not recreated, a legacy pack seeded without any creation, and a symlinked skill left untouched.
+
+  - `aida scaffold upgrade` and a re-run of `aida init` respect the manifest: neither recreates a delivered skill the user deleted.
+  - `aida doctor` does not report a delivered-then-deleted skill as missing-skill scaffold drift, and does not recommend `aida scaffold upgrade` for it.
+  - The manifest fails closed as in STORY-1475: only a missing manifest means "nothing delivered". Any other read error creates nothing and prints a warning, and the manifest is written atomically.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:29:48.596407578Z
-modified_at: 2026-09-25T05:42:22.502127854Z
+modified_at: 2026-09-25T06:03:55.919386307Z
 req_type: Task
 tags:
 - antigravity
