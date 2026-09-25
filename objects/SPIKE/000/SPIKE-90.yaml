@@ -3,12 +3,12 @@ spec_id: SPIKE-90
 agreed_id: SPIKE-90
 title: Evaluate an immutable stale cache snapshot for lock-tolerant reads
 description: Investigate whether AIDA should maintain an immutable, read-only snapshot of the rebuildable SQLite query cache for read commands when the active cache is rebuilding or locked. The spike must examine SQLite backup/snapshot and atomic replacement guarantees; how to avoid copying a live database/WAL unsafely; snapshot freshness metadata and explicit stale-data labeling; lock-owner detection and bounded wait behavior; which commands may fall back to stale data versus requiring a fresh cache; schema migration and corruption handling; permissions and multi-process access; and interaction with the proposed separate history-event cache. Preserve Git/AIDA store as canonical. Produce an architecture recommendation with failure modes, consistency boundaries, operational cleanup/recovery, and a decision on whether this is worthwhile before implementation.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T13:55:45.638264382Z
-modified_at: 2026-09-25T14:01:24.358448684Z
+modified_at: 2026-09-25T22:32:01.946420356Z
 req_type: Spike
 tags:
 - architecture
