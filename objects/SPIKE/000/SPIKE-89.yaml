@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T03:16:37.130372260Z
-modified_at: 2026-09-25T08:03:03.840908348Z
+modified_at: 2026-09-25T08:03:05.853160481Z
 req_type: Spike
 comments:
 - id: 01a0d698-4069-7262-985f-5b089ff43219
@@ -28,6 +28,12 @@ comments:
   content: 'Prototype reference: /home/joe/.gemini/antigravity-cli/brain/9c629ead-bd75-4722-88c6-5378a0d7d8cd/shimmer_prompt.py. This Python example demonstrates the intended interaction: render a 30 FPS copper shimmer and prompt together, switch the terminal to cbreak mode, use select with a frame timeout, stop shimmering on the first input byte, retain the byte in the prompt buffer, support Enter/Ctrl-C/Ctrl-D/backspace/Ctrl-U/Ctrl-W/escape handling, redraw only the banner region, restore terminal settings and cursor in finally, and fall back to ordinary stdin when not attached to a TTY. The Rust spike should use this as behavioral reference, while replacing the Python terminal handling with a cancellation-safe Rust implementation and configurable shimmer/static/off modes.'
   created_at: 2026-09-25T03:24:57.321558842Z
   modified_at: 2026-09-25T03:24:57.321558842Z
+- id: 01a0d796-e5fd-70d1-8904-cb8532c018f2
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved and queued (sign-off). Concrete, bounded and testable.'
+  created_at: 2026-09-25T08:03:05.853160481Z
+  modified_at: 2026-09-25T08:03:05.853160481Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b4984d495336027fed771caed71bc429dc1fd20c
   branch: main
