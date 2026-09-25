@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-25T01:13:23.198549533Z
+modified_at: 2026-09-25T01:20:09.510418529Z
 req_type: Story
 tags:
 - audit
@@ -186,5 +186,123 @@ comments:
       Dispatch (STORY-1353, already shipped). Any grant that relaxes an integrity floor. Advisor delegation of grants. --scope batch/epic (the schema is reserved for it). Grace windows. Retiring the AIDA_SESSION_ROLE env leg (follow-up). Gating archive/defer (a separate ruling, see section 1). Hardening TTY detection against a pseudo-terminal that fakes a human (a known limitation shared with the existing floor). Cross-hub clock-skew correction beyond the duration cap. Autopilot/groom execution authority.
   created_at: 2026-09-25T01:13:23.198549533Z
   modified_at: 2026-09-25T01:13:23.198549533Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d625-ff26-7962-b654-341573c197c2
+  author: joe
+  content: |
+    ADVISOR SIGNOFF: CHANGES REQUESTED
+
+    The direction is right. The closed DispositionAct enum, floor sites that never consult a grant, human-only issuance, PRIN-5 "unverifiable is not absent", and an aida-store ledger are all sound. The sketch cannot be approved as written for two reasons. First, the "Native" branch it puts ahead of the grant is already open to every agent session in this repository. Second, several dispositional write paths never reach the check the grant plugs into. Verified against main at a052adddda. Findings first, then rulings on the five questions, then the required changes.
+
+    FINDINGS FROM VERIFYING THE CODE (main a052adddda)
+
+    F1. The roster grants native advisor authority to every session run by this user. BLOCKING.
+    effective_role_with_roster (lib.rs:48686) consults the per-USER roster before AIDA_SESSION_ROLE (team.rs:265-276). This store's registry/team.toml contains `joe = "advisor"`, set 2026-06-17 in commit 6f917ac8fa. Every agent runs as OS user joe. Run from the main checkout, `AIDA_SESSION_ROLE=implementer aida team my-role` and `AIDA_SESSION_ROLE=product aida team my-role` both print "advisor (from roster)". has_advisor_authority() therefore returns true for the product, implementer and reviewer seats from the main checkout. Four consequences:
+    (a) The sketch orders checks Native, then Granted, then Denied, so the grant is never consulted and no use event is ever written.
+    (b) `--holder product` "resolved through effective_role_with_roster" can never match, because every seat resolves to advisor.
+    (c) The separation STORY-1353 made is not in effect on this repository.
+    (d) `aida team set-role` (team_cmd.rs:202) has no authority gate, and neither does the REST PUT /api/v2/team/:user/role. Any agent can therefore write itself a durable advisor role for every session.
+    Resolution also depends on where a session runs. effective_role_with_roster looks for <project_root>/.aida-store, which a sibling worktree does not have, so sessions in worktrees fall back to the env var. A per-human roster cannot identify per-session seats while all agents share one OS user.
+
+    F2. The env leg is advertised by the substrate itself.
+    Refusal texts tell agents to use the bypass directly: queue_cmd.rs:381/442/517/7427 print "Re-run as advisor: `AIDA_SESSION_ROLE=advisor ...`". lib.rs:10969 says "set `AIDA_SESSION_ROLE=advisor` (for scripts/agents)". The MCP authority line (mcp.rs:739) says "relaunch for advisor authority: AIDA_SESSION_ROLE=advisor aida mcp-serve". While those texts stand, a revoked grant costs an agent one prefix.
+
+    F3. Dispositional writes the sketch does not cover.
+    - `aida queue done`, both the CLI (queue_cmd.rs QueueCommand::Done, ~5211) and MCP tool_queue_done (mcp.rs ~4143), move Draft or NeedsAttention to Done with no authority check. BUG-684 only warns. The merge auto-bump then takes the spec to Completed. The lifecycle model's own transition_guard marks Draft to Done as RequiresAdvisorAuthority. This path skips approval and closure in one step.
+    - Reopen-to-approved. transition_guard (lifecycle.rs:198) gates only Draft and NeedsAttention sources. `aida edit X --status approved --force` on a Rejected or Completed spec therefore needs no authority. `--force` only clears the reopen guard.
+    - `reject` is gated nowhere. Rejected is not a protected target, so status_advance_requires_advisor_authority(_, Rejected) is always false. The queue advance reject check at queue_cmd.rs:441 is dead code. The DispositionAct::Reject variant as sketched would have no site that enforces it. `close` has the same gap: it is gated only from Draft or NeedsAttention. Approved or InProgress to Completed through `edit --status` is ungated.
+    - `aida zen <draft>` with `[autopilot] approve = "auto"` calls zen_auto_approve (lib.rs ~96273/96524). That writes Draft to Approved with no has_advisor_authority check, and the knob lives in an agent-writable config file.
+    - `--escalate-defaults`, and `away_drain = "headless-escalate-defaults"`, ship the implementer's default on a fork the headless advisor escalated to the HUMAN. Since STORY-1353 a drain launch needs only dispatch authority, so the product seat can pick this mode. `aida burndown run --force` also skips the dispatch check entirely (lib.rs:54743).
+    - `aida archive --force` hides a live, approved or queued spec with no authority check (archive_cmd.rs). This confirms the sketch's own finding.
+
+    F4. Env-var spoofing beyond AIDA_SESSION_ROLE.
+    Orchestrator corroboration (orchestrator.rs:230, run_is_live) compares AIDA_AUTO_COMPLETE_TOKEN with run_uuid in the .aida drain-state file. Any same-user process can read that file. While any drain is live, an agent that exports AIDA_AUTO_COMPLETE=1 and the token gets "Orchestrated", which means native advisor and dispatch authority. Once the env leg and the roster are closed, this becomes the cheapest bypass.
+
+    F5. Two sites in the sketch are not integrity floors today.
+    GatedOp::Integrate and GatedOp::MergeGate pass through enforce_team_gate (lib.rs:48698). That function has a `--force` bypass (queue_cmd.rs:6616, lib.rs:63472) and a TTY/orchestrator carve-out. They are team RBAC gates, not floor sites. The supervised-merge floor is actually the merge-hold: handle_merge_hold Clear (lib.rs:33228) and pr ship (pr_cmd.rs:1987/2439), both confirmed to use has_integrity_floor_authority. BUG-1566 is confirmed in code.
+
+    F6. The single-commit claim does not hold on the current write path.
+    GitBackend::update_requirement (git_backend.rs:885) writes the YAML first. auto_commit_paths (git_backend.rs:329) then discards every git error with `let _ =`, commits locally, and returns Ok. The spec change is on disk before any ledger write could fail. The CAS model the sketch cites, schedule_ledger::write_batch_cas_opts, has two relevant behaviours. When push returns Err it keeps the commit locally ("uploads on the next aida push"). On a rejected push it runs `reset --hard HEAD~1`. "Neither happens" therefore needs a new backend primitive. The sketch names one (write_grant_event_with_spec) but does not specify it.
+
+    Claims verified as accurate:
+    - The three authority predicates exist with the stated names and semantics (lib.rs:48931-49021).
+    - has_integrity_floor_authority means stdin is a TTY.
+    - The merge-hold clear and pr ship floors hold, and BUG-1566 is in code.
+    - archive_cmd.rs has no authority gate.
+    - The AIDA_SESSION_ROLE=advisor leg is live on CLI and MCP. MCP mostly reads the env var only. The exception is the execution_mode gate at mcp.rs:2157, which calls crate::has_advisor_authority() and so also reads the roster.
+
+    RULINGS
+
+    Q1. Issuance: a human at a TTY, only. CONFIRMED as an advisor ruling in its own right, not inherited from the proxy ruling.
+    If authority could propagate from an agent to an agent without the operator, a single compromised or confused session could grant itself indefinite authority. That is the trust hole. The binding terms are these:
+    - Issue only if stdin and stdout are both TTYs, and read the y/N confirmation from /dev/tty, not stdin.
+    - Refuse issuance when the caller is orchestrated, has AIDA_AUTO_COMPLETE set at all, is a companion, or is running under an existing grant.
+    - MCP gets no issuance tool. MCP may list, check and revoke only.
+    - Nobody delegates, re-grants or widens a grant.
+    - Holder is restricted to seats without native disposition authority that are not execution seats: product, and integrator if the operator wants it. Refuse implementer, reviewer and orchestrator as holders. A grant held by an execution seat would let a drain child dispose its own work, which violates independence. Refuse advisor as a holder because it would do nothing.
+    - At most one live grant per holder. A new grant revokes and supersedes the old one.
+    - Writing the roster (`aida team set-role` / `unset-role`, and the REST equivalent) moves into the never-grantable set and is gated on has_integrity_floor_authority in this story. It propagates authority exactly as issuing a grant does. If agents can write the roster freely, restricting issuance to a TTY protects nothing.
+
+    Q2. Archive: DROP from v1, which is the sketch's option (b).
+    Remove "archiving" from the description and acceptance. File a follow-up to gate archiving a non-terminal or queued spec (the `--force` path) on disposition authority. Archiving a spec that is already terminal stays as ungated housekeeping. Apply the same reasoning to `reject`, which F3 shows is enforced nowhere: remove it from the v1 enum, or keep it only if the gate ships in the prerequisite below. The invariant is that every DispositionAct variant has at least one enforcement site, and a test proves that site refuses a non-advisor with no grant. An enum variant that nothing enforces is a ledger entry that can be skipped at will.
+
+    Q3. The never-grantable list is NOT complete.
+    Add the following to the IntegrityFloor set or to the named out-of-grant set, each with a refusal test:
+    - Roster writes (Q1).
+    - Choosing escalate-defaults, through the flag or through `away_drain`. This resolves a fork that was escalated to the human. In v1 it requires native disposition at launch: a TTY or a corroborated advisor. It is not grantable.
+    - Any `--force` or team-gate escape in the same invocation as a grant-authorized write. Keep "grant plus --force is refused", and add that enforce_team_gate and enforce_protected_spec_gate never consult a grant.
+    - Changes to authority config. A grant never authorizes writing [autopilot], [grant], [team] or [seats] policy.
+    Correct the list itself: SupervisedMerge's enforcement site is the merge-hold. Integrate and MergeGate are RBAC gates (F5), so say that, and test that a grant has no effect on them. ForcePush of aida-store or main is not something the CLI can enforce. Keep it as a named refusal only where AIDA itself force-pushes.
+
+    Q4. Substrate: aida-store is the RIGHT substrate. Atomicity is achievable, but only with a new primitive, which the sketch must specify.
+    aida-store is git-canonical, auditable by the team and QA across hubs, and consistent with STORY-1173 treating comments as the source of truth. Runtime state under .aida/ would be wrong. The required write semantics:
+    (i) A new backend method stages the spec YAML, the use-event file and oplog.yaml, then makes one commit with an `Aida-Grant:` trailer. It propagates every git error. If the commit fails, it restores both paths in the working tree and invalidates the cache before returning Err. It must not go through update_requirement plus auto_commit_paths.
+    (ii) The grant is evaluated before staging. Inside the CAS loop, after every pull-rebase, re-run evaluate_grant against the rebased store and recompute `prev`. If the grant has been revoked or has expired by then, roll back and refuse. This is how a revoke issued on another hub takes effect. "Every check re-reads the store" otherwise reads only the local store.
+    (iii) When the remote is unreachable, the use event commits locally, like any other store write. Verification therefore treats the chain as a DAG: each `prev` must name an existing event or the genesis hash. Sibling events after an offline merge are valid. Edits, deletions and dangling `prev` values fail.
+    (iv) State the threat model honestly. A grant YAML written directly with raw git shows up as an Add, which the M/D history check cannot see. Name that forgery case explicitly. evaluate_grant should honour only grants whose adding commit carries the issuance trailer. Reserve `[grant] require_signed = true`, so that a grant counts only if its commit is signed with an operator key an agent cannot use unattended, for example an ssh or FIDO key that requires a touch. The default stays a guardrail, not security, consistent with team set-role.
+    Strike section 5(c), the automatic "grant: <ID>" stamp on PROXY DECISION comments. 5(b) says fork rulings are not granted, so the stamp would label narrative text with authority it does not carry and mislead auditors. Keep `aida approvals --unbacked`.
+
+    Q5. Closing the AIDA_SESSION_ROLE leg, together with the roster precedence in F1 and the direct roster writes, is BLOCKING. It is not a follow-up.
+    Without it, three acceptance criteria in the spec pass in a test and fail in practice:
+    - "a live grant lets a non-advisor session perform [these acts] and nothing else"
+    - "an expired or revoked grant fails identically to no grant"
+    - "proxy-approval entries are derivable"
+    Any session defeats all three with a prefix that the substrate's own refusal text recommends, and on this repository with no prefix at all (F1). Shipping the grant without closing the leg produces an audit surface that looks complete and is not, which is the reassuring-but-false verdict PRIN-5 warns about. The doctrine already exists in autonomy-and-escalation.md ("Provenance corroboration"): an env var is a hint to corroborate, never a trust signal. It has simply not been applied to the role.
+    Closing the leg changes how the advisor seat itself holds authority, and that is an architecture change. It goes in its own sibling story with its own sketch and signoff, linked as blocked-by on STORY-1217. The minimum it must deliver:
+    (a) Native disposition from a role requires a session seat corroborated at a TTY. One example is a seat token minted by `aida role enter advisor` at a TTY, bound to the session id, and recorded in the session lease, which follows the zen-intent-marker precedent. A bare AIDA_SESSION_ROLE or a roster entry alone no longer counts. The roster becomes a ceiling on which seats a user may take, never the seat itself.
+    (b) Roster writes are floor-gated (Q1).
+    (c) The refusal texts listed in F2 point to asking the operator or to `aida grant`, never to the env var.
+    (d) The MCP server corroborates its seat the same way. Today it trusts the env var of the shell that launched it.
+    Hardening the drain-state token (F4) goes in a follow-up, for example by requiring the caller's process ancestry to include orchestrator_pid. The sketch must name it in its threat model now.
+
+    REQUIRED CHANGES BEFORE RE-SIGNOFF
+    1. Holder and grant lookup key on the corroborated per-session seat, not on effective_role_with_roster. Remove the "resolved through effective_role_with_roster" wording. Add holder restrictions and one live grant per holder (Q1).
+    2. Link a blocked-by prerequisite story, "seat corroboration: retire the uncorroborated AIDA_SESSION_ROLE and roster legs for disposition, and floor-gate roster writes", with (a) through (d) from Q5. STORY-1217 cannot complete until it lands.
+    3. Link a blocked-by prerequisite bug that brings the missed sites into the lifecycle's own guard, with nothing else added:
+       - CLI and MCP `queue done` from Draft or NeedsAttention
+       - zen_auto_approve
+       - the Rejected or Completed to Approved+ reopen path
+       These enforce an existing guard at sites it missed. They add no new gate. After this bug and the grant land, those sites go through has_disposition_authority.
+    4. Remove archive and reject from the v1 DispositionAct enum and from the spec's acceptance. State exactly which close transitions are gated. File the follow-ups: archive of live specs; reject; Approved or InProgress to Completed via edit; escalate-defaults authority; the `burndown run --force` dispatch bypass; drain-state token hardening.
+    5. Update the never-grantable list and the tests as set out in Q3, and correct the Integrate and MergeGate classification (F5).
+    6. Specify the ledger write primitive and the DAG verification (Q4 i-iii), and the forgery threat model with the require_signed knob reserved (Q4 iv). Replace the integration test ledger_write_failure_aborts_disposition with one that injects a commit failure and asserts that the spec YAML on disk is unchanged. Add revoke_on_remote_observed_after_pull_rebase and sibling_events_verify_as_dag.
+    7. Strike 5(c) stamping.
+    8. Add acceptance criterion "every DispositionAct variant is refused at every one of its write sites for a non-advisor session with no grant, with no env var set and with the roster set to advisor". This test would have caught F1 and F3.
+    9. Add a completeness test for the refusal text: no refusal message contains "AIDA_SESSION_ROLE=advisor".
+
+    Everything else stands as sketched:
+    - the closed enum and the fail-closed default
+    - no grace window, and time as the only scope, with `scope: all` reserved in the schema
+    - the 12h cap, which config can only lower
+    - revoke open to anyone, recorded as a separate immutable record
+    - the orchestrator never consulting or inheriting a grant
+    - a grant never counting as human presence
+    - `grant check` as a preflight only
+    - derived STORY-1173 entries with `independent` left absent
+    - MCP parity through a single has_disposition_authority
+
+    Execution mode stays guided. Re-sketch the items above, including the prerequisite stories, and this seat will turn the re-review around on the delta alone.
+  created_at: 2026-09-25T01:20:09.510418529Z
+  modified_at: 2026-09-25T01:20:09.510418529Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
