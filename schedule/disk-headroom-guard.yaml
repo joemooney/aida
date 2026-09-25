@@ -1,6 +1,6 @@
 job: disk-headroom-guard
-last_run: 2026-09-25T13:35:00.449412889Z
+last_run: 2026-09-25T14:13:25.195388779Z
 last_by:
   seat: substrate
   vendor: tick
-result: failed:124
+result: ok
