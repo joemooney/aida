@@ -7807,6 +7807,10 @@ pub(crate) fn handle_git_backend_command(
             // touches each commit once (cheap, scan deeper), events shells
             // to git per file per commit (expensive, scan shallow).
             let default_max = if events { (*limit * 5).max(50) } else { 250 };
+            // BUG-1617: did the caller pin the window themselves? Gates the
+            // "window ran out" notice — an explicit --max-commits means they
+            // already know it's narrow. trace:BUG-1617 | ai:claude
+            let max_commits_explicit = max_commits.is_some();
             let max = max_commits.unwrap_or(default_max);
             // STORY-441: archive axis replaces TASK-64's terminal-status
             // hide. Default surfaces non-archived rows; `--all` widens to
@@ -7921,6 +7925,7 @@ pub(crate) fn handle_git_backend_command(
             let opts = history::HistoryOpts {
                 limit: *limit,
                 max_commits: max.max(*limit),
+                max_commits_explicit,
                 // TASK-507: --shipped is an events-mode filter; imply it.
                 events_mode: events || *shipped,
                 id_filter,

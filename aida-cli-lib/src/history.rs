@@ -22,6 +22,13 @@ use std::process::Command as ProcessCommand;
 pub struct HistoryOpts {
     pub limit: usize,
     pub max_commits: usize,
+    /// Whether `max_commits` came from an explicit `--max-commits` (vs the
+    /// `(limit*5).max(50)` events-mode default computed when the flag was
+    /// omitted). Gates the BUG-1617 "window ran out" notice: a caller who
+    /// pinned the window on purpose already knows it's narrow, so the hint
+    /// on how to widen it would be noise.
+    // trace:BUG-1617 | ai:claude
+    pub max_commits_explicit: bool,
     pub events_mode: bool,
     pub id_filter: Option<String>,
     pub type_filter: Option<String>,
@@ -195,6 +202,152 @@ fn single_spec_uses_progress_view(opts: &HistoryOpts, agent_mode: bool) -> bool 
     opts.id_filter.is_some() && !opts.events_mode && !agent_mode
 }
 
+// trace:TASK-1502 | ai:claude
+type ResolvedWindow = (
+    HistoryOpts,
+    Option<chrono::DateTime<chrono::Utc>>,
+    Option<chrono::DateTime<chrono::Utc>>,
+);
+
+/// Resolve `opts.since`/`opts.until` into concrete UTC instants up front,
+/// before any git shelling. Accepts every form `queue_cmd::parse_since_arg_at`
+/// does: a compact relative duration (`5h`, `7d`, `30m`, `2w`), the phrase
+/// form (`24 hours ago`), an RFC3339 timestamp (zone honored exactly), a
+/// zone-less ISO datetime (local time), or a bare ISO date (local midnight).
+///
+/// Reuses the same grammar `aida archive --older-than` and `aida queue
+/// progress --since` use rather than adding another parser. Bounds are
+/// resolved here, not left to `git log --since=`, because git's approxidate
+/// parser misreads compact units (`git log --since=30m` is read as a date
+/// on the 30th and matches nothing) and silently ignores unparseable values.
+/// Returns a clone of `opts` with `since`/`until` rewritten to unambiguous
+/// RFC3339 strings, so every downstream `git log` call works unmodified,
+/// plus the resolved instants for display. Rejects `--since` later than
+/// `--until`, since that window can never match anything. `now` and `tz`
+/// are injectable so tests get deterministic output regardless of the wall
+/// clock or system timezone; production passes `chrono::Local`.
+// trace:TASK-1502 | ai:claude
+fn resolve_history_window<Tz>(
+    opts: &HistoryOpts,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<ResolvedWindow>
+where
+    Tz: chrono::TimeZone,
+    Tz::Offset: std::fmt::Display,
+{
+    let since_at = opts
+        .since
+        .as_deref()
+        .map(|raw| parse_history_bound(raw, "--since", now, tz))
+        .transpose()?;
+    let until_at = opts
+        .until
+        .as_deref()
+        .map(|raw| parse_history_bound(raw, "--until", now, tz))
+        .transpose()?;
+    validate_window_order(since_at, until_at, tz)?;
+    let mut resolved = opts.clone();
+    resolved.since = since_at.map(|d| d.to_rfc3339());
+    resolved.until = until_at.map(|d| d.to_rfc3339());
+    Ok((resolved, since_at, until_at))
+}
+
+/// Shared by `resolve_history_window` and `history_kind_report`'s `--kind`
+/// path so the reversed-order check (and its error wording) lives in one
+/// place instead of being duplicated per `aida history` sub-mode.
+// trace:TASK-1502 | ai:claude
+pub(crate) fn validate_window_order<Tz>(
+    since_at: Option<chrono::DateTime<chrono::Utc>>,
+    until_at: Option<chrono::DateTime<chrono::Utc>>,
+    tz: &Tz,
+) -> Result<()>
+where
+    Tz: chrono::TimeZone,
+    Tz::Offset: std::fmt::Display,
+{
+    if let (Some(s), Some(u)) = (since_at, until_at) {
+        if s > u {
+            anyhow::bail!(
+                "--since resolves to {} which is later than --until's {} — \
+                 that window can never match anything; swap the bounds or \
+                 widen one",
+                fmt_window_ts(s, tz),
+                fmt_window_ts(u, tz),
+            );
+        }
+    }
+    Ok(())
+}
+
+/// One time bound for `aida history`, with an error message labeled for the
+/// flag that actually produced it (`parse_since_arg_at`'s own message always
+/// says `--since`, which would misname a bad `--until`). A DST gap/overlap
+/// error is kept verbatim so the caller learns why the value was refused.
+// trace:TASK-1502 | ai:claude
+pub(crate) fn parse_history_bound<Tz: chrono::TimeZone>(
+    raw: &str,
+    flag: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<chrono::DateTime<chrono::Utc>> {
+    crate::queue_cmd::parse_since_arg_at(raw, now, tz).map_err(|e| {
+        if let Some(dst) = e.downcast_ref::<crate::queue_cmd::AmbiguousLocalTime>() {
+            return anyhow::anyhow!("invalid {flag} value: {dst}");
+        }
+        anyhow::anyhow!(
+            "invalid {flag} value `{raw}` — expected a relative duration \
+             (e.g. `5h`, `7d`, `30m`, `2w`, `24 hours ago`), an ISO date \
+             (`2026-05-01`, local midnight), a zone-less ISO datetime \
+             (`2026-05-01T10:00`, local time), or RFC3339"
+        )
+    })
+}
+
+/// Renders `d` in timezone `tz` with an explicit numeric zone (`%z`) taken
+/// from that instant's own offset, so the `Window:` line (and any error
+/// quoting a bound) states the offset actually in effect on that date,
+/// including across a DST change.
+// trace:TASK-1502 | ai:claude
+fn fmt_window_ts<Tz>(d: chrono::DateTime<chrono::Utc>, tz: &Tz) -> String
+where
+    Tz: chrono::TimeZone,
+    Tz::Offset: std::fmt::Display,
+{
+    d.with_timezone(tz).format("%Y-%m-%d %H:%M %z").to_string()
+}
+
+/// The human-output "here's what I actually queried" line, unambiguous
+/// even when the caller typed a relative duration or a bare date. `None`
+/// when neither bound was given (nothing to show).
+// trace:TASK-1502 | ai:claude
+fn format_resolved_window<Tz>(
+    since_at: Option<chrono::DateTime<chrono::Utc>>,
+    until_at: Option<chrono::DateTime<chrono::Utc>>,
+    tz: &Tz,
+) -> Option<String>
+where
+    Tz: chrono::TimeZone,
+    Tz::Offset: std::fmt::Display,
+{
+    match (since_at, until_at) {
+        (None, None) => None,
+        (Some(s), None) => Some(format!(
+            "Window: since {} (open-ended)",
+            fmt_window_ts(s, tz)
+        )),
+        (None, Some(u)) => Some(format!(
+            "Window: until {} (unbounded start)",
+            fmt_window_ts(u, tz)
+        )),
+        (Some(s), Some(u)) => Some(format!(
+            "Window: {} \u{2192} {}",
+            fmt_window_ts(s, tz),
+            fmt_window_ts(u, tz)
+        )),
+    }
+}
+
 pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     if !store_path.is_dir() {
         anyhow::bail!(
@@ -203,6 +356,16 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
              backend has no per-edit history surface.",
             store_path.display()
         );
+    }
+
+    // trace:TASK-1502 | ai:claude
+    let (resolved_opts, since_at, until_at) =
+        resolve_history_window(opts, chrono::Utc::now(), &chrono::Local)?;
+    let opts = &resolved_opts;
+    if !crate::agent_output_mode() {
+        if let Some(line) = format_resolved_window(since_at, until_at, &chrono::Local) {
+            println!("{}", line.dimmed());
+        }
     }
 
     // TASK-1480: a single spec (`--id` / the positional SPEC-ID alias)
@@ -217,7 +380,7 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         return run_digest(store_path, opts);
     }
 
-    let (filtered, hidden_archived) = collect_filtered_events(store_path, opts)?;
+    let (filtered, hidden_archived, window_exhausted) = collect_filtered_events(store_path, opts)?;
 
     if filtered.is_empty() {
         eprintln!("{}", "(no events match the filter)".dimmed());
@@ -230,6 +393,7 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
                 .dimmed()
             );
         }
+        print_window_exhausted_notice(opts, window_exhausted, filtered.len());
         return Ok(());
     }
 
@@ -257,7 +421,56 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         }
     }
 
+    print_window_exhausted_notice(opts, window_exhausted, filtered.len());
+
     Ok(())
+}
+
+/// BUG-1617: `aida history events` bounds its `git log` walk to
+/// `opts.max_commits` commits (by default `(limit*5).max(50)`). When that
+/// window is used up before `--limit` events were found, the command used
+/// to just... stop, with no indication fewer results came back than asked
+/// for. Tell a human caller how to widen the walk — but only when it's
+/// actually the DEFAULT window that ran out (an explicit `--max-commits`
+/// means the caller already knows they narrowed it) and only when a human
+/// is reading (agent/piped output is script-parsed; `window_exhausted` in
+/// the JSON/MCP surface is the machine-readable equivalent there, and
+/// injecting a prose line into that stream would just be noise to strip).
+/// Prints to stderr like the other `(...)` hints in this module, so it
+/// never pollutes stdout for a caller piping the event lines themselves.
+// trace:BUG-1617 | ai:claude
+fn print_window_exhausted_notice(opts: &HistoryOpts, window_exhausted: bool, shown: usize) {
+    // Agent/piped output is script-parsed; `window_exhausted` in the
+    // JSON/MCP surface is the machine-readable equivalent there, and a
+    // prose line would just be noise a script has to filter back out.
+    if crate::agent_output_mode() {
+        return;
+    }
+    if let Some(msg) = window_exhausted_notice_text(opts, window_exhausted, shown) {
+        eprintln!("{}", msg.dimmed());
+    }
+}
+
+/// The notice text (if any) for [`print_window_exhausted_notice`] — split
+/// out as a pure function so the "when do we print" logic is testable
+/// without capturing stdout/stderr. `None` when the limit was met, no
+/// events were exhausted, or the caller explicitly pinned `--max-commits`
+/// (they already know they narrowed the walk).
+// trace:BUG-1617 | ai:claude
+fn window_exhausted_notice_text(
+    opts: &HistoryOpts,
+    window_exhausted: bool,
+    shown: usize,
+) -> Option<String> {
+    if !window_exhausted || opts.max_commits_explicit {
+        return None;
+    }
+    Some(format!(
+        "(only {shown} of the requested {limit} found — the default {max_commits}-commit history window ran out first; widen it with --max-commits <N>, or bound the walk with --since/--until)",
+        shown = shown,
+        limit = opts.limit,
+        max_commits = opts.max_commits,
+    ))
 }
 
 /// TASK-1480: the default view for a single spec (`--id` / positional
@@ -276,7 +489,8 @@ fn run_single_spec_progress(store_path: &Path, opts: &HistoryOpts) -> Result<()>
         .as_deref()
         .expect("run_single_spec_progress requires opts.id_filter");
 
-    let (mut filtered, _hidden_archived) = collect_filtered_events(store_path, opts)?;
+    let (mut filtered, _hidden_archived, _window_exhausted) =
+        collect_filtered_events(store_path, opts)?;
 
     if filtered.is_empty() {
         return report_empty_single_spec(store_path, opts, id);
@@ -347,7 +561,7 @@ fn report_empty_single_spec(store_path: &Path, opts: &HistoryOpts, id: &str) -> 
     probe.shipped_only = false;
     probe.since = None;
     probe.until = None;
-    let (any, _) = collect_filtered_events(store_path, &probe)?;
+    let (any, _, _) = collect_filtered_events(store_path, &probe)?;
     if any.is_empty() {
         return Err(crate::not_found::requirement_not_found_in_loaded_store(id));
     }
@@ -384,11 +598,15 @@ fn current_snapshot(store_path: &Path, spec_id: &str) -> (Option<String>, String
 
 /// Collect structured event records using the same filters as
 /// `aida history events`. Intended for MCP and other non-TTY consumers.
-/// trace:TASK-538 | ai:codex
+/// Returns `(records, window_exhausted)` — see [`collect_filtered_events`]
+/// for what `window_exhausted` means; MCP surfaces it as a top-level JSON
+/// field so a caller can tell "fewer results" from "that's everything."
+// trace:TASK-538 | ai:codex
+// trace:BUG-1617 | ai:claude
 pub fn collect_event_records(
     store_path: &Path,
     opts: &HistoryOpts,
-) -> Result<Vec<HistoryEventRecord>> {
+) -> Result<(Vec<HistoryEventRecord>, bool)> {
     if !store_path.is_dir() {
         anyhow::bail!(
             "Not a git-canonical AIDA store: {}\n\
@@ -398,16 +616,39 @@ pub fn collect_event_records(
         );
     }
 
-    let (events, _) = collect_filtered_events(store_path, opts)?;
-    Ok(events.iter().map(event_record).collect())
+    // TASK-1502: MCP's history tool shares this path, so it gets the same
+    // relative-duration acceptance and since/until validation as the CLI.
+    let (resolved_opts, _since_at, _until_at) =
+        resolve_history_window(opts, chrono::Utc::now(), &chrono::Local)?;
+    let (events, _, window_exhausted) = collect_filtered_events(store_path, &resolved_opts)?;
+    Ok((events.iter().map(event_record).collect(), window_exhausted))
 }
 
-fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec<Event>, usize)> {
+/// Returns `(events, archived_hidden_count, window_exhausted)`.
+/// `window_exhausted` is true when the commit walk found at least one more
+/// commit beyond `max_commits` (real history continues past the cap — see
+/// the over-fetch-by-one comment on the `git log` call below) AND fewer
+/// than `opts.limit` matching events were found. History that is exactly
+/// `max_commits` commits long, or shorter, is NOT exhaustion — there was
+/// nothing more to find regardless of window size.
+// trace:BUG-1617 | ai:claude
+fn collect_filtered_events(
+    store_path: &Path,
+    opts: &HistoryOpts,
+) -> Result<(Vec<Event>, usize, bool)> {
     // Build a `git log` command bounded by --since / --until / --max_commits.
+    // BUG-1617 review fix: over-fetch by one commit. `-n<max_commits>` alone
+    // can't distinguish "history is exactly max_commits commits long" (not
+    // exhausted — that's everything) from "there's more beyond the cap"
+    // (exhausted) — both return exactly `max_commits` lines. Asking for one
+    // extra and only ever DECODING the first `max_commits` (truncated right
+    // after the log call, below) gives an unambiguous signal at the cost of
+    // one extra `git log` line, not one extra `git show`.
+    // trace:BUG-1617 | ai:claude
     let mut log_args: Vec<String> = vec![
         "log".into(),
         "--pretty=format:%H%x09%aI%x09%ae".into(),
-        format!("-n{}", opts.max_commits),
+        format!("-n{}", opts.max_commits.saturating_add(1)),
     ];
     if let Some(s) = &opts.since {
         log_args.push(format!("--since={}", s));
@@ -435,7 +676,17 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
     }
 
     let log_output = run_git(store_path, &log_args)?;
-    let commits: Vec<CommitMeta> = log_output.lines().filter_map(parse_log_line).collect();
+    let mut commits: Vec<CommitMeta> = log_output.lines().filter_map(parse_log_line).collect();
+
+    // More than `max_commits` came back only because we asked for one extra
+    // as a probe — that extra commit means real history continues past the
+    // cap. Exactly `max_commits` (or fewer) means the cap either wasn't hit
+    // or landed exactly on the true end of history; either way, nothing is
+    // being hidden. Truncate back down to `max_commits` before doing any of
+    // the expensive per-commit `git show` work below — the probe commit
+    // itself is never decoded into events. trace:BUG-1617 | ai:claude
+    let commit_walk_capped = commits.len() > opts.max_commits;
+    commits.truncate(opts.max_commits);
 
     let mut events: Vec<Event> = Vec::new();
 
@@ -444,9 +695,15 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
         // events. The auto-commit "chore: update requirements store" still
         // gets walked because each individual file change inside it is
         // its own event.
+        // `--no-renames`: git's default rename detection pairs a delete plus
+        // a similar add into one `R<score>\told\tnew` line, which the
+        // single-path parse below cannot read, so both events were dropped.
+        // With renames off, git reports the separate D and A lines.
+        // trace:BUG-1616 | ai:claude
         let mut show_args: Vec<String> = vec![
             "show".into(),
             "--name-status".into(),
+            "--no-renames".into(),
             "--format=".into(),
             commit.sha.clone(),
         ];
@@ -492,7 +749,7 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
     // `archived_specs` (non-empty when default `--non-archived`) hides those
     // spec events; `archived_only_specs` (Some(...) when `--archived`)
     // narrows to only those. trace:STORY-441 | ai:claude
-    let filtered: Vec<Event> = events
+    let mut filtered: Vec<Event> = events
         .into_iter()
         .filter(|e| match &opts.id_filter {
             Some(id) => e.spec_id.eq_ignore_ascii_case(id),
@@ -529,10 +786,18 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
             Some(only) => only.contains(&e.spec_id),
             None => true,
         })
-        .take(opts.limit)
         .collect();
 
-    Ok((filtered, opts.archived_specs.len()))
+    // BUG-1617: `commit_walk_capped` (computed above, right after the log
+    // call) already tells us whether real history continues past the cap.
+    // Combine with "did we still fall short of --limit" — a limit-satisfying
+    // result is never "exhausted" even if the walk was also capped.
+    // trace:BUG-1617 | ai:claude
+    let window_exhausted = commit_walk_capped && filtered.len() < opts.limit;
+
+    filtered.truncate(opts.limit);
+
+    Ok((filtered, opts.archived_specs.len(), window_exhausted))
 }
 
 /// Digest mode (default): one row per recently-touched requirement, sorted
@@ -711,6 +976,10 @@ fn build_digest_rows(
     let mut log_args: Vec<String> = vec![
         "log".into(),
         "--name-status".into(),
+        // Report a delete plus a similar add as separate D and A lines, not
+        // one `R<score>` line, so the digest's add/delete markers stay
+        // accurate. trace:BUG-1616 | ai:claude
+        "--no-renames".into(),
         "--pretty=format:%H%x09%aI%x09%ae%x09%s".into(),
         format!("-n{}", opts.max_commits),
     ];
@@ -1616,7 +1885,7 @@ mod tests {
             id_filter: Some("TASK-1".to_string()),
             ..base_opts()
         };
-        let (events, _) = collect_filtered_events(root, &opts).unwrap();
+        let (events, _, _) = collect_filtered_events(root, &opts).unwrap();
         assert!(!events.is_empty(), "expected at least one TASK-1 event");
         assert!(
             events.iter().all(|e| e.spec_id == "TASK-1"),
@@ -1679,7 +1948,7 @@ mod tests {
             exclude_meta: true,
             ..base_opts()
         };
-        let (events, _) = collect_filtered_events(root, &hidden).unwrap();
+        let (events, _, _) = collect_filtered_events(root, &hidden).unwrap();
         assert!(
             events.iter().any(|e| e.spec_id == "TASK-1"),
             "the real spec's events must still show, got: {:?}",
@@ -1696,7 +1965,7 @@ mod tests {
             exclude_meta: false,
             ..base_opts()
         };
-        let (events, _) = collect_filtered_events(root, &shown).unwrap();
+        let (events, _, _) = collect_filtered_events(root, &shown).unwrap();
         assert!(
             events.iter().any(|e| e.spec_id == "META-1"),
             "META rows must be visible when not excluded, got: {:?}",
@@ -1784,6 +2053,569 @@ mod tests {
         assert_eq!(modified_at, None);
     }
 
+    // TASK-1502: `resolve_history_window` — every unit, mixed relative +
+    // absolute bounds, bad units, reversed order, and unchanged absolute
+    // forms. All deterministic via an injected `now`. trace:TASK-1502 | ai:claude
+
+    fn fixed_now() -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339("2026-09-25T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    }
+
+    /// A fixed, non-UTC offset (UTC-7) so `resolve_history_window` tests are
+    /// deterministic regardless of the test machine's real timezone, and so
+    /// the local-midnight-vs-UTC-midnight distinction is actually exercised
+    /// (on UTC+0 the two coincide and the bug wouldn't show up).
+    // trace:TASK-1502 | ai:claude
+    fn fixed_local_offset() -> chrono::FixedOffset {
+        chrono::FixedOffset::west_opt(7 * 3600).unwrap()
+    }
+
+    #[test]
+    fn resolve_history_window_every_relative_unit() {
+        let now = fixed_now();
+        let offset = fixed_local_offset();
+        let cases: &[(&str, chrono::Duration)] = &[
+            ("30m", chrono::Duration::minutes(30)),
+            ("5h", chrono::Duration::hours(5)),
+            ("7d", chrono::Duration::days(7)),
+            ("2w", chrono::Duration::weeks(2)),
+        ];
+        for (raw, delta) in cases {
+            let opts = HistoryOpts {
+                since: Some((*raw).to_string()),
+                ..base_opts()
+            };
+            let (resolved, since_at, until_at) =
+                resolve_history_window(&opts, now, &offset).unwrap();
+            assert_eq!(since_at, Some(now - *delta), "unit `{raw}`");
+            assert_eq!(until_at, None);
+            // The rewritten opts carry an unambiguous RFC3339 string, not
+            // the original compact form, so every downstream `git log`
+            // call gets a value git's approxidate parser won't mangle.
+            assert_eq!(resolved.since, Some((now - *delta).to_rfc3339()));
+        }
+    }
+
+    #[test]
+    fn resolve_history_window_mixed_relative_and_absolute_bounds() {
+        // --since as a compact relative duration, --until as an absolute
+        // RFC3339 timestamp — both forms must compose.
+        let now = fixed_now();
+        let offset = fixed_local_offset();
+        let opts = HistoryOpts {
+            since: Some("7d".to_string()),
+            until: Some("2026-09-24T00:00:00Z".to_string()),
+            ..base_opts()
+        };
+        let (_, since_at, until_at) = resolve_history_window(&opts, now, &offset).unwrap();
+        assert_eq!(since_at, Some(now - chrono::Duration::days(7)));
+        assert_eq!(
+            until_at,
+            Some(
+                chrono::DateTime::parse_from_rfc3339("2026-09-24T00:00:00Z")
+                    .unwrap()
+                    .with_timezone(&chrono::Utc)
+            )
+        );
+
+        // And the reverse pairing: --since absolute (bare date, LOCAL
+        // midnight at UTC-7 → 07:00 UTC), --until relative.
+        let opts = HistoryOpts {
+            since: Some("2026-09-01".to_string()),
+            until: Some("5h".to_string()),
+            ..base_opts()
+        };
+        let (_, since_at, until_at) = resolve_history_window(&opts, now, &offset).unwrap();
+        assert_eq!(since_at.unwrap().to_rfc3339(), "2026-09-01T07:00:00+00:00");
+        assert_eq!(until_at, Some(now - chrono::Duration::hours(5)));
+    }
+
+    #[test]
+    fn resolve_history_window_unchanged_absolute_forms_still_work() {
+        // RFC3339 — the pre-TASK-1502 documented form — must keep resolving
+        // exactly as before, zone honored exactly regardless of the
+        // machine's local offset.
+        let now = fixed_now();
+        let offset = fixed_local_offset();
+        let opts = HistoryOpts {
+            since: Some("2026-05-01T00:00:00Z".to_string()),
+            until: Some("2026-06-01T00:00:00+02:00".to_string()),
+            ..base_opts()
+        };
+        let (_, since_at, until_at) = resolve_history_window(&opts, now, &offset).unwrap();
+        assert_eq!(
+            since_at.unwrap().format("%Y-%m-%d").to_string(),
+            "2026-05-01"
+        );
+        assert_eq!(until_at.unwrap().to_rfc3339(), "2026-05-31T22:00:00+00:00");
+    }
+
+    #[test]
+    fn resolve_history_window_bare_date_uses_local_offset_not_utc() {
+        // A bare ISO date resolves to LOCAL midnight, not UTC midnight; the
+        // two differ by exactly `offset` away from UTC+0.
+        let now = fixed_now();
+        let offset = fixed_local_offset(); // UTC-7
+        let opts = HistoryOpts {
+            since: Some("2026-05-01".to_string()),
+            ..base_opts()
+        };
+        let (resolved, since_at, _) = resolve_history_window(&opts, now, &offset).unwrap();
+        assert_eq!(
+            since_at.unwrap().to_rfc3339(),
+            "2026-05-01T07:00:00+00:00",
+            "bare date must resolve to local midnight (UTC-7 → 07:00 UTC), not UTC midnight"
+        );
+        assert_eq!(
+            resolved.since,
+            Some("2026-05-01T07:00:00+00:00".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_history_window_rejects_bad_unit() {
+        let now = fixed_now();
+        let offset = fixed_local_offset();
+        let opts = HistoryOpts {
+            since: Some("5y".to_string()),
+            ..base_opts()
+        };
+        let err = resolve_history_window(&opts, now, &offset)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("--since") && err.contains("5y"),
+            "error should name the flag and the bad value, got: {err}"
+        );
+
+        let opts = HistoryOpts {
+            until: Some("3q".to_string()),
+            ..base_opts()
+        };
+        let err = resolve_history_window(&opts, now, &offset)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("--until") && !err.starts_with("invalid --since"),
+            "a bad --until must be labeled --until, not --since, got: {err}"
+        );
+    }
+
+    #[test]
+    fn resolve_history_window_rejects_since_later_than_until() {
+        let now = fixed_now();
+        let offset = fixed_local_offset();
+        // --since 5h (5 hours ago) is LATER than --until 7d (7 days ago) —
+        // the window is empty and must be refused with a clear error.
+        let opts = HistoryOpts {
+            since: Some("5h".to_string()),
+            until: Some("7d".to_string()),
+            ..base_opts()
+        };
+        let err = resolve_history_window(&opts, now, &offset)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("--since") && err.contains("--until"),
+            "reversed-order error should name both flags, got: {err}"
+        );
+    }
+
+    #[test]
+    fn format_resolved_window_variants() {
+        let now = fixed_now();
+        let offset = fixed_local_offset();
+        assert_eq!(format_resolved_window(None, None, &offset), None);
+        assert!(format_resolved_window(Some(now), None, &offset)
+            .unwrap()
+            .contains("since"));
+        assert!(format_resolved_window(None, Some(now), &offset)
+            .unwrap()
+            .contains("until"));
+        let both =
+            format_resolved_window(Some(now - chrono::Duration::days(1)), Some(now), &offset)
+                .unwrap();
+        // Rendered in the injected LOCAL offset (UTC-7): `now`
+        // (2026-09-25T12:00:00Z) is 2026-09-25 05:00 -0700 locally, and
+        // `now - 1 day` is 2026-09-24 05:00 -0700 — same calendar dates as
+        // UTC here (no midnight boundary crossed at this hour), so this
+        // also proves the explicit `-0700` zone marker is present.
+        // trace:TASK-1502 | ai:claude
+        assert!(
+            both.contains("-0700"),
+            "Window line must state the timezone, got: {both}"
+        );
+        assert!(both.contains("2026-09-24") && both.contains("2026-09-25"));
+    }
+
+    /// A test-only zone that observes US-Pacific-style DST in 2026: UTC-8
+    /// outside, UTC-7 between 2026-03-08T10:00Z (02:00 PST) and
+    /// 2026-11-01T09:00Z (02:00 PDT). Stands in for a real DST zone so the
+    /// per-date offset lookup is exercised without adding chrono-tz.
+    // trace:TASK-1502 | ai:claude
+    #[derive(Clone, Copy, Debug)]
+    struct TestPacific;
+
+    impl TestPacific {
+        fn std() -> chrono::FixedOffset {
+            chrono::FixedOffset::west_opt(8 * 3600).unwrap()
+        }
+        fn dst() -> chrono::FixedOffset {
+            chrono::FixedOffset::west_opt(7 * 3600).unwrap()
+        }
+    }
+
+    impl chrono::TimeZone for TestPacific {
+        type Offset = chrono::FixedOffset;
+
+        fn from_offset(_: &chrono::FixedOffset) -> Self {
+            TestPacific
+        }
+
+        fn offset_from_local_date(
+            &self,
+            local: &chrono::NaiveDate,
+        ) -> chrono::MappedLocalTime<chrono::FixedOffset> {
+            self.offset_from_local_datetime(&local.and_time(chrono::NaiveTime::MIN))
+        }
+
+        fn offset_from_local_datetime(
+            &self,
+            local: &chrono::NaiveDateTime,
+        ) -> chrono::MappedLocalTime<chrono::FixedOffset> {
+            // Every offset whose implied UTC instant maps back to itself.
+            let valid: Vec<chrono::FixedOffset> = [Self::std(), Self::dst()]
+                .into_iter()
+                .filter(|off| {
+                    let utc = *local - chrono::Duration::seconds(off.local_minus_utc().into());
+                    self.offset_from_utc_datetime(&utc) == *off
+                })
+                .collect();
+            match valid.as_slice() {
+                [] => chrono::MappedLocalTime::None,
+                [one] => chrono::MappedLocalTime::Single(*one),
+                [a, b] => chrono::MappedLocalTime::Ambiguous(*a, *b),
+                _ => unreachable!(),
+            }
+        }
+
+        fn offset_from_utc_date(&self, utc: &chrono::NaiveDate) -> chrono::FixedOffset {
+            self.offset_from_utc_datetime(&utc.and_time(chrono::NaiveTime::MIN))
+        }
+
+        fn offset_from_utc_datetime(&self, utc: &chrono::NaiveDateTime) -> chrono::FixedOffset {
+            let start = chrono::NaiveDate::from_ymd_opt(2026, 3, 8)
+                .unwrap()
+                .and_hms_opt(10, 0, 0)
+                .unwrap();
+            let end = chrono::NaiveDate::from_ymd_opt(2026, 11, 1)
+                .unwrap()
+                .and_hms_opt(9, 0, 0)
+                .unwrap();
+            if *utc >= start && *utc < end {
+                Self::dst()
+            } else {
+                Self::std()
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_history_window_bare_dates_use_that_dates_dst_offset() {
+        // `now` is in September (PDT, UTC-7), but a January date must still
+        // resolve against January's offset (PST, UTC-8), not today's.
+        let now = fixed_now();
+        let opts = HistoryOpts {
+            since: Some("2026-01-15".to_string()),
+            until: Some("2026-07-15".to_string()),
+            ..base_opts()
+        };
+        let (_, since_at, until_at) = resolve_history_window(&opts, now, &TestPacific).unwrap();
+        assert_eq!(since_at.unwrap().to_rfc3339(), "2026-01-15T08:00:00+00:00");
+        assert_eq!(until_at.unwrap().to_rfc3339(), "2026-07-15T07:00:00+00:00");
+        // And the Window line shows each instant's own offset.
+        let line = format_resolved_window(since_at, until_at, &TestPacific).unwrap();
+        assert!(
+            line.contains("2026-01-15 00:00 -0800") && line.contains("2026-07-15 00:00 -0700"),
+            "each bound must render with its own offset, got: {line}"
+        );
+    }
+
+    #[test]
+    fn resolve_history_window_rejects_dst_gap_and_overlap() {
+        let now = fixed_now();
+        // 02:30 on the spring-forward day never happens locally.
+        let opts = HistoryOpts {
+            since: Some("2026-03-08T02:30".to_string()),
+            ..base_opts()
+        };
+        let err = resolve_history_window(&opts, now, &TestPacific)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("--since") && err.contains("ambiguous or doesn't exist"),
+            "a DST-gap time must be refused with the DST reason, got: {err}"
+        );
+        // 01:30 on the fall-back day happens twice.
+        let opts = HistoryOpts {
+            until: Some("2026-11-01 01:30".to_string()),
+            ..base_opts()
+        };
+        let err = resolve_history_window(&opts, now, &TestPacific)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("--until") && err.contains("ambiguous or doesn't exist"),
+            "a DST-overlap time must be refused with the DST reason, got: {err}"
+        );
+    }
+
+    #[test]
+    fn resolve_history_window_accepts_legacy_forms() {
+        // Zone-less ISO datetimes (local time) and git-style `N units ago`
+        // phrases were accepted before and must keep working.
+        let now = fixed_now();
+        let offset = fixed_local_offset(); // UTC-7
+        for raw in [
+            "2026-05-01T10:00",
+            "2026-05-01 10:00",
+            "2026-05-01T10:00:00",
+        ] {
+            let opts = HistoryOpts {
+                since: Some(raw.to_string()),
+                ..base_opts()
+            };
+            let (_, since_at, _) = resolve_history_window(&opts, now, &offset).unwrap();
+            assert_eq!(
+                since_at.unwrap().to_rfc3339(),
+                "2026-05-01T17:00:00+00:00",
+                "`{raw}` must be read as local time"
+            );
+        }
+        let cases: &[(&str, chrono::Duration)] = &[
+            ("24 hours ago", chrono::Duration::hours(24)),
+            ("1 hour ago", chrono::Duration::hours(1)),
+            ("90 minutes ago", chrono::Duration::minutes(90)),
+            ("3 days ago", chrono::Duration::days(3)),
+            ("1 week ago", chrono::Duration::weeks(1)),
+            ("2 Weeks Ago", chrono::Duration::weeks(2)),
+        ];
+        for (raw, delta) in cases {
+            let opts = HistoryOpts {
+                since: Some((*raw).to_string()),
+                ..base_opts()
+            };
+            let (_, since_at, _) = resolve_history_window(&opts, now, &offset).unwrap();
+            assert_eq!(since_at, Some(now - *delta), "phrase `{raw}`");
+        }
+        for bad in ["3 fortnights ago", "3 days", "ago 3 days"] {
+            let opts = HistoryOpts {
+                since: Some(bad.to_string()),
+                ..base_opts()
+            };
+            assert!(
+                resolve_history_window(&opts, now, &offset).is_err(),
+                "`{bad}` must be rejected"
+            );
+        }
+    }
+
+    /// TASK-1502: end-to-end through `collect_filtered_events` — a compact
+    /// relative duration like `1h` must bound the actual `git log --since=`
+    /// walk correctly, not just parse cleanly. This is the regression the
+    /// feature exists to fix: git's own approxidate parser does not
+    /// understand compact `30m`/`1h` forms (`git log --since=30m` is read as
+    /// a date on the 30th and matches nothing, with no error), so history
+    /// resolves the bound itself and hands git an unambiguous RFC3339
+    /// string instead.
+    #[test]
+    fn relative_since_bounds_the_actual_git_log_walk() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let git = |args: &[&str], env: &[(&str, &str)]| {
+            let mut cmd = ProcessCommand::new("git");
+            cmd.arg("-C").arg(root).args(args);
+            for (k, v) in env {
+                cmd.env(k, v);
+            }
+            let out = cmd.output().unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"], &[]);
+        git(&["config", "user.email", "t@example.com"], &[]);
+        git(&["config", "user.name", "t"], &[]);
+
+        let write = |rel: &str, body: &str| {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        };
+
+        let now = fixed_now();
+        let old_ts = (now - chrono::Duration::hours(2)).to_rfc3339();
+        let recent_ts = (now - chrono::Duration::minutes(10)).to_rfc3339();
+
+        // Commit A: 2 hours before `now` — outside a 1h window.
+        write(
+            "objects/TASK/000/TASK-1.yaml",
+            "spec_id: TASK-1\ntitle: old\nstatus: Draft\n",
+        );
+        git(&["add", "-A"], &[]);
+        git(
+            &["commit", "-q", "-m", "old commit"],
+            &[
+                ("GIT_AUTHOR_DATE", old_ts.as_str()),
+                ("GIT_COMMITTER_DATE", old_ts.as_str()),
+            ],
+        );
+
+        // Commit B: 10 minutes before `now` — inside a 1h window.
+        write(
+            "objects/TASK/000/TASK-2.yaml",
+            "spec_id: TASK-2\ntitle: recent\nstatus: Draft\n",
+        );
+        git(&["add", "-A"], &[]);
+        git(
+            &["commit", "-q", "-m", "recent commit"],
+            &[
+                ("GIT_AUTHOR_DATE", recent_ts.as_str()),
+                ("GIT_COMMITTER_DATE", recent_ts.as_str()),
+            ],
+        );
+
+        let opts = HistoryOpts {
+            since: Some("1h".to_string()),
+            ..base_opts()
+        };
+        let (resolved, _, _) = resolve_history_window(&opts, now, &fixed_local_offset()).unwrap();
+        let (events, _, _) = collect_filtered_events(root, &resolved).unwrap();
+        let ids: std::collections::BTreeSet<&str> =
+            events.iter().map(|e| e.spec_id.as_str()).collect();
+        assert!(
+            ids.contains("TASK-2"),
+            "recent commit must be in a 1h window, got {ids:?}"
+        );
+        assert!(
+            !ids.contains("TASK-1"),
+            "commit from 2h ago must be excluded from a 1h window, got {ids:?}"
+        );
+    }
+
+    /// BUG-1616: a commit that deletes one spec and adds another with
+    /// near-identical content is paired by git's default rename detection
+    /// into a single `R<score>` line. The event walk and the digest must
+    /// still report the delete and the add as separate events.
+    // trace:BUG-1616 | ai:claude
+    #[test]
+    fn history_reports_delete_and_add_that_git_pairs_as_rename() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let git = |args: &[&str]| -> String {
+            let out = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8_lossy(&out.stdout).to_string()
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+
+        let a_path = "objects/BUG/000/BUG-389.yaml";
+        let b_path = "objects/BUG/000/BUG-390.yaml";
+        let body = |id: &str| {
+            format!(
+                "spec_id: {id}\ntitle: a long shared title so git scores the pair as a rename\n\
+                 status: Draft\npriority: high\nreq_type: bug\n\
+                 description: the same long description body in both files so the \
+                 similarity index stays well above the rename threshold\n"
+            )
+        };
+
+        std::fs::create_dir_all(root.join("objects/BUG/000")).unwrap();
+        std::fs::write(root.join(a_path), body("BUG-389")).unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "add BUG-389"]);
+
+        // One commit: delete BUG-389, add BUG-390 with near-identical content.
+        std::fs::remove_file(root.join(a_path)).unwrap();
+        std::fs::write(root.join(b_path), body("BUG-390")).unwrap();
+        git(&["add", "-A"]);
+        git(&[
+            "commit",
+            "-q",
+            "-m",
+            "chore: update 1 requirements, delete 1",
+        ]);
+
+        // Precondition: git's default detection does pair these as a rename,
+        // so the fixture really exercises the bug.
+        let default_status = git(&["show", "--name-status", "--format=", "-M", "HEAD"]);
+        assert!(
+            default_status.lines().any(|l| l.starts_with('R')),
+            "fixture must be a git rename pair, got: {default_status}"
+        );
+        let head = git(&["rev-parse", "HEAD"]).trim().to_string();
+
+        // Event walk: both the delete and the add from the rename commit.
+        let (events, _, _) = collect_filtered_events(root, &base_opts()).unwrap();
+        let in_head: Vec<&Event> = events.iter().filter(|e| e.sha == head).collect();
+        assert!(
+            in_head
+                .iter()
+                .any(|e| e.spec_id == "BUG-389" && matches!(e.kind, EventKind::Deleted { .. })),
+            "missing Deleted BUG-389, got: {:?}",
+            in_head
+                .iter()
+                .map(|e| (&e.spec_id, &e.kind))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            in_head
+                .iter()
+                .any(|e| e.spec_id == "BUG-390" && matches!(e.kind, EventKind::Added { .. })),
+            "missing Added BUG-390, got: {:?}",
+            in_head
+                .iter()
+                .map(|e| (&e.spec_id, &e.kind))
+                .collect::<Vec<_>>()
+        );
+
+        // Digest: BUG-389 marked deleted, BUG-390 marked added.
+        let digest_opts = HistoryOpts {
+            events_mode: false,
+            ..base_opts()
+        };
+        let (rows, _, _) = build_digest_rows(root, &digest_opts).unwrap();
+        let a = rows
+            .iter()
+            .find(|r| r.spec_id == "BUG-389")
+            .expect("BUG-389 row");
+        let b = rows
+            .iter()
+            .find(|r| r.spec_id == "BUG-390")
+            .expect("BUG-390 row");
+        assert!(a.had_delete, "digest must mark BUG-389 as deleted");
+        assert!(b.had_add, "digest must mark BUG-390 as added");
+    }
+
     /// A `HistoryOpts` with every filter off — tests override the one field
     /// they exercise.
     // trace:TASK-1055
@@ -1791,6 +2623,7 @@ mod tests {
         HistoryOpts {
             limit: 1000,
             max_commits: 1000,
+            max_commits_explicit: false,
             events_mode: true,
             id_filter: None,
             type_filter: None,
@@ -1807,6 +2640,244 @@ mod tests {
             deferred_only_specs: None,
             exclude_meta: false,
         }
+    }
+
+    /// BUG-1617: builds a git-canonical fixture with one spec whose status
+    /// flips back and forth `commit_count` times after a seed commit — each
+    /// flip is exactly one `StatusChange` event, so a test can dial in a
+    /// precise commit/event count without needing hundreds of real commits
+    /// to exercise a small `max_commits` window.
+    // trace:BUG-1617 | ai:claude
+    fn write_status_flip_fixture(root: &Path, commit_count: usize) {
+        let git = |args: &[&str]| {
+            let out = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+
+        let rel = "objects/BUG/000/BUG-1.yaml";
+        let full = root.join(rel);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+
+        std::fs::write(&full, "spec_id: BUG-1\ntitle: t\nstatus: Draft\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "seed"]);
+
+        for i in 0..commit_count {
+            let status = if i % 2 == 0 { "Approved" } else { "Draft" };
+            std::fs::write(
+                &full,
+                format!("spec_id: BUG-1\ntitle: t\nstatus: {status}\n"),
+            )
+            .unwrap();
+            git(&["add", "-A"]);
+            git(&["commit", "-q", "-m", &format!("flip {i}")]);
+        }
+    }
+
+    /// BUG-1617: the commit walk gets capped at 3 commits, but 8 events were
+    /// requested and 10 exist — the DEFAULT window ran out first, so
+    /// `window_exhausted` must be true.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_reports_window_exhausted_when_default_window_runs_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 10);
+
+        let opts = HistoryOpts {
+            limit: 8,
+            max_commits: 3,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        assert!(
+            events.len() < 8,
+            "expected fewer than the requested limit, got {}",
+            events.len()
+        );
+        assert!(
+            window_exhausted,
+            "the 3-commit cap was hit before the 8-event limit — expected window_exhausted=true"
+        );
+    }
+
+    /// BUG-1617: same fixture, but the window and the limit line up exactly
+    /// (3 commits, 3 requested) — the limit was MET, so even though the
+    /// commit walk was also capped at the same point, this is not
+    /// "exhausted": nothing was silently left out of the requested count.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_no_window_exhausted_when_limit_met() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 10);
+
+        let opts = HistoryOpts {
+            limit: 3,
+            max_commits: 3,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        assert_eq!(events.len(), 3);
+        assert!(
+            !window_exhausted,
+            "the limit was met exactly at the window edge — must not be flagged as exhausted"
+        );
+    }
+
+    /// BUG-1617: the window is far larger than the real history (4 commits
+    /// total vs. a 100-commit cap) — the walk legitimately ran out of
+    /// commits to look at, not window capacity. Must not be flagged as
+    /// exhausted even though fewer than `limit` events came back.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_not_exhausted_when_real_history_ends_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 3);
+
+        let opts = HistoryOpts {
+            limit: 10,
+            max_commits: 100,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        // 3 flip commits (StatusChange events) plus the seed commit itself
+        // (an Added event — the default opts don't filter kinds) = 4.
+        assert_eq!(events.len(), 4);
+        assert!(
+            !window_exhausted,
+            "real history ran out, not the window — must not be flagged as exhausted"
+        );
+    }
+
+    /// BUG-1617 review fix: the exact-boundary case the naive
+    /// `commits.len() >= max_commits` check got wrong — history that is
+    /// *exactly* `max_commits` commits long is a coincidence, not
+    /// exhaustion. 4 flips + 1 seed = 5 commits total, `max_commits: 5`, and
+    /// a `--limit` nowhere near met (10). Before the over-fetch-by-one fix
+    /// this reported `window_exhausted: true`; it must report `false` —
+    /// there is nothing beyond the cap to widen toward.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_not_exhausted_when_history_is_exactly_max_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 4);
+
+        let opts = HistoryOpts {
+            limit: 10,
+            max_commits: 5,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        // 4 status-change flips + 1 Added (the seed) = 5, all of history.
+        assert_eq!(events.len(), 5);
+        assert!(
+            !window_exhausted,
+            "history is exactly max_commits long — that IS everything, not exhaustion"
+        );
+    }
+
+    /// BUG-1617 review fix: the sibling of the exactly-at-cap case above —
+    /// history is one commit LONGER than `max_commits` (5 flips + 1 seed = 6
+    /// commits, `max_commits: 5`), so there genuinely is more beyond the
+    /// window. Only the newest `max_commits` commits should be decoded
+    /// (the oldest — the seed's Added event — must NOT appear), and
+    /// `window_exhausted` must be true.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_exhausted_when_history_is_one_more_than_max_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 5);
+
+        let opts = HistoryOpts {
+            limit: 10,
+            max_commits: 5,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        // Only the 5 newest commits are decoded — all 5 are StatusChange
+        // flips; the oldest (seed/Added) commit falls outside the window.
+        assert_eq!(events.len(), 5);
+        assert!(
+            events
+                .iter()
+                .all(|e| matches!(e.kind, EventKind::StatusChange { .. })),
+            "the oldest (seed/Added) commit must fall outside the window"
+        );
+        assert!(
+            window_exhausted,
+            "history continues one commit past the cap — expected window_exhausted=true"
+        );
+    }
+
+    /// BUG-1617: the notice text a human sees — present, and mentions both
+    /// ways to widen the walk (--max-commits and a time bound), exactly when
+    /// the window was exhausted and the caller did NOT pin --max-commits
+    /// themselves.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn window_exhausted_notice_text_present_for_default_window() {
+        let opts = HistoryOpts {
+            limit: 8,
+            max_commits: 3,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let msg = window_exhausted_notice_text(&opts, true, 3).expect("expected a notice");
+        assert!(
+            msg.contains("--max-commits"),
+            "notice should mention --max-commits, got: {msg}"
+        );
+        assert!(
+            msg.contains("--since") || msg.contains("--until"),
+            "notice should mention a time-bound escape hatch, got: {msg}"
+        );
+    }
+
+    /// BUG-1617 acceptance: no notice when the limit was met.
+    #[test]
+    fn window_exhausted_notice_text_absent_when_limit_met() {
+        let opts = HistoryOpts {
+            limit: 3,
+            max_commits: 3,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        assert!(window_exhausted_notice_text(&opts, false, 3).is_none());
+    }
+
+    /// BUG-1617 acceptance: no notice when the caller passed an explicit
+    /// --max-commits — they already know they narrowed the walk.
+    #[test]
+    fn window_exhausted_notice_text_absent_when_max_commits_explicit() {
+        let opts = HistoryOpts {
+            limit: 8,
+            max_commits: 3,
+            max_commits_explicit: true,
+            ..base_opts()
+        };
+        assert!(window_exhausted_notice_text(&opts, true, 3).is_none());
     }
 
     /// BUG-424: a multibyte char straddling the truncation point must not panic
@@ -2170,7 +3241,7 @@ mod tests {
             status_changes_only: true,
             ..base_opts()
         };
-        let (mut filtered, _) = collect_filtered_events(root, &opts).unwrap();
+        let (mut filtered, _, _) = collect_filtered_events(root, &opts).unwrap();
         assert_eq!(
             filtered.len(),
             3,
@@ -2209,7 +3280,7 @@ mod tests {
             comments_only: true,
             ..base_opts()
         };
-        let (comment_events, _) = collect_filtered_events(root, &comments_opts).unwrap();
+        let (comment_events, _, _) = collect_filtered_events(root, &comments_opts).unwrap();
         assert_eq!(comment_events.len(), 1);
         assert!(matches!(
             comment_events[0].kind,
@@ -2223,7 +3294,7 @@ mod tests {
             comments_only: true,
             ..base_opts()
         };
-        let (both_events, _) = collect_filtered_events(root, &both_opts).unwrap();
+        let (both_events, _, _) = collect_filtered_events(root, &both_opts).unwrap();
         assert_eq!(both_events.len(), 4);
     }
 

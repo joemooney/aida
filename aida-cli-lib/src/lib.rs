@@ -33977,18 +33977,23 @@ pub(crate) fn history_kind_report(
             events::EventKind::known_names().join(", ")
         );
     }
+    // `--kind` shares `aida history`'s --since/--until flags, so it gets the
+    // same time-bound grammar and ordering check as the digest/events views,
+    // instead of only the bare-date/RFC3339 forms `events::parse_time_bound`
+    // covers.
+    // trace:TASK-1502 | ai:claude
+    let now = chrono::Utc::now();
     let bound = |v: Option<&str>, flag: &str| -> Result<Option<chrono::DateTime<chrono::Utc>>> {
-        v.map(|raw| {
-            events::parse_time_bound(raw).ok_or_else(|| {
-                anyhow::anyhow!("{flag} `{raw}` is not a date (YYYY-MM-DD) or RFC 3339 time")
-            })
-        })
-        .transpose()
+        v.map(|raw| history::parse_history_bound(raw, flag, now, &chrono::Local))
+            .transpose()
     };
+    let since_at = bound(since, "--since")?;
+    let until_at = bound(until, "--until")?;
+    history::validate_window_order(since_at, until_at, &chrono::Local)?;
     let query = events::KindQuery {
         kind: kind.to_string(),
-        since: bound(since, "--since")?,
-        until: bound(until, "--until")?,
+        since: since_at,
+        until: until_at,
         who: author.map(str::to_string),
         limit,
     };
@@ -72356,6 +72361,9 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
         .args([
             "log",
             "--name-status",
+            // Separate D and A lines instead of an `R<score>` pair, which the
+            // one-tab parse below would skip. trace:BUG-1616 | ai:claude
+            "--no-renames",
             "--pretty=format:%H%x09%s",
             range.as_str(),
         ])
