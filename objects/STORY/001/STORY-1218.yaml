@@ -29,12 +29,12 @@ description: |-
   - (advisor refinement 2026-09-18) `aida shift tick --dry-run` prints the exact wave command, the specs it would include, the guards evaluated (lock, load ceiling, human-gated wave in flight, [shift] enabled) and the mailbox-latency verdict, and exits 0 without writing; this output is the runbook's preflight step and is covered by a test on a fixture queue.
   - (advisor refinement 2026-09-18) Built after SPIKE-82 lands: the wave-size default, the max-failures default and the guard list are taken from the spike's confirmed hypotheses, cited in the story's plan file.
   - (moved from STORY-1226 at the #1946 gate, 2026-09-18; ADR-46 §1) Cold-boot of a headless seat for an overdue SEAT job is the tick's: when a seat job is overdue and no live session holds the role, the tick cold-boots a headless seat (codex exec / claude -p per configured vendor) at most once per hour per seat, ledgered on the job (JobLedger.cold_boot_at, which STORY-1226 reserved), never for a job that would launch a drain or merge. Acceptance: with an overdue advisor seat job and no live advisor, one tick cold-boots once; a second tick within the hour is suppressed and says so; a live advisor session suppresses the cold-boot entirely; the ledger shows cold_boot_at and the seat/vendor used.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:20.548044413Z
-modified_at: 2026-09-25T01:20:35.297747161Z
+modified_at: 2026-09-25T01:21:46.999271395Z
 req_type: Story
 tags:
 - autonomy
