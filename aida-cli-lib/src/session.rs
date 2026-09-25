@@ -1356,7 +1356,11 @@ pub fn spawn_codex_session(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ReviewerLaunchPlan {
     pub(crate) vendor: HeadlessVendor,
-    pub(crate) program: &'static str,
+    /// The binary to spawn — routed through [`resolve_agent_program`], so a
+    /// test can swap it for a mock via `AIDA_AGENT_CMD` without needing a
+    /// real `claude`/`codex` installed. Unset, it is the vendor's own
+    /// binary name, byte-identical to before this seam existed.
+    pub(crate) program: String,
     pub(crate) args: Vec<String>,
 }
 
@@ -1372,7 +1376,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
     match vendor {
         HeadlessVendor::Claude => Ok(ReviewerLaunchPlan {
             vendor,
-            program: "claude",
+            program: resolve_agent_program(vendor.program()),
             args: claude_session_args(
                 permission_mode,
                 name,
@@ -1390,7 +1394,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
             let bypass = permission_mode == Some("bypassPermissions");
             Ok(ReviewerLaunchPlan {
                 vendor,
-                program: "codex",
+                program: resolve_agent_program(vendor.program()),
                 args: codex_session_args(prompt, bypass, None),
             })
         }
@@ -1409,7 +1413,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
 pub(crate) fn spawn_reviewer_launch_plan(
     plan: &ReviewerLaunchPlan,
 ) -> Result<std::process::ExitStatus> {
-    std::process::Command::new(plan.program)
+    std::process::Command::new(&plan.program)
         .args(&plan.args)
         .status()
         .with_context(|| format!("failed to spawn {}", plan.program))
@@ -1735,6 +1739,37 @@ pub(crate) fn preflight_vendor_binary(vendor: HeadlessVendor) -> Result<()> {
          agents.toml at a profile that is actually installed.",
         vendor.as_str()
     );
+}
+
+/// BUG-1607: preflight a launch of `vendor` — vendor SUPPORT (for an
+/// `interactive` launch, only Agy is refused: the AGY dispatch policy is
+/// draft-for-review-only, mechanical/bounded work, with no interactive
+/// keystone dialog) AND binary reachability, checked in that order, both
+/// BEFORE any caller mints a lease or worktree.
+///
+/// This closes an ordering gap that had the exact BUG-1607 shape: before
+/// this function existed, an interactive Agy launch passed
+/// `preflight_vendor_binary` cleanly whenever the `agy` binary happened to
+/// be reachable, so `session_start` minted the lease + worktree, and only
+/// THEN did [`interactive_reviewer_launch_plan`] (or the equivalent
+/// implementer-side Agy check) refuse — leaving an orphaned lease/worktree
+/// behind with a refusal instead of a process, same as the original bug.
+/// Folding the support check into the ONE preflight every launch site
+/// already calls before mutating state closes it for every reviewer AND
+/// implementer entry point at once.
+///
+/// A headless (`interactive = false`) launch supports Agy — only the
+/// binary check applies.
+// trace:BUG-1607 | ai:claude
+pub(crate) fn preflight_launch_vendor(vendor: HeadlessVendor, interactive: bool) -> Result<()> {
+    if interactive && vendor == HeadlessVendor::Agy {
+        anyhow::bail!(
+            "interactive launch does not support vendor `agy` yet. Recovery: re-run with \
+             `--no-human` for a headless AGY launch, choose `--vendor claude` or `--vendor \
+             codex`, or use `--no-launch`."
+        );
+    }
+    preflight_vendor_binary(vendor)
 }
 
 /// TASK-1162: resolve the session vendor for a launch rooted at the current
@@ -5888,6 +5923,68 @@ mod tests {
             .expect("the same mock override applies uniformly across vendors");
     }
 
+    /// BUG-1607: the ordering-gap fix. Before `preflight_launch_vendor`
+    /// existed, an interactive Agy launch could pass `preflight_vendor_binary`
+    /// cleanly whenever `agy` happened to be reachable — so `session_start`
+    /// minted the lease + worktree, and only the LATER
+    /// `interactive_reviewer_launch_plan` call (or the implementer-side
+    /// `launch_vendor == Agy && !no_human` check, both well after
+    /// `session_start`) refused. That is the exact BUG-1607 shape: a refusal
+    /// that arrives after state was already mutated. Prove the fix two ways:
+    /// (1) an interactive Agy launch refuses EVEN WHEN the binary is
+    /// reachable — vendor support is checked, not just presence; (2) the
+    /// SAME resolved vendor, launched headlessly, still succeeds — the fix
+    /// must not regress AGY's real (headless) support.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn preflight_launch_vendor_refuses_interactive_agy_even_when_binary_reachable() {
+        let _env = AgentCmdEnvGuard::acquire();
+        let tmp = tempfile::tempdir().unwrap();
+        let fake = tmp.path().join("fake-agy");
+        std::fs::write(&fake, "#!/bin/sh\nexit 0\n").unwrap();
+        std::env::set_var("AIDA_AGENT_CMD", fake.to_str().unwrap());
+
+        // Binary IS reachable (the mock exists) — the old
+        // `preflight_vendor_binary`-only check would have passed here,
+        // letting a caller mint a lease/worktree before the later refusal.
+        preflight_vendor_binary(HeadlessVendor::Agy).expect("sanity: the mock binary is reachable");
+
+        // The interactive preflight must still refuse — vendor SUPPORT is
+        // checked, independent of binary reachability.
+        let err = preflight_launch_vendor(HeadlessVendor::Agy, true)
+            .expect_err("an interactive Agy launch must be refused before any state is created");
+        let msg = err.to_string();
+        assert!(msg.contains("agy"), "{msg}");
+        assert!(msg.contains("--vendor claude"), "{msg}");
+        assert!(msg.contains("--vendor codex"), "{msg}");
+
+        // A headless launch of the SAME resolved vendor is unaffected — the
+        // fix narrows the gap, it doesn't remove Agy's real (headless)
+        // support.
+        preflight_launch_vendor(HeadlessVendor::Agy, false)
+            .expect("headless Agy launches remain supported");
+    }
+
+    /// BUG-1607: vendor support is checked BEFORE binary reachability, so an
+    /// interactive Agy refusal names the real reason ("does not support
+    /// vendor `agy`") even when the binary is ALSO missing — an operator
+    /// installing `agy` would not make an interactive reviewer/implementer
+    /// launch work, so the error must not suggest otherwise.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn preflight_launch_vendor_agy_support_check_runs_before_binary_check() {
+        let _env = AgentCmdEnvGuard::acquire();
+        // No override installed — `agy` is (almost certainly) not a real
+        // binary on the test machine either, so BOTH checks could fire;
+        // assert the vendor-support message wins.
+        let err = preflight_launch_vendor(HeadlessVendor::Agy, true)
+            .expect_err("interactive Agy must refuse regardless of binary presence");
+        assert!(
+            err.to_string().contains("does not support vendor `agy`"),
+            "{err}"
+        );
+    }
+
     /// BUG-1607: the pure launch-plan resolver an interactive reviewer launch
     /// (`aida queue work --role reviewer` and `aida review` / `aida human
     /// review`) builds from — no process is spawned. With Codex resolved, the
@@ -5897,6 +5994,10 @@ mod tests {
     // trace:BUG-1607 | ai:claude
     #[test]
     fn interactive_reviewer_launch_plan_codex_resolves_to_codex_exec() {
+        // The plan's `program` is now routed through `resolve_agent_program`
+        // (`AIDA_AGENT_CMD`), so guard against a concurrently-running mock
+        // test leaking an override into this one.
+        let _env = AgentCmdEnvGuard::acquire();
         let plan = interactive_reviewer_launch_plan(
             HeadlessVendor::Codex,
             None,
@@ -5941,6 +6042,7 @@ mod tests {
     // trace:BUG-1607 | ai:claude
     #[test]
     fn interactive_reviewer_launch_plan_claude_matches_claude_session_args() {
+        let _env = AgentCmdEnvGuard::acquire();
         let plan = interactive_reviewer_launch_plan(
             HeadlessVendor::Claude,
             Some("acceptEdits"),

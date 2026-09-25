@@ -10799,18 +10799,21 @@ pub(crate) fn handle_queue_work(
         }
     }
 
-    // BUG-1607: the resolved launch vendor's CLI must actually be reachable
-    // BEFORE `session_start` below mints a lease/worktree — `launch_vendor`
-    // above (via `resolve_enabled_headless_vendor`) only checks the
-    // `[agents] enabled` config, not whether the binary is installed. Without
-    // this, a resolved-but-uninstalled vendor (the observed failure: `vendor:
-    // codex` resolved correctly, then the launch itself hardcoded `claude` —
-    // or, on a genuinely codex-only machine, `codex` was never installed)
-    // leaves a live lease + worktree behind with no process. `--no-launch` is
-    // exempt: it deliberately defers the launch, so a missing binary there
-    // shouldn't block the setup-only prep. trace:BUG-1607 | ai:claude
+    // BUG-1607: preflight the resolved launch vendor BEFORE `session_start`
+    // below mints a lease/worktree — both vendor SUPPORT (an interactive
+    // launch refuses Agy; this used to be checked only after session_start,
+    // at the `launch_vendor == Agy && !no_human` bail further down, leaving
+    // an orphaned lease/worktree behind exactly like the bug this fixes) and
+    // binary reachability (`launch_vendor` above, via
+    // `resolve_enabled_headless_vendor`, only checks the `[agents] enabled`
+    // config, not whether the binary is installed — the observed failure:
+    // `vendor: codex` resolved correctly, then the launch itself hardcoded
+    // `claude`, or on a genuinely codex-only machine `codex` was never
+    // installed). `--no-launch` is exempt: it deliberately defers the
+    // launch, so neither check should block the setup-only prep.
+    // trace:BUG-1607 | ai:claude
     if !no_launch {
-        session::preflight_vendor_binary(launch_vendor)?;
+        session::preflight_launch_vendor(launch_vendor, !no_human)?;
     }
 
     // Set AIDA_SESSION_ROLE for the exec'd claude (and for any in-process
@@ -11216,13 +11219,16 @@ pub(crate) fn handle_queue_work(
         );
         return session::exec_codex_session(&prompt, codex_bypass, resolved_model.as_deref());
     }
-    if launch_vendor == session::HeadlessVendor::Agy && !no_human {
-        anyhow::bail!(
-            "interactive queue work does not support vendor `agy` yet. Recovery: re-run with \
-             `--no-human` for a headless AGY launch, choose `--vendor claude` or `--vendor codex`, \
-             or use `--no-launch`."
-        );
-    }
+    // BUG-1607: an interactive Agy launch is now refused by
+    // `preflight_launch_vendor` above, BEFORE `session_start` minted the
+    // lease/worktree this function is already holding by this point — so
+    // `launch_vendor == Agy && !no_human` can no longer reach here. No
+    // per-arm Agy handling needed below either: `match launch` only spawns
+    // Claude.
+    debug_assert!(
+        !(launch_vendor == session::HeadlessVendor::Agy && !no_human),
+        "BUG-1607: preflight_launch_vendor must refuse an interactive Agy launch before this point"
+    );
     match launch {
         QueueWorkLaunch::Resume(id) => {
             if no_human {
