@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:38:32.393127411Z
-modified_at: 2026-09-25T01:28:00.223853163Z
+modified_at: 2026-09-25T01:41:36.188350953Z
 req_type: Spike
 tags:
 - architecture
@@ -173,5 +173,11 @@ comments:
     OPERATOR DECISIONS NEEDED: (1) the successor-vision wording, after which VIS-1 is superseded; (2) replace or reaffirm the Trojan-horse framing, via a successor DECISION spec; (3) ADR-4 and EPIC-39: rejected, superseded, or kept parked; (4) whether the effort imbalance (intent 6.6% against control 50.9%) is acceptable or should get a rebalancing target; (5) adopt STORY-1425's comparative measure on aida-hub as the north star's executable check; (6) the corpus-sufficiency PRIN wording and its enforcement level. Proposed texts are in report section 7; nothing was filed without operator sign-off.
   created_at: 2026-09-25T01:27:58.395290958Z
   modified_at: 2026-09-25T01:27:58.395290958Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d639-a13c-7b43-982e-391f5aa2af70
+  author: joe
+  content: 'CORRECTION (fact-check, 2026-09-24), commit 3f73c169f7 on claude/spike-86. (1) The earlier claim that 0 source files mention Beads was too broad. Product source has 0 hits (aida-*/src). Across all tracked .rs/.ts/.tsx/.py/.sh files the only mention is scripts/demo-lifecycle-authority.sh, 4 times, a demo contrasting AIDA with Beads rather than interop code. The T3 verdict stands. (2) The measuring scripts are now committed under docs/positioning/spike-86-scripts/ and pinned to main 9154924fd2, aida-store 788c4e050d and absolute window anchors. Run python3 docs/positioning/spike-86-scripts/report.py, then corpus.py. They regenerate every figure exactly: 50.9% control and 6.6% intent over 30 days. The 90-day MCP commit count is 50, not 49.'
+  created_at: 2026-09-25T01:41:36.188350953Z
+  modified_at: 2026-09-25T01:41:36.188350953Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 human_only: true
