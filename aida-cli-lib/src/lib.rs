@@ -94703,14 +94703,24 @@ fn handle_auto_complete_next_n(
 
     // STORY-301: write the drain-state file — the drivable queue head, capped
     // at N, is the member list. Best-effort. trace:STORY-301 | ai:claude
+    //
+    // TASK-1490: apply the same `aida_core::pickability::pickability()`
+    // verdict dispatch is gated on (BUG-1608) before capping at N. A
+    // `BlockedBy` dependent is skipped here exactly as `resolve_next_n_head`
+    // skips it once the live drain reaches it, so the state file never
+    // predicts a member the drain will not actually run.
     let drain_root = find_main_worktree_root().ok();
     if let Some(root) = &drain_root {
-        if let Ok(candidates) = auto_complete_head_candidates(storage, user_id, role_override) {
+        if let Ok(candidates) =
+            auto_complete_head_candidates_with_blocked(storage, user_id, role_override)
+        {
             let specs: Vec<String> = candidates
                 .into_iter()
-                .filter(|(_, status)| auto_complete_head_drivable(status))
+                .filter(|(_, status, _)| auto_complete_head_drivable(status))
+                // trace:TASK-1490 | ai:claude
+                .filter(|(_, _, blocked)| blocked.is_none())
                 .take(n)
-                .map(|(id, _)| id)
+                .map(|(id, _, _)| id)
                 .collect();
             let pipeline_depth = DrainTuning::resolve(root).pipeline_depth();
             let _ = drain_state::DrainState::new_next_n(n, &specs)

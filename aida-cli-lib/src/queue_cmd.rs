@@ -11805,16 +11805,18 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
         .collect())
 }
 
-/// Build the `(display_id, status)` candidate list for the active role's
-/// queue in pickup order (queue position ascending, same as `aida queue
-/// next`) — the shared input to [`pick_auto_complete_head`] for both
-/// single-head pickup (TASK-292) and the `nextN` drain (TASK-293).
-/// trace:TASK-292 TASK-293 | ai:claude
-pub(crate) fn auto_complete_head_candidates(
+/// Build the `(display_id, status, blocked)` candidate list for the active
+/// role's queue in pickup order (queue position ascending, same as `aida
+/// queue next`) — the shared input to [`auto_complete_head_candidates`]
+/// (status only, for [`pick_auto_complete_head`]) and, since TASK-1490, to
+/// the drain preview and drain-state member list, both of which need the
+/// carried BUG-1608 pickability verdict rather than the status alone.
+// trace:TASK-292 TASK-293 TASK-1490 | ai:claude
+pub(crate) fn auto_complete_head_candidates_with_blocked(
     storage: &Storage,
     user_id: &str,
     role_override: Option<&str>,
-) -> Result<Vec<(String, RequirementStatus)>> {
+) -> Result<Vec<(String, RequirementStatus, Option<String>)>> {
     let effective_role = effective_auto_complete_role(role_override);
     Ok(
         auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role))?
@@ -11837,7 +11839,30 @@ pub(crate) fn auto_complete_head_candidates(
                     .map(|r| canonical_role_name(r) == effective_role)
                     .unwrap_or(true)
             })
-            .map(|candidate| (candidate.id, candidate.status))
+            .map(|candidate| (candidate.id, candidate.status, candidate.blocked))
+            .collect(),
+    )
+}
+
+/// Build the `(display_id, status)` candidate list for the active role's
+/// queue in pickup order (queue position ascending, same as `aida queue
+/// next`) — the shared input to [`pick_auto_complete_head`] for both
+/// single-head pickup (TASK-292) and the `nextN` drain (TASK-293).
+///
+/// This view drops the BUG-1608 pickability verdict; a caller that must
+/// distinguish a blocked dependent from a merely undrivable status (the
+/// drain preview and drain-state member list, TASK-1490) should call
+/// [`auto_complete_head_candidates_with_blocked`] instead.
+/// trace:TASK-292 TASK-293 | ai:claude
+pub(crate) fn auto_complete_head_candidates(
+    storage: &Storage,
+    user_id: &str,
+    role_override: Option<&str>,
+) -> Result<Vec<(String, RequirementStatus)>> {
+    Ok(
+        auto_complete_head_candidates_with_blocked(storage, user_id, role_override)?
+            .into_iter()
+            .map(|(id, status, _blocked)| (id, status))
             .collect(),
     )
 }
@@ -12094,9 +12119,11 @@ fn preview_queue_work_drain(
 
     if let NextKeyword::Count(n) = next_kw {
         let limit = n.max(1);
-        let members = drain_preview_head_members(storage, user_id, role_override, limit)?;
+        let (members, skipped) =
+            drain_preview_head_members(storage, user_id, role_override, limit)?;
         println!("  target: next {limit}");
         print_drain_preview_members("queue head", members.into_iter(), Some(limit));
+        print_drain_preview_skipped(&skipped);
         return Ok(());
     }
 
@@ -12130,23 +12157,37 @@ fn preview_queue_work_drain(
     }
 
     let limit = max.unwrap_or(99).max(1);
-    let members = drain_preview_head_members(storage, user_id, role_override, limit)?;
+    let (members, skipped) = drain_preview_head_members(storage, user_id, role_override, limit)?;
     println!("  target: queue head");
     print_drain_preview_members("queue head", members.into_iter(), Some(limit));
+    print_drain_preview_skipped(&skipped);
     Ok(())
 }
 
-fn drain_preview_head_members(
+/// Drivable head-of-queue members for the drain preview, alongside the
+/// dependents skipped to reach them. TASK-1490: applies the same
+/// `aida_core::pickability::pickability()` verdict the real drain gates
+/// dispatch on (BUG-1608), so a `BlockedBy` dependent that the drain would
+/// skip is reported as skipped here too, rather than listed as a member the
+/// preview implies would run.
+// trace:TASK-1490 | ai:claude
+pub(crate) fn drain_preview_head_members(
     storage: &Storage,
     user_id: &str,
     role_override: Option<&str>,
     limit: usize,
-) -> Result<Vec<(String, String, String)>> {
-    let candidates = auto_complete_head_candidates(storage, user_id, role_override)?;
+) -> Result<(Vec<(String, String, String)>, Vec<(String, String)>)> {
+    let candidates = auto_complete_head_candidates_with_blocked(storage, user_id, role_override)?;
     let store = storage.load()?;
     let mut members = Vec::new();
-    for (id, status) in candidates {
+    let mut skipped = Vec::new();
+    for (id, status, blocked) in candidates {
         if !auto_complete_head_drivable(&status) {
+            continue;
+        }
+        // trace:TASK-1490 | ai:claude
+        if let Some(reason) = blocked {
+            skipped.push((id, reason));
             continue;
         }
         let title = store
@@ -12158,7 +12199,7 @@ fn drain_preview_head_members(
             break;
         }
     }
-    Ok(members)
+    Ok((members, skipped))
 }
 
 fn print_drain_preview_members<I>(label: &str, members: I, max: Option<usize>)
@@ -12184,6 +12225,28 @@ where
         };
         println!("    {:>2}. {} [{}]{}", i + 1, id, status, title_suffix);
     }
+}
+
+/// Report the `BlockedBy` dependents a drain preview skipped to reach its
+/// member list — the same `(spec, reason)` shape and wording the real
+/// drain's post-run summary uses for its skipped list (see
+/// `emit_next_n_drain_summary`), so the preview never implies a blocked
+/// dependent would run.
+// trace:TASK-1490 | ai:claude
+fn print_drain_preview_skipped(skipped: &[(String, String)]) {
+    if skipped.is_empty() {
+        return;
+    }
+    let kn = skipped.len();
+    let render: Vec<String> = skipped
+        .iter()
+        .map(|(spec, reason)| format!("{spec} ({reason})"))
+        .collect();
+    println!(
+        "  {kn} dependent spec{} skipped: {}",
+        if kn == 1 { "" } else { "s" },
+        render.join(", ")
+    );
 }
 
 /// When an autonomous head pickup finds nothing for the selected role, name

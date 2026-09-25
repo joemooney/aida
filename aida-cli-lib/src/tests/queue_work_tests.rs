@@ -3582,3 +3582,45 @@ fn bug_1608_unknown_dependency_state_fails_closed() {
     assert_eq!(blocked.len(), 1);
     assert_eq!(blocked[0].0, "NFR-56");
 }
+
+/// TASK-1490: the drain preview's member list must apply the same
+/// `aida_core::pickability::pickability()` verdict dispatch uses (BUG-1608),
+/// not a status-only view. NFR-56 (Approved, `BlockedBy → STORY-52` while
+/// STORY-52 is only Approved, not Completed) must not appear as a preview
+/// member — it must show up as skipped, with its blocker — even though
+/// `next 99` has ample room and NFR-56's status alone is drivable.
+// trace:TASK-1490 | ai:claude
+#[test]
+fn drain_preview_reports_blocked_dependent_as_skipped_not_a_member() {
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    let (members, skipped) =
+        crate::queue_cmd::drain_preview_head_members(&storage, "u", Some("implementer"), 99)
+            .expect("preview resolves");
+
+    let member_ids: Vec<&str> = members.iter().map(|(id, _, _)| id.as_str()).collect();
+    assert_eq!(
+        member_ids,
+        vec!["STORY-52", "TASK-60"],
+        "the blocked dependent NFR-56 must not be listed as a member: {member_ids:?}"
+    );
+    assert_eq!(
+        skipped,
+        vec![(
+            "NFR-56".to_string(),
+            "blocked-by STORY-52 (Approved)".to_string()
+        )],
+        "NFR-56 must be reported skipped, with its blocker"
+    );
+
+    // Positive control: once the prerequisite is Completed, the dependent
+    // becomes a member and drops out of skipped. STORY-52 itself is no
+    // longer status-drivable once Completed, so it drops off the preview too
+    // — the same status filter `auto_complete_head_drivable` always applied.
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
+    let (members, skipped) =
+        crate::queue_cmd::drain_preview_head_members(&storage, "u", Some("implementer"), 99)
+            .expect("preview resolves");
+    let member_ids: Vec<&str> = members.iter().map(|(id, _, _)| id.as_str()).collect();
+    assert_eq!(member_ids, vec!["NFR-56", "TASK-60"]);
+    assert!(skipped.is_empty());
+}
