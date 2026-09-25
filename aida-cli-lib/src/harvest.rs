@@ -996,7 +996,9 @@ fn collect_diff(project_root: &Path, opts: &HarvestOptions) -> Result<(String, S
         .clone()
         .unwrap_or_else(|| "origin/main".to_string());
     let cwd = std::env::current_dir().unwrap_or_else(|_| project_root.to_path_buf());
-    let diff = git_diff_base_to_head(&cwd, &base, &[])?;
+    // trace:BUG-1622 | ai:claude
+    crate::git_arg_guard::reject_option_like("--base", &base)?;
+    let diff = git_diff_base_to_head(&cwd, &base, &[], &[])?;
     let head = std::process::Command::new("git")
         .current_dir(&cwd)
         .args(["rev-parse", "--short", "HEAD"])
@@ -1007,17 +1009,28 @@ fn collect_diff(project_root: &Path, opts: &HarvestOptions) -> Result<(String, S
     Ok((diff, format!("{base}...{head}")))
 }
 
-/// `git diff [extra…] <base>...HEAD` run in `cwd` — the one branch-diff scan
+/// `git diff [extra…] <base>...HEAD -- [paths…]` run in `cwd` — the one branch-diff scan
 /// shared by the harvest loop (full patch) and the typed-protocol done-gate
 /// (`--name-only`, to find a deliverable or a test file in the diff).
 // trace:TASK-1277 | ai:claude
-pub(crate) fn git_diff_base_to_head(cwd: &Path, base: &str, extra: &[&str]) -> Result<String> {
+// trace:BUG-1622 | ai:claude
+pub(crate) fn git_diff_base_to_head(
+    cwd: &Path,
+    base: &str,
+    extra: &[&str],
+    paths: &[&str],
+) -> Result<String> {
     let range = format!("{base}...HEAD");
+    // Options, then `--end-of-options` so a dash-led base is read as a
+    // revision, then `--` and any pathspecs. trace:BUG-1622 | ai:claude
     let out = std::process::Command::new("git")
         .current_dir(cwd)
         .arg("diff")
         .args(extra)
+        .arg(crate::git_arg_guard::END_OF_OPTIONS)
         .arg(&range)
+        .arg("--")
+        .args(paths)
         .output()
         .context("could not run `git diff`")?;
     if !out.status.success() {
@@ -1033,7 +1046,7 @@ pub(crate) fn git_diff_base_to_head(cwd: &Path, base: &str, extra: &[&str]) -> R
 /// <base>...HEAD`), in git's order.
 // trace:TASK-1277 | ai:claude
 pub(crate) fn changed_files_base_to_head(cwd: &Path, base: &str) -> Result<Vec<String>> {
-    Ok(git_diff_base_to_head(cwd, base, &["--name-only"])?
+    Ok(git_diff_base_to_head(cwd, base, &["--name-only"], &[])?
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty())

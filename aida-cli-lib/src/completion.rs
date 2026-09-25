@@ -115,7 +115,14 @@ pub(crate) fn emit_spec_completed(
         let output = std::process::Command::new("git")
             .arg("-C")
             .arg(project_root)
-            .args(["show", "-s", "--format=%s", sha])
+            .args([
+                "show",
+                "-s",
+                "--format=%s",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                sha,
+                "--",
+            ]) // trace:BUG-1622 | ai:claude
             .output()
             .ok()?;
         output.status.success().then_some(())?;

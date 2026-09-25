@@ -368,11 +368,11 @@ pub(crate) fn changed_files_for_branch(repo: &Path) -> ChangedFiles {
         Err(e) => return ChangedFiles::Unknown(format!("{e:#}")),
     };
     // Cheap inline-test grep over the Rust hunks; a failure here only loses
-    // the inline-test signal, never the file list.
-    let test_hunk_files =
-        crate::harvest::git_diff_base_to_head(repo, &base, &["-U0", "--", "*.rs"])
-            .map(|patch| files_with_test_hunks(&patch))
-            .unwrap_or_default();
+    // the inline-test signal, never the file list. The `*.rs` pathspec goes
+    // after the range, not before it. trace:BUG-1622 | ai:claude
+    let test_hunk_files = crate::harvest::git_diff_base_to_head(repo, &base, &["-U0"], &["*.rs"])
+        .map(|patch| files_with_test_hunks(&patch))
+        .unwrap_or_default();
     ChangedFiles::Known(BranchDiff {
         files,
         test_hunk_files,

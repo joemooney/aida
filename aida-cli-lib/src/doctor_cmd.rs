@@ -353,6 +353,11 @@ fn is_zero_usize(n: &usize) -> bool {
 
 fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     let project_root = main_worktree_root_from(&find_project_root()?);
+    // A bad `--since` fails the run with an error naming the flag rather than
+    // silently applying no cutoff. trace:BUG-1622 | ai:claude
+    if let Some(raw) = opts.since.as_deref() {
+        resolve_completed_since_cutoff(&project_root, raw)?;
+    }
     let store_path = project_root.join(".aida-store");
     let store = Storage::new(&store_path)
         .load()
@@ -368,10 +373,18 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // It honours the same `--category` filter as the built-in categories.
     // trace:TASK-673 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "completed-without-commit")? {
+        let env_since = std::env::var("AIDA_DOCTOR_COMPLETED_SINCE")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
+        if let (None, Some(raw)) = (opts.since.as_deref(), env_since.as_deref()) {
+            // trace:BUG-1622 | ai:claude
+            resolve_completed_since_cutoff(&project_root, raw)
+                .context("AIDA_DOCTOR_COMPLETED_SINCE is set to an invalid value")?;
+        }
         let since = opts
             .since
             .clone()
-            .or_else(|| std::env::var("AIDA_DOCTOR_COMPLETED_SINCE").ok())
+            .or(env_since)
             .or_else(default_completed_without_commit_recent_cutoff)
             .filter(|s| !s.trim().is_empty());
         let scan = scan_completed_without_commit_with_options(
@@ -3474,7 +3487,15 @@ fn heal_doctor_stale_remote_branch(
     let status = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["push", "origin", "--delete", &finding.id])
+        // The id is a remote branch name; end options before it.
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "push",
+            "--delete",
+            git_arg_guard::END_OF_OPTIONS,
+            "origin",
+            &finding.id,
+        ])
         .status()
         .with_context(|| format!("deleting remote branch origin/{}", finding.id))?;
     Ok(DoctorHealResult {
@@ -3645,7 +3666,13 @@ pub(crate) fn branch_content_fully_landed(
         Some(Some(id))
     };
 
-    let Some(mb_out) = run(&["merge-base", default_ref, branch]) else {
+    // trace:BUG-1622 | ai:claude
+    let Some(mb_out) = run(&[
+        "merge-base",
+        git_arg_guard::END_OF_OPTIONS,
+        default_ref,
+        branch,
+    ]) else {
         return false;
     };
     if !mb_out.status.success() {
@@ -3683,7 +3710,15 @@ pub(crate) fn branch_content_fully_landed(
     // A forge commonly combines every branch commit into one squash commit.
     // `rev-list --cherry-pick` cannot recognize that N-to-1 equivalence, so
     // compare the branch's combined diff with each bounded default-side commit.
-    let Some(branch_diff) = run(&["diff", "--binary", &merge_base, branch]) else {
+    // trace:BUG-1622 | ai:claude
+    let Some(branch_diff) = run(&[
+        "diff",
+        "--binary",
+        git_arg_guard::END_OF_OPTIONS,
+        &merge_base,
+        branch,
+        "--",
+    ]) else {
         return false;
     };
     if !branch_diff.status.success() {

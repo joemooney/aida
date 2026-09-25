@@ -2535,6 +2535,10 @@ impl Forge for PureGitForge {
                 .args(args)
                 .output()
         };
+        // Change branch and base names never reach git as options.
+        // trace:BUG-1622 | ai:claude
+        crate::git_arg_guard::reject_option_like("change branch", &c.branch)?;
+        crate::git_arg_guard::reject_option_like("change base", &base)?;
         // TASK-1458: pure-git has no forge-side head check, so compare the
         // local branch head with the approved pin before touching anything.
         // trace:TASK-1458 | ai:claude
@@ -2550,7 +2554,7 @@ impl Forge for PureGitForge {
         }
         // Checkout base, then land the branch onto it.
         anyhow::ensure!(
-            git(&["checkout", &base])?.status.success(),
+            git(&["checkout", &base, "--"])?.status.success(),
             "pure-git merge: could not checkout {base}"
         );
         // STORY-516: unified merge_change contract — bail (Err) on the first
@@ -2564,7 +2568,14 @@ impl Forge for PureGitForge {
                 // `(SPEC-ID)` trailer survives and trailer-driven auto-complete
                 // still fires. trace:STORY-516 | ai:claude
                 anyhow::ensure!(
-                    git(&["merge", "--squash", &c.branch])?.status.success(),
+                    git(&[
+                        "merge",
+                        "--squash",
+                        crate::git_arg_guard::END_OF_OPTIONS,
+                        &c.branch
+                    ])?
+                    .status
+                    .success(),
                     "pure-git merge: `git merge --squash {}` failed",
                     c.branch
                 );
@@ -2580,21 +2591,34 @@ impl Forge for PureGitForge {
             // `--no-edit` keeps the default merge message without opening an
             // editor (which would hang a non-interactive ship/drain).
             MergeMethod::Merge => anyhow::ensure!(
-                git(&["merge", "--no-ff", "--no-edit", &c.branch])?
-                    .status
-                    .success(),
+                git(&[
+                    "merge",
+                    "--no-ff",
+                    "--no-edit",
+                    crate::git_arg_guard::END_OF_OPTIONS,
+                    &c.branch
+                ])?
+                .status
+                .success(),
                 "pure-git merge: `git merge --no-ff {}` failed",
                 c.branch
             ),
             MergeMethod::Rebase => anyhow::ensure!(
-                git(&["rebase", &c.branch])?.status.success(),
+                git(&["rebase", crate::git_arg_guard::END_OF_OPTIONS, &c.branch])?
+                    .status
+                    .success(),
                 "pure-git merge: `git rebase {}` failed",
                 c.branch
             ),
         }
         // STORY-516: forge-side branch delete after a successful pure-git merge.
         if opts.delete_branch {
-            let _ = git(&["branch", "-D", &c.branch]);
+            let _ = git(&[
+                "branch",
+                "-D",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                &c.branch,
+            ]);
         }
         let sha = rev_parse(&self.project_root, &base);
         Ok(MergeResult {
@@ -3423,10 +3447,13 @@ fn parse_glab_mr_list(body: &str) -> Result<Vec<ChangeRef>> {
 // ─────────────────────────── shared git helpers ───────────────────────────
 
 fn pure_git_checkout(project_root: &Path, branch: &str) -> Result<()> {
+    // `checkout` lacks `--end-of-options` on git 2.43: refuse a dash-led
+    // name and pin it with `--`. trace:BUG-1622 | ai:claude
+    crate::git_arg_guard::reject_option_like("branch", branch)?;
     let out = Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["checkout", branch])
+        .args(["checkout", branch, "--"])
         .output()?;
     anyhow::ensure!(
         out.status.success(),
@@ -3440,7 +3467,14 @@ fn branch_is_ancestor_of(project_root: &Path, branch: &str, base: &str) -> bool 
     Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["merge-base", "--is-ancestor", branch, base])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "merge-base",
+            "--is-ancestor",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            branch,
+            base,
+        ])
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
@@ -3453,7 +3487,15 @@ fn branch_head_subject(project_root: &Path, r#ref: &str) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", "-1", "--format=%s", r#ref])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "log",
+            "-1",
+            "--format=%s",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            r#ref,
+            "--",
+        ])
         .output()
         .ok()?;
     if !out.status.success() {
@@ -3471,7 +3513,14 @@ fn rev_parse(project_root: &Path, r#ref: &str) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["rev-parse", r#ref])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            r#ref,
+        ])
         .output()
         .ok()?;
     if !out.status.success() {

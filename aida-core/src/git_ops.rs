@@ -245,7 +245,9 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
 /// Push to the remote. Returns true on success, false if rejected (non-fast-forward).
 pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     // external-prose-classifier: git_ops::push
-    let result = git(repo, &["push", remote, branch])?;
+    // `--end-of-options` keeps a dash-led remote or branch from reading as
+    // an option. trace:BUG-1622 | ai:claude
+    let result = git(repo, &["push", "--end-of-options", remote, branch])?;
     if result.success {
         Ok(true)
     } else if crate::external_tool_output::contains_any_case_insensitive(
@@ -260,7 +262,12 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
 
 /// Pull with rebase from remote.
 pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
-    let result = git(repo, &["pull", "--rebase", remote, branch])?;
+    // `--end-of-options` keeps a dash-led remote or branch from reading as
+    // an option. trace:BUG-1622 | ai:claude
+    let result = git(
+        repo,
+        &["pull", "--rebase", "--end-of-options", remote, branch],
+    )?;
     if !result.success {
         // A failed pull may have started a rebase and detached HEAD.  Never
         // leave the managed store in that state: later writers could commit
@@ -309,7 +316,12 @@ pub enum StorePullOutcome {
 /// unknown files and never corrupt the store. trace:STORY-641 | ai:claude
 #[cfg(feature = "native")]
 pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result<StorePullOutcome> {
-    let result = git(repo, &["pull", "--rebase", remote, branch])?;
+    // `--end-of-options` keeps a dash-led remote or branch from reading as
+    // an option. trace:BUG-1622 | ai:claude
+    let result = git(
+        repo,
+        &["pull", "--rebase", "--end-of-options", remote, branch],
+    )?;
     if result.success {
         return Ok(StorePullOutcome::Clean);
     }
@@ -752,7 +764,11 @@ fn merge_in_progress(repo: &Path) -> bool {
 // trace:BUG-714 | ai:claude
 #[cfg(feature = "native")]
 pub fn merge_union_auto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullOutcome> {
-    let result = git(repo, &["merge", "--no-ff", "-m", message, ref_])?;
+    // trace:BUG-1622 | ai:claude
+    let result = git(
+        repo,
+        &["merge", "--no-ff", "-m", message, "--end-of-options", ref_],
+    )?;
     if result.success {
         return Ok(StorePullOutcome::Clean);
     }
@@ -961,7 +977,9 @@ pub fn pick_last_writer(ours: Option<&str>, theirs: Option<&str>) -> (&'static s
     note = "use pull_rebase — bare `git pull` fails on divergent branches without pull.rebase config"
 )]
 pub fn pull(repo: &Path, remote: &str, branch: &str) -> Result<()> {
-    let result = git(repo, &["pull", remote, branch])?;
+    // `--end-of-options` keeps a dash-led remote or branch from reading as
+    // an option. trace:BUG-1622 | ai:claude
+    let result = git(repo, &["pull", "--end-of-options", remote, branch])?;
     if !result.success {
         anyhow::bail!("git pull failed: {}", result.stderr);
     }
@@ -1015,7 +1033,17 @@ pub fn is_ancestor(repo: &Path, ancestor: &str, descendant: &str) -> Result<bool
     // 1 when it is not, and 128 on a bad object. Our `git` wrapper only exposes
     // success/failure; non-zero (not-ancestor OR error) both mean "don't trust
     // an incremental diff" → false.
-    let result = git(repo, &["merge-base", "--is-ancestor", ancestor, descendant])?;
+    // trace:BUG-1622 | ai:claude
+    let result = git(
+        repo,
+        &[
+            "merge-base",
+            "--is-ancestor",
+            "--end-of-options",
+            ancestor,
+            descendant,
+        ],
+    )?;
     Ok(result.success)
 }
 
@@ -1041,6 +1069,8 @@ pub fn changed_object_files(
             "diff",
             "--no-renames",
             "--name-status",
+            // trace:BUG-1622 | ai:claude
+            "--end-of-options",
             from,
             to,
             "--",
@@ -1519,7 +1549,11 @@ pub fn add_detached_worktree(repo_root: &Path, path: &Path, ref_: &str) -> Resul
     // (a manually-deleted dir leaves a dangling registration). trace:BUG-39
     let _ = git(repo_root, &["worktree", "prune"]);
     let path_str = path.to_string_lossy();
-    let result = git(repo_root, &["worktree", "add", "--detach", &path_str, ref_])?;
+    // trace:BUG-1622 | ai:claude
+    let result = git(
+        repo_root,
+        &["worktree", "add", "--detach", "--", &path_str, ref_],
+    )?;
     if !result.success {
         anyhow::bail!(
             "failed to add pool worktree at {}: {}",
@@ -1671,7 +1705,15 @@ pub fn submodule_init_command(worktree_path: &Path) -> String {
 /// the compiled cache that makes the pool *warm* is preserved.
 // trace:STORY-714 trace:BUG-553 | ai:claude
 pub fn reset_worktree_to(worktree_path: &Path, ref_: &str) -> Result<()> {
-    let co = git(worktree_path, &["checkout", "--detach", "--force", ref_])?;
+    // `checkout` and `reset` lack `--end-of-options` support on git 2.43:
+    // refuse a dash-led ref and pin it with a trailing `--`. // trace:BUG-1622 | ai:claude
+    if ref_.trim_start().starts_with('-') {
+        anyhow::bail!("refusing to reset onto `{ref_}`: a ref cannot start with `-`");
+    }
+    let co = git(
+        worktree_path,
+        &["checkout", "--detach", "--force", ref_, "--"],
+    )?;
     if !co.success {
         anyhow::bail!(
             "failed to detach worktree {} onto {}: {}",
@@ -1680,7 +1722,7 @@ pub fn reset_worktree_to(worktree_path: &Path, ref_: &str) -> Result<()> {
             co.stderr
         );
     }
-    let reset = git(worktree_path, &["reset", "--hard", ref_])?;
+    let reset = git(worktree_path, &["reset", "--hard", ref_, "--"])?;
     if !reset.success {
         anyhow::bail!(
             "failed to hard-reset worktree {}: {}",
@@ -1896,9 +1938,11 @@ pub fn worktree_head_sha(worktree_path: &Path) -> Option<String> {
 pub fn remove_worktree_at(repo_root: &Path, worktree_path: &Path, force: bool) -> Result<()> {
     let path_str = worktree_path.to_string_lossy();
     let mut args: Vec<&str> = vec!["worktree", "remove"];
+    // `--` below keeps a dash-led path a path. trace:BUG-1622 | ai:claude
     if force {
         args.push("--force");
     }
+    args.push("--");
     args.push(&path_str);
     let result = git(repo_root, &args)?;
     if !result.success {
@@ -1929,7 +1973,8 @@ pub fn is_remote_reachable(repo: &Path, remote: &str) -> bool {
 /// metadata want the URL, not just its existence.
 // trace:STORY-781 | ai:claude
 pub fn remote_url(repo: &Path, remote: &str) -> Option<String> {
-    let r = git(repo, &["remote", "get-url", remote]).ok()?;
+    // trace:BUG-1622 | ai:claude
+    let r = git(repo, &["remote", "get-url", "--end-of-options", remote]).ok()?;
     if !r.success {
         return None;
     }
@@ -1938,7 +1983,8 @@ pub fn remote_url(repo: &Path, remote: &str) -> Option<String> {
 }
 
 pub fn has_remote(repo: &Path, remote: &str) -> bool {
-    git(repo, &["remote", "get-url", remote])
+    // trace:BUG-1622 | ai:claude
+    git(repo, &["remote", "get-url", "--end-of-options", remote])
         .map(|r| r.success)
         .unwrap_or(false)
 }
@@ -1950,7 +1996,8 @@ pub fn has_remote(repo: &Path, remote: &str) -> bool {
 /// "can't tell" as "not known-empty" and don't take empty-origin-only paths.
 /// trace:TASK-844 | ai:claude
 pub fn remote_has_no_heads(repo: &Path, remote: &str) -> bool {
-    match git(repo, &["ls-remote", "--heads", remote]) {
+    // trace:BUG-1622 | ai:claude
+    match git(repo, &["ls-remote", "--heads", "--end-of-options", remote]) {
         Ok(r) if r.success => r.stdout.trim().is_empty(),
         _ => false,
     }
@@ -1966,6 +2013,8 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
         &[
             "ls-remote",
             "--exit-code",
+            // trace:BUG-1622 | ai:claude
+            "--end-of-options",
             remote,
             &format!("refs/heads/{}", branch),
         ],
@@ -1986,7 +2035,13 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
 pub fn remote_branch_head_sha(repo: &Path, remote: &str, branch: &str) -> Option<String> {
     let r = git(
         repo,
-        &["ls-remote", remote, &format!("refs/heads/{}", branch)],
+        // trace:BUG-1622 | ai:claude
+        &[
+            "ls-remote",
+            "--end-of-options",
+            remote,
+            &format!("refs/heads/{}", branch),
+        ],
     )
     .ok()?;
     if !r.success {
@@ -2034,6 +2089,8 @@ pub fn ahead_behind(repo: &Path, left: &str, right: &str) -> Option<(u32, u32)> 
             "rev-list",
             "--left-right",
             "--count",
+            // trace:BUG-1622 | ai:claude
+            "--end-of-options",
             &format!("{left}...{right}"),
         ],
     )
@@ -2053,7 +2110,9 @@ pub fn ahead_behind(repo: &Path, left: &str, right: &str) -> Option<(u32, u32)> 
 /// trace:EPIC-1-052 Phase 4 | ai:claude
 pub fn fetch_branch_into_local(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     let refspec = format!("{}:{}", branch, branch);
-    let result = git(repo, &["fetch", remote, &refspec])?;
+    // `--end-of-options` keeps a dash-led remote or branch from reading as
+    // an option. trace:BUG-1622 | ai:claude
+    let result = git(repo, &["fetch", "--end-of-options", remote, &refspec])?;
     if !result.success {
         anyhow::bail!("git fetch {} {} failed: {}", remote, refspec, result.stderr);
     }
@@ -2080,7 +2139,13 @@ pub fn local_branch_exists(repo: &Path, branch: &str) -> bool {
 /// doesn't exist or the working tree can't be switched.
 /// trace:BUG-559 | ai:claude
 pub fn checkout_branch(repo: &Path, branch: &str) -> Result<()> {
-    let result = git(repo, &["checkout", branch])?;
+    // A dash-led branch would read as an option. trace:BUG-1622 | ai:claude
+    if branch.trim_start().starts_with('-') {
+        anyhow::bail!("refusing to check out `{branch}`: a branch name cannot start with `-`");
+    }
+    // `git checkout` has no `--end-of-options` support on git 2.43; the
+    // trailing `--` pins the name as a branch rather than a pathspec.
+    let result = git(repo, &["checkout", branch, "--"])?;
     if !result.success {
         anyhow::bail!("git checkout {} failed: {}", branch, result.stderr);
     }

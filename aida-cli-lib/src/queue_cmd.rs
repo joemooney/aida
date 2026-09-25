@@ -13298,7 +13298,19 @@ pub(crate) fn handle_queue_recover(
                 );
                 return Ok(());
             }
-            let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
+            // The branch can come from a lease or the forge; end options
+            // before it. trace:BUG-1622 | ai:claude
+            crate::git_arg_guard::reject_option_like("branch", b)?;
+            let push_st = run_git(
+                &[
+                    "push",
+                    "-u",
+                    crate::git_arg_guard::END_OF_OPTIONS,
+                    "origin",
+                    b,
+                ],
+                &probe_repo,
+            )?;
             if !push_st.success() {
                 eprintln!(
                     "{} push failed — resolve manually, then re-run `aida queue recover {}`.",
@@ -13344,7 +13356,19 @@ pub(crate) fn handle_queue_recover(
                 );
                 return Ok(());
             };
-            let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
+            // The branch can come from a lease or the forge; end options
+            // before it. trace:BUG-1622 | ai:claude
+            crate::git_arg_guard::reject_option_like("branch", b)?;
+            let push_st = run_git(
+                &[
+                    "push",
+                    "-u",
+                    crate::git_arg_guard::END_OF_OPTIONS,
+                    "origin",
+                    b,
+                ],
+                &probe_repo,
+            )?;
             if !push_st.success() {
                 eprintln!(
                     "{} push failed — resolve manually.",

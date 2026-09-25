@@ -464,6 +464,11 @@ pub(crate) fn pr_rebase_handler(
         PrRebaseMode::Default
     };
 
+    // trace:BUG-1622 | ai:claude
+    if let Some(sha) = onto_parent {
+        crate::git_arg_guard::reject_option_like("--onto-parent", sha)?;
+    }
+
     let project_root = find_project_root()?;
 
     // ---- Step 1: resolve PR metadata via the forge (STORY-621 Slice 2:
@@ -614,7 +619,14 @@ pub(crate) fn pr_rebase_handler(
         let is_ancestor = std::process::Command::new("git")
             .arg("-C")
             .arg(&wt_path)
-            .args(["merge-base", "--is-ancestor", parent_sha, "HEAD"])
+            // trace:BUG-1622 | ai:claude
+            .args([
+                "merge-base",
+                "--is-ancestor",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                parent_sha,
+                "HEAD",
+            ])
             .status();
         if !matches!(is_ancestor, Ok(s) if s.success()) {
             cleanup_worktree();
@@ -637,7 +649,14 @@ pub(crate) fn pr_rebase_handler(
         let mut cmd = std::process::Command::new("git");
         cmd.arg("-C").arg(&wt_path);
         match onto_parent {
-            Some(parent_sha) => cmd.args(["rebase", "--onto", &origin_base, parent_sha]),
+            // trace:BUG-1622 | ai:claude
+            Some(parent_sha) => cmd.args([
+                "rebase",
+                "--onto",
+                &origin_base,
+                crate::git_arg_guard::END_OF_OPTIONS,
+                parent_sha,
+            ]),
             None => cmd.args(["rebase", &origin_base]),
         };
         cmd.status()
@@ -1287,10 +1306,18 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         .strip_prefix("origin/")
         .unwrap_or(origin_ref.as_str())
         .to_string();
+    // The base comes from the forge (a PR's baseRefName); never let it
+    // read as a git option. trace:BUG-1622 | ai:claude
+    crate::git_arg_guard::reject_option_like("PR base branch", &remote_branch)?;
     eprintln!("  step 2: rebasing onto current {origin_ref}");
     let fetch = std::process::Command::new("git")
         .current_dir(&project_root)
-        .args(["fetch", "origin", &remote_branch])
+        .args([
+            "fetch",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            "origin",
+            &remote_branch,
+        ])
         .status()
         .context("could not invoke `git fetch`")?;
     if !fetch.success() {
@@ -1298,7 +1325,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     }
     let rebase = std::process::Command::new("git")
         .current_dir(&project_root)
-        .args(["rebase", &origin_ref])
+        // trace:BUG-1622 | ai:claude
+        .args(["rebase", crate::git_arg_guard::END_OF_OPTIONS, &origin_ref])
         .status()
         .context("could not invoke `git rebase`")?;
     if !rebase.success() {
@@ -3388,10 +3416,21 @@ pub(crate) fn branch_head_commit_message(
     project_root: &std::path::Path,
     branch: &str,
 ) -> Option<String> {
+    // A forge-reported PR head a fork author named. trace:BUG-1622 | ai:claude
+    if crate::git_arg_guard::is_option_like(branch) {
+        return None;
+    }
     for r in [branch.to_string(), format!("origin/{branch}")] {
         let out = std::process::Command::new("git")
             .current_dir(project_root)
-            .args(["log", "-1", "--format=%B", &r])
+            .args([
+                "log",
+                "-1",
+                "--format=%B",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                &r,
+                "--",
+            ])
             .output()
             .ok()?;
         if out.status.success() {
@@ -4247,6 +4286,7 @@ pub(crate) fn preflight_mr_base(
             "ls-remote",
             "--exit-code",
             "--heads",
+            crate::git_arg_guard::END_OF_OPTIONS, // trace:BUG-1622 | ai:claude
             "origin",
             base,
         ])

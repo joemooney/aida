@@ -15,6 +15,16 @@ use crate::cli;
 /// `ChangelogOptions` and calls `changelog::run`.
 pub(crate) fn handle_changelog_command(cmd: &cli::ChangelogCommand) -> Result<()> {
     let project_root = crate::find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    // The tag bounds only select among `v*` tags, but refuse a dash-led
+    // value anyway so none can ever reach git as an option.
+    // trace:BUG-1622 | ai:claude
+    if let cli::ChangelogCommand::Generate { since, until, .. } = cmd {
+        for (flag, value) in [("--since", since), ("--until", until)] {
+            if let Some(v) = value.as_deref() {
+                crate::git_arg_guard::reject_option_like(flag, v)?;
+            }
+        }
+    }
     let opts = match cmd {
         cli::ChangelogCommand::Generate { since, until, out } => changelog::ChangelogOptions {
             window: if since.is_some() || until.is_some() {
