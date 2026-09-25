@@ -36796,11 +36796,13 @@ fn session_start(
             format!("claude    # then /aida-implement {}", owns).cyan()
         );
         eprintln!("  {}", format!("cd {}", worktree_path.display()).cyan());
+        // Point at the filtered path, not a raw `source` of a worktree file a
+        // branch can commit. trace:BUG-1624 | ai:claude
         if cargo_target_dir.is_some() {
             eprintln!(
                 "  {}    {}",
-                "source .aida/session-env.sh".cyan(),
-                "# warm build cache".dimmed()
+                format!("aida worktree enter {owns}").cyan(),
+                "# cd in + warm build cache (filtered session env)".dimmed()
             );
         }
         eprintln!();
@@ -40460,7 +40462,9 @@ fn parse_session_env(body: &str) -> Vec<(String, String)> {
 /// unsafe; safe here because `session_start --launch` is single-threaded
 /// between parse and exec. trace:TASK-63 | ai:claude
 fn apply_session_env_to_process(body: &str) -> Vec<String> {
-    let pairs = parse_session_env(body);
+    // Only the allowlisted names, never PATH / LD_PRELOAD / BASH_ENV from a
+    // branch-committed file. trace:BUG-1624 | ai:claude
+    let pairs = trusted_session_env(body, &resolve_aida_exe());
     let mut applied = Vec::with_capacity(pairs.len());
     for (name, value) in pairs {
         #[allow(unused_unsafe)]
@@ -40470,6 +40474,40 @@ fn apply_session_env_to_process(body: &str) -> Vec<String> {
         applied.push(name);
     }
     applied
+}
+
+/// The only names [`render_session_env_file`] writes, and so the only names
+/// taken from a `.aida/session-env.sh`. The file lives in the worktree, where
+/// a branch can commit its own copy, so anything else (`PATH`,
+/// `PROMPT_COMMAND`, `BASH_ENV`, `LD_PRELOAD`, ...) is dropped.
+// trace:BUG-1624 | ai:claude
+const SESSION_ENV_NAMES: [&str; 3] = ["CARGO_TARGET_DIR", "AIDA_AGENT_TYPE", "AIDA_BIN"];
+
+/// The trustworthy subset of a `.aida/session-env.sh` body: allowlisted
+/// names only, `CARGO_TARGET_DIR` only when absolute, and `AIDA_BIN`
+/// never taken from the file. When the file pins a binary, the pin is
+/// replaced by `running_exe` (this process's own binary) if that is an
+/// absolute, existing path, and dropped otherwise.
+// trace:BUG-1624 | ai:claude
+fn trusted_session_env(body: &str, running_exe: &std::path::Path) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for (name, value) in parse_session_env(body) {
+        if !SESSION_ENV_NAMES.contains(&name.as_str()) || out.iter().any(|(n, _)| *n == name) {
+            continue;
+        }
+        let value = match name.as_str() {
+            "CARGO_TARGET_DIR" if !std::path::Path::new(&value).is_absolute() => continue,
+            "AIDA_BIN" => {
+                if !(running_exe.is_absolute() && running_exe.is_file()) {
+                    continue;
+                }
+                running_exe.display().to_string()
+            }
+            _ => value,
+        };
+        out.push((name, value));
+    }
+    out
 }
 
 /// Inverse of `shell_single_quote` for the narrow shape we write.
@@ -62901,9 +62939,12 @@ fn lease_id_matches(lease_id: &str, carried: &str) -> bool {
 fn session_env_unset_names(worktree: &std::path::Path) -> Vec<String> {
     std::fs::read_to_string(worktree.join(".aida").join("session-env.sh"))
         .map(|body| {
+            // Allowlisted names only: a branch-committed file must not make
+            // `worktree exit` unset PATH. trace:BUG-1624 | ai:claude
             parse_session_env(&body)
                 .into_iter()
                 .map(|(n, _)| n)
+                .filter(|n| SESSION_ENV_NAMES.contains(&n.as_str()))
                 .collect()
         })
         .unwrap_or_default()
@@ -63177,11 +63218,15 @@ fn print_worktree_next(
             );
         }
     }
+    // Never suggest a raw `source` of the worktree's session-env file: a
+    // branch can commit it. Run enter through the eval so the filtered
+    // payload applies. trace:BUG-1624 | ai:claude
     if command == "enter" && out.has_session_env && !shell_payload_evaled {
         eprintln!(
             "  {}    {}",
-            "source .aida/session-env.sh".cyan(),
-            "# warm build cache".dimmed()
+            "cat .aida/session-env.sh".cyan(),
+            "# review it; the eval'd enter applies only CARGO_TARGET_DIR, AIDA_AGENT_TYPE, AIDA_BIN"
+                .dimmed()
         );
     }
     if let Some(id) = out.lease_id.as_deref() {
@@ -63280,7 +63325,7 @@ fn enter_shell_payload(
     let mut payload = format!("{}\n", enter_cd_line(path));
     let env_path = path.join(".aida").join("session-env.sh");
     if let Ok(body) = std::fs::read_to_string(env_path) {
-        payload.push_str(&session_env_eval_lines(&body));
+        payload.push_str(&session_env_eval_lines(&body, &resolve_aida_exe()));
     }
     payload.push_str(&crate::worktree::ps1_wt_splice_block(focus, lease_file));
     payload
@@ -63289,16 +63334,16 @@ fn enter_shell_payload(
 /// Re-render `.aida/session-env.sh` for the eval'd `worktree enter` payload.
 ///
 /// The file lives in the worktree, so a branch can commit its own copy; its
-/// body is never eval'd verbatim. Only `export NAME='value'` lines with a
-/// valid variable name survive, each value re-quoted, plus the PATH prepend
-/// for the pinned `AIDA_BIN` that [`render_session_env_file`] writes.
+/// body is never eval'd verbatim. Only the allowlisted names survive
+/// ([`trusted_session_env`]), each value re-quoted. The PATH prepend comes
+/// from `running_exe`, the binary doing the enter, never from the file.
 // trace:BUG-1624 | ai:claude
-fn session_env_eval_lines(body: &str) -> String {
+fn session_env_eval_lines(body: &str, running_exe: &std::path::Path) -> String {
     let mut out = String::new();
-    for (name, value) in parse_session_env(body) {
+    for (name, value) in trusted_session_env(body, running_exe) {
         out.push_str(&format!("export {name}={}\n", shell_single_quote(&value)));
         if name == "AIDA_BIN" {
-            if let Some(dir) = std::path::Path::new(&value).parent() {
+            if let Some(dir) = running_exe.parent() {
                 out.push_str(&format!(
                     "PATH={}:\"$PATH\"\n",
                     shell_single_quote(&dir.display().to_string())

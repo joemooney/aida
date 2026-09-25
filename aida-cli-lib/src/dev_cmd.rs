@@ -821,7 +821,8 @@ fn handle_dev_activate(
         "echo '{} aida dev activated ({} build at {}{}){}'",
         crate::glyph(crate::glyphs::Glyph::Check),
         profile,
-        bin_dir.display(),
+        // Inside the eval'd single-quoted echo. trace:BUG-1624 | ai:claude
+        crate::sh_single_quote(&bin_dir.display().to_string()),
         pin_note,
         stale_note
     );

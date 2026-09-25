@@ -268,51 +268,146 @@ fn bug_1624_doctor_since_with_whitespace_is_trimmed_then_guarded() {
     assert!(resolve_completed_since_cutoff_at(root, "  feat  ", now, &chrono::Utc).is_ok());
 }
 
-/// Values that reach the `aida()` wrapper's eval, or a paste-ready line,
-/// are quoted: a session-env file a branch committed cannot inject code,
-/// and a hostile recorded cwd stays a single `cd` argument.
+/// A `.aida/session-env.sh` a branch committed, carrying everything the
+/// strict review showed surviving the first filter.
+const HOSTILE_SESSION_ENV: &str = "touch pwned\n\
+export PROMPT_COMMAND='touch pwned'\n\
+export BASH_ENV='./evil.sh'\n\
+export LD_PRELOAD='./x.so'\n\
+export PATH='.evil:/usr/bin'\n\
+export AIDA_BIN='.evil/aida'\n\
+export CARGO_TARGET_DIR='rel/target'\n\
+export AIDA_AGENT_TYPE='cl'\\''aude $(touch pwned)'\n\
+export BAD-NAME='x'\n";
+
+/// A stand-in for the running binary: an absolute, existing file.
+fn fake_running_exe(dir: &std::path::Path) -> std::path::PathBuf {
+    let bin = dir.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let exe = bin.join("aida");
+    std::fs::write(&exe, "").unwrap();
+    exe
+}
+
+/// Only CARGO_TARGET_DIR (absolute), AIDA_AGENT_TYPE and AIDA_BIN survive,
+/// and AIDA_BIN plus the PATH prepend come from the running binary, never
+/// from the file.
 #[test]
-fn bug_1624_eval_payloads_quote_untrusted_values() {
+fn bug_1624_session_env_allowlists_names_and_ignores_file_aida_bin() {
     let tree = tempfile::TempDir::new().unwrap();
+    let exe = fake_running_exe(tree.path());
+    let lines = session_env_eval_lines(HOSTILE_SESSION_ENV, &exe);
+    for banned in [
+        "PROMPT_COMMAND",
+        "BASH_ENV",
+        "LD_PRELOAD",
+        "'.evil",
+        ".evil/aida",
+        "CARGO_TARGET_DIR",
+        "BAD-NAME",
+        "\ntouch pwned",
+    ] {
+        assert!(!lines.contains(banned), "{banned} leaked into:\n{lines}");
+    }
+    assert!(!lines.starts_with("touch"), "{lines}");
+    let bin_dir = exe.parent().unwrap().display().to_string();
+    assert_eq!(
+        lines,
+        format!(
+            "export AIDA_BIN='{}'\nPATH='{bin_dir}':\"$PATH\"\nexport AIDA_AGENT_TYPE='cl'\\''aude $(touch pwned)'\n",
+            exe.display()
+        ),
+        "order follows the file; got:\n{lines}"
+    );
+
+    // An absolute CARGO_TARGET_DIR is kept; a relative running binary never
+    // yields an AIDA_BIN or a PATH entry.
+    let ok = session_env_eval_lines(
+        "export CARGO_TARGET_DIR='/w/target'\nexport AIDA_BIN='/w/bin/aida'\n",
+        std::path::Path::new("rel/aida"),
+    );
+    assert_eq!(ok, "export CARGO_TARGET_DIR='/w/target'\n");
+
+    // The worktree-enter payload uses the same filter.
     std::fs::create_dir_all(tree.path().join(".aida")).unwrap();
     std::fs::write(
         tree.path().join(".aida/session-env.sh"),
-        "touch pwned\n\
-         export CARGO_TARGET_DIR='/x/target'\n\
-         export AIDA_BIN='/opt/it'\\''s/aida'\n\
-         export EVIL=$(touch pwned)\n\
-         export BAD-NAME='x'\n",
+        HOSTILE_SESSION_ENV,
     )
     .unwrap();
     let payload = enter_shell_payload(tree.path(), "BUG-1624", None);
-    assert!(!payload.contains("\ntouch pwned\n"), "{payload}");
-    assert!(payload.contains("export CARGO_TARGET_DIR='/x/target'\n"));
-    assert!(payload.contains("export AIDA_BIN='/opt/it'\\''s/aida'\n"));
-    assert!(payload.contains("PATH='/opt/it'\\''s':\"$PATH\"\n"));
-    assert!(
-        payload.contains("export EVIL='$(touch pwned)'\n"),
-        "{payload}"
-    );
-    assert!(!payload.contains("BAD-NAME"));
+    for banned in [
+        "PROMPT_COMMAND",
+        "LD_PRELOAD",
+        "BASH_ENV",
+        "'.evil",
+        "\ntouch pwned\n",
+    ] {
+        assert!(
+            !payload.contains(banned),
+            "{banned} leaked into:\n{payload}"
+        );
+    }
+    assert!(!payload.contains("export PATH"), "{payload}");
 
+    // `worktree exit` only unsets allowlisted names.
+    let unset = session_env_unset_names(tree.path());
+    assert!(
+        unset
+            .iter()
+            .all(|n| n == "CARGO_TARGET_DIR" || n == "AIDA_AGENT_TYPE" || n == "AIDA_BIN"),
+        "{unset:?}"
+    );
+    assert!(!unset.iter().any(|n| n == "PATH"));
+}
+
+/// `session start --launch` / `queue work` apply the session env to the
+/// process before exec: the same allowlist holds there.
+#[test]
+fn bug_1624_apply_session_env_to_process_ignores_non_allowlisted_names() {
+    const VAR: &str = "AIDA_TEST_BUG_1624_NOT_ALLOWLISTED";
+    #[allow(unused_unsafe)]
+    unsafe {
+        std::env::remove_var(VAR);
+    }
+    let before_path = std::env::var_os("PATH");
+    let before_preload = std::env::var_os("LD_PRELOAD");
+    let applied = apply_session_env_to_process(&format!(
+        "export {VAR}='x'\nexport PATH='.evil:/usr/bin'\nexport LD_PRELOAD='./x.so'\n\
+         export PROMPT_COMMAND='touch pwned'\n"
+    ));
+    assert!(applied.is_empty(), "{applied:?}");
+    assert!(std::env::var_os(VAR).is_none());
+    assert_eq!(std::env::var_os("PATH"), before_path);
+    assert_eq!(std::env::var_os("LD_PRELOAD"), before_preload);
+}
+
+/// A hostile recorded cwd stays a single `cd` argument in the paste-ready
+/// resume line.
+#[test]
+fn bug_1624_resume_hint_quotes_the_recorded_cwd() {
     let base = "aida queue work BUG-1624 --resume x";
     let cmd = resume_command_with_cwd(base, Some("/w/a;touch pwned"), Some("/w/b"));
     assert_eq!(cmd, format!("cd '/w/a;touch pwned' && {base}"));
 }
 
-/// The re-rendered session env, run through a real shell, executes nothing.
+/// The filtered session env, run through a real shell, executes nothing.
 #[cfg(unix)]
 #[test]
 fn bug_1624_session_env_eval_lines_run_nothing_in_a_shell() {
     let tree = tempfile::TempDir::new().unwrap();
-    let lines = session_env_eval_lines("touch pwned\nexport EVIL=$(touch pwned)\n");
+    let exe = fake_running_exe(tree.path());
+    let lines = session_env_eval_lines(HOSTILE_SESSION_ENV, &exe);
     let out = std::process::Command::new("sh")
         .arg("-c")
-        .arg(format!("{lines}printf '%s' \"$EVIL\""))
+        .arg(format!("{lines}printf '%s' \"$AIDA_AGENT_TYPE\""))
         .current_dir(tree.path())
         .output()
         .unwrap();
     assert!(out.status.success());
-    assert_eq!(String::from_utf8_lossy(&out.stdout), "$(touch pwned)");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "cl'aude $(touch pwned)"
+    );
     assert!(!tree.path().join("pwned").exists());
 }
