@@ -3,12 +3,12 @@ spec_id: TASK-1501
 agreed_id: TASK-1501
 title: Offer configurable YOLO-mode prompt during aida init
 description: Temporarily add an aida init option that asks whether the user wants AIDA to prompt before enabling YOLO/autonomous agent mode. Persist the choice in project settings configuration rather than relying only on an environment variable. Define behavior for interactive and non-interactive init and for existing configs without the setting. Make the effective setting visible in init summaries and verbose launch diagnostics without silently enabling broad access.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:37:53.671428099Z
-modified_at: 2026-09-25T04:37:53.671428099Z
+modified_at: 2026-09-25T08:03:09.253148624Z
 req_type: Task
 tags:
 - agent-launch
