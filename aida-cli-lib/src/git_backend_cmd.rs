@@ -6048,9 +6048,21 @@ pub(crate) fn handle_git_backend_command(
                     &read_copy,
                     &req,
                     leave_target,
-                    // `--tags` replaces the set: refuse on a concurrent tag
-                    // change instead of merging. trace:TASK-1506 | ai:claude
-                    tags.is_some(),
+                    crate::edit_rebase::EditMerge {
+                        // `--tags` replaces the set: refuse on a concurrent
+                        // tag change instead of merging.
+                        tags_replaced: tags.is_some(),
+                        // `--status` refuses on a concurrent move to any
+                        // other status, even a same-value request.
+                        status_set: status.is_some(),
+                        ..Default::default()
+                    },
+                    // STORY-647 re-run on the copy read under the lock: a
+                    // protected tag added meanwhile blocks this edit.
+                    // trace:TASK-1506 trace:STORY-647 | ai:claude
+                    &|cur: &aida_core::Requirement| {
+                        enforce_protected_spec_gate(cur.tags.iter(), *force)
+                    },
                     subject.as_deref(),
                 )?;
                 // STORY-1429: the exit landed; report what it cleared and

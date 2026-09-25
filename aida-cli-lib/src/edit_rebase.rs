@@ -26,10 +26,16 @@
 //! - `--tags` replaces the whole set, so tags are one value: a concurrent
 //!   change to tags refuses (`--add-tag` / `--remove-tag` still merge);
 //! - an edit that changes `status` refuses on a concurrent status change;
+//! - an edit that passed `--status` refuses when a concurrent writer moved
+//!   the status to anything but the requested value (a same-value
+//!   `--status` is not silently dropped while the store moves elsewhere);
 //! - an edit that leaves NeedsAttention refuses unless the spec is unchanged
 //!   since it was read (every field but `modified_at`).
 //!
 //! `modified_at` always takes the edit's stamp.
+//!
+//! The STORY-647 protected-spec gate is re-run on the copy read under the
+//! lock, so a protected tag added meanwhile blocks an unauthorized edit.
 // trace:TASK-1506 | ai:claude
 
 use aida_core::{Requirement, RequirementStatus};
@@ -57,6 +63,9 @@ pub(crate) struct EditMerge {
     pub(crate) tags_replaced: bool,
     /// The edit leaves NeedsAttention: any concurrent change refuses.
     pub(crate) leaving_needs_attention: bool,
+    /// The edit passed `--status`: a concurrent move to any other status
+    /// refuses, even when the requested value equals the read one.
+    pub(crate) status_set: bool,
 }
 
 fn as_map(r: &Requirement) -> anyhow::Result<Mapping> {
@@ -101,6 +110,13 @@ pub(crate) fn rebase_edit(
     // to them refuses. trace:TASK-1506 | ai:claude
     if opts.tags_replaced && current.tags != read.tags {
         return Ok(Err(vec!["tags".to_string()]));
+    }
+    // `--status` was passed: the status as read is what the edit acted on.
+    // A concurrent move to anything but the requested value refuses, so a
+    // same-value `--status` is not silently dropped (the CLI would report a
+    // transition the store never made). trace:TASK-1506 | ai:claude
+    if opts.status_set && current.status != read.status && current.status != planned.status {
+        return Ok(Err(vec!["status".to_string()]));
     }
     let mut conflicts = Vec::new();
     let merged = merge_maps(&r, &p, &c, "", &mut conflicts);
@@ -235,28 +251,47 @@ pub(crate) fn conflict_message(label: &str, fields: &[String]) -> String {
     )
 }
 
+/// The refusal when the STORY-647 protected-spec gate, re-run on the copy
+/// read under the lock, blocks the edit (a protected tag landed meanwhile).
+// trace:TASK-1506 trace:STORY-647 | ai:claude
+pub(crate) fn protected_gate_message(label: &str, gate: &anyhow::Error) -> String {
+    format!(
+        "{label} changed while this edit ran and is now protected; nothing was written. \
+         {gate} Re-check it with `aida show {label}`."
+    )
+}
+
 /// Write an `aida edit` through the per-spec compare-and-swap: under the
-/// store write lock, re-read the spec, re-check the NeedsAttention exit
-/// (`leave`: the label and the status it returns to), rebase the edit onto
-/// that copy and write it. Nothing is written on a refusal. Returns the
-/// written requirement. `tags_replaced` is true when the edit used `--tags`
-/// (replace), which refuses on a concurrent change to tags.
-// trace:TASK-1506 trace:STORY-1429 | ai:claude
+/// store write lock, re-read the spec, re-run the protected-spec gate on it
+/// (`gate`, STORY-647), re-check the NeedsAttention exit (`leave`: the
+/// status it returns to), rebase the edit onto that copy and write it.
+/// Nothing is written on a refusal. Returns the written requirement. `opts`
+/// says which edits refuse on a concurrent change (`leaving_needs_attention`
+/// is set from `leave`).
+// trace:TASK-1506 trace:STORY-1429 trace:STORY-647 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn write_edit_atomically(
     backend: &aida_core::CachedGitBackend,
     label: &str,
     read: &Requirement,
     planned: &Requirement,
     leave: Option<&RequirementStatus>,
-    tags_replaced: bool,
+    opts: EditMerge,
+    gate: &dyn Fn(&Requirement) -> anyhow::Result<()>,
     commit_subject: Option<&str>,
 ) -> anyhow::Result<Requirement> {
     let opts = EditMerge {
-        tags_replaced,
         leaving_needs_attention: leave.is_some(),
+        ..opts
     };
     let mut refusal: Option<anyhow::Error> = None;
     let written = backend.update_spec_atomically_with_subject(read, commit_subject, |cur| {
+        // STORY-647 on the fresh copy: a protected tag added since the read
+        // blocks an edit the read copy allowed. trace:TASK-1506 | ai:claude
+        if let Err(e) = gate(cur) {
+            refusal = Some(anyhow::anyhow!(protected_gate_message(label, &e)));
+            return;
+        }
         if let Some(target) = leave {
             if let Some(moved) = crate::requeue::recheck_before_write(
                 Some(cur),
@@ -426,6 +461,10 @@ mod tests {
         assert_eq!(merged.priority, Priority::High);
     }
 
+    fn no_gate(_: &Requirement) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     struct Fixture {
         _tmp: tempfile::TempDir,
         store_root: std::path::PathBuf,
@@ -474,9 +513,17 @@ mod tests {
             other.update_requirement(&theirs).unwrap();
         }
 
-        let written =
-            write_edit_atomically(&f.backend, "TASK-1", &read, &planned, None, false, None)
-                .unwrap();
+        let written = write_edit_atomically(
+            &f.backend,
+            "TASK-1",
+            &read,
+            &planned,
+            None,
+            EditMerge::default(),
+            &no_gate,
+            None,
+        )
+        .unwrap();
         let disk = on_disk(&f, "TASK-1");
         for r in [&written, &disk] {
             assert_eq!(r.title, "edited title");
@@ -501,9 +548,18 @@ mod tests {
         theirs.status = RequirementStatus::InProgress;
         other.update_requirement(&theirs).unwrap();
 
-        let err = write_edit_atomically(&f.backend, "TASK-1", &read, &planned, None, false, None)
-            .unwrap_err()
-            .to_string();
+        let err = write_edit_atomically(
+            &f.backend,
+            "TASK-1",
+            &read,
+            &planned,
+            None,
+            EditMerge::default(),
+            &no_gate,
+            None,
+        )
+        .unwrap_err()
+        .to_string();
         assert!(err.contains("status"), "{err}");
         assert!(err.contains("nothing was written"), "{err}");
         let disk = on_disk(&f, "TASK-1");
@@ -533,7 +589,8 @@ mod tests {
             &read,
             &planned,
             Some(&RequirementStatus::Approved),
-            false,
+            EditMerge::default(),
+            &no_gate,
             None,
         )
         .unwrap_err()
@@ -550,7 +607,8 @@ mod tests {
             &read,
             &planned,
             Some(&RequirementStatus::Approved),
-            false,
+            EditMerge::default(),
+            &no_gate,
             Some("update TASK-1: test subject"),
         )
         .unwrap();
@@ -582,9 +640,21 @@ mod tests {
         theirs.tags.insert("c".into());
         other.update_requirement(&theirs).unwrap();
 
-        let err = write_edit_atomically(&f.backend, "TASK-1", &read, &planned, None, true, None)
-            .unwrap_err()
-            .to_string();
+        let err = write_edit_atomically(
+            &f.backend,
+            "TASK-1",
+            &read,
+            &planned,
+            None,
+            EditMerge {
+                tags_replaced: true,
+                ..Default::default()
+            },
+            &no_gate,
+            None,
+        )
+        .unwrap_err()
+        .to_string();
         assert!(err.contains("tags"), "{err}");
         assert!(err.contains("nothing was written"), "{err}");
         assert!(err.contains("aida show TASK-1"), "{err}");
@@ -620,7 +690,8 @@ mod tests {
             &read,
             &planned,
             Some(&RequirementStatus::Approved),
-            false,
+            EditMerge::default(),
+            &no_gate,
             None,
         )
         .unwrap_err()
@@ -631,5 +702,116 @@ mod tests {
         assert_eq!(disk.status, RequirementStatus::NeedsAttention);
         assert_eq!(disk.comments.len(), 1);
         assert!(disk.tags.contains("needs-human"));
+    }
+
+    // Re-review blocker 1: the read copy is Approved; the edit runs
+    // `--status approved` while another writer moves the spec to InProgress.
+    // The edit refuses and the store keeps InProgress. trace:TASK-1506 | ai:claude
+    #[test]
+    fn probe_same_value_status_edit_refuses_a_concurrent_status_move() {
+        let f = fixture();
+        let read = f.backend.add_requirement(spec()).unwrap();
+        let mut planned = read.clone();
+        planned.status = RequirementStatus::Approved;
+        planned.modified_at = chrono::Utc::now();
+
+        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
+        theirs.status = RequirementStatus::InProgress;
+        other.update_requirement(&theirs).unwrap();
+
+        let status_set = EditMerge {
+            status_set: true,
+            ..Default::default()
+        };
+        let err = write_edit_atomically(
+            &f.backend, "TASK-1", &read, &planned, None, status_set, &no_gate, None,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("status"), "{err}");
+        assert!(err.contains("nothing was written"), "{err}");
+        assert!(err.contains("aida show TASK-1"), "{err}");
+        assert_eq!(on_disk(&f, "TASK-1").status, RequirementStatus::InProgress);
+    }
+
+    // The same-value allowance stays: a concurrent move to the requested
+    // status is not a conflict, and an edit without `--status` keeps the
+    // concurrent status. trace:TASK-1506 | ai:claude
+    #[test]
+    fn status_set_allows_a_concurrent_move_to_the_requested_value() {
+        let read = spec();
+        let mut planned = read.clone();
+        planned.status = RequirementStatus::Completed;
+        planned.title = "edited".into();
+        let mut current = read.clone();
+        current.status = RequirementStatus::Completed;
+        let status_set = EditMerge {
+            status_set: true,
+            ..Default::default()
+        };
+        let merged = rebase_edit(&read, &planned, &current, status_set)
+            .unwrap()
+            .unwrap();
+        assert_eq!(merged.status, RequirementStatus::Completed);
+        assert_eq!(merged.title, "edited");
+        // Same-value `--status` against a moved spec refuses.
+        let mut planned = read.clone();
+        planned.status = read.status.clone();
+        current.status = RequirementStatus::InProgress;
+        let fields = rebase_edit(&read, &planned, &current, status_set)
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(fields, vec!["status".to_string()]);
+        // No `--status`: the concurrent status survives.
+        let merged = rebase_edit(&read, &planned, &current, EditMerge::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(merged.status, RequirementStatus::InProgress);
+    }
+
+    // Re-review should-fix 2: a non-advisor edits the title while an advisor
+    // adds a protected tag. The gate, re-run on the copy read under the lock,
+    // blocks the edit and nothing is written. trace:TASK-1506 trace:STORY-647 | ai:claude
+    #[test]
+    fn probe_protected_tag_added_concurrently_blocks_the_edit() {
+        let f = fixture();
+        let read = f.backend.add_requirement(spec()).unwrap();
+        let mut planned = read.clone();
+        planned.title = "unauthorized title".into();
+        planned.modified_at = chrono::Utc::now();
+
+        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
+        theirs.tags.insert("protected".into());
+        other.update_requirement(&theirs).unwrap();
+
+        // Stands in for enforce_protected_spec_gate for a non-advisor.
+        let gate = |r: &Requirement| -> anyhow::Result<()> {
+            if r.tags.contains("protected") {
+                anyhow::bail!("refused: protected spec needs the advisor role.");
+            }
+            Ok(())
+        };
+        // The read copy passes the gate; the fresh copy does not.
+        assert!(gate(&read).is_ok());
+        let err = write_edit_atomically(
+            &f.backend,
+            "TASK-1",
+            &read,
+            &planned,
+            None,
+            EditMerge::default(),
+            &gate,
+            None,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("protected"), "{err}");
+        assert!(err.contains("nothing was written"), "{err}");
+        assert!(err.contains("aida show TASK-1"), "{err}");
+        let disk = on_disk(&f, "TASK-1");
+        assert_eq!(disk.title, "title");
+        assert!(disk.tags.contains("protected"));
     }
 }
