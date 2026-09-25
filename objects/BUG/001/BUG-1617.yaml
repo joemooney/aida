@@ -9,12 +9,12 @@ description: |-
   - When the default window runs out before reaching --limit, human output prints a one-line notice explaining how to widen it (--max-commits or a time bound).
   - JSON and MCP output carry a `window_exhausted` boolean.
   - Tests cover the notice and the flag, and verify no notice appears when the limit is met.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:14:53.498604363Z
-modified_at: 2026-09-25T08:16:43.040787498Z
+modified_at: 2026-09-25T08:50:14.040188804Z
 req_type: Bug
 tags:
 - history
