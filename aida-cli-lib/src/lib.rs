@@ -13883,7 +13883,14 @@ fn try_emit_nonblocking_findings_on_completion(
         let output = std::process::Command::new("git")
             .arg("-C")
             .arg(project_root)
-            .args(["show", "-s", "--format=%s", sha])
+            .args([
+                "show",
+                "-s",
+                "--format=%s",
+                git_arg_guard::END_OF_OPTIONS,
+                sha,
+                "--",
+            ]) // trace:BUG-1622 | ai:claude
             .output()
             .ok()?;
         output.status.success().then_some(())?;
@@ -22743,7 +22750,13 @@ fn store_sha_is_ancestor(store_path: &std::path::Path, ancestor: &str, descendan
     std::process::Command::new("git")
         .arg("-C")
         .arg(store_path)
-        .args(["merge-base", "--is-ancestor", ancestor, descendant])
+        .args([
+            "merge-base",
+            "--is-ancestor",
+            git_arg_guard::END_OF_OPTIONS,
+            ancestor,
+            descendant,
+        ]) // trace:BUG-1622 | ai:claude
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
@@ -24974,6 +24987,10 @@ fn resolve_completed_since_cutoff_at<Tz: chrono::TimeZone>(
 ) -> Result<chrono::DateTime<chrono::Utc>> {
     use std::process::Command as PCmd;
     let since = since.trim();
+    // trace:BUG-1622 | ai:claude
+    if since.is_empty() {
+        anyhow::bail!("invalid --since value: it is empty");
+    }
     match queue_cmd::parse_since_arg_at(since, now, tz) {
         Ok(t) => return Ok(t),
         Err(e) if queue_cmd::is_definitive_time_bound_error(&e) => {
@@ -25084,7 +25101,9 @@ fn salvage_worktree_patch(
             }
             body.push_str(&git_output_lossy(
                 worktree,
-                &["diff", "--no-index", "--binary", "/dev/null", f],
+                // `--` so an untracked file named like an option stays a
+                // path. trace:BUG-1622 | ai:claude
+                &["diff", "--no-index", "--binary", "--", "/dev/null", f],
             ));
         }
     }
@@ -34276,6 +34295,7 @@ fn forecast_rebase_onto(
             "merge-tree",
             "--write-tree",
             "--name-only",
+            git_arg_guard::END_OF_OPTIONS, // trace:BUG-1622 | ai:claude
             base_ref,
             branch,
         ])
@@ -36374,7 +36394,13 @@ fn session_start(
             let out = std::process::Command::new("git")
                 .arg("-C")
                 .arg(&project_root)
-                .args(["rev-parse", b])
+                .args([
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    git_arg_guard::END_OF_OPTIONS,
+                    b,
+                ]) // trace:BUG-1622 | ai:claude
                 .output()
                 .ok()?;
             if !out.status.success() {
@@ -36929,6 +36955,12 @@ fn classify_rework_head_change(
 ) -> Option<ReworkHeadChange> {
     let before = before.trim();
     let after = after.trim();
+    // `before` is a stored verdict's reviewed sha: only a commit ID may
+    // reach git. A non-ID is unclassifiable (the caller refuses).
+    // trace:BUG-1622 | ai:claude
+    if !git_arg_guard::is_hex_sha(before) || !git_arg_guard::is_hex_sha(after) {
+        return None;
+    }
     if before.eq_ignore_ascii_case(after) {
         return Some(ReworkHeadChange::Unchanged);
     }
@@ -36936,7 +36968,14 @@ fn classify_rework_head_change(
     let tree_diff = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["diff", "--quiet", before, after])
+        .args([
+            "diff",
+            "--quiet",
+            git_arg_guard::END_OF_OPTIONS,
+            before,
+            after,
+            "--",
+        ])
         .status()
         .ok()?;
     match tree_diff.code() {
@@ -36955,6 +36994,7 @@ fn classify_rework_head_change(
             "rev-list",
             "--cherry-pick",
             "--right-only",
+            git_arg_guard::END_OF_OPTIONS,
             &range,
             &exclude_default,
         ])
@@ -37099,6 +37139,7 @@ fn resolve_commit_sha(repo: &std::path::Path, rev: &str) -> Option<String> {
             "rev-parse",
             "--verify",
             "--quiet",
+            git_arg_guard::END_OF_OPTIONS, // trace:BUG-1622 | ai:claude
             &format!("{rev}^{{commit}}"),
         ])
         .output()
@@ -37146,7 +37187,13 @@ fn is_ancestor_commit(repo: &std::path::Path, ancestor: &str, descendant: &str) 
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["merge-base", "--is-ancestor", ancestor, descendant])
+        .args([
+            "merge-base",
+            "--is-ancestor",
+            git_arg_guard::END_OF_OPTIONS,
+            ancestor,
+            descendant,
+        ]) // trace:BUG-1622 | ai:claude
         .output()
         .ok()?;
     match out.status.code() {
@@ -37336,7 +37383,13 @@ fn commits_behind_origin_main(repo: &std::path::Path, base_ref: &str) -> Option<
         std::process::Command::new("git")
             .arg("-C")
             .arg(repo)
-            .args(["rev-parse", "--verify", "--quiet", refname])
+            .args([
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                git_arg_guard::END_OF_OPTIONS,
+                refname,
+            ]) // trace:BUG-1622 | ai:claude
             .output()
             .ok()
             .filter(|o| o.status.success())
@@ -37351,7 +37404,7 @@ fn commits_behind_origin_main(repo: &std::path::Path, base_ref: &str) -> Option<
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["rev-list", "--count", &range])
+        .args(["rev-list", "--count", git_arg_guard::END_OF_OPTIONS, &range]) // trace:BUG-1622 | ai:claude
         .output()
         .ok()?;
     if !out.status.success() {
@@ -37517,7 +37570,13 @@ fn branch_behind_main(repo: &std::path::Path, branch: &str) -> Option<(u64, Vec<
         std::process::Command::new("git")
             .arg("-C")
             .arg(repo)
-            .args(["rev-parse", "--verify", "--quiet", refname])
+            .args([
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                git_arg_guard::END_OF_OPTIONS,
+                refname,
+            ]) // trace:BUG-1622 | ai:claude
             .output()
             .ok()
             .filter(|o| o.status.success())
@@ -37532,7 +37591,8 @@ fn branch_behind_main(repo: &std::path::Path, branch: &str) -> Option<(u64, Vec<
     let count_out = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["rev-list", "--count", &range])
+        // trace:BUG-1622 | ai:claude
+        .args(["rev-list", "--count", git_arg_guard::END_OF_OPTIONS, &range])
         .output()
         .ok()?;
     if !count_out.status.success() {
@@ -37761,7 +37821,13 @@ pub(crate) fn pr_stale_check_warning(
     let count_out = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["rev-list", "--count", &format!("{branch_ref}..{base_ref}")])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "rev-list",
+            "--count",
+            git_arg_guard::END_OF_OPTIONS,
+            &format!("{branch_ref}..{base_ref}"),
+        ])
         .output()
         .ok()?;
     if !count_out.status.success() {
@@ -37777,7 +37843,14 @@ pub(crate) fn pr_stale_check_warning(
     let diff_out = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["diff", "--name-only", &format!("{branch_ref}...{base_ref}")])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "diff",
+            "--name-only",
+            git_arg_guard::END_OF_OPTIONS,
+            &format!("{branch_ref}...{base_ref}"),
+            "--",
+        ])
         .output()
         .ok()?;
     if !diff_out.status.success() {
@@ -39751,7 +39824,13 @@ fn git_rev_parse_quiet(project_root: &std::path::Path, refname: &str) -> Option<
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["rev-parse", "--verify", "--quiet", refname])
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            git_arg_guard::END_OF_OPTIONS,
+            refname,
+        ]) // trace:BUG-1622 | ai:claude
         .output()
         .ok()?;
     if !out.status.success() {
@@ -41261,6 +41340,7 @@ fn session_end(
                 "worktree",
                 "remove",
                 "--force",
+                "--", // trace:BUG-1622 | ai:claude
                 target.worktree_path.to_str().unwrap_or_default(),
             ])
             .output();
@@ -46029,6 +46109,7 @@ fn force_cleanup_lease(project_root: &std::path::Path, lease: &SessionLease) -> 
             "worktree",
             "remove",
             "--force",
+            "--", // trace:BUG-1622 | ai:claude
             lease.worktree_path.to_str().unwrap_or_default(),
         ])
         .output();
@@ -52139,7 +52220,9 @@ pub(crate) fn filing_drift_hint(
     linkage_commits: &[(String, String, String)],
 ) -> Option<String> {
     let code_sha = filed_at.and_then(|p| p.code_sha.as_deref())?.trim();
-    if code_sha.is_empty() {
+    // `code_sha` comes from the shared store, which another writer controls:
+    // only a commit ID may reach `git log`. trace:BUG-1622 | ai:claude
+    if !git_arg_guard::is_hex_sha(code_sha) {
         return None;
     }
 
@@ -52158,6 +52241,8 @@ pub(crate) fn filing_drift_hint(
         cmd.arg("-C")
             .arg(project_root)
             .args(["show", "--format=", "--name-only"])
+            // trace:BUG-1622 | ai:claude
+            .arg(git_arg_guard::END_OF_OPTIONS)
             .args(&shas);
         if let Some(out) = command_output_with_timeout(cmd, DRIFT_HINT_GIT_TIMEOUT) {
             if out.status.success() {
@@ -52185,11 +52270,13 @@ pub(crate) fn filing_drift_hint(
     log_cmd
         .arg("-C")
         .arg(project_root)
+        // trace:BUG-1622 | ai:claude
         .args([
             "log",
-            &format!("{code_sha}..HEAD"),
             "--name-only",
             "--pretty=format:\u{1}",
+            git_arg_guard::END_OF_OPTIONS,
+            &format!("{code_sha}..HEAD"),
         ])
         .arg("--")
         .args(traced.iter());
@@ -68883,6 +68970,21 @@ fn cascade_rebase_stacked_branches(
             }
         }
 
+        // `.aida/stacks.json` is a file on disk, not git output: only a
+        // commit ID and a non-option branch may reach `git rebase`.
+        // trace:BUG-1622 | ai:claude
+        if !git_arg_guard::is_hex_sha(entry.parent_branch_sha.trim())
+            || git_arg_guard::is_option_like(&entry.branch)
+        {
+            eprintln!(
+                "  {} skipping `{}` — its stack record is malformed (parent sha `{}`)",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                entry.branch,
+                entry.parent_branch_sha
+            );
+            continue;
+        }
+
         // Refresh origin/<default> in the entry's worktree so the
         // rebase target is the freshly-merged tip, not a stale ref.
         // Best-effort — offline / fetch failure still tries the rebase
@@ -68890,7 +68992,12 @@ fn cascade_rebase_stacked_branches(
         let _ = std::process::Command::new("git")
             .arg("-C")
             .arg(&lease.worktree_path)
-            .args(["fetch", "origin", &default_short])
+            .args([
+                "fetch",
+                git_arg_guard::END_OF_OPTIONS,
+                "origin",
+                &default_short,
+            ])
             .output();
 
         // Run the rebase: `git rebase --onto origin/<default> <parent_sha> <branch>`
@@ -68909,7 +69016,8 @@ fn cascade_rebase_stacked_branches(
                 "rebase",
                 "--onto",
                 &onto,
-                &entry.parent_branch_sha,
+                git_arg_guard::END_OF_OPTIONS,
+                entry.parent_branch_sha.trim(),
                 &entry.branch,
             ])
             .status();
@@ -69119,10 +69227,17 @@ fn handle_fetch_command(
 /// when not quiet so progress bars / hint lines reach the user; pipes
 /// stdio to null otherwise. trace:TASK-107 | ai:claude
 fn fetch_branch(repo: &std::path::Path, branch: &str, quiet: bool) -> Result<()> {
+    // The branch can be a forge-reported PR head a fork author named, so
+    // refuse a dash-led one and end options before it. trace:BUG-1622 | ai:claude
+    git_arg_guard::reject_option_like("branch", branch)?;
     let mut cmd = std::process::Command::new("git");
-    cmd.arg("-C")
-        .arg(repo)
-        .args(["fetch", "origin", branch, "--prune"]);
+    cmd.arg("-C").arg(repo).args([
+        "fetch",
+        "--prune",
+        git_arg_guard::END_OF_OPTIONS,
+        "origin",
+        branch,
+    ]);
     if quiet {
         cmd.stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
@@ -69330,7 +69445,13 @@ fn sha_at_or_before_reopen(
     std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["merge-base", "--is-ancestor", candidate, reopen_sha])
+        .args([
+            "merge-base",
+            "--is-ancestor",
+            git_arg_guard::END_OF_OPTIONS,
+            candidate,
+            reopen_sha,
+        ]) // trace:BUG-1622 | ai:claude
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
@@ -69624,7 +69745,14 @@ fn completing_ref_label(project_root: &std::path::Path, sha: &str) -> String {
     let subject = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["show", "-s", "--format=%s", sha])
+        .args([
+            "show",
+            "-s",
+            "--format=%s",
+            git_arg_guard::END_OF_OPTIONS,
+            sha,
+            "--",
+        ]) // trace:BUG-1622 | ai:claude
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -73169,6 +73297,8 @@ fn ahead_behind_vs_ref(
             "rev-list",
             "--left-right",
             "--count",
+            // trace:BUG-1622 | ai:claude
+            git_arg_guard::END_OF_OPTIONS,
             &format!("{}...{}", branch, target),
         ])
         .output()
@@ -76067,7 +76197,13 @@ fn collect_unshipped_work_items_bounded(
                     let is_ancestor = std::process::Command::new("git")
                         .arg("-C")
                         .arg(project_root)
-                        .args(["merge-base", "--is-ancestor", &refname, head])
+                        .args([
+                            "merge-base",
+                            "--is-ancestor",
+                            git_arg_guard::END_OF_OPTIONS,
+                            &refname,
+                            head,
+                        ]) // trace:BUG-1622 | ai:claude
                         .status()
                         .is_ok_and(|status| status.success());
                     is_ancestor
@@ -89373,7 +89509,8 @@ fn commits_behind_default(project_root: &std::path::Path, head: &str, base: &str
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["rev-list", "--count", &range])
+        // trace:BUG-1622 | ai:claude
+        .args(["rev-list", "--count", git_arg_guard::END_OF_OPTIONS, &range])
         .output()
         .ok()?;
     if !out.status.success() {
@@ -89395,7 +89532,14 @@ fn git_diff_name_only(project_root: &std::path::Path, a: &str, b: &str) -> Vec<S
     let Ok(out) = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["diff", "--name-only", &range])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "diff",
+            "--name-only",
+            git_arg_guard::END_OF_OPTIONS,
+            &range,
+            "--",
+        ])
         .output()
     else {
         return Vec::new();
@@ -89478,7 +89622,14 @@ fn git_log_messages(project_root: &std::path::Path, base: &str, head: &str) -> R
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", "--pretty=format:%B%n--END--", &range])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "log",
+            "--pretty=format:%B%n--END--",
+            git_arg_guard::END_OF_OPTIONS,
+            &range,
+            "--",
+        ])
         .output()
         .with_context(|| format!("running git log {}", range))?;
     if !out.status.success() {
@@ -102027,10 +102178,20 @@ fn prepare_graded_review(
         return Ok(None);
     }
 
+    // The branch is a forge-reported PR head and the sha a forge-reported
+    // commit; keep both from reading as git options. trace:BUG-1622 | ai:claude
+    if !git_arg_guard::is_hex_sha(reviewed_sha.trim()) {
+        return Err(auto_complete::PhaseFailure::new(format!(
+            "reviewed head `{reviewed_sha}` is not a commit ID; refusing graded review"
+        )));
+    }
     if let Some(branch) = branch {
+        if let Err(e) = git_arg_guard::reject_option_like("branch", branch) {
+            return Err(auto_complete::PhaseFailure::new(e.to_string()));
+        }
         let fetched = std::process::Command::new("git")
             .current_dir(project_root)
-            .args(["fetch", "origin", branch])
+            .args(["fetch", git_arg_guard::END_OF_OPTIONS, "origin", branch])
             .output();
         if !fetched.as_ref().is_ok_and(|o| o.status.success()) {
             return Err(auto_complete::PhaseFailure::new(format!(
@@ -102042,9 +102203,10 @@ fn prepare_graded_review(
         std::env::temp_dir().join(format!("aida-graded-pr-{pr}-{}", uuid::Uuid::now_v7()));
     let added = std::process::Command::new("git")
         .current_dir(project_root)
-        .args(["worktree", "add", "--detach"])
+        // trace:BUG-1622 | ai:claude
+        .args(["worktree", "add", "--detach", "--"])
         .arg(&checkout)
-        .arg(reviewed_sha)
+        .arg(reviewed_sha.trim())
         .output()
         .map_err(|e| {
             auto_complete::PhaseFailure::new(format!(

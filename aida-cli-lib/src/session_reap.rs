@@ -593,7 +593,7 @@ fn reap_one(project_root: &std::path::Path, lease: &SessionLease) -> String {
     let deleted = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["branch", "-D", branch])
+        .args(["branch", "-D", crate::git_arg_guard::END_OF_OPTIONS, branch]) // trace:BUG-1622 | ai:claude
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);

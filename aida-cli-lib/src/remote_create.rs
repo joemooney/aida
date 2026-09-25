@@ -1255,7 +1255,12 @@ pub fn run_mirror_push(project_root: &Path, pushed_remote: &str, ref_lines: &str
         let out = Command::new("git")
             .arg("-C")
             .arg(project_root)
-            .args(["push", "--quiet", mirror])
+            .args([
+                "push",
+                "--quiet",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                mirror,
+            ]) // trace:BUG-1622 | ai:claude
             .args(&refspecs)
             .output();
         match out {

@@ -117,20 +117,38 @@ fn harvest_base_diff_reads_an_option_like_base_as_a_revision() {
 
 #[test]
 fn rebase_branch_refuses_an_option_like_value_before_fetching() {
-    // `git fetch --upload-pack=<cmd> .` would run <cmd>.
+    // `aida rebase --branch <remote>/<branch>` split the value at the first
+    // `/` and ran `git fetch <remote> <branch>`, so this value became
+    // `git fetch --upload-pack=touch pwned;false .`, which runs the command
+    // in the repo. The marker has no `/` so the split keeps the payload.
     let tmp = scratch_repo();
     let root = tmp.path();
-    let sink = tempfile::TempDir::new().unwrap();
-    let marker = sink.path().join("pwned");
-    let bad = format!("--upload-pack=touch {};false/.", marker.display());
-    let err = aida_core::rebase::detect(root, Some(&bad), true)
+    let bad = "--upload-pack=touch pwned;false/.";
+    // The payload is live: run the pre-fix argv directly and see it fire.
+    let (remote, branch) = bad.split_once('/').unwrap();
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["fetch", remote, branch])
+        .output()
+        .unwrap();
+    assert!(
+        root.join("pwned").exists(),
+        "the payload should fire unguarded"
+    );
+    std::fs::remove_file(root.join("pwned")).unwrap();
+
+    let err = aida_core::rebase::detect(root, Some(bad), true)
         .unwrap_err()
         .to_string();
     assert!(
         err.contains("--branch") && err.contains("starts with `-`"),
         "{err}"
     );
-    assert!(!marker.exists(), "git fetch ran the upload-pack command");
+    assert!(
+        !root.join("pwned").exists(),
+        "git fetch ran the upload-pack command"
+    );
     // A normal ref still resolves.
     let d = aida_core::rebase::detect(root, Some("feat"), false).unwrap();
     assert_eq!((d.ahead, d.behind), (1, 0));
@@ -166,4 +184,187 @@ fn harness_worktree_register_refuses_an_option_like_branch() {
         "{err}"
     );
     assert_sink_empty(sink.path(), "harness register --branch");
+}
+
+fn head_sha(root: &std::path::Path) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+#[test]
+fn filing_drift_hint_ignores_a_store_code_sha_that_is_not_a_commit_id() {
+    // `filed_at.code_sha` comes from the shared store; a hostile writer set
+    // it to `--output=<path>` and `aida show` made git write `<path>..HEAD`.
+    let tmp = scratch_repo();
+    let root = tmp.path();
+    let sink = tempfile::TempDir::new().unwrap();
+    let files = vec![("a.txt".to_string(), None)];
+    let prov = |sha: &str| aida_core::FilingProvenance {
+        code_sha: Some(sha.to_string()),
+        ..Default::default()
+    };
+    for bad in [output_option(sink.path()), "HEAD~1".to_string()] {
+        assert_eq!(
+            filing_drift_hint(root, Some(&prov(&bad)), &files, &[]),
+            None
+        );
+    }
+    assert_sink_empty(sink.path(), "filing_drift_hint");
+    // A real commit ID still yields a hint: `b.txt` was committed after
+    // the first commit, and it is a traced file here.
+    let first = {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["rev-parse", "feat"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let files = vec![("b.txt".to_string(), None)];
+    let hint = filing_drift_hint(root, Some(&prov(&first)), &files, &[]).expect("a drift hint");
+    assert!(hint.starts_with("1 commit"), "{hint}");
+}
+
+#[test]
+fn rework_head_change_refuses_a_verdict_sha_that_is_not_a_commit_id() {
+    // `before` is a verdict's stored reviewed sha: `git diff --quiet
+    // --output=<file> HEAD` truncated <file>.
+    let tmp = scratch_repo();
+    let root = tmp.path();
+    let sink = tempfile::TempDir::new().unwrap();
+    let victim = sink.path().join("victim");
+    std::fs::write(&victim, "keep me").unwrap();
+    let head = head_sha(root);
+    let bad = format!("--output={}", victim.display());
+    assert_eq!(classify_rework_head_change(root, &bad, &head), None);
+    assert_eq!(classify_rework_head_change(root, &head, &bad), None);
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep me");
+    assert_eq!(
+        classify_rework_head_change(root, &head, &head),
+        Some(ReworkHeadChange::Unchanged)
+    );
+}
+
+#[test]
+fn a_verdict_never_stores_a_reviewed_sha_that_is_not_a_commit_id() {
+    let tmp = scratch_repo();
+    let root = tmp.path();
+    let path = root.join("PR-1.json");
+    let build = |sha: &str| {
+        crate::review_verdict::build_verdict_object(
+            root,
+            &path,
+            Some("approved"),
+            Some(sha),
+            Some("topic"),
+            None,
+            &[],
+            "reviewer",
+        )
+        .unwrap()
+    };
+    let obj = build("--output=/tmp/x");
+    assert!(
+        obj.get("reviewed_sha").is_none_or(|v| v.is_null()),
+        "{obj:?}"
+    );
+    // An unresolvable commit ID (another clone's sha) is still kept.
+    let obj = build("abcdef1234567");
+    assert_eq!(obj["reviewed_sha"], "abcdef1234567");
+    // A resolvable one is expanded to the full sha.
+    let head = head_sha(root);
+    let obj = build(&head[..10]);
+    assert_eq!(obj["reviewed_sha"], head.as_str());
+}
+
+#[test]
+fn forge_branch_names_never_reach_git_as_options() {
+    let tmp = scratch_repo();
+    let root = tmp.path();
+    let sink = tempfile::TempDir::new().unwrap();
+    let bad = output_option(sink.path());
+    // `aida pr ship` reads the PR head's commit message.
+    assert_eq!(crate::pr_cmd::branch_head_commit_message(root, &bad), None);
+    assert_sink_empty(sink.path(), "branch_head_commit_message");
+    assert!(crate::pr_cmd::branch_head_commit_message(root, "feat")
+        .unwrap()
+        .contains("one"));
+    // `fetch_branch` (drain rework, PR sync) fetches a forge-named head.
+    git(root, &["remote", "add", "origin", "."]);
+    let payload = "--upload-pack=touch pwned;false";
+    let err = fetch_branch(root, payload, true).unwrap_err().to_string();
+    assert!(err.contains("starts with `-`"), "{err}");
+    assert!(
+        !root.join("pwned").exists(),
+        "git fetch ran the upload-pack command"
+    );
+    fetch_branch(root, "feat", true).unwrap();
+}
+
+#[test]
+fn store_trailer_must_be_a_commit_id() {
+    let good = "Aida-Store: 0123456789abcdef0123456789abcdef01234567\n";
+    assert_eq!(
+        crate::store_cmd::parse_paired_store_sha(good).as_deref(),
+        Some("0123456789abcdef0123456789abcdef01234567")
+    );
+    for bad in ["Aida-Store: --output=/tmp/x\n", "Aida-Store: main\n", "\n"] {
+        assert_eq!(crate::store_cmd::parse_paired_store_sha(bad), None, "{bad}");
+    }
+}
+
+#[test]
+fn salvage_keeps_an_option_named_untracked_file_a_path() {
+    // An untracked file named `--output=<victim>` in a worktree made the
+    // salvage `git diff --no-index` overwrite <victim> on `doctor --heal`.
+    let tmp = scratch_repo();
+    let root = tmp.path();
+    let project = tempfile::TempDir::new().unwrap();
+    let victim = root.join("victim.txt");
+    std::fs::write(&victim, "keep me").unwrap();
+    std::fs::write(root.join("--output=victim.txt"), "x").unwrap();
+    let patch = salvage_worktree_patch(project.path(), "BUG-1", None, root)
+        .unwrap()
+        .expect("a salvage patch");
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep me");
+    let body = std::fs::read_to_string(patch).unwrap();
+    assert!(body.contains("--output=victim.txt"), "{body}");
+}
+
+#[test]
+fn doctor_since_whitespace_only_is_an_error() {
+    let tmp = scratch_repo();
+    let now = chrono::Utc::now();
+    let err = resolve_completed_since_cutoff_at(tmp.path(), "   ", now, &chrono::Utc)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("--since") && err.contains("empty"), "{err}");
+}
+
+#[test]
+fn git_ops_helpers_keep_a_dash_led_branch_from_reading_as_an_option() {
+    let tmp = scratch_repo();
+    let root = tmp.path();
+    assert!(aida_core::git_ops::checkout_branch(root, "--orphan=x").is_err());
+    assert_eq!(aida_core::git_ops::current_branch(root).unwrap(), "main");
+    aida_core::git_ops::checkout_branch(root, "feat").unwrap();
+    assert_eq!(aida_core::git_ops::current_branch(root).unwrap(), "feat");
+    git(root, &["remote", "add", "origin", "."]);
+    assert!(aida_core::git_ops::fetch_branch_into_local(
+        root,
+        "origin",
+        "--upload-pack=touch pwned;false"
+    )
+    .is_err());
+    assert!(!root.join("pwned").exists());
+    assert_eq!(
+        aida_core::git_ops::ahead_behind(root, "main", "feat"),
+        Some((1, 0))
+    );
 }

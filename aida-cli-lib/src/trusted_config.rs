@@ -60,7 +60,12 @@ fn rev_parse_commit(project_root: &Path, refname: &str) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["rev-parse", "--verify", "--quiet"])
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            crate::git_arg_guard::END_OF_OPTIONS,
+        ]) // trace:BUG-1622 | ai:claude
         .arg(format!("{refname}^{{commit}}"))
         .output()
         .ok()?;

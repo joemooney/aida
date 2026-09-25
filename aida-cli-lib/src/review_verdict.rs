@@ -872,6 +872,8 @@ fn resolve_full_sha(project_root: &Path, raw: &str) -> Option<String> {
             "rev-parse",
             "--verify",
             "--quiet",
+            // trace:BUG-1622 | ai:claude
+            crate::git_arg_guard::END_OF_OPTIONS,
             &format!("{raw}^{{commit}}"),
         ])
         .output()
@@ -1036,7 +1038,13 @@ pub(crate) fn build_verdict_object(
     let reviewed_sha = reviewed_sha
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(|s| resolve_full_sha(project_root, s).unwrap_or_else(|| s.to_string()));
+        // Kept verbatim only when it is a commit ID: a value that later
+        // reaches `git diff` must never be readable as an option.
+        // trace:BUG-1622 | ai:claude
+        .and_then(|s| {
+            resolve_full_sha(project_root, s)
+                .or_else(|| crate::git_arg_guard::is_hex_sha(s).then(|| s.to_string()))
+        });
     let reviewed_sha = reviewed_sha.as_deref();
     // STORY-1391: a finding that survives a round is evidence about the BRIEF,
     // and nothing could detect it because this function overwrote the prior

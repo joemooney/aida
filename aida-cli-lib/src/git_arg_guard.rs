@@ -36,6 +36,13 @@ pub(crate) fn is_option_like(value: &str) -> bool {
     value.trim_start().starts_with('-')
 }
 
+/// True when `value` is an abbreviated or full commit ID: 7 to 64 hex
+/// digits (SHA-1 or SHA-256). A value read from the store, a commit trailer
+/// or a verdict must pass this before it becomes a git revision argument.
+pub(crate) fn is_hex_sha(value: &str) -> bool {
+    (7..=64).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -49,6 +56,28 @@ mod tests {
         }
         for v in ["v1.0", "HEAD~3", "main..HEAD", "a-b", "refs/tags/x"] {
             assert!(reject_option_like("--since", v).is_ok(), "{v}");
+        }
+    }
+
+    #[test]
+    fn hex_sha_accepts_only_commit_ids() {
+        for v in [
+            "abcdef1",
+            "0123456789abcdef0123456789abcdef01234567",
+            &"a".repeat(64),
+        ] {
+            assert!(is_hex_sha(v), "{v}");
+        }
+        for v in [
+            "",
+            "abc123",
+            "--output=x",
+            "HEAD",
+            "abcdefg",
+            &"a".repeat(65),
+            " abcdef1",
+        ] {
+            assert!(!is_hex_sha(v), "{v}");
         }
     }
 }
