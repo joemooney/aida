@@ -1,0 +1,36 @@
+id: 01a0d626-b41b-7d82-9b13-939d31ae2bfc
+spec_id: STORY-1473
+agreed_id: STORY-1473
+title: Seat authority is session-bound and set at a TTY; the roster caps which seats a user may take; roster writes are human-at-TTY only
+description: |-
+  Prerequisite for STORY-1217 (aida grant), required by its advisor review on 2026-09-24. Today registry/team.toml maps joe to advisor and is consulted before AIDA_SESSION_ROLE. Because every agent runs as joe, all of them hold advisor authority, which collapses STORY-1353's product/implementer/reviewer separation. `aida team set-role` is also ungated, and refusal messages point at `AIDA_SESSION_ROLE=advisor`. The drain token file is readable by any same-user process.
+
+  Needs an operator decision: this changes how Joe's own sessions and every agent get advisor authority.
+
+  ## Acceptance (to be refined in a sketch, which needs advisor signoff)
+  - A seat role counts only when it was established at a TTY and bound to the session. The env var alone does not confer advisor authority.
+  - The roster is a ceiling on which seats a user may take, not a seat in itself.
+  - Roster writes (`aida team set-role` and similar) require a human at a TTY.
+  - No refusal message suggests an env-var role override.
+  - MCP resolves its seat the same way the CLI does.
+  - The drain token cannot be replayed by another same-user process to impersonate the drain. At minimum this is documented, with a follow-up.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T01:20:55.835788652Z
+modified_at: 2026-09-25T01:20:55.835788652Z
+req_type: Story
+tags:
+- authority
+- needs-operator
+- roles
+- security
+filed_at:
+  code_sha: 9154924fd2cb9ea6a0ce0b0cfe737ee6474e9dfe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c7d35baa35
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
