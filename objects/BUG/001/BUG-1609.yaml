@@ -24,12 +24,12 @@ description: |-
   - Auto-queue-review and review help text is forge-neutral or provider-specific.
 
   This is a concrete live instance of the remaining call-site migration tracked by STORY-621.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:58:10.530410659Z
-modified_at: 2026-09-25T16:46:30.301351785Z
+modified_at: 2026-09-25T17:00:59.617142347Z
 req_type: Bug
 tags:
 - forge
@@ -74,6 +74,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a0d983-5de6-72a3-a70e-de44549adbd6
+  author: aida-auto-bump
+  timestamp: 2026-09-25T17:01:00.262084075Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 processing_record:
 - id: 01a0d61b-4d43-7010-af83-982fa1cde89d
   timestamp: 2026-09-25T01:08:28.611421223Z
@@ -87,3 +94,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 81c37e2cb
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T17:01:00.262078651Z
+  completion_sha: a052addddafee14f59ca10b0db26fb59e68263e9
