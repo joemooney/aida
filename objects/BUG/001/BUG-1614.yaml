@@ -13,11 +13,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:05:57.530829138Z
-modified_at: 2026-09-25T05:31:35.887549645Z
+modified_at: 2026-09-25T05:31:37.697752363Z
 req_type: Bug
 tags:
 - bug
 - server
+comments:
+- id: 01a0d70c-3961-7cc0-9e32-88bb4e82785f
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved. It is a concrete, one-line argument-order bug with a clear acceptance test. Implement it after BUG-1612 merges, since both touch rest.rs.'
+  created_at: 2026-09-25T05:31:37.697752363Z
+  modified_at: 2026-09-25T05:31:37.697752363Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
   branch: main
