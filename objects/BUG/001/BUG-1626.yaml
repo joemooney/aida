@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T16:59:51.629805515Z
-modified_at: 2026-09-25T22:31:34.454068326Z
+modified_at: 2026-09-25T22:32:09.554439101Z
 req_type: Bug
 tags:
 - diagnostics
@@ -51,6 +51,13 @@ tags:
 - regression
 - remote
 - severity:major
+comments:
+- id: 01a0dab2-8c52-7be0-9efd-17b3b65e6761
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved after independent triage (confirmed or plausible on main 6bc5859).'
+  created_at: 2026-09-25T22:32:09.554439101Z
+  modified_at: 2026-09-25T22:32:09.554439101Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: ac9803a159e1871122232d6e6512ca668da96446
   branch: main
