@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:45:01.179683029Z
-modified_at: 2026-09-25T15:02:43.310677059Z
+modified_at: 2026-09-25T15:03:13.972424412Z
 req_type: Bug
 comments:
 - id: 01a0d899-46d9-7102-8936-dc8e08960384
@@ -38,6 +38,12 @@ comments:
     TESTS: pass (bug_1622 6, time_bound 13, rebase 120, doctor 152). Reverting the rebase.rs guard and the doctor reject+EOO made rebase_branch_refuses_… and doctor_and_digest_since_refuse_… fail, so the tests are meaningful. Nit: the rebase test's marker assertion is vacuous. The marker path contains '/', so split_once cuts inside it, and the pre-fix exploit touches a relative path instead. The test fails only through the error-message assertion. Use a slash-free marker such as 'touch pwned;false/.' and check <repo>/pwned. The tests use tempdirs and write nothing to ~/.aida.
   created_at: 2026-09-25T15:02:43.310677059Z
   modified_at: 2026-09-25T15:02:43.310677059Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d917-8b34-7083-a370-f511099cbdaa
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept the security review. Rework all 3 blockers (filing_drift_hint code_sha, classify_rework_head_change reviewed_sha, and forge PR branch names in log/fetch/push), plus the should-fix items (the store_cmd Aida-Store trailer, the salvage diff --no-index with no --, the cascade rebase from stacks.json). Also do the Low items: add --end-of-options in aida-core git_ops push/fetch/checkout helpers and doctor_cmd push --delete. Validate store-derived SHAs as hex. Fix the doctor --since whitespace nit and the rebase test marker. Remote add stays out of scope (Low, operator''s own input).'
+  created_at: 2026-09-25T15:03:13.972424412Z
+  modified_at: 2026-09-25T15:03:13.972424412Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
