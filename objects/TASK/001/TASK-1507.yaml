@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T12:22:41.463993580Z
+modified_at: 2026-09-25T12:22:47.613968161Z
 req_type: Task
 tags:
 - cache
@@ -88,6 +88,12 @@ comments:
     None of these needs re-signoff. The B1 fix only tightens the A7 rule, so it needs no re-signoff, but record it on TASK-1505. N1 needs the advisor to re-affirm OQ3.
   created_at: 2026-09-25T12:22:41.463993580Z
   modified_at: 2026-09-25T12:22:41.463993580Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d884-a83d-7123-9739-0a63c10b5368
+  author: joe
+  content: 'Correction to my strict review, B1: the probe ran 56 (chunk size x since) combinations, not 49. 8 of them were wrongly served. The finding is unchanged.'
+  created_at: 2026-09-25T12:22:47.613968161Z
+  modified_at: 2026-09-25T12:22:47.613968161Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
