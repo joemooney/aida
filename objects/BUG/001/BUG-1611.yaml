@@ -1,0 +1,35 @@
+id: 01a0d626-a287-7232-a046-154706c62caf
+spec_id: BUG-1611
+agreed_id: BUG-1611
+title: Lifecycle authority guard is skipped at queue done, zen auto-approve, and the forced reopen path
+description: |-
+  Found by the STORY-1217 advisor review (2026-09-24), checked against main a052adddda. Several dispositional writes bypass the STORY-1353 authority predicates:
+  - `aida queue done` (CLI and MCP) moves a Draft straight to Done with no authority check, and merge then promotes it to Completed.
+  - `aida edit --status approved --force` re-approves a Rejected or Completed spec with no authority check.
+  - `aida zen <draft>` approves a draft under `[autopilot] approve = "auto"` with no authority check.
+
+  ## Acceptance
+  - `queue done` refuses a spec that has not passed the approval gate (Draft, or Rejected), via the existing lifecycle guard, on both the CLI and MCP paths.
+  - A forced re-approval of a Rejected or Completed spec runs the same authority predicate that approval does. `--force` does not bypass authority.
+  - zen auto-approve runs the approval authority predicate, and `[autopilot] approve = \"auto\"` cannot approve without it.
+  - Refusal messages do not suggest re-running with an env-var role override.
+  - A test covers each write site.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T01:20:51.335669387Z
+modified_at: 2026-09-25T01:20:51.335669387Z
+req_type: Bug
+tags:
+- authority
+- lifecycle
+- security
+filed_at:
+  code_sha: 9154924fd2cb9ea6a0ce0b0cfe737ee6474e9dfe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c7d35baa35
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
