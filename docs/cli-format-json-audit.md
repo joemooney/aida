@@ -241,6 +241,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida shift enable` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida shift disable` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida shift resume` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida shift install` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida autoprogress` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida health` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida groom` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -304,6 +305,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida schedule emit-cron` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida schedule install-cron` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida schedule uninstall-cron` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida schedule install-systemd` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida schedule uninstall-systemd` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role enter` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role add` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

@@ -1309,11 +1309,50 @@ business — STORY-1218 — which consults this same registry. Full reference:
 
 The night shift keeps drain waves moving when no seat is awake. It is a
 deterministic, LLM-free check (`aida shift tick`) registered as the
-`night-shift` substrate job of `aida schedule tick`, so it runs on the cron
-driver `aida schedule install-cron` already installed (every 15 minutes; the
-job's own `every = "10m"` is capped by the driver's cadence). It is **off
-unless enabled for this clone**, and the switch never lives in committed
-config.
+`night-shift` substrate job of `aida schedule tick`, so it runs on whichever
+scheduler driver this repo has: a systemd user timer (`aida shift install
+--systemd-user`, Linux; fires 1 minute after it is started, 2 minutes after
+boot, then 10 minutes after each tick finishes) or a crontab entry (`aida
+shift install --cron`; every 15 minutes, which caps the job's own
+`every = "10m"`). It is **off unless enabled for this clone**, and the switch
+never lives in committed config.
+
+### Scheduler driver: systemd timer or crontab
+
+Each repo should have exactly one driver. `aida shift install --systemd-user`
+(or `aida schedule install-systemd`) writes
+`~/.config/systemd/user/aida-tick-<hash>.{service,timer}`, enables the timer
+and checks `systemctl --user is-enabled`; only after that check passes does it
+remove this repo's crontab lines, including old entries written before the
+marker comment existed. It prints each removed line. Commented-out lines and
+other repos' lines are never touched. `--cron` (or `aida schedule
+install-cron`) works the other way round: it writes the crontab entry, reads
+it back, and only then disables this repo's timer. If a step fails after the
+new driver is in place, both drivers remain. That is harmless, because the
+tick lock stops two ticks overlapping, and `aida doctor` reports it. The
+install never leaves the repo with no driver.
+
+Unit details worth knowing:
+
+- `KillMode=process`: the wave the tick launches stays in the tick service's
+  cgroup, and without this setting systemd would kill the wave when the tick
+  exits. With it, the journal logs a line like `Unit process <pid> (aida)
+  remains running after unit stopped` or `Found left-over process <pid>
+  (aida) in control group while starting unit` for a running wave. That is
+  expected and not an error.
+- No memory or CPU limits are set, because they would also limit the wave.
+  `TimeoutStartSec=15min` stops a stuck tick.
+- Removing the systemd driver only disables the timer. A tick that is running
+  finishes, and a wave is never killed. A unit file is deleted only if it
+  contains aida's marker comment, and a file with the same name that aida did
+  not write is never overwritten.
+- If linger is off for your user, the timer stops when you log out. The
+  installer tells you to run `loginctl enable-linger`; it never uses sudo.
+- Output goes to the journal:
+  `journalctl --user -u aida-tick-<hash>.service`. See the next run with
+  `systemctl --user list-timers`.
+- Installing either driver needs a person at a terminal who answers yes, as
+  `aida shift enable` does.
 
 What one tick does, in order:
 
@@ -1375,10 +1414,14 @@ few shift nights.
 - [ ] `aida no-human acknowledge` (once per machine).
 - [ ] Confirm the `watchdog` job is enabled and has run in the last hour
   (`aida schedule status`); the shift refuses without its evidence.
-- [ ] `aida schedule install-cron` if `aida shift status` shows no driver.
-- [ ] `aida shift enable` at your own terminal (it refuses in an agent
-  session or without a TTY, and asks y/N; writes `~/.aida/shift-local.toml` for this clone
-  and registers the `night-shift` job).
+- [ ] `aida shift install --systemd-user` (Linux) or `aida shift install
+  --cron` at your own terminal. It enables the shift and installs that
+  driver in one step, and removes this repo's other driver after the new one
+  is verified. It refuses in an agent session or without a TTY, and asks y/N.
+  It writes `~/.aida/shift-local.toml` for this clone and registers the
+  `night-shift` job. If a driver is already installed, `aida shift enable`
+  alone does the enabling part. `aida shift status` names the driver, and
+  says "both installed" if there are two.
 - [ ] **Preflight:** `aida shift tick --dry-run`. Read every `FAIL` line, the
   exact wave command and the specs it would include. It writes nothing.
 - [ ] In the morning: `aida shift status`, `aida history events --kind
@@ -1388,8 +1431,8 @@ few shift nights.
 - [ ] `aida shift disable` to stop. A wave already running finishes its
   current spec; stop it the usual way if it must end now.
 
-Not in this cut: re-driving parked specs, a systemd timer driver,
-mailbox-latency escalation and headless cold-boot of overdue seat jobs.
+Not in this cut: re-driving parked specs, mailbox-latency escalation and
+headless cold-boot of overdue seat jobs.
 
 ## Limits of this cut
 

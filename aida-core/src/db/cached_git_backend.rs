@@ -737,6 +737,37 @@ impl CachedGitBackend {
         }
         Ok(n)
     }
+
+    /// Per-spec compare-and-swap with an optional commit subject (see
+    /// [`GitBackend::update_spec_atomically_with_subject`]), then that one
+    /// cache row. Holds the store write lock across both; never scans the
+    /// store.
+    // trace:TASK-1506 trace:BUG-1612 | ai:claude
+    pub fn update_spec_atomically_with_subject<F>(
+        &self,
+        target: &Requirement,
+        commit_subject: Option<&str>,
+        update_fn: F,
+    ) -> Result<Option<Requirement>>
+    where
+        F: FnOnce(&mut Requirement),
+    {
+        let _lock = self.inner.lock_store()?;
+        let pre_write_head = self.current_head_sha();
+        let Some(updated) =
+            self.inner
+                .update_spec_atomically_with_subject(target, commit_subject, update_fn)?
+        else {
+            return Ok(None);
+        };
+        if let Err(e) = self.upsert_requirement_with_schema_retry(&updated) {
+            let _ = self.cache.set_source_head_sha("");
+            eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
+        } else {
+            self.refresh_epics_then_restamp(&[&updated], &pre_write_head);
+        }
+        Ok(Some(updated))
+    }
 }
 
 impl DatabaseBackend for CachedGitBackend {
@@ -832,18 +863,7 @@ impl DatabaseBackend for CachedGitBackend {
     where
         F: FnOnce(&mut Requirement),
     {
-        let _lock = self.inner.lock_store()?;
-        let pre_write_head = self.current_head_sha();
-        let Some(updated) = self.inner.update_spec_atomically(target, update_fn)? else {
-            return Ok(None);
-        };
-        if let Err(e) = self.upsert_requirement_with_schema_retry(&updated) {
-            let _ = self.cache.set_source_head_sha("");
-            eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
-        } else {
-            self.refresh_epics_then_restamp(&[&updated], &pre_write_head);
-        }
-        Ok(Some(updated))
+        self.update_spec_atomically_with_subject(target, None, update_fn)
     }
 
     // ---- single-row CRUD: write-through with cache upsert/delete ----------

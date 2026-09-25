@@ -281,29 +281,27 @@ pub(crate) fn supervisor_requeue<B: DatabaseBackend>(
 }
 
 /// Reclassify a capped transient park to needs-human with one targeted write,
-/// only while it is still parked (the status is re-read just before the
-/// write). Returns false when it moved.
-// trace:STORY-1429 | ai:claude
+/// only while it is still parked. The status check and the reclassification
+/// run on the copy read under the store write lock (`update_spec_atomically`),
+/// so a spec that moved between the listing and the write is left alone and a
+/// concurrent change to it is never overwritten. Returns false when it moved.
+// trace:STORY-1429 trace:TASK-1506 | ai:claude
 fn reclassify_needs_human_atomically<B: DatabaseBackend>(
     backend: &B,
     id: uuid::Uuid,
     max_attempts: u32,
 ) -> Result<bool> {
-    let Some(mut r) = backend.get_requirement(&id)? else {
+    let Some(located) = backend.get_requirement(&id)? else {
         return Ok(false);
     };
-    if r.status != RequirementStatus::NeedsAttention {
-        return Ok(false);
-    }
-    reclassify_needs_human(&mut r, max_attempts);
-    let still_parked = backend
-        .get_requirement(&id)?
-        .is_some_and(|f| f.status == RequirementStatus::NeedsAttention);
-    if !still_parked {
-        return Ok(false);
-    }
-    backend.update_requirement(&r)?;
-    Ok(true)
+    let mut applied = false;
+    backend.update_spec_atomically(&located, |r| {
+        if r.status == RequirementStatus::NeedsAttention {
+            reclassify_needs_human(r, max_attempts);
+            applied = true;
+        }
+    })?;
+    Ok(applied)
 }
 
 /// Classify one parked spec. Transient iff it carries a typed transient
@@ -658,5 +656,40 @@ mod tests {
             ),
         );
         assert_eq!(events::supervisor_redrive_state(root, "STORY-7"), before);
+    }
+
+    // The parked check and the reclassification run on the copy read under
+    // the store lock: a spec that moved is left alone, and a concurrent change
+    // to a still-parked spec is kept. trace:TASK-1506 | ai:claude
+    #[test]
+    fn reclassify_runs_on_the_copy_under_the_lock() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&root).unwrap();
+        let backend = aida_core::GitBackend::new(&root).unwrap();
+        let parked = backend
+            .add_requirement(req_with_failure("watchdog"))
+            .unwrap();
+
+        // Moved out of NeedsAttention after the supervisor listed it.
+        let other = aida_core::GitBackend::new(&root).unwrap();
+        let mut moved = other.get_requirement(&parked.id).unwrap().unwrap();
+        moved.status = RequirementStatus::InProgress;
+        other.update_requirement(&moved).unwrap();
+        assert!(!reclassify_needs_human_atomically(&backend, parked.id, 3).unwrap());
+        let after = backend.get_requirement(&parked.id).unwrap().unwrap();
+        assert!(!after.tags.contains(NEEDS_HUMAN_TAG));
+        assert!(after.comments.is_empty());
+
+        // Still parked, with a concurrent owner change: both land.
+        let mut theirs = after.clone();
+        theirs.status = RequirementStatus::NeedsAttention;
+        theirs.owner = "someone".to_string();
+        other.update_requirement(&theirs).unwrap();
+        assert!(reclassify_needs_human_atomically(&backend, parked.id, 3).unwrap());
+        let done = backend.get_requirement(&parked.id).unwrap().unwrap();
+        assert!(done.tags.contains(NEEDS_HUMAN_TAG));
+        assert_eq!(done.owner, "someone");
+        assert_eq!(done.comments.len(), 1);
     }
 }

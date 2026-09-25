@@ -82,6 +82,7 @@ mod status_cmd;
 mod supervise_cmd;
 mod supervisor;
 // trace:STORY-1218 | ai:claude
+mod schedule_driver;
 mod shift;
 mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
@@ -111,6 +112,7 @@ mod drive_robustness;
 mod dryrun;
 // trace:TASK-1117 | ai:claude
 mod edit_buffer;
+mod edit_rebase;
 mod effort_calibration;
 // trace:ADR-55 | ai:antigravity
 pub mod evaluator;

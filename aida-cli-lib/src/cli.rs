@@ -2556,7 +2556,8 @@ pub enum ShiftCommand {
         json: bool,
     },
     /// Show whether the night shift is on for this clone, where that setting
-    /// lives, the cron driver, the last check and wave, and the guard verdicts.
+    /// lives, which scheduler driver runs it (cron, systemd, or both), the last
+    /// check and wave, and the guard verdicts.
     Status {
         /// Emit JSON instead of text.
         #[clap(long)]
@@ -2574,6 +2575,20 @@ pub enum ShiftCommand {
     /// consecutive waves made no progress. Needs a human at an interactive
     /// terminal and an explicit yes.
     Resume,
+    /// Turn the night shift on for this clone AND install the scheduler driver
+    /// that runs it: `--systemd-user` (a systemd user timer, Linux) or
+    /// `--cron` (a crontab entry). Installing one driver removes this repo's
+    /// other one after the new one is verified. Needs a human at an
+    /// interactive terminal and an explicit yes.
+    // trace:TASK-1491 | ai:claude
+    Install {
+        /// Install a systemd user timer (Linux).
+        #[clap(long, conflicts_with = "cron", required_unless_present = "cron")]
+        systemd_user: bool,
+        /// Install a crontab entry.
+        #[clap(long)]
+        cron: bool,
+    },
 }
 
 /// Lightweight supervisor helpers for product/advisor stop-gap loops.
@@ -8743,6 +8758,20 @@ pub enum MaintenanceScheduleCommand {
     /// never touches another repo's entry.
     // trace:STORY-1463 | ai:claude
     UninstallCron,
+
+    /// Install a systemd user timer that runs `aida schedule tick` for this
+    /// repo (Linux only; idempotent — safe to re-run, and it repairs an older
+    /// unit). The timer is enabled and verified first; only then is this
+    /// repo's crontab entry removed. Needs a human at an interactive terminal
+    /// and an explicit yes. `install-cron` likewise removes this timer.
+    // trace:TASK-1491 | ai:claude
+    InstallSystemd,
+
+    /// Disable and delete this repo's systemd user timer. Only the timer is
+    /// disabled: a tick already running finishes. Unit files that aida did
+    /// not write are left alone. Idempotent.
+    // trace:TASK-1491 | ai:claude
+    UninstallSystemd,
 }
 
 // trace:EPIC-72 trace:TASK-1439 | ai:antigravity

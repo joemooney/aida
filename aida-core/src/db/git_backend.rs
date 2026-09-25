@@ -980,6 +980,24 @@ impl GitBackend {
     where
         F: FnOnce(&mut Requirement),
     {
+        self.update_spec_atomically_with_subject(target, None, update_fn)
+    }
+
+    /// [`Self::update_spec_atomically`] with an explicit commit subject. With
+    /// `Some(subject)` the store commit reads `<subject>: update 1
+    /// requirement` (the shape `bulk_update` writes), so a caller that names
+    /// why it wrote (e.g. `aida edit --tags --force` dropping structural tags)
+    /// keeps that audit line while taking the per-spec compare-and-swap.
+    // trace:TASK-1506 | ai:claude
+    pub fn update_spec_atomically_with_subject<F>(
+        &self,
+        target: &Requirement,
+        commit_subject: Option<&str>,
+        update_fn: F,
+    ) -> Result<Option<Requirement>>
+    where
+        F: FnOnce(&mut Requirement),
+    {
         let spec_id = target.spec_id.as_deref().ok_or_else(|| {
             anyhow::anyhow!("Cannot update a requirement without a spec_id in the git store")
         })?;
@@ -1018,7 +1036,11 @@ impl GitBackend {
         self.ensure_object_unchanged(&spec_id, &path, &before)?;
         if let Some(written) = self.stage_requirement_update(&next)? {
             let rel = object_store::relative_object_path(written)?;
-            self.auto_commit_paths(&format!("update {}", written), &[&rel]);
+            let message = match commit_subject {
+                Some(subject) => format!("{subject}: update 1 requirement"),
+                None => format!("update {}", written),
+            };
+            self.auto_commit_paths(&message, &[&rel]);
         }
         Ok(Some(next))
     }

@@ -5274,6 +5274,11 @@ pub(crate) fn handle_git_backend_command(
             let mut req = backend
                 .get_requirement_unambiguous(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+            // TASK-1506: the copy this edit started from. The write below
+            // re-reads the spec under the store lock and applies only what
+            // this edit changed (this copy → `req`) onto that fresh copy.
+            // trace:TASK-1506 | ai:claude
+            let read_copy = req.clone();
 
             // TASK-47: refuse to re-open a Completed/Rejected req
             // without --force. Closing or idempotent re-flips stay
@@ -6016,33 +6021,50 @@ pub(crate) fn handle_git_backend_command(
 
             if changed {
                 req.modified_at = chrono::Utc::now();
-                // STORY-1429: re-read and compare just before the one targeted
-                // write; nothing is written when the spec left NeedsAttention
-                // meanwhile. trace:STORY-1429 | ai:claude
-                if let Some((label, _, _, target, _)) = &pending_leave {
-                    let fresh = backend.get_requirement(&req.id)?;
-                    if let Some(moved) = crate::requeue::recheck_before_write(
-                        fresh.as_ref(),
-                        &RequirementStatus::NeedsAttention,
-                        target,
-                    ) {
-                        anyhow::bail!(
-                            crate::requeue::unchanged_message(label, &moved).unwrap_or_default()
-                        );
-                    }
-                }
-                if force_dropped_structural_tags.is_empty() {
-                    backend.update_requirement(&req)?;
-                } else {
-                    backend.bulk_update(
-                        std::slice::from_ref(&req),
-                        &format!(
-                            "update {}: replaced tags, dropped: {}",
-                            req.spec_id.as_deref().unwrap_or(id),
-                            force_dropped_structural_tags.join(", ")
-                        ),
-                    )?;
-                }
+                // STORY-1429 / TASK-1506: one targeted write through the
+                // per-spec compare-and-swap. Under the store lock the spec is
+                // re-read, a NeedsAttention exit is re-checked against that
+                // copy (nothing is written when the spec left NeedsAttention
+                // meanwhile), and this edit's field changes are applied to it,
+                // so a concurrent change to another field is kept and a
+                // same-field clash refuses instead of being overwritten.
+                // trace:STORY-1429 trace:TASK-1506 | ai:claude
+                let label = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+                let leave_target = pending_leave.as_ref().map(|(_, _, _, target, _)| target);
+                let subject = (!force_dropped_structural_tags.is_empty()).then(|| {
+                    format!(
+                        "update {}: replaced tags, dropped: {}",
+                        label,
+                        force_dropped_structural_tags.join(", ")
+                    )
+                });
+                let leave_label = pending_leave
+                    .as_ref()
+                    .map(|(l, _, _, _, _)| l.as_str())
+                    .unwrap_or(label.as_str());
+                req = crate::edit_rebase::write_edit_atomically(
+                    &backend,
+                    leave_label,
+                    &read_copy,
+                    &req,
+                    leave_target,
+                    crate::edit_rebase::EditMerge {
+                        // `--tags` replaces the set: refuse on a concurrent
+                        // tag change instead of merging.
+                        tags_replaced: tags.is_some(),
+                        // `--status` refuses on a concurrent move to any
+                        // other status, even a same-value request.
+                        status_set: status.is_some(),
+                        ..Default::default()
+                    },
+                    // STORY-647 re-run on the copy read under the lock: a
+                    // protected tag added meanwhile blocks this edit.
+                    // trace:TASK-1506 trace:STORY-647 | ai:claude
+                    &|cur: &aida_core::Requirement| {
+                        enforce_protected_spec_gate(cur.tags.iter(), *force)
+                    },
+                    subject.as_deref(),
+                )?;
                 // STORY-1429: the exit landed; report what it cleared and
                 // record the requeue. trace:STORY-1429 | ai:claude
                 if let Some((label, root, ctx, _, outcome)) = &pending_leave {
