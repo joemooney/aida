@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
@@ -81,12 +81,25 @@ pub struct DigestOptions {
 // ============================================================================
 
 /// Parse the `--since` argument into a UTC instant. Fallthrough:
-///   1. `Nd|Nh|Nm` duration → now − duration
-///   2. `YYYY-MM-DD` ISO date → that day at 00:00 UTC
-///   3. any other token → resolved via `git log -1 --format=%cI <ref>`
-///   4. absent → marker's `window_end`, else now − 24h
+///   1. the shared time-bound grammar: a relative duration (`7d`, `12h`,
+///      `2w`, `30m`, `24 hours ago`) → that long before now; an ISO date
+///      (`YYYY-MM-DD`) → local midnight; a zone-less ISO datetime → local
+///      time; RFC3339 → that instant
+///   2. any other token → resolved via `git log -1 --format=%cI <ref>`
+///   3. absent → marker's `window_end`, else now − 24h
+// trace:TASK-1509 | ai:claude
 pub fn parse_digest_since(raw: Option<&str>, project_root: &Path) -> Result<DateTime<Utc>> {
-    let now = Utc::now();
+    parse_digest_since_at(raw, project_root, Utc::now(), &chrono::Local)
+}
+
+/// [`parse_digest_since`] against an explicit `now` and timezone, for tests.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_digest_since_at<Tz: chrono::TimeZone>(
+    raw: Option<&str>,
+    project_root: &Path,
+    now: DateTime<Utc>,
+    tz: &Tz,
+) -> Result<DateTime<Utc>> {
     let trimmed = raw.map(|s| s.trim()).unwrap_or("");
     if trimmed.is_empty() {
         return Ok(match DigestMarker::load(project_root) {
@@ -94,25 +107,24 @@ pub fn parse_digest_since(raw: Option<&str>, project_root: &Path) -> Result<Date
             None => now - chrono::Duration::hours(24),
         });
     }
-    if let Ok(dur) = crate::parse_days_arg(trimmed) {
-        return Ok(now - dur);
-    }
-    if let Some(t) = parse_iso_date(trimmed) {
-        return Ok(t);
+    match crate::queue_cmd::parse_since_arg_at(trimmed, now, tz) {
+        Ok(t) => return Ok(t),
+        // A local time inside a DST gap/overlap is a real answer, not a
+        // cue to go looking for a git ref of that name.
+        Err(e) if e.is::<crate::queue_cmd::AmbiguousLocalTime>() => {
+            anyhow::bail!("invalid --since value: {e}")
+        }
+        Err(_) => {}
     }
     if let Some(t) = resolve_git_ref_date(project_root, trimmed) {
         return Ok(t);
     }
     anyhow::bail!(
-        "--since {} is not a duration (e.g. 7d), an ISO date (YYYY-MM-DD), or a known git ref/tag",
+        "--since {} is not a relative duration (e.g. `7d`, `2w`, `24 hours ago`), \
+         an ISO date (`YYYY-MM-DD`, local midnight), a zone-less ISO datetime \
+         (local time), RFC3339, or a known git ref/tag",
         trimmed
     );
-}
-
-fn parse_iso_date(raw: &str) -> Option<DateTime<Utc>> {
-    let nd = NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok()?;
-    Utc.with_ymd_and_hms(nd.year(), nd.month(), nd.day(), 0, 0, 0)
-        .single()
 }
 
 fn resolve_git_ref_date(project_root: &Path, refspec: &str) -> Option<DateTime<Utc>> {
@@ -1762,10 +1774,14 @@ mod tests {
     #[test]
     fn parse_digest_since_handles_iso_date() {
         let tmp = TempDir::new().unwrap();
-        let t = parse_digest_since(Some("2024-01-15"), tmp.path()).unwrap();
+        // trace:TASK-1509 | ai:claude — a bare date is local midnight (was
+        // UTC midnight before the shared grammar); pin the zone so the
+        // assertion does not depend on the machine's timezone.
+        let tz = chrono::FixedOffset::east_opt(2 * 3600).unwrap();
+        let t = parse_digest_since_at(Some("2024-01-15"), tmp.path(), now(), &tz).unwrap();
         assert_eq!(
             t.format("%Y-%m-%d %H:%M:%S").to_string(),
-            "2024-01-15 00:00:00"
+            "2024-01-14 22:00:00"
         );
     }
 

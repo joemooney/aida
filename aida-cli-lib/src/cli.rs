@@ -529,8 +529,12 @@ pub enum MetricsCommand {
     /// Reads `~/.aida/auto-complete.jsonl` + `~/.aida/usage.jsonl`.
     // trace:STORY-477 | ai:claude
     AgentLift {
-        /// Report over the last N days/hours/minutes (e.g. `30d`, `12h`).
+        /// Report over this window: a relative duration (`30d`, `12h`, `2w`,
+        /// `45m`, or `24 hours ago`), an ISO date (`2026-05-01`, local
+        /// midnight), a zone-less ISO datetime (`2026-05-01T10:00`, local
+        /// time), or RFC3339.
         // trace:STORY-477 | ai:claude
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "WINDOW", default_value = "30d")]
         since: String,
         /// Emit Markdown — suitable for pasting into release notes or a case
@@ -3332,7 +3336,10 @@ pub enum MailboxCommand {
         /// Message id to archive. Must already be read by the target inbox.
         message_id: Option<String>,
 
-        /// Sweep read mail older than the given duration (e.g. 30d, 12h).
+        /// Sweep read mail older than this point: a relative duration (`30d`,
+        /// `12h`, `2w`, or `24 hours ago`), an ISO date (`2026-05-01`, local
+        /// midnight), a zone-less ISO datetime (local time), or RFC3339.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, conflicts_with = "message_id")]
         older_than: Option<String>,
 
@@ -3348,7 +3355,9 @@ pub enum MailboxCommand {
     /// Maintenance alias for `archive --older-than ... --read-only`.
     // trace:TASK-1211 | ai:codex
     Gc {
-        /// Sweep read mail older than the given duration (default: 30d).
+        /// Sweep read mail older than this point (default: 30d). Same forms
+        /// as `aida mail archive --older-than`.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, default_value = "30d")]
         older_than: String,
 
@@ -7194,8 +7203,10 @@ pub enum FindingsCommand {
         #[clap(subcommand)]
         action: Option<CalibrationAction>,
 
-        /// Restrict to records within the window. Form: `<N>{d,h,w,m}` —
-        /// e.g. `7d`, `12h`, `2w`, `30m`.
+        /// Restrict to records since this point: a relative window (`7d`,
+        /// `12h`, `2w`, `30m`, or `24 hours ago`), an ISO date (`2026-05-01`,
+        /// local midnight), a zone-less ISO datetime (local time), or RFC3339.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "WINDOW")]
         since: Option<String>,
 
@@ -7306,9 +7317,11 @@ pub enum CalibrationSubcommand {
     /// recency.
     // trace:STORY-439 | ai:claude
     Mismatches {
-        /// Restrict to records within the window. Form: `<N>{d,h,w,m}`
-        /// — e.g. `7d`, `12h`, `2w`, `30m`. Filters by the newest
-        /// timestamp across the three slots.
+        /// Restrict to records since this point: a relative window (`7d`,
+        /// `12h`, `2w`, `30m`, or `24 hours ago`), an ISO date (`2026-05-01`,
+        /// local midnight), a zone-less ISO datetime (local time), or
+        /// RFC3339. Filters by the newest timestamp across the three slots.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "WINDOW")]
         since: Option<String>,
         /// Cap the rows printed. Default 50.
@@ -7334,8 +7347,10 @@ pub enum LoadCommand {
     /// Estimate-vs-actual effort deltas. `1d` is 8 work-hours; `1w`
     /// is 5 work-days / 40 work-hours.
     Calibration {
-        /// Restrict to records within the window. Form: `<N>{d,h,w,m}`
-        /// — e.g. `7d`, `12h`, `2w`, `30m`.
+        /// Restrict to records since this point: a relative window (`7d`,
+        /// `12h`, `2w`, `30m`, or `24 hours ago`), an ISO date (`2026-05-01`,
+        /// local midnight), a zone-less ISO datetime (local time), or RFC3339.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "WINDOW")]
         since: Option<String>,
         /// Group deltas by requirement type.
@@ -7787,11 +7802,14 @@ pub enum HeadlessCommand {
         #[clap(long, short = 'n')]
         no_follow: bool,
 
-        /// Skip entries older than the given duration (e.g. `10m`, `2h`,
-        /// `1d`). Bare integers are interpreted as seconds. Compared
-        /// against `timestamp` fields when the event carries one; events
-        /// without a timestamp (assistant messages, system events) pass
-        /// through unfiltered.
+        /// Skip entries older than this point: a relative duration (`30s`,
+        /// `10m`, `2h`, `1d`, `2w`, or `24 hours ago`; a bare integer means
+        /// seconds), an ISO date (`2026-05-01`, local midnight), a zone-less
+        /// ISO datetime (local time), or RFC3339. Compared against
+        /// `timestamp` fields when the event carries one; events without a
+        /// timestamp (assistant messages, system events) pass through
+        /// unfiltered.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "DURATION")]
         since: Option<String>,
     },
@@ -7905,7 +7923,11 @@ pub enum DrainCommand {
         /// Start from at most the last N lines of what is already in the log.
         #[clap(long, short = 'n', value_name = "N")]
         lines: Option<usize>,
-        /// Skip anything older than this (`30s`, `10m`, `2h`, `1d`).
+        /// Skip anything older than this: a relative duration (`30s`, `10m`,
+        /// `2h`, `1d`, `2w`, or `24 hours ago`; a bare integer means seconds),
+        /// an ISO date (`2026-05-01`, local midnight), a zone-less ISO
+        /// datetime (local time), or RFC3339.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "DURATION")]
         since: Option<String>,
         /// Print what is already there and exit instead of following.
@@ -7956,8 +7978,11 @@ pub enum UsageCommand {
     /// Rank command shapes by latency, slowest first.
     // trace:STORY-1028 | ai:codex
     Slowest,
-    /// Show commands not used in the last duration.
+    /// Show commands not used since this point: a relative duration (`30d`,
+    /// `2w`, or `24 hours ago`), an ISO date (local midnight), a zone-less
+    /// ISO datetime (local time), or RFC3339.
     // trace:STORY-1028 | ai:codex
+    // trace:TASK-1509 | ai:claude
     Unused {
         #[clap(value_name = "DURATION")]
         duration: String,
@@ -9948,9 +9973,12 @@ pub enum Command {
         /// SPEC-ID to archive (mutually exclusive with --older-than).
         id: Option<String>,
 
-        /// Bulk-archive every spec last touched before this duration
-        /// (e.g. `30d`, `12h`, `2w`, an ISO date interpreted as local
-        /// midnight, or RFC3339). Pairs with `--status`.
+        /// Bulk-archive every spec last touched before this point: a
+        /// relative duration (`30d`, `12h`, `2w`, or `24 hours ago`), an ISO
+        /// date (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or RFC3339. Pairs with
+        /// `--status`.
+        // trace:TASK-1509 | ai:claude
         // trace:STORY-441 | ai:claude
         #[clap(long, value_name = "DURATION", conflicts_with = "id")]
         older_than: Option<String>,
@@ -10432,7 +10460,11 @@ pub enum Command {
         /// Start from at most the last N lines of what is already in the log.
         #[clap(long, short = 'n', value_name = "N")]
         lines: Option<usize>,
-        /// Skip anything older than this (`30s`, `10m`, `2h`, `1d`).
+        /// Skip anything older than this: a relative duration (`30s`, `10m`,
+        /// `2h`, `1d`, `2w`, or `24 hours ago`; a bare integer means seconds),
+        /// an ISO date (`2026-05-01`, local midnight), a zone-less ISO
+        /// datetime (local time), or RFC3339.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "DURATION")]
         since: Option<String>,
         /// Print what is already there and exit instead of following.
@@ -10631,14 +10663,20 @@ pub enum Command {
     ///
     // trace:STORY-122 | ai:claude
     Usage {
-        /// Show commands used within the last N days. Default 30.
+        /// Show commands used since this point (default `30d`): a relative
+        /// duration (`30d`, `12h`, `2w`, or `24 hours ago`), an ISO date
+        /// (`2026-05-01`, local midnight), a zone-less ISO datetime (local
+        /// time), or RFC3339.
         // trace:STORY-122 | ai:claude
-        #[clap(long, value_name = "Nd", default_value = "30d")]
+        // trace:TASK-1509 | ai:claude
+        #[clap(long, value_name = "WINDOW", default_value = "30d")]
         since: String,
-        /// Show commands NOT used in the last N days (deprecation
-        /// candidates). Mutually exclusive with --errors.
+        /// Show commands NOT used since this point (deprecation
+        /// candidates). Same forms as `--since`. Mutually exclusive with
+        /// --errors.
         // trace:STORY-122 | ai:claude
-        #[clap(long, value_name = "Nd", conflicts_with = "errors", hide = true)]
+        // trace:TASK-1509 | ai:claude
+        #[clap(long, value_name = "WINDOW", conflicts_with = "errors", hide = true)]
         unused: Option<String>,
         /// Show commands with the highest error rate (`exit_code != 0`
         /// over total invocations). UX-gap candidates.
@@ -10761,8 +10799,11 @@ pub enum Command {
     /// `.aida/last-digest.toml` marker → 24h.
     // trace:STORY-252
     Digest {
-        /// Window start: `Nd`/`Nh`/`Nm` duration, ISO date (`YYYY-MM-DD`), or a
-        /// git tag/ref. Absent: marker's window_end, else last 24h.
+        /// Window start: a relative duration (`7d`, `12h`, `2w`, `30m`, or
+        /// `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a
+        /// zone-less ISO datetime (local time), RFC3339, or a git tag/ref.
+        /// Absent: marker's window_end, else last 24h.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "WINDOW")]
         since: Option<String>,
         /// Tailor framing + SPEC-ID visibility for the reader.
@@ -11337,11 +11378,14 @@ pub enum Command {
         all: bool,
 
         /// Exempt specs completed before this point from the
-        /// completed-without-commit integrity check (a git ref/tag whose
-        /// commit date is the cutoff, or an ISO date). Quiets noise on
+        /// completed-without-commit integrity check: a git ref/tag whose
+        /// commit date is the cutoff, a relative duration (`30d`, `2w`,
+        /// `24 hours ago`), an ISO date (local midnight), a zone-less ISO
+        /// datetime (local time), or RFC3339. Quiets noise on
         /// legacy history predating trace conventions. Falls back to the
         /// AIDA_DOCTOR_COMPLETED_SINCE env var.
         // trace:TASK-673 | ai:claude
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "REF_OR_DATE")]
         since: Option<String>,
 

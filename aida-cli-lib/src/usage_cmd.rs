@@ -902,7 +902,8 @@ pub(crate) fn handle_usage_command(
     // since the cutoff. (A "command not in events at all" is invisible
     // here — we can only report what we've seen.)
     if let Some(raw) = unused_raw {
-        let cutoff_window = parse_days_arg(raw)?;
+        // trace:TASK-1509 | ai:claude
+        let cutoff_window = crate::queue_cmd::parse_lookback(raw, "--unused")?;
         let cutoff = now - cutoff_window;
         let mut last_seen: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> =
             std::collections::HashMap::new();

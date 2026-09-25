@@ -6848,10 +6848,12 @@ pub(crate) fn status_is_shelved(status: &aida_core::RequirementStatus) -> bool {
 /// local time that falls in a DST gap or overlap is rejected rather than
 /// guessed.
 ///
-/// Shared by `aida archive --older-than`, `aida queue progress --since`,
-/// the proxy-approvals and review-classes `--since`/`--until` filters,
-/// `aida status --activity --since`, and `aida history --since`/`--until`.
+/// Every time-bound flag in the CLI resolves through this grammar (history,
+/// queue progress, archive, approvals, review/findings classes, status,
+/// digest, doctor, calibration, tail, usage, metrics, mailbox). The list is
+/// enforced by `tests/time_bound_flags_tests.rs`, which walks the clap tree.
 // trace:TASK-1502 | ai:claude
+// trace:TASK-1509 | ai:claude
 pub(crate) fn parse_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
     parse_since_arg_at(raw, chrono::Utc::now(), &chrono::Local)
 }
@@ -6961,6 +6963,50 @@ pub(crate) fn parse_since_arg_at<Tz: chrono::TimeZone>(
         ),
     };
     Ok(now - delta)
+}
+
+/// [`parse_since_arg_at`] with an error labeled for the flag that produced
+/// it (`parse_since_arg_at`'s own message always says `--since`, which would
+/// misname a bad `--until` or `--older-than`). A DST gap/overlap error is kept
+/// verbatim so the caller learns why the value was refused.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_time_bound_at<Tz: chrono::TimeZone>(
+    raw: &str,
+    flag: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<chrono::DateTime<chrono::Utc>> {
+    parse_since_arg_at(raw, now, tz).map_err(|e| {
+        if let Some(dst) = e.downcast_ref::<AmbiguousLocalTime>() {
+            return anyhow::anyhow!("invalid {flag} value: {dst}");
+        }
+        anyhow::anyhow!(
+            "invalid {flag} value `{raw}` — expected a relative duration \
+             (e.g. `5h`, `7d`, `30m`, `2w`, `24 hours ago`), an ISO date \
+             (`2026-05-01`, local midnight), a zone-less ISO datetime \
+             (`2026-05-01T10:00`, local time), or RFC3339"
+        )
+    })
+}
+
+/// A time bound expressed as a lookback: how far before `now` the bound
+/// resolved by [`parse_time_bound_at`] lies. For the commands whose filters
+/// take a window length rather than an instant (usage, metrics, calibration,
+/// mailbox archive). A bound in the future yields a negative duration.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_lookback_at<Tz: chrono::TimeZone>(
+    raw: &str,
+    flag: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<chrono::Duration> {
+    Ok(now - parse_time_bound_at(raw, flag, now, tz)?)
+}
+
+/// [`parse_lookback_at`] against the wall clock and the system timezone.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_lookback(raw: &str, flag: &str) -> Result<chrono::Duration> {
+    parse_lookback_at(raw, flag, chrono::Utc::now(), &chrono::Local)
 }
 
 pub(crate) fn handle_queue_progress(
@@ -7388,6 +7434,11 @@ pub(crate) fn handle_queue_progress(
 #[cfg(test)]
 #[path = "tests/queue_progress_tests.rs"]
 mod queue_progress_tests;
+
+// trace:TASK-1509 | ai:claude
+#[cfg(test)]
+#[path = "tests/time_bound_flags_tests.rs"]
+mod time_bound_flags_tests;
 
 /// trace:BUG-225 | ai:claude
 #[cfg(test)]

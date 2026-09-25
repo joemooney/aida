@@ -928,10 +928,47 @@ fn finish(mut out: std::io::StdoutLock<'_>) -> Result<()> {
     Ok(())
 }
 
-/// Parse `--since` values like `10m`, `5s`, `2h`, `1d`, or a bare integer
-/// (interpreted as seconds). Returns an explicit `Duration` rather than a
-/// chrono::Duration so the caller can reuse it across stdlib APIs.
+/// Parse a tail `--since` value into how far back to start. Accepts the
+/// shared time-bound grammar (`10m`, `2h`, `1d`, `2w`, `24 hours ago`, an ISO
+/// date at local midnight, a zone-less ISO datetime in local time, or
+/// RFC3339), plus the tail-only forms kept for compatibility: seconds (`30s`),
+/// a bare integer meaning seconds (`30`), and spelled-out units (`10min`,
+/// `2hours`). Returns an explicit `Duration` rather than a chrono::Duration
+/// so the caller can reuse it across stdlib APIs. A bound in the future
+/// clamps to zero.
+// trace:TASK-1509 | ai:claude
 pub fn parse_since(s: &str) -> Result<Duration> {
+    parse_since_at(s, chrono::Utc::now(), &chrono::Local)
+}
+
+/// [`parse_since`] against an explicit `now` and timezone, for tests.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_since_at<Tz: chrono::TimeZone>(
+    s: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<Duration> {
+    match crate::queue_cmd::parse_since_arg_at(s, now, tz) {
+        Ok(at) => Ok((now - at).to_std().unwrap_or(Duration::ZERO)),
+        Err(e) if e.is::<crate::queue_cmd::AmbiguousLocalTime>() => {
+            Err(anyhow!("invalid --since value: {e}"))
+        }
+        Err(_) => parse_tail_only_duration(s).map_err(|_| {
+            anyhow!(
+                "invalid --since value `{}` — expected a relative duration \
+                 (e.g. `30s`, `10m`, `2h`, `1d`, `2w`, `24 hours ago`; a bare \
+                 number is seconds), an ISO date (`2026-05-01`, local \
+                 midnight), a zone-less ISO datetime (`2026-05-01T10:00`, \
+                 local time), or RFC3339",
+                s.trim()
+            )
+        }),
+    }
+}
+
+/// The tail-only duration forms the shared grammar does not cover: seconds,
+/// a bare integer (seconds), and spelled-out units such as `10min`.
+fn parse_tail_only_duration(s: &str) -> Result<Duration> {
     let s = s.trim();
     if s.is_empty() {
         bail!("--since value is empty");

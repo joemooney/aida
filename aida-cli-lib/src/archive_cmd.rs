@@ -15,8 +15,7 @@ use aida_core::Storage;
 
 use crate::not_found;
 use crate::{
-    current_user_id, is_terminal_status_str, parse_since_arg, prompt_yes_no, record_role_activity,
-    shorten_text,
+    current_user_id, is_terminal_status_str, prompt_yes_no, record_role_activity, shorten_text,
 };
 
 // STORY-441: `aida archive <ID>` and `aida archive --older-than <DUR>`.
@@ -193,8 +192,13 @@ fn archive_sweep(
     verbose: bool,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
-    let cutoff = parse_since_arg(duration)
-        .map_err(|e| anyhow::anyhow!("invalid --older-than `{duration}`: {e}"))?;
+    // trace:TASK-1509 | ai:claude
+    let cutoff = crate::queue_cmd::parse_time_bound_at(
+        duration,
+        "--older-than",
+        chrono::Utc::now(),
+        &chrono::Local,
+    )?;
     let statuses: Vec<String> = status_csv
         .unwrap_or("completed,rejected")
         .split(',')
