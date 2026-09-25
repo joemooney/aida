@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T06:31:24.916031923Z
-modified_at: 2026-09-25T12:23:26.009991398Z
+modified_at: 2026-09-25T12:29:18.305822671Z
 req_type: Task
 tags:
 - cache
@@ -243,6 +243,64 @@ comments:
   content: 'Note from the TASK-1507 strict review: the A7 --since eligibility is tightened to ''since newer than the newest commit not yet filled'' (the fill order is topo). This is stricter than the sketch. OQ3 (merge ordering under cuts) is sent to the advisor for a ruling.'
   created_at: 2026-09-25T12:23:26.009991398Z
   modified_at: 2026-09-25T12:23:26.009991398Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d88a-9e61-7532-8a91-d1042fbea5eb
+  author: joe
+  content: |-
+    ADVISOR RULING (OQ3/N1): choose (a), date-priority order. (c) is the interim safe default only; it is not an acceptable permanent answer. Reject (b) and (d). OQ3 is amended as below. Also a NEW finding N1b (the --id path diverges with no cut at all), binding for slice 1.
+
+    EVIDENCE (read-only, fresh clone of aida-store at 8861cb75: 37,743 commits, 6 merges)
+    - git log default order vs rev-list --topo-order: the two orders first diverge at index 9,067, at the 2026-09-18 reconciles. The newest-N SETS differ for 3,093 values of N, in 5 ranges: 9068-9107, 9110-9133, 21210-21434, 21841-24628 (the -s ours merge of 06-30) and 37114-37129.
+    - Clock skew: there are 0 parent-to-child edges where the child is older than its parent. `git log` order is monotone non-increasing in %ct. Sorting by (commit_ts DESC, topo position DESC) reproduces `git log`'s order EXACTLY for all 37,743 commits. 3,727 commits share a committer second with another commit, and every tie is still resolved correctly by a topo-consistent tie-break.
+    - Commit rate is about 650-1,300 commits a day (9,260 in the last 7 days). The newest merge is 9,066 commits back.
+
+    WHY (a)
+    - When no commit is older than a parent, git's default walk is a date-priority queue that pops commits newest-first. Its order from any HEAD is therefore the global (commit_ts, tie-break) order restricted to the commits reachable from that HEAD.
+    - The sort key is intrinsic to each commit, so no stored per-HEAD position is needed. It stays stable as HEAD advances, including across new merges: new commits carry new timestamps and slot in by date. (A stored "position from HEAD" would be unstable; a merge renumbers everything below it. Do not store one.)
+    - The index's seq is only topo-consistent, and it depends on the path taken to build it: catch-up appends reverse-topo segments, and back-fill walks topo from an anchor. seq is therefore acceptable ONLY as the tie-break, never as the primary order. Two complete indexes built along different paths would otherwise disagree with each other under a cut, not just with the walk.
+    - The result is byte-for-byte parity with the walk on merge fixtures too, a stronger bar than OQ3's "same set". It also costs nothing in performance: about 26k events, and the key is (commit_ts, seq), which is already indexed as commits_ts.
+
+    WHY NOT (b)
+    - It changes the order `aida history` shows users, grouping side branches together.
+    - It adds a full-graph topo sort to every fallback walk.
+    - It still would not give parity. git's topo output is not unique, and it reshuffles older commits when a new merge lands, so the index would have to replay git's exact topo algorithm from every HEAD.
+
+    WHY (c) IS NOT PERMANENT
+    - It is correct: with no skew, a newest-N window by topo order that contains no merge is the same set as the date-ordered one.
+    - Measured cost today: 0 fallbacks for the default 50-commit, MCP 500 and status 2,000 windows, because the nearest merge is 9,066 back.
+    - After each new reconcile, every query whose window or limit scan reaches the merge falls back. At the current commit rate that lasts about 1 hour for 50-commit windows, about 9-18 hours for MCP's 500, and about 1.5-3 days for status's 2,000. Deep scans never serve: an old spec's --id, rare filters such as --type EPIC --status-changes, or --max-commits >= about 9k.
+    - The planned OQ2/BUG-1617 follow-up drops the implicit window for cache-served queries. Once it does, limit-only scans will routinely cross merges, and (c) would turn the index off exactly for the slow queries it exists to speed up, pushing them onto a 37k-commit walk.
+
+    (d) is rejected: an answer that depends on which path served it breaks the rule that the index is transparent.
+
+    BINDING CONDITIONS
+    R1 Order. Every served query orders commits by (commit_ts DESC, seq DESC) and events within a commit by ordinal ASC.
+      - The max_commits window is the newest N+1 rows by that key (N+1 for the capped probe). The --id window is the same over touches.
+      - Replace the `e.commit_seq >= low` range trick with a tuple bound on (commit_ts, seq).
+      - Denormalizing commit_ts into events, with an index on (commit_ts, commit_seq) including the partial ship index, is recommended.
+      - Bump HISTORY_SCHEMA_VERSION.
+    R2 Coverage for a partly built index. Unify cuts with the B1 fix. A cut, meaning a window boundary or the limit-th match, may be served only when the boundary row's commit_ts is strictly greater than the stored max commit_ts of the commits not yet back-filled. On equality, fall back. This single watermark covers --since, -n and --max-commits.
+      - Optional simplification: enumerate back-fill with plain `git rev-list <anchor>`, which is date order, instead of --topo-order. The fill then proceeds in walk order and the watermark becomes the floor. The watermark stays the correctness check either way.
+    R3 Skew guard. During indexing, record every parent-to-child edge where child ct < parent ct, in a small table.
+      - If any recorded edge's [child_ts, parent_ts] interval overlaps the served range (from the boundary ts to HEAD), fall back for cut queries and for --since.
+      - This replaces A7's "document clock skew as outside parity". There are zero such edges today, so the guard costs nothing.
+    R4 Cross-branch ties. When the rows at the boundary (N and N+1) share a commit_ts and a merge whose merge-base ts <= that ts <= the merge's ts exists, fall back.
+      - Record merges with their base ts at indexing time. There are 6 today.
+      - Ties within one line of ancestry are already resolved correctly by seq.
+    R5 Tests. Add a merge fixture with an interleaving-dated side branch and assert EXACT order and set equality with the walk for every -n/--max-commits cut, on (i) a complete index, (ii) one built by catch-up across the merge, and (iii) a partially back-filled index. Add a skew fixture that asserts the fallback, and a boundary-tie fixture.
+    R6 Sequencing. The implementer may ship (c) in the slice 1 rework as already requested and land R1-R5 as a follow-up task. In that case (c) is scoped exactly as: a cut applies, and a merge lies between HEAD and the boundary row in the index's order. R1-R5 are a closure condition for TASK-1505: it may not complete, and the OQ2 window-drop follow-up may not ship, until they land. Landing them directly in slice 1 is preferred, since the B1 watermark is already being reworked.
+
+    N1b (NEW, binding for slice 1, independent of cuts)
+    - For --id, the walk runs `git log -- <path>`, and git's default history simplification prunes merge side branches that are TREESAME, notably the whole side branch of the 06-30 `-s ours` merge. The index's `touches` table does no simplification.
+    - Measured: 72 of the 75 spec paths touched on any merged side branch return a different commit set. For example, objects/BUG/000/BUG-15.yaml gives 7 commits from the walk and 10 with --full-history; the side commits c36ede36 and aca97878, "update BUG-15", appear only in the index.
+    - `aida history BUG-15` and `--id BUG-15` therefore already disagree between the two paths with an UNBOUNDED window.
+    - Condition: during indexing, record the paths touched in each merge's symmetric range (`git log --format= --name-only M^1...M^2`) in a `merge_paths` table. Serve --id queries on those paths from the walk.
+    - Add a regression test with a side branch that touches a spec path, merged with -s ours.
+    - File a separate BUG for the product question of whether --id should use --full-history, to be consistent with non-id `history events`, which already shows those side commits. Do not change it inside this performance task.
+
+    No re-signoff is needed for R1-R6 or N1b. They tighten coverage and ordering and add no new architecture.
+  created_at: 2026-09-25T12:29:18.305822671Z
+  modified_at: 2026-09-25T12:29:18.305822671Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: dce27130ca391f4e587993afadb05b1447a6643f
