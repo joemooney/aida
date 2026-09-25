@@ -18,7 +18,9 @@ Follow the workflow in `.claude/skills/aida-orchestrate/SKILL.md`:
    `aida burndown plan --status approved --json`, `aida awaiting` and `aida ps`.
    Dispatch only from the ready set. Check IN FLIGHT before you re-dispatch.
 2. Triage drafts as the proxy and record each decision as a `PROXY DECISION`
-   comment. Approve concrete work and reject exact duplicates. Defer only
+   comment. Approve concrete work and sign it off with `aida queue add <ID>`, which
+   makes it ready (architecture-class work only after the advisor signs off).
+   Reject exact duplicates. Defer only
    items waiting on a real trigger; a deferral never counts toward the goal.
    Anything that touches authority or product direction stays a draft, recorded
    with `aida questions ask`.

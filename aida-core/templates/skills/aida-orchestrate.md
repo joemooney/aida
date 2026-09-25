@@ -67,7 +67,8 @@ This skill needs four harness capabilities:
 - a way to stop a stuck job (`TaskStop`).
 
 **Implementation and review must always run in separate sessions.** Without
-subagents, launch them with `aida queue work <SPEC>` or `aida agent new`, or
+subagents, launch them with `aida queue work <SPEC>` (the spec must be queued),
+or with `aida agent new` told to push a branch and not open a PR. You can also
 route review to another seat. If no second session is available, stop at
 pushed branches and report. **Never review your own diff.**
 
@@ -90,7 +91,8 @@ Put each open item in one bucket:
 | Bucket | Action |
 |---|---|
 | `draft` | Triage it (step 2). |
-| `ready` in `burndown plan` | Dispatch an implementer (step 4). |
+| `awaiting_signoff` in `burndown plan` (approved, not yet queued) | Sign off by queueing it (step 2), or run the sketch gate first if it is architecture-class. |
+| `ready` in `burndown plan` | Dispatch an implementer (step 4), unless it is architecture-class and has no posted `ADVISOR SIGNOFF: APPROVED`. The sketch-gate row wins. |
 | Approved but architecture, authority, autonomy or store-integrity class | Sketch gate first (step 3). |
 | `supervised` / keystone | `/aida-guided-implement` with the operator, or report it. |
 | `serialize_held`, `parked`, unmet blocked-by, pending decision | Report it. Don't dispatch. |
@@ -103,17 +105,21 @@ Put each open item in one bucket:
 For each draft, decide, then record why with
 `aida comment add <ID> "PROXY DECISION (orchestrator for <operator>): ..."`:
 
-- **Concrete, testable, bounded** → `aida edit <ID> --status approved`.
+- **Concrete, testable, bounded** → `aida edit <ID> --status approved`, then
+  `aida queue add <ID>`. Queueing is the sign-off that makes it `ready`; record
+  both in the PROXY DECISION.
 - **Exact duplicate** → `aida edit <ID> --status rejected`, and name the
   survivor in the comment.
 - **Architecture-class** → approve it and send it through step 3 (the sketch
-  gate), or leave it as a draft. Never defer it just to clear it.
+  gate). Queue it only after `ADVISOR SIGNOFF: APPROVED`. Never defer it just
+  to clear it.
 - **Needs something that hasn't happened yet** (real data over time, another
   spec merging first) → `aida defer <ID> --until "<concrete trigger>"`.
 - **Changes authority** (roles, grants, human-at-TTY floors, merge-hold,
   unattended-run enablement, your own permissions) **or sets product direction**
-  → leave it as a draft. Record the fork with `aida questions ask <ID> ...` so
-  it appears in `aida human` and `aida awaiting`, and report it.
+  → leave it as a draft. Record the fork with
+  `aida questions ask <ID> -q "<question>" -c "label|consequence|resolution" -c "..."`
+  so it appears in `aida human` and `aida awaiting`, and report it.
 
 If an approval is refused for lack of authority, don't work around it. Report
 it.
@@ -229,9 +235,10 @@ Put the approved branches into one integration branch based on
 ### 7. PR, CI, verified merge
 
 - Push the branch and open the PR with
-  `gh pr create --title "[AI:<tool>] chore(integrate): batch N - SPEC-A SPEC-B"`.
+  `gh pr create --base <default> --title "[AI:<tool>] chore(integrate): batch N - SPEC-A SPEC-B" --body "<spec list + each mechanical fix made in the batch>"`.
 - Wait in a Bash `run_in_background` job, e.g.
-  `gh pr checks N --required --watch --fail-fast`. Never poll from the model.
+  `gh pr checks N --required --watch --fail-fast` (in a repo with no required
+  checks, use plain `--watch` and report that). Never poll from the model.
   On GitLab or other forges, use the equivalent, or `/aida-integrate`'s forge
   probes.
 - Merge on the exact sha:
@@ -301,7 +308,9 @@ EOF
 
 ## Report to the operator
 
-After each batch, report in plain language, leading with the outcome:
+After each batch, report in plain language, leading with the outcome (use
+`PushNotification`, if available, when the list drains or an item becomes
+blocked on the operator):
 - what merged and which specs completed;
 - what's in review, and the real bugs reviewers found on main;
 - the proxy decisions made;
