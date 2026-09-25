@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T06:31:24.916031923Z
-modified_at: 2026-09-25T08:16:07.253405819Z
+modified_at: 2026-09-25T12:23:26.009991398Z
 req_type: Task
 tags:
 - cache
@@ -237,6 +237,12 @@ comments:
   content: 'Orchestrator: the advisor signed off with amendments A1-A10. Split as required: BUG-1616 (rename detection, prerequisite), BUG-1617 (truncation notice), TASK-1507 (slice 1) and TASK-1508 (slice 2). TASK-1505 is tagged closure:pending until both slices merge.'
   created_at: 2026-09-25T08:16:07.253405819Z
   modified_at: 2026-09-25T08:16:07.253405819Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d885-3e3a-7b71-8d59-82296d0900be
+  author: joe
+  content: 'Note from the TASK-1507 strict review: the A7 --since eligibility is tightened to ''since newer than the newest commit not yet filled'' (the fill order is topo). This is stricter than the sketch. OQ3 (merge ordering under cuts) is sent to the advisor for a ruling.'
+  created_at: 2026-09-25T12:23:26.009991398Z
+  modified_at: 2026-09-25T12:23:26.009991398Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: dce27130ca391f4e587993afadb05b1447a6643f
