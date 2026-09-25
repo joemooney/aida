@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T15:52:33.233412803Z
-modified_at: 2026-09-25T16:51:29.314006958Z
+modified_at: 2026-09-25T17:27:54.274185601Z
 req_type: Bug
 comments:
 - id: 01a0d944-d2b8-7893-b058-c72cdf4cce92
@@ -22,6 +22,45 @@ comments:
   content: 'Scope addition from BUG-1622''s security re-review (Low): ''git pull'' ignores --end-of-options (it forwards arguments to fetch). Call reject_option_like inside the 3 pull helpers in aida-core/src/git_ops.rs (~269, ~323, ~982) and correct their comments, which claim protection that isn''t there. Add the missing guard tests the review listed: the stacks.json cascade, the prepare_graded_review refusal, the queue recover pushes, the pure-git forge refusals, and doctor whitespace --since.'
   created_at: 2026-09-25T16:03:04.983160399Z
   modified_at: 2026-09-25T16:03:04.983160399Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d99b-fea2-7d52-acd9-6e57fa8b94f7
+  author: joe
+  content: |-
+    SHELL-INVOCATION AUDIT (BUG-1624), all crates. I grepped every Command::new("sh"/"bash"/"cmd"/"setsid"), each -c / /C, every shell string built with format!, the eval'd payloads the aida() wrapper runs, and the generated hook, cron and systemd text. Trust rule: operator config (notify command, worktree_pool hooks, smoke_check read from the trusted default-branch config, editor env) is trusted. Spec, forge, remote, branch and lease data are not.
+
+    FIXED (untrusted value reached a shell string):
+    1. aida-cli-lib implementer_preflight::execute: the forge/origin-HEAD default branch was spliced into the `bash -c` CI guard text through ${{ github.base_ref }}. Now the name is substituted only when git_arg_guard::is_shell_safe_branch_name passes. That check runs `git check-ref-format --branch` as an argv and also requires every character to be shell-inert, [A-Za-z0-9._/+@-], with no leading dash. Otherwise the guard is Inconclusive, which refuses publication, and runs nothing. AIDA_PREFLIGHT_DEFAULT_BRANCH is exported only when the name is valid.
+    2. aida-cli-lib lib.rs enter_shell_payload (eval'd by `worktree enter`): this used to append .aida/session-env.sh verbatim, and a branch can commit that file. Now only `export NAME='value'` lines with valid names are kept. Each value is re-quoted, and the AIDA_BIN PATH prepend is rebuilt (session_env_eval_lines).
+    3. aida-cli-lib role_cmd role enter and persona enter (eval'd): role name, persona, project path, the cd target and the PS1 segment were unquoted or double-quoted. All are now sh_single_quote'd, and names in `#` comment lines are flattened to one line.
+    4. aida-cli-lib dev_cmd dev activate (eval'd) and the shell-init helpers file (sourced by every shell): repo and bin paths are now quoted.
+    5. aida-cli-lib init_bootstrap emit_enter_dir (eval'd cd): the path is now quoted.
+    6. aida-cli-lib lib.rs session start re-entry (eval'd): the lease-file session id is now quoted.
+    7. aida-cli-lib edit_buffer launch_editor: the buffer path, which contains the spec id, was spliced as '<path>' with no escaping. It is now passed as "$@", the way git runs $EDITOR. The editor value itself is operator env and stays shell text. The Windows cmd path keeps a double-quoted temp path; Windows paths cannot contain ".
+    8. aida-server admin.rs restart: the hand-rolled shell_escape left ; $ and backticks live. It now runs `sh -c 'sleep 2 && exec "$@"'` with the binary path and argv as positional parameters, and shell_escape is removed.
+    9. aida-cli-lib lib.rs resume_command_with_cwd, a paste-ready hint: the recorded cwd is now shell_quote'd.
+    Also (git pull, folded in from BUG-1622): aida-core git_ops pull_rebase, pull_rebase_auto_merge and pull now call git_ops::reject_option_like on remote and branch. `git pull` forwards them to fetch without --end-of-options. The comments now say this.
+
+    SAFE, NO CHANGE:
+    - notify.rs run_command_bounded (sh -c / cmd /C): the command is operator config. {title} and {rule} are shell_quote'd, and the message goes over stdin.
+    - worktree_hooks::run_hooks (sh -c): hooks come only from machine-global ~/.aida/config.toml. PREWARM_BUILD_COMMAND is a constant.
+    - pr_cmd smoke check (sh -c): comes from the trusted origin/<default> config (TASK-969) or the constant `cargo build --release`.
+    - compete_cmd gate (sh -c): compete::DEFAULT_GATE or the operator's --gate flag.
+    - pane_host tmux window command (a /bin/sh string): every argv token goes through sh_quote. The rc path and channel are internal.
+    - drive_robustness systemd-inhibit sh -c watcher: only an integer pid is interpolated. The --why reason is sanitized and is an argv, not shell.
+    - maintenance_schedule cron line and schedule_driver systemd unit: paths are shell_quote'd or systemd_quote'd; % and newlines are refused. Args and marker are internal.
+    - forge create_cmd_for_branch and lib.rs review_open_change_hint: display-only hints. Branch and base are shell_quote'd, and inside $(...) the quoting holds.
+    - worktree.rs ps1 splice/strip and exit_shell_payload: focus and paths are quoted. Unset names come from parse_session_env, which validates identifiers.
+    - implementer_preflight guard text itself: this is the project's own .github/workflows/ci.yml. That is project code, the same trust level as running its tests.
+    - Scaffolded git hooks, validate/track hooks and the mirror pre-push hook: static include_str!/const templates with nothing interpolated. None of the hook templates use eval or sh -c.
+    - human_audit and terminal_cmd tmux send-keys: argv. The keys are a constant slash command, or the operator's own `aida session send` text.
+    - lib.rs Windows `cmd /C start <url>`: the url is a local file:// path of an installed doc.
+    - sandbox_export_line, the brief `cd` lines and the queue/session `cd` hints: display-only copy-paste text of operator-local paths.
+    - Test-only sh -c sites (exit_signal, network_retry (script plus positional args), agent_registry, maintenance_schedule, worktree PS1 test, session bwrap probe, scaffolding hook runners): fixed strings or tempdir paths.
+    - git `-c key=value` argv (git_ops, criteria_red_run, pr_cmd, lib.rs probes and many tests): git config argv, not a shell.
+
+    FLAGGED BY DESIGN, NOT CHANGED (needs a decision): graded_review::execute_graded_review runs spec-authored acceptance commands (## Verify blocks and backticked commands) through `bash -c` in the reviewed checkout. The spec text is the command, not an interpolated value, and `bash`/`sh` are allowed first words, so dropping the shell would not narrow what can run. The trust boundary is the store (a shared, multi-node store). If store writers are not fully trusted, gate executable criteria behind a trusted-config opt-in. That belongs in a follow-up spec.
+  created_at: 2026-09-25T17:27:54.274185601Z
+  modified_at: 2026-09-25T17:27:54.274185601Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b821736ce75455f3858816002777b451fd4aaf03
