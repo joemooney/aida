@@ -708,10 +708,12 @@ fn handle_dev_activate(
     // trace:TASK-1171 | ai:claude — from here to the end of the function,
     // stdout is shell code the wrapper evals; mark it as such.
     let _eval = crate::shell_eval::EvalBlock::open();
+    // Paths are quoted (or kept to one comment line) in this eval'd block.
+    // trace:BUG-1624 | ai:claude
     println!(
         "# aida dev activate — using {} build at {}{}{}",
         profile,
-        bin_dir.display(),
+        bin_dir.display().to_string().replace(['\n', '\r'], " "),
         if stale {
             "  (alternate build is newer)"
         } else {
@@ -744,8 +746,14 @@ fn handle_dev_activate(
         }
     }
 
-    println!("export AIDA_DEV_REPO='{}'", repo.display());
-    println!("export AIDA_DEV_BIN='{}'", bin_dir.display());
+    println!(
+        "export AIDA_DEV_REPO='{}'",
+        crate::sh_single_quote(&repo.display().to_string())
+    );
+    println!(
+        "export AIDA_DEV_BIN='{}'",
+        crate::sh_single_quote(&bin_dir.display().to_string())
+    );
     println!("export AIDA_DEV_PROFILE='{}'", profile);
     println!("export AIDA_DEV_ACTIVE=1");
 
@@ -762,7 +770,10 @@ fn handle_dev_activate(
     println!("if [ -z \"${{AIDA_DEV_PREV_PATH+x}}\" ]; then");
     println!("    export AIDA_DEV_PREV_PATH=\"$PATH\"");
     println!("fi");
-    println!("export PATH='{}':\"$PATH\"", bin_dir.display());
+    println!(
+        "export PATH='{}':\"$PATH\"",
+        crate::sh_single_quote(&bin_dir.display().to_string())
+    );
     // TASK-19: splice-in semantics for PS1 instead of save/restore. We
     // record the literal prefix we're prepending in AIDA_DEV_PS1_PREFIX
     // so deactivate can strip exactly the same string regardless of what
@@ -1787,7 +1798,11 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
         .ok()
         .and_then(|cwd| find_aida_repo_above(&cwd));
     let env_export = match &repo {
-        Some(r) => format!("export AIDA_DEV_REPO='{}'\n\n", r.display()),
+        // Sourced by every new shell; quote the path. trace:BUG-1624 | ai:claude
+        Some(r) => format!(
+            "export AIDA_DEV_REPO='{}'\n\n",
+            crate::sh_single_quote(&r.display().to_string())
+        ),
         None => String::new(),
     };
     let helpers_body = format!(

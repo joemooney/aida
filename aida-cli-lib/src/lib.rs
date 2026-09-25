@@ -35740,7 +35740,9 @@ fn session_start(
                 // session rather than failing the re-entry.
                 // trace:TASK-1171 | ai:claude
                 let _eval = crate::shell_eval::EvalBlock::open();
-                println!("export AIDA_SESSION_ID='{}'", existing.id);
+                // The id is read back from a lease file; quote it for the
+                // eval. trace:BUG-1624 | ai:claude
+                println!("export AIDA_SESSION_ID='{}'", sh_single_quote(&existing.id));
             }
             return Ok(());
         }
@@ -63278,13 +63280,33 @@ fn enter_shell_payload(
     let mut payload = format!("{}\n", enter_cd_line(path));
     let env_path = path.join(".aida").join("session-env.sh");
     if let Ok(body) = std::fs::read_to_string(env_path) {
-        payload.push_str(&body);
-        if !payload.ends_with('\n') {
-            payload.push('\n');
-        }
+        payload.push_str(&session_env_eval_lines(&body));
     }
     payload.push_str(&crate::worktree::ps1_wt_splice_block(focus, lease_file));
     payload
+}
+
+/// Re-render `.aida/session-env.sh` for the eval'd `worktree enter` payload.
+///
+/// The file lives in the worktree, so a branch can commit its own copy; its
+/// body is never eval'd verbatim. Only `export NAME='value'` lines with a
+/// valid variable name survive, each value re-quoted, plus the PATH prepend
+/// for the pinned `AIDA_BIN` that [`render_session_env_file`] writes.
+// trace:BUG-1624 | ai:claude
+fn session_env_eval_lines(body: &str) -> String {
+    let mut out = String::new();
+    for (name, value) in parse_session_env(body) {
+        out.push_str(&format!("export {name}={}\n", shell_single_quote(&value)));
+        if name == "AIDA_BIN" {
+            if let Some(dir) = std::path::Path::new(&value).parent() {
+                out.push_str(&format!(
+                    "PATH={}:\"$PATH\"\n",
+                    shell_single_quote(&dir.display().to_string())
+                ));
+            }
+        }
+    }
+    out
 }
 
 /// `aida worktree list` — every registered git worktree annotated with its
@@ -107003,8 +107025,10 @@ fn paste_ready_resume_command(scope: &str, m: &session::SessionMeta) -> String {
 /// trace:TASK-402 | ai:claude
 fn resume_command_with_cwd(base: &str, worktree: Option<&str>, current: Option<&str>) -> String {
     match worktree {
+        // The recorded cwd is session metadata and the line is meant to be
+        // pasted into a shell: quote it. trace:BUG-1624 | ai:claude
         Some(wt) if !wt.is_empty() && Some(wt) != current => {
-            format!("cd {} && {}", wt, base)
+            format!("cd {} && {}", shell_quote(wt), base)
         }
         _ => base.to_string(),
     }
@@ -107222,3 +107246,8 @@ mod epic_72_exposition_tests;
 #[cfg(test)]
 #[path = "tests/bug_1622_git_option_injection_tests.rs"]
 mod bug_1622_git_option_injection_tests;
+
+// trace:BUG-1624 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1624_shell_and_git_guard_tests.rs"]
+mod bug_1624_shell_and_git_guard_tests;

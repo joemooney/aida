@@ -9,7 +9,11 @@
 //! 2. The git call puts [`END_OF_OPTIONS`] before revision arguments (and
 //!    `--` before paths), so even a value that slipped past the check is
 //!    parsed as a revision, never as an option such as `--output=<path>`.
+//!
+//! A branch name that must land in a SHELL string (rather than an argv) goes
+//! through [`is_shell_safe_branch_name`] instead.
 // trace:BUG-1622 | ai:claude
+// trace:BUG-1624 | ai:claude
 
 use anyhow::{bail, Result};
 
@@ -43,9 +47,75 @@ pub(crate) fn is_hex_sha(value: &str) -> bool {
     (7..=64).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
+/// True when `name` is a branch name that may be spliced, unquoted, into a
+/// shell command line: it passes `git check-ref-format --branch` (run as an
+/// argv, never through a shell) AND every character is shell-inert
+/// (`[A-Za-z0-9._/+@-]`, not starting with `-`).
+///
+/// git's ref-name rules alone are not enough: they allow `;`, `$`, `(`,
+/// backticks, quotes, `&`, `|` and `>`, any of which a shell would act on.
+/// The character allowlist is what makes the value safe in every quoting
+/// context (bare, inside `'…'`, inside `"…"`); the git check keeps the value
+/// a real branch name. A forge or remote-derived default branch must pass
+/// this before it reaches a shell string.
+// trace:BUG-1624 | ai:claude
+pub(crate) fn is_shell_safe_branch_name(name: &str) -> bool {
+    if name.is_empty()
+        || is_option_like(name)
+        || !name.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'/' | b'+' | b'@' | b'-')
+        })
+    {
+        return false;
+    }
+    std::process::Command::new("git")
+        .args(["check-ref-format", "--branch", name])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-1624 | ai:claude
+    #[test]
+    fn bug_1624_shell_safe_branch_names() {
+        for ok in [
+            "main",
+            "master",
+            "trunk",
+            "release/1.2",
+            "feat-x_y+z",
+            "dev@2",
+        ] {
+            assert!(is_shell_safe_branch_name(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "main;touch pwned",
+            "main$(touch pwned)",
+            "main`touch pwned`",
+            "x';touch pwned;'",
+            "a\"b",
+            "a|b",
+            "a&b",
+            "a>b",
+            "a b",
+            "-main",
+            "--upload-pack=x",
+            "main..x",
+            "main.lock",
+            "@{-1}",
+            "/main",
+            "ma\nin",
+        ] {
+            assert!(!is_shell_safe_branch_name(bad), "{bad:?}");
+        }
+    }
 
     #[test]
     fn dash_values_are_refused_with_the_flag_named() {

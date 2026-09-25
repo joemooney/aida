@@ -279,16 +279,31 @@ fn stakeholder_persona_name(name: &str) -> Option<&'static str> {
 /// creating/loading a role file, registering a build seat, or acquiring a
 /// lease. The informational line remains shell code for compatibility with
 /// wrappers that predate the dedicated eval channel.
+/// Keep a free-text value on one line inside an eval'd `# …` comment: a
+/// newline would end the comment and turn the rest into shell code.
+// trace:BUG-1624 | ai:claude
+fn eval_comment_text(value: &str) -> String {
+    value.replace(['\n', '\r'], " ")
+}
+
 fn emit_persona_enter_eval(project_root: &std::path::Path, persona: &str) {
     let _eval = crate::shell_eval::EvalBlock::open();
-    println!("# aida role enter — {persona} (stakeholder persona)");
-    println!("export AIDA_SESSION_ROLE='{persona}'");
+    // Every value is quoted: this block is eval'd by the caller's shell.
+    // trace:BUG-1624 | ai:claude
+    println!(
+        "# aida role enter — {} (stakeholder persona)",
+        eval_comment_text(persona)
+    );
+    println!("export AIDA_SESSION_ROLE='{}'", sh_single_quote(persona));
     println!("unset AIDA_SESSION_PURPOSE");
-    println!("export AIDA_SESSION_PROJECT='{}'", project_root.display());
+    println!(
+        "export AIDA_SESSION_PROJECT='{}'",
+        sh_single_quote(&project_root.display().to_string())
+    );
     println!(
         "echo '{} Entered stakeholder persona: {} — least-privilege; not a build seat'",
         crate::glyph(crate::glyphs::Glyph::Check),
-        persona
+        sh_single_quote(persona)
     );
 }
 
@@ -519,8 +534,12 @@ fn emit_role_enter_eval(
         .working_directory
         .as_deref()
         .unwrap_or(project_root)
-        .display();
-    println!("# aida role enter — {}", state.name);
+        .display()
+        .to_string();
+    // Role names, paths and purpose come from role config and the CLI;
+    // every value in this eval'd block is single-quoted (or kept to one
+    // comment line). trace:BUG-1624 | ai:claude
+    println!("# aida role enter — {}", eval_comment_text(&state.name));
     // Strip ALL `(role:NAME) ` prefixes from PS1, regardless of which role
     // is currently in AIDA_SESSION_ROLE. The earlier single-pattern strip
     // (keyed off AIDA_SESSION_ROLE) leaked prefixes whenever the env var
@@ -539,21 +558,30 @@ fn emit_role_enter_eval(
     println!("    done");
     println!("    unset _aida_old_ps1 _aida_after _aida_name");
     println!("fi");
-    println!("export AIDA_SESSION_ROLE='{}'", state.name);
+    println!(
+        "export AIDA_SESSION_ROLE='{}'",
+        sh_single_quote(&state.name)
+    );
     if let Some(p) = &state.purpose {
         println!("export AIDA_SESSION_PURPOSE='{}'", sh_single_quote(p));
     } else {
         println!("unset AIDA_SESSION_PURPOSE");
     }
-    println!("export AIDA_SESSION_PROJECT='{}'", project_root.display());
+    println!(
+        "export AIDA_SESSION_PROJECT='{}'",
+        sh_single_quote(&project_root.display().to_string())
+    );
     if let Some(title) = role_enter_launch_title(project_root, state, no_title, registry_entry) {
         println!("printf '\\033]2;%s\\007' '{}'", sh_single_quote(&title));
     }
     println!("if [ -n \"${{PS1+x}}\" ]; then");
-    println!("    export PS1=\"(role:{}) $PS1\"", state.name);
+    println!(
+        "    export PS1='(role:{}) '\"$PS1\"",
+        sh_single_quote(&state.name)
+    );
     println!("fi");
     if cd {
-        println!("cd '{}'", cwd);
+        println!("cd '{}'", sh_single_quote(&cwd));
     }
     let verb = if was_existing {
         "Resumed"

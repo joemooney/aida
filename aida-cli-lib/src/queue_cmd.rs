@@ -13034,6 +13034,32 @@ fn auto_complete_sibling_role_hint(
 /// out to `aida` subcommands (`queue work --from-pr`, `pull`, `session end`,
 /// `queue add`) and `git` / `gh` rather than reimplementing them.
 /// trace:STORY-384 | ai:claude
+/// `aida queue recover`'s push of the spec branch to origin. The branch can
+/// come from a lease or the forge, so a dash-led name is refused and
+/// options end before it. `Ok(false)` is a push git itself rejected.
+// trace:BUG-1622 trace:BUG-1624 | ai:claude
+pub(crate) fn recover_push_branch(repo: &std::path::Path, branch: &str) -> Result<bool> {
+    crate::git_arg_guard::reject_option_like("branch", branch)?;
+    let args = [
+        "push",
+        "-u",
+        crate::git_arg_guard::END_OF_OPTIONS,
+        "origin",
+        branch,
+    ];
+    println!(
+        "  {} git {}",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+        args.join(" ")
+    );
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .status()?;
+    Ok(status.success())
+}
+
 pub(crate) fn handle_queue_recover(
     storage: &Storage,
     user_id: &str,
@@ -13298,20 +13324,8 @@ pub(crate) fn handle_queue_recover(
                 );
                 return Ok(());
             }
-            // The branch can come from a lease or the forge; end options
-            // before it. trace:BUG-1622 | ai:claude
-            crate::git_arg_guard::reject_option_like("branch", b)?;
-            let push_st = run_git(
-                &[
-                    "push",
-                    "-u",
-                    crate::git_arg_guard::END_OF_OPTIONS,
-                    "origin",
-                    b,
-                ],
-                &probe_repo,
-            )?;
-            if !push_st.success() {
+            // trace:BUG-1622 trace:BUG-1624 | ai:claude
+            if !recover_push_branch(&probe_repo, b)? {
                 eprintln!(
                     "{} push failed — resolve manually, then re-run `aida queue recover {}`.",
                     crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
@@ -13356,20 +13370,8 @@ pub(crate) fn handle_queue_recover(
                 );
                 return Ok(());
             };
-            // The branch can come from a lease or the forge; end options
-            // before it. trace:BUG-1622 | ai:claude
-            crate::git_arg_guard::reject_option_like("branch", b)?;
-            let push_st = run_git(
-                &[
-                    "push",
-                    "-u",
-                    crate::git_arg_guard::END_OF_OPTIONS,
-                    "origin",
-                    b,
-                ],
-                &probe_repo,
-            )?;
-            if !push_st.success() {
+            // trace:BUG-1622 trace:BUG-1624 | ai:claude
+            if !recover_push_branch(&probe_repo, b)? {
                 eprintln!(
                     "{} push failed — resolve manually.",
                     crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
