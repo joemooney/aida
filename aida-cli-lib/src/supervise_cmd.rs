@@ -365,6 +365,15 @@ struct WatchReport {
     drift: Vec<String>,
     /// Children queued this pass (only populated under --execute).
     realigned: Vec<String>,
+    /// The re-drive reflex's one-line outcome (the night shift's step).
+    // trace:BUG-1621 | ai:claude
+    redrive: String,
+    /// Parks re-queued this pass (only under --execute with re-drive on).
+    redriven: Vec<String>,
+    /// Parks reclassified to needs-human at the ADR-26 cap this pass.
+    reclassified: Vec<String>,
+    /// Per-park decisions, including every floor refusal.
+    redrive_plan: Vec<crate::supervisor::SuperviseDecision>,
 }
 
 fn handle_supervise_watch(
@@ -422,6 +431,48 @@ fn run_watch_pass(
     execute: bool,
     json: bool,
 ) -> Result<()> {
+    let queued = queued_spec_ids();
+    let report = watch_pass_core(
+        backend,
+        project_root,
+        objective,
+        execute,
+        &queued,
+        &mut queue_add_implementer,
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string(&report)?);
+    } else {
+        print_watch_report(&report, execute);
+    }
+
+    // Compose the other shipped reflex: nudge advisor stalls.
+    // Nudge sends a real mailbox message / notification, so it only fires under
+    // --execute; a dry-run pass has no side effects.
+    if execute {
+        let _ = handle_supervise_nudge(backend, store_path);
+    }
+
+    // Surface only human-decision items.
+    if !json {
+        print_awaiting_surface();
+    }
+    Ok(())
+}
+
+/// One watch pass without its subprocess reads and its output: realign
+/// (through `queue_add`) and the re-drive reflex. `execute = false` is a
+/// dry run that writes nothing. Split out so tests drive the real wiring.
+// trace:BUG-1621 | ai:claude
+fn watch_pass_core(
+    backend: &aida_core::CachedGitBackend,
+    project_root: &Path,
+    objective: &str,
+    execute: bool,
+    queued: &std::collections::HashSet<String>,
+    queue_add: &mut dyn FnMut(&str) -> bool,
+) -> Result<WatchReport> {
     use aida_core::models::{RelationshipType, RequirementStatus};
 
     let store = backend.load()?;
@@ -458,55 +509,55 @@ fn run_watch_pass(
         .count();
 
     // Drift = Approved, not archived, not deferred, not already queued.
-    let queued = queued_spec_ids();
-    let drift = compute_drift(&children, &queued);
+    let drift = compute_drift(&children, queued);
 
     // Realign: queue each drifted child for the implementer (idempotent — the
     // Approved filter + queue-add dupe tolerance keep it safe to re-run).
     let mut realigned: Vec<String> = Vec::new();
     if execute {
         for spec in &drift {
-            if queue_add_implementer(spec) {
+            if queue_add(spec) {
                 realigned.push(spec.clone());
             }
         }
     }
 
-    let report = WatchReport {
-        objective: obj_display.clone(),
+    // The re-drive reflex runs through the night shift's own re-drive step
+    // (BUG-1621): the same per-clone opt-in (ADR-26 default off), guards,
+    // floors, attempt-recorded-first requeue and cap branch as the tick. It
+    // only re-queues; the next drain wave picks the specs up, so this pass
+    // never launches a drive and never forces a claim. A failure is reported
+    // and never stops the rest of the pass.
+    // trace:BUG-1621 | ai:claude
+    let redrive = crate::shift::run_redrive_pass(project_root, backend, !execute);
+    let (redrive_line, redriven, reclassified, redrive_plan) = match redrive {
+        Ok(r) => {
+            let mut line = r.redrive;
+            let failing: Vec<&str> = r
+                .redrive_guards
+                .iter()
+                .filter(|g| !g.pass)
+                .map(|g| g.detail.as_str())
+                .collect();
+            if !failing.is_empty() {
+                line.push_str(&format!(" ({})", failing.join("; ")));
+            }
+            (line, r.redriven, r.reclassified, r.redrive_plan)
+        }
+        Err(e) => (format!("error: {e:#}"), Vec::new(), Vec::new(), Vec::new()),
+    };
+
+    Ok(WatchReport {
+        objective: obj_display,
         total_children: total,
         done_children: done,
-        drift: drift.clone(),
-        realigned: realigned.clone(),
-    };
-
-    if json {
-        println!("{}", serde_json::to_string(&report)?);
-    } else {
-        print_watch_report(&report, execute);
-    }
-
-    // Compose the shipped reflexes: redrive transient parks, nudge advisor stalls.
-    let redrive_opts = crate::supervisor::SuperviseOpts {
-        execute,
-        max_attempts: crate::supervisor::DEFAULT_MAX_ATTEMPTS,
-        backoff: crate::supervisor::DEFAULT_BACKOFF.to_vec(),
-        max: None,
-        json,
-        floors: None,
-    };
-    let _ = crate::supervisor::handle_supervise_command(backend, project_root, redrive_opts);
-    // Nudge sends a real mailbox message / notification, so it only fires under
-    // --execute; a dry-run pass has no side effects.
-    if execute {
-        let _ = handle_supervise_nudge(backend, store_path);
-    }
-
-    // Surface only human-decision items.
-    if !json {
-        print_awaiting_surface();
-    }
-    Ok(())
+        drift,
+        realigned,
+        redrive: redrive_line,
+        redriven,
+        reclassified,
+        redrive_plan,
+    })
 }
 
 fn print_watch_report(report: &WatchReport, execute: bool) {
@@ -530,6 +581,8 @@ fn print_watch_report(report: &WatchReport, execute: bool) {
             report.drift.join(", ")
         );
     }
+    // trace:BUG-1621 | ai:claude
+    println!("  re-drive: {}", report.redrive);
 }
 
 /// Whether a child type is realignable — i.e. buildable work an implementer
@@ -669,3 +722,7 @@ mod story_1052_supervise_nudge_tests;
 #[cfg(test)]
 #[path = "tests/story_1096_supervise_watch_tests.rs"]
 mod story_1096_supervise_watch_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1621_watch_redrive_tests.rs"]
+mod bug_1621_watch_redrive_tests;
