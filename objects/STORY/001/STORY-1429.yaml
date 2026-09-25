@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:50:20.038947417Z
-modified_at: 2026-09-24T16:30:08.376323080Z
+modified_at: 2026-09-25T01:12:54.211460043Z
 req_type: Story
 tags:
 - aida:queue
@@ -57,4 +57,77 @@ comments:
   content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Route as --mode decide. Most of option (b) exists since #2035; the choice between options is the work.'
   created_at: 2026-09-24T08:12:32.602756419Z
   modified_at: 2026-09-24T08:12:32.602756419Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d61f-5ac3-70e3-8009-e56f37b03f9c
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff):
+
+    STORY-1429 design: option (b), a one-keystroke requeue, confirmed. Most of the plumbing is already on main (#2035 BUG-1470, #2143 TASK-1311). The work left is: one owner for the transition, the keystroke itself, race closure, and the decision record.
+
+    STATE ON MAIN (verified):
+    - `aida queue rework <ID>` (metadata-only) goes NeedsAttention -> Approved and requeues the spec. It is advisor-gated through `rework_target_for_mode`. TASK-1311 made it clear shelve markers (`requeue::clear_shelve_markers`), and only a TTY human can clear `needs-human`.
+    - `aida findings list` and `aida awaiting` print the requeue command as a hint (`print_requeue_hint_row`, `requeue_hint`). That is copy-paste, not a keystroke.
+    - Four doors move a spec out of NeedsAttention, each with its own copy of the logic: `handle_queue_rework` (queue_cmd.rs), the `aida edit --status` door in `handle_git_backend_command` (git_backend_cmd.rs ~5797), `tool_queue_rework_inner` (mcp.rs), and `handle_supervise_command` (supervisor.rs ~177). The supervisor copy sets `status=Approved` and `failure_reason=None` directly. It leaves `attention_reason` in place and writes no audit note.
+    - Race: `handle_queue_rework` computes its target from a pre-read `current_status` and then writes it unconditionally inside `update_atomically`. It never checks for a live lease. On an InProgress spec, metadata-only rework resets it to Approved with only a warning, even when a live session holds it.
+
+    1. OWNERSHIP AND TRIGGER
+    - Owner of the decision: the human, or a TTY advisor, doing the triage. Option (a), where the drain resumes triaged specs, is rejected under PRIN-5. The resume decision stays with someone who can see the findings, and an agent that triaged wrongly cannot re-dispatch into the same failure. The one existing machine path stays as it is: the STORY-1051 supervisor re-drives only TRANSIENT kinds, which are classified, not triaged.
+    - Owner in code: a new `requeue::return_to_flight(store, req_id, &ReturnCtx) -> ReturnOutcome`. All four doors call it inside their `update_atomically` closure. It does the compare-and-swap on status, clears the markers, writes the audit note and returns what changed.
+    - Trigger: the requeue transition itself (NeedsAttention -> Approved, plus a queue entry). It emits a new `EventKind::SpecRequeued { via, actor, from, to, cleared_tags, kept_tags }` into events.jsonl. No separate "triaged" state exists, because under (b) triaging and requeueing are one act.
+
+    2. ONE-KEYSTROKE SURFACE (existing verbs only, no new top-level verb)
+    - `aida queue rework` / `aida rework` with the ID omitted, at a TTY, becomes an interactive loop over the NeedsAttention parks. The ID becomes `Option<String>` in `QueueCommand::Rework` and the top-level `Rework`. The rendering matches the failure and punt rows in `findings list`. Each row shows its preview, then asks:
+        [r] requeue -> Approved, queued for <role> (head)   [s] skip   [d] decide (only when a DecisionRequest is pending)   [o] show   [q] quit
+    - Bare `aida findings`, or `findings list` at a TTY in non-JSON mode, offers to enter the loop when parks exist, the same way bare `aida questions` offers its answer loop (`questions_answer_loop`).
+    - The resulting status is correct by construction. The loop never takes `--status`. The preview comes from `requeue::requeue_preview(req, store) -> RequeuePreview { target, role, waits_on: Option<blocker>, keeps_escalation, offerable }`, and `target` comes from `rework_target_for_mode(NeedsAttention, false)`. The same preview drives `requeue_hint`, so the hint and the keystroke cannot disagree.
+    - With an ID, `aida queue rework <ID>` is unchanged apart from the race fixes in section 4.
+
+    3. RE-ENTRY INTO THE DRAIN
+    - After a requeue the spec is Approved and head-queued on its existing role route. Its `batch:*` tags are kept, because `clear_shelve_markers` removes only `needs-human`.
+    - The queue-wide `--drain` head resolver re-reads the store on every pick (BUG-1608 / TASK-1490), so a running drain picks the spec up on its next head resolution. A `--batch` drain picks it up if the tag matches. If no drain is running, the requeue output says so and prints the launch command. It never auto-launches.
+    - Dependency gate: requeue is allowed for a spec with an unmet BlockedBy. The preview states it, e.g. "-> Approved, waits on STORY-52 (NeedsAttention)". `pickability()` still gates dispatch, and requeue never bypasses it.
+    - Failure budget: requeue neither refunds nor resets the `--max-failures` count of a running drain. A drain that has already stopped on a spent budget stays stopped. If a requeued spec shelves again in the same run, `forget_batch_disposition` replaces its earlier entry, so the budget counts distinct shelved specs. Each re-drive costs a human keystroke, so that bounds it.
+    - ADVISOR Q: should a re-shelve count again (strict PRIN-5)? I lean no. I will pin whichever is chosen with a test.
+
+    4. IDEMPOTENCY AND RACES
+    - Double requeue: inside the closure, `return_to_flight` re-reads the status. If it is not NeedsAttention, it returns `AlreadyInFlight { status, since }` and exits 0 with "already requeued; nothing changed". It writes no second audit comment and no event. Queue add is already idempotent. Also fix the duplicate `reason` comment: when leaving NeedsAttention, the reason goes only into the audit note.
+    - Status moved under us (for example, a drain claimed the spec between the read and the write): the compare-and-swap fails, nothing is written, and the command names the new status.
+    - Requeue while a lease is live: before any write, run `live_spec_claim_by_other` (the BUG-637 gate, made `pub(crate)`). A live lease held by another session means refuse, naming the holder and `aida session end <id>`. A dead or stale lease does not block; pickup reclaims it (BUG-1285). This also closes the InProgress metadata-only reset over a live lease: that case becomes a refusal instead of a warning.
+    - Cross-clone concurrent requeue: the status writes converge to Approved, and at worst two audit comments appear. Accepted.
+
+    5. FAIL-CLOSED (PRIN-5)
+    - No advisor authority: refuse before any side effect. This already exists.
+    - Not a TTY: the loop never prompts. It prints the hints and exits 0, so agents keep the command form.
+    - A pending DecisionRequest, HumanOnly, or Superseded: `[r]` is not offered.
+    - Lease state unknown (lease directory unreadable or the process probe errors): treat it as live and refuse.
+    - The compare-and-swap fails: no write.
+    - Only a TTY human clears `needs-human`. MCP and the supervisor pass `human_present=false` (unchanged).
+    - Any error while emitting the event is logged. The transition itself has already been committed atomically; the event is telemetry.
+
+    6. FILES AND SYMBOLS
+    - requeue.rs: add `return_to_flight`, `ReturnCtx`, `ReturnOutcome`, `requeue_preview`, `RequeuePreview`; `requeue_hint` switches to the preview.
+    - queue_cmd.rs: `handle_queue_rework` gets the compare-and-swap via `return_to_flight`, the lease refusal and the single reason comment. Add `rework_triage_loop`.
+    - cli.rs: `QueueCommand::Rework.id` and top-level `Commands::Rework.id` become `Option`.
+    - lib.rs: `FindingsCommand::List` gets the offer to enter the loop. Update `print_requeue_hint_row`, and make `live_spec_claim_by_other` visible.
+    - git_backend_cmd.rs (`handle_git_backend_command`, edit door), mcp.rs (`tool_queue_rework_inner`), supervisor.rs (`handle_supervise_command`): route through `return_to_flight`.
+    - events.rs: add `EventKind::SpecRequeued`. awaiting_you.rs: shelved rows use the preview.
+    - Docs: docs/autonomous-drain.md "Triage path", docs/cli/04-git-lifecycle.md.
+    - Decision record: a new decision spec, "NeedsAttention resume: one-keystroke human requeue (b) over drain auto-resume (a)", with the rejection rationale, linked from STORY-1429.
+
+    7. TESTS
+    - requeue::tests: `return_to_flight_cas_refuses_when_status_moved`, `double_requeue_is_noop_with_one_audit_comment`, `preview_names_target_role_blocker_and_decision`, `preview_not_offerable_for_pending_decision_or_human_only`
+    - queue_rework_tests: `rework_refuses_while_other_session_lease_is_live`, `rework_proceeds_over_dead_lease`, `rework_fails_closed_on_unknown_lease_state`, `rework_in_progress_metadata_only_refuses_over_live_lease`, `triage_loop_without_tty_prints_hints_and_never_prompts`, `triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued` (stdin injected)
+    - queue_work_tests: `requeued_spec_reenters_queue_wide_drain_head`, `requeued_dependent_still_skipped_by_blocked_by_gate`
+    - auto_complete tests: `drain_batch_requeued_spec_reshelve_budget_semantics` (pins the answer to the advisor question)
+    - supervisor::tests: `supervisor_redrive_routes_through_return_to_flight_and_clears_attention_reason`
+
+    8. OUT OF SCOPE
+    - Option (a): drain auto-resume of non-transient parks. It is rejected, and the rejection is recorded in the decision spec.
+    - Auto-launching a drain after a requeue. That belongs to STORY-1218 (shift tick).
+    - Changing the supervisor's `--force-claim` policy.
+    - Applying the keystroke to Done specs with a request-changes verdict (`AwaitingRework`). That is a separate surface.
+    - A TUI, and deduplicating comments across clones.
+  created_at: 2026-09-25T01:12:54.211460043Z
+  modified_at: 2026-09-25T01:12:54.211460043Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
