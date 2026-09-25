@@ -66,6 +66,7 @@ pub(crate) fn handle_supervise_command(
                 backoff: crate::supervisor::DEFAULT_BACKOFF.to_vec(),
                 max: *max,
                 json: *json,
+                floors: None,
             };
             crate::supervisor::handle_supervise_command(backend, project_root, opts)
         }
@@ -492,6 +493,7 @@ fn run_watch_pass(
         backoff: crate::supervisor::DEFAULT_BACKOFF.to_vec(),
         max: None,
         json,
+        floors: None,
     };
     let _ = crate::supervisor::handle_supervise_command(backend, project_root, redrive_opts);
     // Nudge sends a real mailbox message / notification, so it only fires under

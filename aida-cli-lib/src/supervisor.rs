@@ -53,6 +53,9 @@ pub(crate) struct SuperviseOpts {
     /// Cap on how many specs to re-drive in a single run (`None` = no cap).
     pub(crate) max: Option<usize>,
     pub(crate) json: bool,
+    /// Extra floors an unattended caller (the night shift) applies before
+    /// anything else. `None` = the manual verb's behaviour.
+    pub(crate) floors: Option<RedriveFloors>,
 }
 
 impl Default for SuperviseOpts {
@@ -63,8 +66,33 @@ impl Default for SuperviseOpts {
             backoff: DEFAULT_BACKOFF.to_vec(),
             max: None,
             json: false,
+            floors: None,
         }
     }
+}
+
+/// The night shift's re-drive floors: it touches only parks it could also
+/// launch. A park outside them is left exactly as it is (no re-drive, no cap
+/// reclassification) for a human or the manual verb.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct RedriveFloors {
+    /// Only an EXPLICIT `execution_mode = drain` park.
+    pub(crate) drain_mode_only: bool,
+    /// Never a keystone-class spec (the one keystone classifier).
+    pub(crate) exclude_keystone: bool,
+    /// Upper-cased spec ids that carry a live merge hold.
+    pub(crate) held: std::collections::BTreeSet<String>,
+}
+
+/// Where a re-driven spec is put back in the queue.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QueueTarget {
+    /// Queue file owner (the user the wave drains as).
+    pub(crate) user: String,
+    /// `for_role` routing (the wave's role).
+    pub(crate) role: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -82,14 +110,19 @@ pub(crate) struct SuperviseDecision {
     /// Supervised re-drives already spent (from the event log).
     pub(crate) attempts: u32,
     /// What the supervisor did / would do: re-drive, backoff-wait,
-    /// reclassify-needs-human, leave-for-human, skip-max-this-run.
+    /// reclassify-needs-human, leave-for-human, skip-max-this-run (and, under
+    /// the night shift's floors, leave-not-drain-mode / leave-keystone /
+    /// leave-merge-held).
     pub(crate) action: String,
+    /// The spec's store id, for the targeted write that applies the decision.
+    #[serde(skip)]
+    pub(crate) id: Option<uuid::Uuid>,
 }
 
-/// The `aida supervise` entry point. Pure-ish: reads the store + event log,
-/// decides per park, and (when `execute`) mutates the store and launches the
-/// re-drives.
-// trace:STORY-1051 | ai:claude
+/// The `aida supervise` entry point. Plans over the store + event log with
+/// [`plan_redrives`], and (when `execute`) applies each decision with a
+/// targeted write and launches the re-drives in the foreground.
+// trace:STORY-1051 trace:TASK-1492 | ai:claude
 pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
     backend: &B,
     project_root: &std::path::Path,
@@ -102,122 +135,41 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
     // spec).
     // trace:STORY-1429 | ai:claude
     let store = backend.load()?;
-    let mut decisions = Vec::new();
+    // Attempts come from the event log, archive included, so a rotation of
+    // `events.jsonl` never resets the ADR-26 count (fork B).
+    let history = events::RedriveHistory::from_events(&events::read_all_with_archive(project_root));
+    let mut decisions = plan_redrives(&store.requirements, &history, &opts, chrono::Utc::now());
     let mut launches: Vec<String> = Vec::new();
-    let mut cap_findings: Vec<(String, String, u32)> = Vec::new();
-    let mut launched = 0usize;
-    let now = chrono::Utc::now();
 
-    // Oldest-parked first, so the longest-stuck spec is recovered first.
-    let mut parked: Vec<usize> = store
-        .requirements
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, r)| matches!(r.status, RequirementStatus::NeedsAttention).then_some(idx))
-        .collect();
-    parked.sort_by(|a, b| {
-        store.requirements[*a]
-            .modified_at
-            .cmp(&store.requirements[*b].modified_at)
-    });
-
-    for idx in parked {
-        let spec = store.requirements[idx].display_id();
-        // Attempt count + last re-drive time come from the event log (fork B).
-        let (attempts, last_redrive) = events::supervisor_redrive_state(project_root, &spec);
-        let mut decision = classify_requirement(&store.requirements[idx], attempts);
-
-        if decision.class == ParkClass::NeedsHuman {
-            decisions.push(decision);
-            continue;
-        }
-
-        // Transient. Cap reached → reclassify to needs-human and stop.
-        if attempts >= opts.max_attempts {
-            if opts.execute {
-                let id = store.requirements[idx].id;
-                if !reclassify_needs_human_atomically(backend, id, opts.max_attempts)? {
-                    decision.action = "skip-status-moved".to_string();
-                    decisions.push(decision);
-                    continue;
+    if opts.execute {
+        for decision in decisions.iter_mut() {
+            match decision.action.as_str() {
+                "reclassify-needs-human" => {
+                    if !apply_cap(backend, project_root, decision, opts.max_attempts)? {
+                        decision.action = "skip-status-moved".to_string();
+                    }
                 }
-                cap_findings.push((spec.clone(), decision.reason.clone(), attempts));
-                events::emit(
-                    project_root,
-                    &events::Event::new(
-                        Some(spec.clone()),
-                        "",
-                        events::EventKind::ReclassifiedNeedsHuman {
-                            kind: decision.reason.clone(),
-                            attempts,
-                        },
-                    ),
-                );
-            }
-            decision.action = "reclassify-needs-human".to_string();
-            decisions.push(decision);
-            continue;
-        }
-
-        // Backoff: wait `backoff[attempts]` since the last re-drive (or since the
-        // spec was parked, for the first re-drive) before trying again.
-        let since = last_redrive.unwrap_or(store.requirements[idx].modified_at);
-        let wait = backoff_for(&opts.backoff, attempts);
-        let elapsed = (now - since).to_std().unwrap_or(Duration::ZERO);
-        if elapsed < wait {
-            decision.action = "backoff-wait".to_string();
-            decisions.push(decision);
-            continue;
-        }
-
-        // Per-run cap on how many we re-drive.
-        if opts.max.is_some_and(|m| launched >= m) {
-            decision.action = "skip-max-this-run".to_string();
-            decisions.push(decision);
-            continue;
-        }
-
-        // Re-drive: re-queue (status → Approved, clear the failure) and emit the
-        // event that IS the attempt record. The actual drive is launched after
-        // the write lands. STORY-1429: the transition goes through the one
-        // owner with one targeted single-spec write; a spec that moved in
-        // the meantime (a human triaged it, a drain claimed it) is skipped. The
-        // supervisor is never a human at a terminal, so it never clears an
-        // escalation.
-        // trace:STORY-1429 | ai:claude
-        let next_attempt = attempts + 1;
-        if opts.execute {
-            match supervisor_requeue(
-                backend,
-                project_root,
-                store.requirements[idx].id,
-                &spec,
-                &decision.reason,
-                next_attempt,
-                opts.max_attempts,
-            )? {
-                true => {
-                    launches.push(spec.clone());
-                    launched += 1;
+                "would-re-drive" => {
+                    // The supervisor is never a human at a terminal, so it
+                    // never clears an escalation (STORY-1429).
+                    let applied = apply_requeue(
+                        backend,
+                        project_root,
+                        std::slice::from_ref(decision),
+                        opts.max_attempts,
+                        None,
+                    )?;
+                    if applied.is_empty() {
+                        decision.action = "skip-status-moved".to_string();
+                        decision.attempts = decision.attempts.saturating_sub(1);
+                    } else {
+                        decision.action = "re-drive".to_string();
+                        launches.push(decision.spec.clone());
+                    }
                 }
-                false => {
-                    decision.action = "skip-status-moved".to_string();
-                    decisions.push(decision);
-                    continue;
-                }
+                _ => {}
             }
         }
-        decision.attempts = next_attempt;
-        decision.action = if opts.execute {
-            "re-drive".to_string()
-        } else {
-            "would-re-drive".to_string()
-        };
-        decisions.push(decision);
-    }
-
-    for (spec, kind, attempts) in cap_findings {
-        backend.add_requirement(cap_finding(&spec, &kind, attempts))?;
     }
 
     render_decisions(&decisions, opts.json)?;
@@ -228,6 +180,187 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
         }
     }
     Ok(())
+}
+
+/// Plan one supervisor pass over the parked specs, oldest-parked first, so
+/// the longest-stuck spec is recovered first. Pure over its inputs: the
+/// attempt count and last re-drive time come from `history` (ADR-26 fork B).
+/// Actions: `would-re-drive` (attempts already advanced to the attempt it
+/// would be), `reclassify-needs-human` (cap reached), `backoff-wait`,
+/// `skip-max-this-run`, `leave-for-human`, and the floor refusals.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn plan_redrives(
+    requirements: &[Requirement],
+    history: &events::RedriveHistory,
+    opts: &SuperviseOpts,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Vec<SuperviseDecision> {
+    let mut parked: Vec<&Requirement> = requirements
+        .iter()
+        .filter(|r| matches!(r.status, RequirementStatus::NeedsAttention))
+        .collect();
+    parked.sort_by_key(|r| r.modified_at);
+
+    let mut decisions = Vec::new();
+    let mut planned = 0usize;
+    for req in parked {
+        let spec = req.display_id();
+        let (attempts, last_redrive) = history.get(&spec);
+        let mut decision = classify_requirement(req, attempts);
+
+        if let Some(floors) = &opts.floors {
+            if let Some(action) = floor_refusal(req, &spec, floors) {
+                decision.action = action.to_string();
+                decisions.push(decision);
+                continue;
+            }
+        }
+        if decision.class == ParkClass::NeedsHuman {
+            decisions.push(decision);
+            continue;
+        }
+        // Transient. Cap reached → reclassify to needs-human and stop.
+        if attempts >= opts.max_attempts {
+            decision.action = "reclassify-needs-human".to_string();
+            decisions.push(decision);
+            continue;
+        }
+        // Backoff: wait `backoff[attempts]` since the last re-drive (or since
+        // the spec was parked, for the first re-drive) before trying again.
+        let since = last_redrive.unwrap_or(req.modified_at);
+        let wait = backoff_for(&opts.backoff, attempts);
+        let elapsed = (now - since).to_std().unwrap_or(Duration::ZERO);
+        if elapsed < wait {
+            decision.action = "backoff-wait".to_string();
+            decisions.push(decision);
+            continue;
+        }
+        // Per-run cap on how many we re-drive.
+        if opts.max.is_some_and(|m| planned >= m) {
+            decision.action = "skip-max-this-run".to_string();
+            decisions.push(decision);
+            continue;
+        }
+        planned += 1;
+        decision.attempts = attempts + 1;
+        decision.action = "would-re-drive".to_string();
+        decisions.push(decision);
+    }
+    decisions
+}
+
+/// The night shift's floors, checked before any other decision.
+// trace:TASK-1492 | ai:claude
+fn floor_refusal(req: &Requirement, spec: &str, floors: &RedriveFloors) -> Option<&'static str> {
+    if floors.drain_mode_only && req.execution_mode != Some(aida_core::ExecutionMode::Drain) {
+        return Some("leave-not-drain-mode");
+    }
+    if floors.exclude_keystone
+        && crate::presence::is_keystone_class(
+            &req.req_type.to_string(),
+            req.tags.iter().map(|t| t.as_str()),
+        )
+    {
+        return Some("leave-keystone");
+    }
+    if floors.held.contains(&spec.to_ascii_uppercase()) {
+        return Some("leave-merge-held");
+    }
+    None
+}
+
+/// Apply the `would-re-drive` decisions: each spec goes back to Approved
+/// through the one requeue owner (emitting `SpecReDriven`, the attempt
+/// record). With a `queue` target, every re-queued spec is then (re-)added at
+/// the HEAD of that queue in the decisions' order (oldest-parked first): the
+/// implementer dequeues at pickup, so a parked spec is usually not queued any
+/// more, and a status change alone would never reach a wave. Returns the
+/// specs actually re-queued; a spec that moved meanwhile is skipped.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn apply_requeue<B: DatabaseBackend>(
+    backend: &B,
+    project_root: &std::path::Path,
+    decisions: &[SuperviseDecision],
+    max_attempts: u32,
+    queue: Option<&QueueTarget>,
+) -> Result<Vec<String>> {
+    let mut applied: Vec<(String, uuid::Uuid)> = Vec::new();
+    for d in decisions.iter().filter(|d| d.action == "would-re-drive") {
+        let Some(id) = d.id else { continue };
+        if supervisor_requeue(
+            backend,
+            project_root,
+            id,
+            &d.spec,
+            &d.reason,
+            d.attempts,
+            max_attempts,
+        )? {
+            applied.push((d.spec.clone(), id));
+        }
+    }
+    if let (Some(q), false) = (queue, applied.is_empty()) {
+        let ids: Vec<uuid::Uuid> = applied.iter().map(|(_, id)| *id).collect();
+        let head = backend
+            .queue_list(&q.user, false)?
+            .iter()
+            .filter(|e| !ids.contains(&e.requirement_id) && e.position != i64::MAX)
+            .map(|e| e.position)
+            .min()
+            .unwrap_or(0);
+        let n = ids.len() as i64;
+        for (i, id) in ids.iter().enumerate() {
+            backend.queue_add(aida_core::QueueEntry {
+                user_id: q.user.clone(),
+                requirement_id: *id,
+                position: head.saturating_sub((n - i as i64).saturating_mul(1000)),
+                added_by: "night-shift".to_string(),
+                note: Some("re-queued after a transient park".to_string()),
+                added_at: chrono::Utc::now(),
+                for_role: Some(q.role.clone()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })?;
+        }
+    }
+    Ok(applied.into_iter().map(|(spec, _)| spec).collect())
+}
+
+/// Apply a `reclassify-needs-human` decision (the ADR-26 cap branch):
+/// tag needs-human with one targeted write while the spec is still parked,
+/// emit `ReclassifiedNeedsHuman`, and file the cap finding. Returns false
+/// when the spec had moved, in which case nothing was written or emitted.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn apply_cap<B: DatabaseBackend>(
+    backend: &B,
+    project_root: &std::path::Path,
+    decision: &SuperviseDecision,
+    max_attempts: u32,
+) -> Result<bool> {
+    let Some(id) = decision.id else {
+        return Ok(false);
+    };
+    if !reclassify_needs_human_atomically(backend, id, max_attempts)? {
+        return Ok(false);
+    }
+    events::emit(
+        project_root,
+        &events::Event::new(
+            Some(decision.spec.clone()),
+            "",
+            events::EventKind::ReclassifiedNeedsHuman {
+                kind: decision.reason.clone(),
+                attempts: decision.attempts,
+            },
+        ),
+    );
+    backend.add_requirement(cap_finding(
+        &decision.spec,
+        &decision.reason,
+        decision.attempts,
+    ))?;
+    Ok(true)
 }
 
 /// One supervised re-drive's store transition: the owner runs on the copy
@@ -309,12 +442,14 @@ fn reclassify_needs_human_atomically<B: DatabaseBackend>(
 // trace:STORY-1051 | ai:claude
 pub(crate) fn classify_requirement(req: &Requirement, attempts: u32) -> SuperviseDecision {
     let spec = req.display_id();
+    let id = Some(req.id);
     let human = |reason: &str| SuperviseDecision {
         spec: spec.clone(),
         class: ParkClass::NeedsHuman,
         reason: reason.to_string(),
         attempts,
         action: "leave-for-human".to_string(),
+        id,
     };
     if req.tags.contains(NEEDS_HUMAN_TAG) {
         return human(NEEDS_HUMAN_TAG);
@@ -332,6 +467,7 @@ pub(crate) fn classify_requirement(req: &Requirement, attempts: u32) -> Supervis
             reason: fr.kind.clone(),
             attempts,
             action: "would-re-drive".to_string(),
+            id,
         }
     } else {
         // ci-red on a real test failure, request-changes on substance,

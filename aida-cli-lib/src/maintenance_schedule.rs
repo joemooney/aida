@@ -2373,23 +2373,11 @@ pub(crate) fn collect_snapshot(
         let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
         let watermarks =
             crate::mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
-        let mut unread = 0i64;
-        let mut oldest: Option<i64> = None;
-        for m in &merged {
-            if m.deleted || m.retracted || m.archived {
-                continue;
-            }
-            let aida_core::mailbox::Recipient::Agent(to) = &m.to else {
-                continue;
-            };
-            let seen = watermarks.get(to).copied().unwrap_or(0);
-            if m.timestamp > seen {
-                unread += 1;
-                if oldest.is_none_or(|o| m.timestamp < o) {
-                    oldest = Some(m.timestamp);
-                }
-            }
-        }
+        // trace:TASK-1492 | ai:claude — the same per-recipient read the night
+        // shift's mail-latency escalation uses.
+        let per_recipient = crate::mailbox_store::unread_by_recipient(&merged, &watermarks);
+        let unread: i64 = per_recipient.values().map(|u| u.count).sum();
+        let oldest: Option<i64> = per_recipient.values().map(|u| u.oldest_ts).min();
         snap.mail_unread = unread;
         snap.mail_oldest_unread_age_secs = oldest
             .map(|ts| ((now.timestamp_millis() - ts) / 1000).max(0))
