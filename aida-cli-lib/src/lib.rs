@@ -25934,6 +25934,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_context: false,
             noexec: false,
             show_prompt: false,
+            verbose: false,
             prompt: None,
             no_prompt: false,
             no_resume: false,
@@ -25958,6 +25959,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_context: false,
             noexec: false,
             show_prompt: false,
+            verbose: false,
             prompt: None,
             no_prompt: false,
             no_resume: false,
@@ -25980,6 +25982,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_context: false,
             noexec: false,
             show_prompt: false,
+            verbose: false,
             prompt: None,
             no_prompt: false,
             no_resume: false,
@@ -26068,6 +26071,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_context,
             noexec,
             show_prompt,
+            verbose,
             prompt,
             no_prompt,
             no_resume,
@@ -26090,6 +26094,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             !*no_title,
             *noexec,
             *show_prompt,
+            *verbose,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -26114,6 +26119,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_context,
             noexec,
             show_prompt,
+            verbose,
             prompt,
             no_prompt,
             no_resume,
@@ -26134,6 +26140,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             !*no_title,
             *noexec,
             *show_prompt,
+            *verbose,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -26156,6 +26163,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_context,
             noexec,
             show_prompt,
+            verbose,
             prompt,
             no_prompt,
             no_resume,
@@ -26176,6 +26184,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             !*no_title,
             *noexec,
             *show_prompt,
+            *verbose,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -26331,6 +26340,7 @@ fn agent_resume_ended(
         &[],
         entry.description.clone(),
         true,
+        false,
     )
 }
 
@@ -27034,6 +27044,7 @@ fn agent_new_claude(
     title: bool,
     noexec: bool,
     show_prompt: bool,
+    verbose: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -27107,6 +27118,7 @@ fn agent_new_claude(
             title,
             noexec,
             show_prompt,
+            verbose,
             prompt,
             resume,
             flag_options,
@@ -27125,6 +27137,7 @@ fn agent_new_claude(
             title,
             noexec,
             show_prompt,
+            verbose,
             prompt,
             resume,
             flag_options,
@@ -27148,6 +27161,7 @@ fn agent_new_codex(
     title: bool,
     noexec: bool,
     show_prompt: bool,
+    verbose: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -27187,6 +27201,7 @@ fn agent_new_codex(
         title,
         noexec,
         show_prompt,
+        verbose,
         prompt,
         resume,
         flag_options,
@@ -27209,6 +27224,7 @@ fn agent_new_antigravity(
     title: bool,
     noexec: bool,
     show_prompt: bool,
+    verbose: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -27248,6 +27264,7 @@ fn agent_new_antigravity(
         title,
         noexec,
         show_prompt,
+        verbose,
         prompt,
         resume,
         flag_options,
@@ -27269,6 +27286,7 @@ fn agent_new_with_config(
     title: bool,
     noexec: bool,
     show_prompt: bool,
+    verbose: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -27443,6 +27461,25 @@ fn agent_new_with_config(
         config.agent_type
     );
 
+    // TASK-1498: `--verbose` launch-time diagnostics — a REAL launch (unlike
+    // `--no-exec`, which previews and exits). Printed to stderr, same as the
+    // banner lines above, so stdout stays exactly what it is today when
+    // `--verbose` is not passed. trace:TASK-1498 | ai:claude
+    if verbose {
+        eprint!(
+            "{}",
+            render_agent_launch_diagnostics(
+                &binary,
+                &config,
+                &plan,
+                &prompt,
+                &prompt_args,
+                true,
+                context.enabled,
+            )?
+        );
+    }
+
     run_tracked_agent(
         &binary,
         &config,
@@ -27451,6 +27488,7 @@ fn agent_new_with_config(
         &prompt_args,
         description,
         title,
+        verbose,
     )
 }
 
@@ -27479,6 +27517,7 @@ fn agent_new_bg_dispatch(
     _title: bool,
     noexec: bool,
     show_prompt: bool,
+    verbose: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -27615,6 +27654,24 @@ fn agent_new_bg_dispatch(
         );
     }
 
+    // TASK-1498: `--verbose` pre-spawn diagnostics, same contract as the
+    // foreground path — printed to stderr before the child is spawned.
+    // trace:TASK-1498 | ai:claude
+    if verbose {
+        eprint!(
+            "{}",
+            render_agent_launch_diagnostics(
+                &binary,
+                &config,
+                &plan,
+                &prompt,
+                &prompt_args,
+                false,
+                context.enabled,
+            )?
+        );
+    }
+
     let mut command = std::process::Command::new(&binary);
     command
         .current_dir(&plan.launch_cwd)
@@ -27656,6 +27713,22 @@ fn agent_new_bg_dispatch(
     let output = command
         .output()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
+    // TASK-1498: `--verbose` child-result diagnostics for the `--bg` shape —
+    // `claude --bg` returns immediately after handing off, so "exit" here is
+    // the dispatcher's own exit, not the backgrounded session's.
+    // trace:TASK-1498 | ai:claude
+    if verbose {
+        eprintln!(
+            "  {}: dispatcher exited: success={} code={}",
+            "diagnostics".bold(),
+            output.status.success(),
+            output
+                .status
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "signal".to_string())
+        );
+    }
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     if !output.status.success() {
@@ -29969,6 +30042,94 @@ fn render_agent_launch_noexec(
     Ok(out)
 }
 
+/// TASK-1498: build a DISPLAY-only copy of `prompt_args` for verbose
+/// diagnostics — the actual prompt text (last element; see
+/// `agent_initial_prompt_args`, which returns `[]`, `[prompt]`, or `[flag,
+/// prompt]`) is replaced with a length-only placeholder. The real
+/// `prompt_args` passed to the actual launch is untouched; this copy is
+/// used ONLY to build the diagnostic command line, so the initial message —
+/// which may be long, may embed a `--prompt`-supplied secret, or may simply
+/// not be the operator's business to have echoed to a terminal/log by
+/// default — never appears in `--verbose` output. `prompt_source` already
+/// says whether it was explicit or generated.
+// trace:TASK-1498 | ai:claude
+fn redact_prompt_arg_for_diagnostics(prompt_args: &[String]) -> Vec<String> {
+    let Some((last, rest)) = prompt_args.split_last() else {
+        return Vec::new();
+    };
+    let mut out = rest.to_vec();
+    out.push(format!(
+        "<redacted prompt — {} chars; see prompt_source>",
+        last.chars().count()
+    ));
+    out
+}
+
+/// TASK-1498: apply the STORY-582 `redact_secrets` scrub to only the
+/// `command: ...` line of a rendered launch contract, leaving every other
+/// line (and their newlines) untouched. `redact_secrets` operates on
+/// whitespace-split tokens and joins with a single space, which would
+/// collapse a multi-line report onto one line if applied to the whole body —
+/// scoping it to the one line that carries the generated child argv avoids
+/// that while still catching a token/secret-looking value an `--extra-flag`
+/// or default arg might carry.
+// trace:TASK-1498 | ai:claude
+fn redact_launch_command_line(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    for line in body.split_inclusive('\n') {
+        if let Some(rest) = line.strip_prefix("command: ") {
+            let (content, newline) = match rest.strip_suffix('\n') {
+                Some(c) => (c, "\n"),
+                None => (rest, ""),
+            };
+            out.push_str("command: ");
+            out.push_str(&redact_secrets(content));
+            out.push_str(newline);
+        } else {
+            out.push_str(line);
+        }
+    }
+    out
+}
+
+/// TASK-1498: `--verbose` pre-spawn diagnostics for a launch that REALLY
+/// executes — distinct from `--no-exec`, which previews the identical
+/// contract and exits without spawning. Reuses `render_agent_launch_noexec`
+/// verbatim for the body (argv, permission posture, prompt source, context
+/// snapshot path, AIDA env inputs, guidance files) so the two can never
+/// drift apart; only the banner line differs (this one says a process IS
+/// being spawned), the prompt text is replaced by a length-only placeholder
+/// (`redact_prompt_arg_for_diagnostics`), and the `command:` line is passed
+/// through `redact_secrets` (`redact_launch_command_line`) so a
+/// secret-looking argv value is never printed.
+// trace:TASK-1498 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn render_agent_launch_diagnostics(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    prompt: &AgentPromptOptions,
+    prompt_args: &[String],
+    wrap_claude: bool,
+    context_enabled: bool,
+) -> Result<String> {
+    let display_prompt_args = redact_prompt_arg_for_diagnostics(prompt_args);
+    let body = render_agent_launch_noexec(
+        binary,
+        config,
+        plan,
+        prompt,
+        &display_prompt_args,
+        wrap_claude,
+        context_enabled,
+    )?;
+    let body = redact_launch_command_line(&body);
+    let rest = body.splitn(2, '\n').nth(1).unwrap_or("");
+    Ok(format!(
+        "# AIDA agent launch diagnostics (--verbose) — resolved launch contract; spawning now.\n{rest}"
+    ))
+}
+
 /// TASK-1467: label the prompt that would be sent as `explicit` (from
 /// `--prompt`) or `generated` (the role-aware launch prompt), or note that no
 /// initial message would be sent at all.
@@ -30126,6 +30287,7 @@ fn run_tracked_agent(
     prompt_args: &[String],
     description: Option<String>,
     title: bool,
+    verbose: bool,
 ) -> Result<()> {
     // TASK-864: route the INTERACTIVE foreground launch through the same os_wrap
     // (bwrap) boundary the headless paths use. When `[contained] os_wrap` is on
@@ -30211,7 +30373,7 @@ fn run_tracked_agent(
         ),
         (RoleInstanceKind::Driver, text) => text,
     };
-    agent_registry::register_spawned_agent(
+    let registry_entry = agent_registry::register_spawned_agent(
         &plan.project_root,
         config.agent_type,
         child_pid,
@@ -30224,11 +30386,38 @@ fn run_tracked_agent(
         plan.resumed_from.clone(),
         description,
     )?;
+    // TASK-1498: `--verbose` process-registration diagnostics — confirms the
+    // spawned pid and the registry entry id it was recorded under, right
+    // after the write that makes it visible to `aida agent ls`.
+    // trace:TASK-1498 | ai:claude
+    if verbose {
+        eprintln!(
+            "  {}: spawned pid {} registered as {}",
+            "diagnostics".bold(),
+            child_pid,
+            registry_entry.id
+        );
+    }
     let signal_forwarder = install_child_signal_forwarder(child_pid)?;
     let status = child
         .wait()
         .with_context(|| format!("failed to wait for {}", config.agent_type))?;
     signal_forwarder.stop();
+    // TASK-1498: `--verbose` child exit/result diagnostics — reported clearly
+    // without changing launch semantics (the exit-code propagation below is
+    // unchanged). trace:TASK-1498 | ai:claude
+    if verbose {
+        eprintln!(
+            "  {}: pid {} exited: success={} code={}",
+            "diagnostics".bold(),
+            child_pid,
+            status.success(),
+            status
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "signal".to_string())
+        );
+    }
     if let Some(restore) = title_restore {
         agent_registry::restore_terminal_title(restore);
     }
@@ -87456,6 +87645,7 @@ fn handle_derisk_command(spec: &str) -> Result<()> {
             true,
             false,
             false,
+            false,
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
             AgentDefaultFlagOptions::new(true, Vec::new(), None),
@@ -87471,6 +87661,7 @@ fn handle_derisk_command(spec: &str) -> Result<()> {
             false,
             AgentContextOptions::new(true, false),
             true,
+            false,
             false,
             false,
             AgentPromptOptions::new(Some(launch.prompt), false),
@@ -87511,6 +87702,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             true,
             false,
             false,
+            false,
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
             AgentDefaultFlagOptions::new(true, Vec::new(), None),
@@ -87526,6 +87718,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             false,
             AgentContextOptions::new(true, false),
             true,
+            false,
             false,
             false,
             AgentPromptOptions::new(Some(launch.prompt), false),

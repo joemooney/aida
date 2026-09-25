@@ -1845,9 +1845,10 @@ async fn add_comment(
         )
     })?;
 
+    // trace:BUG-1614 | ai:claude — Comment::new takes (author, content); do not swap.
     let comment = aida_core::Comment::new(
-        body.content,
         body.author.unwrap_or_else(|| "anonymous".to_string()),
+        body.content,
     );
 
     let proto_comment = comment_to_proto(&comment);
@@ -2253,9 +2254,10 @@ async fn add_comment_legacy(
         )
     })?;
 
+    // trace:BUG-1614 | ai:claude — Comment::new takes (author, content); do not swap.
     let comment = aida_core::Comment::new(
-        body.content,
         body.author.unwrap_or_else(|| "anonymous".to_string()),
+        body.content,
     );
 
     let proto_comment = comment_to_proto(&comment);
@@ -4805,5 +4807,38 @@ mod bug_1612_save_conflict_tests {
         let persisted = raw.load().unwrap();
         assert!(persisted.users[0].verify_pin("4321"));
         assert_eq!(persisted.requirements[0].title, "edited elsewhere");
+    }
+
+    // trace:BUG-1614 | ai:claude — add_comment_legacy previously called
+    // Comment::new(body.content, body.author), but Comment::new takes
+    // (author, content); content and author were stored swapped.
+    #[tokio::test]
+    async fn rest_add_comment_stores_content_and_author_without_swap() {
+        let dir = tempfile::tempdir().unwrap();
+        let (state, raw, _task) = git_server(dir.path());
+
+        let request = Json(AddCommentRequest {
+            content: "the requirement needs a design review".into(),
+            author: Some("bob".into()),
+            parent_comment_id: None,
+        });
+
+        let (status, Json(response)) =
+            add_comment_legacy(State(state.clone()), Path("TASK-1".into()), request)
+                .await
+                .unwrap_or_else(|_| panic!("add_comment_legacy failed"));
+        assert_eq!(status, StatusCode::CREATED);
+
+        let returned = response.comment.expect("response carries the comment");
+        assert_eq!(returned.content, "the requirement needs a design review");
+        assert_eq!(returned.author, "bob");
+
+        let on_disk = raw.get_requirement_by_spec_id("TASK-1").unwrap().unwrap();
+        assert_eq!(on_disk.comments.len(), 1);
+        assert_eq!(
+            on_disk.comments[0].content,
+            "the requirement needs a design review"
+        );
+        assert_eq!(on_disk.comments[0].author, "bob");
     }
 }
