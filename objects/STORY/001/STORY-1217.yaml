@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-25T01:21:01.727918128Z
+modified_at: 2026-09-25T01:21:02.754429423Z
 req_type: Story
 tags:
 - audit
@@ -312,5 +312,11 @@ comments:
     Execution mode stays guided. Re-sketch the items above, including the prerequisite stories, and this seat will turn the re-review around on the delta alone.
   created_at: 2026-09-25T01:20:09.510418529Z
   modified_at: 2026-09-25T01:20:09.510418529Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d626-cf22-7b22-afb0-a23f33b1f2ad
+  author: joe
+  content: 'Orchestrator: the advisor signoff returned CHANGES REQUESTED. Filed the two prerequisites it named: BUG-1611 (approved; lifecycle guard at queue done, forced reopen and zen) and STORY-1473 (DRAFT; session-bound seat authority). STORY-1473 needs Joe''s decision because it changes how advisor authority works for him and for every agent. STORY-1217 is blocked on both.'
+  created_at: 2026-09-25T01:21:02.754429423Z
+  modified_at: 2026-09-25T01:21:02.754429423Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
