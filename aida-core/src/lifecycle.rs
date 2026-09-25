@@ -195,9 +195,20 @@ pub fn target_requires_advisor_authority(to: State) -> bool {
 /// for `status_advance_requires_advisor_authority`. Defined over the FULL
 /// (from, to) domain, not only declared edges, because the gate governs direct
 /// edits too (e.g. `Draft → InProgress`). trace:TASK-739 | ai:claude
+///
+/// BUG-1611: a closed (terminal) source — `Rejected`, `Completed`,
+/// `Superseded` — lifted back into a protected target is a reopen, and a reopen
+/// into the approved+ pipeline is the same triage decision as approving a
+/// draft. Before this, only `Draft`/`NeedsAttention` were gated sources, so
+/// `aida edit X --status approved --force` on a Rejected or Completed spec
+/// needed no authority (`--force` only clears the separate reopen guard). A
+/// terminal self-edge (`Completed → Completed`) is an idempotent re-flip, not a
+/// reopen, and stays ungated.
+// trace:BUG-1611 | ai:claude
 pub fn transition_guard(from: State, to: State) -> GuardKind {
-    if matches!(from, State::Draft | State::NeedsAttention) && target_requires_advisor_authority(to)
-    {
+    let gated_source =
+        matches!(from, State::Draft | State::NeedsAttention) || (from.is_terminal() && from != to); // trace:BUG-1611 | ai:claude
+    if gated_source && target_requires_advisor_authority(to) {
         GuardKind::RequiresAdvisorAuthority
     } else {
         GuardKind::None
@@ -967,6 +978,46 @@ mod tests {
     fn in_progress_to_approved_is_not_gated() {
         assert_eq!(
             transition_guard(State::InProgress, State::Approved),
+            GuardKind::None
+        );
+    }
+
+    // BUG-1611: reopening a closed spec into the approved+ pipeline is an
+    // advisor-authority act; an idempotent terminal self-edge and a close
+    // (into a non-protected target) stay ungated. trace:BUG-1611 | ai:claude
+    #[test]
+    fn terminal_source_reopen_into_pipeline_requires_advisor_authority() {
+        for from in [State::Rejected, State::Completed, State::Superseded] {
+            for to in [
+                State::Approved,
+                State::Planned,
+                State::InProgress,
+                State::Done,
+            ] {
+                assert_eq!(
+                    transition_guard(from, to),
+                    GuardKind::RequiresAdvisorAuthority,
+                    "{from:?} -> {to:?} is a reopen and must need authority"
+                );
+            }
+            assert_eq!(transition_guard(from, State::Draft), GuardKind::None);
+        }
+        assert_eq!(
+            transition_guard(State::Rejected, State::Completed),
+            GuardKind::RequiresAdvisorAuthority
+        );
+        assert_eq!(
+            transition_guard(State::Completed, State::Completed),
+            GuardKind::None,
+            "an idempotent re-flip is not a reopen"
+        );
+        // The execution flips a drain rides stay free.
+        assert_eq!(
+            transition_guard(State::InProgress, State::Done),
+            GuardKind::None
+        );
+        assert_eq!(
+            transition_guard(State::Approved, State::Done),
             GuardKind::None
         );
     }
