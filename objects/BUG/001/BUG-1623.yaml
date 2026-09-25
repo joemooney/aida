@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T15:30:53.823179350Z
-modified_at: 2026-09-25T18:10:58.612514208Z
+modified_at: 2026-09-25T18:45:05.057849766Z
 req_type: Bug
 comments:
 - id: 01a0d931-3140-7210-972a-8a1d6795a190
@@ -22,6 +22,30 @@ comments:
   content: 'Scope addition from the BUG-1621 re-review (minor): n1, when the shift is disabled after it launched a wave, watch --execute holds forever with ''awaits settlement by the next check''; name the fix in the message (enable the shift or run a tick). n2, the --execute flag help (cli.rs ~2643) should mention re-drive and nudge. n3, with --json --execute the nudge prints plain text after the JSON line. n4, the help sentence at cli.rs ~2634 reads awkwardly.'
   created_at: 2026-09-25T17:19:49.655860521Z
   modified_at: 2026-09-25T17:19:49.655860521Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d9e2-a7a1-72e2-908f-fa56fbf9f4dd
+  author: joe
+  content: |-
+    Strict review: REQUEST CHANGES — at f96605b6da. One required fix (n1). Everything else passes.
+    REQUIRED n1 (aida-cli-lib/src/shift.rs:1412-1417): the unsettled-wave message tells the operator to 'run `aida shift enable` first'. Enabling arms unattended drain launches and registers the tick job. The first enabled tick settles the wave and can then launch a new one. So the message prescribes granting unattended-launch authority just to clear a re-drive hold. It is also printed when the shift is already enabled, where the parenthetical does not apply. Describe the state instead. Suggested wording: 'wave unsettled: the last shift wave exited and is not settled yet; only a shift tick settles it, and a disabled shift does not tick, so re-drive stays held until the shift runs again'. Leave enabling to the operator's own decision. Better still, check cfg.enabled and word the two cases separately.
+    VERIFIED:
+    - m1: notify.rs:768-771 kill_group + wait before returning the poll error.
+    - m2: stdin is written on a detached thread (notify.rs:722-729). The group kill gives EPIPE; there is no lock or deadlock; on the happy path the thread ends on write completion or EPIPE. Mutation check: a synchronous write makes notify_bounded_stdin_write_cannot_outlive_the_timeout FAIL (5.0s).
+    - m4: poll_exit uses waitid/WNOWAIT only under cfg(target_os=linux); the fallback is try_wait. A Reaped shell is never group-killed. A timed-out shell is never reaped before killpg, so its pid or zombie still holds the pgid and there is no reuse race. cargo check --target aarch64-apple-darwin could not run (ring needs a mac C toolchain). Instead I forced the non-Linux cfg on Linux: it compiles with no new warnings, and all notify:: tests pass except the Linux-gated background-child test, as documented.
+    - m5: reverting apply_requeue_with to return Err immediately makes a_store_error_mid_pass_still_queues_the_already_approved_specs FAIL (queued=[]).
+    - m6: docs/autonomous-drain.md:1398-1402 is accurate.
+    - n2/n4 help text is correct.
+    - n3: under --json the nudge line goes to eprintln (supervise_cmd.rs:466-472), and every other stdout print is gated !json, so stdout is pure JSON.
+    - The notify, nudge and watch paths never merge, approve or grant.
+    - New tests use tempdirs only: no /tmp literals, systemd, crontab or ~/.aida.
+    - cargo test -p aida-cli-lib --lib: notify 25, shift 65, supervis 70, watch 69, all pass. No stray sleep processes.
+    NITS (non-blocking):
+    - (a) notify.rs:768 the error path also killpg's on ECHILD, where the pid may already be reaped and reused. Nothing in-tree ignores SIGCHLD or calls waitpid(-1), so it is unreachable today. Consider skipping the kill on ECHILD.
+    - (b) notify.rs:731 'the group kill below ends every process of the command's group' is Linux-only; the non-Linux reaped path does no group kill.
+    - (c) notify.rs:1222 the pidfile path is not shell-quoted.
+    - (d) No test pins the n1 message or n3 stderr routing.
+  created_at: 2026-09-25T18:45:05.057849766Z
+  modified_at: 2026-09-25T18:45:05.057849766Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b821736ce75455f3858816002777b451fd4aaf03
