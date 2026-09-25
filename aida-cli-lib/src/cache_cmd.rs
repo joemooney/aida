@@ -19,13 +19,38 @@ pub(crate) fn handle_cache_command(
     use aida_core::DatabaseBackend;
 
     match cmd {
-        CacheCommand::Rebuild => {
+        CacheCommand::Rebuild { history: true } => {
+            // trace:TASK-1507 | ai:claude
+            println!("Rebuilding the history index from the store's git log...");
+            let report = crate::history_cache::rebuild_full(backend.path())?;
+            println!(
+                "{}: History index rebuilt in {:.1}s. {} commit(s), {} event(s) at {}.",
+                "OK".green(),
+                report.elapsed.as_secs_f64(),
+                report.commits,
+                report.events,
+                report.path.display()
+            );
+            for p in &report.pruned {
+                println!(
+                    "Removed an index file from another version: {}",
+                    p.display()
+                );
+            }
+        }
+        CacheCommand::Rebuild { history: false } => {
             let n = backend.rebuild_cache()?;
             println!(
                 "{}: Cache rebuilt. {} requirement(s) projected from git store at {}.",
                 "OK".green(),
                 n,
                 backend.cache().path().display()
+            );
+            // trace:TASK-1507 | ai:claude
+            println!(
+                "{}",
+                "(the history index is separate; rebuild it with `aida cache rebuild --history`)"
+                    .dimmed()
             );
         }
         CacheCommand::Status => {
@@ -68,12 +93,92 @@ pub(crate) fn handle_cache_command(
             } else {
                 println!("Status:           {}", "FRESH".green());
             }
+            print_history_status(&crate::history_cache::status(backend.path()));
         }
         CacheCommand::Verify { fix, json } => {
             return handle_cache_verify(backend, *fix, *json);
         }
     }
     Ok(())
+}
+
+/// The History section of `aida cache status`: where the history index
+/// lives, how far it reaches, and whether it matches the store HEAD.
+// trace:TASK-1507 | ai:claude
+fn print_history_status(st: &crate::history_cache::HistoryCacheStatus) {
+    println!();
+    println!("History index:    {}", st.path.display());
+    for line in history_status_lines(st) {
+        println!("{line}");
+    }
+}
+
+/// Pure rendering of the History section rows (after the path line), so the
+/// wording is testable without capturing stdout.
+// trace:TASK-1507 | ai:claude
+pub(crate) fn history_status_lines(st: &crate::history_cache::HistoryCacheStatus) -> Vec<String> {
+    let mut out = Vec::new();
+    if !st.exists {
+        out.push(
+            "History status:   not built yet — it builds on the next `aida history` \
+             query, or run `aida cache rebuild --history`"
+                .to_string(),
+        );
+        return out;
+    }
+    if let Some(err) = &st.error {
+        out.push(format!(
+            "History status:   {} ({err}) — `aida history` reads git directly; \
+             run `aida cache rebuild --history`",
+            "UNREADABLE".yellow()
+        ));
+        return out;
+    }
+    out.push(format!(
+        "History events:   {} event(s) from {} commit(s)",
+        st.events, st.commits
+    ));
+    out.push(format!(
+        "History reaches:  {}",
+        if st.complete {
+            "the start of the store history".to_string()
+        } else {
+            match &st.floor_commit_at {
+                Some(at) => format!("back to {at} (still filling in older history)"),
+                None => "nothing yet (still filling in older history)".to_string(),
+            }
+        }
+    ));
+    out.push(format!(
+        "History updated:  {}",
+        st.updated_at.as_deref().unwrap_or("(never)")
+    ));
+    out.push(format!(
+        "History tip SHA:  {}",
+        st.tip.as_deref().unwrap_or("(none)")
+    ));
+    if let Some(reason) = &st.last_reset_reason {
+        out.push(format!("History last reset: {reason}"));
+    }
+    if st.indexer_running {
+        out.push("History indexer:  running now".to_string());
+    }
+    let fresh = st.tip.is_some() && st.tip == st.head;
+    out.push(if fresh && st.complete {
+        format!("History status:   {}", "FRESH".green())
+    } else if fresh {
+        format!(
+            "History status:   {} — recent history is served from the index; \
+             older queries read git directly until it finishes",
+            "FILLING".yellow()
+        )
+    } else {
+        format!(
+            "History status:   {} — it catches up on the next `aida history` query",
+            "BEHIND".yellow()
+        )
+    });
+    out
 }
 
 /// Cross-check the cache's projected status for every spec against the status

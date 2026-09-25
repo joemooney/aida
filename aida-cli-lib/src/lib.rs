@@ -173,6 +173,8 @@ mod health_cmd;
 mod health_metrics;
 mod health_vitals_cmd;
 mod history;
+// trace:TASK-1507 | ai:claude
+mod history_cache;
 mod human_audit;
 mod human_cmd;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
@@ -12888,6 +12890,11 @@ mod bug_588_history_id_resolves_uuid_tests;
 #[cfg(test)]
 #[path = "tests/task_1480_history_id_alias_tests.rs"]
 mod task_1480_history_id_alias_tests;
+
+// trace:TASK-1507 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1507_history_cache_tests.rs"]
+mod task_1507_history_cache_tests;
 
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
@@ -43920,6 +43927,34 @@ fn followup_filed_anywhere(existing_titles: &[String], bullet: &str) -> bool {
     existing_titles.iter().any(|t| *t == want)
 }
 
+/// BUG-1625: does `store` already hold `bullet` as a filed followup of
+/// `parent`? True when a spec with the same trimmed, case-insensitive title is
+/// a child of `parent` or carries a [`FOLLOWUP_SRC_TAG_PREFIX`] provenance tag.
+/// Used to classify a failed `aida add` as "already filed" instead of
+/// "declined". Pure + total.
+// trace:BUG-1625 | ai:claude
+fn followup_filed_in_store(store: &RequirementsStore, parent: &str, bullet: &str) -> bool {
+    use aida_core::models::RelationshipType;
+    let want = bullet.trim().to_ascii_lowercase();
+    let child_ids: std::collections::HashSet<uuid::Uuid> = store
+        .get_requirement_by_spec_id(parent)
+        .map(|p| {
+            p.relationships
+                .iter()
+                .filter(|r| r.rel_type == RelationshipType::Parent)
+                .map(|r| r.target_id)
+                .collect()
+        })
+        .unwrap_or_default();
+    store.requirements.iter().any(|r| {
+        r.title.trim().to_ascii_lowercase() == want
+            && (child_ids.contains(&r.id)
+                || r.tags
+                    .iter()
+                    .any(|t| t.starts_with(FOLLOWUP_SRC_TAG_PREFIX)))
+    })
+}
+
 /// BUG-680: tag prefix that records the source plan path on a followup TASK the
 /// auto-followup path files. The BUG-656 marker comment records the extraction
 /// on the *completing spec*, but that comment can be lost or arrive unsynced
@@ -44937,7 +44972,22 @@ fn extract_plan_followups(
                     global_filed_titles.push(followup.trim().to_ascii_lowercase());
                     filed.push((new_id, followup.clone()));
                 }
-                None => declined.push(followup.clone()),
+                // BUG-1625: a failed add is not automatically a decline — the
+                // followup may already exist in the (now fresher) store, filed
+                // by another clone. Re-read and record it as already-filed so
+                // pull output never reports an existing task as declined.
+                // trace:BUG-1625 | ai:claude
+                None => {
+                    let exists = storage
+                        .load()
+                        .map(|fresh| followup_filed_in_store(&fresh, spec_id, followup))
+                        .unwrap_or(false);
+                    if exists {
+                        deduped.push(followup.clone());
+                    } else {
+                        declined.push(followup.clone());
+                    }
+                }
             }
         } else {
             declined.push(followup.clone());
@@ -68542,6 +68592,10 @@ fn handle_pull_command(
     // trace:BUG-254 | ai:claude
     let mut code_failed: Option<String> = None;
     let mut store_failed: Option<String> = None;
+    // BUG-1625: set by a successful code leg to the auto-bump scan base; the
+    // store-touching reconcile runs only after the store leg has pulled (or
+    // was legitimately skipped). trace:BUG-1625 | ai:claude
+    let mut deferred_reconcile: Option<Option<String>> = None;
 
     // ---- Code pull (current branch on the project repo) ----
     if !store_only {
@@ -68679,45 +68733,13 @@ fn handle_pull_command(
                             store_path.display()
                         );
                         }
-                        if auto_bump_enabled() {
-                            let storage = Storage::new(store_path);
-                            match auto_bump_done_to_completed(
-                                &project_root,
-                                store_path,
-                                scan_pre,
-                                &storage,
-                            ) {
-                                Ok(flips) => {
-                                    if dbg_autobump {
-                                        eprintln!(
-                                        "  [autobump-debug] auto_bump_done_to_completed → {} flip(s): {:?}",
-                                        flips.len(),
-                                        flips.iter().map(|f| f.spec_id.clone()).collect::<Vec<_>>()
-                                    );
-                                    }
-                                    if !quiet {
-                                        print_auto_bump_summary(&flips);
-                                    }
-                                    // STORY-700: the first-run payoff — a spec the
-                                    // user filed just auto-completed via the merge.
-                                    // Only fires when the arc sits at the work-done
-                                    // step, and terminates the chain. Suppressed in
-                                    // --quiet (orchestrator/scripted) runs.
-                                    // trace:STORY-700 | ai:claude
-                                    if !quiet && !flips.is_empty() {
-                                        first_run::after_spec_completed(&project_root);
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!(
-                                        "  {} auto-bump failed: {} (specs stay at Done; \
-                                     re-run `aida pull` after fixing)",
-                                        "Warning:".yellow().bold(),
-                                        e
-                                    );
-                                }
-                            }
-                        }
+                        // BUG-1625: DEFER every store-reading/-writing step
+                        // (auto-bump reconcile, closure steps, followup
+                        // extraction, archive sweep) until the store leg has
+                        // pulled — running them here acted on a stale local
+                        // store and regressed remotely-Completed specs.
+                        // trace:BUG-1625 | ai:claude
+                        deferred_reconcile = Some(scan_pre.map(str::to_string));
                         // STORY-248: stacked-branch cascade. Walks
                         // `.aida/stacks.json`; for each entry whose parent
                         // branch is no longer reachable locally + on origin
@@ -68735,19 +68757,6 @@ fn handle_pull_command(
                                 "Warning:".yellow().bold(),
                                 e
                             );
-                        }
-
-                        // STORY-441: opt-in auto-archive sweep after the auto-bump
-                        // settles. Reads `[archive] auto_after_days` from
-                        // `.aida/config.toml`; absent → no-op. AIDA_AUTO_ARCHIVE=0
-                        // disables it. Best-effort: errors are warnings.
-                        // trace:STORY-441 | ai:claude
-                        let cache_path =
-                            aida_core::CachedGitBackend::default_cache_path(store_path);
-                        if let Ok(sweep_backend) =
-                            aida_core::CachedGitBackend::open(store_path, &cache_path)
-                        {
-                            maybe_auto_archive_sweep(&project_root, &sweep_backend, quiet);
                         }
 
                         // BUG-665: HEAD just advanced. If a dev-activated in-repo
@@ -68814,12 +68823,24 @@ fn handle_pull_command(
     }
 
     // ---- Store pull (orphan branch via pull_rebase) ----
+    // `--code-only`: the operator opted out of the store leg, so the deferred
+    // reconcile runs against the local store as before. trace:BUG-1625
+    if code_only {
+        if let Some(scan_pre) = deferred_reconcile.take() {
+            run_deferred_code_reconcile(&project_root, store_path, scan_pre.as_deref(), quiet);
+        }
+    }
     if !code_only {
         if !git_ops::is_git_repo(store_path) {
             println!(
                 "  {} no orphan worktree — skipping store pull",
                 "Note:".dimmed()
             );
+            // BUG-1625: no store leg to wait for (legacy / not-yet-attached
+            // store) — the local store IS the canonical one. trace:BUG-1625
+            if let Some(scan_pre) = deferred_reconcile.take() {
+                run_deferred_code_reconcile(&project_root, store_path, scan_pre.as_deref(), quiet);
+            }
             // BUG-476: skipping the store pull must NOT launder a failed code
             // leg into a success. A code-only clone (or a not-yet-attached
             // store, common in CI) hits this early return with `code_failed`
@@ -68837,6 +68858,10 @@ fn handle_pull_command(
                 "  {} orphan store has no `origin` — skipping store pull",
                 "Note:".dimmed()
             );
+            // BUG-1625: nothing remote to pull first. trace:BUG-1625
+            if let Some(scan_pre) = deferred_reconcile.take() {
+                run_deferred_code_reconcile(&project_root, store_path, scan_pre.as_deref(), quiet);
+            }
             // BUG-476: same as above — a no-origin store does not redeem a
             // failed code leg. trace:BUG-476
             if let Some(c) = code_failed.as_deref() {
@@ -68932,6 +68957,20 @@ fn handle_pull_command(
                         }
                     }
                 }
+                // BUG-1625: the store is now fresh — run the code-derived
+                // reconcile (auto-bump, closure steps, followup extraction,
+                // archive sweep) against it, never against the pre-pull
+                // snapshot. trace:BUG-1625 | ai:claude
+                if store_failed.is_none() {
+                    if let Some(scan_pre) = deferred_reconcile.take() {
+                        run_deferred_code_reconcile(
+                            &project_root,
+                            store_path,
+                            scan_pre.as_deref(),
+                            quiet,
+                        );
+                    }
+                }
                 // TASK-1033: opportunistic store maintenance after a clean
                 // store-leg pull — ensure the lowered gc.auto is set, then
                 // `git gc --auto` (no-op unless the threshold is exceeded).
@@ -68947,6 +68986,17 @@ fn handle_pull_command(
                 store_failed = Some(format!("store leg pull_rebase failed: {}", e));
             }
         }
+    }
+    // BUG-1625: the store leg failed (or its post-pull scan did), so the local
+    // store may be stale — leave code-derived reconciliation unapplied rather
+    // than write status transitions against it. trace:BUG-1625 | ai:claude
+    if deferred_reconcile.is_some() {
+        eprintln!(
+            "  {} Done→Completed auto-bump and plan-followup filing skipped — the \
+             store did not sync, so they would act on stale data. Fix the store \
+             pull above, then re-run `aida pull` to apply them.",
+            "Note:".dimmed(),
+        );
     }
 
     // STORY-262: no-daemon scheduled advisor tasks. After the legs settle,
@@ -68986,6 +69036,65 @@ fn handle_pull_command(
         (Some(c), Some(s)) => {
             anyhow::bail!("aida pull: code leg failed ({c}); store leg failed ({s})")
         }
+    }
+}
+
+/// BUG-1625: the store-touching half of `aida pull`'s code leg — the
+/// merge-driven auto-bump (reconcile, closure steps, plan-followup extraction)
+/// and the opt-in archive sweep. `handle_pull_command` calls this only AFTER
+/// the store leg has pulled (or was legitimately skipped: `--code-only`, no
+/// orphan worktree, no store `origin`), so every automated status transition
+/// reads and writes the freshly pulled canonical store instead of a stale local
+/// snapshot. Best-effort: failures warn and never change pull's exit code.
+// trace:BUG-1625 | ai:claude
+fn run_deferred_code_reconcile(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    scan_pre: Option<&str>,
+    quiet: bool,
+) {
+    let dbg_autobump = std::env::var("AIDA_DEBUG_AUTOBUMP")
+        .map(|v| v != "0" && !v.is_empty())
+        .unwrap_or(false);
+    // trace:STORY-86 | ai:claude
+    if auto_bump_enabled() {
+        let storage = Storage::new(store_path);
+        match auto_bump_done_to_completed(project_root, store_path, scan_pre, &storage) {
+            Ok(flips) => {
+                if dbg_autobump {
+                    eprintln!(
+                        "  [autobump-debug] auto_bump_done_to_completed → {} flip(s): {:?}",
+                        flips.len(),
+                        flips.iter().map(|f| f.spec_id.clone()).collect::<Vec<_>>()
+                    );
+                }
+                if !quiet {
+                    print_auto_bump_summary(&flips);
+                }
+                // STORY-700: the first-run payoff — a spec the user filed just
+                // auto-completed via the merge. Suppressed in --quiet runs.
+                // trace:STORY-700 | ai:claude
+                if !quiet && !flips.is_empty() {
+                    first_run::after_spec_completed(project_root);
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} auto-bump failed: {} (specs stay at Done; \
+                     re-run `aida pull` after fixing)",
+                    "Warning:".yellow().bold(),
+                    e
+                );
+            }
+        }
+    }
+    // STORY-441: opt-in auto-archive sweep after the auto-bump settles. Reads
+    // `[archive] auto_after_days` from `.aida/config.toml`; absent → no-op.
+    // AIDA_AUTO_ARCHIVE=0 disables it. Best-effort: errors are warnings.
+    // trace:STORY-441 | ai:claude
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
+    if let Ok(sweep_backend) = aida_core::CachedGitBackend::open(store_path, &cache_path) {
+        maybe_auto_archive_sweep(project_root, &sweep_backend, quiet);
     }
 }
 
