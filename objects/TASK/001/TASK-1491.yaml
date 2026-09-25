@@ -30,12 +30,12 @@ description: |
   Named tests from the sketch: `systemd_units_share_tick_invocation_marker_abs_exe_no_format_flag`, `systemd_unit_has_killmode_process` (as the A12 test above), `systemd_install_installed_uptodate_repaired`, `systemd_install_removes_this_repos_cron_incl_legacy_unmarked_only`, `doctor_driver_status_systemd_and_dual_driver`.
 
   Acceptance on this box: `aida shift install --systemd-user`, then `systemctl --user list-timers` output plus one journal tick attached to the PR. Do not enable the night shift itself (`aida shift enable`) in the AIDA repo as part of that check.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:03:52.561229247Z
-modified_at: 2026-09-25T02:06:54.254438788Z
+modified_at: 2026-09-25T08:52:39.765061150Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
