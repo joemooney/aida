@@ -19,13 +19,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:29:48.596407578Z
-modified_at: 2026-09-25T05:29:48.596407578Z
+modified_at: 2026-09-25T05:42:22.502127854Z
 req_type: Task
 tags:
 - antigravity
 - codex
 - refresh
 - scaffolding-pack
+comments:
+- id: 01a0d716-1026-7442-8023-4c1dc9c1065b
+  author: joe
+  content: 'Context from the STORY-1475 review: STORY-1475 now ships a minimal pack-local manifest, .aida-delivered (one skill name per line, in .codex/skills/ and .antigravity/skills/). It is written by Scaffolder::apply and by refresh, and applies only to REFRESH_DELIVERED_SKILLS = [aida-orchestrate]. This task should generalise it: seed from existing manifests, then remove the allow-list. Also note that the include_aida_<name>_skill flags (for example include_aida_orchestrate_skill) are ScaffoldConfig defaults only and are not saved per project. Refresh rebuilds ScaffoldConfig::default(), so a project cannot opt out of a delivered skill through config today. Decide whether the manifest, or a persisted [scaffold] setting, should carry opt-outs.'
+  created_at: 2026-09-25T05:42:22.502127854Z
+  modified_at: 2026-09-25T05:42:22.502127854Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b348f531d44eb6da32add84237a3343bf461963f
   branch: claude/story-1475
