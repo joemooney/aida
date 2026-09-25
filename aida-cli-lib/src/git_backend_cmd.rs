@@ -6048,6 +6048,9 @@ pub(crate) fn handle_git_backend_command(
                     &read_copy,
                     &req,
                     leave_target,
+                    // `--tags` replaces the set: refuse on a concurrent tag
+                    // change instead of merging. trace:TASK-1506 | ai:claude
+                    tags.is_some(),
                     subject.as_deref(),
                 )?;
                 // STORY-1429: the exit landed; report what it cleared and

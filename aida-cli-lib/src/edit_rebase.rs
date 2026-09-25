@@ -16,9 +16,18 @@
 //! - a list (tags, comments, relationships, refs, …) changed on both sides
 //!   keeps both: the edit's removals and additions are applied to the
 //!   current list;
-//! - a nested map is merged key by key under the same rules;
+//! - a nested map is merged key by key under the same rules, except the
+//!   struct-valued fields in [`ATOMIC_FIELDS`], which are one value each;
 //! - a scalar both sides changed to different values is a real conflict: the
 //!   edit is refused and nothing is written.
+//!
+//! Some edits refuse on any concurrent change instead of merging (strict
+//! review, TASK-1506):
+//! - `--tags` replaces the whole set, so tags are one value: a concurrent
+//!   change to tags refuses (`--add-tag` / `--remove-tag` still merge);
+//! - an edit that changes `status` refuses on a concurrent status change;
+//! - an edit that leaves NeedsAttention refuses unless the spec is unchanged
+//!   since it was read (every field but `modified_at`).
 //!
 //! `modified_at` always takes the edit's stamp.
 // trace:TASK-1506 | ai:claude
@@ -26,22 +35,73 @@
 use aida_core::{Requirement, RequirementStatus};
 use serde_yaml::{Mapping, Value};
 
+/// Struct-valued fields that are one value each: when both the edit and a
+/// concurrent writer changed one, it is a conflict, not a key-wise merge.
+/// (`implementation_info` and `custom_fields` stay key-merged.)
+// trace:TASK-1506 | ai:claude
+const ATOMIC_FIELDS: &[&str] = &[
+    "failure_reason",
+    "attention_reason",
+    "decision_request",
+    "interface_changes",
+    "ai_evaluation",
+    "filed_at",
+    "origin",
+];
+
+/// How strictly an edit merges with a concurrent change.
+// trace:TASK-1506 | ai:claude
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct EditMerge {
+    /// The edit used `--tags` (replace the whole set), so tags are one value.
+    pub(crate) tags_replaced: bool,
+    /// The edit leaves NeedsAttention: any concurrent change refuses.
+    pub(crate) leaving_needs_attention: bool,
+}
+
+fn as_map(r: &Requirement) -> anyhow::Result<Mapping> {
+    match serde_yaml::to_value(r)? {
+        Value::Mapping(m) => Ok(m),
+        _ => anyhow::bail!("a requirement did not serialize to a mapping"),
+    }
+}
+
 /// Apply the edit (`read` → `planned`) to `current`, the copy read under the
 /// store lock. Returns the requirement to write, or the list of fields both
-/// the edit and a concurrent writer changed to different values.
+/// the edit and a concurrent writer changed (see [`EditMerge`] for the edits
+/// that refuse on any concurrent change to a field).
 // trace:TASK-1506 | ai:claude
 pub(crate) fn rebase_edit(
     read: &Requirement,
     planned: &Requirement,
     current: &Requirement,
+    opts: EditMerge,
 ) -> anyhow::Result<Result<Requirement, Vec<String>>> {
-    let as_map = |r: &Requirement| -> anyhow::Result<Mapping> {
-        match serde_yaml::to_value(r)? {
-            Value::Mapping(m) => Ok(m),
-            _ => anyhow::bail!("a requirement did not serialize to a mapping"),
-        }
-    };
     let (r, p, c) = (as_map(read)?, as_map(planned)?, as_map(current)?);
+    let null = Value::Null;
+    // Leaving NeedsAttention acts on the parked spec as it was read; any
+    // concurrent change (a new tag, a comment, …) refuses.
+    // trace:TASK-1506 | ai:claude
+    if opts.leaving_needs_attention {
+        let mut changed: Vec<String> = Vec::new();
+        for k in c.keys().chain(r.keys()) {
+            let Some(name) = k.as_str() else { continue };
+            if name == "modified_at" || changed.iter().any(|n| n == name) {
+                continue;
+            }
+            if r.get(k).unwrap_or(&null) != c.get(k).unwrap_or(&null) {
+                changed.push(name.to_string());
+            }
+        }
+        if !changed.is_empty() {
+            return Ok(Err(changed));
+        }
+    }
+    // `--tags` replaced the set: tags are one value, so a concurrent change
+    // to them refuses. trace:TASK-1506 | ai:claude
+    if opts.tags_replaced && current.tags != read.tags {
+        return Ok(Err(vec!["tags".to_string()]));
+    }
     let mut conflicts = Vec::new();
     let merged = merge_maps(&r, &p, &c, "", &mut conflicts);
     if !conflicts.is_empty() {
@@ -76,6 +136,10 @@ fn merge_maps(
         let c = current.get(k).unwrap_or(&null);
         let v = if name == "modified_at" {
             p.clone()
+        } else if prefix.is_empty() && ATOMIC_FIELDS.contains(&name.as_str()) {
+            // One value: both sides changing it differently is a conflict.
+            // trace:TASK-1506 | ai:claude
+            merge_atomic(r, p, c, &name, conflicts)
         } else {
             merge_value(r, p, c, &name, conflicts)
         };
@@ -86,6 +150,26 @@ fn merge_maps(
         }
     }
     out
+}
+
+/// Merge a field that is one value: the side that changed it wins, and both
+/// sides changing it to different values is a conflict.
+// trace:TASK-1506 | ai:claude
+fn merge_atomic(
+    read: &Value,
+    planned: &Value,
+    current: &Value,
+    name: &str,
+    conflicts: &mut Vec<String>,
+) -> Value {
+    if planned == read || current == planned {
+        current.clone()
+    } else if current == read {
+        planned.clone()
+    } else {
+        conflicts.push(name.to_string());
+        current.clone()
+    }
 }
 
 fn merge_value(
@@ -155,7 +239,8 @@ pub(crate) fn conflict_message(label: &str, fields: &[String]) -> String {
 /// store write lock, re-read the spec, re-check the NeedsAttention exit
 /// (`leave`: the label and the status it returns to), rebase the edit onto
 /// that copy and write it. Nothing is written on a refusal. Returns the
-/// written requirement.
+/// written requirement. `tags_replaced` is true when the edit used `--tags`
+/// (replace), which refuses on a concurrent change to tags.
 // trace:TASK-1506 trace:STORY-1429 | ai:claude
 pub(crate) fn write_edit_atomically(
     backend: &aida_core::CachedGitBackend,
@@ -163,8 +248,13 @@ pub(crate) fn write_edit_atomically(
     read: &Requirement,
     planned: &Requirement,
     leave: Option<&RequirementStatus>,
+    tags_replaced: bool,
     commit_subject: Option<&str>,
 ) -> anyhow::Result<Requirement> {
+    let opts = EditMerge {
+        tags_replaced,
+        leaving_needs_attention: leave.is_some(),
+    };
     let mut refusal: Option<anyhow::Error> = None;
     let written = backend.update_spec_atomically_with_subject(read, commit_subject, |cur| {
         if let Some(target) = leave {
@@ -180,7 +270,7 @@ pub(crate) fn write_edit_atomically(
                 return;
             }
         }
-        match rebase_edit(read, planned, cur) {
+        match rebase_edit(read, planned, cur, opts) {
             Ok(Ok(merged)) => *cur = merged,
             Ok(Err(fields)) => refusal = Some(anyhow::anyhow!(conflict_message(label, &fields))),
             Err(e) => refusal = Some(e),
@@ -224,7 +314,9 @@ mod tests {
         current.tags.insert("theirs".into());
         current.add_comment(Comment::new("other".into(), "concurrent note".into()));
 
-        let merged = rebase_edit(&read, &planned, &current).unwrap().unwrap();
+        let merged = rebase_edit(&read, &planned, &current, EditMerge::default())
+            .unwrap()
+            .unwrap();
         assert_eq!(merged.title, "new title");
         assert_eq!(merged.priority, Priority::High);
         assert!(merged.tags.contains("mine"));
@@ -242,11 +334,15 @@ mod tests {
         planned.owner = "me".into();
         let mut current = read.clone();
         current.status = RequirementStatus::InProgress;
-        let fields = rebase_edit(&read, &planned, &current).unwrap().unwrap_err();
+        let fields = rebase_edit(&read, &planned, &current, EditMerge::default())
+            .unwrap()
+            .unwrap_err();
         assert_eq!(fields, vec!["status".to_string()]);
         // Both sides making the same change is not a conflict.
         current.status = RequirementStatus::Completed;
-        let merged = rebase_edit(&read, &planned, &current).unwrap().unwrap();
+        let merged = rebase_edit(&read, &planned, &current, EditMerge::default())
+            .unwrap()
+            .unwrap();
         assert_eq!(merged.owner, "me");
     }
 
@@ -258,8 +354,76 @@ mod tests {
         planned.add_comment(Comment::new("me".into(), "edit note".into()));
         let mut current = read.clone();
         current.add_comment(Comment::new("other".into(), "their note".into()));
-        let merged = rebase_edit(&read, &planned, &current).unwrap().unwrap();
+        let merged = rebase_edit(&read, &planned, &current, EditMerge::default())
+            .unwrap()
+            .unwrap();
         assert_eq!(merged.comments.len(), 2);
+    }
+
+    // A struct-valued field both sides changed is a conflict, not a key-wise
+    // merge; implementation_info-style maps still merge. trace:TASK-1506 | ai:claude
+    #[test]
+    fn struct_valued_field_changed_on_both_sides_is_a_conflict() {
+        let read = spec();
+        let mut planned = read.clone();
+        planned.filed_at = Some(aida_core::FilingProvenance {
+            code_sha: Some("abc".into()),
+            ..Default::default()
+        });
+        let mut current = read.clone();
+        current.filed_at = Some(aida_core::FilingProvenance {
+            branch: Some("main".into()),
+            ..Default::default()
+        });
+        let fields = rebase_edit(&read, &planned, &current, EditMerge::default())
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(fields, vec!["filed_at".to_string()]);
+        // Only one side changed it: that side wins.
+        let merged = rebase_edit(&read, &planned, &read, EditMerge::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(merged.filed_at, planned.filed_at);
+        // custom_fields stay key-merged.
+        let mut planned = read.clone();
+        planned.custom_fields.insert("a".into(), "1".into());
+        let mut current = read.clone();
+        current.custom_fields.insert("b".into(), "2".into());
+        let merged = rebase_edit(&read, &planned, &current, EditMerge::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(merged.custom_fields.len(), 2);
+    }
+
+    // `--tags` replace treats tags as one value; `--add-tag` still merges.
+    // trace:TASK-1506 | ai:claude
+    #[test]
+    fn tags_replace_refuses_a_concurrent_tag_change() {
+        let read = spec();
+        let mut planned = read.clone();
+        planned.tags.insert("x".into());
+        let mut current = read.clone();
+        current.tags.insert("c".into());
+        let replace = EditMerge {
+            tags_replaced: true,
+            ..Default::default()
+        };
+        let fields = rebase_edit(&read, &planned, &current, replace)
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(fields, vec!["tags".to_string()]);
+        let merged = rebase_edit(&read, &planned, &current, EditMerge::default())
+            .unwrap()
+            .unwrap();
+        assert!(merged.tags.contains("x") && merged.tags.contains("c"));
+        // No concurrent tag change: the replace applies.
+        let mut current = read.clone();
+        current.priority = Priority::High;
+        let merged = rebase_edit(&read, &planned, &current, replace)
+            .unwrap()
+            .unwrap();
+        assert_eq!(merged.tags, planned.tags);
+        assert_eq!(merged.priority, Priority::High);
     }
 
     struct Fixture {
@@ -311,7 +475,8 @@ mod tests {
         }
 
         let written =
-            write_edit_atomically(&f.backend, "TASK-1", &read, &planned, None, None).unwrap();
+            write_edit_atomically(&f.backend, "TASK-1", &read, &planned, None, false, None)
+                .unwrap();
         let disk = on_disk(&f, "TASK-1");
         for r in [&written, &disk] {
             assert_eq!(r.title, "edited title");
@@ -336,7 +501,7 @@ mod tests {
         theirs.status = RequirementStatus::InProgress;
         other.update_requirement(&theirs).unwrap();
 
-        let err = write_edit_atomically(&f.backend, "TASK-1", &read, &planned, None, None)
+        let err = write_edit_atomically(&f.backend, "TASK-1", &read, &planned, None, false, None)
             .unwrap_err()
             .to_string();
         assert!(err.contains("status"), "{err}");
@@ -368,6 +533,7 @@ mod tests {
             &read,
             &planned,
             Some(&RequirementStatus::Approved),
+            false,
             None,
         )
         .unwrap_err()
@@ -384,6 +550,7 @@ mod tests {
             &read,
             &planned,
             Some(&RequirementStatus::Approved),
+            false,
             Some("update TASK-1: test subject"),
         )
         .unwrap();
@@ -396,5 +563,73 @@ mod tests {
             .output()
             .unwrap();
         assert!(String::from_utf8_lossy(&log.stdout).contains("test subject"));
+    }
+
+    // Review probe (a): the read copy has tags {keep}; the user runs
+    // `--tags keep,x` while another writer removes keep and adds c. The
+    // replace refuses and nothing is written. trace:TASK-1506 | ai:claude
+    #[test]
+    fn probe_tags_replace_with_concurrent_tag_change_writes_nothing() {
+        let f = fixture();
+        let read = f.backend.add_requirement(spec()).unwrap();
+        let mut planned = read.clone();
+        planned.tags = ["keep", "x"].iter().map(|t| t.to_string()).collect();
+        planned.modified_at = chrono::Utc::now();
+
+        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
+        theirs.tags.remove("keep");
+        theirs.tags.insert("c".into());
+        other.update_requirement(&theirs).unwrap();
+
+        let err = write_edit_atomically(&f.backend, "TASK-1", &read, &planned, None, true, None)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("tags"), "{err}");
+        assert!(err.contains("nothing was written"), "{err}");
+        assert!(err.contains("aida show TASK-1"), "{err}");
+        let disk = on_disk(&f, "TASK-1");
+        let want: std::collections::HashSet<String> = ["c".to_string()].into_iter().collect();
+        assert_eq!(disk.tags, want);
+    }
+
+    // Review probe (b): the read copy is NeedsAttention; the edit sets
+    // Approved with a return comment while another writer adds the
+    // needs-human tag and a comment. The exit refuses and nothing is written.
+    // trace:TASK-1506 | ai:claude
+    #[test]
+    fn probe_leaving_needs_attention_refuses_any_concurrent_change() {
+        let f = fixture();
+        let mut parked = spec();
+        parked.status = RequirementStatus::NeedsAttention;
+        let read = f.backend.add_requirement(parked).unwrap();
+        let mut planned = read.clone();
+        planned.status = RequirementStatus::Approved;
+        planned.add_comment(Comment::new("me".into(), "returned to the queue".into()));
+        planned.modified_at = chrono::Utc::now();
+
+        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
+        theirs.tags.insert("needs-human".into());
+        theirs.add_comment(Comment::new("other".into(), "needs a human".into()));
+        other.update_requirement(&theirs).unwrap();
+
+        let err = write_edit_atomically(
+            &f.backend,
+            "TASK-1",
+            &read,
+            &planned,
+            Some(&RequirementStatus::Approved),
+            false,
+            None,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("nothing was written"), "{err}");
+        assert!(err.contains("tags") && err.contains("comments"), "{err}");
+        let disk = on_disk(&f, "TASK-1");
+        assert_eq!(disk.status, RequirementStatus::NeedsAttention);
+        assert_eq!(disk.comments.len(), 1);
+        assert!(disk.tags.contains("needs-human"));
     }
 }
