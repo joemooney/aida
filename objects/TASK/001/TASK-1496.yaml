@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:05:25.253633460Z
-modified_at: 2026-09-25T02:07:10.198006027Z
+modified_at: 2026-09-25T02:07:13.320498986Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-24-shift-tick.md
@@ -16,6 +16,13 @@ relationships:
 - rel_type: Child
   target_id: 01a0b5e0-7244-7451-89a9-f8c561574633
   created_at: 2026-09-25T02:05:33.057283138Z
+comments:
+- id: 01a0d651-15a8-7ed3-8cdb-45bf6da6985b
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): deferred. The advisor marked the per-wave transient systemd unit as a non-binding follow-up, and it depends on TASK-1491.'
+  created_at: 2026-09-25T02:07:13.320498986Z
+  modified_at: 2026-09-25T02:07:13.320498986Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 deferred: true
 deferred_at: 2026-09-25T02:07:10.198006027Z
 deferred_until: the systemd driver (TASK-1491) has merged and a per-wave unit is wanted for isolation or accounting
