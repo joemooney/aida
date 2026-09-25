@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T15:50:32.240289235Z
+modified_at: 2026-09-25T19:22:29.405888831Z
 req_type: Task
 tags:
 - cache
@@ -188,6 +188,47 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): accept round 3. Rework: B3, record the times of ALL commits in each merge''s parallel region (both sides plus the merge-base/fork point); fall back when the served range contains a second shared by more than one of them. B4, a budgeted catch-up commits a partial batch only if the old tip is an ancestor of the batch''s last commit; UNIQUE-constraint and ancestry failures are treated as corruption and trigger a reset, never a permanently dead index. N2a, when checking liveness, ignore aida-store-pre-squash-* backup refs and remote-tracking refs (only local branches and worktree HEADs count), so a compact still resets. Turn the reviewer''s probes (scratchpad/tests_with_probes.rs) into regression tests. If round 4 still finds a correctness bug, the orchestrator will narrow slice 1 to the conservative rule: fall back whenever the served range overlaps any merge''s parallel window.'
   created_at: 2026-09-25T15:50:32.240289235Z
   modified_at: 2026-09-25T15:50:32.240289235Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0da04-e69d-7d32-8f51-161a277be23b
+  author: joe
+  content: |-
+    Strict review round 4: REQUEST CHANGES. I reviewed 0c9f16b172 as an independent reviewer in a throwaway worktree, which I have since removed. I found ONE wrong served answer. It is on the --id path, not the tie or order path. Per the PROXY DECISION, I recommend the conservative narrowing.
+
+    BLOCKER
+    B5 (N1b is incomplete: path changes made only by merges). history_cache.rs:884-887 builds merge_paths with `git log --format= --name-only --no-renames A...B`. Without -m, git log prints no diff for merge commits. A path that changes only inside a merge on one side of a later merge (an evil merge, a renumbering or normalizing reconcile, or a conflict resolution whose inputs are not in the range) is therefore missing from merge_paths. If the outer merge is TREESAME to its other parent for that path (for example a -s ours merge, which the live store already has), `git log -- <path>` simplifies the side away and never shows that merge. The index still has a touch for it (--cc lists the path). Reproduced on a COMPLETE index: root(FR-1, BUG-3), main A1, side S1 and S2, M1 = merge(S1, S2) with an evil FR-1 status edit, then M = merge(A1, M1) keeping A1's FR-1. `--id FR-1` served [M1:FR-1, root:FR-1]; the walk returned [root:FR-1]. All seconds are distinct and there is no skew, so no other guard fires. Fix options: (a) the targeted fix, adding -m (`git log -m --format= --name-only --no-renames A...B`). I verified that the probe then passes and the whole task_1507 suite stays green. (b) The narrowing the PROXY DECISION pre-authorized: fall back whenever the served range overlaps any merge's parallel window. That also covers this case, because a TREESAME simplification can only drop commits in a merge's window. Whichever is chosen, add the fixture as a regression test.
+
+    FIXES VERIFIED
+    - B3: correct. merge_region_ts records both sides and the merge bases. The query falls back on any region second held by more than one indexed commit at or above `lower`. Partners that are not yet back-filled lie at or below the watermark. By argument: any git-vs-seq misorder needs an incomparable same-second pair or an ancestor queued early, and both lie in some merge's region or base set, so the rule is sufficient. By fuzz: see below.
+    - B4 part 1: correct. count(tip..C) == indexed plus is_ancestor(tip, C) proves indexed == ancestors(C). Part 2: an Inconsistent error or a constraint violation resets the index and the next query serves again (tested).
+    - N2a: correct. Only refs/heads counts toward liveness, pre-squash backups are excluded, and a root change is checked before liveness. The remote-ref and backup-branch compact tests pass.
+
+    RANDOMIZED PARITY (probe: scratchpad/rev4/rev4_probe.rs)
+    - 360 random DAGs, 10-34 steps each, with branches from tips and from old commits, 2-parent and octopus merges, nested merges, merges that bring a branch forward, evil merge edits, 15% forced timestamp collisions, delta-0 ties, and 120 DAGs with 7% clock skew.
+    - Each DAG was checked in several index states: complete; partial back-fill with chunk sizes 1/2/3/5 and random chunk counts; catch-up from a random earlier main commit (starting from a full or a partial index, zero-budget or unbounded, with and without an intermediate hop); and catch-up plus further back-fill.
+    - Each state was checked against about 36 probes: -n, --max-commits (plain, with -n, with --status-changes), --since ±1 s (plain, with -n, with --max-commits), --until and --since+--until, --id (plain, -n, --max-commits, --since), --shipped, --type.
+    - Result: 67,257 answers served and compared exactly (events, order and window_exhausted), with 0 mismatches and 0 errors. Every catch-up reached HEAD.
+    - The fuzzer can catch real bugs. With the B3 guard disabled it found 438 mismatches in 90 DAGs, and it also kills R1 seq ASC and R2 since >=. It did not hit B5, which needs a TREESAME drop over an evil merge.
+    - I also checked git's fractional-second --since/--until parsing: git floors, which matches parse_from_rfc3339().timestamp().
+
+    CONCURRENCY
+    - Three processes ran serve_at at once with a 3 ms budget, catching one shared index up across an 85-91-commit range that contains merges. They served about 1,150 answers with 0 wrong. The losers fell back ("database is locked / recovering WAL" is a fallback, not an error), and the final tip was the same in all three.
+    - One reader ran for 40 s while a writer looped over rebuild_full_at, partial_build, and file deletion under the lock. The reader served 2,266 answers with 0 wrong. NO_CKPT_ON_CLOSE means a reader holding an unlinked inode never deletes the new WAL by name.
+
+    NON-BLOCKING
+    N6 (liveness, introduced by the B4 fix). history_cache.rs:1210-1219. Reverse topo lists a merge's side branch before the merge. When the budget expires inside a side branch longer than MAX_BOUNDARY_PROBES (32), every probe fails the descendant check. The transaction is then dropped and the next query redoes the same work. Probe: an 80-commit side branch caught up with a zero or 1 ms budget never reached HEAD in 30 attempts and served 0 of 5 queries. At the 1.5 s default this happens only for side branches larger than about one budget's worth of commits (roughly thousands), but it lasts until someone runs `cache rebuild --history`. Suggest: once the probe cap is hit, keep appending without a budget until the next valid boundary (the merge itself), rather than rolling back.
+    N7. A reader on a diverged checkout whose history joined another root makes replaced() true at :1111, so it resets the shared index, and the main checkout then resets it back (ping-pong). This costs performance only.
+    T2 (mutants that survive; the code is correct):
+    - B3 without merge-base recording (:880-883) survives. It is probably an equivalent mutant: the partner of a base tie is always a side commit.
+    - Dropping the delete-on-failed-reset path (:1713) survives, because that path is untested.
+    - Liveness before the root check (:1111) survives: nothing in the tests keeps the old tip live on a non-backup ref during a compact.
+    - Removing the "reader behind" branch (:1108) survives, because liveness masks it in the tests.
+
+    MUTATION SWEEP (task_1507 filter plus probes): 19 mutants. Killed: B3 off, B3 count>2, B3 ts>lower, B3 no sides, B4 no ancestor, B4 no reset, N2a all refs, N2a no backup filter, R2 since >=, R2 boundary >=, R2 unknown watermark, R3 off, N1b off, R1 seq ASC, tip==head off. Survived: the 4 listed under T2.
+    Suites on the branch: all 49 task_1507 tests pass. The only failure in the filtered run was my B5 probe.
+
+    VERDICT: I found one wrong served answer (B5, --id over an evil or reconcile merge that a TREESAME merge simplifies away). The tie, order, catch-up and concurrency paths had no wrong answer in 67k served comparisons. Per the PROXY DECISION, apply the conservative narrowing rule (fall back whenever the served range overlaps any merge's parallel window) for slice 1, or at minimum add -m to the merge_paths log with a regression test.
+  created_at: 2026-09-25T19:22:29.405888831Z
+  modified_at: 2026-09-25T19:22:29.405888831Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
