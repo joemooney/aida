@@ -19,12 +19,12 @@ description: |-
   - The resulting status is correct by construction rather than by the operator remembering which flag to pass.
 
   Related: BUG-1470 established that metadata-only rework must leave a spec claimable, which is the precondition for either option.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:50:20.038947417Z
-modified_at: 2026-09-25T02:10:56.212713561Z
+modified_at: 2026-09-25T02:10:57.598277637Z
 req_type: Story
 tags:
 - aida:queue
