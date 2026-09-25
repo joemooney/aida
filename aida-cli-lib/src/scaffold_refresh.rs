@@ -35,16 +35,27 @@ const PROJECT_PACKS: &[(&str, &str)] = &[
     (".antigravity/skills/", "Antigravity skills"),
 ];
 
-/// Curated vendor packs whose skill list is governed by `include_*_skill`
-/// flags. When one is already installed, refresh also delivers a skill the
-/// binary newly ships into it: the skill's own directory must be absent, so a
-/// file the user moved or edited is never touched.
+/// Curated vendor packs that may receive a skill from
+/// [`REFRESH_DELIVERED_SKILLS`] on refresh.
 // trace:STORY-1475 | ai:claude
 const ADDITIVE_PACKS: &[&str] = &[".codex/skills/", ".antigravity/skills/"];
 
-/// Deliver `artifact` into an installed curated pack when its skill directory
-/// does not exist yet. Returns `None` when the pack is not installed or the
-/// skill directory already exists (the caller keeps the `Missing` outcome).
+/// The ONLY skills refresh may create in an installed Codex/Antigravity pack.
+///
+/// Refresh's contract (TASK-1170) is edit-preserving: it never creates a file,
+/// because a missing skill is indistinguishable from one the user deleted on
+/// purpose, and recreating it would undo that deletion. `aida-orchestrate` is
+/// the single exception: its Codex/Antigravity form first shipped after those
+/// packs existed, so no installed pack can have held and then deleted it. A
+/// general "deliver skills new since install, never resurrect deleted ones"
+/// mechanism (a delivered-skills manifest) is tracked in TASK-1503; until
+/// then, do not add names here without that same never-shipped-before proof.
+// trace:STORY-1475 | ai:claude
+const REFRESH_DELIVERED_SKILLS: &[&str] = &["aida-orchestrate"];
+
+/// Deliver `artifact` into an installed curated pack when it is an allow-listed
+/// skill ([`REFRESH_DELIVERED_SKILLS`]) whose directory does not exist yet.
+/// Returns `None` otherwise (the caller keeps the `Missing` outcome).
 // trace:STORY-1475 | ai:claude
 fn install_new_pack_skill(
     project_root: &Path,
@@ -61,6 +72,10 @@ fn install_new_pack_skill(
     }
     let dest = project_root.join(artifact_path);
     let skill_dir = dest.parent()?;
+    let skill_name = skill_dir.file_name()?.to_str()?;
+    if !REFRESH_DELIVERED_SKILLS.contains(&skill_name) {
+        return None;
+    }
     if skill_dir == pack_root || skill_dir.symlink_metadata().is_ok() {
         return None;
     }
@@ -70,8 +85,8 @@ fn install_new_pack_skill(
 /// Refresh every installed agent pack under `project_root`. Only files that already exist are
 /// touched — installing a pack the project opted out of stays `aida init`'s
 /// job, so a Claude-only project never grows a `.codex/` tree from a refresh.
-/// The one addition: an installed Codex or Antigravity pack receives a newly
-/// shipped skill (see [`ADDITIVE_PACKS`]).
+/// The one exception: an installed Codex or Antigravity pack receives the
+/// allow-listed skills in [`REFRESH_DELIVERED_SKILLS`].
 ///
 /// `codex_prompts_dest` overrides the machine-global `~/.codex/prompts`
 /// location for the deprecation notice (mirrors `scaffold codex-prompts --dest`).
@@ -618,6 +633,15 @@ global = true
                 .contains(&PathBuf::from(format!("{pack}/aida-orchestrate/SKILL.md"))));
         }
         assert!(!root.join(".codex/skills/aida-req/SKILL.md").exists());
+        // Only the allow-listed skill is delivered: nothing else is created.
+        for pack in [".codex/skills", ".antigravity/skills"] {
+            let entries: Vec<_> = std::fs::read_dir(root.join(pack))
+                .unwrap()
+                .map(|e| e.unwrap().file_name().into_string().unwrap())
+                .filter(|n| n != "aida-req")
+                .collect();
+            assert_eq!(entries, vec!["aida-orchestrate".to_string()], "{pack}");
+        }
         assert!(!root.join(".claude").exists(), "no Claude pack is created");
 
         // Second run: the delivered file is now pristine and current.
@@ -626,6 +650,39 @@ global = true
             again.iter().all(|p| p.report.installed.is_empty()),
             "a second refresh installs nothing new"
         );
+    }
+
+    /// A skill the user deleted from an installed vendor pack stays deleted:
+    /// refresh only creates allow-listed skills (TASK-1170 contract).
+    // trace:STORY-1475 | ai:claude
+    #[test]
+    fn refresh_does_not_recreate_deleted_vendor_pack_skill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let codex = root.join(".codex/skills");
+        // An installed pack whose aida-commit skill the user deleted.
+        let req = wrap_with_aida_header(
+            Path::new(".codex/skills/aida-req/SKILL.md"),
+            "---\nname: aida-req\n---\n# Req\n",
+        );
+        std::fs::create_dir_all(codex.join("aida-req")).unwrap();
+        std::fs::write(codex.join("aida-req/SKILL.md"), &req).unwrap();
+
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert!(
+            !codex.join("aida-commit").exists(),
+            "a deleted skill must not be resurrected"
+        );
+        let report = &packs
+            .iter()
+            .find(|p| p.label == "Codex skills")
+            .expect("codex pack reported")
+            .report;
+        assert!(report
+            .installed
+            .iter()
+            .all(|p| p.ends_with("aida-orchestrate/SKILL.md")));
+        assert!(report.missing > 0, "other missing skills stay Missing");
     }
 
     #[test]
