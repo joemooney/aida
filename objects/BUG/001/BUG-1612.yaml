@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:51:09.557186527Z
-modified_at: 2026-09-25T04:25:08.414171663Z
+modified_at: 2026-09-25T05:30:11.647300836Z
 req_type: Bug
 tags:
 - concurrency
@@ -72,6 +72,16 @@ comments:
     Also: updated the clear_failure_reason_targeted comment, and filed BUG-1613 (metadata.yaml is written wholesale by save() and BulkWriter).
   created_at: 2026-09-25T04:25:08.414171663Z
   modified_at: 2026-09-25T04:25:08.414171663Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d70a-e93f-7c02-b288-468c4ca92a07
+  author: joe
+  content: |-
+    Review round 3 (REQUEST_CHANGES addressed):
+    1. False conflicts after the store's own writes. Each LoadSnapshot entry now carries two values: the disk fingerprint (used for 'stale on disk') and a caller baseline (the fingerprint of the in-memory copy as of the last load or save). 'Touched' is judged against the baseline only. save() and update_atomically record both after writing. content_fingerprint now normalizes CRLF, so CRLF checkouts are not seen as changed. Both reproduced cases are now tests: create TASK-9, save, concurrent edit of it, then an edit of TASK-1 saves; clear risk_notes (preserved on disk), save, concurrent edit, then adding TASK-5 saves.
+    2. The server getting stuck. All 32 server save sites (30 in rest.rs, evaluate.rs, skill_runner.rs), plus the gRPC ServerState::save, now go through ServerState::save_store / save_current. On StoreConflictError these reload the in-memory store in place and return StoreSaveError::Conflict: HTTP 409 for REST, ABORTED for gRPC. The auth register and PIN paths now return the error instead of logging and succeeding. Tests: a REST add-comment conflict returns 409 and the retry succeeds (the other writer's edit is kept); a PIN change during a conflict returns 409 and the retry persists the PIN.
+    Non-blocking: the supervisor now emits SpecReDriven only after a successful save. test_distributed.sh now also removes the store .gitignore (info/exclude path). Filed BUG-1614 (REST add-comment swaps author and content, found while testing).
+  created_at: 2026-09-25T05:30:11.647300836Z
+  modified_at: 2026-09-25T05:30:11.647300836Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b4984d495336027fed771caed71bc429dc1fd20c
