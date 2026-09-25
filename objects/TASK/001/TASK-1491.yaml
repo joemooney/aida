@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:03:52.561229247Z
-modified_at: 2026-09-25T09:48:27.960803380Z
+modified_at: 2026-09-25T09:49:01.952443368Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -76,6 +76,12 @@ comments:
     VERIFIED OK: the cron line is byte-identical (same shell_quote, argv and marker, both paths canonical). The whole-line marker is prefix-safe. crontab_after_driver_switch keeps commented, prefix-sibling and unrelated lines and CRLF byte-for-byte. The switch installs and verifies before it removes, so there are never zero drivers. Removal only runs disable --now on the timer, deletes only marked files and refuses foreign ones. No sudo, and the linger reminder only prints on Linger=no. The TTY and agent gate covers install-cron, install-systemd and shift install, and AIDA_AGENT_OUTPUT=0 cannot bypass the stdin-TTY check. No MCP or integration-test path reaches the installers. The cfg(test) guards are real for systemctl, the unit dir, crontab writes and linger. A12: OnActiveSec=1min plus OnBootSec=2min plus OnUnitInactiveSec=10min gives a first fire on enable+start, KillMode=process is correct for the setsid wave in the oneshot cgroup, TimeoutStartSec=15min is sane given the 120s ceiling per job, there are no resource limits and no Persistent=. ExecStart and Environment quoting (backslash, double quote, dollar as $$) passes systemd-analyze verify. There are no SPEC IDs in --help text.
   created_at: 2026-09-25T09:48:27.960803380Z
   modified_at: 2026-09-25T09:48:27.960803380Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d7f7-e280-7f42-9495-4ec4d65bbb43
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept the strict review. Rework: B1 (an unreadable systemd state is Unknown, never Disabled; label and doctor report driver-unknown; add a fake-host test with no user bus). Also fix N1 (tick_invocation refuses a trailing space and a trailing backslash), N2 (the status check includes is-active; re-enabling reports Repaired), N3 (fix the test comment, or run the dual-driver check even with no jobs; prefer the latter if it''s cheap), N4 (route the aida init cron offer through driver_gate_refusal), N5 (the error says the shift is enabled with no driver change), N8 (remove the written unit files if enable fails). N6 is filed as a follow-up. N7 is accepted as is (read-only).'
+  created_at: 2026-09-25T09:49:01.952443368Z
+  modified_at: 2026-09-25T09:49:01.952443368Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
