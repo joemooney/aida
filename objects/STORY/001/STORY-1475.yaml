@@ -34,12 +34,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:02:30.145878720Z
-modified_at: 2026-09-25T05:02:57.841048833Z
+modified_at: 2026-09-25T05:24:12.770912910Z
 req_type: Story
 tags:
 - antigravity
 - codex
 - cross-vendor
+- docs:impacted
 - orchestrator
 - scaffolding-pack
 - skill
