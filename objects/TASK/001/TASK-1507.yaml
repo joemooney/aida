@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T14:45:14.819828739Z
+modified_at: 2026-09-25T14:45:41.754902721Z
 req_type: Task
 tags:
 - cache
@@ -152,6 +152,12 @@ comments:
     - Mutations killed: R2 since >=; watermark off-by-one; seq-primary order (candidates and events); tie-break ASC; R3 off, strict, and not recorded; R4 off; N1b off; N2 off and elsewhere-off; N3 bound no-op; N4 off.
   created_at: 2026-09-25T14:45:14.819828739Z
   modified_at: 2026-09-25T14:45:14.819828739Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d907-7cfa-74b3-8ef5-cc5e313cf699
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept the re-review. Rework: B2, when recording each merge, store the commit times that occur on both sides (rev-list --timestamp M^1 ^M^2 and M^2 ^M^1); fall back whenever the served range contains one of those tied times. This replaces the boundary-only R4. N2a: also treat the tip as live when ''git for-each-ref --contains <tip>'' finds a ref, so a branch switch doesn''t trigger a reset. T1: add tests that pin the unknown-watermark guard (a partial build with zero chunks must not serve) and the two boundary comparisons. N4b is accepted as negligible.'
+  created_at: 2026-09-25T14:45:41.754902721Z
+  modified_at: 2026-09-25T14:45:41.754902721Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
