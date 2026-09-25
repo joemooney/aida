@@ -1,0 +1,49 @@
+id: 01a0d64e-0571-7910-954e-613d10f4e7e2
+spec_id: TASK-1491
+agreed_id: TASK-1491
+title: 'Night shift slice 2: systemd user timer driver, driver-switch rules and doctor DriverStatus'
+description: |
+  Slice 2 of STORY-1218 (night shift): the systemd user timer driver, the driver switch rules, and doctor's DriverStatus. Slice 1 (the tick core on the existing cron driver) shipped in docs/plans/2026-09-24-shift-tick.md. GUIDED build, human-reviewed PR, no auto-merge (advisor Q6 ruling).
+
+  Scope (from the advisor signoff, binding):
+  - `aida schedule install-systemd | uninstall-systemd`; `aida shift install --systemd-user|--cron` = enable + that install. Units `aida-tick-<hash8(canon repo)>.{service,timer}`, `Type=oneshot`, `WorkingDirectory`, `Environment=PATH=… AIDA_SCHEDULE_INVOKER=systemd`, `ExecStart=<canonical exe> schedule tick`, output to the journal. Share one `tick_invocation(repo, exe)` between `build_tick_cron_line` and `build_systemd_units` so the argv cannot drift (BUG-1600: no `--format json`). Unit files carry the `aida-schedule-tick:<canon>` marker; install is compare-and-rewrite returning Installed/AlreadyUpToDate/Repaired (`CronInstallOutcome` -> `DriverInstallOutcome`).
+  - Doctor: `CronDriverStatus` becomes `DriverStatus { cron, systemd }`; flag "both installed" and "none installed" so a systemd-only repo is not reported as driverless.
+
+  A12 (binding) — Timer and unit shape:
+  - `OnUnitInactiveSec` alone NEVER fires the first time. Add `OnActiveSec=1min` and `OnBootSec=2min`.
+  - Drop `Persistent=true`. It applies only to `OnCalendar` timers and does nothing here.
+  - Add `TimeoutStartSec=15min` as a backstop against a wedged tick.
+  - Set NO `MemoryMax`, `CPUQuota` or similar resource limits. They would silently constrain the wave that is left behind in the cgroup.
+  - `KillMode=process` is REQUIRED: setsid does not leave the cgroup, and when a oneshot's main process exits systemd kills the rest of the cgroup. Stopping the tick must never kill a drain mid-integration.
+  - Document the expected journal line "left-over process" in the runbook.
+  - Test `systemd_unit_has_killmode_process_and_first_fire_trigger`.
+  - A `systemd-run --user` transient unit per wave is a better long-term shape (separate cgroup, journal and `systemctl` stop per wave). Not binding; file it as a follow-up.
+
+  A13 (binding) — Rules for the driver switch:
+  (a) Install the new driver and verify it first (`systemctl --user is-enabled` on the timer, or a crontab read-back). Only then remove the old one. A failure part-way leaves both drivers, which is harmless under the tick lock and flagged by doctor, and never leaves none.
+  (b) Cron removal uses a NEW pure function, `crontab_after_driver_switch(existing, marker)`. It removes this repo's ACTIVE marked line and ACTIVE legacy lines using the BUG-1605 predicates only. Commented-out lines, other repos' lines (including repos whose path is a prefix of this one) and unrelated lines must come through byte-for-byte. Print every line removed. Tests cover a prefix-path sibling repo, commented marked and legacy lines, an unrelated user line, and a missing trailing newline. (Note: `crontab_after_uninstall` removes only MARKED lines today.)
+  (c) Removing systemd only runs `disable --now` on the `.timer`. It never stops the `.service`. It deletes a unit file only if the file carries our `aida-schedule-tick:<canon>` marker. If a file with our name but no marker exists, the installer refuses and does not overwrite it.
+  (d) Never use sudo. Only print the reminder to enable linger (`loginctl enable-linger`) when Linger=no.
+
+  Non-binding: warn when the canonical exe is under a `target/` directory that belongs to a git worktree (a drain rebuild swaps the binary under the timer).
+
+  Named tests from the sketch: `systemd_units_share_tick_invocation_marker_abs_exe_no_format_flag`, `systemd_unit_has_killmode_process` (as the A12 test above), `systemd_install_installed_uptodate_repaired`, `systemd_install_removes_this_repos_cron_incl_legacy_unmarked_only`, `doctor_driver_status_systemd_and_dual_driver`.
+
+  Acceptance on this box: `aida shift install --systemd-user`, then `systemctl --user list-timers` output plus one journal tick attached to the PR. Do not enable the night shift itself (`aida shift enable`) in the AIDA repo as part of that check.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T02:03:52.561229247Z
+modified_at: 2026-09-25T02:03:52.561229247Z
+req_type: Task
+tags:
+- autonomy keystone orchestrator reliability
+filed_at:
+  code_sha: a276969ea936d46b488ec50e058b70773e1ca994
+  branch: claude/story-1218
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c7d35baa35
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
