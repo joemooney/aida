@@ -6831,34 +6831,134 @@ pub(crate) fn status_is_shelved(status: &aida_core::RequirementStatus) -> bool {
     matches!(status, aida_core::RequirementStatus::NeedsAttention)
 }
 
-/// Parse a `--since` value as either an RFC3339 timestamp or a relative
-/// `<N>{d,h,m}` expression (e.g. `2d`, `12h`, `45m`). Returns the
-/// resulting absolute UTC timestamp.
+/// Parse a `--since`/`--until` style time bound into an absolute UTC instant.
+/// Accepted forms, tried in this order:
+///
+/// - RFC3339 (`2026-05-01T10:00:00Z`, `2026-05-01T10:00:00+02:00`): the zone
+///   in the input is honored exactly.
+/// - A bare ISO date (`2026-05-01`): local midnight on that date.
+/// - A zone-less ISO datetime (`2026-05-01T10:00`, `2026-05-01 10:00`,
+///   optionally with seconds): that wall-clock time in the local timezone.
+/// - A compact relative duration `<N>{m,h,d,w}` (`45m`, `12h`, `2d`, `2w`),
+///   or the phrase form `<N> <unit>(s) ago` with unit minute/hour/day/week
+///   (`24 hours ago`, `1 week ago`): that long before now.
+///
+/// Local-time forms use the offset in effect on the requested date, so a
+/// January date and a July date resolve correctly across a DST change. A
+/// local time that falls in a DST gap or overlap is rejected rather than
+/// guessed.
+///
+/// Shared by `aida archive --older-than`, `aida queue progress --since`,
+/// the proxy-approvals and review-classes `--since`/`--until` filters,
+/// `aida status --activity --since`, and `aida history --since`/`--until`.
+// trace:TASK-1502 | ai:claude
 pub(crate) fn parse_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
+    parse_since_arg_at(raw, chrono::Utc::now(), &chrono::Local)
+}
+
+/// A local wall-clock time that has no single meaning in the local timezone
+/// (it falls in a DST gap or overlap). Kept as a distinct error type so
+/// callers that relabel parse errors can still surface this one verbatim.
+// trace:TASK-1502 | ai:claude
+#[derive(Debug)]
+pub(crate) struct AmbiguousLocalTime(pub String);
+
+impl std::fmt::Display for AmbiguousLocalTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "`{}` is ambiguous or doesn't exist in the local timezone (a DST \
+             transition); give an explicit offset instead, e.g. RFC3339",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for AmbiguousLocalTime {}
+
+/// Zone-less ISO datetime layouts accepted as local wall-clock time.
+const NAIVE_DATETIME_FORMATS: &[&str] = &[
+    "%Y-%m-%dT%H:%M:%S%.f",
+    "%Y-%m-%dT%H:%M",
+    "%Y-%m-%d %H:%M:%S%.f",
+    "%Y-%m-%d %H:%M",
+];
+
+/// [`parse_since_arg`], but resolves relative durations against an explicit
+/// `now` and local-time forms against an explicit timezone `tz`, instead of
+/// the wall clock and system timezone. Production passes `chrono::Local`;
+/// tests pass a `FixedOffset` or a DST-observing zone for deterministic
+/// output.
+// trace:TASK-1502 | ai:claude
+pub(crate) fn parse_since_arg_at<Tz: chrono::TimeZone>(
+    raw: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<chrono::DateTime<chrono::Utc>> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         anyhow::bail!("--since cannot be empty");
     }
-    // Try RFC3339 first.
+    // An explicit zone in the input is always honored exactly.
     if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(trimmed) {
         return Ok(ts.with_timezone(&chrono::Utc));
     }
-    // Relative form: <number><unit>, unit ∈ {d,h,m}
-    // BUG-100: peel the last CHAR rather than the last BYTE so multi-byte
-    // trailing units don't crash the process.
-    let (num_str, unit) = split_last_char(trimmed);
-    let n: i64 = num_str.parse().map_err(|_| {
+    // Local-time forms: resolve against the zone's offset on THAT date, so
+    // a DST gap or overlap is detected instead of silently misapplied.
+    let local = |naive: chrono::NaiveDateTime| -> Result<chrono::DateTime<chrono::Utc>> {
+        tz.from_local_datetime(&naive)
+            .single()
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+            .ok_or_else(|| anyhow::Error::new(AmbiguousLocalTime(trimmed.to_string())))
+    };
+    if let Ok(d) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        return local(d.and_time(chrono::NaiveTime::MIN));
+    }
+    for fmt in NAIVE_DATETIME_FORMATS {
+        if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(trimmed, fmt) {
+            return local(naive);
+        }
+    }
+    let invalid = || {
         anyhow::anyhow!(
-            "invalid --since value `{}` (try `2d`, `12h`, or RFC3339)",
+            "invalid --since value `{}` (try `2d`, `12h`, `2w`, `24 hours ago`, \
+             an ISO date or datetime, or RFC3339)",
             raw
         )
-    })?;
-    let now = chrono::Utc::now();
+    };
+    // Phrase form: `<N> <unit>(s) ago`, kept for callers of the old
+    // git-approxidate-backed history flags.
+    let words: Vec<&str> = trimmed.split_whitespace().collect();
+    let (num_str, unit) = if let [n, unit, ago] = words.as_slice() {
+        if !ago.eq_ignore_ascii_case("ago") {
+            return Err(invalid());
+        }
+        let unit = unit.to_ascii_lowercase();
+        let unit = match unit.strip_suffix('s').unwrap_or(&unit) {
+            "minute" => "m",
+            "hour" => "h",
+            "day" => "d",
+            "week" => "w",
+            _ => return Err(invalid()),
+        };
+        (*n, unit)
+    } else {
+        // Compact form: <number><unit>, unit ∈ {m,h,d,w}.
+        // BUG-100: peel the last CHAR rather than the last BYTE so
+        // multi-byte trailing units don't crash the process.
+        split_last_char(trimmed)
+    };
+    let n: i64 = num_str.parse().map_err(|_| invalid())?;
     let delta = match unit {
         "d" => chrono::Duration::days(n),
         "h" => chrono::Duration::hours(n),
         "m" => chrono::Duration::minutes(n),
-        _ => anyhow::bail!("invalid --since unit `{}` — use d/h/m or RFC3339", unit),
+        "w" => chrono::Duration::weeks(n),
+        _ => anyhow::bail!(
+            "invalid --since unit `{}`: use m/h/d/w, `<N> <unit>s ago`, an ISO \
+             date or datetime, or RFC3339",
+            unit
+        ),
     };
     Ok(now - delta)
 }

@@ -1164,8 +1164,10 @@ pub fn read_all_with_archive(project_root: &Path) -> Vec<Event> {
 }
 
 /// Parse a `--since`/`--until` bound: RFC 3339, or a bare `YYYY-MM-DD`
-/// (midnight UTC).
+/// (midnight UTC). Test-only fixture helper now: `aida history --kind` uses
+/// the shared local-time-aware parser instead.
 // trace:STORY-1436 | ai:claude
+#[cfg(test)]
 pub fn parse_time_bound(value: &str) -> Option<DateTime<Utc>> {
     let v = value.trim();
     if let Ok(t) = DateTime::parse_from_rfc3339(v) {
