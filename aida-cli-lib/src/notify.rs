@@ -701,16 +701,10 @@ fn run_command_bounded(
         .stderr(Stdio::piped())
         .spawn()
         .with_context(|| format!("spawn notify command `{command}`"))?;
-    if let Some(mut stdin) = child.stdin.take() {
-        // A notify command is not required to read stdin (`notify-send` takes
-        // everything as arguments); if it exits first the write sees EPIPE,
-        // which is not a delivery failure.
-        match stdin.write_all(message.as_bytes()) {
-            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {}
-            other => other?,
-        }
-    }
     let Some(timeout) = timeout else {
+        if let Some(mut stdin) = child.stdin.take() {
+            write_message(&mut stdin, message)?;
+        }
         let output = child.wait_with_output()?;
         if output.status.success() {
             return Ok(());
@@ -721,10 +715,24 @@ fn run_command_bounded(
             String::from_utf8_lossy(&output.stderr).trim()
         )
     };
+    // The message is written on a thread: a hung command that never reads
+    // stdin must not hold the caller past the bound once the message is
+    // larger than the pipe buffer. The group kill closes the read end, so
+    // the blocked write then fails with EPIPE and the thread ends.
+    // trace:BUG-1623 | ai:claude
+    let (stdin_tx, stdin_rx) = std::sync::mpsc::channel();
+    if let Some(mut stdin) = child.stdin.take() {
+        let body = message.to_string();
+        std::thread::spawn(move || {
+            let _ = stdin_tx.send(write_message(&mut stdin, &body));
+        });
+    }
     // stderr is drained on a thread so a chatty command cannot block on a
-    // full pipe. The thread ends when every holder of the pipe is gone,
-    // which the group kill below guarantees.
-    // trace:TASK-1492 | ai:claude
+    // full pipe. The group kill below ends every process of the command's
+    // group, but a descendant that left the group (`setsid`, a daemonizing
+    // helper) can keep stderr open, so the thread is never joined blindly:
+    // its text is awaited for a bounded moment and it is otherwise detached.
+    // trace:TASK-1492 trace:BUG-1623 | ai:claude
     let (tx, rx) = std::sync::mpsc::channel();
     let reader = child.stderr.take().map(|mut stderr| {
         std::thread::spawn(move || {
@@ -734,20 +742,35 @@ fn run_command_bounded(
         })
     });
     let started = std::time::Instant::now();
-    let timed_out = loop {
-        if exited_unreaped(&mut child)? {
-            break false;
+    let polled = loop {
+        match poll_exit(&mut child) {
+            Ok(ChildPoll::Running) => {}
+            other => break other.map(|p| (p, false)),
         }
         if started.elapsed() >= timeout {
-            break true;
+            break Ok((ChildPoll::Running, true));
         }
         std::thread::sleep(Duration::from_millis(20));
     };
-    // The shell is not reaped yet, so its pid is still the live group id:
-    // end every process the command started (a timed-out one, or a
-    // background leftover holding stderr), then reap the shell.
-    kill_group(&mut child);
-    let status = child.wait()?;
+    // An unreaped shell's pid is still the live group id: end every process
+    // the command started (a timed-out one, or a background leftover), then
+    // reap the shell. A poll error leaves the shell unreaped too, so it gets
+    // the same cleanup before the error is returned. A shell already reaped
+    // by the poll (the non-Linux fallback) is never group-killed, since its
+    // pid could have been reused.
+    // trace:BUG-1623 | ai:claude
+    let (status, timed_out) = match polled {
+        Ok((ChildPoll::Reaped(status), _)) => (status, false),
+        Ok((_, timed_out)) => {
+            kill_group(&mut child);
+            (child.wait()?, timed_out)
+        }
+        Err(e) => {
+            kill_group(&mut child);
+            let _ = child.wait();
+            return Err(e).context("poll notify command");
+        }
+    };
     let stderr = rx.recv_timeout(Duration::from_secs(1)).unwrap_or_default();
     if let Some(reader) = reader {
         if reader.is_finished() {
@@ -760,17 +783,46 @@ fn run_command_bounded(
             timeout.as_secs_f32()
         );
     }
+    // A write still blocked here belongs to a stdin holder outside the group;
+    // it is not waited for.
+    if let Ok(Err(e)) = stdin_rx.recv_timeout(Duration::from_millis(100)) {
+        return Err(e).context("write notify message");
+    }
     if status.success() {
         return Ok(());
     }
     anyhow::bail!("notify command exited {status}: {}", stderr.trim())
 }
 
-/// Has the child exited? Unix: checked WITHOUT reaping it (`WNOWAIT`), so
-/// its pid stays reserved as the process-group id until [`kill_group`] ran.
-// trace:TASK-1492 | ai:claude
-#[cfg(unix)]
-fn exited_unreaped(child: &mut std::process::Child) -> std::io::Result<bool> {
+/// Write the message to the command's stdin. A notify command is not
+/// required to read stdin (`notify-send` takes everything as arguments); if
+/// it exits first the write sees EPIPE, which is not a delivery failure.
+// trace:BUG-1623 | ai:claude
+fn write_message(stdin: &mut std::process::ChildStdin, message: &str) -> std::io::Result<()> {
+    match stdin.write_all(message.as_bytes()) {
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        other => other,
+    }
+}
+
+/// One poll of the bounded command.
+// trace:BUG-1623 | ai:claude
+enum ChildPoll {
+    Running,
+    /// Exited but not reaped: its pid is still reserved as the group id.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    ExitedUnreaped,
+    /// Exited and already reaped by the poll.
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
+    Reaped(std::process::ExitStatus),
+}
+
+/// Linux: checked WITHOUT reaping the child (`waitid` with `WNOWAIT`), so
+/// its pid stays reserved as the process-group id until [`kill_group`] ran
+/// and background leftovers of a finished command are ended too.
+// trace:TASK-1492 trace:BUG-1623 | ai:claude
+#[cfg(target_os = "linux")]
+fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
     // SAFETY: waitid only writes the zeroed siginfo we own.
     let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
     let rc = unsafe {
@@ -785,12 +837,24 @@ fn exited_unreaped(child: &mut std::process::Child) -> std::io::Result<bool> {
         return Err(std::io::Error::last_os_error());
     }
     // SAFETY: si_pid is valid for a waitid result; 0 means still running.
-    Ok(unsafe { info.si_pid() } != 0)
+    Ok(if unsafe { info.si_pid() } != 0 {
+        ChildPoll::ExitedUnreaped
+    } else {
+        ChildPoll::Running
+    })
 }
 
-#[cfg(windows)]
-fn exited_unreaped(child: &mut std::process::Child) -> std::io::Result<bool> {
-    Ok(child.try_wait()?.is_some())
+/// Elsewhere (macOS/BSD `waitid` with `WNOHANG | WNOWAIT` is not relied on,
+/// and Windows has no process groups here): a plain `try_wait`, which reaps.
+/// A timed-out command is still group-killed while unreaped; background
+/// leftovers of a command that exited on its own are not ended.
+// trace:BUG-1623 | ai:claude
+#[cfg(not(target_os = "linux"))]
+fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
+    Ok(match child.try_wait()? {
+        Some(status) => ChildPoll::Reaped(status),
+        None => ChildPoll::Running,
+    })
 }
 
 /// SIGKILL the command's whole process group (its pgid is the unreaped
@@ -1097,6 +1161,94 @@ mod tests {
         )
         .unwrap_err();
         assert!(format!("{err:#}").contains("boom"), "{err:#}");
+    }
+
+    // m2: a hung command that never reads stdin cannot block the caller in
+    // the stdin write: a message far larger than the pipe buffer still
+    // returns at the bound.
+    // trace:BUG-1623 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn notify_bounded_stdin_write_cannot_outlive_the_timeout() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = NotifyConfig {
+            command: "sleep 5".to_string(),
+            min_interval: Duration::from_secs(0),
+            quiet_hours: None,
+            rules: NotifyRules::default(),
+        };
+        let message = "x".repeat(4 * 1024 * 1024);
+        let started = std::time::Instant::now();
+        let err = run_command_bounded(
+            dir.path(),
+            &cfg,
+            "r",
+            "t",
+            &message,
+            Some(Duration::from_millis(300)),
+        )
+        .unwrap_err();
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "{:?}",
+            started.elapsed()
+        );
+        assert!(format!("{err:#}").contains("killed"), "{err:#}");
+        // A command that reads the whole large message still succeeds.
+        let ok = NotifyConfig {
+            command: "cat >/dev/null".to_string(),
+            ..cfg
+        };
+        run_command_bounded(
+            dir.path(),
+            &ok,
+            "r",
+            "t",
+            &message,
+            Some(Duration::from_secs(10)),
+        )
+        .unwrap();
+    }
+
+    // m6: on Linux a background child the notify command leaves behind is
+    // ended when the command exits (it shares the command's process group).
+    // trace:BUG-1623 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn notify_background_children_are_killed_when_the_command_exits() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join("bg-pid");
+        let cfg = NotifyConfig {
+            command: format!("sleep 7.456 & echo $! > {}; exit 0", pidfile.display()),
+            min_interval: Duration::from_secs(0),
+            quiet_hours: None,
+            rules: NotifyRules::default(),
+        };
+        let started = std::time::Instant::now();
+        run_command_bounded(
+            dir.path(),
+            &cfg,
+            "r",
+            "t",
+            "m\n",
+            Some(Duration::from_secs(5)),
+        )
+        .unwrap();
+        assert!(started.elapsed() < Duration::from_secs(4));
+        let pid: libc::pid_t = std::fs::read_to_string(&pidfile)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        // SAFETY: signal 0 only probes whether the pid still exists.
+        while unsafe { libc::kill(pid, 0) } == 0 {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "background child {pid} outlived the notify command"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 
     // N1: a timed-out compound command or pipeline leaves no process of its

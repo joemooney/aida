@@ -1246,4 +1246,77 @@ mod tests {
             }
         }
     }
+
+    // m5 (A7): a store error part-way through the pass is returned only
+    // AFTER the specs already moved to Approved got their queue entry, so
+    // none is left Approved but unqueued.
+    // trace:BUG-1623 | ai:claude
+    #[test]
+    fn a_store_error_mid_pass_still_queues_the_already_approved_specs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store_root = tmp.path().join(".aida-store");
+        let backend = aida_core::GitBackend::new(&store_root).unwrap();
+        stored_park(&backend, "STORY-1", 120);
+        stored_park(&backend, "STORY-2", 90);
+        stored_park(&backend, "STORY-3", 60);
+        let store = backend.load().unwrap();
+        let plan = plan_redrives(
+            &store.requirements,
+            &events::RedriveHistory::default(),
+            &SuperviseOpts::default(),
+            chrono::Utc::now(),
+        );
+        let story1 = store
+            .requirements
+            .iter()
+            .find(|r| r.display_id() == "STORY-1")
+            .unwrap()
+            .id;
+        let queue = QueueTarget {
+            user: "joe".to_string(),
+            role: "implementer".to_string(),
+        };
+        let objects = store_root.join("objects");
+        let hidden = store_root.join("objects-hidden");
+        // The second attempt record succeeds, then the object store becomes
+        // unreadable (a file where the objects directory was): that spec's
+        // status write fails with a store error.
+        let mut calls = 0usize;
+        let mut record = |_: &events::Event| {
+            calls += 1;
+            if calls == 2 {
+                std::fs::rename(&objects, &hidden).unwrap();
+                std::fs::write(&objects, "not a directory").unwrap();
+            }
+            Ok(())
+        };
+        let err = apply_requeue_with(
+            &backend,
+            &plan,
+            3,
+            Some(&queue),
+            &mut record,
+            &mut |_, _, _| {},
+        )
+        .unwrap_err();
+        assert!(!format!("{err:#}").is_empty());
+        assert_eq!(calls, 2, "the pass stops at the store error");
+        let queued: Vec<uuid::Uuid> = backend
+            .queue_list("joe", false)
+            .unwrap()
+            .iter()
+            .map(|e| e.requirement_id)
+            .collect();
+        assert_eq!(queued, vec![story1], "STORY-1 is queued before the error");
+        std::fs::remove_file(&objects).unwrap();
+        std::fs::rename(&hidden, &objects).unwrap();
+        for r in backend.load().unwrap().requirements {
+            let want = if r.display_id() == "STORY-1" {
+                RequirementStatus::Approved
+            } else {
+                RequirementStatus::NeedsAttention
+            };
+            assert_eq!(r.status, want, "{}", r.display_id());
+        }
+    }
 }

@@ -1395,8 +1395,12 @@ What one tick does, in order:
    dropped is retried on a later check. With no `[notify] command` configured
    nothing is sent and no episode is opened. The notify command may run for
    at most 15s, less when the tick deadline is closer; a command still
-   running then is killed and logged to `.aida/notify.log`. Skipped past the
-   tick deadline.
+   running then is killed and logged to `.aida/notify.log`. The command runs
+   in its own process group, and on Linux that whole group is killed when the
+   command exits, so a background child it starts (`cmd &`) does not outlive
+   it; a notify helper that must keep running has to detach with `setsid`.
+   <!-- trace:BUG-1623 | ai:claude -->
+   Skipped past the tick deadline.
 8. Emits one `ShiftTick` event only when it acted or its refusing-guard set
    changed; it names re-queued specs (`redriven`), capped parks
    (`reclassified`), mail escalations (`mail_escalated`) and a re-drive held

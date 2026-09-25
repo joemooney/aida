@@ -1406,11 +1406,15 @@ fn redrive_guards(p: &Probes, state: &ShiftState, ctx: &TickCtx) -> Vec<GuardVer
         // outcome (and so the zero-progress breaker) is still unknown. The
         // tick settles before this step, so only an out-of-tick caller
         // (`supervise watch --execute`) can see one; it holds until the next
-        // tick settles the wave (BUG-1621 B1).
-        // trace:BUG-1621 | ai:claude
-        _ if wave_open => {
-            Some("wave unsettled: a shift wave awaits settlement by the next check".to_string())
-        }
+        // tick settles the wave (BUG-1621 B1). A disabled shift never
+        // ticks, so the message names the way out (BUG-1623 n1).
+        // trace:BUG-1621 trace:BUG-1623 | ai:claude
+        _ if wave_open => Some(
+            "wave unsettled: the last shift wave has exited and waits for the next \
+             `aida shift tick` to settle it (a disabled shift never ticks: run \
+             `aida shift enable` first)"
+                .to_string(),
+        ),
         _ => None,
     };
     vec![
