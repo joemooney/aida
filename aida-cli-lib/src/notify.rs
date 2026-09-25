@@ -728,10 +728,12 @@ fn run_command_bounded(
         });
     }
     // stderr is drained on a thread so a chatty command cannot block on a
-    // full pipe. The group kill below ends every process of the command's
-    // group, but a descendant that left the group (`setsid`, a daemonizing
-    // helper) can keep stderr open, so the thread is never joined blindly:
-    // its text is awaited for a bounded moment and it is otherwise detached.
+    // full pipe. The pipe may outlive the shell: a descendant that left the
+    // group (`setsid`, a daemonizing helper) keeps it open everywhere, and
+    // off Linux a background child of a command that exited on its own is
+    // not group-killed either (only Linux kills the group after a normal
+    // exit). So the thread is never joined blindly: its text is awaited for
+    // a bounded moment and it is otherwise detached.
     // trace:TASK-1492 trace:BUG-1623 | ai:claude
     let (tx, rx) = std::sync::mpsc::channel();
     let reader = child.stderr.take().map(|mut stderr| {
@@ -755,9 +757,10 @@ fn run_command_bounded(
     // An unreaped shell's pid is still the live group id: end every process
     // the command started (a timed-out one, or a background leftover), then
     // reap the shell. A poll error leaves the shell unreaped too, so it gets
-    // the same cleanup before the error is returned. A shell already reaped
-    // by the poll (the non-Linux fallback) is never group-killed, since its
-    // pid could have been reused.
+    // the same cleanup before the error is returned, except ECHILD: the
+    // shell is already gone (reaped elsewhere), its pid may have been reused,
+    // and a group kill could hit an unrelated group. A shell already reaped
+    // by the poll (the non-Linux fallback) is never group-killed either.
     // trace:BUG-1623 | ai:claude
     let (status, timed_out) = match polled {
         Ok((ChildPoll::Reaped(status), _)) => (status, false),
@@ -766,8 +769,10 @@ fn run_command_bounded(
             (child.wait()?, timed_out)
         }
         Err(e) => {
-            kill_group(&mut child);
-            let _ = child.wait();
+            if !is_echild(&e) {
+                kill_group(&mut child);
+                let _ = child.wait();
+            }
             return Err(e).context("poll notify command");
         }
     };
@@ -802,6 +807,20 @@ fn write_message(stdin: &mut std::process::ChildStdin, message: &str) -> std::io
     match stdin.write_all(message.as_bytes()) {
         Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         other => other,
+    }
+}
+
+/// Did the poll fail because the child no longer exists (already reaped)?
+// trace:BUG-1623 | ai:claude
+fn is_echild(e: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    {
+        e.raw_os_error() == Some(libc::ECHILD)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = e;
+        false
     }
 }
 
@@ -1219,7 +1238,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pidfile = dir.path().join("bg-pid");
         let cfg = NotifyConfig {
-            command: format!("sleep 7.456 & echo $! > {}; exit 0", pidfile.display()),
+            command: format!(
+                "sleep 7.456 & echo $! > {}; exit 0",
+                shell_quote(&pidfile.display().to_string())
+            ),
             min_interval: Duration::from_secs(0),
             quiet_hours: None,
             rules: NotifyRules::default(),
@@ -1265,7 +1287,10 @@ mod tests {
         {
             let pidfile = dir.path().join(format!("pgid-{i}"));
             let cfg = NotifyConfig {
-                command: format!("echo $$ > {} ; {body}", pidfile.display()),
+                command: format!(
+                    "echo $$ > {} ; {body}",
+                    shell_quote(&pidfile.display().to_string())
+                ),
                 min_interval: Duration::from_secs(0),
                 quiet_hours: None,
                 rules: NotifyRules::default(),

@@ -323,6 +323,56 @@ fn watch_redrive_held_while_a_drain_or_wave_is_live() {
     assert_eq!(r.redrive_plan[0].attempts, 0);
 }
 
+// BUG-1623 n1: the unsettled-wave hold describes the state for an enabled
+// and a disabled shift separately, and never advises enabling the shift
+// (that grants unattended launches just to clear a hold).
+// trace:BUG-1623 | ai:claude
+#[test]
+fn watch_unsettled_wave_hold_describes_state_without_advising_enable() {
+    use crate::shift::unsettled_wave_detail;
+    let on = unsettled_wave_detail(true);
+    let off = unsettled_wave_detail(false);
+    assert_eq!(
+        on,
+        "wave unsettled: the last shift wave has exited and waits for the next shift tick \
+         to settle it"
+    );
+    assert_eq!(
+        off,
+        "wave unsettled: the last shift wave has exited, but a disabled shift does not tick, \
+         so re-drive waits until the shift runs again"
+    );
+
+    // Through the real guard: the wording follows this clone's shift switch.
+    let unsettled = ShiftState {
+        waves: vec![WaveRecord {
+            batch: "shift-20260925-0250".to_string(),
+            specs: vec!["TASK-1".to_string()],
+            at: now() - Duration::minutes(10),
+            argv: Vec::new(),
+            pid: Some(7),
+            pid_start: None,
+            log: None,
+            outcome: None,
+        }],
+        ..Default::default()
+    };
+    let cfg_shift_on = cfg(&format!(
+        "[repo.\"{REPO}\"]\nenabled = true\nredrive = true\n"
+    ));
+    for (config, want) in [(cfg_shift_on, &on), (cfg_redrive_on(), &off)] {
+        let mut p = probes(vec![drain_park("TASK-9", 60)]);
+        p.last_wave_alive = false;
+        let (r, rec) = run(&config, &p, &unsettled, false);
+        assert!(rec.calls.is_empty(), "{:?}", rec.calls);
+        let detail = guard_detail(&r, "redrive-lock-free");
+        assert_eq!(&detail, want);
+    }
+    for detail in [&on, &off] {
+        assert!(!detail.contains("shift enable"), "{detail}");
+    }
+}
+
 #[test]
 fn watch_redrive_held_by_a_tripped_breaker_or_unreadable_state() {
     let p = probes(vec![drain_park("TASK-9", 60)]);

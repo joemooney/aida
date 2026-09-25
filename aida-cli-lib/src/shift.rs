@@ -1394,9 +1394,30 @@ pub(crate) fn mail_escalations(
     plan
 }
 
+/// The `redrive-lock-free` detail for a launched wave that exited but is not
+/// settled yet. It describes the state only: enabling the shift grants
+/// unattended launches, so it is never suggested just to clear this hold.
+// trace:BUG-1623 | ai:claude
+pub(crate) fn unsettled_wave_detail(shift_enabled: bool) -> String {
+    if shift_enabled {
+        "wave unsettled: the last shift wave has exited and waits for the next shift tick \
+         to settle it"
+            .to_string()
+    } else {
+        "wave unsettled: the last shift wave has exited, but a disabled shift does not tick, \
+         so re-drive waits until the shift runs again"
+            .to_string()
+    }
+}
+
 /// The re-drive step's own guards. Evaluated only when re-drive is on.
 // trace:TASK-1492 | ai:claude
-fn redrive_guards(p: &Probes, state: &ShiftState, ctx: &TickCtx) -> Vec<GuardVerdict> {
+fn redrive_guards(
+    p: &Probes,
+    state: &ShiftState,
+    ctx: &TickCtx,
+    shift_enabled: bool,
+) -> Vec<GuardVerdict> {
     let wave_open = state.last_launched().is_some_and(|w| w.outcome.is_none());
     let lock_live = match p.lock {
         LockView::Running(pid) => Some(format!("a drain holds the lock (pid {pid})")),
@@ -1406,15 +1427,10 @@ fn redrive_guards(p: &Probes, state: &ShiftState, ctx: &TickCtx) -> Vec<GuardVer
         // outcome (and so the zero-progress breaker) is still unknown. The
         // tick settles before this step, so only an out-of-tick caller
         // (`supervise watch --execute`) can see one; it holds until the next
-        // tick settles the wave (BUG-1621 B1). A disabled shift never
-        // ticks, so the message names the way out (BUG-1623 n1).
+        // tick settles the wave (BUG-1621 B1). The message states the
+        // state only; it never advises enabling the shift (BUG-1623 n1).
         // trace:BUG-1621 trace:BUG-1623 | ai:claude
-        _ if wave_open => Some(
-            "wave unsettled: the last shift wave has exited and waits for the next \
-             `aida shift tick` to settle it (a disabled shift never ticks: run \
-             `aida shift enable` first)"
-                .to_string(),
-        ),
+        _ if wave_open => Some(unsettled_wave_detail(shift_enabled)),
         _ => None,
     };
     vec![
@@ -1482,7 +1498,7 @@ fn redrive_step(
         };
         return Ok(Vec::new());
     }
-    report.redrive_guards = redrive_guards(p, state, ctx);
+    report.redrive_guards = redrive_guards(p, state, ctx, cfg.enabled);
     let Ok(history) = &p.redrive_history else {
         report.redrive = "held: redrive-evidence".to_string();
         return Ok(Vec::new());

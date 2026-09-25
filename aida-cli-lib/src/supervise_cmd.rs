@@ -450,31 +450,48 @@ fn run_watch_pass(
         &mut queue_add_implementer,
     )?;
 
-    if json {
-        println!("{}", serde_json::to_string(&report)?);
-    } else {
-        print_watch_report(&report, execute);
-    }
-
-    // Compose the other shipped reflex: nudge advisor stalls.
-    // Nudge sends a real mailbox message / notification, so it only fires under
-    // --execute; a dry-run pass has no side effects.
-    // With --json the nudge line goes to stderr, so stdout stays one JSON
-    // document per pass.
-    // trace:BUG-1623 | ai:claude
-    if execute {
-        if let Ok(Some(line)) = nudge_pass(backend, store_path) {
-            if json {
-                eprintln!("{line}");
-            } else {
-                println!("{line}");
-            }
-        }
-    }
+    emit_pass_output(
+        &report,
+        execute,
+        json,
+        &mut || nudge_pass(backend, store_path).ok().flatten(),
+        &mut std::io::stdout(),
+        &mut std::io::stderr(),
+    )?;
 
     // Surface only human-decision items.
     if !json {
         print_awaiting_surface();
+    }
+    Ok(())
+}
+
+/// Print one pass's report, then run the nudge reflex (only under
+/// --execute: it sends a real mailbox message / notification, so a dry run
+/// has no side effects). With --json the nudge line goes to `err`, so `out`
+/// stays exactly one JSON document per pass.
+// trace:BUG-1623 | ai:claude
+fn emit_pass_output(
+    report: &WatchReport,
+    execute: bool,
+    json: bool,
+    nudge: &mut dyn FnMut() -> Option<String>,
+    out: &mut dyn std::io::Write,
+    err: &mut dyn std::io::Write,
+) -> Result<()> {
+    if json {
+        writeln!(out, "{}", serde_json::to_string(report)?)?;
+    } else {
+        print_watch_report(report, execute);
+    }
+    if execute {
+        if let Some(line) = nudge() {
+            if json {
+                writeln!(err, "{line}")?;
+            } else {
+                writeln!(out, "{line}")?;
+            }
+        }
     }
     Ok(())
 }
