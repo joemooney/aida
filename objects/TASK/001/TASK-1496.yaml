@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:05:25.253633460Z
-modified_at: 2026-09-25T16:19:23.753635523Z
+modified_at: 2026-09-25T16:19:25.899978816Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-24-shift-tick.md
@@ -16,6 +16,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0b5e0-7244-7451-89a9-f8c561574633
   created_at: 2026-09-25T02:05:33.057283138Z
+- rel_type: SupersededBy
+  target_id: 01a0d7f7-e8c3-7673-8b75-e553e0a9f30e
+  created_at: 2026-09-25T16:19:25.899948683Z
+  created_by: joe
 comments:
 - id: 01a0d651-15a8-7ed3-8cdb-45bf6da6985b
   author: joe
