@@ -23,7 +23,17 @@
 
 ## 1. Method, and every command behind the numbers
 
-All git measurements run on `main` pinned at `9154924fd2`, excluding merge commits. Two scratch scripts did the classification. They are not committed because they are one-off measuring tools, but their rules are summarised below so the numbers can be reproduced.
+All git measurements run on `main` pinned at `9154924fd2`, excluding merge commits. The measuring scripts are committed next to this report in [`spike-86-scripts/`](spike-86-scripts/) and regenerate every figure here exactly. Run them from the repository root with `python3` (the corpus script needs PyYAML):
+
+```bash
+python3 docs/positioning/spike-86-scripts/report.py     # sections 2.1, 2.2 and 2.5 (about 2 minutes)
+git fetch origin aida-store                              # corpus.py reads the store at a pinned revision
+python3 docs/positioning/spike-86-scripts/corpus.py      # sections 2.3 and 2.4; --list30 prints each 30-day spec's layer
+python3 docs/positioning/spike-86-scripts/classify.py --since="2026-08-25 18:15 -0700"   # raw per-layer churn
+python3 docs/positioning/spike-86-scripts/deep.py     --since="2026-08-25 18:15 -0700"   # test and dispatcher attribution
+```
+
+The defaults pin `--rev 9154924fd2` and `--store-rev 788c4e050d`. The windows are the absolute anchors `2026-08-25 18:15 -0700` (30 days) and `2026-06-26 18:15 -0700` (90 days). These equal the `--since=30.days` and `--since=90.days` evaluations made during the spike: no commit falls between the two forms of either boundary. Corpus windows are `created_at` within N days of 2026-09-24T00:00Z. The layer rules are summarised below; `classify.py` holds them exactly.
 
 **Layer classifier (file path to layer, first match wins).** The layers are those of the spike's stack hypothesis, with *intent* split out of *store* because theses T1 and T2 and the north star all hinge on it:
 
@@ -46,7 +56,7 @@ Commands:
 git log --since=90.days --oneline origin/main | wc -l                      # 1046
 git log origin/main --since=90.days --no-merges --format=%ad --date=format:%G-W%V | sort | uniq -c
 # per-layer churn (numstat; commits > 5,000 changed lines excluded as mechanical moves)
-git log 9154924fd2 --since={90,30}.days --no-merges --numstat --format=@@%H   # piped to classify.py
+git log 9154924fd2 --since={90,30}.days --no-merges --numstat --format=@@%H   # classify.py / deep.py
 # dispatcher hunks attributed by the enclosing fn in the hunk header
 git log 9154924fd2 --since={90,30}.days --no-merges -U0 -- aida-cli/src/main.rs aida-cli-lib/src/lib.rs
 # current size
@@ -55,7 +65,7 @@ git ls-tree -r --name-only 9154924fd2 aida-core/src aida-cli-lib/src aida-cli/sr
 git log 9154924fd2 --since=90.days --no-merges --format=%s | grep -cE '\((SPEC-ID list)\)( \(#N\))?$'
 git grep -hoE 'trace:[A-Z]+-[0-9][0-9-]*' 9154924fd2 -- '*.rs' '*.ts' '*.tsx' '*.py' '*.sh' | wc -l
 git grep -hoE 'trace:[A-Z]+-[0-9-]+\.(ac|AC)[0-9a-f]+' 9154924fd2 | wc -l
-# spec corpus: every YAML object under .aida-store/objects/*/*/*.yaml (corpus.py)
+# spec corpus: every YAML object under objects/ at aida-store 788c4e050d (corpus.py)
 aida list --all --json          # 4,426 rows at first read; the YAML carries created_at + description
 aida show VIS-1 | STORY-551 | CR-6 | ADR-4 | EPIC-39 | EPIC-26 | EPIC-70 | ADR-44 | TERM-5 | STORY-754
 aida list --all --type principle ; aida list --all --type vision ; aida list --all --parent EPIC-39
@@ -92,7 +102,7 @@ Unattributed and excluded churn, not in the shares: 30d tests 5,967, 30d dispatc
 
 Commits touching each layer, as raw file paths (one commit can count in several layers): 30d: control **284**, surface 185, store 104, execution 88, intent **34**, of 543 commits. 90d: control 424, surface 343, store 191, execution 137, intent 56, of 1,039.
 
-**Surface, broken down**, 30d / 90d: `aida-tui` **20 commits, 1,277 lines** / 46 commits, 9,252 lines (8,011 of those in `aida-tui/src/redesign`, late June). MCP is 31 commits, 1,559 lines / 49 commits, 2,565 lines. The rest of the surface is CLI rendering, chiefly `cli.rs` and `awaiting_you.rs`, which are views onto control-plane state.
+**Surface, broken down**, 30d / 90d: `aida-tui` **20 commits, 1,277 lines** / 46 commits, 9,252 lines (8,011 of those in `aida-tui/src/redesign`, late June). MCP is 31 commits, 1,559 lines / 50 commits, 2,565 lines. The rest of the surface is CLI rendering, chiefly `cli.rs` and `awaiting_you.rs`, which are views onto control-plane state.
 
 ### 2.2 Standing code size by layer (`9154924fd2`, `.rs`, `.ts` and `.tsx` source)
 
@@ -179,7 +189,7 @@ The governing test, per SPIKE-86 comment 1, is whether each thesis serves the no
 |---|---|---|---|---|---|
 | T1 | "Your project's missing index, of intent, not just code" (VIS-1, **approved**, empty description) | store + intent = 25.4% of attributed lines | partly: "of intent" yes, "index" no | **Superseded** | a successor VISION (operator-worded); then `aida edit VIS-1 --status superseded --superseded-by <VIS-N>`. Not *rejected*: it governed. |
 | T2 | Intent traceability + lifecycle truth (STORY-551, CR-6, **completed**) | intent 6.6% of lines; 15,601 traces; 88.9% trailers | **yes**, this is its mechanism | **Subsumed** into the successor vision as the pitch's "how" | none beyond the successor vision; CR-6's decision is honoured by it |
-| T3 | Human-governance layer; concede the substrate race to Beads/Gas Town; interop (ADR-4, EPIC-39, **draft**, parked) | governance hits 12.5% of authored specs; **0** source files mention Beads; EPIC-39 has **0** children | the governance half does (gates keep the corpus true); the concede half does not (the store *is* the north star) | **Split**: governance is **subsumed** into the control plane; "concede the substrate, interop" is **refuted** by nine months of store and control-plane investment | ADR-4 moved to `rejected` or `superseded`, with a comment recording which half survived; EPIC-39 closed with it (operator decision) |
+| T3 | Human-governance layer; concede the substrate race to Beads/Gas Town; interop (ADR-4, EPIC-39, **draft**, parked) | governance hits 12.5% of authored specs; no product source mentions Beads (**0** hits in `aida-*/src`; across all tracked `.rs/.ts/.tsx/.py/.sh` the only mention is `scripts/demo-lifecycle-authority.sh`, 4 times, a demo contrasting AIDA with Beads, not interop code); EPIC-39 has **0** children | the governance half does (gates keep the corpus true); the concede half does not (the store *is* the north star) | **Split**: governance is **subsumed** into the control plane; "concede the substrate, interop" is **refuted** by nine months of store and control-plane investment | ADR-4 moved to `rejected` or `superseded`, with a comment recording which half survived; EPIC-39 closed with it (operator decision) |
 | T4 | Trojan horse: "the TUI is what people think AIDA is" (CLAUDE.md and repository guide, 2026-05-14; OVERVIEW §"Public face"; EPIC-26 **completed**) | TUI: 20 commits, 1,277 lines; 5 authored specs (0.7%) | no; it is a presentation choice | **Superseded as positioning**; the *humility tactic* survives, moved to `aida why` and the memory lane | a successor DECISION spec (deliverable 5), then a doc filing to replace the Trojan-horse passages in CLAUDE.md, OVERVIEW.md and `docs/agents/aida-repository-guide.md` |
 | T5 | A durable-execution workflow orchestrator with a merge queue, whose workers are LLM agents (this spike's corpus read) | **50.9%** of lines; **57.1%** of authored specs; 632 machine-filed stubs | yes, as the **means** (corpus integrity), not the end | **Live, as the architecture description only**; not the pitch, because ADR-4's own red-team records that Gas Town already ships "a gated merge queue" | TERM-5 is amended to say "corpus-integrity layer"; a contributor-facing architecture doc is filed separately |
 
