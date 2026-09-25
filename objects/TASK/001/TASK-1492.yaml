@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:04:13.382715808Z
-modified_at: 2026-09-25T12:32:09.984705139Z
+modified_at: 2026-09-25T12:32:46.872441394Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -81,6 +81,12 @@ comments:
     Tests use tempdirs and mocks only. None touch ~/.aida, the live store, crontab or systemd.
   created_at: 2026-09-25T12:32:09.984705139Z
   modified_at: 2026-09-25T12:32:09.984705139Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d88d-cd18-7c60-98f1-7c45f7a11be4
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept the strict review. Rework: B1: record the re-drive attempt with a fallible write (try_emit) BEFORE the status change; if the write fails, don''t requeue, and hold re-drive for the rest of the tick. B2: open a mail-latency episode only when the notification was actually sent or deferred for quiet hours, never when suppressed; the mock gets a ''suppressed'' outcome and a test. Should-fix: give the notify command a bounded timeout within the tick deadline; make manual supervise --max count applied re-drives again; document per-clone attempt counting and the rotation limit; add tests for an unreadable-but-present events file, the probe wiring, and the cap branch driven from the tick. The pre-existing unattended ''supervise watch --execute'' without floors is filed separately.'
+  created_at: 2026-09-25T12:32:46.872441394Z
+  modified_at: 2026-09-25T12:32:46.872441394Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
