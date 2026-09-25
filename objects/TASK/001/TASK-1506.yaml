@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T07:22:26.359799020Z
-modified_at: 2026-09-25T09:20:21.401986096Z
+modified_at: 2026-09-25T09:52:27.941654142Z
 req_type: Task
 tags:
 - concurrency
@@ -25,6 +25,21 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): the strict review asks for changes and I accept its narrowed scope. Field-level merge stays only for edit-local fields: title, description, owner, priority, feature, type, narrative, weight, origin, mode, --add-tag/--remove-tag, refs, comments and carve-outs. Refuse with a conflict, writing nothing, if any concurrent change hits an edit that (1) uses --tags replace, when current.tags != read.tags; (2) changes status; or (3) leaves NeedsAttention, when the fresh copy differs from the read copy on anything but modified_at. Add regression tests for both review probes. Also: a struct-valued field that both sides changed is a conflict, not a key-wise merge.'
   created_at: 2026-09-25T09:20:21.401986096Z
   modified_at: 2026-09-25T09:20:21.401986096Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d7fb-0725-7260-ac0d-8c1f26b915b2
+  author: joe
+  content: |-
+    Strict re-review: REQUEST CHANGES — one blocker; the rest is sound. Reviewed d8afaa46d5. Required changes 1-5 are all in. Mutation-tested: switching off each rework check (the leave-NeedsAttention equality check, the --tags equality check, ATOMIC_FIELDS) makes its probe or unit test fail, so the tests are meaningful. Passing: edit_rebase 10/10; supervisor+bug_1611+requeue lib filter 58/58; bug_1252_structural_tags 2/2; tests/test_distributed.sh all pass; fmt clean.
+
+    BLOCKER 1 — an idempotent status edit is silently dropped (edit_rebase.rs:182-183). Scenario: the read copy is Approved, you run 'aida edit X --status approved', and another writer moves X to InProgress in between. planned.status == read.status, so current wins and the store keeps InProgress. But the CLI still prints Updated (git_backend_cmd.rs:6117), emits a disposition event (6084), and flips the session manifest to Approved (6152, from new_status_for_manifest at 5868). The store and the manifest now disagree. I confirmed this with a probe test (resulting status = InProgress). It also contradicts required change 2 as written: a status edit should refuse on a concurrent status change. Fix: when --status was passed, refuse if current.status != read.status && current.status != planned.status. That keeps the same-value allowance below.
+
+    SHOULD-FIX 2 — the STORY-647 protected-tags gate runs on the read copy only (git_backend_cmd.rs:5380). Scenario: a non-advisor edits the title while an advisor adds a protected tag. The merge keeps the tag and applies the title, so an unauthorized edit lands on a protected spec (probe confirmed). This is not a regression, because the old code dropped the protected tag entirely. Still, re-running enforce_protected_spec_gate on cur.tags inside the write_edit_atomically closure is cheap. The editor path (TASK-1117) makes the race window minutes long.
+
+    Same-value concurrent status (the behaviour the implementer kept) is SAFE with respect to the gates. When fresh.status == target, the actual transition is identity, so the advisor gate (TASK-647/BUG-482), TASK-47 reopen, STORY-332 attention rules and the BUG-626/TASK-761 type gates have nothing to authorize. Leaving NeedsAttention is fully strict. Into-Completed with the same value is in practice refused, because both sides stamp different implementation_info.completed_at values. The remaining cost is cosmetic: post-write events and manifest updates fire as if this edit made the transition.
+
+    Notes (non-blocking): (a) a refused edit is a no-op closure, but CachedGitBackend::update_spec_atomically_with_subject still upserts the cache and runs refresh_parent_epic_status, so a stale epic rollup can still be written. This is BUG-1612 behaviour that predates this branch. (b) Reclassify re-checks only status == NeedsAttention under the lock, not the classification. The semantics are the same as before, and it is otherwise correct. (c) In a list merge, removing an item that the other writer modified is silently lost (edit_rebase.rs:199-202); no current edit flag hits this. (d) The CLI wiring (tags.is_some() -> tags_replaced, pending_leave -> leaving_needs_attention) is only covered through direct write_edit_atomically calls. (e) The commit subject '<subject>: update 1 requirement' matches bulk_update, and bug_1252 passes.
+  created_at: 2026-09-25T09:52:27.941654142Z
+  modified_at: 2026-09-25T09:52:27.941654142Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 84aa1380788e41afce75bef08b0b983f2151da66
