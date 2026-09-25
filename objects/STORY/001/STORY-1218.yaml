@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:20.548044413Z
-modified_at: 2026-09-20T06:30:59.972712723Z
+modified_at: 2026-09-25T01:14:59.350475416Z
 req_type: Story
 tags:
 - autonomy
@@ -69,4 +69,135 @@ comments:
   created_at: 2026-09-18T19:07:46.853974181Z
   modified_at: 2026-09-18T19:07:46.853974181Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0d621-4396-78e3-a1d1-85aa66a463c3
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): aida shift tick — a deterministic, LLM-free night-shift step that runs as a job inside the existing scheduler
+
+    ## 1. Entry point: a new substrate job in the existing `schedule tick`, not a second scheduler
+    - Add `shift tick` to `maintenance_schedule::command_table()` (args `["shift","tick"]`, `hook_allowed: false`, so a per-turn `--hook` tick can never launch a drain). `aida shift enable` writes `[shift] enabled = true` plus `[[schedule.jobs]] name="night-shift" command="shift tick" every="10m" enabled=true` through config_edit. Both are visible in `aida schedule list/status`.
+    - `aida shift tick [--dry-run] [--json]` also runs standalone, for the preflight and for manual use.
+    - Why reuse: one driver per repo, which is already installed and was repaired by BUG-1600/1605. The tick lock (TASK-1281) and min_gap already give single-flight. We also get the job ledger on aida-store (a cross-clone "last tick"), and a failed tick becomes `CronJobFailed`, routed to a seat through the existing `on=[CronJobFailed]` jobs. A separate entry point would need its own lock, ledger, failure routing and driver. It would also recreate the two-schedulers problem that STORY-1226 closed.
+    - Constraint this imposes: substrate children are killed after `SCHEDULED_COMMAND_TIMEOUT` (120s). So shift tick never blocks on a wave. It spawns the wave detached (setsid, stdio to `.aida/shift-wave-<stamp>.log`) and returns. For the same reason it must NOT call `supervisor::handle_supervise_command(execute)`: `launch_redrive` runs a foreground `queue work` per spec (see §2 step 3).
+    - Double gate: shift tick exits 0 and does nothing unless `[shift] enabled = true`, even when the job entry is present. The default is off.
+
+    ## 2. One tick, in order (the pure core is `shift::tick_core(inputs, clock, exec)`)
+    0. Take the single-flight lock: `.aida/shift.lock` flock try-lock, because a manual run does not hold the schedule tick lock. If the lock is contended, the tick is a no-op.
+    1. Reap: in-process `session_reap::scan_reapable` + reap (`--yes` semantics: detect-and-leave on live pids, and the worktree-gc predicate is unchanged). Doing this first frees dead-pid leases, so the wave does not burn its retry budget on them (BUG-1285).
+    2. Probe the lock with `drain_lock::probe_lock`.
+       - `Running`: no-op for launch and for re-drive. Reaping and mail still run.
+       - `Stale(pid)`: record `recovered_stale_pid` in the event, then continue. The tick does NOT delete the file. The spawned `queue work` stale-reclaims it through the same `acquire_drain_lock_with_specs` path as a manual drain, which gives BUG-538 parity with no TOCTOU delete of a freshly acquired lock.
+       - `.aida/shift-state.json.last_launch = {pid, pid_start, batch, at}` with that pid alive but no lock written yet: treat as "launch in progress" and do nothing.
+    3. Re-drive, only when the lock is free. Split `supervisor.rs` into `plan_redrives(store, events, opts) -> Vec<SuperviseDecision>` and `apply_requeue` (status goes to Approved, emits `SpecReDriven`); the launch half stays in `handle_supervise_command` for the manual verb. The tick calls plan+requeue only, within the ADR-26 caps (3 attempts, 2m/8m/30m backoff from the SpecReDriven history, `[shift] max_redrives_per_tick` default 3). Two added floors:
+       - it re-drives only parks whose spec `execution_mode == drain`;
+       - it never re-drives a spec with a live merge hold or an `attention_reason` (these are already NeedsHuman in `classify_requirement`; covered by a test).
+       Re-queued specs join this tick's wave.
+    4. Launch guards, evaluated in the pure `evaluate_guards(&GuardInputs) -> Vec<GuardVerdict>`. Any Fail refuses the launch:
+       `enabled`, `lock-free`, `drain-mode-only`, `token-budget`, `budget-evidence`, `watchdog-quiet`, `load-ceiling`, `mem-ceiling`, `disk-headroom` (from `machine_readiness::probe`, TASK-1298), `wave-cap`, `no-progress` (BUG-1422 shape: if the last shift wave's QueueDrained has shipped+shelved == 0 and the queue set is unchanged, do not relaunch).
+    5. Select and launch.
+       - Selection: refactor `drain_mode_ready_count` into `drain_mode_ready_specs() -> Vec<String>` (queue order, Approved or Planned, `execution_mode == Drain`); both the snapshot and the tick use it. Take the first `wave_size` (default 6, from SPIKE-82 H2: 4-8 held).
+       - Auto mode tags them `batch:shift-YYYYMMDD-HHMM`.
+       - Configured `[shift] batch = "<name>"`: every queued member must be drain-mode, otherwise the tick fails closed and names the offender. `--batch` takes the head, so one drive member would get driven.
+       - argv, from the pure `build_wave_argv`: `queue work --batch <b> --auto-complete --no-human=both --escalate-blocks --max <wave_size> --max-failures <n> --max-tokens <min(wave_budget, remaining_daily)> --max-runtime <dur>`. It never includes `--force-claim`, `--steal` or `--force`, and never sets `AIDA_DRAIN_FORCE`.
+       - Defaults: max_failures defaults to 3. SPIKE-82 did NOT isolate this cap (no wave exhausted it), so 3 is a conservative choice rather than evidence; the advisor should confirm it.
+    6. Mail latency: see §5.
+    7. Cold-boot (slice 2, ADR-46 §1): an overdue seat job with no live holder of that role gets a headless seat at most once per hour per seat, ledgered on `JobLedger.cold_boot_at`. It never happens for a job that would drain or merge, it is subject to the same token-budget guard, and a live seat suppresses it.
+    8. Emit one `ShiftTick` only if the tick acted, or if the guard verdict set changed since the last tick. A tick with nothing to do stays quiet.
+
+    ## 3. Budget, safety, fail-closed
+    - The tick never overlaps a live drain (step 2). It never merges, never clears or places a merge hold, and never approves or grooms. Merge-hold PRs stay behind `forge::merge_change` (ADR-37) for the morning. The tick never selects or re-drives drive/guided/operator/decide specs.
+    - Token budget. Correction to the brief: there is no 4B value in `.aida/config.toml`. It has no `[watchdog]` section, so `runaway_seats::policy()` falls back to the built-in `daily_token_budget = 6_000_000_000` (alert at 90%). `[shift] daily_token_budget` defaults to the watchdog's value. The tick refuses to launch when trailing-24h spend is at or above `[shift] budget_stop_pct` (default 80). Spend comes from the watchdog's persisted aggregates (new `runaway_seats::trailing_day_tokens(state_path, now)`; no rescan, zero tokens). Each wave is also hard-capped with `--max-tokens` and `--max-runtime` (drain_caps, TASK-966).
+    - Fail-closed evidence rules:
+      - Aggregates missing or older than 1h: `budget-evidence` fails. `shift enable` therefore verifies that the `watchdog` job is enabled.
+      - Any runaway-seats `CronJobFailed` in the last 2h: `watchdog-quiet` fails.
+      - An unreadable load, memory or disk probe fails.
+    - Caps: `max_waves_per_day` (default 8) and `max_redrives_per_tick`. `active_hours` is optional; the `QuietHours` parser is reused.
+
+    ## 4. Driver: offer both, one per repo; recommend systemd on Linux, keep cron as the fallback
+    - The driver stays `aida schedule tick`. It never runs `shift tick` directly, so all registered jobs keep running from a single driver.
+    - Existing cron installs stay correct with no reinstall: the line already runs `schedule tick`, and night-shift is just a registered job. The effective cadence is max(`*/15`, `every`).
+    - New `aida schedule install-systemd | uninstall-systemd`. `aida shift install --systemd-user|--cron` = enable + that install.
+      - Units: `aida-tick-<hash8(canon repo)>.{service,timer}`, with `Type=oneshot`, `WorkingDirectory`, `Environment=PATH=… AIDA_SCHEDULE_INVOKER=systemd`, `ExecStart=<canonical exe> schedule tick`, `OnUnitInactiveSec=10m`, `Persistent=true`. Output goes to the journal.
+      - `KillMode=process` is REQUIRED. Without it, systemd kills the detached wave with the oneshot's cgroup.
+      - The installer prints the `loginctl enable-linger` reminder when Linger=no. It never runs sudo.
+    - BUG-1605 lesson: an install must detect every prior driver shape for this repo as a repair target, not only a byte-identical marker match. Concretely:
+      - share one `tick_invocation(repo, exe)` between `build_tick_cron_line` and `build_systemd_units`, so the argv cannot drift (BUG-1600: no `--format json`);
+      - the unit files carry the `aida-schedule-tick:<canon>` marker comment, and install is compare-and-rewrite, returning Installed/AlreadyUpToDate/Repaired;
+      - installing systemd removes this repo's cron line, including legacy unmarked lines, using `legacy_tick_line_positions`, and installing cron disables this repo's timer.
+    - Doctor: `CronDriverStatus` becomes `DriverStatus { cron, systemd }`. Doctor flags "both installed" and "none installed", so a systemd-only repo is no longer reported as having no driver.
+    - Tradeoff: systemd gives journal logs, a controlled environment and a view of the next run (`systemctl --user show -p NextElapseUSecRealtime`), and it survives logout with linger. Cron is portable (macOS) and already deployed. Overlap safety does not depend on the driver: the tick lock, the shift lock and the drain lock provide it.
+
+    ## 5. Mail-latency escalation and observability
+    - Mail latency: per recipient, the oldest-unread age, using the same merge_dedup + watermark read as `collect_snapshot` (hoisted to `mailbox_store::oldest_unread_by_recipient`). Above `[shift] mail_latency` (default 30m), the tick calls `notify::send_direct(rule="mail-latency")`. It is once per episode per seat (shift-state `mail_episodes`), re-arms after the age drops back under the threshold, and never goes to the mailbox or chat. notify's own min_interval and quiet_hours still apply.
+    - Event: `EventKind::ShiftTick { launched: Option<{batch, specs, pid, argv}>, redriven: Vec<String>, reaped: usize, recovered_stale_pid: Option<u32>, refused: Vec<String> /*guard names*/, mail_escalated: Vec<String>, cold_booted: Vec<String> }`, registered in `events.rs` `name()` and the category lists.
+    - `aida shift status [--json]` shows: enabled, driver(s), last and next tick, last launch plus its QueueDrained outcome, current guard verdicts, 24h tokens vs budget, and waves today.
+    - `aida status` gets one line after `print_live_drain_status_line`, e.g. `night shift: on (systemd 10m) · last tick 4m ago · wave shift-0924-2210 (6)` or `night shift: BLOCKED token-budget 83% of 6B`. When shift is disabled it prints nothing, so existing output is unchanged.
+    - `--dry-run` prints the exact argv, the specs, every guard with pass/fail and its value, and the mail verdict. It exits 0 and writes nothing: no tags, no state, no event, no requeue.
+
+    ## 6. Files and symbols
+    - `aida-cli-lib/src/shift.rs` (new): `ShiftConfig::load`, `ShiftState{load,save}`, `GuardInputs`, `evaluate_guards`, `select_wave`, `build_wave_argv`, `mail_escalations`, `tick_core`, `spawn_detached_wave`, `handle_shift_command`.
+    - `cli.rs`: `Command::Shift(ShiftCommand{Tick,Status,Enable,Disable,Install,Uninstall})`, `MaintenanceScheduleCommand::{InstallSystemd,UninstallSystemd}`.
+    - `maintenance_schedule.rs`:
+      - `command_table()`: the `shift tick` entry;
+      - `tick_invocation`, `build_systemd_units`, `install_tick_systemd` / `uninstall_tick_systemd`;
+      - `CronInstallOutcome` renamed to `DriverInstallOutcome`, and `DriverStatus`;
+      - `drain_mode_ready_specs`.
+    - `supervisor.rs`: `plan_redrives` and `apply_requeue`, split out of `handle_supervise_command`.
+    - `runaway_seats.rs`: `trailing_day_tokens`.
+    - `mailbox_store.rs`: `oldest_unread_by_recipient`.
+    - `events.rs`: `ShiftTick`.
+    - `status_cmd.rs`: `print_shift_status_line`.
+    - `doctor_cmd.rs`: `build_scheduler_driver_findings` made systemd-aware.
+    - `session_reap.rs`: a report-returning `reap_quiet`.
+    - `docs/autonomous-drain.md` "Night shift" runbook (preflight = `shift tick --dry-run`), `docs/cli/03-work-autonomy.md`, `docs/plans/2026-09-24-story-1218-shift-tick.md` (cites the SPIKE-82 defaults).
+
+    ## 7. Tests
+    - `shift_tick_launches_wave_when_lock_free_and_event_names_it`
+    - `shift_tick_second_tick_during_wave_is_noop`
+    - `shift_tick_launch_in_progress_before_lock_written_is_noop`
+    - `shift_tick_never_selects_drive_guided_operator_decide`
+    - `shift_configured_batch_with_non_drain_member_refuses`
+    - `shift_tick_live_lock_noop_stale_lock_logs_recovered_pid_and_leaves_file`
+    - `shift_wave_argv_never_forces`
+    - `shift_tick_redrives_transient_park_without_seat`
+    - `shift_tick_skips_redrive_while_drain_live`
+    - `shift_tick_never_redrives_merge_hold_or_non_drain_park`
+    - `shift_refuses_over_token_budget`
+    - `shift_refuses_when_budget_evidence_missing_or_stale`
+    - `shift_refuses_after_runaway_watchdog_trip`
+    - `shift_refuses_over_load_mem_disk_ceiling`
+    - `shift_no_progress_wave_not_relaunched`
+    - `shift_disabled_by_default_launches_nothing`
+    - `shift_dry_run_on_fixture_queue_prints_argv_specs_guards_mail_and_writes_nothing`
+    - `shift_mail_latency_escalates_once_per_episode_and_rearms`
+    - `shift_quiet_tick_emits_no_event`
+    - `schedule_command_table_shift_tick_not_hook_allowed`
+    - `systemd_units_share_tick_invocation_marker_abs_exe_no_format_flag`
+    - `systemd_unit_has_killmode_process`
+    - `systemd_install_installed_uptodate_repaired`
+    - `systemd_install_removes_this_repos_cron_incl_legacy_unmarked_only`
+    - `doctor_driver_status_systemd_and_dual_driver`
+    - `status_line_silent_when_shift_disabled`
+    - Slice 2: `cold_boot_once_per_hour_per_seat_suppressed_by_live_seat`
+    - Acceptance on this box: `aida shift install --systemd-user`, then `systemctl --user list-timers` plus one journal tick, attached to the PR.
+
+    ## 8. Out of scope
+    - A durable advisor or merge-gate service (SPIKE-82 gap 6). The tick never merges or releases holds.
+    - Waking the tick on each event append (inotify); the tick is periodic only.
+    - launchd and Windows Task Scheduler.
+    - Parallel drains per scope.
+    - Grooming or approval (autoprogress `--groom` stays; the tick does not replace or delete `autoprogress`).
+    - The end-of-shift reconciliation report (gap 8, follow-up).
+    - Rebuild handoff (TASK-1285, already done).
+
+    Proposed slices:
+    - Slice 1: §1–§4, reap, requeue-only re-drive, event, status.
+    - Slice 2: mail-latency escalation and cold-boot.
+
+    Open questions for the advisor:
+    - the default of 3 for max_failures;
+    - whether auto-tagging `batch:shift-*` (a store write each wave) is preferred over a new explicit spec-list flag on `queue work`.
+  created_at: 2026-09-25T01:14:59.350475416Z
+  modified_at: 2026-09-25T01:14:59.350475416Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
