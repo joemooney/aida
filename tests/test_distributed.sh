@@ -193,7 +193,7 @@ pass "BUG-608: --sibling creates a true sibling store (../aida-store)"
 
 # file a spec from repo-a
 ( cd "$WS/repo-a" && AIDA_SESSION_ROLE=advisor "$AIDA" add --title "from repo-a" --type task --status approved >/dev/null 2>&1 ) || fail "repo-a add failed"
-LIST_A=$( cd "$WS/repo-a" && "$AIDA" list 2>/dev/null )
+LIST_A=$( cd "$WS/repo-a" && "$AIDA" list 2>/dev/null ) || LIST_A=""
 SPEC_A=$( grep -oE 'TASK-[0-9A-Za-z]+-[0-9]+' <<<"$LIST_A" | head -1 )
 [ -n "$SPEC_A" ] || fail "repo-a did not file a spec"
 
@@ -201,13 +201,13 @@ SPEC_A=$( grep -oE 'TASK-[0-9A-Za-z]+-[0-9]+' <<<"$LIST_A" | head -1 )
 if ( cd "$WS/repo-b" && "$AIDA" init --sibling --no-skills --no-hooks >/dev/null 2>&1 ); then
   fail "BUG-610: init --sibling on a populated store must refuse (nonzero exit)"
 fi
-LIST_A=$( cd "$WS/repo-a" && "$AIDA" list 2>/dev/null )
+LIST_A=$( cd "$WS/repo-a" && "$AIDA" list 2>/dev/null ) || LIST_A=""
 grep -q "$SPEC_A" <<<"$LIST_A" || fail "BUG-610: refusal destroyed repo-a's spec"
 pass "BUG-610: --sibling refuses to overwrite a populated store, store intact"
 
 # repo-b: --attach JOINS the store and sees the shared spec (STORY-674)
 ( cd "$WS/repo-b" && "$AIDA" init --sibling --attach --no-skills --no-hooks >/dev/null 2>&1 ) || fail "STORY-674: --attach failed"
-LIST_B=$( cd "$WS/repo-b" && "$AIDA" list 2>/dev/null )
+LIST_B=$( cd "$WS/repo-b" && "$AIDA" list 2>/dev/null ) || LIST_B=""
 grep -q "$SPEC_A" <<<"$LIST_B" || fail "STORY-674: repo-b can't see shared spec after attach"
 pass "STORY-674: --attach lets repo-b see the shared spec ($SPEC_A)"
 
