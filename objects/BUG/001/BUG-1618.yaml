@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:44:52.921456265Z
-modified_at: 2026-09-25T12:02:54.647454290Z
+modified_at: 2026-09-25T13:41:33.971562982Z
 req_type: Bug
 tags:
 - flaky
@@ -42,6 +42,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): strict review confirms release authority behaviour is byte-identical, so this is not an authority change and the proxy may merge it. Rework to finish acceptance item 3: wrap mcp_update_requirement_gates_advisor_and_merge_driven_statuses in AmbientGuard::hermetic, then run the FULL aida-cli-lib lib suite with a simulated leased roster (a fake .aida-store with joe = advisor) and a pseudo-TTY. Guard every test that fails only in that setup.'
   created_at: 2026-09-25T12:02:54.647454290Z
   modified_at: 2026-09-25T12:02:54.647454290Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d8cc-c6d7-7f92-9fdb-2eeddbca9ec9
+  author: joe
+  content: 'Orchestrator note: the rework is paused. The agent''s pseudo-TTY full-suite run (script -qec ... cargo test in a scratchpad copy) reached ~30G RSS within seconds, and it is the likely cause of the 05:56 systemd-oomd kill of the whole session. It was killed and the agent stopped. The uncommitted change in mcp.rs (guarding mcp_update_requirement_gates_advisor_and_merge_driven_statuses) survives in wt-bug-1618. Resume with a targeted pty run only, e.g. authority/advisor/escalat filters, under a memory cap. Do not run the full suite under a pty again.'
+  created_at: 2026-09-25T13:41:33.971562982Z
+  modified_at: 2026-09-25T13:41:33.971562982Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
