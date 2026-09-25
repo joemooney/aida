@@ -82,6 +82,7 @@ mod status_cmd;
 mod supervise_cmd;
 mod supervisor;
 // trace:STORY-1218 | ai:claude
+mod schedule_driver;
 mod shift;
 mod terminal_cmd;
 // trace:TASK-1427 | ai:codex

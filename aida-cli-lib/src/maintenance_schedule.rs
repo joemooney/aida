@@ -371,8 +371,17 @@ pub(crate) fn handle_schedule_command(
         }
         MaintenanceScheduleCommand::Done { job, note } => done(project_root, job, note.as_deref())?,
         MaintenanceScheduleCommand::EmitCron => emit_cron(project_root)?,
-        MaintenanceScheduleCommand::InstallCron => install_cron_command(project_root)?,
+        MaintenanceScheduleCommand::InstallCron => {
+            install_driver_command(project_root, crate::schedule_driver::Driver::Cron)?
+        }
         MaintenanceScheduleCommand::UninstallCron => uninstall_cron_command(project_root)?,
+        // trace:TASK-1491 | ai:claude
+        MaintenanceScheduleCommand::InstallSystemd => {
+            install_driver_command(project_root, crate::schedule_driver::Driver::Systemd)?
+        }
+        MaintenanceScheduleCommand::UninstallSystemd => {
+            crate::schedule_driver::uninstall_systemd_command(project_root)?
+        }
     }
     Ok(())
 }
@@ -1538,19 +1547,39 @@ pub(crate) fn tick_cron_marker(project_root: &Path) -> String {
     format!("aida-schedule-tick:{}", canon.display())
 }
 
-/// Pure line-builder, split out from [`tick_cron_line`] so the exact shape
-/// is unit-testable without touching `std::env::current_exe`. Errors when
-/// any path component contains `%`: cron's OWN parser (before `/bin/sh`
-/// ever sees the line, and regardless of shell quoting) turns an unescaped
-/// `%` in the command field into a literal newline plus stdin redirection —
-/// see crontab(5). That would silently corrupt this entry (both the `cd`
-/// target and the trailing marker comment, which cron scans the same way),
-/// and escaping it consistently would require re-escaping the same way on
-/// every later read-back comparison against `tick_cron_marker`. Rejecting
-/// outright is simpler and auditable for a character that should never
-/// legitimately appear in an install path.
+/// The one `aida schedule tick` invocation every driver runs, built once and
+/// rendered by both [`build_tick_cron_line`] and
+/// `schedule_driver::build_systemd_units`, so the argv, the PATH, the working
+/// directory and the marker cannot drift between the two drivers (BUG-1600:
+/// the drift that shipped was an unsupported `--format json`). The invoker
+/// tag (`AIDA_SCHEDULE_INVOKER=cron|systemd`) is the only per-driver part.
+// trace:TASK-1491 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TickInvocation {
+    /// Canonical repo path: the `cd` target / `WorkingDirectory=`.
+    pub repo: String,
+    /// Absolute `aida` binary.
+    pub exe: String,
+    /// `PATH` value: the binary's directory first, then the system dirs.
+    pub path_env: String,
+    /// Arguments after the binary. Exactly `schedule tick`, never a format flag.
+    pub args: [&'static str; 2],
+    /// `aida-schedule-tick:<canon repo>`, carried by every driver artifact.
+    pub marker: String,
+}
+
+/// Build the shared [`TickInvocation`]. Errors when any path contains `%`:
+/// cron's OWN parser (before `/bin/sh` ever sees the line, and regardless of
+/// shell quoting) turns an unescaped `%` in the command field into a literal
+/// newline plus stdin redirection — see crontab(5) — and systemd expands `%`
+/// as a unit specifier in `ExecStart=`/`WorkingDirectory=`/`Environment=`.
+/// Either would silently corrupt the entry and every later read-back
+/// comparison against the marker. A line break is refused for the same
+/// reason: both formats are line-oriented. Rejecting outright is simpler and
+/// auditable for characters that should never appear in an install path.
 // trace:STORY-1463 | ai:claude
-pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> Result<String> {
+// trace:TASK-1491 | ai:claude
+pub(crate) fn tick_invocation(repo: &Path, aida_exe: &Path) -> Result<TickInvocation> {
     let repo_str = repo.display().to_string();
     let aida_exe_str = aida_exe.display().to_string();
     let bin_dir = aida_exe
@@ -1564,32 +1593,76 @@ pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> Result<Strin
     ] {
         if value.contains('%') {
             anyhow::bail!(
-                "cannot build a scheduler-tick crontab entry: {label} '{value}' contains '%', \
+                "cannot build a scheduler-tick driver entry: {label} '{value}' contains '%', \
                  which cron's own parser treats as a literal newline in the command field \
-                 (crontab(5)) — rename the path to avoid '%' and retry"
+                 (crontab(5)) and systemd expands as a unit specifier — rename the path to \
+                 avoid '%' and retry"
+            );
+        }
+        if value.contains(['\n', '\r']) {
+            anyhow::bail!(
+                "cannot build a scheduler-tick driver entry: {label} {value:?} contains a line \
+                 break — rename the path and retry"
             );
         }
     }
-    let path_assignment = format!("{bin_dir}:/usr/local/bin:/usr/bin:/bin");
-    // BUG-1600: `schedule tick` has no `--json`/`--format json` projection
-    // (see docs/cli-format-json-audit.md, BUG-1502's capability gate) — it
-    // only ever prints human/TOON lines. A prior version of this builder
-    // added `--format json` believing cron needed a machine-readable log;
-    // nothing ever parsed it, and every tick from an installed entry failed
-    // before dispatch. Plain `schedule tick` is the fix: its own stdout is
-    // already line-oriented and greppable, which is all `schedule-tick.log`
-    // consumers (a human, `aida doctor`) need. `AIDA_SCHEDULE_INVOKER=cron`
-    // tags every event this invocation records so scheduler telemetry can
-    // tell a cron-driven tick apart from the per-turn hook (`--hook`, which
-    // is self-identifying) or a manual run (neither).
+    // systemd strips trailing whitespace from a unit value (the tick would
+    // `cd` into a sibling path, and our marker would never match again) and
+    // a trailing backslash continues the line into the next directive.
+    for (label, value) in [
+        ("repo path", repo_str.as_str()),
+        ("aida binary path", aida_exe_str.as_str()),
+    ] {
+        if value.ends_with(char::is_whitespace) || value.ends_with('\\') {
+            anyhow::bail!(
+                "cannot build a scheduler-tick driver entry: {label} {value:?} ends in \
+                 whitespace or a backslash, which a systemd unit cannot hold — rename the path \
+                 and retry"
+            );
+        }
+    }
+    Ok(TickInvocation {
+        path_env: format!("{bin_dir}:/usr/local/bin:/usr/bin:/bin"),
+        repo: repo_str,
+        exe: aida_exe_str,
+        // BUG-1600: `schedule tick` has no `--json`/`--format json` projection
+        // (see docs/cli-format-json-audit.md, BUG-1502's capability gate) — it
+        // only ever prints human/TOON lines. A prior version of the cron
+        // builder added `--format json` believing cron needed a
+        // machine-readable log; nothing ever parsed it, and every tick from an
+        // installed entry failed before dispatch.
+        // trace:BUG-1600 | ai:claude
+        args: ["schedule", "tick"],
+        marker: tick_cron_marker(repo),
+    })
+}
+
+/// Pure line-builder, split out from [`tick_cron_line`] so the exact shape
+/// is unit-testable without touching `std::env::current_exe`. Renders the
+/// shared [`tick_invocation`]; see there for the `%` refusal.
+// trace:STORY-1463 | ai:claude
+// trace:TASK-1491 | ai:claude
+pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> Result<String> {
+    Ok(render_tick_cron_line(&tick_invocation(repo, aida_exe)?))
+}
+
+/// Render the crontab line for an already-built [`TickInvocation`].
+// trace:TASK-1491 | ai:claude
+pub(crate) fn render_tick_cron_line(inv: &TickInvocation) -> String {
+    // `AIDA_SCHEDULE_INVOKER=cron` tags every event this invocation records
+    // so scheduler telemetry can tell a cron-driven tick apart from the
+    // per-turn hook (`--hook`, which is self-identifying), a systemd timer,
+    // or a manual run. Plain `schedule tick` output goes to
+    // `schedule-tick.log`, which a human or `aida doctor` reads.
     // trace:BUG-1600 | ai:claude
-    Ok(format!(
-        "*/15 * * * * cd {} && PATH={} AIDA_SCHEDULE_INVOKER=cron {} schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {}",
-        shell_quote(&repo_str),
-        shell_quote(&path_assignment),
-        shell_quote(&aida_exe_str),
-        tick_cron_marker(repo),
-    ))
+    format!(
+        "*/15 * * * * cd {} && PATH={} AIDA_SCHEDULE_INVOKER=cron {} {} >> ~/.aida/schedule-tick.log 2>&1 # {}",
+        shell_quote(&inv.repo),
+        shell_quote(&inv.path_env),
+        shell_quote(&inv.exe),
+        inv.args.join(" "),
+        inv.marker,
+    )
 }
 
 /// The crontab entry that drives `aida schedule tick` for `project_root`
@@ -1615,7 +1688,7 @@ pub(crate) fn tick_cron_line(project_root: &Path) -> Result<String> {
 /// `crontab` binary missing, a permission error, …) is `Err` so the caller
 /// can report "unknown" rather than misreading it as "no entry installed".
 // trace:STORY-1463 | ai:claude
-fn read_crontab() -> Result<Option<String>> {
+pub(crate) fn read_crontab() -> Result<Option<String>> {
     let output = match ProcessCommand::new("crontab").arg("-l").output() {
         Ok(o) => o,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -1636,7 +1709,7 @@ fn read_crontab() -> Result<Option<String>> {
     );
 }
 
-fn write_crontab(body: &str) -> Result<()> {
+pub(crate) fn write_crontab(body: &str) -> Result<()> {
     use std::io::Write;
     let mut child = ProcessCommand::new("crontab")
         .arg("-")
@@ -1682,7 +1755,7 @@ fn line_is_commented_out(line: &str) -> bool {
 /// active.
 // trace:STORY-1463 | ai:claude
 // trace:BUG-1605 | ai:claude
-fn line_has_marker(line: &str, marker: &str) -> bool {
+pub(crate) fn line_has_marker(line: &str, marker: &str) -> bool {
     !line_is_commented_out(line) && line.trim_end().ends_with(&format!("# {marker}"))
 }
 
@@ -1761,7 +1834,7 @@ fn legacy_tick_line_positions(lines: &[&str], repo: &str, marked_pos: Option<usi
 /// `crontab_after_install` returning `Some(...)` is a repair rather than a
 /// fresh append.
 // trace:BUG-1605 | ai:claude
-fn crontab_has_repair_target(existing: &str, marker: &str) -> bool {
+pub(crate) fn crontab_has_repair_target(existing: &str, marker: &str) -> bool {
     let repo = repo_from_marker(marker);
     existing
         .lines()
@@ -1859,6 +1932,44 @@ pub(crate) fn crontab_after_uninstall(existing: &str, marker: &str) -> Option<St
     Some(body)
 }
 
+/// Pure: the crontab body after switching this repo to another driver
+/// (advisor A13b). Removes every ACTIVE line that is this repo's marked
+/// entry ([`line_has_marker`]) or an active legacy, pre-marker tick line for
+/// it ([`line_is_legacy_tick_line`], the BUG-1605 predicates) — and nothing
+/// else. Commented-out lines (marked or legacy), another repo's lines
+/// (including a repo whose path is a strict prefix of this one) and
+/// unrelated user lines come through byte-for-byte, line endings and a
+/// missing final newline included. Returns the new body and every removed
+/// line (for the caller to print), or `None` when nothing matched.
+///
+/// Differs from [`crontab_after_uninstall`], which removes only MARKED
+/// lines: a driver switch must not leave an old unmarked entry ticking
+/// alongside the new driver.
+// trace:TASK-1491 | ai:claude
+pub(crate) fn crontab_after_driver_switch(
+    existing: &str,
+    marker: &str,
+) -> Option<(String, Vec<String>)> {
+    let repo = repo_from_marker(marker);
+    let mut body = String::with_capacity(existing.len());
+    let mut removed = Vec::new();
+    for raw in existing.split_inclusive('\n') {
+        let line = raw.trim_end_matches(['\n', '\r']);
+        let ours = line_has_marker(line, marker)
+            || repo.is_some_and(|r| line_is_legacy_tick_line(line, r));
+        if ours {
+            removed.push(line.to_string());
+        } else {
+            body.push_str(raw);
+        }
+    }
+    if removed.is_empty() {
+        None
+    } else {
+        Some((body, removed))
+    }
+}
+
 /// What [`install_tick_cron`] did. BUG-1600: a plain bool collapsed "wasn't
 /// there, now is" and "was there but stale (e.g. the old `--format json`
 /// flag), now fixed" into the same `Ok(true)` — the CLI printed "Installed"
@@ -1866,7 +1977,7 @@ pub(crate) fn crontab_after_uninstall(existing: &str, marker: &str) -> Option<St
 /// command to pick up a fix. Distinguishing the three lets the caller say so.
 // trace:BUG-1600 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CronInstallOutcome {
+pub(crate) enum DriverInstallOutcome {
     /// No entry existed for this repo; one was appended.
     Installed,
     /// An entry existed and already matched the current reference shape.
@@ -1874,38 +1985,6 @@ pub(crate) enum CronInstallOutcome {
     /// An entry existed with stale content (e.g. an old unsupported flag)
     /// and was rewritten in place.
     Repaired,
-}
-
-/// Install (or repair) this repo's tick entry in the user's crontab.
-/// Windows has no crontab — callers print `tick_cron_line` and the manual
-/// next step instead of calling this.
-// trace:STORY-1463 | ai:claude
-// trace:BUG-1600 | ai:claude
-pub(crate) fn install_tick_cron(project_root: &Path) -> Result<CronInstallOutcome> {
-    if cfg!(windows) {
-        anyhow::bail!(
-            "cron install is not supported on Windows — add this line to Task Scheduler by hand:\n  {}",
-            tick_cron_line(project_root)?
-        );
-    }
-    let marker = tick_cron_marker(project_root);
-    let line = tick_cron_line(project_root)?;
-    let existing = read_crontab()?.unwrap_or_default();
-    // BUG-1605: a legacy, pre-marker line for this repo is a repair target
-    // too — not just a byte-identical marker match — so a legacy-only
-    // install reports `Repaired`, not `Installed`.
-    let already_present = crontab_has_repair_target(&existing, &marker);
-    match crontab_after_install(&existing, &marker, &line) {
-        None => Ok(CronInstallOutcome::AlreadyUpToDate),
-        Some(body) => {
-            write_crontab(&body)?;
-            Ok(if already_present {
-                CronInstallOutcome::Repaired
-            } else {
-                CronInstallOutcome::Installed
-            })
-        }
-    }
 }
 
 /// Remove this repo's tick entry from the user's crontab (found via its
@@ -1958,14 +2037,6 @@ pub(crate) fn classify_cron_driver(
         Ok(_) => CronDriverStatus::Missing,
         Err(reason) => CronDriverStatus::Unknown(reason),
     }
-}
-
-fn cron_driver_status(project_root: &Path) -> CronDriverStatus {
-    if cfg!(windows) {
-        return CronDriverStatus::Unknown("no crontab on Windows".to_string());
-    }
-    let marker = tick_cron_marker(project_root);
-    classify_cron_driver(read_crontab().map_err(|e| e.to_string()), &marker)
 }
 
 /// How many enabled SUBSTRATE jobs this repo's merged registry declares
@@ -2031,36 +2102,69 @@ pub(crate) fn overdue_substrate_jobs(project_root: &Path) -> Result<Vec<OverdueS
 }
 
 /// Pure assembly of the `scheduler-driver` doctor findings from
-/// already-computed evidence — no I/O, fully unit-testable.
+/// already-computed evidence — no I/O, fully unit-testable. Systemd-aware
+/// (TASK-1491): a repo driven only by its systemd timer is not driverless,
+/// and a repo with BOTH drivers installed is flagged — harmless under the
+/// tick lock, but each driver ticks, and one should be removed.
 // trace:STORY-1463 | ai:claude
+// trace:TASK-1491 | ai:claude
 pub(crate) fn build_scheduler_driver_findings(
     enabled_substrate_jobs: usize,
-    cron_status: CronDriverStatus,
+    status: &crate::schedule_driver::DriverStatus,
     overdue: &[OverdueSubstrateJob],
     now: DateTime<Utc>,
 ) -> Vec<crate::DoctorFinding> {
+    use crate::schedule_driver::SystemdDriverStatus;
     let mut out = Vec::new();
-    if enabled_substrate_jobs > 0 {
-        match cron_status {
-            CronDriverStatus::Installed => {}
-            CronDriverStatus::Missing => out.push(crate::DoctorFinding {
+    if status.both_installed() {
+        out.push(crate::DoctorFinding {
+            category: "scheduler-driver".to_string(),
+            id: "scheduler-tick-dual-driver".to_string(),
+            summary: "both a crontab entry and a systemd user timer run `aida schedule tick` for \
+                      this repo; the tick lock keeps them from overlapping, but keep only one"
+                .to_string(),
+            action: "aida schedule uninstall-cron".to_string(),
+            safe_heal: false,
+        });
+    }
+    let install_action = match status.systemd {
+        SystemdDriverStatus::Unsupported => "aida schedule install-cron",
+        _ => "aida schedule install-systemd",
+    };
+    if enabled_substrate_jobs > 0 && !status.any_installed() {
+        // PRIN-5: when either driver's state is unreadable and none is
+        // confirmed installed, the answer is "unknown", never "none".
+        let unknown = status.unknown_reasons();
+        if unknown.is_empty() {
+            let systemd_note = match &status.systemd {
+                SystemdDriverStatus::Disabled => {
+                    " (this repo's systemd timer exists but is disabled)"
+                }
+                SystemdDriverStatus::Stopped => {
+                    " (this repo's systemd timer is enabled but not running)"
+                }
+                _ => "",
+            };
+            out.push(crate::DoctorFinding {
                 category: "scheduler-driver".to_string(),
                 id: "scheduler-tick-not-installed".to_string(),
                 summary: format!(
-                    "{enabled_substrate_jobs} enabled substrate scheduler job(s) registered, but nothing invokes `aida schedule tick` for this repo — they will never run"
+                    "{enabled_substrate_jobs} enabled substrate scheduler job(s) registered, but nothing invokes `aida schedule tick` for this repo — they will never run{systemd_note}"
                 ),
-                action: "aida schedule install-cron".to_string(),
+                action: install_action.to_string(),
                 safe_heal: false,
-            }),
-            CronDriverStatus::Unknown(reason) => out.push(crate::DoctorFinding {
+            });
+        } else {
+            out.push(crate::DoctorFinding {
                 category: "scheduler-driver".to_string(),
                 id: "scheduler-tick-driver-unknown".to_string(),
                 summary: format!(
-                    "cannot confirm whether a scheduler driver is installed for this repo ({reason}) — status unknown, not ok"
+                    "cannot confirm whether a scheduler driver is installed for this repo ({}) — status unknown, not ok",
+                    unknown.join("; ")
                 ),
-                action: "aida schedule install-cron".to_string(),
+                action: install_action.to_string(),
                 safe_heal: false,
-            }),
+            });
         }
     }
     if !overdue.is_empty() {
@@ -2090,48 +2194,73 @@ pub(crate) fn build_scheduler_driver_findings(
     out
 }
 
-/// `aida doctor` entry point: evidence-gated so a repo with no registered
-/// jobs never shells out to `crontab` at all.
+/// PURE: whether doctor reads the drivers at all. A repo with no registered
+/// jobs, nothing overdue and no timer file of ours never shells out to
+/// `crontab` or `systemctl`; a timer file alone (a file read) is enough
+/// evidence to look, so a dual-driver setup is flagged even with no jobs.
+// trace:TASK-1491 | ai:claude
+pub(crate) fn scheduler_driver_check_needed(
+    enabled_substrate_jobs: usize,
+    any_overdue: bool,
+    systemd_timer_file_present: bool,
+) -> bool {
+    enabled_substrate_jobs > 0 || any_overdue || systemd_timer_file_present
+}
+
+/// `aida doctor` entry point, evidence-gated by
+/// [`scheduler_driver_check_needed`].
 // trace:STORY-1463 | ai:claude
+// trace:TASK-1491 | ai:claude
 pub(crate) fn scheduler_driver_doctor_findings(
     project_root: &Path,
 ) -> Result<Vec<crate::DoctorFinding>> {
     let enabled = enabled_substrate_job_count(project_root)?;
     let overdue = overdue_substrate_jobs(project_root)?;
-    if enabled == 0 && overdue.is_empty() {
+    // Only read the timer file when nothing else already asks for a look.
+    let timer_file = enabled == 0
+        && overdue.is_empty()
+        && crate::schedule_driver::systemd_timer_file_present_for(project_root);
+    if !scheduler_driver_check_needed(enabled, !overdue.is_empty(), timer_file) {
         return Ok(Vec::new());
     }
-    let cron_status = cron_driver_status(project_root);
+    let status = crate::schedule_driver::driver_status(project_root);
     Ok(build_scheduler_driver_findings(
         enabled,
-        cron_status,
+        &status,
         &overdue,
         Utc::now(),
     ))
 }
 
-/// `aida schedule install-cron` / the `aida init` TTY offer.
+/// `aida schedule install-cron` / `install-systemd`. Gated like `aida shift
+/// enable` (a human at a TTY answering yes): a driver starts unattended
+/// scheduled runs. Installing one driver removes this repo's other one, but
+/// only after the new one is verified (A13a).
 // trace:STORY-1463 | ai:claude
-fn install_cron_command(project_root: &Path) -> Result<()> {
+// trace:TASK-1491 | ai:claude
+fn install_driver_command(
+    project_root: &Path,
+    driver: crate::schedule_driver::Driver,
+) -> Result<()> {
+    use crate::schedule_driver::Driver;
     if cfg!(windows) {
-        println!("Windows has no crontab. Add this line to Task Scheduler instead:");
+        println!("Windows has no crontab or systemd. Add this line to Task Scheduler instead:");
         println!("  {}", tick_cron_line(project_root)?);
         return Ok(());
     }
-    match install_tick_cron(project_root) {
-        Ok(CronInstallOutcome::Installed) => {
-            println!("Installed the scheduler tick crontab entry for this repo.")
-        }
-        Ok(CronInstallOutcome::AlreadyUpToDate) => {
-            println!("Already installed — this repo's tick entry is already in your crontab.")
-        }
-        // trace:BUG-1600 | ai:claude
-        Ok(CronInstallOutcome::Repaired) => println!(
-            "Repaired this repo's scheduler tick crontab entry — it was running an older, \
-             unsupported invocation and has been rewritten."
-        ),
-        Err(e) => return Err(e),
-    }
+    let command = match driver {
+        Driver::Cron => "aida schedule install-cron",
+        Driver::Systemd => "aida schedule install-systemd",
+    };
+    crate::schedule_driver::with_real_operator(|op| {
+        crate::schedule_driver::install_driver_command(
+            project_root,
+            command,
+            driver,
+            op,
+            &mut crate::schedule_driver::RealDriverHost,
+        )
+    })?;
     Ok(())
 }
 
@@ -2150,6 +2279,16 @@ fn uninstall_cron_command(project_root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// PURE: whether `aida init` may offer the crontab install. The same floor
+/// as `aida schedule install-cron` (`driver_gate_refusal`: a human at an
+/// interactive stdin, outside agent output mode), plus a terminal stdout to
+/// show the question on.
+// trace:TASK-1491 | ai:claude
+pub(crate) fn init_tick_offer_allowed(stdin_tty: bool, stdout_tty: bool, agent_mode: bool) -> bool {
+    stdout_tty
+        && crate::schedule_driver::driver_gate_refusal("aida init", stdin_tty, agent_mode).is_none()
+}
+
 /// STORY-1463: at a TTY, offer to install the crontab entry that drives
 /// `aida schedule tick` for this repo. Default answer is **no** — writing to
 /// the operator's crontab is a real system side effect that should be an
@@ -2158,7 +2297,11 @@ fn uninstall_cron_command(project_root: &Path) -> Result<()> {
 // trace:STORY-1463 | ai:claude
 pub(crate) fn maybe_offer_tick_install(project_root: &Path) {
     use std::io::IsTerminal;
-    if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
+    if !init_tick_offer_allowed(
+        std::io::stdin().is_terminal(),
+        std::io::stdout().is_terminal(),
+        crate::agent_output_mode(),
+    ) {
         return;
     }
     let line = match tick_cron_line(project_root) {
@@ -2186,16 +2329,25 @@ pub(crate) fn maybe_offer_tick_install(project_root: &Path) {
         );
         return;
     }
-    match install_tick_cron(project_root) {
-        Ok(CronInstallOutcome::Installed) => println!("  Installed."),
-        Ok(CronInstallOutcome::AlreadyUpToDate) => println!("  Already installed."),
+    // TASK-1491: the same verified switch as `install-cron`, so a systemd
+    // timer for this repo is removed once the entry is confirmed.
+    let result = crate::schedule_driver::real_tick_invocation(project_root).and_then(|inv| {
+        crate::schedule_driver::switch_driver(
+            &mut crate::schedule_driver::RealDriverHost,
+            &inv,
+            crate::schedule_driver::Driver::Cron,
+        )
+    });
+    match result.map(|r| r.outcome) {
+        Ok(DriverInstallOutcome::Installed) => println!("  Installed."),
+        Ok(DriverInstallOutcome::AlreadyUpToDate) => println!("  Already installed."),
         // trace:BUG-1600 | ai:claude
-        Ok(CronInstallOutcome::Repaired) => {
+        Ok(DriverInstallOutcome::Repaired) => {
             println!(
                 "  Repaired — the installed entry was running an older, unsupported invocation."
             )
         }
-        Err(e) => eprintln!("  Note: scheduler tick was not installed: {e}"),
+        Err(e) => eprintln!("  Note: scheduler tick was not installed: {e:#}"),
     }
 }
 
@@ -2527,17 +2679,6 @@ pub(crate) fn jobs_running_command(project_root: &Path, command: &str) -> Vec<(S
         .filter(|t| t.command.as_ref().is_some_and(|c| c.display == command))
         .map(|t| (t.name.clone(), t.enabled))
         .collect()
-}
-
-/// STORY-1218: is this repo's cron driver line installed? `None` = could not
-/// tell (no crontab, unsupported platform).
-// trace:STORY-1218 | ai:claude
-pub(crate) fn cron_driver_installed(project_root: &Path) -> Option<bool> {
-    match cron_driver_status(project_root) {
-        CronDriverStatus::Installed => Some(true),
-        CronDriverStatus::Missing => Some(false),
-        CronDriverStatus::Unknown(_) => None,
-    }
 }
 
 fn parse_scheduled_command(s: &str) -> Result<ScheduledCommand> {
