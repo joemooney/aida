@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:45:01.179683029Z
-modified_at: 2026-09-25T14:19:26.235405342Z
+modified_at: 2026-09-25T15:02:43.310677059Z
 req_type: Bug
 comments:
 - id: 01a0d899-46d9-7102-8936-dc8e08960384
@@ -16,6 +16,28 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved, high priority because of the option-injection class. Dispatch it after batch 69 lands TASK-1509.'
   created_at: 2026-09-25T12:45:18.937337018Z
   modified_at: 2026-09-25T12:45:18.937337018Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d917-136e-7313-a4ac-ff652c125850
+  author: joe
+  content: |-
+    Strict security review: REQUEST CHANGES — the fixed sites are correct, but the 'grep for others' part of the acceptance is not met. Store-derived and forge-derived values still reach git as options. Reviewed ff892a10ba on git 2.43.0.
+
+    BLOCKERS (unguarded, reproduced in a scratch repo):
+    (1) lib.rs:52188 filing_drift_hint runs 'git log <code_sha>..HEAD'. code_sha is filed_at.code_sha from a spec in the shared store, and nothing validates it. A spec with code_sha='--output=/dir/x' makes git create or truncate /dir/x..HEAD (reproduced). It runs on 'aida show' and on MCP show_requirement (lib.rs:52807, 61051; git_backend_cmd.rs:4249). So another store writer can make a file appear on any viewer's machine, and that viewer can be an MCP client. This contradicts the claim that MCP never passes user text to git. Fix: require code_sha to be hex, and add --end-of-options.
+    (2) lib.rs:36939 classify_rework_head_change runs 'git diff --quiet <before> <after>' with no guard. 'before' is the verdict's reviewed_sha, which review_verdict.rs:1036-1039 stores verbatim when it doesn't resolve. 'git diff --quiet --output=<file> HEAD' truncated a victim file to 0 bytes (reproduced), and this runs in the unattended drain. Fix: add --end-of-options, and only accept a hex sha when the verdict is written.
+    (3) PR head/base branch names from the forge are passed bare, and a fork author controls them: pr_cmd.rs:3411 branch_head_commit_message 'git log -1 --format=%B <branch>' on 'aida pr ship' is a file write via --output. The fetch sites lib.rs:69124 fetch_branch and lib.rs:102031 'git fetch origin <branch>', plus pr_cmd.rs:1312 (finish, baseRefName), allow --upload-pack=<cmd>, which runs a command when origin is a local path. queue_cmd.rs:13301/13347 'push -u origin <b>' allows --receive-pack/--exec. Whether GitHub accepts a ref named '-…' is unverified; git's check-ref-format allows refs/heads/--output=x. Fix: reject_option_like on forge names, and --end-of-options at each site.
+
+    SHOULD-FIX: store_cmd.rs:345 rev-list '<p>...<c>', where p is the Aida-Store: trailer from HEAD's commit message (a file write with a ...<sha> suffix; require hex). lib.rs:25085 salvage 'git diff --no-index /dev/null <f>' has no '--', so an untracked file inside the worktree named '--output=...' overwrites that path during doctor --heal. lib.rs:68905 cascade rebase takes .aida/stacks.json values bare (--exec). Low, prefix-limited: lib.rs:37532/37548, 37761/37777, 89373/89395 ranges '{b}..origin/…'; doctor_cmd.rs:3490 'push origin --delete <id>'. The aida-core git_ops helpers (push, fetch_branch_into_local, checkout_branch, …) never add --end-of-options. Every caller today passes constants or values git produced, so this is a follow-up.
+
+    VERIFIED OK: every guarded site in the diff. --end-of-options works on git 2.43 for log, diff, rev-list, cherry, branch -f, merge-base --is-ancestor, fetch, rebase and rebase --onto. It is placed after all options and just before the first user value, and '--output=' after it gets 'bad revision' with nothing written. The '--' in worktree add parses a dash-led path as a path. Bypass attempts: the check trims leading whitespace first; unicode dashes and refs/../-x aren't options to git; the trailing --end-of-options is the backstop. REST and aida-server pass only constants to git (confirmed). Remote-name URL via rebase --branch: split_once('/') keeps it free of slashes, and ext:: is blocked by default. That leaves scp-style host:repo and '+src:dst' refspec force-updates, which are self-inflicted CLI inputs, Low. A separate bug for 'remote add' is not needed: a dash-led value only makes it fail with a usage error, and the inputs are the operator's own.
+
+    GATE (item 3): the old command 'diff -U0 -- *.rs base...HEAD' treated the range as a path, so it compared working tree to index and test_hunk_files was effectively always empty. The fix makes the gate MORE lenient, not stricter: test_hunk_files can only turn bug_test_item from Missing to Met. No merge floor or authority depends on it. Acceptable, and it fixes a latent false MISSING.
+
+    DOCTOR vs STATUS (item 4): acceptable. status reads only the env var for a dashboard. Nit: doctor --since '  ' (whitespace only) still silently applies no cutoff and skips the default recent cutoff (doctor_cmd.rs:358/384).
+
+    TESTS: pass (bug_1622 6, time_bound 13, rebase 120, doctor 152). Reverting the rebase.rs guard and the doctor reject+EOO made rebase_branch_refuses_… and doctor_and_digest_since_refuse_… fail, so the tests are meaningful. Nit: the rebase test's marker assertion is vacuous. The marker path contains '/', so split_once cuts inside it, and the pre-fix exploit touches a relative path instead. The test fails only through the error-message assertion. Use a slash-free marker such as 'touch pwned;false/.' and check <repo>/pwned. The tests use tempdirs and write nothing to ~/.aida.
+  created_at: 2026-09-25T15:02:43.310677059Z
+  modified_at: 2026-09-25T15:02:43.310677059Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
