@@ -365,6 +365,15 @@ struct WatchReport {
     drift: Vec<String>,
     /// Children queued this pass (only populated under --execute).
     realigned: Vec<String>,
+    /// The re-drive reflex's one-line outcome (the night shift's step).
+    // trace:BUG-1621 | ai:claude
+    redrive: String,
+    /// Parks re-queued this pass (only under --execute with re-drive on).
+    redriven: Vec<String>,
+    /// Parks reclassified to needs-human at the ADR-26 cap this pass.
+    reclassified: Vec<String>,
+    /// Per-park decisions, including every floor refusal.
+    redrive_plan: Vec<crate::supervisor::SuperviseDecision>,
 }
 
 fn handle_supervise_watch(
@@ -472,12 +481,41 @@ fn run_watch_pass(
         }
     }
 
+    // The re-drive reflex runs through the night shift's own re-drive step
+    // (BUG-1621): the same per-clone opt-in (ADR-26 default off), guards,
+    // floors, attempt-recorded-first requeue and cap branch as the tick. It
+    // only re-queues; the next drain wave picks the specs up, so this pass
+    // never launches a drive and never forces a claim. A failure is reported
+    // and never stops the rest of the pass.
+    // trace:BUG-1621 | ai:claude
+    let redrive = crate::shift::run_redrive_pass(project_root, backend, !execute);
+    let (redrive_line, redriven, reclassified, redrive_plan) = match redrive {
+        Ok(r) => {
+            let mut line = r.redrive;
+            let failing: Vec<&str> = r
+                .redrive_guards
+                .iter()
+                .filter(|g| !g.pass)
+                .map(|g| g.detail.as_str())
+                .collect();
+            if !failing.is_empty() {
+                line.push_str(&format!(" ({})", failing.join("; ")));
+            }
+            (line, r.redriven, r.reclassified, r.redrive_plan)
+        }
+        Err(e) => (format!("error: {e:#}"), Vec::new(), Vec::new(), Vec::new()),
+    };
+
     let report = WatchReport {
         objective: obj_display.clone(),
         total_children: total,
         done_children: done,
         drift: drift.clone(),
         realigned: realigned.clone(),
+        redrive: redrive_line,
+        redriven,
+        reclassified,
+        redrive_plan,
     };
 
     if json {
@@ -486,16 +524,7 @@ fn run_watch_pass(
         print_watch_report(&report, execute);
     }
 
-    // Compose the shipped reflexes: redrive transient parks, nudge advisor stalls.
-    let redrive_opts = crate::supervisor::SuperviseOpts {
-        execute,
-        max_attempts: crate::supervisor::DEFAULT_MAX_ATTEMPTS,
-        backoff: crate::supervisor::DEFAULT_BACKOFF.to_vec(),
-        max: None,
-        json,
-        floors: None,
-    };
-    let _ = crate::supervisor::handle_supervise_command(backend, project_root, redrive_opts);
+    // Compose the other shipped reflex: nudge advisor stalls.
     // Nudge sends a real mailbox message / notification, so it only fires under
     // --execute; a dry-run pass has no side effects.
     if execute {
@@ -530,6 +559,8 @@ fn print_watch_report(report: &WatchReport, execute: bool) {
             report.drift.join(", ")
         );
     }
+    // trace:BUG-1621 | ai:claude
+    println!("  re-drive: {}", report.redrive);
 }
 
 /// Whether a child type is realignable — i.e. buildable work an implementer
@@ -669,3 +700,7 @@ mod story_1052_supervise_nudge_tests;
 #[cfg(test)]
 #[path = "tests/story_1096_supervise_watch_tests.rs"]
 mod story_1096_supervise_watch_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1621_watch_redrive_tests.rs"]
+mod bug_1621_watch_redrive_tests;

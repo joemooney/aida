@@ -2109,14 +2109,13 @@ fn gather_candidates(
         .collect()
 }
 
-fn gather_probes(
+/// This clone's drain lock (and its live holder) plus a live drain claim held
+/// by another clone. Shared by the tick and the out-of-tick re-drive pass.
+// trace:TASK-1497 trace:BUG-1621 | ai:claude
+fn probe_drain_locks(
     project_root: &Path,
-    backend: &aida_core::CachedGitBackend,
-    cfg: &ShiftConfig,
-    state: &ShiftState,
     now: DateTime<Utc>,
-) -> Probes {
-    // trace:TASK-1497 | ai:claude
+) -> (LockView, Option<LockHolder>, Option<String>) {
     let (lock, lock_holder) = match crate::drain_lock::probe_lock(project_root) {
         crate::drain_lock::LockStatus::None => (LockView::Free, None),
         crate::drain_lock::LockStatus::Running(l) => (
@@ -2142,6 +2141,34 @@ fn gather_probes(
             c.clone_path, c.host, c.pid
         )
     });
+    (lock, lock_holder, foreign_claim)
+}
+
+/// Is the last launched shift wave's process still alive?
+// trace:BUG-1621 | ai:claude
+fn last_wave_is_alive(state: &ShiftState) -> bool {
+    state
+        .waves
+        .iter()
+        .rev()
+        .find(|w| w.pid.is_some())
+        .is_some_and(|w| {
+            w.outcome.is_none()
+                && crate::process_probe::process_identity_is_alive(
+                    w.pid.unwrap_or_default(),
+                    w.pid_start.as_deref(),
+                )
+        })
+}
+
+fn gather_probes(
+    project_root: &Path,
+    backend: &aida_core::CachedGitBackend,
+    cfg: &ShiftConfig,
+    state: &ShiftState,
+    now: DateTime<Utc>,
+) -> Probes {
+    let (lock, lock_holder, foreign_claim) = probe_drain_locks(project_root, now);
     let events = events::read_all(project_root);
     let watchdog_jobs: Vec<String> =
         crate::maintenance_schedule::jobs_running_command(project_root, WATCHDOG_COMMAND)
@@ -2198,13 +2225,7 @@ fn gather_probes(
     let mut queue_fingerprint: Vec<String> = candidates.iter().map(|c| c.spec.clone()).collect();
     queue_fingerprint.sort();
     let last = state.waves.iter().rev().find(|w| w.pid.is_some());
-    let last_wave_alive = last.is_some_and(|w| {
-        w.outcome.is_none()
-            && crate::process_probe::process_identity_is_alive(
-                w.pid.unwrap_or_default(),
-                w.pid_start.as_deref(),
-            )
-    });
+    let last_wave_alive = last_wave_is_alive(state);
     let mut finished_specs = BTreeSet::new();
     if let Some(w) = last {
         for spec in &w.specs {
@@ -2302,6 +2323,164 @@ pub(crate) fn redrive_probes<B: aida_core::DatabaseBackend>(
         ),
         Err(e) => (Vec::new(), Err(format!("cannot read the store: {e:#}"))),
     }
+}
+
+// ---------------------------------------------------------------------------
+// BUG-1621: the re-drive step for a caller outside the tick
+// ---------------------------------------------------------------------------
+
+/// The re-drive step for a caller outside the tick (`aida supervise watch
+/// --execute`). It runs the tick's own [`redrive_step`], so that caller gets
+/// exactly the same pipeline and floors: the per-clone opt-in (ADR-26 fork C,
+/// default off), the redrive-evidence / lock / breaker / state guards, the
+/// drain-mode, keystone, merge-hold and needs-human floors, the attempt
+/// recorded before each requeue (and the rest of the pass held when it
+/// cannot be), and the cap branch. Re-driven specs go back to the head of the
+/// queue for the next drain wave; nothing is launched here, so there is no
+/// foreground `queue work` and no forced claim. Side effects go only through
+/// `exec`, and none on a dry run.
+// trace:BUG-1621 | ai:claude
+pub(crate) fn redrive_pass(
+    cfg: &ShiftConfig,
+    p: &Probes,
+    state: &ShiftState,
+    ctx: &TickCtx,
+    exec: &mut dyn ShiftExec,
+) -> Result<TickReport> {
+    let mut report = TickReport {
+        dry_run: ctx.dry_run,
+        enabled: cfg.enabled,
+        enabled_source: cfg.enabled_source.clone(),
+        queue_user: p.queue_user.clone(),
+        queue_role: WAVE_ROLE.to_string(),
+        redrive: "off (ADR-26 default)".to_string(),
+        ..Default::default()
+    };
+    redrive_step(cfg, p, state, ctx, !ctx.dry_run, &mut report, exec)?;
+    Ok(report)
+}
+
+impl Probes {
+    /// The probes [`redrive_pass`] reads, with every launch-only field left
+    /// neutral (the out-of-tick pass never launches a wave).
+    // trace:BUG-1621 | ai:claude
+    pub(crate) fn for_redrive(
+        lock: LockView,
+        foreign_claim: Option<String>,
+        last_wave_alive: bool,
+        queue_user: String,
+        (parked, redrive_history): RedriveProbes,
+        held: BTreeSet<String>,
+    ) -> Self {
+        Probes {
+            lock,
+            lock_holder: None,
+            foreign_claim,
+            no_human_ack: None,
+            budget: None,
+            vendor: String::new(),
+            vendor_error: None,
+            watchdog_failures: 0,
+            load: None,
+            memory: None,
+            disk: None,
+            queue_user,
+            candidates: Vec::new(),
+            queue_fingerprint: Vec::new(),
+            last_wave_alive,
+            queue_drained: Vec::new(),
+            finished_specs: BTreeSet::new(),
+            parked,
+            held,
+            redrive_history,
+            mail: Ok(BTreeMap::new()),
+            mail_known: BTreeSet::new(),
+        }
+    }
+}
+
+/// Production shell of [`redrive_pass`]: this clone's shift config (the
+/// local layer holds the opt-in), then [`run_redrive_pass_with`].
+// trace:BUG-1621 | ai:claude
+pub(crate) fn run_redrive_pass(
+    project_root: &Path,
+    backend: &aida_core::CachedGitBackend,
+    dry_run: bool,
+) -> Result<TickReport> {
+    run_redrive_pass_with(project_root, backend, &load_config(project_root), dry_run)
+}
+
+/// [`run_redrive_pass`] with the config injected (tests build it without
+/// reading `~/.aida`). A live pass takes `.aida/shift.lock` like a tick, so
+/// it never interleaves with one: when a tick holds the lock, the pass
+/// re-drives nothing and leaves the parks to that tick.
+// trace:BUG-1621 | ai:claude
+pub(crate) fn run_redrive_pass_with(
+    project_root: &Path,
+    backend: &aida_core::CachedGitBackend,
+    cfg: &ShiftConfig,
+    dry_run: bool,
+) -> Result<TickReport> {
+    let now = Utc::now();
+    let mut exec = RealExec {
+        project_root: project_root.to_path_buf(),
+        backend,
+    };
+    let quiet_ctx = |state_error| TickCtx {
+        now,
+        dry_run,
+        optional_allowed: true,
+        launch_allowed: true,
+        state_error,
+        log_path: PathBuf::new(),
+        clock: None,
+    };
+    if !cfg.redrive {
+        // Off: the step reports why and returns before reading or writing
+        // anything, so nothing is probed.
+        let p = Probes::for_redrive(
+            LockView::Free,
+            None,
+            false,
+            String::new(),
+            (Vec::new(), Err("re-drive is off".to_string())),
+            BTreeSet::new(),
+        );
+        return redrive_pass(cfg, &p, &ShiftState::default(), &quiet_ctx(None), &mut exec);
+    }
+    let _lock = if dry_run {
+        None
+    } else {
+        match try_shift_lock(project_root)? {
+            Some(f) => Some(f),
+            None => {
+                return Ok(TickReport {
+                    dry_run,
+                    enabled: cfg.enabled,
+                    enabled_source: cfg.enabled_source.clone(),
+                    redrive:
+                        "held: a night-shift check is running; its re-drive step handles the parks"
+                            .to_string(),
+                    ..Default::default()
+                });
+            }
+        }
+    };
+    let (state, state_error) = match load_state(&state_path(project_root)) {
+        Ok(s) => (s, None),
+        Err(e) => (ShiftState::default(), Some(format!("{e:#}"))),
+    };
+    let ctx = quiet_ctx(state_error);
+    let (lock, _, foreign_claim) = probe_drain_locks(project_root, now);
+    let p = Probes::for_redrive(
+        lock,
+        foreign_claim,
+        last_wave_is_alive(&state),
+        crate::current_user_id(None),
+        redrive_probes(project_root, backend, cfg),
+        held_specs(project_root),
+    );
+    redrive_pass(cfg, &p, &state, &ctx, &mut exec)
 }
 
 /// The recipients the mail-latency step may page for, lower-cased. Reuses
