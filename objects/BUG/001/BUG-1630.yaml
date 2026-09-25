@@ -3,12 +3,12 @@ spec_id: BUG-1630
 agreed_id: BUG-1630
 title: build.rs watches ../.git/HEAD, which never exists in linked worktrees, so every cargo test rebuilds the whole lib
 description: 'Found while finishing BUG-1618. In a linked worktree .git is a file (gitdir: ...), so the build script''s rerun-if-changed on ../.git/HEAD points at a path that doesn''t exist, and cargo reruns the build script every time. Each filtered test run rebuilds all of aida-cli-lib (3-4 min), which multiplies CPU, memory pressure and agent time in the worktree-per-spec workflow. Fix: resolve the real git dir (git rev-parse --git-dir / --git-common-dir, or parse the gitdir: file) and watch HEAD and the ref it points to there; fall back gracefully when git is absent. Acceptance: in a linked worktree a second ''cargo test -p aida-cli-lib --lib <filter>'' with no source change does not rerun the build script or recompile the lib; the version stamp still updates on commit.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T20:32:14.600361247Z
-modified_at: 2026-09-25T21:03:55.677090553Z
+modified_at: 2026-09-25T21:57:12.910081721Z
 req_type: Bug
 comments:
 - id: 01a0da45-114e-7d70-a786-6e90694da378
@@ -29,6 +29,20 @@ comments:
   created_at: 2026-09-25T21:03:55.677090553Z
   modified_at: 2026-09-25T21:03:55.677090553Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0da92-8a79-7f33-bb91-cb8ef8636b25
+  author: aida-auto-bump
+  timestamp: 2026-09-25T21:57:11.929860032Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0da92-8e4e-70d1-aaff-4e3bdd25a6c4
+  timestamp: 2026-09-25T21:57:12.910079151Z
+  agent: implementer
+  commit_sha: 8d0d98de3e91e54843ef2c70b2e58af67bd8c9a7
+  summary: Completed via merge 8d0d98de
 filed_at:
   code_sha: 99698621ba5890d30a9d128655537987cfd239d4
   branch: main
@@ -37,3 +51,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T21:57:11.929825239Z
+  completion_sha: 8d0d98de3e91e54843ef2c70b2e58af67bd8c9a7
