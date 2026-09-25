@@ -48,6 +48,13 @@ struct FakeHost {
     started: BTreeSet<String>,
     /// No user bus: every call exits 1 with nothing on stdout.
     no_bus: bool,
+    /// `start` / `restart` fail (BUG-1619).
+    start_fails: bool,
+    /// `disable --now` fails (BUG-1619).
+    disable_fails: bool,
+    /// Whether the unit file was still on disk at each `disable --now`, to
+    /// pin "disable first, then remove" (BUG-1619).
+    unit_present_at_disable: Vec<bool>,
     log: Vec<Vec<String>>,
     linger: Option<bool>,
     supported: bool,
@@ -69,6 +76,9 @@ impl FakeHost {
             enable_fails: false,
             started: BTreeSet::new(),
             no_bus: false,
+            start_fails: false,
+            disable_fails: false,
+            unit_present_at_disable: Vec::new(),
             log: Vec::new(),
             linger: Some(true),
             supported: true,
@@ -127,6 +137,20 @@ impl DriverHost for FakeHost {
                 stdout: String::new(),
                 stderr: "Failed to enable unit: Unit file does not exist.\n".to_string(),
             },
+            ["start" | "restart", _] if self.start_fails => CommandOutput {
+                success: false,
+                stdout: String::new(),
+                stderr: "Job for the timer failed.\n".to_string(),
+            },
+            ["disable", "--now", unit] if self.disable_fails => {
+                self.unit_present_at_disable
+                    .push(self.unit_dir.join(unit).exists());
+                CommandOutput {
+                    success: false,
+                    stdout: String::new(),
+                    stderr: "Failed to disable unit.\n".to_string(),
+                }
+            }
             ["start" | "restart", unit] => {
                 self.started.insert(unit.to_string());
                 ok("")
@@ -149,6 +173,8 @@ impl DriverHost for FakeHost {
                 ok("")
             }
             ["disable", "--now", unit] => {
+                self.unit_present_at_disable
+                    .push(self.unit_dir.join(unit).exists());
                 self.enabled.remove(*unit);
                 self.started.remove(*unit);
                 ok("")
@@ -366,7 +392,7 @@ fn systemd_install_verifies_before_removing_cron() {
     host.crontab = Some(format!("{cron}\n"));
 
     let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
-    assert!(err.to_string().contains("is-enabled"), "{err}");
+    assert!(format!("{err:#}").contains("is-enabled"), "{err:#}");
     assert_eq!(
         host.crontab.as_deref(),
         Some(format!("{cron}\n").as_str()),
@@ -988,4 +1014,320 @@ fn schedule_driver_build_output_helper() {
     let exe = checkout.path().join("target").join("debug").join("aida");
     assert!(exe_is_build_output(&exe));
     assert!(!exe_is_build_output(Path::new(EXE)));
+}
+
+// ---------------------------------------------------------------------------
+// BUG-1619: partial-install cleanup and accurate driver messages
+// ---------------------------------------------------------------------------
+
+fn cron_body() -> String {
+    format!(
+        "{}\n",
+        build_tick_cron_line(Path::new(REPO), Path::new(EXE)).unwrap()
+    )
+}
+
+fn failure_files(err: &anyhow::Error) -> UnitFilesAfterFailure {
+    err.downcast_ref::<SystemdInstallFailure>()
+        .expect("a systemd install failure carries SystemdInstallFailure")
+        .files
+        .clone()
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_fresh_install_start_failure_disables_then_removes_units() {
+    let mut host = FakeHost::new();
+    host.start_fails = true;
+    host.crontab = Some(cron_body());
+    let (service, timer) = names();
+
+    let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("removed the unit files"), "{msg}");
+    assert_eq!(
+        failure_files(&err),
+        UnitFilesAfterFailure::CleanedUp {
+            removed: vec![service.clone(), timer.clone()],
+            left: vec![],
+            disable_error: None,
+        }
+    );
+    // Disable first (while the timer file still exists), then remove.
+    let calls = host.calls();
+    let disable = calls
+        .iter()
+        .position(|c| c == &format!("disable --now {timer}"))
+        .expect("the enabled timer is disabled");
+    assert!(calls[..disable].contains(&format!("enable {timer}")));
+    assert_eq!(calls.last().map(String::as_str), Some("daemon-reload"));
+    assert_eq!(host.unit_present_at_disable, vec![true]);
+    assert!(!host.enabled.contains(&timer), "no enabled timer left");
+    assert!(host.unit(&service).is_none() && host.unit(&timer).is_none());
+    assert!(
+        host.log.iter().flatten().all(|a| !a.ends_with(".service")),
+        "the service is never stopped or disabled"
+    );
+    assert_eq!(host.crontab, Some(cron_body()), "never zero drivers");
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_fresh_install_post_check_failure_disables_and_removes_units() {
+    let mut host = FakeHost::new();
+    host.enable_does_not_stick = true;
+    host.crontab = Some(cron_body());
+    let (service, timer) = names();
+
+    let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("is-enabled"), "{msg}");
+    assert!(matches!(
+        failure_files(&err),
+        UnitFilesAfterFailure::CleanedUp { ref left, .. } if left.is_empty()
+    ));
+    assert!(host.calls().contains(&format!("disable --now {timer}")));
+    assert!(
+        !host.started.contains(&timer),
+        "the started timer is stopped"
+    );
+    assert!(host.unit(&service).is_none() && host.unit(&timer).is_none());
+    assert_eq!(host.crontab, Some(cron_body()), "cron kept");
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_second_unit_write_failure_removes_the_first() {
+    let mut host = FakeHost::new();
+    host.crontab = Some(cron_body());
+    let (service, timer) = names();
+    // A directory where the timer's temporary file goes makes that write
+    // fail after the service file has been written.
+    std::fs::create_dir_all(host.unit_dir.join(format!("{timer}.aida-tmp"))).unwrap();
+
+    let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+    assert_eq!(
+        failure_files(&err),
+        UnitFilesAfterFailure::CleanedUp {
+            removed: vec![service.clone()],
+            left: vec![],
+            disable_error: None,
+        }
+    );
+    assert!(host.unit(&service).is_none(), "first file removed");
+    assert!(
+        !host.calls().iter().any(|c| c.starts_with("disable")),
+        "nothing was enabled, so nothing is disabled: {:?}",
+        host.calls()
+    );
+    assert_eq!(host.crontab, Some(cron_body()), "cron kept");
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_cleanup_disable_failure_still_removes_marked_units_and_says_so() {
+    let mut host = FakeHost::new();
+    host.start_fails = true;
+    host.disable_fails = true;
+    let (service, timer) = names();
+    let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+    match failure_files(&err) {
+        UnitFilesAfterFailure::CleanedUp {
+            removed,
+            disable_error: Some(d),
+            ..
+        } => {
+            assert_eq!(removed, vec![service.clone(), timer.clone()]);
+            assert!(d.contains("Failed to disable"), "{d}");
+        }
+        other => panic!("expected a cleanup with a disable error, got {other:?}"),
+    }
+    assert!(format!("{err:#}").contains("disabling it failed"));
+    assert!(crate::shift::driver_state_after_failure(&err).contains("could not be fully"));
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_cleanup_never_removes_a_file_without_our_marker() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.timer"), format!("# {}\n", marker())).unwrap();
+    std::fs::write(dir.path().join("b.service"), "[Service]\n").unwrap();
+    let removed = remove_marked_files(dir.path(), &["a.timer", "b.service"], &marker());
+    assert_eq!(removed, vec!["a.timer".to_string()]);
+    assert!(dir.path().join("b.service").exists());
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_failed_repair_leaves_rewritten_files_and_never_disables() {
+    let mut host = FakeHost::new();
+    switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    let (service, timer) = names();
+    let old = host
+        .unit(&timer)
+        .unwrap()
+        .replace("OnBootSec=2min", "OnBootSec=5min");
+    host.put_unit(&timer, &old);
+    host.start_fails = true;
+    host.log.clear();
+
+    let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+    assert_eq!(
+        failure_files(&err),
+        UnitFilesAfterFailure::Rewritten(vec![timer.clone()])
+    );
+    assert!(format!("{err:#}").contains("left in place"));
+    assert!(host.unit(&service).is_some() && host.unit(&timer).is_some());
+    assert!(host.unit(&timer).unwrap().contains("OnBootSec=2min"));
+    assert!(!host.calls().iter().any(|c| c.starts_with("disable")));
+
+    // A failure with the files already current changes no file.
+    let mut host = FakeHost::new();
+    switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    host.started.clear();
+    host.start_fails = true;
+    let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+    assert_eq!(failure_files(&err), UnitFilesAfterFailure::Unchanged);
+    assert!(host.unit(&timer).is_some());
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_repaired_message_names_the_cause() {
+    let mut host = FakeHost::new();
+    let (_, timer) = names();
+    switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+
+    // Rewritten files.
+    let old = host
+        .unit(&timer)
+        .unwrap()
+        .replace("OnBootSec=2min", "OnBootSec=5min");
+    host.put_unit(&timer, &old);
+    let r = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    assert_eq!(r.outcome, DriverInstallOutcome::Repaired);
+    assert_eq!(r.repair.rewrote, vec![timer.clone()]);
+    assert!(!r.repair.re_enabled && !r.repair.restarted);
+    let text = r.repair.describe();
+    assert!(
+        text.contains("rewrote") && text.contains("older invocation"),
+        "{text}"
+    );
+
+    // Re-enabled (unchanged files): no "older invocation" claim.
+    host.enabled.clear();
+    host.started.clear();
+    let r = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    assert_eq!(r.outcome, DriverInstallOutcome::Repaired);
+    assert!(r.repair.rewrote.is_empty() && r.repair.re_enabled);
+    let text = r.repair.describe();
+    assert!(text.contains("re-enabled"), "{text}");
+    assert!(!text.contains("older invocation"), "{text}");
+
+    // Restarted (enabled but stopped).
+    host.started.clear();
+    let r = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    assert_eq!(r.outcome, DriverInstallOutcome::Repaired);
+    assert!(r.repair.restarted && !r.repair.re_enabled);
+    let text = r.repair.describe();
+    assert!(
+        text.contains("started the timer") && text.contains("not running"),
+        "{text}"
+    );
+    assert!(!text.contains("older invocation"), "{text}");
+
+    // Up to date: no cause.
+    let r = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    assert_eq!(r.outcome, DriverInstallOutcome::AlreadyUpToDate);
+    assert_eq!(r.repair, RepairCauses::default());
+
+    // Cron repair: the entry was rewritten.
+    let mut host = FakeHost::new();
+    host.crontab = Some(format!(
+        "*/15 * * * * cd {REPO} && aida schedule tick --format json\n"
+    ));
+    let r = switch_driver(&mut host, &inv(), Driver::Cron).unwrap();
+    assert_eq!(r.outcome, DriverInstallOutcome::Repaired);
+    assert!(r.repair.describe().contains("rewrote the crontab entry"));
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_shift_install_wording_after_a_failed_repair_or_cleanup() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+    let layer = root.path().join("home-shift-local.toml");
+    let repo = root.path().canonicalize().unwrap().display().to_string();
+    let (_, timer) = unit_names(&repo);
+    let run = |host: &mut FakeHost| {
+        let mut yes = |_: &str| Ok(true);
+        let mut human = crate::shift::Operator {
+            stdin_tty: true,
+            agent_mode: false,
+            confirm: &mut yes,
+        };
+        format!(
+            "{:#}",
+            crate::shift::install_command(root.path(), &layer, Driver::Systemd, &mut human, host)
+                .unwrap_err()
+        )
+    };
+
+    // Fresh install cleaned up after a start failure: unchanged is true.
+    let mut host = FakeHost::new();
+    host.start_fails = true;
+    let msg = run(&mut host);
+    assert!(msg.contains("disabled and removed"), "{msg}");
+    assert!(msg.contains("scheduler driver is unchanged"), "{msg}");
+
+    // A repair that rewrote the files and then failed: never "unchanged".
+    let mut host = FakeHost::new();
+    host.start_fails = false;
+    let mut yes = |_: &str| Ok(true);
+    let mut human = crate::shift::Operator {
+        stdin_tty: true,
+        agent_mode: false,
+        confirm: &mut yes,
+    };
+    crate::shift::install_command(root.path(), &layer, Driver::Systemd, &mut human, &mut host)
+        .unwrap();
+    let old = host
+        .unit(&timer)
+        .unwrap()
+        .replace("OnBootSec=2min", "OnBootSec=5min");
+    host.put_unit(&timer, &old);
+    host.start_fails = true;
+    let msg = run(&mut host);
+    assert!(msg.contains("rewritten before the failure"), "{msg}");
+    assert!(!msg.contains("unchanged"), "{msg}");
+
+    // An error that is not a systemd install failure keeps the hedge.
+    let other = anyhow::anyhow!("something else");
+    assert!(crate::shift::driver_state_after_failure(&other).starts_with("Unless"));
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_shift_enable_hint_reports_unknown_not_needed() {
+    let m = marker();
+    let mut host = FakeHost::new();
+    switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    host.no_bus = true;
+    let st = driver_status_with(&mut host, REPO, &m);
+    let hint = crate::shift::driver_hint(&st).expect("an unknown driver is reported");
+    assert!(hint.contains(&st.label()), "{hint}");
+    assert!(hint.contains("unknown"), "{hint}");
+    assert!(!hint.contains("needed"), "{hint}");
+
+    // Nothing installed and nothing unknown: still "needed".
+    let none = driver_status_with(&mut FakeHost::new(), REPO, &m);
+    assert!(crate::shift::driver_hint(&none)
+        .unwrap()
+        .contains("needed: a scheduler driver"));
+
+    // Installed: no hint.
+    let mut host = FakeHost::new();
+    switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    let st = driver_status_with(&mut host, REPO, &m);
+    assert_eq!(crate::shift::driver_hint(&st), None);
 }

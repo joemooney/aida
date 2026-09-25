@@ -2030,16 +2030,75 @@ pub(crate) fn install_command(
     let switched = crate::schedule_driver::real_tick_invocation(project_root).and_then(|inv| {
         crate::schedule_driver::switch_driver(host, &inv, driver).map(|report| (inv, report))
     });
-    let (inv, report) = switched.with_context(|| {
-        format!(
-            "night shift is now enabled for {key}, but installing the {} failed. Unless the \
-             error below says a driver was installed, this repo's scheduler driver is unchanged; \
+    // trace:BUG-1619 | ai:claude
+    let (inv, report) = switched.map_err(|e| {
+        let state = driver_state_after_failure(&e);
+        e.context(format!(
+            "night shift is now enabled for {key}, but installing the {} failed. {state}; \
              `aida shift disable` turns the shift back off",
             driver.label()
-        )
+        ))
     })?;
     crate::schedule_driver::print_switch_report(&report, Path::new(&inv.exe));
     Ok(Some(report))
+}
+
+/// PURE: what a failed driver switch left of this repo's scheduler driver,
+/// read from the [`SystemdInstallFailure`] context when the systemd install
+/// itself failed. "Unchanged" is only claimed when it is true.
+///
+/// [`SystemdInstallFailure`]: crate::schedule_driver::SystemdInstallFailure
+// trace:BUG-1619 | ai:claude
+pub(crate) fn driver_state_after_failure(err: &anyhow::Error) -> String {
+    use crate::schedule_driver::{SystemdInstallFailure, UnitFilesAfterFailure};
+    match err
+        .downcast_ref::<SystemdInstallFailure>()
+        .map(|f| &f.files)
+    {
+        Some(UnitFilesAfterFailure::Unchanged) => {
+            "This repo's systemd unit files are unchanged".to_string()
+        }
+        Some(UnitFilesAfterFailure::CleanedUp {
+            left,
+            disable_error: None,
+            ..
+        }) if left.is_empty() => {
+            "The partly installed systemd timer was disabled and removed, so this repo's \
+             scheduler driver is unchanged"
+                .to_string()
+        }
+        Some(UnitFilesAfterFailure::CleanedUp { .. }) => {
+            "The partly installed systemd timer could not be fully cleaned up (see below)"
+                .to_string()
+        }
+        Some(UnitFilesAfterFailure::Rewritten(_)) => {
+            "This repo's existing systemd unit files were rewritten before the failure and \
+             left in place (see below)"
+                .to_string()
+        }
+        None => "Unless the error below says a driver was installed, this repo's scheduler \
+                 driver is unchanged"
+            .to_string(),
+    }
+}
+
+/// PURE: the `aida shift enable` driver hint. Unknown is reported as
+/// unknown, exactly as `DriverStatus::label` does, never as "needed".
+// trace:BUG-1619 | ai:claude
+pub(crate) fn driver_hint(status: &crate::schedule_driver::DriverStatus) -> Option<String> {
+    if status.any_installed() {
+        None
+    } else if !status.unknown_reasons().is_empty() {
+        Some(format!(
+            "  scheduler driver: {} — `aida doctor` shows more",
+            status.label()
+        ))
+    } else {
+        Some(
+            "  needed: a scheduler driver — `aida shift install --systemd-user` (Linux) or `--cron`"
+                .to_string(),
+        )
+    }
 }
 
 /// The writes behind an approved `enable` / `install`.
@@ -2081,10 +2140,11 @@ fn apply_enable(project_root: &Path, layer: &Path, hint_driver: bool) -> Result<
         println!("  needed: an enabled `watchdog` job (`command = \"{WATCHDOG_COMMAND}\"`) — without its spend evidence the tick refuses");
     }
     // trace:TASK-1491 | ai:claude
-    if hint_driver && !crate::schedule_driver::driver_status(project_root).any_installed() {
-        println!(
-            "  needed: a scheduler driver — `aida shift install --systemd-user` (Linux) or `--cron`"
-        );
+    // trace:BUG-1619 | ai:claude
+    if hint_driver {
+        if let Some(hint) = driver_hint(&crate::schedule_driver::driver_status(project_root)) {
+            println!("{hint}");
+        }
     }
     println!("  preflight: `aida shift tick --dry-run`");
     Ok(())
