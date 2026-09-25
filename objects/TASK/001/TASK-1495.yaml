@@ -1,0 +1,22 @@
+id: 01a0d64f-21f4-7ea0-963e-970fc20c6a08
+spec_id: TASK-1495
+agreed_id: TASK-1495
+title: Re-derive the max_failures default after five shift nights
+description: ''
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T02:05:05.396905144Z
+modified_at: 2026-09-25T02:05:05.396905144Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-09-24-shift-tick.md
+filed_at:
+  code_sha: a276969ea936d46b488ec50e058b70773e1ca994
+  branch: claude/story-1218
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c7d35baa35
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
