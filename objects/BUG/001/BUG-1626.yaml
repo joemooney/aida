@@ -37,12 +37,12 @@ description: |
   - After a code failure and store success, `aida push` exits nonzero and reports partial success plus the appropriate `aida pull` recovery command.
   - The symmetric store-failure/code-success case also exits nonzero.
   - Scripted and interactive modes have consistent exit semantics.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T16:59:51.629805515Z
-modified_at: 2026-09-25T16:59:51.629805515Z
+modified_at: 2026-09-25T22:31:34.454068326Z
 req_type: Bug
 tags:
 - diagnostics
