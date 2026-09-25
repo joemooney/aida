@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T16:58:33.851363516Z
-modified_at: 2026-09-25T22:32:06.986720330Z
+modified_at: 2026-09-25T22:32:50.145931570Z
 req_type: Bug
 tags:
 - autobump
@@ -61,6 +61,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved after independent triage (confirmed or plausible on main 6bc5859).'
   created_at: 2026-09-25T22:32:06.986720330Z
   modified_at: 2026-09-25T22:32:06.986720330Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dab3-2ae1-7ed3-9d65-94d775cd13cf
+  author: joe
+  content: 'Extra acceptance criterion from triage: the store merge never replaces a terminal status with a non-terminal one written by an automated source. Severity: this already regressed BUG-1607/1608/1609/1610 Completed→Done today (repaired). Workaround until fixed: ''aida pull --store-only'' before ''aida pull''.'
+  created_at: 2026-09-25T22:32:50.145931570Z
+  modified_at: 2026-09-25T22:32:50.145931570Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: ac9803a159e1871122232d6e6512ca668da96446
