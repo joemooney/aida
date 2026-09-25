@@ -105,6 +105,23 @@ impl EnvVarsGuard {
     }
 }
 
+impl EnvVarsGuard {
+    /// Hold [`env_lock`] and remember each key's current value WITHOUT
+    /// changing it; on drop every key is restored. For a test whose code
+    /// under test may mutate the env (or would, if a guard regressed), so a
+    /// failure cannot leave `PATH` / `LD_PRELOAD` poisoned for the rest of
+    /// the test process.
+    // trace:BUG-1627 | ai:claude
+    pub(crate) fn snapshot(keys: &[&'static str]) -> Self {
+        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let prev = keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
+        Self {
+            prev,
+            _guard: guard,
+        }
+    }
+}
+
 impl Drop for EnvVarsGuard {
     fn drop(&mut self) {
         for (key, prev) in &self.prev {

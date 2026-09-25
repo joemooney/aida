@@ -314,10 +314,11 @@ fn bug_1624_session_env_allowlists_names_and_ignores_file_aida_bin() {
     assert_eq!(
         lines,
         format!(
-            "export AIDA_BIN='{}'\nPATH='{bin_dir}':\"$PATH\"\nexport AIDA_AGENT_TYPE='cl'\\''aude $(touch pwned)'\n",
+            "export AIDA_BIN='{}'\nPATH='{bin_dir}':\"$PATH\"\n",
             exe.display()
         ),
-        "order follows the file; got:\n{lines}"
+        "order follows the file; an unknown AIDA_AGENT_TYPE is dropped \
+         (BUG-1627); got:\n{lines}"
     );
 
     // An absolute CARGO_TARGET_DIR is kept; a relative running binary never
@@ -366,6 +367,11 @@ fn bug_1624_session_env_allowlists_names_and_ignores_file_aida_bin() {
 #[test]
 fn bug_1624_apply_session_env_to_process_ignores_non_allowlisted_names() {
     const VAR: &str = "AIDA_TEST_BUG_1624_NOT_ALLOWLISTED";
+    // Restore every name the hostile body carries even if the allowlist
+    // regresses and this test fails, so a leak can't poison later tests.
+    // trace:BUG-1627 | ai:claude
+    let _restore =
+        crate::test_env::EnvVarsGuard::snapshot(&[VAR, "PATH", "LD_PRELOAD", "PROMPT_COMMAND"]);
     #[allow(unused_unsafe)]
     unsafe {
         std::env::remove_var(VAR);
@@ -397,17 +403,21 @@ fn bug_1624_resume_hint_quotes_the_recorded_cwd() {
 fn bug_1624_session_env_eval_lines_run_nothing_in_a_shell() {
     let tree = tempfile::TempDir::new().unwrap();
     let exe = fake_running_exe(tree.path());
-    let lines = session_env_eval_lines(HOSTILE_SESSION_ENV, &exe);
+    // An absolute CARGO_TARGET_DIR is kept, so it carries the hostile
+    // quoting now that an unknown AIDA_AGENT_TYPE is dropped (BUG-1627).
+    let body =
+        format!("{HOSTILE_SESSION_ENV}export CARGO_TARGET_DIR='/w/cl'\\''aude $(touch pwned)'\n");
+    let lines = session_env_eval_lines(&body, &exe);
     let out = std::process::Command::new("sh")
         .arg("-c")
-        .arg(format!("{lines}printf '%s' \"$AIDA_AGENT_TYPE\""))
+        .arg(format!("{lines}printf '%s' \"$CARGO_TARGET_DIR\""))
         .current_dir(tree.path())
         .output()
         .unwrap();
     assert!(out.status.success());
     assert_eq!(
         String::from_utf8_lossy(&out.stdout),
-        "cl'aude $(touch pwned)"
+        "/w/cl'aude $(touch pwned)"
     );
     assert!(!tree.path().join("pwned").exists());
 }

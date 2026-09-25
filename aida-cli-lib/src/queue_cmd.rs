@@ -11698,10 +11698,13 @@ pub(crate) fn handle_queue_work(
             "  {}",
             format!("cd {}", lease.worktree_path.display()).cyan()
         );
+        // Never point at a raw `source` of the worktree's session-env file (a
+        // branch can commit it); the eval'd enter applies the filtered env.
+        // trace:BUG-1627 | ai:claude
         eprintln!(
             "  {}    {}",
-            "source .aida/session-env.sh".cyan(),
-            "# share parent's cargo target/".dimmed()
+            format!("aida worktree enter {}", lease.scope).cyan(),
+            "# cd in + warm build cache (filtered session env)".dimmed()
         );
         if no_human {
             // STORY-263: mirror the headless launch the non-`--no-launch`
