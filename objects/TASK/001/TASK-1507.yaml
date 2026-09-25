@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T19:23:07.202537191Z
+modified_at: 2026-09-25T22:29:45.385422834Z
 req_type: Task
 tags:
 - cache
@@ -241,6 +241,44 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): round 4 found one wrong served answer (B5, --id after an evil merge). I narrow conservatively, scoped to where the defect is: (1) add -m to the merge_paths git log (the targeted fix, verified by the reviewer); (2) in addition, a --id query falls back to the git walk whenever its served range contains ANY merge commit (the conservative rule, --id only; the --id walk costs about 0.5s, so the price is small). Non-id queries keep the current rules: 67,257 random answers showed 0 mismatches. Also: turn the B5 reproduction into a regression test; add tests that kill the 3 meaningful surviving mutants (delete-on-reset-failure, root-before-liveness order, reader-behind branch); fix N6 (when the probe limit is hit, continue to the merge instead of rolling back, so long side branches make progress). N7 is accepted as speed only.'
   created_at: 2026-09-25T19:23:07.202537191Z
   modified_at: 2026-09-25T19:23:07.202537191Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dab0-5929-71b2-bfeb-ee9dbf71b8a0
+  author: joe
+  content: |-
+    Strict review round 5: REQUEST CHANGES — reviewed 4894061c73 as an independent reviewer in a throwaway worktree (since removed). No wrong served answer was found anywhere. There is one budget defect in the new N6 path with a one-line exact fix, plus two test gaps.
+
+    SUITES on the unmodified branch: task_1507 52/52, history 110/110, cache 73/73.
+
+    PARITY (0 mismatches in every run)
+    - rev4 random sweep, 360 DAGs (seeds 0..120, 10000..10120, and 20000..20120 with skew): 67,241 answers served and compared exactly, 0 mismatches, 0 errors. Every catch-up reached HEAD.
+    - New id-focused sweep, 90 DAGs (scratchpad/rev5/rev5_probe.rs): 30% -s ours merges, 15% theirs merges, 35% evil merge edits, 45% of merges on side targets, and about 155 --id probes per state (-n 0..3; --max-commits 0..4, plain, with -n 1 and with --status-changes; --since; --since -n; --since --max-commits; --until). 91,341 answers served, 0 mismatches.
+    - Hand-built shapes, checked exhaustively in every state (complete, every partial chunk of 1-3, zero-budget catch-up from every main commit), with every id x every since +-1, -n 1: evil octopus merge on a side branch under an ours merge; FR-2 existing only through a merge; a rename (FR-1 content moved to FR-2's path) and a delete on a side dropped by an ours merge; an evil add-only merge; delete then re-add on main; and a probe of the +1 candidate. 2,942 served, 0 mismatches.
+    - Concurrency: 3 processes x 2 seeds at a 3 ms budget (about 2,200 served) and a reader against a resetting writer for 40 s (3,600 served). 0 wrong. The errors are only 'database is locked / recovering WAL', which fall back.
+
+    B5 and --id narrowing: correct. The -m change (history_cache.rs:902) records a merge's own changes. Without the rule, the only remaining served range is a linear chain with no merges, so a --id query matches git log -- <path>. Nothing produced a --id wrong answer.
+
+    BLOCKER
+    B6 (N6 budget: the overshoot is quadratic). history_cache.rs:1254-1266. Past the probe cap, EVERY descendant of the old tip spawns rev-list --count tip..C, which is O(range) per commit. The expensive case: HEAD fast-forwards to another hub's merge whose FIRST parent is that hub's line, forked before our tip. Reverse topo then lists the foreign line (not descendants), then our K descendants, and each descendant fails the count because the foreign commits are not its ancestors. Measured with a zero budget, where each run is one call that reaches HEAD: K=500 took 2.2 s, K=1500 took 9.0 s, K=3000 took 25.4 s. An unbudgeted catch-up of the same range takes 1.2 s. So the overshoot is bounded (O(K x range), and it always ends at HEAD), but it is 20x the unbudgeted cost and it grows quadratically on the MCP path. That is not acceptable for a 1.5 s budget. Exact fix: in the N6 branch, probe only merges, adding && raw.parents.len() > 1 to the condition. Why this is exact: past the cap the budget has already expired, so every earlier descendant was probed. If a non-merge C with parent P were a valid boundary, P was appended immediately before C, was a descendant, and was valid, so P's probe would already have returned. The first valid boundary in N6 mode is therefore always a merge (or HEAD, which the indexed == total path handles). I verified it: K=3000 went from 24.3 s to 1.44 s, the task_1507 suite stayed green (63/63 including my probes), and the non-HEAD boundary probe still commits at the merge.
+
+    B4 regression under N6: none. is_desc (the ancestry-path set) plus count(tip..C) == indexed proves indexed == ancestors(C) minus ancestors(tip), so a tip that is not a descendant cannot be committed. The mutant that drops the is_desc check is killed by the long-side-branch tests.
+
+    TEST GAPS (required with the fix)
+    T3. N1b (the global merge_paths check, :1551) is load-bearing but no longer pinned. With N1b disabled, all branch tests pass, because the new merge-in-range rule masks the old ours-merge test. The rule alone is NOT sufficient. The comment at :1683-1687 ('no merge below lower can affect the range') is wrong for window_exhausted: the +1 capped probe candidate can be a commit that git log -- <path> simplifies away below lower. Repro, with N1b off: root; side s1 adds FR-1; main a1; M = ours-merge(a1, s1); b1 adds FR-1 on main. --id FR-1 --max-commits 1 was served exh=true where the walk gives exh=false. The same happened with --max-commits 2 and --status-changes across complete, partial and catch-up states (22 bad). Add this fixture as a test and correct the comment.
+    T4. The N6 commit block itself is not exercised. The existing N6 test's only valid boundary is HEAD, which commits through the indexed == total path, so a mutant that rolls back at the N6 boundary survives the whole suite. Add a fixture with commits after the merge: 60-commit side, merge, then 5 more commits. Assert that the first zero-budget call leaves tip == the merge (my probe rev5_n6_boundary_before_head does this).
+
+    MUTANT PINS (all three kill their mutants)
+    - The mutant that drops delete-on-failed-reset is killed by task_1507_failed_reset_deletes_an_inconsistent_index.
+    - The mutant that puts liveness before the root check is killed by task_1507_root_change_resets_even_when_a_branch_keeps_the_old_tip.
+    - The mutant that removes the reader-behind branch is killed by task_1507_reader_behind_with_no_live_ref_does_not_reset.
+    Other mutants: dropping -m alone is killed (by the has_merge_path assertion only; the merge rule masks the served answer). Turning the merge rule off is killed. Dropping -m with the rule off is killed by 4 tests. N1b off SURVIVES the branch suite (T3). N6 rollback-at-boundary SURVIVES (T4). N6 without the is_desc check is killed.
+
+    IN-SUITE SWEEP (tests:2570): 38 s alone, the long pole of the task_1507 filter. It kills nothing that the targeted fixtures do not already kill. Recommendation: mark it #[ignore] and add a CI step running cargo test -p aida-cli-lib --lib task_1507_random_dag_sweep -- --ignored, following the precedent of the gitlab_live step in cross-platform.yml:217. Keep the targeted fixtures in the suite.
+
+    NON-BLOCKING: N7 is accepted as a speed-only cost, as decided.
+
+    VERDICT: the correctness bar is met: 0 mismatches in about 161k served comparisons. Fix B6 (one condition) and add T3 and T4. A re-review can be limited to that diff.
+  created_at: 2026-09-25T22:29:45.385422834Z
+  modified_at: 2026-09-25T22:29:45.385422834Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
