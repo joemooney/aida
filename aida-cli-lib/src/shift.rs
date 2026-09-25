@@ -2059,12 +2059,24 @@ pub(crate) fn driver_state_after_failure(err: &anyhow::Error) -> String {
             "This repo's systemd unit files are unchanged".to_string()
         }
         Some(UnitFilesAfterFailure::CleanedUp {
+            timer_enabled: true,
             left,
             disable_error: None,
             ..
         }) if left.is_empty() => {
             "The partly installed systemd timer was disabled and removed, so this repo's \
              scheduler driver is unchanged"
+                .to_string()
+        }
+        // A write failed before `enable`: nothing was enabled or disabled.
+        // trace:BUG-1619 | ai:claude
+        Some(UnitFilesAfterFailure::CleanedUp {
+            timer_enabled: false,
+            left,
+            ..
+        }) if left.is_empty() => {
+            "No timer was enabled, and the unit file(s) this install wrote were removed, so \
+             this repo's scheduler driver is unchanged"
                 .to_string()
         }
         Some(UnitFilesAfterFailure::CleanedUp { .. }) => {
@@ -2083,7 +2095,8 @@ pub(crate) fn driver_state_after_failure(err: &anyhow::Error) -> String {
 }
 
 /// PURE: the `aida shift enable` driver hint. Unknown is reported as
-/// unknown, exactly as `DriverStatus::label` does, never as "needed".
+/// unknown, and a disabled or stopped timer as installed but disabled / not
+/// running, exactly as `DriverStatus::label` does, never as "needed".
 // trace:BUG-1619 | ai:claude
 pub(crate) fn driver_hint(status: &crate::schedule_driver::DriverStatus) -> Option<String> {
     if status.any_installed() {
@@ -2093,6 +2106,14 @@ pub(crate) fn driver_hint(status: &crate::schedule_driver::DriverStatus) -> Opti
             "  scheduler driver: {} — `aida doctor` shows more",
             status.label()
         ))
+    } else if matches!(
+        status.systemd,
+        crate::schedule_driver::SystemdDriverStatus::Disabled
+            | crate::schedule_driver::SystemdDriverStatus::Stopped
+    ) {
+        // Installed but disabled / not running: say so, as label() does.
+        // trace:BUG-1619 | ai:claude
+        Some(format!("  scheduler driver: {}", status.label()))
     } else {
         Some(
             "  needed: a scheduler driver — `aida shift install --systemd-user` (Linux) or `--cron`"

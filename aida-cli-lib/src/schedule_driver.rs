@@ -308,7 +308,12 @@ fn atomic_tmp_path(path: &Path) -> PathBuf {
 fn write_atomic(path: &Path, content: &str) -> Result<()> {
     let tmp = atomic_tmp_path(path);
     std::fs::write(&tmp, content).with_context(|| format!("failed to write {}", tmp.display()))?;
-    std::fs::rename(&tmp, path).with_context(|| format!("failed to write {}", path.display()))
+    std::fs::rename(&tmp, path).map_err(|e| {
+        // Leave no `.aida-tmp` behind when the rename fails.
+        // trace:BUG-1619 | ai:claude
+        let _ = std::fs::remove_file(&tmp);
+        anyhow::Error::new(e).context(format!("failed to write {}", path.display()))
+    })
 }
 
 fn systemctl_ok(host: &mut dyn DriverHost, args: &[&str]) -> Result<CommandOutput> {
@@ -383,6 +388,10 @@ pub(crate) enum UnitFilesAfterFailure {
     /// A fresh install was undone: the timer disabled (when it had been
     /// enabled) and every file carrying our marker removed.
     CleanedUp {
+        /// `enable` had been attempted, so the cleanup ran `disable --now`.
+        /// False when a write failed first: nothing was enabled.
+        // trace:BUG-1619 | ai:claude
+        timer_enabled: bool,
         removed: Vec<String>,
         /// Files this install wrote that could not be removed.
         left: Vec<String>,
@@ -414,6 +423,7 @@ impl std::fmt::Display for SystemdInstallFailure {
                 removed,
                 left,
                 disable_error,
+                ..
             } => {
                 write!(f, "could not install {timer}; ")?;
                 if let Some(e) = disable_error {
@@ -449,7 +459,9 @@ impl std::fmt::Display for SystemdInstallFailure {
 
 /// Write (or repair) both unit files, enable and start the timer, then
 /// verify with `systemctl --user is-enabled` and `is-active`. Refuses, before
-/// writing anything, when a file with our name exists without our marker.
+/// writing anything, when a file with our name exists without our marker, and
+/// on a fresh install when systemd already knows the timer from another
+/// directory or cannot be asked (BUG-1619).
 /// A fresh install that fails at any later step (writing the second file,
 /// `daemon-reload`, `enable`, `start`, or the verify) disables the timer
 /// and removes the files carrying our marker, so nothing is orphaned. A
@@ -483,6 +495,37 @@ pub(crate) fn install_systemd_units(
         current.push(cur);
     }
     let none_existed = current.iter().all(Option::is_none);
+    // A fresh install (neither file in our unit directory) goes ahead only
+    // when systemd does not know the timer at all. If it is known, a unit
+    // with our name was loaded from another directory (an `XDG_CONFIG_HOME`
+    // mismatch, `~/.local/share/systemd/user`, ...), and enabling or, on a
+    // failure, disabling that name would act on that other install. So
+    // refuse before writing or disabling anything.
+    // trace:BUG-1619 | ai:claude
+    if none_existed {
+        let probe = match host.systemctl_user(&["is-enabled", &units.timer_name]) {
+            Ok(out) => classify_fresh_probe(&out),
+            Err(e) => FreshProbe::Unknown(format!("{e:#}")),
+        };
+        let refusal = match probe {
+            FreshProbe::NotFound => None,
+            FreshProbe::Known(state) => Some(format!(
+                "systemd already knows {timer} (`systemctl --user is-enabled` reports                  {state:?}), but its unit file is not in {dir}. Another install of this repo's                  timer is loaded from a different unit directory (for example a different                  XDG_CONFIG_HOME, or ~/.local/share/systemd/user). Refusing to install over it;                  check `systemctl --user status {timer}` and remove the other copy first",
+                timer = units.timer_name,
+                dir = dir.display(),
+            )),
+            FreshProbe::Unknown(why) => Some(format!(
+                "could not tell whether systemd already knows {timer} ({why}). Refusing to                  install without that check; make sure the systemd user manager is reachable                  (`systemctl --user status`) and run the install again",
+                timer = units.timer_name,
+            )),
+        };
+        if let Some(msg) = refusal {
+            return Err(anyhow::anyhow!(msg).context(SystemdInstallFailure {
+                timer_name: units.timer_name.clone(),
+                files: UnitFilesAfterFailure::Unchanged,
+            }));
+        }
+    }
     // The timer's state before this run decides AlreadyUpToDate versus
     // Repaired and, for a repair, which cause to report.
     let prior = if none_existed {
@@ -548,6 +591,7 @@ pub(crate) fn install_systemd_units(
                 .cloned()
                 .collect();
             UnitFilesAfterFailure::CleanedUp {
+                timer_enabled: enable_attempted,
                 removed,
                 left,
                 disable_error,
@@ -924,6 +968,38 @@ pub(crate) fn classify_is_enabled(out: &CommandOutput) -> Result<bool, String> {
         "disabled" | "masked" | "masked-runtime" | "static" | "linked" | "linked-runtime"
         | "indirect" | "not-found" => Ok(false),
         _ => Err(unreadable("is-enabled", out)),
+    }
+}
+
+/// What `is-enabled` says about a timer whose unit file is not in our
+/// unit directory.
+// trace:BUG-1619 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum FreshProbe {
+    /// No unit file with this name anywhere systemd looks.
+    NotFound,
+    /// systemd knows the unit (the reported state).
+    Known(String),
+    /// Could not tell (no user bus, unrecognised output).
+    Unknown(String),
+}
+
+/// PURE: classify `is-enabled` for the fresh-install check. Newer systemd
+/// prints `not-found`; older releases print nothing on stdout and a "No
+/// such file or directory" error on stderr. Any other known state means the
+/// unit exists somewhere. Anything else (no user bus) is unknown.
+// trace:BUG-1619 | ai:claude
+pub(crate) fn classify_fresh_probe(out: &CommandOutput) -> FreshProbe {
+    let stdout = out.stdout.trim();
+    if stdout == "not-found" {
+        return FreshProbe::NotFound;
+    }
+    if stdout.is_empty() && !out.success && out.stderr.contains("No such file or directory") {
+        return FreshProbe::NotFound;
+    }
+    match classify_is_enabled(out) {
+        Ok(_) => FreshProbe::Known(stdout.to_string()),
+        Err(r) => FreshProbe::Unknown(r),
     }
 }
 

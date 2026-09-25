@@ -55,6 +55,12 @@ struct FakeHost {
     /// Whether the unit file was still on disk at each `disable --now`, to
     /// pin "disable first, then remove" (BUG-1619).
     unit_present_at_disable: Vec<bool>,
+    /// `is-enabled` state for a timer whose file is not in `unit_dir`: a
+    /// copy systemd loads from another directory (BUG-1619).
+    elsewhere: Option<&'static str>,
+    /// Old systemd: an unknown unit prints nothing on stdout and a "No such
+    /// file or directory" error, instead of `not-found` (BUG-1619).
+    legacy_not_found: bool,
     log: Vec<Vec<String>>,
     linger: Option<bool>,
     supported: bool,
@@ -79,6 +85,8 @@ impl FakeHost {
             start_fails: false,
             disable_fails: false,
             unit_present_at_disable: Vec::new(),
+            elsewhere: None,
+            legacy_not_found: false,
             log: Vec::new(),
             linger: Some(true),
             supported: true,
@@ -179,15 +187,29 @@ impl DriverHost for FakeHost {
                 self.started.remove(*unit);
                 ok("")
             }
+            // trace:BUG-1619 | ai:claude
             ["is-enabled", unit] => {
+                let not_enabled = |stdout: &str| CommandOutput {
+                    success: false,
+                    stdout: format!("{stdout}\n"),
+                    stderr: String::new(),
+                };
                 if self.enabled.contains(*unit) {
                     ok("enabled\n")
-                } else {
+                } else if self.unit_dir.join(unit).exists() {
+                    not_enabled("disabled")
+                } else if let Some(state) = self.elsewhere {
+                    not_enabled(state)
+                } else if self.legacy_not_found {
                     CommandOutput {
                         success: false,
-                        stdout: "disabled\n".to_string(),
-                        stderr: String::new(),
+                        stdout: String::new(),
+                        stderr: format!(
+                            "Failed to get unit file state for {unit}: No such file or directory\n"
+                        ),
                     }
+                } else {
+                    not_enabled("not-found")
                 }
             }
             _ => ok(""),
@@ -1048,6 +1070,7 @@ fn bug_1619_fresh_install_start_failure_disables_then_removes_units() {
     assert_eq!(
         failure_files(&err),
         UnitFilesAfterFailure::CleanedUp {
+            timer_enabled: true,
             removed: vec![service.clone(), timer.clone()],
             left: vec![],
             disable_error: None,
@@ -1109,6 +1132,7 @@ fn bug_1619_second_unit_write_failure_removes_the_first() {
     assert_eq!(
         failure_files(&err),
         UnitFilesAfterFailure::CleanedUp {
+            timer_enabled: false,
             removed: vec![service.clone()],
             left: vec![],
             disable_error: None,
@@ -1330,4 +1354,193 @@ fn bug_1619_shift_enable_hint_reports_unknown_not_needed() {
     switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
     let st = driver_status_with(&mut host, REPO, &m);
     assert_eq!(crate::shift::driver_hint(&st), None);
+}
+
+// ---------------------------------------------------------------------------
+// BUG-1619 rework: fresh-install guard, wording, hint, temp file
+// ---------------------------------------------------------------------------
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_fresh_install_refuses_when_systemd_knows_the_timer_elsewhere() {
+    for state in ["enabled", "disabled", "static", "masked", "linked"] {
+        let mut host = FakeHost::new();
+        host.elsewhere = Some(state);
+        host.crontab = Some(cron_body());
+        let (service, timer) = names();
+
+        let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("already knows"), "{state}: {msg}");
+        assert!(msg.contains("different unit directory"), "{state}: {msg}");
+        assert_eq!(failure_files(&err), UnitFilesAfterFailure::Unchanged);
+        // Nothing written, nothing enabled or disabled: only the probe ran.
+        assert_eq!(host.calls(), vec![format!("is-enabled {timer}")], "{state}");
+        assert!(host.unit(&service).is_none() && host.unit(&timer).is_none());
+        assert!(!host.unit_dir.exists(), "{state}: no directory created");
+        assert_eq!(host.crontab, Some(cron_body()), "{state}: cron kept");
+        assert!(crate::shift::driver_state_after_failure(&err).contains("unchanged"));
+    }
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_fresh_install_refuses_when_systemd_state_is_unknown() {
+    let mut host = FakeHost::new();
+    host.no_bus = true;
+    host.crontab = Some(cron_body());
+    let (service, timer) = names();
+
+    let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("could not tell whether systemd already knows"),
+        "{msg}"
+    );
+    assert!(msg.contains("Failed to connect to bus"), "{msg}");
+    assert_eq!(failure_files(&err), UnitFilesAfterFailure::Unchanged);
+    assert_eq!(host.calls(), vec![format!("is-enabled {timer}")]);
+    assert!(host.unit(&service).is_none() && host.unit(&timer).is_none());
+    assert_eq!(host.crontab, Some(cron_body()), "cron kept");
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_fresh_install_proceeds_when_systemd_reports_not_found() {
+    for legacy in [false, true] {
+        let mut host = FakeHost::new();
+        host.legacy_not_found = legacy;
+        host.crontab = Some(cron_body());
+        let (service, timer) = names();
+
+        let r = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+        assert_eq!(
+            r.outcome,
+            DriverInstallOutcome::Installed,
+            "legacy={legacy}"
+        );
+        let calls = host.calls();
+        assert_eq!(calls[0], format!("is-enabled {timer}"), "probe runs first");
+        assert!(calls.contains(&format!("enable {timer}")), "{calls:?}");
+        assert!(host.unit(&service).is_some() && host.unit(&timer).is_some());
+        // New driver verified, then cron removed.
+        assert!(!host.crontab.clone().unwrap_or_default().contains(REPO));
+    }
+    // A repair (our files present) never runs the fresh probe's refusal.
+    let mut host = FakeHost::new();
+    switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    host.elsewhere = Some("enabled");
+    host.enabled.clear();
+    let r = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    assert_eq!(r.outcome, DriverInstallOutcome::Repaired);
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_fresh_probe_classifier() {
+    let out = |success: bool, stdout: &str, stderr: &str| CommandOutput {
+        success,
+        stdout: stdout.to_string(),
+        stderr: stderr.to_string(),
+    };
+    assert_eq!(
+        classify_fresh_probe(&out(false, "not-found\n", "")),
+        FreshProbe::NotFound
+    );
+    assert_eq!(
+        classify_fresh_probe(&out(
+            false,
+            "",
+            "Failed to get unit file state for x.timer: No such file or directory\n"
+        )),
+        FreshProbe::NotFound
+    );
+    assert_eq!(
+        classify_fresh_probe(&out(false, "disabled\n", "")),
+        FreshProbe::Known("disabled".to_string())
+    );
+    assert_eq!(
+        classify_fresh_probe(&out(true, "enabled\n", "")),
+        FreshProbe::Known("enabled".to_string())
+    );
+    assert!(matches!(
+        classify_fresh_probe(&out(
+            false,
+            "",
+            "Failed to connect to bus: No medium found\n"
+        )),
+        FreshProbe::Unknown(_)
+    ));
+    assert!(matches!(
+        classify_fresh_probe(&out(true, "bogus\n", "")),
+        FreshProbe::Unknown(_)
+    ));
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_second_write_failure_wording_says_nothing_was_enabled() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+    let layer = root.path().join("home-shift-local.toml");
+    let repo = root.path().canonicalize().unwrap().display().to_string();
+    let (_, timer) = unit_names(&repo);
+    let mut host = FakeHost::new();
+    std::fs::create_dir_all(host.unit_dir.join(format!("{timer}.aida-tmp"))).unwrap();
+    let mut yes = |_: &str| Ok(true);
+    let mut human = crate::shift::Operator {
+        stdin_tty: true,
+        agent_mode: false,
+        confirm: &mut yes,
+    };
+    let err =
+        crate::shift::install_command(root.path(), &layer, Driver::Systemd, &mut human, &mut host)
+            .unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("No timer was enabled"), "{msg}");
+    assert!(
+        msg.contains("unit file(s) this install wrote were removed"),
+        "{msg}"
+    );
+    assert!(!msg.contains("disabled and removed"), "{msg}");
+    assert!(!host.calls().iter().any(|c| c.starts_with("disable")));
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_shift_enable_hint_matches_label_for_disabled_and_stopped() {
+    let m = marker();
+    let mut host = FakeHost::new();
+    switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+
+    // Disabled.
+    host.enabled.clear();
+    host.started.clear();
+    let st = driver_status_with(&mut host, REPO, &m);
+    assert_eq!(st.systemd, SystemdDriverStatus::Disabled);
+    let hint = crate::shift::driver_hint(&st).expect("a disabled timer is reported");
+    assert!(hint.contains(&st.label()), "{hint}");
+    assert!(hint.contains("installed but disabled"), "{hint}");
+    assert!(!hint.contains("needed"), "{hint}");
+
+    // Enabled but stopped.
+    let (_, timer) = names();
+    host.enabled.insert(timer);
+    let st = driver_status_with(&mut host, REPO, &m);
+    assert_eq!(st.systemd, SystemdDriverStatus::Stopped);
+    let hint = crate::shift::driver_hint(&st).expect("a stopped timer is reported");
+    assert!(hint.contains(&st.label()), "{hint}");
+    assert!(hint.contains("not running"), "{hint}");
+    assert!(!hint.contains("needed"), "{hint}");
+}
+
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_failed_rename_removes_the_temp_file() {
+    let dir = tempfile::tempdir().unwrap();
+    // A non-empty directory at the target makes the rename fail.
+    let target = dir.path().join("x.timer");
+    std::fs::create_dir_all(target.join("inner")).unwrap();
+    assert!(write_atomic(&target, "body").is_err());
+    assert!(!atomic_tmp_path(&target).exists(), "temp file removed");
 }
