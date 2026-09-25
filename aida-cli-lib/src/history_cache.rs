@@ -110,6 +110,17 @@ thread_local! {
 }
 
 #[cfg(test)]
+thread_local! {
+    /// Tests: make the next reset fail, to exercise the delete fallback.
+    static FAIL_NEXT_RESET: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+pub(crate) fn fail_next_reset() {
+    FAIL_NEXT_RESET.with(|c| c.set(true));
+}
+
+#[cfg(test)]
 pub(crate) fn set_test_serve_enabled(on: bool) {
     TEST_SERVE_ENABLED.with(|c| c.set(on));
 }
@@ -883,7 +894,17 @@ fn record_merge(tx: &Connection, store: &Path, raw: &RawCommit) -> Result<()> {
             }
             let paths = git_lines(
                 store,
-                &["log", "--format=", "--name-only", "--no-renames", &range],
+                // trace:TASK-1507 | ai:claude
+                // B5: `-m` also lists what merges inside the range changed
+                // themselves (evil merges, reconciles).
+                &[
+                    "log",
+                    "-m",
+                    "--format=",
+                    "--name-only",
+                    "--no-renames",
+                    &range,
+                ],
             )?;
             for path in &paths {
                 ins.execute([path])?;
@@ -1139,6 +1160,10 @@ impl HistoryCache {
     /// `head`. `reason` is recorded for diagnostics (`None` for a first
     /// build).
     fn reset(&mut self, store: &Path, head: &str, reason: Option<&str>) -> Result<()> {
+        #[cfg(test)]
+        if FAIL_NEXT_RESET.with(|c| c.replace(false)) {
+            anyhow::bail!("test: reset failed");
+        }
         let old_tip = self.meta("tip_sha")?.unwrap_or_default();
         let roots = aida_core::git_ops::root_commits(store, head)?.join(",");
         let tx = self.conn.transaction()?;
@@ -1197,6 +1222,9 @@ impl HistoryCache {
         let mut indexed = 0usize;
         let mut probes = 0usize;
         let mut new_root = false;
+        // Descendants of the old tip in the range, computed once the probe
+        // limit is hit (N6).
+        let mut descendants: Option<HashSet<String>> = None;
         let mut seen: Vec<(String, i64, Vec<String>)> = Vec::new();
         while let Some(raw) = stream.next_commit()? {
             let dec = decode_commit(&raw, &mut blobs)?;
@@ -1209,9 +1237,33 @@ impl HistoryCache {
             new_root |= raw.parents.is_empty();
             if indexed < total && budget.expired() {
                 if probes >= MAX_BOUNDARY_PROBES {
-                    // No ancestor-closed boundary found in time: keep the
-                    // old tip; this query falls back to the git walk.
-                    return Ok(false);
+                    // trace:TASK-1507 | ai:claude
+                    // N6: no valid boundary within the probe limit (a long
+                    // side branch). Rather than roll back and redo the same
+                    // work next time, keep appending past the budget and
+                    // probe only descendants of the old tip, the only
+                    // commits that can be a boundary (normally the merge).
+                    if descendants.is_none() {
+                        let range = format!("{tip}..{head}");
+                        descendants = Some(
+                            git_lines(store, &["rev-list", "--ancestry-path", &range])?
+                                .into_iter()
+                                .collect(),
+                        );
+                    }
+                    let is_desc = descendants.as_ref().is_some_and(|d| d.contains(&raw.sha));
+                    if is_desc
+                        && aida_core::git_ops::rev_list_count(
+                            store,
+                            &format!("{tip}..{}", raw.sha),
+                        )? == indexed
+                    {
+                        record_skew_for(&tx, store, &seen)?;
+                        Self::finish_append(&tx, &raw, new_root.then_some(store))?;
+                        tx.commit()?;
+                        return Ok(false);
+                    }
+                    continue;
                 }
                 probes += 1;
                 // trace:TASK-1507 | ai:claude
@@ -1627,6 +1679,23 @@ impl HistoryCache {
         if cross_tie {
             return Ok(None);
         }
+        // trace:TASK-1507 | ai:claude
+        // Conservative `--id` rule (round-4 proxy decision): `git log --
+        // <path>` simplifies merges, which the index cannot mirror in
+        // general, so an `--id` query whose served range holds any merge
+        // uses the walk. A dropped commit is an ancestor of such a merge,
+        // so no merge below `lower` can affect the range (skew is R3's).
+        if id_path.is_some() {
+            let merge_in_range: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM commits
+                     WHERE is_merge = 1 AND (?1 IS NULL OR commit_ts >= ?1))",
+                [lower],
+                |r| r.get(0),
+            )?;
+            if merge_in_range {
+                return Ok(None);
+            }
+        }
 
         let window_exhausted = capped && events.len() < opts.limit;
         events.truncate(opts.limit);
@@ -1935,6 +2004,19 @@ pub(crate) mod test_support {
             cache.reset(store, &head, None)?;
         }
         cache.backfill_chunks(store, Budget::unbounded(), chunk_size, Some(max_chunks))
+    }
+
+    /// Whether `path` is recorded as touched across some merge.
+    pub(crate) fn has_merge_path(db_path: &Path, path: &str) -> bool {
+        HistoryCache::open_existing(db_path)
+            .unwrap()
+            .conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM merge_paths WHERE path = ?1)",
+                [path],
+                |r| r.get(0),
+            )
+            .unwrap()
     }
 
     /// Every indexed commit SHA, newest (highest seq) first.

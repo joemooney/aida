@@ -1507,10 +1507,17 @@ fn task_1507_id_on_a_path_touched_across_an_ours_merge_uses_the_walk() {
         serve(&fx, &o).is_none(),
         "--id on a side-branch path must use the walk"
     );
-    // A path untouched across the merge is still served, exactly.
+    // A path untouched across the merge: with the merge in range the
+    // conservative `--id` rule uses the walk; above the merge it serves.
     let mut o = opts();
     o.id_filter = Some("EPIC-72".into());
-    assert_parity(&fx, &o, "id untouched across the merge");
+    assert!(serve(&fx, &o).is_none(), "--id with a merge in range");
+    let mut epic = epic.clone();
+    epic.status = "Approved".into();
+    fx.put(&epic);
+    fx.commit_at(BASE_TS + 500, "main: update EPIC-72");
+    o.since = Some(rfc3339(BASE_TS + 450));
+    assert_parity(&fx, &o, "id above the merge");
 }
 
 #[test]
@@ -2137,4 +2144,537 @@ fn task_1507_pre_squash_backup_branch_never_keeps_a_rewritten_tip_live() {
         test_support::meta(&fx.db, "last_reset_reason").as_deref(),
         Some("store history was rewritten")
     );
+}
+
+// ---------------------------------------------------------------------------
+// Round 5: merge-own paths (B5), conservative `--id` across merges, long
+// side branches make progress (N6), pinned liveness and self-repair
+// branches (T2), and a small fixed-seed random sweep.
+// trace:TASK-1507 | ai:claude
+// ---------------------------------------------------------------------------
+
+#[test]
+fn task_1507_reader_behind_with_no_live_ref_does_not_reset() {
+    // T2: an undo in the only checkout (the branch moves back, so nothing
+    // else holds the tip). The reader is behind: fall back, keep the index.
+    let mut fx = Fixture::new();
+    build_linear(&mut fx);
+    assert_parity(&fx, &opts(), "initial");
+    let tip = fx.head();
+    let built_at = test_support::meta(&fx.db, "built_at");
+    fx.git(&["reset", "-q", "--hard", "HEAD~2"]);
+    assert!(serve(&fx, &opts()).is_none());
+    assert_eq!(test_support::meta(&fx.db, "tip_sha"), Some(tip));
+    assert_eq!(test_support::meta(&fx.db, "built_at"), built_at);
+    assert_eq!(test_support::meta(&fx.db, "last_reset_reason"), None);
+}
+
+#[test]
+fn task_1507_root_change_resets_even_when_a_branch_keeps_the_old_tip() {
+    // T2: the root check runs before liveness. A user branch still holds
+    // the pre-compact tip, but the store history was replaced.
+    let mut fx = Fixture::new();
+    build_linear(&mut fx);
+    assert_parity(&fx, &opts(), "initial");
+    fx.git(&["branch", "keep-old", "HEAD"]);
+    let squashed = fx
+        .git(&["commit-tree", "HEAD^{tree}", "-m", "squashed"])
+        .trim()
+        .to_string();
+    fx.git(&["reset", "-q", "--soft", &squashed]);
+    assert_parity(&fx, &opts(), "after compact");
+    assert!(test_support::meta(&fx.db, "last_reset_reason")
+        .unwrap()
+        .contains("root commit changed"));
+}
+
+#[test]
+fn task_1507_failed_reset_deletes_an_inconsistent_index() {
+    // T2: an inconsistent index whose reset also fails is deleted, so the
+    // next query rebuilds it.
+    let mut fx = Fixture::new();
+    build_dated_merge(&mut fx, &[100, 200, 300], &[150], 600, &[700]);
+    fx.git(&["checkout", "-q", "--detach", "aida-store~1^1"]);
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    fx.git(&["checkout", "-q", "aida-store"]);
+    let side1 = fx
+        .git(&["rev-parse", "aida-store~1^2~2"])
+        .trim()
+        .to_string();
+    test_support::set_meta(&fx.db, "tip_sha", &side1);
+    history_cache::fail_next_reset();
+    let first = history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS);
+    assert!(first.is_err(), "the inconsistent catch-up falls back");
+    assert!(!fx.db.exists(), "the unrepairable index is deleted");
+    assert_parity(&fx, &opts(), "rebuilt");
+}
+
+mod sweep {
+    //! Random DAGs (after the round-4 reviewer's probe), trimmed to a
+    //! small fixed-seed set: every served answer must equal the walk.
+    use super::*;
+    use std::collections::HashMap;
+
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            self.0 = x;
+            x.wrapping_mul(0x2545F4914F6CDD1D)
+        }
+        fn below(&mut self, n: usize) -> usize {
+            if n == 0 {
+                0
+            } else {
+                (self.next() % n as u64) as usize
+            }
+        }
+        fn pct(&mut self, p: usize) -> bool {
+            self.below(100) < p
+        }
+        fn pick<'a, T>(&mut self, v: &'a [T]) -> &'a T {
+            &v[self.below(v.len())]
+        }
+    }
+
+    const IDS: [(&str, &str); 5] = [
+        ("FR-1", "Functional"),
+        ("FR-2", "Functional"),
+        ("BUG-3", "Bug"),
+        ("TASK-4", "Task"),
+        ("EPIC-5", "Epic"),
+    ];
+    const STAT: [&str; 4] = ["Draft", "Approved", "Done", "Completed"];
+
+    type State = BTreeMap<&'static str, Spec>;
+
+    pub(super) struct Dag {
+        pub fx: Fixture,
+        ts: HashMap<String, i64>,
+        parents: HashMap<String, Vec<String>>,
+        states: HashMap<String, State>,
+        pub main_hist: Vec<String>,
+        all: Vec<String>,
+    }
+
+    impl Dag {
+        pub fn new() -> Self {
+            Dag {
+                fx: Fixture::new(),
+                ts: HashMap::new(),
+                parents: HashMap::new(),
+                states: HashMap::new(),
+                main_hist: Vec::new(),
+                all: Vec::new(),
+            }
+        }
+
+        fn ancestors(&self, c: &str) -> HashSet<String> {
+            let mut seen = HashSet::new();
+            let mut st = vec![c.to_string()];
+            while let Some(x) = st.pop() {
+                if seen.insert(x.clone()) {
+                    for p in &self.parents[&x] {
+                        st.push(p.clone());
+                    }
+                }
+            }
+            seen
+        }
+
+        /// Commit `state` (the whole objects tree) with `parents` at `ts`.
+        pub fn write_commit(
+            &mut self,
+            parents: &[String],
+            state: State,
+            ts: i64,
+            msg: &str,
+        ) -> String {
+            let obj = self.fx.store.join("objects");
+            let _ = std::fs::remove_dir_all(&obj);
+            for s in state.values() {
+                self.fx.put(s);
+            }
+            self.fx.clock = ts;
+            self.fx.git(&["add", "-A"]);
+            let tree = self.fx.git(&["write-tree"]).trim().to_string();
+            let mut args: Vec<String> = vec!["commit-tree".into(), tree];
+            for p in parents {
+                args.push("-p".into());
+                args.push(p.clone());
+            }
+            args.push("-m".into());
+            args.push(msg.into());
+            let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let sha = self.fx.git(&a).trim().to_string();
+            self.ts.insert(sha.clone(), ts);
+            self.parents.insert(sha.clone(), parents.to_vec());
+            self.states.insert(sha.clone(), state);
+            self.all.push(sha.clone());
+            sha
+        }
+
+        pub fn set_head(&self, sha: &str) {
+            self.fx.git(&["update-ref", "refs/heads/aida-store", sha]);
+            self.fx
+                .git(&["symbolic-ref", "HEAD", "refs/heads/aida-store"]);
+            self.fx.git(&["reset", "-q", "--hard", sha]);
+        }
+    }
+
+    fn edit(rng: &mut Rng, st: &mut State, n: usize) {
+        for _ in 0..n {
+            let (id, ty) = *rng.pick(&IDS);
+            match st.get_mut(id) {
+                None => {
+                    let mut s = Spec::new(id, ty, &format!("{id} title"));
+                    s.status = (*rng.pick(&STAT)).into();
+                    st.insert(id, s);
+                }
+                Some(s) => match rng.below(10) {
+                    0 => {
+                        st.remove(id);
+                    }
+                    1..=4 => s.status = (*rng.pick(&STAT)).into(),
+                    5 | 6 => s
+                        .comments
+                        .push(("alice".into(), format!("c{}", rng.below(1000)))),
+                    7 => s.tags.push(format!("t{}", rng.below(100))),
+                    8 => s.owner = format!("o{}", rng.below(5)),
+                    _ => s.description = format!("d{}", rng.below(1000)),
+                },
+            }
+        }
+    }
+
+    fn random_dag(seed: u64, steps: usize, skew: bool) -> Dag {
+        let mut rng = Rng(seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407)
+            | 1);
+        let mut dag = Dag::new();
+        let mut st = State::new();
+        edit(&mut rng, &mut st, 2);
+        let root = dag.write_commit(&[], st, BASE_TS, "root");
+        let mut tips: Vec<String> = vec![root.clone()];
+        dag.main_hist.push(root);
+        let deltas = [0i64, 0, 0, 10, 10, 20, 50, 120];
+        let choose_ts = |rng: &mut Rng, dag: &Dag, parents: &[String]| -> i64 {
+            let maxp = parents.iter().map(|p| dag.ts[p]).max().unwrap();
+            if skew && rng.pct(7) {
+                return maxp - 1 - rng.below(60) as i64;
+            }
+            if rng.pct(15) {
+                let cands: Vec<i64> = dag.ts.values().copied().filter(|t| *t >= maxp).collect();
+                if !cands.is_empty() {
+                    return *rng.pick(&cands);
+                }
+            }
+            maxp + *rng.pick(&deltas)
+        };
+        for step in 0..steps {
+            let op = rng.below(100);
+            if op < 55 || tips.len() == 1 && op < 70 {
+                let b = if rng.pct(40) {
+                    0
+                } else {
+                    rng.below(tips.len())
+                };
+                let p = tips[b].clone();
+                let mut s = dag.states[&p].clone();
+                let n = rng.below(3);
+                edit(&mut rng, &mut s, n);
+                let ts = choose_ts(&mut rng, &dag, std::slice::from_ref(&p));
+                let c = dag.write_commit(&[p], s, ts, &format!("c{step}"));
+                tips[b] = c.clone();
+                if b == 0 {
+                    dag.main_hist.push(c);
+                }
+            } else if op < 72 {
+                if tips.len() >= 4 {
+                    continue;
+                }
+                let from = if rng.pct(60) {
+                    tips[rng.below(tips.len())].clone()
+                } else {
+                    dag.all[rng.below(dag.all.len())].clone()
+                };
+                tips.push(from);
+            } else {
+                if tips.len() < 2 {
+                    continue;
+                }
+                let target = if rng.pct(70) {
+                    0
+                } else {
+                    rng.below(tips.len())
+                };
+                let mut others: Vec<usize> = (0..tips.len()).filter(|i| *i != target).collect();
+                let k = if others.len() >= 2 && rng.pct(25) {
+                    2
+                } else {
+                    1
+                };
+                let mut srcs = Vec::new();
+                for _ in 0..k {
+                    let i = rng.below(others.len());
+                    srcs.push(others.remove(i));
+                }
+                let mut parents = vec![tips[target].clone()];
+                let tanc = dag.ancestors(&tips[target]);
+                for &s in &srcs {
+                    let t = &tips[s];
+                    if tanc.contains(t) || parents.contains(t) {
+                        continue;
+                    }
+                    parents.push(t.clone());
+                }
+                if parents.len() < 2 {
+                    continue;
+                }
+                let mut ms = State::new();
+                for (id, _) in IDS {
+                    let p = rng.pick(&parents).clone();
+                    if let Some(s) = dag.states[&p].get(id) {
+                        ms.insert(id, s.clone());
+                    }
+                }
+                if rng.pct(20) {
+                    edit(&mut rng, &mut ms, 1);
+                }
+                let ts = choose_ts(&mut rng, &dag, &parents);
+                let m = dag.write_commit(&parents, ms, ts, &format!("merge{step}"));
+                tips[target] = m.clone();
+                if target == 0 {
+                    dag.main_hist.push(m);
+                }
+                if rng.pct(50) {
+                    let mut rm: Vec<usize> = srcs.clone();
+                    rm.sort_unstable();
+                    for i in rm.into_iter().rev() {
+                        if i != 0 && tips.len() > 1 {
+                            tips.remove(i);
+                        }
+                    }
+                }
+            }
+        }
+        let head = dag.main_hist.last().unwrap().clone();
+        dag.set_head(&head);
+        dag
+    }
+
+    fn probes_for(rng: &mut Rng, fx: &Fixture) -> Vec<(String, HistoryOpts)> {
+        let times = commit_times(fx);
+        let ncommits = times.len();
+        let nevents = collect_filtered_events_git(&fx.store, &opts())
+            .unwrap()
+            .0
+            .len();
+        let rt = |rng: &mut Rng| -> i64 { times[rng.below(times.len())] + rng.below(3) as i64 - 1 };
+        let mut out = vec![("all".to_string(), opts())];
+        for _ in 0..3 {
+            let mut o = opts();
+            o.limit = rng.below(nevents + 2);
+            out.push((format!("-n {}", o.limit), o));
+            let mut o = opts();
+            o.max_commits = rng.below(ncommits + 2);
+            o.max_commits_explicit = true;
+            out.push((format!("--max-commits {}", o.max_commits), o));
+            let mut o = opts();
+            let s = rt(rng);
+            o.since = Some(rfc3339(s));
+            out.push((format!("--since {s}"), o));
+            let mut o = opts();
+            let (id, _) = *rng.pick(&IDS);
+            o.id_filter = Some(id.to_string());
+            o.limit = rng.below(4);
+            out.push((format!("--id {id} -n {}", o.limit), o));
+        }
+        let mut o = opts();
+        o.shipped_only = true;
+        out.push(("--shipped".into(), o));
+        out
+    }
+
+    fn compare(
+        bad: &mut Vec<String>,
+        fx: &Fixture,
+        probes: &[(String, HistoryOpts)],
+        walks: &[Walked],
+        tag: &str,
+    ) {
+        for ((label, o), w) in probes.iter().zip(walks) {
+            match test_support::query_only(&fx.store, &fx.db, o) {
+                Ok(Some(got)) => {
+                    if got.events != w.0 || got.window_exhausted != w.1 {
+                        bad.push(format!("[{tag}] {label}: served answer differs"));
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => bad.push(format!("[{tag}] {label}: query error {e:#}")),
+            }
+        }
+    }
+
+    fn run_seed(seed: u64, skew: bool, bad: &mut Vec<String>) {
+        let dag = random_dag(seed, 8 + (seed % 12) as usize, skew);
+        let fx = &dag.fx;
+        let mut rng = Rng(seed ^ 0x9E3779B97F4A7C15);
+        let head = dag.main_hist.last().unwrap().clone();
+        let probes = probes_for(&mut rng, fx);
+        let walks = walk_all(fx, &probes);
+        let total = commit_times(fx).len();
+
+        fx.drop_index();
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        compare(bad, fx, &probes, &walks, &format!("seed {seed} complete"));
+
+        let c = *rng.pick(&[1usize, 2, 3]);
+        let k = 1 + rng.below(total.div_ceil(c));
+        fx.drop_index();
+        test_support::partial_build(&fx.store, &fx.db, c, k).unwrap();
+        compare(
+            bad,
+            fx,
+            &probes,
+            &walks,
+            &format!("seed {seed} partial c{c} x{k}"),
+        );
+
+        if dag.main_hist.len() >= 2 {
+            let h1 = dag.main_hist[rng.below(dag.main_hist.len() - 1)].clone();
+            dag.set_head(&h1);
+            fx.drop_index();
+            history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+            dag.set_head(&head);
+            for _ in 0..50 {
+                test_support::index(&fx.store, &fx.db, Budget::for_duration(Duration::ZERO))
+                    .unwrap_or_else(|e| panic!("seed {seed}: catch-up error {e:#}"));
+                if test_support::meta(&fx.db, "tip_sha").as_deref() == Some(head.as_str()) {
+                    break;
+                }
+            }
+            if test_support::meta(&fx.db, "tip_sha").as_deref() != Some(head.as_str()) {
+                bad.push(format!("[seed {seed}] catch-up never reached HEAD"));
+            }
+            compare(bad, fx, &probes, &walks, &format!("seed {seed} catch-up"));
+        }
+        fx.drop_index();
+    }
+
+    #[test]
+    fn task_1507_random_dag_sweep_fixed_seeds() {
+        let mut bad = Vec::new();
+        // Kept small: each graph costs a few seconds of git processes.
+        for seed in 0..10 {
+            run_seed(seed, false, &mut bad);
+        }
+        for seed in 20_000..20_002 {
+            run_seed(seed, true, &mut bad);
+        }
+        assert!(
+            bad.is_empty(),
+            "{} mismatches: {:#?}",
+            bad.len(),
+            &bad[..bad.len().min(20)]
+        );
+    }
+
+    #[test]
+    fn task_1507_id_over_an_evil_merge_simplified_away_uses_the_walk() {
+        // B5: the side branch's own merge M1 edits FR-1 (an evil merge);
+        // the outer merge keeps main's FR-1, so `git log -- FR-1` drops
+        // the side and never shows M1. The index must not serve M1.
+        let mut d = Dag::new();
+        let mut st = State::new();
+        st.insert("FR-1", Spec::new("FR-1", "Functional", "fr"));
+        st.insert("BUG-3", Spec::new("BUG-3", "Bug", "bug"));
+        let root = d.write_commit(&[], st.clone(), BASE_TS, "root");
+        let mut a = st.clone();
+        a.get_mut("BUG-3").unwrap().status = "Approved".into();
+        let a1 = d.write_commit(&[root.clone()], a.clone(), BASE_TS + 100, "main");
+        let mut s1s = st.clone();
+        s1s.insert("TASK-4", Spec::new("TASK-4", "Task", "t"));
+        let s1 = d.write_commit(&[root.clone()], s1s.clone(), BASE_TS + 10, "s1");
+        let mut s2s = st.clone();
+        s2s.insert("EPIC-5", Spec::new("EPIC-5", "Epic", "e"));
+        let s2 = d.write_commit(&[root.clone()], s2s.clone(), BASE_TS + 20, "s2");
+        let mut m1s = s1s.clone();
+        m1s.insert("EPIC-5", s2s["EPIC-5"].clone());
+        m1s.get_mut("FR-1").unwrap().status = "Done".into();
+        let m1 = d.write_commit(&[s1, s2], m1s.clone(), BASE_TS + 30, "m1 evil");
+        let mut ms = a.clone();
+        ms.insert("TASK-4", m1s["TASK-4"].clone());
+        ms.insert("EPIC-5", m1s["EPIC-5"].clone());
+        let m = d.write_commit(&[a1, m1], ms, BASE_TS + 200, "outer merge");
+        d.set_head(&m);
+        let fx = &d.fx;
+        let mut probes = Vec::new();
+        for id in ["FR-1", "BUG-3", "TASK-4", "EPIC-5"] {
+            let mut o = opts();
+            o.id_filter = Some(id.into());
+            probes.push((format!("--id {id}"), o));
+        }
+        probes.push(("all".into(), opts()));
+        let walks = walk_all(fx, &probes);
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        let mut bad = Vec::new();
+        compare(&mut bad, fx, &probes, &walks, "evil side merge");
+        assert!(bad.is_empty(), "{bad:#?}");
+        let mut o = opts();
+        o.id_filter = Some("FR-1".into());
+        assert!(
+            test_support::query_only(&fx.store, &fx.db, &o)
+                .unwrap()
+                .is_none(),
+            "--id FR-1 must use the walk"
+        );
+        // The evil merge's own FR-1 change is recorded (`log -m`).
+        let fr1 = aida_core::object_store::relative_object_path("FR-1").unwrap();
+        assert!(test_support::has_merge_path(&fx.db, &fr1));
+    }
+
+    #[test]
+    fn task_1507_long_side_branch_catch_up_makes_progress() {
+        // N6: an 80-commit side branch, longer than the boundary-probe
+        // limit, caught up with a zero budget.
+        let mut d = Dag::new();
+        let mut st = State::new();
+        st.insert("FR-1", Spec::new("FR-1", "Functional", "fr"));
+        let root = d.write_commit(&[], st.clone(), BASE_TS, "root");
+        let mut prev = root.clone();
+        let mut s = st.clone();
+        for i in 0..80 {
+            s.get_mut("FR-1").unwrap().description = format!("side {i}");
+            prev = d.write_commit(&[prev.clone()], s.clone(), BASE_TS + 10 + i, "side");
+        }
+        let mut a = st.clone();
+        a.insert("BUG-3", Spec::new("BUG-3", "Bug", "b"));
+        let a1 = d.write_commit(&[root.clone()], a.clone(), BASE_TS + 5, "main");
+        d.set_head(&a1);
+        history_cache::rebuild_full_at(&d.fx.store, &d.fx.db).unwrap();
+        let mut ms = s.clone();
+        ms.insert("BUG-3", a["BUG-3"].clone());
+        let m = d.write_commit(&[a1, prev], ms, BASE_TS + 500, "merge");
+        d.set_head(&m);
+        let mut reached = None;
+        for i in 0..3 {
+            test_support::index(&d.fx.store, &d.fx.db, Budget::for_duration(Duration::ZERO))
+                .unwrap();
+            if test_support::meta(&d.fx.db, "tip_sha").as_deref() == Some(m.as_str()) {
+                reached = Some(i);
+                break;
+            }
+        }
+        assert!(reached.is_some(), "a zero budget still reaches HEAD");
+        let (walk, _, x) = collect_filtered_events_git(&d.fx.store, &opts()).unwrap();
+        let got = history_cache::serve_at(&d.fx.store, &d.fx.db, &opts(), Duration::from_millis(1))
+            .unwrap()
+            .expect("served once caught up");
+        assert_same(&got, &(walk, x), "after the long side branch");
+    }
 }
