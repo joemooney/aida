@@ -64,6 +64,31 @@ pub fn is_git_repo(path: &Path) -> bool {
 /// resolves the private exclude file for both main and linked worktrees.
 // trace:BUG-914 | ai:codex
 pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
+    let exclude_path = resolve_exclude_path(worktree)?;
+    append_exclude_entries(
+        &exclude_path,
+        &[
+            ".aida/",
+            ".aida-store",
+            ".aida-store/",
+            ".aida-compete-*.log",
+        ],
+    )
+}
+
+/// Exclude the store's runtime lock files (`.aida/*.lock`, e.g. the store
+/// write lock) from git in a store worktree, so `git add -A` (db sync,
+/// auto-push) can never commit them, even in a store whose `.gitignore`
+/// lacks the pattern. Idempotent; returns whether it wrote anything.
+// trace:BUG-1612 | ai:claude
+pub fn ensure_store_lock_excluded(store_root: &Path) -> Result<bool> {
+    let exclude_path = resolve_exclude_path(store_root)?;
+    append_exclude_entries(&exclude_path, &[".aida/*.lock"])
+}
+
+/// `git rev-parse --git-path info/exclude`, absolutized.
+// trace:BUG-914 trace:BUG-1612 | ai:claude
+fn resolve_exclude_path(worktree: &Path) -> Result<PathBuf> {
     let output = Command::new("git")
         .current_dir(worktree)
         .args(["rev-parse", "--git-path", "info/exclude"])
@@ -85,21 +110,11 @@ pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
     if raw.is_empty() {
         anyhow::bail!("git returned an empty path for info/exclude");
     }
-    let exclude_path = if Path::new(&raw).is_absolute() {
+    Ok(if Path::new(&raw).is_absolute() {
         PathBuf::from(raw)
     } else {
         worktree.join(raw)
-    };
-
-    append_exclude_entries(
-        &exclude_path,
-        &[
-            ".aida/",
-            ".aida-store",
-            ".aida-store/",
-            ".aida-compete-*.log",
-        ],
-    )
+    })
 }
 
 // trace:BUG-914 | ai:codex

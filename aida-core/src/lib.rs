@@ -171,7 +171,7 @@ pub use db::{
     observe_cache_lock, observe_lock_info_file, open_or_create, read_cache_lock_info,
     reclaim_dead_lock_info, ArchiveFilter, Cache, CacheLockInfo, CacheLockObservation,
     CachedGitBackend, DeferFilter, Degrees, GitBackend, ListFilter, LockInfoReclaim,
-    LockOwnerState, RequirementSummary, SortOrder, SqliteBackend, YamlBackend,
+    LockOwnerState, RequirementSummary, SortOrder, SqliteBackend, StoreConflictError, YamlBackend,
 };
 #[cfg(all(feature = "native", feature = "postgres"))]
 pub use db::{migrate_from_postgres, migrate_to_postgres};

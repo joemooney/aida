@@ -669,13 +669,16 @@ impl Storage {
         // as Storage::load() — delegate to GitBackend so any handler that
         // takes a Storage façade can mutate the canonical store.
         // trace:EPIC-1-001 | ai:claude
+        //
+        // BUG-1612: not load + whole-store save. `GitBackend::update_atomically`
+        // runs the closure under the store write lock and writes only the specs
+        // it changed, added or removed, so a spec another writer added is never
+        // deleted and a concurrent edit is never silently reverted.
+        // trace:BUG-1612 | ai:claude
         if self.file_path.is_dir() {
             use crate::db::DatabaseBackend;
             let backend = self.git_backend_for(&self.file_path)?;
-            let mut store = backend.load()?;
-            update_fn(&mut store);
-            backend.save(&store)?;
-            return Ok(store);
+            return backend.update_atomically(update_fn);
         }
 
         // YAML path: Acquire exclusive lock
@@ -705,6 +708,37 @@ impl Storage {
 
         // Lock is released when lock_file is dropped
         Ok(store)
+    }
+
+    /// Atomically update ONE requirement (see
+    /// [`DatabaseBackend::update_spec_atomically`]). On a git-canonical
+    /// directory store this is a per-spec compare-and-swap under the store
+    /// write lock that reads and writes only `target`'s object; YAML and
+    /// SQLite stores go through their locked whole-file update. Returns the
+    /// updated requirement, or `None` when it no longer exists.
+    ///
+    /// [`DatabaseBackend::update_spec_atomically`]: crate::db::DatabaseBackend::update_spec_atomically
+    // trace:BUG-1612 | ai:claude
+    pub fn update_spec_atomically<F>(
+        &self,
+        target: &crate::models::Requirement,
+        update_fn: F,
+    ) -> Result<Option<crate::models::Requirement>>
+    where
+        F: FnOnce(&mut crate::models::Requirement),
+    {
+        if self.file_path.is_dir() {
+            let backend = self.git_backend_for(&self.file_path)?;
+            return backend.update_spec_atomically(target, update_fn);
+        }
+        let mut updated = None;
+        self.update_atomically(|store| {
+            if let Some(r) = store.requirements.iter_mut().find(|r| r.id == target.id) {
+                update_fn(r);
+                updated = Some(r.clone());
+            }
+        })?;
+        Ok(updated)
     }
 
     // trace:FR-0153 | ai:claude:high
