@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:20.548044413Z
-modified_at: 2026-09-25T16:46:34.279820209Z
+modified_at: 2026-09-25T16:46:46.717696435Z
 req_type: Story
 tags:
 - autonomy
@@ -348,6 +348,18 @@ comments:
   created_at: 2026-09-25T13:19:39.606510279Z
   modified_at: 2026-09-25T13:19:39.606510279Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d976-5867-7cb1-8000-bd631b1d1e65
+  author: joe.mooney
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-09-24-shift-tick.md
+    filed 0 task(s)
+    declined 4:
+      - Slice 2: systemd user timer driver, driver switch rules, doctor DriverStatus (A12, A13)
+      - Slice 3: re-drive step, mail-latency escalation, cold-boot (A5, A6, A7)
+      - Re-derive the max_failures default after five shift nights
+      - Per-wave `systemd-run --user` transient unit (non-binding A12 note)
+  created_at: 2026-09-25T16:46:46.887127342Z
+  modified_at: 2026-09-25T16:46:46.887127342Z
 history:
 - id: 01a0d976-2727-7943-8714-6d601a04afed
   author: aida-auto-bump
