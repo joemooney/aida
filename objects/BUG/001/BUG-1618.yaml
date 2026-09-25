@@ -13,12 +13,12 @@ description: |-
   - Identify the leaking input (cwd-based session/lease detection, AIDA_* env, or the ~/.aida roster) and make these tests hermetic: injected authority, a temp HOME and cwd, and cleared session env under the env lock.
   - The three tests pass when run from inside a leased `aida worktree add` worktree and from a plain shell.
   - Grep for other authority tests with the same dependency and fix them the same way.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:44:52.921456265Z
-modified_at: 2026-09-25T21:25:07.260990900Z
+modified_at: 2026-09-25T22:28:48.797634573Z
 req_type: Bug
 tags:
 - flaky
@@ -67,6 +67,20 @@ comments:
   created_at: 2026-09-25T21:25:07.260990900Z
   modified_at: 2026-09-25T21:25:07.260990900Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0daaf-7c13-7483-aaf9-63c01e4b617b
+  author: aida-auto-bump
+  timestamp: 2026-09-25T22:28:48.787278210Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0daaf-7c1d-77b2-88d3-6739a97bf2ef
+  timestamp: 2026-09-25T22:28:48.797633191Z
+  agent: implementer
+  commit_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
+  summary: Completed via merge 6bc58590
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
   branch: main
@@ -75,3 +89,7 @@ filed_at:
   aida_build_sha: cb07ece7f0
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T22:28:48.787253132Z
+  completion_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
