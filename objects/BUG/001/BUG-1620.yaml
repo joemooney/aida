@@ -8,8 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:30:03.452544442Z
-modified_at: 2026-09-25T12:30:23.892033961Z
+modified_at: 2026-09-25T12:30:34.272453641Z
 req_type: Bug
+comments:
+- id: 01a0d88b-c720-7070-b64e-6aab426521a5
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved. Lean toward --full-history, so that --id matches the full event trail. Land it after TASK-1507, so the index''s N1b routing can be simplified to match.'
+  created_at: 2026-09-25T12:30:34.272453641Z
+  modified_at: 2026-09-25T12:30:34.272453641Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
   branch: main
