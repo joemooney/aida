@@ -43879,7 +43879,7 @@ fn prompt_interface_surface(label: &str, example: &str) -> Vec<String> {
 #[allow(clippy::too_many_arguments)]
 fn capture_interface_changes(
     storage: &Storage,
-    req_id: uuid::Uuid,
+    target: &aida_core::Requirement,
     display_id: &str,
     flag_cli: &[String],
     flag_mcp: &[String],
@@ -43888,6 +43888,7 @@ fn capture_interface_changes(
     no_interface_change: bool,
     interactive: bool,
 ) -> Result<()> {
+    let req_id = target.id;
     let any_flag = !flag_cli.is_empty()
         || !flag_mcp.is_empty()
         || !flag_tui.is_empty()
@@ -43967,13 +43968,12 @@ fn capture_interface_changes(
         parts.join(", ")
     };
 
-    storage.update_atomically(|s| {
-        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-            // Store `Some(empty)` for the explicit no-change case so it reads as
-            // "decided"; store the populated set otherwise.
-            r.interface_changes = Some(changes.clone());
-            r.modified_at = now;
-        }
+    // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+    storage.update_spec_atomically(target, |r| {
+        // Store `Some(empty)` for the explicit no-change case so it reads as
+        // "decided"; store the populated set otherwise.
+        r.interface_changes = Some(changes.clone());
+        r.modified_at = now;
     })?;
 
     if was_empty {
@@ -44090,12 +44090,13 @@ fn prompt_test_plan_steps() -> Vec<String> {
 // trace:STORY-698 | ai:claude
 fn capture_test_plan(
     storage: &Storage,
-    req_id: uuid::Uuid,
+    target: &aida_core::Requirement,
     display_id: &str,
     flag_steps: &[String],
     no_test_plan: bool,
     interactive: bool,
 ) -> Result<()> {
+    let req_id = target.id;
     // Cheap pre-checks (flags / opt-out) decide most cases without a load.
     let at_tty = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
     let disabled = capture_test_plan_disabled();
@@ -44161,14 +44162,13 @@ fn capture_test_plan(
 
     let now = chrono::Utc::now();
     let step_count = notes.lines().filter(|l| !l.trim().is_empty()).count();
-    storage.update_atomically(|s| {
-        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-            let info = r
-                .implementation_info
-                .get_or_insert_with(aida_core::ImplementationInfo::default);
-            info.test_coverage_notes = Some(notes.clone());
-            r.modified_at = now;
-        }
+    // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+    storage.update_spec_atomically(target, |r| {
+        let info = r
+            .implementation_info
+            .get_or_insert_with(aida_core::ImplementationInfo::default);
+        info.test_coverage_notes = Some(notes.clone());
+        r.modified_at = now;
     })?;
 
     println!(
@@ -44514,13 +44514,11 @@ fn extract_plan_followups(
     }
     let now = chrono::Utc::now();
     let author = get_default_author();
-    let req_uuid = req.id;
-    let _ = storage.update_atomically(|s| {
-        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_uuid) {
-            r.comments
-                .push(Comment::new(author.clone(), marker.clone()));
-            r.modified_at = now;
-        }
+    // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+    let _ = storage.update_spec_atomically(req, |r| {
+        r.comments
+            .push(Comment::new(author.clone(), marker.clone()));
+        r.modified_at = now;
     });
 
     if filed.is_empty() {
@@ -97151,18 +97149,16 @@ fn prepare_auto_complete_phase1_status(
         .iter()
         .find(|r| spec_matches(r, spec))
         .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
-    let req_id = req.id;
     let display_id = req.display_id();
     let current = req.status.clone();
     let Some(target) = auto_complete_phase1_target_status(&current) else {
         return Ok(None);
     };
     let now = chrono::Utc::now();
-    storage.update_atomically(|s| {
-        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-            r.status = target.clone();
-            r.modified_at = now;
-        }
+    // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+    storage.update_spec_atomically(req, |r| {
+        r.status = target.clone();
+        r.modified_at = now;
     })?;
     Ok(Some((display_id, current)))
 }

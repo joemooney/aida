@@ -15,6 +15,48 @@ use crate::projects::ProjectManager;
 use crate::proto;
 use crate::proto::requirements_service_server::RequirementsService;
 
+/// Why a server-side store save failed.
+// trace:BUG-1612 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StoreSaveError {
+    /// A concurrent edit on disk conflicts with this save. Nothing was
+    /// written and the in-memory store was reloaded; the client should retry.
+    Conflict(String),
+    /// Any other save failure.
+    Failed(String),
+}
+
+impl StoreSaveError {
+    /// HTTP status for REST handlers: 409 for a conflict, 500 otherwise.
+    pub fn http_status(&self) -> axum::http::StatusCode {
+        match self {
+            Self::Conflict(_) => axum::http::StatusCode::CONFLICT,
+            Self::Failed(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    pub fn message(&self) -> &str {
+        match self {
+            Self::Conflict(m) | Self::Failed(m) => m,
+        }
+    }
+}
+
+impl std::fmt::Display for StoreSaveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.message())
+    }
+}
+
+impl From<StoreSaveError> for Status {
+    fn from(e: StoreSaveError) -> Self {
+        match e {
+            StoreSaveError::Conflict(m) => Status::aborted(m),
+            StoreSaveError::Failed(m) => Status::internal(m),
+        }
+    }
+}
+
 /// Server state shared across all connections
 pub struct ServerState {
     pub backend: Box<dyn DatabaseBackend>,
@@ -41,17 +83,47 @@ impl ServerState {
 
     /// Save the current store to disk and update mtime to prevent unnecessary reloads.
     /// Uses block_in_place for PostgreSQL compatibility (sync postgres crate can't run
-    /// inside a Tokio async context without this).
+    /// inside a Tokio async context without this). A save conflict is `ABORTED`
+    /// (see [`Self::save_store`]).
+    // trace:BUG-1612 | ai:claude
     async fn save(&self) -> Result<(), Status> {
-        let store = self.store.read().await;
-        let backend = &self.backend;
-        tokio::task::block_in_place(|| {
-            backend
-                .save(&store)
-                .map_err(|e| Status::internal(format!("Failed to save: {}", e)))
-        })?;
+        {
+            let mut store = self.store.write().await;
+            tokio::task::block_in_place(|| self.save_store(&mut store))?;
+        }
         self.mark_saved().await;
         Ok(())
+    }
+
+    /// The one path every server-side store save goes through.
+    ///
+    /// On a git store a whole-store save that collides with a concurrent
+    /// on-disk edit writes nothing and fails with `StoreConflictError`
+    /// (BUG-1612). The in-memory store is then stale and would make every later
+    /// save fail too, so it is reloaded from disk IN PLACE before the conflict
+    /// is returned; the client retries against current state.
+    // trace:BUG-1612 | ai:claude
+    pub fn save_store(&self, store: &mut RequirementsStore) -> Result<(), StoreSaveError> {
+        match self.backend.save(store) {
+            Ok(()) => Ok(()),
+            Err(e) if e.downcast_ref::<aida_core::StoreConflictError>().is_some() => {
+                match self.backend.load() {
+                    Ok(fresh) => *store = fresh,
+                    Err(reload_err) => {
+                        tracing::warn!("Reload after save conflict failed: {}", reload_err)
+                    }
+                }
+                Err(StoreSaveError::Conflict(e.to_string()))
+            }
+            Err(e) => Err(StoreSaveError::Failed(format!("Failed to save: {e}"))),
+        }
+    }
+
+    /// [`Self::save_store`] on the shared in-memory store (takes its write lock).
+    // trace:BUG-1612 | ai:claude
+    pub async fn save_current(&self) -> Result<(), StoreSaveError> {
+        let mut store = self.store.write().await;
+        self.save_store(&mut store)
     }
 
     /// Update last_loaded_mtime after a direct backend.save() to prevent spurious reloads

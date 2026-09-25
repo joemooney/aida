@@ -4153,28 +4153,27 @@ impl<'a> McpServer<'a> {
             Some(test_plan.join("\n"))
         };
 
+        // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
         self.storage
-            .update_atomically(|s| {
-                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    r.set_status_from_str("Done");
-                    r.modified_at = now;
-                    let info = r
-                        .implementation_info
-                        .get_or_insert_with(aida_core::ImplementationInfo::default);
-                    info.implemented = true;
-                    info.implemented_at.get_or_insert(now);
-                    if info.implemented_by.is_none() {
-                        info.implemented_by = Some(completer.clone());
-                    }
-                    if let Some(ref tool) = source_tool {
-                        info.source_tool.get_or_insert_with(|| tool.clone());
-                    }
-                    if let Some(ref tp) = captured_test_plan {
-                        info.test_coverage_notes = Some(tp.clone());
-                    }
-                    if let Some(ref ic) = captured_ic {
-                        r.interface_changes = Some(ic.clone());
-                    }
+            .update_spec_atomically(req, |r| {
+                r.set_status_from_str("Done");
+                r.modified_at = now;
+                let info = r
+                    .implementation_info
+                    .get_or_insert_with(aida_core::ImplementationInfo::default);
+                info.implemented = true;
+                info.implemented_at.get_or_insert(now);
+                if info.implemented_by.is_none() {
+                    info.implemented_by = Some(completer.clone());
+                }
+                if let Some(ref tool) = source_tool {
+                    info.source_tool.get_or_insert_with(|| tool.clone());
+                }
+                if let Some(ref tp) = captured_test_plan {
+                    info.test_coverage_notes = Some(tp.clone());
+                }
+                if let Some(ref ic) = captured_ic {
+                    r.interface_changes = Some(ic.clone());
                 }
             })
             .map_err(|e| e.to_string())?;
@@ -4406,23 +4405,23 @@ impl<'a> McpServer<'a> {
                     let new_status = new_status.clone();
                     let now = chrono::Utc::now();
                     let mut moved_to: Option<RequirementStatus> = None;
+                    // Per-spec compare-and-swap under the store write lock; the
+                    // status recheck below runs on the copy read under it. trace:BUG-1612 | ai:claude
                     self.storage
-                        .update_atomically(|s| {
-                            if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                                // STORY-1429: compare-and-swap on the copy read
-                                // under the write. trace:STORY-1429 | ai:claude
-                                if r.status != current_status {
-                                    moved_to = Some(r.status.clone());
-                                    return;
-                                }
-                                r.set_status_from_str(&format!("{:?}", new_status));
-                                r.modified_at = now;
-                                // TASK-1477: the `queue_rework` MCP tool can also
-                                // reopen a Completed spec — clear the stale
-                                // completed_at so the next completion stamps a
-                                // fresh date. trace:TASK-1477 | ai:claude
-                                crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                        .update_spec_atomically(req, |r| {
+                            // STORY-1429: compare-and-swap on the copy read
+                            // under the write. trace:STORY-1429 | ai:claude
+                            if r.status != current_status {
+                                moved_to = Some(r.status.clone());
+                                return;
                             }
+                            r.set_status_from_str(&format!("{:?}", new_status));
+                            r.modified_at = now;
+                            // TASK-1477: the `queue_rework` MCP tool can also
+                            // reopen a Completed spec — clear the stale
+                            // completed_at so the next completion stamps a
+                            // fresh date. trace:TASK-1477 | ai:claude
+                            crate::completion::clear_completed_at_on_reopen(r, &current_status);
                         })
                         .map_err(|e| e.to_string())?;
                     if let Some(actual) = moved_to {
@@ -4446,11 +4445,10 @@ impl<'a> McpServer<'a> {
         if let Some(reason_text) = reason.filter(|_| !reason_recorded) {
             let author = crate::get_default_author();
             let comment = aida_core::Comment::new(author, reason_text.to_string());
+            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
             self.storage
-                .update_atomically(|s| {
-                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                        r.add_comment(comment);
-                    }
+                .update_spec_atomically(req, |r| {
+                    r.add_comment(comment);
                 })
                 .map_err(|e| e.to_string())?;
         }

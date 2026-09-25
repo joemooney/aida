@@ -244,6 +244,8 @@ pub fn object_exists(objects_root: &Path, spec_id: &str) -> Result<bool> {
 /// Returns (spec_id, path) pairs.
 #[cfg(feature = "native")]
 pub fn list_objects(objects_root: &Path) -> Result<Vec<(String, PathBuf)>> {
+    #[cfg(test)]
+    OBJECT_LIST_COUNT.with(|c| c.set(c.get() + 1));
     let mut results = Vec::new();
 
     if !objects_root.exists() {
@@ -348,11 +350,62 @@ pub fn parse_failure_hint(path: Option<&Path>) -> String {
 /// Load all requirements from the object store into a Vec.
 #[cfg(feature = "native")]
 pub fn load_all_objects(objects_root: &Path) -> Result<Vec<Requirement>> {
+    Ok(load_all_objects_with_fingerprints(objects_root)?.0)
+}
+
+/// Fingerprint of an object file's text, for load-snapshot compare-and-swap.
+/// Runtime-only (never persisted), so the hasher need not be stable across
+/// builds.
+// trace:BUG-1612 | ai:claude
+///
+/// Line endings are normalized first (a CRLF checkout of an object is the
+/// same content), matching `write_object_if_changed`'s comparison.
+pub fn content_fingerprint(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    if text.contains('\r') {
+        text.replace("\r\n", "\n").hash(&mut h);
+    } else {
+        text.hash(&mut h);
+    }
+    h.finish()
+}
+
+/// Read an object's raw text by spec_id; `Ok(None)` when the file is absent.
+// trace:BUG-1612 | ai:claude
+#[cfg(feature = "native")]
+pub fn read_object_text(objects_root: &Path, spec_id: &str) -> Result<Option<String>> {
+    let path = object_path(objects_root, spec_id)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    crate::read_atomic(&path)
+        .map(Some)
+        .with_context(|| format!("Failed to read {}", path.display()))
+}
+
+/// Load all requirements, and also return the load snapshot: every listed
+/// object file (including ones that failed to parse) with a fingerprint of
+/// its text. A whole-store save uses it to tell which absent objects the
+/// caller removed and which specs changed on disk since the load.
+// trace:BUG-1612 | ai:claude
+#[cfg(feature = "native")]
+pub fn load_all_objects_with_fingerprints(
+    objects_root: &Path,
+) -> Result<(Vec<Requirement>, std::collections::BTreeMap<String, u64>)> {
     let files = list_objects(objects_root)?;
+    let mut fingerprints = std::collections::BTreeMap::new();
     let mut requirements = Vec::with_capacity(files.len());
 
     for (spec_id, path) in &files {
-        match read_object_from_path(path) {
+        let parsed = crate::read_atomic(path)
+            .with_context(|| format!("Failed to read {}", path.display()))
+            .and_then(|yaml| {
+                fingerprints.insert(spec_id.clone(), content_fingerprint(&yaml));
+                serde_yaml::from_str::<Requirement>(&yaml)
+                    .with_context(|| format!("Failed to parse {}", path.display()))
+            });
+        match parsed {
             Ok(req) => requirements.push(req),
             Err(e) => {
                 // BUG-97 / TASK-223: enrich the warning with the recovery
@@ -366,7 +419,16 @@ pub fn load_all_objects(objects_root: &Path) -> Result<Vec<Requirement>> {
         }
     }
 
-    Ok(requirements)
+    Ok((requirements, fingerprints))
+}
+
+// BUG-1612: test-only probe counting whole-store directory listings on this
+// thread (every full load, by-uuid scan and whole-store save lists objects
+// first), so tests can prove a per-spec write path never walks the store.
+// trace:BUG-1612 | ai:claude
+#[cfg(test)]
+thread_local! {
+    pub(crate) static OBJECT_LIST_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // BUG-1606: test-only probe counting `find_by_uuid` calls on this thread. The

@@ -249,6 +249,23 @@ impl WebAuthState {
         })
     }
 
+    /// In-memory auth state with the given mode and defaults, for tests.
+    // trace:BUG-1612 | ai:claude
+    #[cfg(test)]
+    pub(crate) fn for_test(mode: WebAuthMode) -> Arc<Self> {
+        Arc::new(Self {
+            mode,
+            session_ttl: Duration::hours(24),
+            store: SessionStore::Memory(RwLock::new(HashMap::new())),
+            role_default: UserRole::Editor,
+            role_admin_users: Vec::new(),
+            role_editor_users: Vec::new(),
+            role_viewer_users: Vec::new(),
+            oidc_config: None,
+            oidc_state_ttl: Duration::minutes(10),
+        })
+    }
+
     pub fn mode(&self) -> WebAuthMode {
         self.mode
     }

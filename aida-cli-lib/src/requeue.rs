@@ -179,9 +179,10 @@ pub(crate) fn requeue_command(id: &str) -> String {
 // Each used to carry its own copy of the transition, and each computed the
 // target from a status it had read before its write. The owner below is pure:
 // every door runs it on the one spec it read, re-reads the status just before
-// its targeted single-spec write, and writes nothing if the spec moved. (No
-// door uses the git store's whole-store load/save: it is lock-free and can
-// drop concurrently added specs.)
+// its targeted single-spec write, and writes nothing if the spec moved. On
+// the git store that write is the per-spec compare-and-swap
+// `update_spec_atomically` (BUG-1612), which re-reads the spec under the
+// store write lock.
 // trace:STORY-1429 | ai:claude
 // ---------------------------------------------------------------------------
 
@@ -321,12 +322,14 @@ pub(crate) fn recheck_before_write(
 }
 
 /// The targeted single-spec door (`aida edit`'s sibling helpers, the
-/// supervisor, and `queue rework` / the MCP tool on the git store). Reads the
-/// one spec, runs the owner on it, re-reads and compares the status just
-/// before the write, then writes that one spec. The cleared failure is part
-/// of that same write. It never loads or saves the whole store (a lock-free
-/// whole-store save on the git store can drop concurrently added specs).
-// trace:STORY-1429 | ai:claude
+/// supervisor, and `queue rework` / the MCP tool on the git store). Runs the
+/// owner inside the backend's per-spec compare-and-swap
+/// (`update_spec_atomically`): the one spec is re-read under the store write
+/// lock, so the owner's status comparison IS the recheck under that lock, and
+/// only that spec is written (the cleared failure is part of the same write).
+/// When the owner does not apply, nothing is written. It never loads or saves
+/// the whole store.
+// trace:STORY-1429 trace:BUG-1612 | ai:claude
 pub(crate) fn return_to_flight_in_backend<B: aida_core::DatabaseBackend>(
     backend: &B,
     id: uuid::Uuid,
@@ -334,19 +337,14 @@ pub(crate) fn return_to_flight_in_backend<B: aida_core::DatabaseBackend>(
     target: &RequirementStatus,
     ctx: &ReturnCtx,
 ) -> anyhow::Result<(ReturnOutcome, Option<Requirement>)> {
-    let Some(mut r) = backend.get_requirement(&id)? else {
+    let Some(located) = backend.get_requirement(&id)? else {
         return Ok((ReturnOutcome::Missing, None));
     };
-    let outcome = return_to_flight(&mut r, expected, target, ctx);
-    if !outcome.applied() {
-        return Ok((outcome, Some(r)));
-    }
-    let fresh = backend.get_requirement(&id)?;
-    if let Some(moved) = recheck_before_write(fresh.as_ref(), expected, target) {
-        return Ok((moved, fresh));
-    }
-    backend.update_requirement(&r)?;
-    Ok((outcome, Some(r)))
+    let mut outcome = ReturnOutcome::Missing;
+    let fresh = backend.update_spec_atomically(&located, |r| {
+        outcome = return_to_flight(r, expected, target, ctx);
+    })?;
+    Ok((outcome, fresh))
 }
 
 /// The `Storage` door (CLI `queue rework`, the MCP tool). On the git store it

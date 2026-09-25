@@ -5134,6 +5134,102 @@ pub struct RequirementsStore {
     #[serde(skip)]
     #[ts(skip)]
     pub dispenser: Option<DispenserHandle>,
+
+    /// Load snapshot from a git-canonical backend: every object file that was
+    /// on disk when this store was loaded (parseable or not), keyed by object
+    /// id, with a fingerprint of the file's content at that moment.
+    ///
+    /// A whole-store `save()` uses it as a per-spec compare-and-swap: it
+    /// deletes an absent object ONLY when it is listed here unchanged (the
+    /// caller loaded it and then removed it), and it skips writing a spec
+    /// whose file changed on disk since the load (a concurrent edit it would
+    /// otherwise revert). Each successful save refreshes it for the objects it
+    /// wrote, created and deleted, so one loaded store can be saved repeatedly.
+    /// `None` (a store not loaded from a git store) deletes nothing.
+    /// Runtime-only; never serialized.
+    // trace:BUG-1612 | ai:claude
+    #[serde(skip)]
+    #[ts(skip)]
+    pub loaded_objects: Option<LoadSnapshot>,
+}
+
+/// Load snapshot of a git-canonical store, per object id:
+/// - the DISK fingerprint: the object file's text as last loaded or written
+///   through this store (detects a concurrent edit on disk);
+/// - the CALLER baseline: the fingerprint of this store's in-memory copy as of
+///   that load or save (detects whether this caller touched the spec since).
+///   The two differ when a save writes more than the in-memory copy (filing
+///   provenance stamped on create, fields preserved from disk).
+///
+/// Interior-mutable so `save(&store)` can refresh it after a write; a clone is
+/// a deep copy, so two clones of one store never share (and corrupt) each
+/// other's view of what is on disk.
+// trace:BUG-1612 | ai:claude
+#[derive(Default)]
+pub struct LoadSnapshot(std::sync::Mutex<std::collections::BTreeMap<String, SnapshotEntry>>);
+
+/// One object's entry in a [`LoadSnapshot`].
+// trace:BUG-1612 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SnapshotEntry {
+    /// Fingerprint of the object file's text.
+    pub disk: u64,
+    /// Fingerprint of the in-memory copy; `None` = same as the disk text
+    /// (a fresh load, where the copy was parsed from that text).
+    pub caller: Option<u64>,
+}
+
+impl LoadSnapshot {
+    /// A snapshot fresh from a load: object id -> disk fingerprint.
+    pub fn new(map: std::collections::BTreeMap<String, u64>) -> Self {
+        Self(std::sync::Mutex::new(
+            map.into_iter()
+                .map(|(k, disk)| (k, SnapshotEntry { disk, caller: None }))
+                .collect(),
+        ))
+    }
+
+    fn map(&self) -> std::sync::MutexGuard<'_, std::collections::BTreeMap<String, SnapshotEntry>> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Disk fingerprint recorded for `id`, if the store saw that object.
+    pub fn disk(&self, id: &str) -> Option<u64> {
+        self.map().get(id).map(|e| e.disk)
+    }
+
+    /// Caller baseline for `id`: the in-memory copy's fingerprint as of the
+    /// last load or save.
+    pub fn baseline(&self, id: &str) -> Option<u64> {
+        self.map().get(id).map(|e| e.caller.unwrap_or(e.disk))
+    }
+
+    /// Record that `id` now holds content with disk fingerprint `disk`, and
+    /// the in-memory copy has fingerprint `caller`.
+    pub fn record(&self, id: &str, disk: u64, caller: u64) {
+        let caller = (caller != disk).then_some(caller);
+        self.map()
+            .insert(id.to_string(), SnapshotEntry { disk, caller });
+    }
+
+    /// Record that `id` no longer exists.
+    pub fn remove(&self, id: &str) {
+        self.map().remove(id);
+    }
+}
+
+impl Clone for LoadSnapshot {
+    fn clone(&self) -> Self {
+        Self(std::sync::Mutex::new(self.map().clone()))
+    }
+}
+
+impl std::fmt::Debug for LoadSnapshot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LoadSnapshot({} objects)", self.map().len())
+    }
 }
 
 /// Wrapper for Arc<dyn Dispenser> that implements Debug and Clone.
@@ -5211,6 +5307,7 @@ impl RequirementsStore {
             store_version: 1,
             migrated_to: None,
             dispenser: None,
+            loaded_objects: None,
         }
     }
 
