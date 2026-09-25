@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T15:30:53.823179350Z
-modified_at: 2026-09-25T15:31:14.880275102Z
+modified_at: 2026-09-25T17:19:49.655860521Z
 req_type: Bug
 comments:
 - id: 01a0d931-3140-7210-972a-8a1d6795a190
@@ -16,6 +16,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved as a bounded follow-up to TASK-1492.'
   created_at: 2026-09-25T15:31:14.880275102Z
   modified_at: 2026-09-25T15:31:14.880275102Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d994-9997-7c90-975f-28e7086ecf94
+  author: joe
+  content: 'Scope addition from the BUG-1621 re-review (minor): n1, when the shift is disabled after it launched a wave, watch --execute holds forever with ''awaits settlement by the next check''; name the fix in the message (enable the shift or run a tick). n2, the --execute flag help (cli.rs ~2643) should mention re-drive and nudge. n3, with --json --execute the nudge prints plain text after the JSON line. n4, the help sentence at cli.rs ~2634 reads awkwardly.'
+  created_at: 2026-09-25T17:19:49.655860521Z
+  modified_at: 2026-09-25T17:19:49.655860521Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b821736ce75455f3858816002777b451fd4aaf03
