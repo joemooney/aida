@@ -1276,12 +1276,13 @@ not bypass the dependency gate.
 
 Every way out of `NeedsAttention` (`aida rework`, `aida edit --status`, the
 `queue_rework` MCP tool, the re-drive supervisor) goes through one
-transition. It checks the status on the copy it writes, so a spec that moved
-in the meantime is left alone. It clears `attention_reason`,
+transition, applied to that one spec. The status is read again just before
+the single-spec write, so a spec that moved in the meantime is left alone. It clears `attention_reason`,
 `failure_reason` and the drain's parking tag, writes one audit note that
-carries the triage reason, and records a `SpecRequeued` event. A requeue is
-refused while another session holds a live claim on the spec, `--force`
-included, and it is refused when the claim state cannot be read. The punt
+carries the triage reason, and records a `SpecRequeued` event. `aida rework`,
+the MCP tool and `aida edit --status` refuse while another session holds a
+live claim on the spec, `--force` included, and they refuse when a claim that
+could be on the spec cannot be read. The punt
 ledger entry stays; it's history. <!-- trace:STORY-1429 | ai:claude -->
 
 ## Seat jobs — periodic duties per seat (STORY-1226)

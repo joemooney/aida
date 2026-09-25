@@ -7,7 +7,8 @@
 //! `queue_rework` MCP tool, and the re-drive supervisor. The doors gate on
 //! advisor authority at the call site; this module owns what happens to the
 //! spec once the gate has passed: [`return_to_flight`] is the one transition
-//! every door runs, on the copy read inside its atomic write.
+//! every door runs on the one spec, re-reading the status just before its
+//! single-spec write.
 //!
 //! The drain's ready set is "Approved + queued + not parking-tagged + no
 //! pending decision" (`burndown::classify`). Before this module, triage flipped
@@ -177,8 +178,10 @@ pub(crate) fn requeue_command(id: &str) -> String {
 // edit --status`, the `queue_rework` MCP tool and the re-drive supervisor.
 // Each used to carry its own copy of the transition, and each computed the
 // target from a status it had read before its write. The owner below is pure:
-// every door runs it on a copy of the spec read INSIDE that door's atomic
-// write, so the status comparison and the write see the same copy.
+// every door runs it on the one spec it read, re-reads the status just before
+// its targeted single-spec write, and writes nothing if the spec moved. (No
+// door uses the git store's whole-store load/save: it is lock-free and can
+// drop concurrently added specs.)
 // trace:STORY-1429 | ai:claude
 // ---------------------------------------------------------------------------
 
@@ -275,8 +278,8 @@ pub(crate) fn return_to_flight(
     }
 }
 
-/// Run [`return_to_flight`] on the copy of `id` held by `store`. This is the
-/// body every door's atomic-write closure runs. Returns the outcome and, when
+/// Run [`return_to_flight`] on the copy of `id` held by `store`: the body of
+/// the file-backed stores' locked `update_atomically` closure. Returns the outcome and, when
 /// the spec exists, the resulting copy.
 // trace:STORY-1429 | ai:claude
 pub(crate) fn return_in_store(
@@ -295,35 +298,34 @@ pub(crate) fn return_in_store(
     }
 }
 
-/// The `Storage` door (CLI `queue rework`, the MCP tool): the owner runs
-/// inside `update_atomically`. On the git-canonical store a full-store save
-/// keeps the on-disk `failure_reason` when the incoming copy has none, so the
-/// cleared failure is written again with a targeted update.
+/// What a status re-read just before a write says about an applied return.
+/// `None` when the spec is still at `expected` and the write may proceed.
 // trace:STORY-1429 | ai:claude
-pub(crate) fn return_to_flight_in_storage(
-    storage: &aida_core::Storage,
-    id: uuid::Uuid,
+pub(crate) fn recheck_before_write(
+    fresh: Option<&Requirement>,
     expected: &RequirementStatus,
     target: &RequirementStatus,
-    ctx: &ReturnCtx,
-) -> anyhow::Result<(ReturnOutcome, Option<Requirement>)> {
-    let mut result = (ReturnOutcome::Missing, None);
-    storage.update_atomically(|s| {
-        result = return_in_store(s, id, expected, target, ctx);
-    })?;
-    if let (ReturnOutcome::Returned { cleared, .. }, Some(r)) = (&result.0, &result.1) {
-        if cleared.failure_summary.is_some() {
-            if let Some(spec) = r.spec_id.as_deref() {
-                crate::queue_cmd::clear_failure_reason_targeted(storage, spec);
-            }
-        }
+) -> Option<ReturnOutcome> {
+    match fresh {
+        None => Some(ReturnOutcome::Missing),
+        Some(f) if &f.status == expected => None,
+        Some(f) if &f.status == target => Some(ReturnOutcome::AlreadyInFlight {
+            status: f.status.clone(),
+            since: f.modified_at,
+        }),
+        Some(f) => Some(ReturnOutcome::StatusMoved {
+            expected: expected.clone(),
+            actual: f.status.clone(),
+        }),
     }
-    Ok(result)
 }
 
-/// The `DatabaseBackend` door (`aida edit`, the supervisor): the owner runs
-/// inside the backend's `update_atomically`. Same targeted failure clear as
-/// [`return_to_flight_in_storage`].
+/// The targeted single-spec door (`aida edit`'s sibling helpers, the
+/// supervisor, and `queue rework` / the MCP tool on the git store). Reads the
+/// one spec, runs the owner on it, re-reads and compares the status just
+/// before the write, then writes that one spec. The cleared failure is part
+/// of that same write. It never loads or saves the whole store (a lock-free
+/// whole-store save on the git store can drop concurrently added specs).
 // trace:STORY-1429 | ai:claude
 pub(crate) fn return_to_flight_in_backend<B: aida_core::DatabaseBackend>(
     backend: &B,
@@ -332,21 +334,41 @@ pub(crate) fn return_to_flight_in_backend<B: aida_core::DatabaseBackend>(
     target: &RequirementStatus,
     ctx: &ReturnCtx,
 ) -> anyhow::Result<(ReturnOutcome, Option<Requirement>)> {
+    let Some(mut r) = backend.get_requirement(&id)? else {
+        return Ok((ReturnOutcome::Missing, None));
+    };
+    let outcome = return_to_flight(&mut r, expected, target, ctx);
+    if !outcome.applied() {
+        return Ok((outcome, Some(r)));
+    }
+    let fresh = backend.get_requirement(&id)?;
+    if let Some(moved) = recheck_before_write(fresh.as_ref(), expected, target) {
+        return Ok((moved, fresh));
+    }
+    backend.update_requirement(&r)?;
+    Ok((outcome, Some(r)))
+}
+
+/// The `Storage` door (CLI `queue rework`, the MCP tool). On the git store it
+/// takes the targeted single-spec path above; the file-backed stores keep
+/// their locked `update_atomically`, where the owner runs on the copy read
+/// under the lock.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn return_to_flight_in_storage(
+    storage: &aida_core::Storage,
+    id: uuid::Uuid,
+    expected: &RequirementStatus,
+    target: &RequirementStatus,
+    ctx: &ReturnCtx,
+) -> anyhow::Result<(ReturnOutcome, Option<Requirement>)> {
+    if storage.path().is_dir() {
+        let backend = crate::queue_cmd::advance_backend(storage.path())?;
+        return return_to_flight_in_backend(&backend, id, expected, target, ctx);
+    }
     let mut result = (ReturnOutcome::Missing, None);
-    backend.update_atomically(|s| {
+    storage.update_atomically(|s| {
         result = return_in_store(s, id, expected, target, ctx);
     })?;
-    if let ReturnOutcome::Returned { cleared, .. } = &result.0 {
-        if cleared.failure_summary.is_some() {
-            if let Ok(Some(mut r)) = backend.get_requirement(&id) {
-                if r.failure_reason.is_some() {
-                    r.failure_reason = None;
-                    let _ = backend.update_requirement(&r);
-                }
-                result.1 = Some(r);
-            }
-        }
-    }
     Ok(result)
 }
 
@@ -823,6 +845,30 @@ mod tests {
         );
         assert_eq!(missing, ReturnOutcome::Missing);
         assert!(none.is_none());
+    }
+
+    // The re-read just before a targeted write: the write proceeds only
+    // while the spec is still at `expected`. trace:STORY-1429 | ai:claude
+    #[test]
+    fn recheck_before_write_refuses_a_moved_spec() {
+        let na = RequirementStatus::NeedsAttention;
+        let ap = RequirementStatus::Approved;
+        let mut r = shelved_req();
+        assert_eq!(recheck_before_write(Some(&r), &na, &ap), None);
+        r.status = RequirementStatus::InProgress;
+        assert!(matches!(
+            recheck_before_write(Some(&r), &na, &ap),
+            Some(ReturnOutcome::StatusMoved { .. })
+        ));
+        r.status = ap.clone();
+        assert!(matches!(
+            recheck_before_write(Some(&r), &na, &ap),
+            Some(ReturnOutcome::AlreadyInFlight { .. })
+        ));
+        assert_eq!(
+            recheck_before_write(None, &na, &ap),
+            Some(ReturnOutcome::Missing)
+        );
     }
 
     // trace:STORY-1429 | ai:claude

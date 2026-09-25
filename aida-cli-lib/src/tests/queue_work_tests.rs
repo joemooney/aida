@@ -3632,7 +3632,9 @@ fn drain_preview_reports_blocked_dependent_as_skipped_not_a_member() {
 #[test]
 fn requeued_spec_reenters_queue_wide_drain_head() {
     let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
-    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    let (dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    // Anchor the cache-path walk-up to this tempdir (BUG-1598).
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
     bug_1608_set_status(&storage, "STORY-52", RequirementStatus::NeedsAttention);
     let (pick, _role, _blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
     assert_eq!(
@@ -3669,7 +3671,8 @@ fn requeued_spec_reenters_queue_wide_drain_head() {
 #[test]
 fn requeued_dependent_still_skipped_by_blocked_by_gate() {
     let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
-    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, false);
+    let (dir, storage) = bug_1608_fixture(RequirementStatus::Approved, false);
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
     bug_1608_set_status(&storage, "NFR-56", RequirementStatus::NeedsAttention);
 
     let store = storage.load().unwrap();

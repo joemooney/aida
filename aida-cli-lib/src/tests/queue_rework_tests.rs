@@ -1685,3 +1685,105 @@ fn findings_tip_points_at_the_loop() {
     );
     assert!(crate::findings_triage_tip(1).contains("triage it"));
 }
+
+/// Review blocker: the sessions directory also holds `<id>.activity.toml`,
+/// `<id>.manifest.toml` companions, `write_atomic` staging files and
+/// `mcp-claim.<spec>.toml` markers. None of them is a session lease, so none
+/// may make the gate "unknown": the requeue proceeds.
+#[test]
+fn rework_proceeds_with_companion_files_in_the_lease_dir() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9115")]);
+    let dead = lease_for("BUG-9115", Some(DEAD_PID));
+    write_lease(tmp.path(), &dead);
+    let dir = tmp.path().join(".aida").join("sessions");
+    std::fs::write(dir.join(format!("{}.activity.toml", dead.id)), "last = 1\n").unwrap();
+    std::fs::write(
+        dir.join(format!("{}.manifest.toml", dead.id)),
+        "[[items]]\nspec = \"BUG-9115\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("mcp-claim.bug-9115.toml"),
+        "id = \"abc\"\nscope = \"BUG-9115\"\nmcp_claim = true\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join(format!("{}.tmp.1.2", dead.id)), "id = \"half").unwrap();
+    rework_as(&storage, "BUG-9115", None, false).expect("companions are not leases");
+    assert_eq!(status_of(&storage, "BUG-9115"), RequirementStatus::Approved);
+}
+
+/// A lease caught mid-write is retried once; one that stays unparseable is
+/// unknown only when it could name the spec.
+#[test]
+fn truncated_lease_is_retried_then_scoped() {
+    let full = toml::to_string(&lease_for("BUG-9116", None)).unwrap();
+    let half = full[..full.len() / 3].to_string();
+
+    // Partial on the first read, complete on the retry: parsed.
+    let calls = std::cell::Cell::new(0);
+    let read = || {
+        calls.set(calls.get() + 1);
+        Ok(if calls.get() == 1 {
+            half.clone()
+        } else {
+            full.clone()
+        })
+    };
+    assert!(matches!(
+        crate::read_lease_file_for_gate("l", read, &["BUG-9116"]),
+        crate::LeaseFileRead::Lease(_)
+    ));
+    assert_eq!(calls.get(), 2, "retried exactly once");
+
+    // Stays truncated and names the spec: unknown.
+    let stuck = format!("id = \"x\"\nscope = \"BUG-9116\"\nstarted_at = ");
+    assert!(matches!(
+        crate::read_lease_file_for_gate("l", || Ok(stuck.clone()), &["BUG-9116"]),
+        crate::LeaseFileRead::Unknown(_)
+    ));
+    // Stays truncated before any scope is visible: could be ours, unknown.
+    assert!(matches!(
+        crate::read_lease_file_for_gate("l", || Ok("id = \"x\"\nsco".to_string()), &["BUG-9116"]),
+        crate::LeaseFileRead::Unknown(_)
+    ));
+    // A scope cut off mid-value is not trusted either.
+    assert!(matches!(
+        crate::read_lease_file_for_gate("l", || Ok("scope = \"BUG-91".to_string()), &["BUG-9116"]),
+        crate::LeaseFileRead::Unknown(_)
+    ));
+    // Stays unparseable but visibly names another spec: ignored.
+    assert!(matches!(
+        crate::read_lease_file_for_gate(
+            "l",
+            || Ok("scope = \"TASK-1\"\nstarted_at = ".to_string()),
+            &["BUG-9116"]
+        ),
+        crate::LeaseFileRead::OtherScope
+    ));
+    // An unreadable file: unknown.
+    assert!(matches!(
+        crate::read_lease_file_for_gate(
+            "l",
+            || Err(std::io::Error::other("denied")),
+            &["BUG-9116"]
+        ),
+        crate::LeaseFileRead::Unknown(_)
+    ));
+}
+
+/// A corrupt lease for a DIFFERENT spec does not block this requeue.
+#[test]
+fn rework_ignores_unparseable_lease_for_another_spec() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9117")]);
+    let dir = tmp.path().join(".aida").join("sessions");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("otherlease.toml"),
+        "id = \"otherlease\"\nscope = \"TASK-77\"\nstarted_at = ",
+    )
+    .unwrap();
+    rework_as(&storage, "BUG-9117", None, false).expect("another spec's lease is irrelevant");
+    assert_eq!(status_of(&storage, "BUG-9117"), RequirementStatus::Approved);
+}

@@ -7301,30 +7301,6 @@ mod queue_progress_tests;
 #[path = "tests/headless_hint_tests.rs"]
 mod headless_hint_tests;
 
-/// TASK-1311: a full-store save deliberately preserves an on-disk
-/// `failure_reason` the caller did not load (BUG-756), so clearing it inside
-/// `update_atomically` does not stick on the git-canonical store. Clear it with
-/// a targeted write instead, the path `aida edit` uses. Best-effort: a spec
-/// still carrying a stale FailureReason is only a display artifact (it is no
-/// longer NeedsAttention, so neither the drain nor `aida findings list` reads
-/// it), never a reason to fail the requeue.
-// trace:TASK-1311 | ai:claude
-pub(crate) fn clear_failure_reason_targeted(storage: &Storage, spec_id: &str) {
-    let store_path = storage.path();
-    if !store_path.is_dir() {
-        return;
-    }
-    let Ok(backend) = advance_backend(store_path) else {
-        return;
-    };
-    if let Ok(Some(mut r)) = backend.get_requirement_by_spec_id(spec_id) {
-        if r.failure_reason.is_some() {
-            r.failure_reason = None;
-            let _ = backend.update_requirement(&r);
-        }
-    }
-}
-
 /// The project root whose `.aida/` holds the leases, drain lock and event
 /// log for `storage`: the store's parent directory, falling back to the
 /// discovered project root.
@@ -7853,9 +7829,9 @@ pub(crate) fn handle_queue_rework(
     }
 
     // Status flip (if any). STORY-1429: the target was computed from a status
-    // read before this point, so the write re-checks it on the copy read
-    // inside `update_atomically` (compare-and-swap) and changes nothing when
-    // the spec moved in between. Leaving NeedsAttention goes through the one
+    // read before this point, so the write re-checks it (compare-and-swap)
+    // and changes nothing when the spec moved in between. Leaving
+    // NeedsAttention goes through the one
     // owner, `requeue::return_to_flight`, which also clears the shelve
     // markers and writes the single audit note that carries `--reason`.
     // trace:STORY-1429 trace:TASK-1311 | ai:claude

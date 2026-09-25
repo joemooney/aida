@@ -96,9 +96,10 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
     opts: SuperviseOpts,
 ) -> Result<()> {
     // STORY-1429: `store` is a read-only snapshot for classification. Every
-    // write below is a per-spec atomic write that re-checks the status on the
-    // copy read under that write, instead of one whole-store save of this
-    // snapshot (which could revert a concurrent triage).
+    // write below is a targeted single-spec write that re-reads the status
+    // just before writing, instead of one whole-store save of this snapshot
+    // (which could revert a concurrent triage or drop a concurrently added
+    // spec).
     // trace:STORY-1429 | ai:claude
     let store = backend.load()?;
     let mut decisions = Vec::new();
@@ -179,7 +180,7 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
         // Re-drive: re-queue (status → Approved, clear the failure) and emit the
         // event that IS the attempt record. The actual drive is launched after
         // the write lands. STORY-1429: the transition goes through the one
-        // owner on the copy read inside the atomic write; a spec that moved in
+        // owner with one targeted single-spec write; a spec that moved in
         // the meantime (a human triaged it, a drain claimed it) is skipped. The
         // supervisor is never a human at a terminal, so it never clears an
         // escalation.
@@ -216,7 +217,7 @@ pub(crate) fn handle_supervise_command<B: DatabaseBackend>(
     }
 
     for (spec, kind, attempts) in cap_findings {
-        backend.update_atomically(|s| file_cap_finding(s, &spec, &kind, attempts))?;
+        backend.add_requirement(cap_finding(&spec, &kind, attempts))?;
     }
 
     render_decisions(&decisions, opts.json)?;
@@ -279,24 +280,30 @@ pub(crate) fn supervisor_requeue<B: DatabaseBackend>(
     Ok(true)
 }
 
-/// Reclassify a capped transient park to needs-human under an atomic write,
-/// only while it is still parked. Returns false when it moved.
+/// Reclassify a capped transient park to needs-human with one targeted write,
+/// only while it is still parked (the status is re-read just before the
+/// write). Returns false when it moved.
 // trace:STORY-1429 | ai:claude
 fn reclassify_needs_human_atomically<B: DatabaseBackend>(
     backend: &B,
     id: uuid::Uuid,
     max_attempts: u32,
 ) -> Result<bool> {
-    let mut applied = false;
-    backend.update_atomically(|s| {
-        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == id) {
-            if r.status == RequirementStatus::NeedsAttention {
-                reclassify_needs_human(r, max_attempts);
-                applied = true;
-            }
-        }
-    })?;
-    Ok(applied)
+    let Some(mut r) = backend.get_requirement(&id)? else {
+        return Ok(false);
+    };
+    if r.status != RequirementStatus::NeedsAttention {
+        return Ok(false);
+    }
+    reclassify_needs_human(&mut r, max_attempts);
+    let still_parked = backend
+        .get_requirement(&id)?
+        .is_some_and(|f| f.status == RequirementStatus::NeedsAttention);
+    if !still_parked {
+        return Ok(false);
+    }
+    backend.update_requirement(&r)?;
+    Ok(true)
 }
 
 /// Classify one parked spec. Transient iff it carries a typed transient
@@ -387,12 +394,9 @@ fn reclassify_needs_human(req: &mut Requirement, max_attempts: u32) {
     req.modified_at = chrono::Utc::now();
 }
 
-fn file_cap_finding(
-    store: &mut aida_core::RequirementsStore,
-    spec: &str,
-    kind: &str,
-    attempts: u32,
-) {
+/// The cap finding, added with a single targeted add (no whole-store save).
+// trace:STORY-1429 | ai:claude
+fn cap_finding(spec: &str, kind: &str, attempts: u32) -> Requirement {
     let mut finding = Requirement::new(
         format!("Supervisor retry cap exhausted for {spec}"),
         format!(
@@ -410,7 +414,7 @@ fn file_cap_finding(
     finding.tags.insert("kind:supervisor-cap".to_string());
     finding.tags.insert("severity:major".to_string());
     finding.tags.insert(format!("linked:{spec}"));
-    store.add_requirement_with_id(finding, None, Some("TASK"));
+    finding
 }
 
 fn render_decisions(decisions: &[SuperviseDecision], json: bool) -> Result<()> {
@@ -563,7 +567,7 @@ mod tests {
     }
 
     // STORY-1429: the supervisor's re-drive runs through the one owner, on the
-    // copy read inside a per-spec atomic write. It clears the attention and
+    // one spec with a targeted write. It clears the attention and
     // failure markers, records one audit note, and emits both the attempt
     // record (SpecReDriven) and the requeue trail (SpecRequeued). A second
     // call finds the spec no longer parked and changes nothing.

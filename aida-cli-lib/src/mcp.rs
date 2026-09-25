@@ -4360,8 +4360,8 @@ impl<'a> McpServer<'a> {
         if let Some(ref new_status) = target_status {
             if new_status != &current_status {
                 if current_status == RequirementStatus::NeedsAttention {
-                    // STORY-1429: the one owner, run on the copy read inside
-                    // the atomic write. An MCP caller is never a human at a
+                    // STORY-1429: the one owner, applied to the one spec with
+                    // a status re-read before its targeted write. An MCP caller is never a human at a
                     // terminal, so it never clears the advisor's escalation to
                     // a human. trace:STORY-1429 trace:TASK-1311 | ai:claude
                     let ctx = crate::requeue::ReturnCtx {

@@ -31129,8 +31129,10 @@ fn session_harness_worktree_register(
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
-    std::fs::write(
-        lease_path(&project_root, &id),
+    // STORY-1429: atomic, so a reader never sees a half-written lease.
+    // trace:STORY-1429 | ai:claude
+    aida_core::write_atomic(
+        &lease_path(&project_root, &id),
         toml::to_string_pretty(&lease)?,
     )?;
     println!(
@@ -32438,11 +32440,98 @@ impl RequeueLeaseCheck {
     }
 }
 
-/// Lease listing that reports every read failure instead of skipping it: an
-/// unreadable lease directory, an unreadable file, or a lease that does not
-/// parse. A missing directory is a definite "no leases".
+/// Whether `name` is a real session lease file: `<id>.toml` with no dot in the
+/// stem, the same rule `lease_ids_in` (BUG-114) uses. That excludes the
+/// `<id>.activity.toml` / `<id>.manifest.toml` companions, `write_atomic`
+/// staging files, and the `mcp-claim.<spec>.toml` markers the MCP `claim_task`
+/// tool writes. An MCP claim is an advisory marker with no liveness signal
+/// that every other AIDA command (the BUG-637 pickup gate included) ignores;
+/// a claim left behind by a dead MCP server would otherwise block requeues
+/// of its spec forever.
 // trace:STORY-1429 | ai:claude
-fn list_leases_strict(project_root: &std::path::Path) -> Result<Vec<SessionLease>, String> {
+fn is_session_lease_file(name: &str) -> bool {
+    name.strip_suffix(".toml")
+        .is_some_and(|stem| !stem.is_empty() && !stem.contains('.'))
+}
+
+/// What one lease file told the requeue gate.
+// trace:STORY-1429 | ai:claude
+#[derive(Debug)]
+pub(crate) enum LeaseFileRead {
+    Lease(Box<SessionLease>),
+    /// Unparseable, but it visibly names a different scope: cannot be a
+    /// claim on the spec being requeued.
+    OtherScope,
+    /// Unreadable or unparseable, and it could name the spec.
+    Unknown(String),
+}
+
+/// Read one lease file for the requeue gate. A read or parse failure is
+/// retried once (a writer may be mid-write); a file still unparseable after
+/// the retry is `Unknown` only when it could name one of `spec_ids`: its text
+/// mentions one, or no `scope` is visible in it at all.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn read_lease_file_for_gate(
+    label: &str,
+    read: impl Fn() -> std::io::Result<String>,
+    spec_ids: &[&str],
+) -> LeaseFileRead {
+    let attempt = || -> Result<SessionLease, (Option<String>, String)> {
+        let content =
+            read().map_err(|e| (None, format!("the lease {label} is unreadable: {e}")))?;
+        toml::from_str::<SessionLease>(&content).map_err(|e| {
+            (
+                Some(content),
+                format!("the lease {label} does not parse: {e}"),
+            )
+        })
+    };
+    let (content, why) = match attempt() {
+        Ok(lease) => return LeaseFileRead::Lease(Box::new(lease)),
+        Err(_) => {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            match attempt() {
+                Ok(lease) => return LeaseFileRead::Lease(Box::new(lease)),
+                Err(e) => e,
+            }
+        }
+    };
+    let Some(content) = content else {
+        return LeaseFileRead::Unknown(why);
+    };
+    let lower = content.to_ascii_lowercase();
+    let mentions = spec_ids
+        .iter()
+        .any(|id| !id.is_empty() && lower.contains(&id.to_ascii_lowercase()));
+    if mentions {
+        return LeaseFileRead::Unknown(why);
+    }
+    // Only a COMPLETE quoted scope counts: a value cut off mid-write could
+    // still be the spec's id.
+    let names_a_scope = content.lines().any(|l| {
+        let l = l.trim_start();
+        l.strip_prefix("scope")
+            .map(str::trim_start)
+            .and_then(|rest| rest.strip_prefix('='))
+            .map(str::trim)
+            .is_some_and(|v| v.len() > 2 && v.starts_with('"') && v.ends_with('"'))
+    });
+    if names_a_scope {
+        LeaseFileRead::OtherScope
+    } else {
+        LeaseFileRead::Unknown(why)
+    }
+}
+
+/// Lease listing for the requeue gate. Reads only real lease files (see
+/// [`is_session_lease_file`]). An unreadable lease directory is an error; a
+/// missing one is a definite "no leases". A lease that stays unparseable after
+/// one retry is an error only when it could name one of `spec_ids`.
+// trace:STORY-1429 | ai:claude
+fn list_leases_strict(
+    project_root: &std::path::Path,
+    spec_ids: &[&str],
+) -> Result<Vec<SessionLease>, String> {
     let dir = leases_dir(project_root);
     if !dir.exists() {
         return Ok(Vec::new());
@@ -32453,14 +32542,25 @@ fn list_leases_strict(project_root: &std::path::Path) -> Result<Vec<SessionLease
     for entry in entries {
         let entry = entry.map_err(|e| format!("reading {}: {e}", dir.display()))?;
         let p = entry.path();
-        if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+        let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !is_session_lease_file(name) {
             continue;
         }
-        let content = std::fs::read_to_string(&p)
-            .map_err(|e| format!("the lease {} is unreadable: {e}", p.display()))?;
-        let lease = toml::from_str::<SessionLease>(&content)
-            .map_err(|e| format!("the lease {} does not parse: {e}", p.display()))?;
-        out.push(lease);
+        let label = p.display().to_string();
+        match read_lease_file_for_gate(&label, || std::fs::read_to_string(&p), spec_ids) {
+            LeaseFileRead::Lease(lease) => out.push(*lease),
+            LeaseFileRead::OtherScope => {}
+            LeaseFileRead::Unknown(why) => {
+                // A lease removed between the listing and the read is gone,
+                // not unknown.
+                if !p.exists() {
+                    continue;
+                }
+                return Err(why);
+            }
+        }
     }
     out.sort_by_key(|l| l.started_at);
     Ok(out)
@@ -32541,7 +32641,7 @@ pub(crate) fn requeue_lease_gate(
     project_root: &std::path::Path,
     spec_ids: &[&str],
 ) -> RequeueLeaseCheck {
-    let listed = list_leases_strict(project_root);
+    let listed = list_leases_strict(project_root, spec_ids);
     let self_lease = std::env::current_dir()
         .ok()
         .and_then(|cwd| active_lease_for_cwd(project_root, &cwd));
@@ -36156,7 +36256,9 @@ fn session_start(
         manual_enter_at: None,
     };
     let lease_file = lease_path(&project_root, &id);
-    std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
+    // STORY-1429: atomic, so a reader never sees a half-written lease.
+    // trace:STORY-1429 | ai:claude
+    aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
 
     // BUG-379: atomic-enough with the lease just persisted, bump
     // Approved → InProgress. Idempotent — if the spec already moved
@@ -61229,8 +61331,10 @@ fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
-    std::fs::write(
-        lease_path(&project_root, &id),
+    // STORY-1429: atomic, so a reader never sees a half-written lease.
+    // trace:STORY-1429 | ai:claude
+    aida_core::write_atomic(
+        &lease_path(&project_root, &id),
         toml::to_string_pretty(&lease)?,
     )?;
 
@@ -85938,7 +86042,9 @@ fn acquire_review_lease_with_mode(
     };
     std::fs::create_dir_all(leases_dir(project_root))?;
     let path = lease_path(project_root, &id);
-    std::fs::write(&path, toml::to_string_pretty(&lease)?)?;
+    // STORY-1429: atomic, so a reader never sees a half-written lease.
+    // trace:STORY-1429 | ai:claude
+    aida_core::write_atomic(&path, toml::to_string_pretty(&lease)?)?;
     Ok(ReviewLeaseGuard { path })
 }
 

@@ -5663,6 +5663,15 @@ pub(crate) fn handle_git_backend_command(
             // TASK-358: triage out of NeedsAttention — captured here, applied
             // after the backend save below. trace:TASK-358 | ai:claude
             let mut left_needs_attention = false;
+            // STORY-1429: an applied NeedsAttention exit, checked and reported
+            // around the targeted write below. trace:STORY-1429 | ai:claude
+            let mut pending_leave: Option<(
+                String,
+                std::path::PathBuf,
+                crate::requeue::ReturnCtx,
+                RequirementStatus,
+                crate::requeue::ReturnOutcome,
+            )> = None;
             if let Some(s) = status {
                 // BUG-751: type-aware — a decision spec (ADR) may be moved to
                 // its accepted state with the ADR-native verb `accepted`,
@@ -5807,14 +5816,26 @@ pub(crate) fn handle_git_backend_command(
                 // trace:TASK-1311 | ai:claude
                 //
                 // STORY-1429: the exit runs through the one owner,
-                // `requeue::return_to_flight`, INSIDE an atomic write on a
-                // fresh copy of the spec, so the NeedsAttention check and the
-                // write see the same copy. If the spec moved in between (a
-                // concurrent requeue or a drain), nothing is written. The rest
-                // of this edit then applies on top of the returned copy.
+                // `requeue::return_to_flight`, on this one spec. The status is
+                // re-read and compared just before the single targeted write
+                // below, so a spec that moved in between (a concurrent requeue
+                // or a drain) is left alone. The requeue lease gate applies
+                // here too.
                 // trace:STORY-1429 | ai:claude
                 if was_needs_attention && !matches!(req.status, RequirementStatus::NeedsAttention) {
                     let spec_label = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+                    let lease_root = store_path
+                        .parent()
+                        .map(std::path::Path::to_path_buf)
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    let display = req.display_id();
+                    let check = crate::requeue_lease_gate(
+                        &lease_root,
+                        &[spec_label.as_str(), display.as_str()],
+                    );
+                    if let Some(msg) = check.refusal(&spec_label) {
+                        anyhow::bail!(msg);
+                    }
                     // The escalation tag is a hand-off to a human; only a
                     // human at a terminal may clear it (not a non-TTY advisor
                     // agent, not an orchestrated phase).
@@ -5826,53 +5847,15 @@ pub(crate) fn handle_git_backend_command(
                         reason: None,
                     };
                     let target = req.status.clone();
-                    let (outcome, fresh) = crate::requeue::return_to_flight_in_backend(
-                        &backend,
-                        req.id,
+                    req.status = RequirementStatus::NeedsAttention;
+                    let outcome = crate::requeue::return_to_flight(
+                        &mut req,
                         &RequirementStatus::NeedsAttention,
                         &target,
                         &ctx,
-                    )?;
-                    match &outcome {
-                        crate::requeue::ReturnOutcome::Returned { cleared, .. } => {
-                            if let Some(fresh) = fresh {
-                                req.status = fresh.status;
-                                req.custom_status = fresh.custom_status;
-                                req.tags = fresh.tags;
-                                req.failure_reason = fresh.failure_reason;
-                                req.attention_reason = fresh.attention_reason;
-                                req.comments = fresh.comments;
-                                req.modified_at = fresh.modified_at;
-                            }
-                            if let Some(root) = store_path.parent() {
-                                crate::requeue::emit_requeued(root, &spec_label, &ctx, &outcome);
-                            }
-                            if !cleared.removed_tags.is_empty() {
-                                eprintln!(
-                                    "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
-                                    "·".dimmed(),
-                                    cleared.removed_tags.join(", ")
-                                );
-                            }
-                            if let Some(w) =
-                                crate::requeue::kept_escalation_warning(&spec_label, cleared)
-                            {
-                                eprintln!("  {} {w}", "Warning:".yellow().bold());
-                            }
-                            left_needs_attention = true;
-                        }
-                        crate::requeue::ReturnOutcome::AlreadyInFlight { .. } => {
-                            if let Some(msg) =
-                                crate::requeue::unchanged_message(&spec_label, &outcome)
-                            {
-                                eprintln!("  {} {msg}", "·".dimmed());
-                            }
-                        }
-                        _ => {
-                            anyhow::bail!(crate::requeue::unchanged_message(&spec_label, &outcome)
-                                .unwrap_or_default());
-                        }
-                    }
+                    );
+                    pending_leave = Some((spec_label, lease_root, ctx, target, outcome));
+                    left_needs_attention = true;
                 }
                 changed = true;
                 new_status_for_manifest = Some(canonical.to_string());
@@ -6031,6 +6014,21 @@ pub(crate) fn handle_git_backend_command(
 
             if changed {
                 req.modified_at = chrono::Utc::now();
+                // STORY-1429: re-read and compare just before the one targeted
+                // write; nothing is written when the spec left NeedsAttention
+                // meanwhile. trace:STORY-1429 | ai:claude
+                if let Some((label, _, _, target, _)) = &pending_leave {
+                    let fresh = backend.get_requirement(&req.id)?;
+                    if let Some(moved) = crate::requeue::recheck_before_write(
+                        fresh.as_ref(),
+                        &RequirementStatus::NeedsAttention,
+                        target,
+                    ) {
+                        anyhow::bail!(
+                            crate::requeue::unchanged_message(label, &moved).unwrap_or_default()
+                        );
+                    }
+                }
                 if force_dropped_structural_tags.is_empty() {
                     backend.update_requirement(&req)?;
                 } else {
@@ -6042,6 +6040,23 @@ pub(crate) fn handle_git_backend_command(
                             force_dropped_structural_tags.join(", ")
                         ),
                     )?;
+                }
+                // STORY-1429: the exit landed; report what it cleared and
+                // record the requeue. trace:STORY-1429 | ai:claude
+                if let Some((label, root, ctx, _, outcome)) = &pending_leave {
+                    if let crate::requeue::ReturnOutcome::Returned { cleared, .. } = outcome {
+                        if !cleared.removed_tags.is_empty() {
+                            eprintln!(
+                                "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
+                                "·".dimmed(),
+                                cleared.removed_tags.join(", ")
+                            );
+                        }
+                        if let Some(w) = crate::requeue::kept_escalation_warning(label, cleared) {
+                            eprintln!("  {} {w}", "Warning:".yellow().bold());
+                        }
+                    }
+                    crate::requeue::emit_requeued(root, label, ctx, outcome);
                 }
                 // TASK-1450: a disposition (status) or execution_mode change
                 // made through `aida edit` is a coordination-seat decision —
