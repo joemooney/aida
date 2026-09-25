@@ -13,7 +13,8 @@ use super::*;
 use crate::cli::{Cli, Command, MaintenanceScheduleCommand, ShiftCommand};
 use crate::maintenance_schedule::{
     build_scheduler_driver_findings, build_tick_cron_line, crontab_after_driver_switch,
-    render_tick_cron_line, tick_invocation, CronDriverStatus, DriverInstallOutcome,
+    init_tick_offer_allowed, render_tick_cron_line, scheduler_driver_check_needed, tick_invocation,
+    CronDriverStatus, DriverInstallOutcome,
 };
 use clap::Parser;
 use std::collections::BTreeSet;
@@ -41,6 +42,12 @@ struct FakeHost {
     enabled: BTreeSet<String>,
     /// `enable` "succeeds" but `is-enabled` keeps saying disabled.
     enable_does_not_stick: bool,
+    /// `enable` fails (e.g. the user manager reads another unit directory).
+    enable_fails: bool,
+    /// Timers started (`start` / `restart`), for `is-active`.
+    started: BTreeSet<String>,
+    /// No user bus: every call exits 1 with nothing on stdout.
+    no_bus: bool,
     log: Vec<Vec<String>>,
     linger: Option<bool>,
     supported: bool,
@@ -59,6 +66,9 @@ impl FakeHost {
             crontab_drops_writes: false,
             enabled: BTreeSet::new(),
             enable_does_not_stick: false,
+            enable_fails: false,
+            started: BTreeSet::new(),
+            no_bus: false,
             log: Vec::new(),
             linger: Some(true),
             supported: true,
@@ -104,7 +114,34 @@ impl DriverHost for FakeHost {
             stdout: stdout.to_string(),
             stderr: String::new(),
         };
+        if self.no_bus {
+            return Ok(CommandOutput {
+                success: false,
+                stdout: String::new(),
+                stderr: "Failed to connect to bus: No medium found\n".to_string(),
+            });
+        }
         Ok(match args {
+            ["enable", _] if self.enable_fails => CommandOutput {
+                success: false,
+                stdout: String::new(),
+                stderr: "Failed to enable unit: Unit file does not exist.\n".to_string(),
+            },
+            ["start" | "restart", unit] => {
+                self.started.insert(unit.to_string());
+                ok("")
+            }
+            ["is-active", unit] => {
+                if self.started.contains(*unit) {
+                    ok("active\n")
+                } else {
+                    CommandOutput {
+                        success: false,
+                        stdout: "inactive\n".to_string(),
+                        stderr: String::new(),
+                    }
+                }
+            }
             ["enable", unit] => {
                 if !self.enable_does_not_stick {
                     self.enabled.insert(unit.to_string());
@@ -113,6 +150,7 @@ impl DriverHost for FakeHost {
             }
             ["disable", "--now", unit] => {
                 self.enabled.remove(*unit);
+                self.started.remove(*unit);
                 ok("")
             }
             ["is-enabled", unit] => {
@@ -567,8 +605,13 @@ fn doctor_driver_status_systemd_and_dual_driver() {
         f.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(),
         vec!["scheduler-tick-dual-driver"]
     );
-    // Flagged even with no registered jobs.
+    // Flagged even with no registered jobs: the pure builder emits it, and
+    // doctor looks whenever our timer file is present.
     assert_eq!(build_scheduler_driver_findings(0, &both, &[], now).len(), 1);
+    assert!(scheduler_driver_check_needed(0, false, true));
+    assert!(!scheduler_driver_check_needed(0, false, false));
+    assert!(systemd_timer_file_present(&host, REPO, &m));
+    assert!(!systemd_timer_file_present(&FakeHost::new(), REPO, &m));
 
     // Systemd only: NOT reported as driverless.
     host.crontab = Some("0 4 * * * unrelated\n".to_string());
@@ -601,6 +644,189 @@ fn doctor_driver_status_systemd_and_dual_driver() {
     let f = build_scheduler_driver_findings(1, &unknown, &[], now);
     assert_eq!(f[0].id, "scheduler-tick-driver-unknown");
     assert_eq!(f[0].action, "aida schedule install-cron");
+}
+
+#[test]
+fn doctor_no_user_bus_is_unknown_never_disabled() {
+    let m = marker();
+    let now = chrono::Utc::now();
+    let mut host = FakeHost::new();
+    switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    // The session loses its user bus (cron, ssh without pam_systemd, a
+    // sandbox): `systemctl --user` prints nothing on stdout and exits 1.
+    host.no_bus = true;
+    host.crontab = Some("0 4 * * * unrelated\n".to_string());
+    let st = driver_status_with(&mut host, REPO, &m);
+    match &st.systemd {
+        SystemdDriverStatus::Unknown(r) => assert!(r.contains("Failed to connect to bus"), "{r}"),
+        other => panic!("expected Unknown, got {other:?}"),
+    }
+    assert_eq!(st.cron, CronDriverStatus::Missing);
+    assert!(st.label().starts_with("unknown"), "{}", st.label());
+    let f = build_scheduler_driver_findings(2, &st, &[], now);
+    assert_eq!(f.len(), 1);
+    assert_eq!(f[0].id, "scheduler-tick-driver-unknown");
+    assert!(f[0].summary.contains("systemd:"), "{}", f[0].summary);
+
+    // Unknown cron + missing systemd is unknown too, in label and doctor.
+    let st = DriverStatus {
+        cron: CronDriverStatus::Unknown("no crontab".to_string()),
+        systemd: SystemdDriverStatus::Missing,
+    };
+    assert!(st.label().starts_with("unknown"), "{}", st.label());
+    assert_eq!(
+        build_scheduler_driver_findings(1, &st, &[], now)[0].id,
+        "scheduler-tick-driver-unknown"
+    );
+    // A confirmed install still wins over the other driver being unknown.
+    let st = DriverStatus {
+        cron: CronDriverStatus::Installed,
+        systemd: SystemdDriverStatus::Unknown("no bus".to_string()),
+    };
+    assert_eq!(st.label(), "cron (installed)");
+    assert!(build_scheduler_driver_findings(1, &st, &[], now).is_empty());
+}
+
+#[test]
+fn systemd_state_classifiers_recognise_states_and_refuse_the_rest() {
+    let out = |stdout: &str, stderr: &str| CommandOutput {
+        success: stdout.trim() == "enabled" || stdout.trim() == "active",
+        stdout: stdout.to_string(),
+        stderr: stderr.to_string(),
+    };
+    assert_eq!(classify_is_enabled(&out("enabled\n", "")), Ok(true));
+    for s in [
+        "disabled",
+        "masked",
+        "static",
+        "linked",
+        "indirect",
+        "not-found",
+    ] {
+        assert_eq!(classify_is_enabled(&out(s, "")), Ok(false), "{s}");
+    }
+    assert!(classify_is_enabled(&out("", "Failed to connect to bus")).is_err());
+    assert!(classify_is_enabled(&out("", "")).is_err());
+    assert!(classify_is_enabled(&out("something-new", "")).is_err());
+    assert_eq!(classify_is_active(&out("active\n", "")), Ok(true));
+    assert_eq!(classify_is_active(&out("inactive\n", "")), Ok(false));
+    assert_eq!(classify_is_active(&out("failed\n", "")), Ok(false));
+    assert!(classify_is_active(&out("", "Failed to connect to bus")).is_err());
+}
+
+#[test]
+fn systemd_status_checks_is_active_and_restart_reports_repaired() {
+    let m = marker();
+    let mut host = FakeHost::new();
+    let (_, timer) = names();
+    switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    // Enabled but stopped: not driving.
+    host.started.clear();
+    let st = driver_status_with(&mut host, REPO, &m);
+    assert_eq!(st.systemd, SystemdDriverStatus::Stopped);
+    assert!(!st.any_installed());
+    let f = build_scheduler_driver_findings(1, &st, &[], chrono::Utc::now());
+    assert_eq!(f[0].id, "scheduler-tick-not-installed");
+    assert!(f[0].summary.contains("not running"), "{}", f[0].summary);
+
+    // Re-running the install restarts it: a repair, not a no-op.
+    host.log.clear();
+    let r = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    assert_eq!(r.outcome, DriverInstallOutcome::Repaired);
+    assert!(host.started.contains(&timer));
+    assert!(host.calls().contains(&format!("is-active {timer}")));
+
+    // A disabled timer re-enabled by the install is a repair too.
+    host.enabled.clear();
+    let r = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    assert_eq!(r.outcome, DriverInstallOutcome::Repaired);
+    // And now, truly up to date.
+    let r = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    assert_eq!(r.outcome, DriverInstallOutcome::AlreadyUpToDate);
+}
+
+#[test]
+fn systemd_install_removes_written_units_when_enable_fails() {
+    let mut host = FakeHost::new();
+    host.enable_fails = true;
+    let cron = build_tick_cron_line(Path::new(REPO), Path::new(EXE)).unwrap();
+    host.crontab = Some(format!("{cron}\n"));
+    let (service, timer) = names();
+    let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("removed the unit files"), "{msg}");
+    assert!(host.unit(&service).is_none() && host.unit(&timer).is_none());
+    assert_eq!(
+        host.crontab.as_deref(),
+        Some(format!("{cron}\n").as_str()),
+        "cron kept"
+    );
+
+    // An existing install of ours is not torn down by a failed repair.
+    let mut host = FakeHost::new();
+    switch_driver(&mut host, &inv(), Driver::Systemd).unwrap();
+    let old = host
+        .unit(&timer)
+        .unwrap()
+        .replace("OnBootSec=2min", "OnBootSec=5min");
+    host.put_unit(&timer, &old);
+    host.enable_fails = true;
+    assert!(switch_driver(&mut host, &inv(), Driver::Systemd).is_err());
+    assert!(host.unit(&service).is_some() && host.unit(&timer).is_some());
+}
+
+#[test]
+fn tick_invocation_refuses_trailing_whitespace_and_backslash() {
+    for repo in ["/home/op/repo ", "/home/op/repo\t", "/home/op/repo\\"] {
+        let err = tick_invocation(Path::new(repo), Path::new(EXE)).unwrap_err();
+        assert!(err.to_string().contains("ends in whitespace"), "{err}");
+    }
+    for exe in ["/opt/aida ", "/opt/aida\\"] {
+        assert!(
+            tick_invocation(Path::new(REPO), Path::new(exe)).is_err(),
+            "{exe}"
+        );
+    }
+    // Inner spaces and backslashes stay fine.
+    assert!(tick_invocation(Path::new("/home/op/my repo"), Path::new("/opt/a\\b/aida")).is_ok());
+}
+
+#[test]
+fn init_tick_offer_uses_the_driver_gate() {
+    assert!(init_tick_offer_allowed(true, true, false));
+    assert!(!init_tick_offer_allowed(true, true, true), "agent mode");
+    assert!(
+        !init_tick_offer_allowed(false, true, false),
+        "stdin not a tty"
+    );
+    assert!(
+        !init_tick_offer_allowed(true, false, false),
+        "stdout not a tty"
+    );
+}
+
+#[test]
+fn shift_install_driver_failure_says_the_shift_is_enabled() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+    let layer = root.path().join("home-shift-local.toml");
+    let mut host = FakeHost::new();
+    host.enable_fails = true;
+    let mut yes = |_: &str| Ok(true);
+    let mut human = crate::shift::Operator {
+        stdin_tty: true,
+        agent_mode: false,
+        confirm: &mut yes,
+    };
+    let err =
+        crate::shift::install_command(root.path(), &layer, Driver::Systemd, &mut human, &mut host)
+            .unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("night shift is now enabled"), "{msg}");
+    assert!(msg.contains("scheduler driver is unchanged"), "{msg}");
+    assert!(std::fs::read_to_string(&layer)
+        .unwrap()
+        .contains("enabled = true"));
 }
 
 // ---------------------------------------------------------------------------

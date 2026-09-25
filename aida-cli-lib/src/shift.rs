@@ -2026,8 +2026,18 @@ pub(crate) fn install_command(
         return Ok(None);
     }
     apply_enable(project_root, layer, false)?;
-    let inv = crate::schedule_driver::real_tick_invocation(project_root)?;
-    let report = crate::schedule_driver::switch_driver(host, &inv, driver)?;
+    // trace:TASK-1491 | ai:claude
+    let switched = crate::schedule_driver::real_tick_invocation(project_root).and_then(|inv| {
+        crate::schedule_driver::switch_driver(host, &inv, driver).map(|report| (inv, report))
+    });
+    let (inv, report) = switched.with_context(|| {
+        format!(
+            "night shift is now enabled for {key}, but installing the {} failed. Unless the \
+             error below says a driver was installed, this repo's scheduler driver is unchanged; \
+             `aida shift disable` turns the shift back off",
+            driver.label()
+        )
+    })?;
     crate::schedule_driver::print_switch_report(&report, Path::new(&inv.exe));
     Ok(Some(report))
 }

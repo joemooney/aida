@@ -319,8 +319,11 @@ fn systemctl_ok(host: &mut dyn DriverHost, args: &[&str]) -> Result<CommandOutpu
 // ---------------------------------------------------------------------------
 
 /// Write (or repair) both unit files, enable and start the timer, then
-/// verify with `systemctl --user is-enabled`. Refuses, before writing
-/// anything, when a file with our name exists without our marker.
+/// verify with `systemctl --user is-enabled` and `is-active`. Refuses, before
+/// writing anything, when a file with our name exists without our marker.
+/// A fresh install whose `daemon-reload` or `enable` fails removes the files
+/// it just wrote, so a unit directory the user manager does not read (a
+/// different `XDG_CONFIG_HOME`) is not left holding orphaned units.
 // trace:TASK-1491 | ai:claude
 pub(crate) fn install_systemd_units(
     host: &mut dyn DriverHost,
@@ -348,6 +351,15 @@ pub(crate) fn install_systemd_units(
         current.push(cur);
     }
     let none_existed = current.iter().all(Option::is_none);
+    // Unchanged files: whether the timer was already enabled and running
+    // decides AlreadyUpToDate versus Repaired (a re-enable or restart is a
+    // repair, not a no-op).
+    let already_running = !none_existed
+        && current
+            .iter()
+            .zip(files)
+            .all(|(cur, (_, content))| cur.as_deref() == Some(content.as_str()))
+        && timer_state(host, &units.timer_name) == SystemdDriverStatus::Installed;
     std::fs::create_dir_all(&dir).with_context(|| format!("failed to create {}", dir.display()))?;
     let mut wrote = false;
     for ((name, content), cur) in files.iter().zip(&current) {
@@ -356,31 +368,66 @@ pub(crate) fn install_systemd_units(
             wrote = true;
         }
     }
-    if wrote {
-        systemctl_ok(host, &["daemon-reload"])?;
+    let registered = (|| -> Result<()> {
+        if wrote {
+            systemctl_ok(host, &["daemon-reload"])?;
+        }
+        systemctl_ok(host, &["enable", &units.timer_name])?;
+        Ok(())
+    })();
+    if let Err(e) = registered {
+        if !(wrote && none_existed) {
+            return Err(e);
+        }
+        let removed = remove_marked_files(&dir, &files.map(|(n, _)| n.as_str()), &units.marker);
+        let _ = host.systemctl_user(&["daemon-reload"]);
+        return Err(e.context(format!(
+            "could not enable {}; removed the unit files this install wrote ({}). \
+             Any other driver for this repo was left in place.",
+            units.timer_name,
+            if removed.is_empty() {
+                "none could be removed".to_string()
+            } else {
+                removed.join(", ")
+            }
+        )));
     }
-    systemctl_ok(host, &["enable", &units.timer_name])?;
     // A rewritten timer only picks up its new settings on a restart.
     systemctl_ok(
         host,
         &[if wrote { "restart" } else { "start" }, &units.timer_name],
     )?;
-    let state = host.systemctl_user(&["is-enabled", &units.timer_name])?;
-    if state.stdout.trim() != "enabled" {
+    let state = timer_state(host, &units.timer_name);
+    if state != SystemdDriverStatus::Installed {
         anyhow::bail!(
-            "wrote {} but `systemctl --user is-enabled` reports {:?}, not \"enabled\". \
-             Any other driver for this repo was left in place.",
+            "wrote {} but `systemctl --user is-enabled` / `is-active` report it {}, not \
+             enabled and running. Any other driver for this repo was left in place.",
             units.timer_name,
-            state.stdout.trim()
+            state.describe()
         );
     }
-    Ok(if !wrote {
+    Ok(if already_running {
         DriverInstallOutcome::AlreadyUpToDate
     } else if none_existed {
         DriverInstallOutcome::Installed
     } else {
         DriverInstallOutcome::Repaired
     })
+}
+
+/// Delete each named file in `dir` that carries our marker; returns the
+/// names deleted. Best effort: used only to undo a failed fresh install.
+fn remove_marked_files(dir: &Path, names: &[&str], marker: &str) -> Vec<String> {
+    let mut removed = Vec::new();
+    for name in names {
+        let path = dir.join(name);
+        if let Ok(Some(c)) = read_optional(&path) {
+            if unit_has_marker(&c, marker) && std::fs::remove_file(&path).is_ok() {
+                removed.push((*name).to_string());
+            }
+        }
+    }
+    removed
 }
 
 /// What [`remove_systemd_units`] did.
@@ -583,16 +630,33 @@ pub(crate) fn exe_is_build_output(exe: &Path) -> bool {
 /// Whether this repo's systemd timer drives the tick.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SystemdDriverStatus {
-    /// Our marked timer exists and `is-enabled` says enabled.
+    /// Our marked timer exists, is enabled, and is active.
     Installed,
-    /// Our marked timer exists but is not enabled.
+    /// Our marked timer exists but is not enabled (or systemd does not know it).
     Disabled,
+    /// Our marked timer is enabled but not active (stopped or failed).
+    Stopped,
     /// No timer of ours.
     Missing,
     /// Not a systemd platform.
     Unsupported,
-    /// Could not tell. PRIN-5: never collapse this into "ok".
+    /// Could not tell (no user bus, unrecognised `systemctl` output, an
+    /// unreadable unit directory). PRIN-5: never collapse this into a verdict.
     Unknown(String),
+}
+
+impl SystemdDriverStatus {
+    /// A short phrase for error messages.
+    pub(crate) fn describe(&self) -> String {
+        match self {
+            SystemdDriverStatus::Installed => "enabled and running".to_string(),
+            SystemdDriverStatus::Disabled => "not enabled".to_string(),
+            SystemdDriverStatus::Stopped => "enabled but not running".to_string(),
+            SystemdDriverStatus::Missing => "missing".to_string(),
+            SystemdDriverStatus::Unsupported => "unsupported on this platform".to_string(),
+            SystemdDriverStatus::Unknown(r) => format!("unknown ({r})"),
+        }
+    }
 }
 
 /// Both drivers' state for one repo (`CronDriverStatus` before slice 2).
@@ -619,6 +683,20 @@ impl DriverStatus {
         self.cron_installed() || self.systemd_installed()
     }
 
+    /// Why a driver's state could not be read, one entry per unknown
+    /// driver. Non-empty with nothing installed means "unknown", not "none".
+    // trace:TASK-1491 | ai:claude
+    pub(crate) fn unknown_reasons(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        if let CronDriverStatus::Unknown(r) = &self.cron {
+            out.push(format!("crontab: {r}"));
+        }
+        if let SystemdDriverStatus::Unknown(r) = &self.systemd {
+            out.push(format!("systemd: {r}"));
+        }
+        out
+    }
+
     /// One phrase for `aida shift status`.
     pub(crate) fn label(&self) -> String {
         match (self.cron_installed(), self.systemd_installed()) {
@@ -628,12 +706,14 @@ impl DriverStatus {
             (true, false) => "cron (installed)".to_string(),
             (false, true) => "systemd timer (installed)".to_string(),
             (false, false) => {
-                if matches!(self.cron, CronDriverStatus::Unknown(_))
-                    && !matches!(self.systemd, SystemdDriverStatus::Missing)
-                {
-                    "unknown".to_string()
+                let unknown = self.unknown_reasons();
+                if !unknown.is_empty() {
+                    format!("unknown ({})", unknown.join("; "))
                 } else if self.systemd == SystemdDriverStatus::Disabled {
                     "systemd timer installed but disabled (`aida shift install --systemd-user`)"
+                        .to_string()
+                } else if self.systemd == SystemdDriverStatus::Stopped {
+                    "systemd timer enabled but not running (`aida shift install --systemd-user`)"
                         .to_string()
                 } else {
                     "none installed (`aida shift install --systemd-user` or `--cron`)".to_string()
@@ -641,6 +721,83 @@ impl DriverStatus {
             }
         }
     }
+}
+
+/// PURE: why `systemctl` output carries no recognised state.
+fn unreadable(verb: &str, out: &CommandOutput) -> String {
+    let stderr = out.stderr.trim();
+    let stdout = out.stdout.trim();
+    if !stderr.is_empty() {
+        format!("`systemctl --user {verb}` failed: {stderr}")
+    } else if !stdout.is_empty() {
+        format!("`systemctl --user {verb}` printed an unrecognised state {stdout:?}")
+    } else {
+        format!("`systemctl --user {verb}` printed nothing")
+    }
+}
+
+/// PURE: `is-enabled` output as enabled (`Ok(true)`), a known not-enabled
+/// state (`Ok(false)`), or unreadable (`Err`). No user bus prints nothing on
+/// stdout and exits 1, which is unreadable, never "disabled".
+// trace:TASK-1491 | ai:claude
+pub(crate) fn classify_is_enabled(out: &CommandOutput) -> Result<bool, String> {
+    match out.stdout.trim() {
+        "enabled" | "enabled-runtime" => Ok(true),
+        "disabled" | "masked" | "masked-runtime" | "static" | "linked" | "linked-runtime"
+        | "indirect" | "not-found" => Ok(false),
+        _ => Err(unreadable("is-enabled", out)),
+    }
+}
+
+/// PURE: `is-active` output as active (`Ok(true)`), a known inactive state
+/// (`Ok(false)`), or unreadable (`Err`).
+// trace:TASK-1491 | ai:claude
+pub(crate) fn classify_is_active(out: &CommandOutput) -> Result<bool, String> {
+    match out.stdout.trim() {
+        "active" | "activating" | "reloading" => Ok(true),
+        "inactive" | "failed" | "deactivating" => Ok(false),
+        _ => Err(unreadable("is-active", out)),
+    }
+}
+
+/// The run state of a timer whose unit file is ours: `is-enabled`, then
+/// `is-active`. Never returns `Missing` or `Unsupported`.
+// trace:TASK-1491 | ai:claude
+pub(crate) fn timer_state(host: &mut dyn DriverHost, timer_name: &str) -> SystemdDriverStatus {
+    let enabled = match host.systemctl_user(&["is-enabled", timer_name]) {
+        Ok(out) => classify_is_enabled(&out),
+        Err(e) => Err(format!("{e:#}")),
+    };
+    match enabled {
+        Err(r) => return SystemdDriverStatus::Unknown(r),
+        Ok(false) => return SystemdDriverStatus::Disabled,
+        Ok(true) => {}
+    }
+    let active = match host.systemctl_user(&["is-active", timer_name]) {
+        Ok(out) => classify_is_active(&out),
+        Err(e) => Err(format!("{e:#}")),
+    };
+    match active {
+        Ok(true) => SystemdDriverStatus::Installed,
+        Ok(false) => SystemdDriverStatus::Stopped,
+        Err(r) => SystemdDriverStatus::Unknown(r),
+    }
+}
+
+/// Whether this repo's marked timer file is present. A filesystem read
+/// only (no `systemctl`), cheap enough for every `aida doctor` run.
+// trace:TASK-1491 | ai:claude
+pub(crate) fn systemd_timer_file_present(host: &dyn DriverHost, repo: &str, marker: &str) -> bool {
+    if !host.systemd_supported() {
+        return false;
+    }
+    let Ok(dir) = host.unit_dir() else {
+        return false;
+    };
+    matches!(
+        read_optional(&dir.join(unit_names(repo).1)),
+        Ok(Some(c)) if unit_has_marker(&c, marker)
+    )
 }
 
 /// Read this repo's systemd driver state through `host`.
@@ -663,11 +820,7 @@ pub(crate) fn systemd_driver_status_with(
         Ok(_) => return SystemdDriverStatus::Missing,
         Err(e) => return SystemdDriverStatus::Unknown(format!("{e:#}")),
     }
-    match host.systemctl_user(&["is-enabled", &timer_name]) {
-        Ok(out) if out.stdout.trim() == "enabled" => SystemdDriverStatus::Installed,
-        Ok(_) => SystemdDriverStatus::Disabled,
-        Err(e) => SystemdDriverStatus::Unknown(format!("{e:#}")),
-    }
+    timer_state(host, &timer_name)
 }
 
 /// Both drivers' state through `host`.
@@ -691,6 +844,13 @@ fn canonical_repo(project_root: &Path) -> PathBuf {
 pub(crate) fn driver_status(project_root: &Path) -> DriverStatus {
     let repo = canonical_repo(project_root).display().to_string();
     driver_status_with(&mut RealDriverHost, &repo, &tick_cron_marker(project_root))
+}
+
+/// Whether `project_root`'s marked timer file is present on the real host
+/// (a file read; never `systemctl`).
+pub(crate) fn systemd_timer_file_present_for(project_root: &Path) -> bool {
+    let repo = canonical_repo(project_root).display().to_string();
+    systemd_timer_file_present(&RealDriverHost, &repo, &tick_cron_marker(project_root))
 }
 
 /// The shared invocation for `project_root` and the running `aida` binary.

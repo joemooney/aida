@@ -1606,6 +1606,21 @@ pub(crate) fn tick_invocation(repo: &Path, aida_exe: &Path) -> Result<TickInvoca
             );
         }
     }
+    // systemd strips trailing whitespace from a unit value (the tick would
+    // `cd` into a sibling path, and our marker would never match again) and
+    // a trailing backslash continues the line into the next directive.
+    for (label, value) in [
+        ("repo path", repo_str.as_str()),
+        ("aida binary path", aida_exe_str.as_str()),
+    ] {
+        if value.ends_with(char::is_whitespace) || value.ends_with('\\') {
+            anyhow::bail!(
+                "cannot build a scheduler-tick driver entry: {label} {value:?} ends in \
+                 whitespace or a backslash, which a systemd unit cannot hold — rename the path \
+                 and retry"
+            );
+        }
+    }
     Ok(TickInvocation {
         path_env: format!("{bin_dir}:/usr/local/bin:/usr/bin:/bin"),
         repo: repo_str,
@@ -2116,19 +2131,21 @@ pub(crate) fn build_scheduler_driver_findings(
         SystemdDriverStatus::Unsupported => "aida schedule install-cron",
         _ => "aida schedule install-systemd",
     };
-    let systemd_note = match &status.systemd {
-        SystemdDriverStatus::Disabled => {
-            " (this repo's systemd timer exists but is disabled)".to_string()
-        }
-        SystemdDriverStatus::Unknown(reason) => {
-            format!(" (systemd timer state unknown: {reason})")
-        }
-        _ => String::new(),
-    };
     if enabled_substrate_jobs > 0 && !status.any_installed() {
-        match &status.cron {
-            CronDriverStatus::Installed => {}
-            CronDriverStatus::Missing => out.push(crate::DoctorFinding {
+        // PRIN-5: when either driver's state is unreadable and none is
+        // confirmed installed, the answer is "unknown", never "none".
+        let unknown = status.unknown_reasons();
+        if unknown.is_empty() {
+            let systemd_note = match &status.systemd {
+                SystemdDriverStatus::Disabled => {
+                    " (this repo's systemd timer exists but is disabled)"
+                }
+                SystemdDriverStatus::Stopped => {
+                    " (this repo's systemd timer is enabled but not running)"
+                }
+                _ => "",
+            };
+            out.push(crate::DoctorFinding {
                 category: "scheduler-driver".to_string(),
                 id: "scheduler-tick-not-installed".to_string(),
                 summary: format!(
@@ -2136,16 +2153,18 @@ pub(crate) fn build_scheduler_driver_findings(
                 ),
                 action: install_action.to_string(),
                 safe_heal: false,
-            }),
-            CronDriverStatus::Unknown(reason) => out.push(crate::DoctorFinding {
+            });
+        } else {
+            out.push(crate::DoctorFinding {
                 category: "scheduler-driver".to_string(),
                 id: "scheduler-tick-driver-unknown".to_string(),
                 summary: format!(
-                    "cannot confirm whether a scheduler driver is installed for this repo ({reason}) — status unknown, not ok{systemd_note}"
+                    "cannot confirm whether a scheduler driver is installed for this repo ({}) — status unknown, not ok",
+                    unknown.join("; ")
                 ),
                 action: install_action.to_string(),
                 safe_heal: false,
-            }),
+            });
         }
     }
     if !overdue.is_empty() {
@@ -2175,8 +2194,21 @@ pub(crate) fn build_scheduler_driver_findings(
     out
 }
 
-/// `aida doctor` entry point: evidence-gated so a repo with no registered
-/// jobs never shells out to `crontab` or `systemctl` at all.
+/// PURE: whether doctor reads the drivers at all. A repo with no registered
+/// jobs, nothing overdue and no timer file of ours never shells out to
+/// `crontab` or `systemctl`; a timer file alone (a file read) is enough
+/// evidence to look, so a dual-driver setup is flagged even with no jobs.
+// trace:TASK-1491 | ai:claude
+pub(crate) fn scheduler_driver_check_needed(
+    enabled_substrate_jobs: usize,
+    any_overdue: bool,
+    systemd_timer_file_present: bool,
+) -> bool {
+    enabled_substrate_jobs > 0 || any_overdue || systemd_timer_file_present
+}
+
+/// `aida doctor` entry point, evidence-gated by
+/// [`scheduler_driver_check_needed`].
 // trace:STORY-1463 | ai:claude
 // trace:TASK-1491 | ai:claude
 pub(crate) fn scheduler_driver_doctor_findings(
@@ -2184,7 +2216,11 @@ pub(crate) fn scheduler_driver_doctor_findings(
 ) -> Result<Vec<crate::DoctorFinding>> {
     let enabled = enabled_substrate_job_count(project_root)?;
     let overdue = overdue_substrate_jobs(project_root)?;
-    if enabled == 0 && overdue.is_empty() {
+    // Only read the timer file when nothing else already asks for a look.
+    let timer_file = enabled == 0
+        && overdue.is_empty()
+        && crate::schedule_driver::systemd_timer_file_present_for(project_root);
+    if !scheduler_driver_check_needed(enabled, !overdue.is_empty(), timer_file) {
         return Ok(Vec::new());
     }
     let status = crate::schedule_driver::driver_status(project_root);
@@ -2243,6 +2279,16 @@ fn uninstall_cron_command(project_root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// PURE: whether `aida init` may offer the crontab install. The same floor
+/// as `aida schedule install-cron` (`driver_gate_refusal`: a human at an
+/// interactive stdin, outside agent output mode), plus a terminal stdout to
+/// show the question on.
+// trace:TASK-1491 | ai:claude
+pub(crate) fn init_tick_offer_allowed(stdin_tty: bool, stdout_tty: bool, agent_mode: bool) -> bool {
+    stdout_tty
+        && crate::schedule_driver::driver_gate_refusal("aida init", stdin_tty, agent_mode).is_none()
+}
+
 /// STORY-1463: at a TTY, offer to install the crontab entry that drives
 /// `aida schedule tick` for this repo. Default answer is **no** — writing to
 /// the operator's crontab is a real system side effect that should be an
@@ -2251,7 +2297,11 @@ fn uninstall_cron_command(project_root: &Path) -> Result<()> {
 // trace:STORY-1463 | ai:claude
 pub(crate) fn maybe_offer_tick_install(project_root: &Path) {
     use std::io::IsTerminal;
-    if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
+    if !init_tick_offer_allowed(
+        std::io::stdin().is_terminal(),
+        std::io::stdout().is_terminal(),
+        crate::agent_output_mode(),
+    ) {
         return;
     }
     let line = match tick_cron_line(project_root) {
