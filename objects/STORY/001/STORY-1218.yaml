@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:20.548044413Z
-modified_at: 2026-09-25T03:35:33.280002524Z
+modified_at: 2026-09-25T13:19:39.606510279Z
 req_type: Story
 tags:
 - autonomy
@@ -342,4 +342,10 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit cb07ece), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit STORY-1218 --description ...` / `aida edit STORY-1218 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec STORY-1218 --since cb07ece^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit STORY-1218 --status completed`. (merge sha: cb07ece7f030325296c865968ba88a115c4a01cc)'
   created_at: 2026-09-25T03:35:33.281541371Z
   modified_at: 2026-09-25T03:35:33.281541371Z
+- id: 01a0d8b8-b856-7302-bbbd-063fa44439af
+  author: joe
+  content: 'On-box acceptance (Joe at a TTY, 2026-09-25 06:18): ''aida shift install --systemd-user'' installed the aida-tick-2b20e8a3 timer and removed the repo''s cron line. ''systemctl --user list-timers'' lists it. The journal shows one tick: ''schedule tick: watchdog ok'', ''night-shift ok'', Result=success, 23.5s CPU, 210M peak. Notes: (a) the unit runs target/release/aida from the dev checkout (the installer warns about this); (b) a second tick follows 1 min after install (OnActiveSec), then every 10 min after the last run finishes; (c) the dry run shows no wave yet: budget-evidence fails for vendor codex, and no eligible drain-mode spec is queued. STORY-1218 closes once TASK-1492 (slice 3) merges.'
+  created_at: 2026-09-25T13:19:39.606510279Z
+  modified_at: 2026-09-25T13:19:39.606510279Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
