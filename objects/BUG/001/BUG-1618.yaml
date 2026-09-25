@@ -18,12 +18,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:44:52.921456265Z
-modified_at: 2026-09-25T08:44:52.921456265Z
+modified_at: 2026-09-25T08:53:39.208078510Z
 req_type: Bug
 tags:
 - flaky
 - isolation
 - test
+comments:
+- id: 01a0d7c5-2f08-7ee2-a861-81fbbdb99517
+  author: joe
+  content: 'Additional evidence (TASK-1502 implementer): in a leased worktree, run alone with --test-threads=1, these tests fail on a network `git pull --rebase` against the shared aida-store remote. The test path therefore reaches the real store remote, which is a hermeticity leak beyond the authority resolution. The fix must keep these tests entirely local (a fixture store with no network remote).'
+  created_at: 2026-09-25T08:53:39.208078510Z
+  modified_at: 2026-09-25T08:53:39.208078510Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
   branch: main
