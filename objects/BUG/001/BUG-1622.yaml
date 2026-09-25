@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:45:01.179683029Z
-modified_at: 2026-09-25T15:03:13.972424412Z
+modified_at: 2026-09-25T16:02:35.378512079Z
 req_type: Bug
 comments:
 - id: 01a0d899-46d9-7102-8936-dc8e08960384
@@ -44,6 +44,28 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): accept the security review. Rework all 3 blockers (filing_drift_hint code_sha, classify_rework_head_change reviewed_sha, and forge PR branch names in log/fetch/push), plus the should-fix items (the store_cmd Aida-Store trailer, the salvage diff --no-index with no --, the cascade rebase from stacks.json). Also do the Low items: add --end-of-options in aida-core git_ops push/fetch/checkout helpers and doctor_cmd push --delete. Validate store-derived SHAs as hex. Fix the doctor --since whitespace nit and the rebase test marker. Remote add stays out of scope (Low, operator''s own input).'
   created_at: 2026-09-25T15:03:13.972424412Z
   modified_at: 2026-09-25T15:03:13.972424412Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d94d-e2f2-7423-8d3b-c13421a190bc
+  author: joe
+  content: |-
+    Strict security re-review: APPROVE — I reviewed a23ce6cc23, a fast-forward from ff892a10ba, on git 2.43.0. The whole diff against origin/main (b821736ce7) is 30 files. All 3 blockers are fixed. Reverting each guard makes its test fail. The should-fix and Low items are done. I found one new Low item and it is a follow-up, not a blocker.
+
+    BLOCKERS, verified:
+    (1) filing_drift_hint (lib.rs:52216) now requires code_sha to be 7 to 64 hex digits, and --end-of-options comes before the <sha>..HEAD range and the linkage show shas. code_sha is the full oid from porcelain v2 (provenance.rs), so no legitimate value is lost.
+    (2) classify_rework_head_change (lib.rs:36951) requires both SHAs to be hex. It also has --end-of-options plus a trailing -- on diff and rev-list. The caller at lib.rs:102552 turns None into a ReworkNoOp refusal, so it fails closed. The verdict write (review_verdict.rs:1038) keeps an unresolvable value only when it is hex. A resolvable short or ref value is still expanded to the full sha, so only a non-hex value that doesn't resolve is dropped, which fails closed as UNKNOWN.
+    (3) Forge branch names: pr_cmd.rs:3415 refuses the value and adds --end-of-options; fetch_branch (lib.rs:69229) refuses and adds --end-of-options; prepare_graded_review (lib.rs:102160) requires a hex sha, refuses the branch, and passes -- to worktree add; the pr finish base (pr_cmd.rs:1311) refuses and adds --end-of-options to fetch and rebase; queue recover push (queue_cmd.rs:13303/13361) refuses and adds --end-of-options.
+
+    MUTATION TESTS (throwaway worktree): reverting the filing, classify, fetch_branch/branch_head_commit_message and verdict-storage guards made filing_drift_hint_ignores_…, rework_head_change_refuses_…, forge_branch_names_never_reach_git_… (git wrote 'pwned') and a_verdict_never_stores_… fail. A second round, reverting the salvage --, the store-trailer hex filter, the --since empty bail and the git_ops checkout refusal, made the 4 matching tests fail.
+
+    AUDIT ITEMS OK: the completion_sha shows (completion.rs, lib.rs:13883/69745) use --end-of-options plus --. The merge-base inputs, the lease-branch rev-parse, merge-tree, the trusted_config rev-parse, mirror push, and branch -D in session_reap and the pure-git forge all use --end-of-options. worktree remove uses -- (lib.rs:41340/46109 and git_ops remove_worktree_at). In the pure-git forge merge (forge.rs:2538), reject_option_like covers both the branch and the base, checkout <base> -- is used, merge and rebase use --end-of-options, and rev_parse uses --verify --quiet. Every rev-parse site that adds --end-of-options also passes --verify --quiet (8 sites checked). Without --verify, git 2.43 prints the literal '--end-of-options' (reproduced). I tested in a scratch repo that --end-of-options works for push, push --delete, ls-remote, remote get-url, merge --squash/--no-ff/-m, branch -D, merge-tree, fetch, rebase, show, merge-base, diff and rev-list. checkout and reset reject it: checkout reads it as a pathspec, and reset fails with 'must come before non-option arguments'. So both checkout sites (git_ops reset_worktree_to and checkout_branch, forge.rs pure_git_checkout and merge) refuse dash-led refs before running and put -- after the ref. The combination is correct. The hex rule of 7 to 64 digits allows SHA-1 and SHA-256. Values under 7 digits that don't resolve are dropped, which fails closed. Every store-written SHA is a full oid.
+
+    NEW LOW, follow-up: git pull does NOT honour --end-of-options. It forwards the remote and refspec to fetch after its own parsing. I reproduced this on 2.43: 'git pull [--rebase] --end-of-options origin "--upload-pack=touch X;git-upload-pack"' created X, and so did the same value in the remote position, and so did '-- <value>'. The new comments at aida-core/src/git_ops.rs:269, 323 and 982 (pull_rebase, pull_rebase_auto_merge, pull) therefore claim protection that isn't there. It is not reachable today: all 30+ callers pass the literal 'origin' and current_branch() of the store, which is git-produced, and git refuses dash-led branch names. Follow-up: call reject_option_like on the remote and branch inside those 3 helpers and fix the comments. lib.rs:68455 'pull --ff-only origin <current branch>' is in the same class and also takes git-produced input.
+
+    OTHER NITS: the cascade_rebase_stacked_branches guard (lib.rs:68973), the prepare_graded_review hex/branch refusal, the queue recover pushes and the pure-git forge refusals have no test of their own. They are correct by inspection. doctor_since_whitespace_only_is_an_error covers the resolver's empty bail but not the doctor_cmd.rs:358 filter removal itself. Branch/finding.id deletes (doctor_cmd.rs:4069/5382, pr_cmd.rs:267) and several 'origin/'- or default-ref-prefixed ranges still lack --end-of-options, but every value is git-produced or has a non-dash prefix. Info only.
+
+    TESTS: cargo test -p aida-cli-lib --lib with filters bug_1622 rebase pr_cmd show store stack review_verdict: 480 passed, 0 failed (14 in bug_1622). With filters git_arg_guard task_1265 doctor since: 198 passed. cargo test -p aida-core git_ops: 53 passed. The bug_1622 tests use tempdirs only. The ~/.aida changes during the run came from the concurrent int70 preflight (usage.jsonl shows binary c45b5fb4a7), not from these tests. The worktree was removed.
+  created_at: 2026-09-25T16:02:35.378512079Z
+  modified_at: 2026-09-25T16:02:35.378512079Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
