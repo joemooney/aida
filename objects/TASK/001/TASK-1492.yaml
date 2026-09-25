@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:04:13.382715808Z
-modified_at: 2026-09-25T12:04:18.001552435Z
+modified_at: 2026-09-25T12:05:38.486510218Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -47,6 +47,12 @@ comments:
   content: 'Slice 3 implementer (claude): re-drive (A5/A6/A7) and mail-latency escalation are built on claude/task-1492. Cold-boot is NOT built: the signoff leaves these choices open, and the brief says to stop rather than improvise. (1) Which seat is launched for a job with seats=["*"] or several seats, and how is a seat name mapped to AgentSeat / vendor? (2) What does ''no live holder of that role'' read: agent_registry entries with role + live pid, presence, or discover_live_advisor_session? (3) What does ''overdue'' mean for a seat job: due_since older than its interval (STORY-1226 wording), or any due? (4) ''Never for a job that would drain or merge'': seat jobs are free-text prompts, so what is the test? An explicit per-job opt-in such as cold_boot = true, or something else? (5) Authority: a headless advisor launched by claude -p / codex exec with the seat''s normal permissions can approve or merge, which conflicts with ''never grant authority unattended''. What permission profile or prompt contract applies, and is cold-boot also a separate default-off local switch like redrive? (6) Where is the 4/day total counted: shift-state or ledger cold_boot_at? Also for the advisor, on mail latency: the signoff says ''per recipient''. On this box, 15 recipients have old unread mail, including junk addresses (33492, SPEC, main.rs), so the first enabled tick sends one combined notification for all 15. Should it be limited to known seats?'
   created_at: 2026-09-25T12:04:18.001552435Z
   modified_at: 2026-09-25T12:04:18.001552435Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d874-f436-7002-8343-f6f9f600aa06
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept deferring cold-boot. It is split into TASK-1511, a draft awaiting Joe because of the authority question. TASK-1492''s scope is now re-drive plus mail-latency escalation. Mail latency: limit escalation to KNOWN recipients (seats and roles registered in the agent registry, the team roster or active sessions) so junk addresses never page the operator, and cap each notification at a reasonable number of names with ''+N more''. The keystone skip floor is accepted. Enabling re-drive by editing the local file by hand is fine for now.'
+  created_at: 2026-09-25T12:05:38.486510218Z
+  modified_at: 2026-09-25T12:05:38.486510218Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
