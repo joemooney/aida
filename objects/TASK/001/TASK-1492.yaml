@@ -18,12 +18,12 @@ description: |
   Cold-boot (ADR-46 §1, moved from STORY-1226): an overdue SEAT job with no live holder of that role gets a headless seat (codex exec / claude -p per configured vendor) at most once per hour per seat, ledgered on `JobLedger.cold_boot_at`. Binding per the advisor: cold-boot also spawns detached (A2 hygiene), stays under the same budget-evidence guard (A9), and is capped at 1 per hour per seat and at most 4 per day in total. It never happens for a job that would drain or merge, and a live seat suppresses it. The ShiftTick event gains `redriven` and `cold_booted`.
 
   Named tests: `shift_tick_redrives_transient_park_without_seat`, `shift_tick_skips_redrive_while_drain_live`, `shift_tick_never_redrives_merge_hold_or_non_drain_park`, `shift_redrive_cap_survives_event_rotation`, `shift_mail_latency_escalates_once_per_episode_and_rearms`, `cold_boot_once_per_hour_per_seat_suppressed_by_live_seat`.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:04:13.382715808Z
-modified_at: 2026-09-25T15:30:31.218104073Z
+modified_at: 2026-09-25T16:19:06.247151095Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -133,6 +133,20 @@ comments:
   created_at: 2026-09-25T15:30:31.218104073Z
   modified_at: 2026-09-25T15:30:31.218104073Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d95d-017e-7860-84cf-890895f1f034
+  author: aida-auto-bump
+  timestamp: 2026-09-25T16:19:06.238766870Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0d95d-0187-7460-bce2-f0f8d90bc7b6
+  timestamp: 2026-09-25T16:19:06.247148992Z
+  agent: implementer
+  commit_sha: ac9803a159e1871122232d6e6512ca668da96446
+  summary: Completed via merge ac9803a1
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
   branch: claude/story-1218
@@ -141,3 +155,7 @@ filed_at:
   aida_build_sha: c7d35baa35
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T16:19:06.238742158Z
+  completion_sha: ac9803a159e1871122232d6e6512ca668da96446
