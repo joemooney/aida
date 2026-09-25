@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-25T04:30:22.048735259Z
+modified_at: 2026-09-25T04:32:59.490165542Z
 req_type: Task
 tags:
 - agent-launch
@@ -16,6 +16,17 @@ tags:
 - permissions
 - portability
 - scaffold
+comments:
+- id: 01a0d6d5-9599-7352-8d73-d363126fba35
+  author: joe
+  content: 'Refinement: the shell/scaffold integration should support automatic local build-profile detection. It may resolve target/release versus target/debug (with explicit override support) so developers can switch build modes without editing project configuration or embedding checkout-specific paths. Diagnostics should report the selected profile and executable path; the precedence and stale-build behavior should be defined rather than silently choosing an unexpected binary.'
+  created_at: 2026-09-25T04:31:56.824983158Z
+  modified_at: 2026-09-25T04:31:56.824983158Z
+- id: 01a0d6d6-8a62-7a22-9d85-267cecb4214a
+  author: joe
+  content: 'Permission clarification: scaffolding should authorize both target/debug and target/release under the resolved local AIDA checkout, rather than granting access only to whichever binary was detected at scaffold time. Switching between debug and release should therefore require no scaffold rerun; runtime resolution selects the available/desired executable and diagnostics show the choice.'
+  created_at: 2026-09-25T04:32:59.490165542Z
+  modified_at: 2026-09-25T04:32:59.490165542Z
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
   branch: main
