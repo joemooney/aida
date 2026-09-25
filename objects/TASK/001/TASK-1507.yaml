@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T15:50:07.066694684Z
+modified_at: 2026-09-25T15:50:32.240289235Z
 req_type: Task
 tags:
 - cache
@@ -182,6 +182,12 @@ comments:
     - Mutation sweep, task_1507 filter; all 15 mutants killed: R1 candidate order (2 failing tests), R1 event order (3), R2 boundary >= (1), R2 since >= (3), R2 unknown watermark (1), R3 off (1), B2 off (2), B2 ts > lower (2), B2 not recorded (2), N1b off (1), N2 off (2), N2a off (1), N3 checkpoint on close (1), N3 bound_wal no-op (1), N4 ignore held lock (1).
   created_at: 2026-09-25T15:50:07.066694684Z
   modified_at: 2026-09-25T15:50:07.066694684Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d942-da30-73e0-9cd7-b37698668d37
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept round 3. Rework: B3, record the times of ALL commits in each merge''s parallel region (both sides plus the merge-base/fork point); fall back when the served range contains a second shared by more than one of them. B4, a budgeted catch-up commits a partial batch only if the old tip is an ancestor of the batch''s last commit; UNIQUE-constraint and ancestry failures are treated as corruption and trigger a reset, never a permanently dead index. N2a, when checking liveness, ignore aida-store-pre-squash-* backup refs and remote-tracking refs (only local branches and worktree HEADs count), so a compact still resets. Turn the reviewer''s probes (scratchpad/tests_with_probes.rs) into regression tests. If round 4 still finds a correctness bug, the orchestrator will narrow slice 1 to the conservative rule: fall back whenever the served range overlaps any merge''s parallel window.'
+  created_at: 2026-09-25T15:50:32.240289235Z
+  modified_at: 2026-09-25T15:50:32.240289235Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
