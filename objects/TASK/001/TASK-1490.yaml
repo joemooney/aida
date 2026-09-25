@@ -13,11 +13,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T23:54:06.265475487Z
-modified_at: 2026-09-25T00:16:54.198768172Z
+modified_at: 2026-09-25T00:22:59.583992791Z
 req_type: Task
 tags:
 - drain
 - papercut
+comments:
+- id: 01a0d5f1-a900-7fb3-8349-2776a6cf1bec
+  author: joe
+  content: 'Review: APPROVE (fresh reviewer). The candidate split is a faithful refactor, the drain-state schema is unchanged, and the preview is byte-identical when nothing is blocked. Queued for batch 58 with BUG-1608.'
+  created_at: 2026-09-25T00:22:59.583992791Z
+  modified_at: 2026-09-25T00:22:59.583992791Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c7d35baa35b4965c961adec0b1d68a098e3701e9
   branch: main
