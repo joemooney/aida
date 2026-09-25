@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T16:58:33.851363516Z
-modified_at: 2026-09-25T22:33:39.310277954Z
+modified_at: 2026-09-25T23:04:22.120304361Z
 req_type: Bug
 tags:
 - autobump
@@ -67,6 +67,27 @@ comments:
   content: 'Extra acceptance criterion from triage: the store merge never replaces a terminal status with a non-terminal one written by an automated source. Severity: this already regressed BUG-1607/1608/1609/1610 Completed→Done today (repaired). Workaround until fixed: ''aida pull --store-only'' before ''aida pull''.'
   created_at: 2026-09-25T22:32:50.145931570Z
   modified_at: 2026-09-25T22:32:50.145931570Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dad0-0968-7631-9882-4661e50624c3
+  author: joe
+  content: |-
+    Strict review: APPROVE — claude/bug-1625 @ 2e66619af9. No blockers.
+
+    VERIFIED
+    - Ordering: every store-touching step (auto-bump/reconcile/closure/followups/archive sweep) moved into run_deferred_code_reconcile (lib.rs:69043), which runs only after pull_rebase_auto_merge succeeds AND the collision scan passes (lib.rs:68957), or on --code-only / no orphan worktree / no store origin (68821, 68834, 68855). Store failure or collision leaves it unapplied, with a retry note (68986). A failed code leg never sets the deferral. Other callers checked: db sync --pull (git_backend_cmd.rs:7364) already bumps only after pull_rebase; MCP pull and queue run_aida(pull) go through handle_pull_command; the edit/queue-done followup callers are human-initiated.
+    - Merge rule (conflict.rs:273, 425, 456): every status writer authored aida-auto-bump/aida-reconcile only moves forward (Done/Completed/Rejected, gated by auto_bump_eligible_status), so no legitimate automated reopen is blocked. The guard is symmetric in ours/theirs, so the merge stays deterministic in both orientations. When both sides are terminal, it falls back to LWW. Spoofing an author can only preserve a terminal status, never force a regression. Base plus the terminal side's history form the 'known' set, so entries unioned or reordered by the merge are not miscounted. No code path truncates history.
+    - The live incident object (BUG-1607) carries the Draft->Done entry authored aida-auto-bump, so the guard matches the real shape.
+    - Mutation checks (throwaway worktree): reverting the ordering makes both two-clone pull tests fail. The keep-Completed test fails on the no-Done-entry assertion, which proves the guard also rescued the status end-to-end. Disabling the guard fails bug1625_automated_write_never_regresses_terminal_status. Ignoring authorship fails bug1625_human_reopen_of_terminal_still_merges.
+    - Green: aida-core conflict (65) and merge (78). aida-cli-lib --lib: pull 54, auto_bump 79, reconcile 45, requeue 39, queue_done 17. tests/test_distributed.sh passes (run with an isolated HOME).
+
+    NON-BLOCKING FOLLOW-UPS
+    1. The extra acceptance criterion is only partly covered. History-less automated status writers bypass the guard and still regress terminal status via LWW: the orchestrator shelve (lib.rs:46440 InProgress->NeedsAttention), queue_cmd.rs:8168, the MCP punt (mcp.rs:3097), and requeue return_to_flight (requeue.rs:265, comment only, no status history entry). File a follow-up to record status history with automated author names in these writers, or to guard them.
+    2. Retry after a store failure is lossy for large pulls. The re-run code pull is a no-op, so the scan falls back to --max-count=50 (lib.rs:71237). Bumps for a failed pull of more than 50 commits are dropped. Either persist scan_pre or point the note (68986) at 'aida reconcile-status'.
+    3. The followup fallback (lib.rs:44974) has no test through extract_plan_followups; only the pure helper is tested. The acceptance criterion about remote-only followups also has no end-to-end pull test. followup_filed_in_store (43929) accepts any same-titled spec carrying a followup-src tag from ANY plan, which can hide a genuine filing failure as already-filed.
+    4. --code-only still reconciles against a possibly stale store (68821). This is the incident shape, now mitigated only by the merge guard. Consider warning or skipping followup extraction in that mode.
+    5. Pre-existing, outside this change: tests/test_distributed.sh writes to the real ~/.aida/roles unless HOME is isolated.
+  created_at: 2026-09-25T23:04:22.120304361Z
+  modified_at: 2026-09-25T23:04:22.120304361Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: ac9803a159e1871122232d6e6512ca668da96446
