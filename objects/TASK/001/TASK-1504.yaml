@@ -1,0 +1,29 @@
+id: 01a0d727-1f20-73e1-8138-814edc072b08
+spec_id: TASK-1504
+agreed_id: TASK-1504
+title: '/aida-orchestrate (Claude): add --strict to the queue work fallback so it cannot silently queue an unsigned-off spec'
+description: |-
+  Found by the STORY-1475 review. aida-core/templates/skills/aida-orchestrate.md (Required capabilities fallback) says `aida queue work <SPEC>`. Without --strict, queue work auto-queues an Approved-but-unqueued spec (resolve_queue_work_plan, queue_cmd.rs about line 8100), which bypasses the step-2 queue sign-off.
+
+  ## Acceptance
+  - Every `aida queue work` in the Claude skill and its command twin passes --strict, or states the exemption.
+  - make check-templates and aida skill lint pass.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T06:01:00.448413246Z
+modified_at: 2026-09-25T06:01:00.448413246Z
+req_type: Task
+tags:
+- orchestrator
+- papercut
+- skill
+filed_at:
+  code_sha: dce27130ca391f4e587993afadb05b1447a6643f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
