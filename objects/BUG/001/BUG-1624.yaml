@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T15:52:33.233412803Z
-modified_at: 2026-09-25T15:52:41.400414755Z
+modified_at: 2026-09-25T16:03:04.983160399Z
 req_type: Bug
 comments:
 - id: 01a0d944-d2b8-7893-b058-c72cdf4cce92
@@ -16,6 +16,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved at high priority because it is an injection class. Dispatch it after BUG-1622 lands, and give it a strict security review.'
   created_at: 2026-09-25T15:52:41.400414755Z
   modified_at: 2026-09-25T15:52:41.400414755Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d94e-5697-7202-9646-b5efafafd235
+  author: joe
+  content: 'Scope addition from BUG-1622''s security re-review (Low): ''git pull'' ignores --end-of-options (it forwards arguments to fetch). Call reject_option_like inside the 3 pull helpers in aida-core/src/git_ops.rs (~269, ~323, ~982) and correct their comments, which claim protection that isn''t there. Add the missing guard tests the review listed: the stacks.json cascade, the prepare_graded_review refusal, the queue recover pushes, the pure-git forge refusals, and doctor whitespace --since.'
+  created_at: 2026-09-25T16:03:04.983160399Z
+  modified_at: 2026-09-25T16:03:04.983160399Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b821736ce75455f3858816002777b451fd4aaf03
