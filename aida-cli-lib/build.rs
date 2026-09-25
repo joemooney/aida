@@ -46,7 +46,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Mark dirty if working tree has uncommitted changes (best-effort).
     let dirty = Command::new("git")
-        .args(["status", "--porcelain"])
+        // `--no-optional-locks`: without it `git status` opportunistically
+        // rewrites a racy index (fresh after `git worktree add`), and since
+        // the index is a rerun trigger the next build would be Dirty.
+        // trace:BUG-1630 | ai:claude
+        .args(["--no-optional-locks", "status", "--porcelain"])
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -108,10 +112,20 @@ fn emit_git_rerun_triggers() {
             watched.push(loose);
         } else if !reflog.exists() {
             // Packed ref and no reflog to catch the next commit: watch the
-            // directory the loose ref will be created in. Spurious reruns are
-            // safe; a missed stamp update is not.
-            if let Some(parent) = loose.parent() {
-                watched.push(parent.to_path_buf());
+            // nearest existing ancestor of where the loose ref will be created
+            // (for a nested `a/b` whose `refs/heads/a` doesn't exist yet, its
+            // creation bumps `refs/heads`). Spurious reruns are safe; a missed
+            // stamp update is not.
+            // Never climb above `refs/`: a recursive watch of the whole git
+            // dir (objects, logs) would rerun on nearly every git operation.
+            let refs_root = common_dir.join("refs");
+            if let Some(dir) = loose
+                .ancestors()
+                .skip(1)
+                .take_while(|d| d.starts_with(&refs_root))
+                .find(|d| d.is_dir())
+            {
+                watched.push(dir.to_path_buf());
             }
         }
     }
