@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:44:52.921456265Z
-modified_at: 2026-09-25T13:41:33.971562982Z
+modified_at: 2026-09-25T18:24:48.298960108Z
 req_type: Bug
 tags:
 - flaky
@@ -48,6 +48,12 @@ comments:
   content: 'Orchestrator note: the rework is paused. The agent''s pseudo-TTY full-suite run (script -qec ... cargo test in a scratchpad copy) reached ~30G RSS within seconds, and it is the likely cause of the 05:56 systemd-oomd kill of the whole session. It was killed and the agent stopped. The uncommitted change in mcp.rs (guarding mcp_update_requirement_gates_advisor_and_merge_driven_statuses) survives in wt-bug-1618. Resume with a targeted pty run only, e.g. authority/advisor/escalat filters, under a memory cap. Do not run the full suite under a pty again.'
   created_at: 2026-09-25T13:41:33.971562982Z
   modified_at: 2026-09-25T13:41:33.971562982Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d9d0-16aa-71d3-a0bd-f3dd4980cdc9
+  author: joe
+  content: 'Additional evidence (from the BUG-1624 re-review): mcp_authority_gate_honors_advisor_role is flaky under the ''role'' filter. It failed 3 of 8 runs on origin/main, because it reads the process-wide AIDA_SESSION_ROLE while other role tests set it in parallel. Same family. When BUG-1618 resumes, guard it with AmbientGuard::hermetic or the env lock.'
+  created_at: 2026-09-25T18:24:48.298960108Z
+  modified_at: 2026-09-25T18:24:48.298960108Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
