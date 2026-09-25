@@ -22,12 +22,12 @@ description: |-
   - Tests cover an empty GitLab project whose first pushed ref is the feature branch.
 
   The root setup error is recoverable; the AIDA bug is that the review surface presents an impossible action without diagnosing it.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:58:42.443126121Z
-modified_at: 2026-09-25T00:26:22.102962929Z
+modified_at: 2026-09-25T01:08:29.107563866Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -53,6 +53,20 @@ comments:
   created_at: 2026-09-25T00:26:22.102962929Z
   modified_at: 2026-09-25T00:26:22.102962929Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d61b-4f2b-7101-bacf-af546a2e23d7
+  author: aida-auto-bump
+  timestamp: 2026-09-25T01:08:29.099127589Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d61b-4f33-7702-9209-aaa20736108c
+  timestamp: 2026-09-25T01:08:29.107561577Z
+  agent: aida
+  commit_sha: a052addddafee14f59ca10b0db26fb59e68263e9
+  summary: Completed via merge a052addd
 filed_at:
   code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
   branch: main
@@ -64,3 +78,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-25T00:11:05.200851369Z
   implemented_by: joe
+  completed_at: 2026-09-25T01:08:29.099123354Z
+  completion_sha: a052addddafee14f59ca10b0db26fb59e68263e9
