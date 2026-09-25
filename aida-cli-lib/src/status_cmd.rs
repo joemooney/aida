@@ -1065,6 +1065,7 @@ fn collect_absence_change_digest(
     let opts = history::HistoryOpts {
         limit: 250,
         max_commits: 2_000,
+        max_commits_explicit: false,
         events_mode: true,
         id_filter: None,
         type_filter: None,
@@ -1081,7 +1082,7 @@ fn collect_absence_change_digest(
         deferred_only_specs: None,
         exclude_meta: true,
     };
-    let Ok(events) = history::collect_event_records(store_path, &opts) else {
+    let Ok((events, _window_exhausted)) = history::collect_event_records(store_path, &opts) else {
         return AbsenceChangeDigest::default();
     };
     summarize_absence_events(&events)

@@ -22,6 +22,13 @@ use std::process::Command as ProcessCommand;
 pub struct HistoryOpts {
     pub limit: usize,
     pub max_commits: usize,
+    /// Whether `max_commits` came from an explicit `--max-commits` (vs the
+    /// `(limit*5).max(50)` events-mode default computed when the flag was
+    /// omitted). Gates the BUG-1617 "window ran out" notice: a caller who
+    /// pinned the window on purpose already knows it's narrow, so the hint
+    /// on how to widen it would be noise.
+    // trace:BUG-1617 | ai:claude
+    pub max_commits_explicit: bool,
     pub events_mode: bool,
     pub id_filter: Option<String>,
     pub type_filter: Option<String>,
@@ -217,7 +224,7 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         return run_digest(store_path, opts);
     }
 
-    let (filtered, hidden_archived) = collect_filtered_events(store_path, opts)?;
+    let (filtered, hidden_archived, window_exhausted) = collect_filtered_events(store_path, opts)?;
 
     if filtered.is_empty() {
         eprintln!("{}", "(no events match the filter)".dimmed());
@@ -230,6 +237,7 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
                 .dimmed()
             );
         }
+        print_window_exhausted_notice(opts, window_exhausted, filtered.len());
         return Ok(());
     }
 
@@ -257,7 +265,56 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         }
     }
 
+    print_window_exhausted_notice(opts, window_exhausted, filtered.len());
+
     Ok(())
+}
+
+/// BUG-1617: `aida history events` bounds its `git log` walk to
+/// `opts.max_commits` commits (by default `(limit*5).max(50)`). When that
+/// window is used up before `--limit` events were found, the command used
+/// to just... stop, with no indication fewer results came back than asked
+/// for. Tell a human caller how to widen the walk — but only when it's
+/// actually the DEFAULT window that ran out (an explicit `--max-commits`
+/// means the caller already knows they narrowed it) and only when a human
+/// is reading (agent/piped output is script-parsed; `window_exhausted` in
+/// the JSON/MCP surface is the machine-readable equivalent there, and
+/// injecting a prose line into that stream would just be noise to strip).
+/// Prints to stderr like the other `(...)` hints in this module, so it
+/// never pollutes stdout for a caller piping the event lines themselves.
+// trace:BUG-1617 | ai:claude
+fn print_window_exhausted_notice(opts: &HistoryOpts, window_exhausted: bool, shown: usize) {
+    // Agent/piped output is script-parsed; `window_exhausted` in the
+    // JSON/MCP surface is the machine-readable equivalent there, and a
+    // prose line would just be noise a script has to filter back out.
+    if crate::agent_output_mode() {
+        return;
+    }
+    if let Some(msg) = window_exhausted_notice_text(opts, window_exhausted, shown) {
+        eprintln!("{}", msg.dimmed());
+    }
+}
+
+/// The notice text (if any) for [`print_window_exhausted_notice`] — split
+/// out as a pure function so the "when do we print" logic is testable
+/// without capturing stdout/stderr. `None` when the limit was met, no
+/// events were exhausted, or the caller explicitly pinned `--max-commits`
+/// (they already know they narrowed the walk).
+// trace:BUG-1617 | ai:claude
+fn window_exhausted_notice_text(
+    opts: &HistoryOpts,
+    window_exhausted: bool,
+    shown: usize,
+) -> Option<String> {
+    if !window_exhausted || opts.max_commits_explicit {
+        return None;
+    }
+    Some(format!(
+        "(only {shown} of the requested {limit} found — the default {max_commits}-commit history window ran out first; widen it with --max-commits <N>, or bound the walk with --since/--until)",
+        shown = shown,
+        limit = opts.limit,
+        max_commits = opts.max_commits,
+    ))
 }
 
 /// TASK-1480: the default view for a single spec (`--id` / positional
@@ -276,7 +333,8 @@ fn run_single_spec_progress(store_path: &Path, opts: &HistoryOpts) -> Result<()>
         .as_deref()
         .expect("run_single_spec_progress requires opts.id_filter");
 
-    let (mut filtered, _hidden_archived) = collect_filtered_events(store_path, opts)?;
+    let (mut filtered, _hidden_archived, _window_exhausted) =
+        collect_filtered_events(store_path, opts)?;
 
     if filtered.is_empty() {
         return report_empty_single_spec(store_path, opts, id);
@@ -347,7 +405,7 @@ fn report_empty_single_spec(store_path: &Path, opts: &HistoryOpts, id: &str) -> 
     probe.shipped_only = false;
     probe.since = None;
     probe.until = None;
-    let (any, _) = collect_filtered_events(store_path, &probe)?;
+    let (any, _, _) = collect_filtered_events(store_path, &probe)?;
     if any.is_empty() {
         return Err(crate::not_found::requirement_not_found_in_loaded_store(id));
     }
@@ -384,11 +442,15 @@ fn current_snapshot(store_path: &Path, spec_id: &str) -> (Option<String>, String
 
 /// Collect structured event records using the same filters as
 /// `aida history events`. Intended for MCP and other non-TTY consumers.
-/// trace:TASK-538 | ai:codex
+/// Returns `(records, window_exhausted)` — see [`collect_filtered_events`]
+/// for what `window_exhausted` means; MCP surfaces it as a top-level JSON
+/// field so a caller can tell "fewer results" from "that's everything."
+// trace:TASK-538 | ai:codex
+// trace:BUG-1617 | ai:claude
 pub fn collect_event_records(
     store_path: &Path,
     opts: &HistoryOpts,
-) -> Result<Vec<HistoryEventRecord>> {
+) -> Result<(Vec<HistoryEventRecord>, bool)> {
     if !store_path.is_dir() {
         anyhow::bail!(
             "Not a git-canonical AIDA store: {}\n\
@@ -398,16 +460,35 @@ pub fn collect_event_records(
         );
     }
 
-    let (events, _) = collect_filtered_events(store_path, opts)?;
-    Ok(events.iter().map(event_record).collect())
+    let (events, _, window_exhausted) = collect_filtered_events(store_path, opts)?;
+    Ok((events.iter().map(event_record).collect(), window_exhausted))
 }
 
-fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec<Event>, usize)> {
+/// Returns `(events, archived_hidden_count, window_exhausted)`.
+/// `window_exhausted` is true when the commit walk found at least one more
+/// commit beyond `max_commits` (real history continues past the cap — see
+/// the over-fetch-by-one comment on the `git log` call below) AND fewer
+/// than `opts.limit` matching events were found. History that is exactly
+/// `max_commits` commits long, or shorter, is NOT exhaustion — there was
+/// nothing more to find regardless of window size.
+// trace:BUG-1617 | ai:claude
+fn collect_filtered_events(
+    store_path: &Path,
+    opts: &HistoryOpts,
+) -> Result<(Vec<Event>, usize, bool)> {
     // Build a `git log` command bounded by --since / --until / --max_commits.
+    // BUG-1617 review fix: over-fetch by one commit. `-n<max_commits>` alone
+    // can't distinguish "history is exactly max_commits commits long" (not
+    // exhausted — that's everything) from "there's more beyond the cap"
+    // (exhausted) — both return exactly `max_commits` lines. Asking for one
+    // extra and only ever DECODING the first `max_commits` (truncated right
+    // after the log call, below) gives an unambiguous signal at the cost of
+    // one extra `git log` line, not one extra `git show`.
+    // trace:BUG-1617 | ai:claude
     let mut log_args: Vec<String> = vec![
         "log".into(),
         "--pretty=format:%H%x09%aI%x09%ae".into(),
-        format!("-n{}", opts.max_commits),
+        format!("-n{}", opts.max_commits.saturating_add(1)),
     ];
     if let Some(s) = &opts.since {
         log_args.push(format!("--since={}", s));
@@ -435,7 +516,17 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
     }
 
     let log_output = run_git(store_path, &log_args)?;
-    let commits: Vec<CommitMeta> = log_output.lines().filter_map(parse_log_line).collect();
+    let mut commits: Vec<CommitMeta> = log_output.lines().filter_map(parse_log_line).collect();
+
+    // More than `max_commits` came back only because we asked for one extra
+    // as a probe — that extra commit means real history continues past the
+    // cap. Exactly `max_commits` (or fewer) means the cap either wasn't hit
+    // or landed exactly on the true end of history; either way, nothing is
+    // being hidden. Truncate back down to `max_commits` before doing any of
+    // the expensive per-commit `git show` work below — the probe commit
+    // itself is never decoded into events. trace:BUG-1617 | ai:claude
+    let commit_walk_capped = commits.len() > opts.max_commits;
+    commits.truncate(opts.max_commits);
 
     let mut events: Vec<Event> = Vec::new();
 
@@ -498,7 +589,7 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
     // `archived_specs` (non-empty when default `--non-archived`) hides those
     // spec events; `archived_only_specs` (Some(...) when `--archived`)
     // narrows to only those. trace:STORY-441 | ai:claude
-    let filtered: Vec<Event> = events
+    let mut filtered: Vec<Event> = events
         .into_iter()
         .filter(|e| match &opts.id_filter {
             Some(id) => e.spec_id.eq_ignore_ascii_case(id),
@@ -535,10 +626,18 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
             Some(only) => only.contains(&e.spec_id),
             None => true,
         })
-        .take(opts.limit)
         .collect();
 
-    Ok((filtered, opts.archived_specs.len()))
+    // BUG-1617: `commit_walk_capped` (computed above, right after the log
+    // call) already tells us whether real history continues past the cap.
+    // Combine with "did we still fall short of --limit" — a limit-satisfying
+    // result is never "exhausted" even if the walk was also capped.
+    // trace:BUG-1617 | ai:claude
+    let window_exhausted = commit_walk_capped && filtered.len() < opts.limit;
+
+    filtered.truncate(opts.limit);
+
+    Ok((filtered, opts.archived_specs.len(), window_exhausted))
 }
 
 /// Digest mode (default): one row per recently-touched requirement, sorted
@@ -1626,7 +1725,7 @@ mod tests {
             id_filter: Some("TASK-1".to_string()),
             ..base_opts()
         };
-        let (events, _) = collect_filtered_events(root, &opts).unwrap();
+        let (events, _, _) = collect_filtered_events(root, &opts).unwrap();
         assert!(!events.is_empty(), "expected at least one TASK-1 event");
         assert!(
             events.iter().all(|e| e.spec_id == "TASK-1"),
@@ -1689,7 +1788,7 @@ mod tests {
             exclude_meta: true,
             ..base_opts()
         };
-        let (events, _) = collect_filtered_events(root, &hidden).unwrap();
+        let (events, _, _) = collect_filtered_events(root, &hidden).unwrap();
         assert!(
             events.iter().any(|e| e.spec_id == "TASK-1"),
             "the real spec's events must still show, got: {:?}",
@@ -1706,7 +1805,7 @@ mod tests {
             exclude_meta: false,
             ..base_opts()
         };
-        let (events, _) = collect_filtered_events(root, &shown).unwrap();
+        let (events, _, _) = collect_filtered_events(root, &shown).unwrap();
         assert!(
             events.iter().any(|e| e.spec_id == "META-1"),
             "META rows must be visible when not excluded, got: {:?}",
@@ -1908,6 +2007,7 @@ mod tests {
         HistoryOpts {
             limit: 1000,
             max_commits: 1000,
+            max_commits_explicit: false,
             events_mode: true,
             id_filter: None,
             type_filter: None,
@@ -1924,6 +2024,244 @@ mod tests {
             deferred_only_specs: None,
             exclude_meta: false,
         }
+    }
+
+    /// BUG-1617: builds a git-canonical fixture with one spec whose status
+    /// flips back and forth `commit_count` times after a seed commit — each
+    /// flip is exactly one `StatusChange` event, so a test can dial in a
+    /// precise commit/event count without needing hundreds of real commits
+    /// to exercise a small `max_commits` window.
+    // trace:BUG-1617 | ai:claude
+    fn write_status_flip_fixture(root: &Path, commit_count: usize) {
+        let git = |args: &[&str]| {
+            let out = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+
+        let rel = "objects/BUG/000/BUG-1.yaml";
+        let full = root.join(rel);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+
+        std::fs::write(&full, "spec_id: BUG-1\ntitle: t\nstatus: Draft\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "seed"]);
+
+        for i in 0..commit_count {
+            let status = if i % 2 == 0 { "Approved" } else { "Draft" };
+            std::fs::write(
+                &full,
+                format!("spec_id: BUG-1\ntitle: t\nstatus: {status}\n"),
+            )
+            .unwrap();
+            git(&["add", "-A"]);
+            git(&["commit", "-q", "-m", &format!("flip {i}")]);
+        }
+    }
+
+    /// BUG-1617: the commit walk gets capped at 3 commits, but 8 events were
+    /// requested and 10 exist — the DEFAULT window ran out first, so
+    /// `window_exhausted` must be true.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_reports_window_exhausted_when_default_window_runs_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 10);
+
+        let opts = HistoryOpts {
+            limit: 8,
+            max_commits: 3,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        assert!(
+            events.len() < 8,
+            "expected fewer than the requested limit, got {}",
+            events.len()
+        );
+        assert!(
+            window_exhausted,
+            "the 3-commit cap was hit before the 8-event limit — expected window_exhausted=true"
+        );
+    }
+
+    /// BUG-1617: same fixture, but the window and the limit line up exactly
+    /// (3 commits, 3 requested) — the limit was MET, so even though the
+    /// commit walk was also capped at the same point, this is not
+    /// "exhausted": nothing was silently left out of the requested count.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_no_window_exhausted_when_limit_met() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 10);
+
+        let opts = HistoryOpts {
+            limit: 3,
+            max_commits: 3,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        assert_eq!(events.len(), 3);
+        assert!(
+            !window_exhausted,
+            "the limit was met exactly at the window edge — must not be flagged as exhausted"
+        );
+    }
+
+    /// BUG-1617: the window is far larger than the real history (4 commits
+    /// total vs. a 100-commit cap) — the walk legitimately ran out of
+    /// commits to look at, not window capacity. Must not be flagged as
+    /// exhausted even though fewer than `limit` events came back.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_not_exhausted_when_real_history_ends_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 3);
+
+        let opts = HistoryOpts {
+            limit: 10,
+            max_commits: 100,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        // 3 flip commits (StatusChange events) plus the seed commit itself
+        // (an Added event — the default opts don't filter kinds) = 4.
+        assert_eq!(events.len(), 4);
+        assert!(
+            !window_exhausted,
+            "real history ran out, not the window — must not be flagged as exhausted"
+        );
+    }
+
+    /// BUG-1617 review fix: the exact-boundary case the naive
+    /// `commits.len() >= max_commits` check got wrong — history that is
+    /// *exactly* `max_commits` commits long is a coincidence, not
+    /// exhaustion. 4 flips + 1 seed = 5 commits total, `max_commits: 5`, and
+    /// a `--limit` nowhere near met (10). Before the over-fetch-by-one fix
+    /// this reported `window_exhausted: true`; it must report `false` —
+    /// there is nothing beyond the cap to widen toward.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_not_exhausted_when_history_is_exactly_max_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 4);
+
+        let opts = HistoryOpts {
+            limit: 10,
+            max_commits: 5,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        // 4 status-change flips + 1 Added (the seed) = 5, all of history.
+        assert_eq!(events.len(), 5);
+        assert!(
+            !window_exhausted,
+            "history is exactly max_commits long — that IS everything, not exhaustion"
+        );
+    }
+
+    /// BUG-1617 review fix: the sibling of the exactly-at-cap case above —
+    /// history is one commit LONGER than `max_commits` (5 flips + 1 seed = 6
+    /// commits, `max_commits: 5`), so there genuinely is more beyond the
+    /// window. Only the newest `max_commits` commits should be decoded
+    /// (the oldest — the seed's Added event — must NOT appear), and
+    /// `window_exhausted` must be true.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_exhausted_when_history_is_one_more_than_max_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 5);
+
+        let opts = HistoryOpts {
+            limit: 10,
+            max_commits: 5,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        // Only the 5 newest commits are decoded — all 5 are StatusChange
+        // flips; the oldest (seed/Added) commit falls outside the window.
+        assert_eq!(events.len(), 5);
+        assert!(
+            events
+                .iter()
+                .all(|e| matches!(e.kind, EventKind::StatusChange { .. })),
+            "the oldest (seed/Added) commit must fall outside the window"
+        );
+        assert!(
+            window_exhausted,
+            "history continues one commit past the cap — expected window_exhausted=true"
+        );
+    }
+
+    /// BUG-1617: the notice text a human sees — present, and mentions both
+    /// ways to widen the walk (--max-commits and a time bound), exactly when
+    /// the window was exhausted and the caller did NOT pin --max-commits
+    /// themselves.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn window_exhausted_notice_text_present_for_default_window() {
+        let opts = HistoryOpts {
+            limit: 8,
+            max_commits: 3,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let msg = window_exhausted_notice_text(&opts, true, 3).expect("expected a notice");
+        assert!(
+            msg.contains("--max-commits"),
+            "notice should mention --max-commits, got: {msg}"
+        );
+        assert!(
+            msg.contains("--since") || msg.contains("--until"),
+            "notice should mention a time-bound escape hatch, got: {msg}"
+        );
+    }
+
+    /// BUG-1617 acceptance: no notice when the limit was met.
+    #[test]
+    fn window_exhausted_notice_text_absent_when_limit_met() {
+        let opts = HistoryOpts {
+            limit: 3,
+            max_commits: 3,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        assert!(window_exhausted_notice_text(&opts, false, 3).is_none());
+    }
+
+    /// BUG-1617 acceptance: no notice when the caller passed an explicit
+    /// --max-commits — they already know they narrowed the walk.
+    #[test]
+    fn window_exhausted_notice_text_absent_when_max_commits_explicit() {
+        let opts = HistoryOpts {
+            limit: 8,
+            max_commits: 3,
+            max_commits_explicit: true,
+            ..base_opts()
+        };
+        assert!(window_exhausted_notice_text(&opts, true, 3).is_none());
     }
 
     /// BUG-424: a multibyte char straddling the truncation point must not panic
@@ -2287,7 +2625,7 @@ mod tests {
             status_changes_only: true,
             ..base_opts()
         };
-        let (mut filtered, _) = collect_filtered_events(root, &opts).unwrap();
+        let (mut filtered, _, _) = collect_filtered_events(root, &opts).unwrap();
         assert_eq!(
             filtered.len(),
             3,
@@ -2326,7 +2664,7 @@ mod tests {
             comments_only: true,
             ..base_opts()
         };
-        let (comment_events, _) = collect_filtered_events(root, &comments_opts).unwrap();
+        let (comment_events, _, _) = collect_filtered_events(root, &comments_opts).unwrap();
         assert_eq!(comment_events.len(), 1);
         assert!(matches!(
             comment_events[0].kind,
@@ -2340,7 +2678,7 @@ mod tests {
             comments_only: true,
             ..base_opts()
         };
-        let (both_events, _) = collect_filtered_events(root, &both_opts).unwrap();
+        let (both_events, _, _) = collect_filtered_events(root, &both_opts).unwrap();
         assert_eq!(both_events.len(), 4);
     }
 
