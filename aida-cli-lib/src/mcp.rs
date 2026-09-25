@@ -2537,6 +2537,11 @@ impl<'a> McpServer<'a> {
         let opts = HistoryOpts {
             limit,
             max_commits,
+            // MCP exposes no `max_commits` override — the window here is
+            // always the computed default, so `window_exhausted` below is
+            // always meaningful as "the default window ran out."
+            // trace:BUG-1617 | ai:claude
+            max_commits_explicit: false,
             events_mode,
             id_filter: spec_id,
             type_filter,
@@ -2560,11 +2565,16 @@ impl<'a> McpServer<'a> {
             // visible (the CLI-only default-view hide doesn't apply here).
             exclude_meta: false,
         };
-        let events = history::collect_event_records(self.storage.path(), &opts)
+        let (events, window_exhausted) = history::collect_event_records(self.storage.path(), &opts)
             .map_err(|e| e.to_string())?;
+        // BUG-1617: tell a caller when the default commit window ran out
+        // before `limit` events were found, so a short `events` array reads
+        // as "there may be more — widen the window" rather than "that's
+        // everything." trace:BUG-1617 | ai:claude
         serde_json::to_string_pretty(&json!({
             "count": events.len(),
             "events": events,
+            "window_exhausted": window_exhausted,
         }))
         .map_err(|e| e.to_string())
     }
@@ -7390,7 +7400,7 @@ pub fn tool_descriptors() -> Value {
                 }
             },
             "outputSchema": text_envelope_output_schema(
-                "pretty-printed JSON `{ count, events }`, where each event has `sha`, `timestamp`, `author`, `spec_id`, `req_type`, `kind`, `summary`, and structured `detail` fields."
+                "pretty-printed JSON `{ count, events, window_exhausted }`, where each event has `sha`, `timestamp`, `author`, `spec_id`, `req_type`, `kind`, `summary`, and structured `detail` fields. `window_exhausted` is true when the commit walk hit its cap before `count` reached the requested `limit` — there may be older matching events beyond it; a caller who needs them should narrow with `since`/`until`, since the MCP tool has no `max_commits` override of its own."
             )
         },
 
@@ -8679,6 +8689,69 @@ mod tests {
         std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
         let storage = Box::leak(Box::new(Storage::new(cache_path)));
         McpServer::new(storage, dir.to_path_buf())
+    }
+
+    /// BUG-1617: the `history` MCP tool's JSON now carries a top-level
+    /// `window_exhausted` boolean alongside `count`/`events`. This is a
+    /// wiring/shape test — a small fixture (one status flip) is nowhere
+    /// near the tool's 500-commit window floor, so `window_exhausted` is
+    /// always false here; the exhaustion-detection *logic* itself (true vs.
+    /// false depending on where the commit cap lands relative to the
+    /// requested limit) is covered directly against
+    /// `collect_filtered_events` in `history.rs`'s own tests, cheaply,
+    /// without needing hundreds of commits to trip the MCP tool's fixed
+    /// floor.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn tool_history_json_carries_window_exhausted_field() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+
+        let git = |args: &[&str]| {
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(&store_root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+
+        let rel = std::path::Path::new("objects/BUG/000/BUG-1.yaml");
+        let full = store_root.join(rel);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(&full, "spec_id: BUG-1\ntitle: t\nstatus: Draft\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "seed"]);
+        std::fs::write(&full, "spec_id: BUG-1\ntitle: t\nstatus: Approved\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "flip"]);
+
+        let storage = Storage::new(&store_root);
+        let server = McpServer::new(&storage, dir.path().to_path_buf());
+
+        let response = server
+            .tool_history(&json!({"limit": 5}))
+            .expect("tool_history should succeed against a fresh git fixture");
+        let parsed: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(
+            parsed.get("window_exhausted"),
+            Some(&Value::Bool(false)),
+            "plenty of window left relative to the tiny fixture — expected window_exhausted: false, got: {parsed}"
+        );
+        assert!(
+            parsed.get("count").and_then(Value::as_u64).unwrap_or(0) >= 1,
+            "expected at least the one status-change event, got: {parsed}"
+        );
     }
 
     #[test]
