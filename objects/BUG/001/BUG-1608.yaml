@@ -22,12 +22,12 @@ description: |-
   - Regression coverage exercises the real queue resolver/status transitions used by `--drain`.
 
   Regression context: STORY-449 documents and tests both the failure cap and dependent skip, but the observed queue-wide drain violated both guarantees.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:57:33.141469956Z
-modified_at: 2026-09-24T23:54:05.380199476Z
+modified_at: 2026-09-25T01:08:28.136767071Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -53,6 +53,20 @@ comments:
   created_at: 2026-09-24T23:54:05.380199476Z
   modified_at: 2026-09-24T23:54:05.380199476Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d61b-4b61-7631-8b2f-90e4baebed3b
+  author: aida-auto-bump
+  timestamp: 2026-09-25T01:08:28.129180031Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d61b-4b68-7301-9174-b9781ef38269
+  timestamp: 2026-09-25T01:08:28.136765425Z
+  agent: aida
+  commit_sha: a052addddafee14f59ca10b0db26fb59e68263e9
+  summary: Completed via merge a052addd
 filed_at:
   code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
   branch: main
@@ -60,3 +74,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 81c37e2cb
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T01:08:28.129176107Z
+  completion_sha: a052addddafee14f59ca10b0db26fb59e68263e9
