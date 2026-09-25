@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:05:57.530829138Z
-modified_at: 2026-09-25T08:08:19.069426462Z
+modified_at: 2026-09-25T08:08:39.120854538Z
 req_type: Bug
 tags:
 - bug
@@ -24,6 +24,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved. It is a concrete, one-line argument-order bug with a clear acceptance test. Implement it after BUG-1612 merges, since both touch rest.rs.'
   created_at: 2026-09-25T05:31:37.697752363Z
   modified_at: 2026-09-25T05:31:37.697752363Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d79b-fbd0-7522-9ba4-2b4e132ad666
+  author: joe
+  content: 'Review: APPROVE (orchestrator; not the author). Both REST add_comment paths now call Comment::new(author, content) in order. gRPC was already correct (struct literal). The new test asserts content and author in the response and on disk. Queued for batch 66.'
+  created_at: 2026-09-25T08:08:39.120854538Z
+  modified_at: 2026-09-25T08:08:39.120854538Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
