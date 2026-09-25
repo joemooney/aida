@@ -7348,12 +7348,12 @@ pub fn tool_descriptors() -> Value {
                     },
                     "since": {
                         "type": "string",
-                        "description": "Optional lower time bound (mirrors `aida history --since`). Accepts a compact relative duration meaning 'that far before now' (`5h`, `7d`, `30m`, `2w`), an ISO date (`2026-05-01`, interpreted as local midnight), or a full RFC3339 timestamp (zone honored exactly). A `since` that resolves later than `until` is rejected.",
-                        "example": "24h"
+                        "description": "Optional lower time bound (mirrors `aida history --since`). Accepts a relative duration meaning 'that far before now' (`30m`, `5h`, `7d`, `2w`, or `<N> minutes/hours/days/weeks ago`), an ISO date (`2026-05-01`, local midnight), a zone-less ISO datetime (`2026-05-01T10:00`, local time), or a full RFC3339 timestamp (zone honored exactly). Other git date phrases are no longer passed through and are rejected. A `since` that resolves later than `until` is rejected.",
+                        "example": "24 hours ago"
                     },
                     "until": {
                         "type": "string",
-                        "description": "Optional upper time bound (mirrors `aida history --until`). Same forms as `since`: a compact relative duration, an ISO date (local midnight), or RFC3339.",
+                        "description": "Optional upper time bound (mirrors `aida history --until`). Same forms as `since`: a relative duration, an ISO date (local midnight), a zone-less ISO datetime (local time), or RFC3339.",
                         "example": "2026-06-01"
                     },
                     "limit": {

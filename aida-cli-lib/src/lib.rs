@@ -33786,30 +33786,19 @@ pub(crate) fn history_kind_report(
             events::EventKind::known_names().join(", ")
         );
     }
-    // TASK-1502: `--kind` shares `aida history`'s --since/--until flags, so
-    // it gets the same compact-relative-duration grammar
-    // (`queue_cmd::parse_since_arg_at`) as the digest/events views, instead
-    // of only the bare-date/RFC3339 forms `events::parse_time_bound` covers.
+    // `--kind` shares `aida history`'s --since/--until flags, so it gets the
+    // same time-bound grammar and ordering check as the digest/events views,
+    // instead of only the bare-date/RFC3339 forms `events::parse_time_bound`
+    // covers.
     // trace:TASK-1502 | ai:claude
     let now = chrono::Utc::now();
-    let local_offset = queue_cmd::local_offset_now();
     let bound = |v: Option<&str>, flag: &str| -> Result<Option<chrono::DateTime<chrono::Utc>>> {
-        v.map(|raw| {
-            queue_cmd::parse_since_arg_at(raw, now, local_offset).map_err(|_| {
-                anyhow::anyhow!(
-                    "invalid {flag} value `{raw}` — expected a compact relative \
-                     duration (e.g. `5h`, `7d`, `30m`, `2w`), an ISO date \
-                     (`2026-05-01`, interpreted as local midnight), or RFC3339"
-                )
-            })
-        })
-        .transpose()
+        v.map(|raw| history::parse_history_bound(raw, flag, now, &chrono::Local))
+            .transpose()
     };
     let since_at = bound(since, "--since")?;
     let until_at = bound(until, "--until")?;
-    // trace:TASK-1502 | ai:claude — reuses the same ordering check as the
-    // digest/events views instead of duplicating it here.
-    history::validate_window_order(since_at, until_at, local_offset)?;
+    history::validate_window_order(since_at, until_at, &chrono::Local)?;
     let query = events::KindQuery {
         kind: kind.to_string(),
         since: since_at,
