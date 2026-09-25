@@ -46,3 +46,9 @@
   added_by: joe
   added_at: 2026-09-25T08:03:19.549397080Z
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0d7a1-8b46-7c81-acf2-46978c1f9114
+  position: 9000
+  added_by: joe
+  added_at: 2026-09-25T08:16:15.845482239Z
+  added_by_machine: imac
