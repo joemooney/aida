@@ -33792,13 +33792,14 @@ pub(crate) fn history_kind_report(
     // of only the bare-date/RFC3339 forms `events::parse_time_bound` covers.
     // trace:TASK-1502 | ai:claude
     let now = chrono::Utc::now();
+    let local_offset = queue_cmd::local_offset_now();
     let bound = |v: Option<&str>, flag: &str| -> Result<Option<chrono::DateTime<chrono::Utc>>> {
         v.map(|raw| {
-            queue_cmd::parse_since_arg_at(raw, now).map_err(|_| {
+            queue_cmd::parse_since_arg_at(raw, now, local_offset).map_err(|_| {
                 anyhow::anyhow!(
                     "invalid {flag} value `{raw}` — expected a compact relative \
                      duration (e.g. `5h`, `7d`, `30m`, `2w`), an ISO date \
-                     (`2026-05-01`), or RFC3339"
+                     (`2026-05-01`, interpreted as local midnight), or RFC3339"
                 )
             })
         })
@@ -33806,17 +33807,9 @@ pub(crate) fn history_kind_report(
     };
     let since_at = bound(since, "--since")?;
     let until_at = bound(until, "--until")?;
-    if let (Some(s), Some(u)) = (since_at, until_at) {
-        if s > u {
-            anyhow::bail!(
-                "--since resolves to {} which is later than --until's {} — \
-                 that window can never match anything; swap the bounds or \
-                 widen one",
-                s.format("%Y-%m-%d %H:%M UTC"),
-                u.format("%Y-%m-%d %H:%M UTC"),
-            );
-        }
-    }
+    // trace:TASK-1502 | ai:claude — reuses the same ordering check as the
+    // digest/events views instead of duplicating it here.
+    history::validate_window_order(since_at, until_at, local_offset)?;
     let query = events::KindQuery {
         kind: kind.to_string(),
         since: since_at,

@@ -6831,10 +6831,13 @@ pub(crate) fn status_is_shelved(status: &aida_core::RequirementStatus) -> bool {
     matches!(status, aida_core::RequirementStatus::NeedsAttention)
 }
 
-/// Parse a `--since` value as either an RFC3339 timestamp, a bare ISO date
-/// (`YYYY-MM-DD`, midnight UTC), or a relative `<N>{d,h,m,w}` expression
-/// (e.g. `2d`, `12h`, `45m`, `2w`). Returns the resulting absolute UTC
-/// timestamp, resolved against the current wall-clock time.
+/// Parse a `--since` value as either an RFC3339 timestamp (zone honored
+/// exactly), a bare ISO date (`YYYY-MM-DD`, interpreted as LOCAL midnight —
+/// matching git's own approxidate and user intuition, not UTC midnight), or
+/// a relative `<N>{d,h,m,w}` expression (e.g. `2d`, `12h`, `45m`, `2w`,
+/// always relative to `now` regardless of zone). Returns the resulting
+/// absolute UTC timestamp, resolved against the current wall-clock time and
+/// the machine's current local UTC offset.
 ///
 /// Shared by `aida archive --older-than`, `aida queue progress --since`,
 /// the proxy-approvals `--since`/`--until` filters, and `aida history
@@ -6842,30 +6845,59 @@ pub(crate) fn status_is_shelved(status: &aida_core::RequirementStatus) -> bool {
 /// in the CLI rather than a parser per command.
 // trace:TASK-1502 | ai:claude
 pub(crate) fn parse_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
-    parse_since_arg_at(raw, chrono::Utc::now())
+    parse_since_arg_at(raw, chrono::Utc::now(), local_offset_now())
+}
+
+/// The machine's current local UTC offset, as a `FixedOffset` snapshot —
+/// used to interpret a bare ISO date as LOCAL midnight. A single
+/// current-offset snapshot rather than a full DST-aware per-date lookup:
+/// simple, and correct except on the rare day a DST transition falls
+/// exactly on the requested date (in which case local-midnight is
+/// ambiguous/nonexistent and `parse_since_arg_at` reports that rather than
+/// guessing).
+// trace:TASK-1502 | ai:claude
+pub(crate) fn local_offset_now() -> chrono::FixedOffset {
+    *chrono::Local::now().offset()
 }
 
 /// [`parse_since_arg`], but resolves relative durations against an explicit
-/// `now` instead of the wall clock. Lets callers get deterministic output in
-/// tests without mocking the system clock.
+/// `now`, and a bare ISO date against an explicit `local_offset`, instead of
+/// the wall clock / system timezone. Lets callers (notably tests) get
+/// deterministic output without mocking the system clock or `$TZ`.
 // trace:TASK-1502 | ai:claude
 pub(crate) fn parse_since_arg_at(
     raw: &str,
     now: chrono::DateTime<chrono::Utc>,
+    local_offset: chrono::FixedOffset,
 ) -> Result<chrono::DateTime<chrono::Utc>> {
+    use chrono::TimeZone;
+
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         anyhow::bail!("--since cannot be empty");
     }
-    // Try RFC3339 first.
+    // Try RFC3339 first — an explicit zone in the input is always honored
+    // exactly, never reinterpreted against `local_offset`.
     if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(trimmed) {
         return Ok(ts.with_timezone(&chrono::Utc));
     }
-    // Bare ISO date (`YYYY-MM-DD`, no time component) — midnight UTC.
-    // trace:TASK-1502 | ai:claude
+    // Bare ISO date (`YYYY-MM-DD`, no time/zone) — LOCAL midnight, per
+    // TASK-1502 review: git's own approxidate resolves a bare date to local
+    // midnight, and silently reinterpreting it as UTC midnight would shift
+    // the window by the caller's UTC offset. trace:TASK-1502 | ai:claude
     if let Ok(d) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
-        if let Some(dt) = d.and_hms_opt(0, 0, 0) {
-            return Ok(dt.and_utc());
+        if let Some(midnight) = d.and_hms_opt(0, 0, 0) {
+            let local_dt = local_offset
+                .from_local_datetime(&midnight)
+                .single()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "`{}` is ambiguous or doesn't exist at local midnight (a DST \
+                     transition) — use an explicit time and zone instead",
+                        raw
+                    )
+                })?;
+            return Ok(local_dt.with_timezone(&chrono::Utc));
         }
     }
     // Relative form: <number><unit>, unit ∈ {d,h,m,w}

@@ -196,8 +196,9 @@ fn single_spec_uses_progress_view(opts: &HistoryOpts, agent_mode: bool) -> bool 
 }
 
 /// TASK-1502: resolve `opts.since`/`opts.until` — a compact relative duration
-/// (`5h`, `7d`, `30m`, `2w`), an RFC3339 timestamp, or a bare ISO date — into
-/// concrete UTC instants, up front, before any git shelling.
+/// (`5h`, `7d`, `30m`, `2w`), an RFC3339 timestamp (zone honored exactly),
+/// or a bare ISO date (LOCAL midnight) — into concrete UTC instants, up
+/// front, before any git shelling.
 ///
 /// Reuses `queue_cmd::parse_since_arg_at`, the same duration grammar `aida
 /// archive --older-than` and `aida queue progress --since` already use,
@@ -210,7 +211,8 @@ fn single_spec_uses_progress_view(opts: &HistoryOpts, agent_mode: bool) -> bool 
 /// strings (so every downstream `git log` call keeps working unmodified),
 /// plus the resolved instants for display. Rejects `--since` later than
 /// `--until` with a clear error — that window can never match anything.
-/// `now` is injectable so callers (notably tests) get deterministic output.
+/// `now` and `local_offset` are both injectable so callers (notably tests)
+/// get deterministic output regardless of wall clock or system timezone.
 // trace:TASK-1502 | ai:claude
 type ResolvedWindow = (
     HistoryOpts,
@@ -221,32 +223,46 @@ type ResolvedWindow = (
 fn resolve_history_window(
     opts: &HistoryOpts,
     now: chrono::DateTime<chrono::Utc>,
+    local_offset: chrono::FixedOffset,
 ) -> Result<ResolvedWindow> {
     let since_at = opts
         .since
         .as_deref()
-        .map(|raw| parse_history_bound(raw, "--since", now))
+        .map(|raw| parse_history_bound(raw, "--since", now, local_offset))
         .transpose()?;
     let until_at = opts
         .until
         .as_deref()
-        .map(|raw| parse_history_bound(raw, "--until", now))
+        .map(|raw| parse_history_bound(raw, "--until", now, local_offset))
         .transpose()?;
+    validate_window_order(since_at, until_at, local_offset)?;
+    let mut resolved = opts.clone();
+    resolved.since = since_at.map(|d| d.to_rfc3339());
+    resolved.until = until_at.map(|d| d.to_rfc3339());
+    Ok((resolved, since_at, until_at))
+}
+
+/// Shared by `resolve_history_window` and `history_kind_report`'s `--kind`
+/// path so the reversed-order check (and its error wording) lives in one
+/// place instead of being duplicated per `aida history` sub-mode.
+// trace:TASK-1502 | ai:claude
+pub(crate) fn validate_window_order(
+    since_at: Option<chrono::DateTime<chrono::Utc>>,
+    until_at: Option<chrono::DateTime<chrono::Utc>>,
+    local_offset: chrono::FixedOffset,
+) -> Result<()> {
     if let (Some(s), Some(u)) = (since_at, until_at) {
         if s > u {
             anyhow::bail!(
                 "--since resolves to {} which is later than --until's {} — \
                  that window can never match anything; swap the bounds or \
                  widen one",
-                fmt_window_ts(s),
-                fmt_window_ts(u),
+                fmt_window_ts(s, local_offset),
+                fmt_window_ts(u, local_offset),
             );
         }
     }
-    let mut resolved = opts.clone();
-    resolved.since = since_at.map(|d| d.to_rfc3339());
-    resolved.until = until_at.map(|d| d.to_rfc3339());
-    Ok((resolved, since_at, until_at))
+    Ok(())
 }
 
 /// One bound of [`resolve_history_window`], with an error message labeled
@@ -257,38 +273,51 @@ fn parse_history_bound(
     raw: &str,
     flag: &str,
     now: chrono::DateTime<chrono::Utc>,
+    local_offset: chrono::FixedOffset,
 ) -> Result<chrono::DateTime<chrono::Utc>> {
-    crate::queue_cmd::parse_since_arg_at(raw, now).map_err(|_| {
+    crate::queue_cmd::parse_since_arg_at(raw, now, local_offset).map_err(|_| {
         anyhow::anyhow!(
             "invalid {flag} value `{raw}` — expected a compact relative \
              duration (e.g. `5h`, `7d`, `30m`, `2w`), an ISO date \
-             (`2026-05-01`), or RFC3339"
+             (`2026-05-01`, interpreted as local midnight), or RFC3339"
         )
     })
 }
 
-fn fmt_window_ts(d: chrono::DateTime<chrono::Utc>) -> String {
-    d.format("%Y-%m-%d %H:%M UTC").to_string()
+/// Renders `d` in the caller's local offset with an explicit numeric zone
+/// (`%z`) — so the `Window:` line (and any error quoting a bound) always
+/// states the timezone a bare-date bound resolved against, rather than
+/// silently converting to UTC and leaving the reader to do the math.
+// trace:TASK-1502 | ai:claude
+fn fmt_window_ts(d: chrono::DateTime<chrono::Utc>, local_offset: chrono::FixedOffset) -> String {
+    d.with_timezone(&local_offset)
+        .format("%Y-%m-%d %H:%M %z")
+        .to_string()
 }
 
 /// TASK-1502: the human-output "here's what I actually queried" line —
-/// unambiguous even though the caller may have typed a relative duration.
-/// `None` when neither bound was given (nothing to show).
+/// unambiguous even though the caller may have typed a relative duration or
+/// a bare date (resolved against `local_offset`). `None` when neither bound
+/// was given (nothing to show).
 fn format_resolved_window(
     since_at: Option<chrono::DateTime<chrono::Utc>>,
     until_at: Option<chrono::DateTime<chrono::Utc>>,
+    local_offset: chrono::FixedOffset,
 ) -> Option<String> {
     match (since_at, until_at) {
         (None, None) => None,
-        (Some(s), None) => Some(format!("Window: since {} (open-ended)", fmt_window_ts(s))),
+        (Some(s), None) => Some(format!(
+            "Window: since {} (open-ended)",
+            fmt_window_ts(s, local_offset)
+        )),
         (None, Some(u)) => Some(format!(
             "Window: until {} (unbounded start)",
-            fmt_window_ts(u)
+            fmt_window_ts(u, local_offset)
         )),
         (Some(s), Some(u)) => Some(format!(
             "Window: {} \u{2192} {}",
-            fmt_window_ts(s),
-            fmt_window_ts(u)
+            fmt_window_ts(s, local_offset),
+            fmt_window_ts(u, local_offset)
         )),
     }
 }
@@ -304,10 +333,12 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     }
 
     // trace:TASK-1502 | ai:claude
-    let (resolved_opts, since_at, until_at) = resolve_history_window(opts, chrono::Utc::now())?;
+    let local_offset = crate::queue_cmd::local_offset_now();
+    let (resolved_opts, since_at, until_at) =
+        resolve_history_window(opts, chrono::Utc::now(), local_offset)?;
     let opts = &resolved_opts;
     if !crate::agent_output_mode() {
-        if let Some(line) = format_resolved_window(since_at, until_at) {
+        if let Some(line) = format_resolved_window(since_at, until_at, local_offset) {
             println!("{}", line.dimmed());
         }
     }
@@ -507,7 +538,11 @@ pub fn collect_event_records(
 
     // TASK-1502: MCP's history tool shares this path, so it gets the same
     // relative-duration acceptance and since/until validation as the CLI.
-    let (resolved_opts, _since_at, _until_at) = resolve_history_window(opts, chrono::Utc::now())?;
+    let (resolved_opts, _since_at, _until_at) = resolve_history_window(
+        opts,
+        chrono::Utc::now(),
+        crate::queue_cmd::local_offset_now(),
+    )?;
     let (events, _) = collect_filtered_events(store_path, &resolved_opts)?;
     Ok(events.iter().map(event_record).collect())
 }
@@ -1904,9 +1939,19 @@ mod tests {
             .with_timezone(&chrono::Utc)
     }
 
+    /// A fixed, non-UTC offset (UTC-7) so `resolve_history_window` tests are
+    /// deterministic regardless of the test machine's real timezone, and so
+    /// the local-midnight-vs-UTC-midnight distinction is actually exercised
+    /// (on UTC+0 the two coincide and the bug wouldn't show up).
+    // trace:TASK-1502 | ai:claude
+    fn fixed_local_offset() -> chrono::FixedOffset {
+        chrono::FixedOffset::west_opt(7 * 3600).unwrap()
+    }
+
     #[test]
     fn resolve_history_window_every_relative_unit() {
         let now = fixed_now();
+        let offset = fixed_local_offset();
         let cases: &[(&str, chrono::Duration)] = &[
             ("30m", chrono::Duration::minutes(30)),
             ("5h", chrono::Duration::hours(5)),
@@ -1918,7 +1963,8 @@ mod tests {
                 since: Some((*raw).to_string()),
                 ..base_opts()
             };
-            let (resolved, since_at, until_at) = resolve_history_window(&opts, now).unwrap();
+            let (resolved, since_at, until_at) =
+                resolve_history_window(&opts, now, offset).unwrap();
             assert_eq!(since_at, Some(now - *delta), "unit `{raw}`");
             assert_eq!(until_at, None);
             // The rewritten opts carry an unambiguous RFC3339 string, not
@@ -1933,12 +1979,13 @@ mod tests {
         // --since as a compact relative duration, --until as an absolute
         // RFC3339 timestamp — both forms must compose.
         let now = fixed_now();
+        let offset = fixed_local_offset();
         let opts = HistoryOpts {
             since: Some("7d".to_string()),
             until: Some("2026-09-24T00:00:00Z".to_string()),
             ..base_opts()
         };
-        let (_, since_at, until_at) = resolve_history_window(&opts, now).unwrap();
+        let (_, since_at, until_at) = resolve_history_window(&opts, now, offset).unwrap();
         assert_eq!(since_at, Some(now - chrono::Duration::days(7)));
         assert_eq!(
             until_at,
@@ -1949,55 +1996,72 @@ mod tests {
             )
         );
 
-        // And the reverse pairing: --since absolute, --until relative.
+        // And the reverse pairing: --since absolute (bare date, LOCAL
+        // midnight at UTC-7 → 07:00 UTC), --until relative.
         let opts = HistoryOpts {
             since: Some("2026-09-01".to_string()),
             until: Some("5h".to_string()),
             ..base_opts()
         };
-        let (_, since_at, until_at) = resolve_history_window(&opts, now).unwrap();
-        assert_eq!(
-            since_at,
-            Some(
-                chrono::NaiveDate::from_ymd_opt(2026, 9, 1)
-                    .unwrap()
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap()
-                    .and_utc()
-            )
-        );
+        let (_, since_at, until_at) = resolve_history_window(&opts, now, offset).unwrap();
+        assert_eq!(since_at.unwrap().to_rfc3339(), "2026-09-01T07:00:00+00:00");
         assert_eq!(until_at, Some(now - chrono::Duration::hours(5)));
     }
 
     #[test]
     fn resolve_history_window_unchanged_absolute_forms_still_work() {
-        // RFC3339 and bare ISO date — the pre-TASK-1502 documented forms —
-        // must keep resolving exactly as before.
+        // RFC3339 — the pre-TASK-1502 documented form — must keep resolving
+        // exactly as before, zone honored exactly regardless of the
+        // machine's local offset.
         let now = fixed_now();
+        let offset = fixed_local_offset();
         let opts = HistoryOpts {
             since: Some("2026-05-01T00:00:00Z".to_string()),
-            until: Some("2026-06-01".to_string()),
+            until: Some("2026-06-01T00:00:00+02:00".to_string()),
             ..base_opts()
         };
-        let (_, since_at, until_at) = resolve_history_window(&opts, now).unwrap();
+        let (_, since_at, until_at) = resolve_history_window(&opts, now, offset).unwrap();
         assert_eq!(
             since_at.unwrap().format("%Y-%m-%d").to_string(),
             "2026-05-01"
         );
+        assert_eq!(until_at.unwrap().to_rfc3339(), "2026-05-31T22:00:00+00:00");
+    }
+
+    #[test]
+    fn resolve_history_window_bare_date_uses_local_offset_not_utc() {
+        // TASK-1502 review blocker: a bare ISO date must resolve to LOCAL
+        // midnight (git approxidate / user-intuition semantics), not UTC
+        // midnight — the two differ by exactly `offset` away from UTC+0.
+        let now = fixed_now();
+        let offset = fixed_local_offset(); // UTC-7
+        let opts = HistoryOpts {
+            since: Some("2026-05-01".to_string()),
+            ..base_opts()
+        };
+        let (resolved, since_at, _) = resolve_history_window(&opts, now, offset).unwrap();
         assert_eq!(
-            until_at.unwrap().format("%Y-%m-%d %H:%M:%S").to_string(),
-            "2026-06-01 00:00:00"
+            since_at.unwrap().to_rfc3339(),
+            "2026-05-01T07:00:00+00:00",
+            "bare date must resolve to local midnight (UTC-7 → 07:00 UTC), not UTC midnight"
+        );
+        assert_eq!(
+            resolved.since,
+            Some("2026-05-01T07:00:00+00:00".to_string())
         );
     }
 
     #[test]
     fn resolve_history_window_rejects_bad_unit() {
         let now = fixed_now();
+        let offset = fixed_local_offset();
         let opts = HistoryOpts {
             since: Some("5y".to_string()),
             ..base_opts()
         };
-        let err = resolve_history_window(&opts, now).unwrap_err().to_string();
+        let err = resolve_history_window(&opts, now, offset)
+            .unwrap_err()
+            .to_string();
         assert!(
             err.contains("--since") && err.contains("5y"),
             "error should name the flag and the bad value, got: {err}"
@@ -2007,7 +2071,9 @@ mod tests {
             until: Some("3q".to_string()),
             ..base_opts()
         };
-        let err = resolve_history_window(&opts, now).unwrap_err().to_string();
+        let err = resolve_history_window(&opts, now, offset)
+            .unwrap_err()
+            .to_string();
         assert!(
             err.contains("--until") && !err.starts_with("invalid --since"),
             "a bad --until must be labeled --until, not --since, got: {err}"
@@ -2017,6 +2083,7 @@ mod tests {
     #[test]
     fn resolve_history_window_rejects_since_later_than_until() {
         let now = fixed_now();
+        let offset = fixed_local_offset();
         // --since 5h (5 hours ago) is LATER than --until 7d (7 days ago) —
         // the window is empty and must be refused with a clear error.
         let opts = HistoryOpts {
@@ -2024,7 +2091,9 @@ mod tests {
             until: Some("7d".to_string()),
             ..base_opts()
         };
-        let err = resolve_history_window(&opts, now).unwrap_err().to_string();
+        let err = resolve_history_window(&opts, now, offset)
+            .unwrap_err()
+            .to_string();
         assert!(
             err.contains("--since") && err.contains("--until"),
             "reversed-order error should name both flags, got: {err}"
@@ -2034,15 +2103,26 @@ mod tests {
     #[test]
     fn format_resolved_window_variants() {
         let now = fixed_now();
-        assert_eq!(format_resolved_window(None, None), None);
-        assert!(format_resolved_window(Some(now), None)
+        let offset = fixed_local_offset();
+        assert_eq!(format_resolved_window(None, None, offset), None);
+        assert!(format_resolved_window(Some(now), None, offset)
             .unwrap()
             .contains("since"));
-        assert!(format_resolved_window(None, Some(now))
+        assert!(format_resolved_window(None, Some(now), offset)
             .unwrap()
             .contains("until"));
-        let both =
-            format_resolved_window(Some(now - chrono::Duration::days(1)), Some(now)).unwrap();
+        let both = format_resolved_window(Some(now - chrono::Duration::days(1)), Some(now), offset)
+            .unwrap();
+        // Rendered in the injected LOCAL offset (UTC-7): `now`
+        // (2026-09-25T12:00:00Z) is 2026-09-25 05:00 -0700 locally, and
+        // `now - 1 day` is 2026-09-24 05:00 -0700 — same calendar dates as
+        // UTC here (no midnight boundary crossed at this hour), so this
+        // also proves the explicit `-0700` zone marker is present.
+        // trace:TASK-1502 | ai:claude
+        assert!(
+            both.contains("-0700"),
+            "Window line must state the timezone, got: {both}"
+        );
         assert!(both.contains("2026-09-24") && both.contains("2026-09-25"));
     }
 
@@ -2119,7 +2199,7 @@ mod tests {
             since: Some("1h".to_string()),
             ..base_opts()
         };
-        let (resolved, _, _) = resolve_history_window(&opts, now).unwrap();
+        let (resolved, _, _) = resolve_history_window(&opts, now, fixed_local_offset()).unwrap();
         let (events, _) = collect_filtered_events(root, &resolved).unwrap();
         let ids: std::collections::BTreeSet<&str> =
             events.iter().map(|e| e.spec_id.as_str()).collect();

@@ -6581,7 +6581,8 @@ pub enum QueueCommand {
         #[clap(long, value_name = "NAME", conflicts_with = "session")]
         batch: Option<String>,
         /// Filter items to those modified after this timestamp
-        /// (RFC3339 or `<N>{d,h,m}` ago, e.g. `2d`, `12h`). Useful for
+        /// (RFC3339, an ISO date interpreted as local midnight, or
+        /// `<N>{d,h,m,w}` ago, e.g. `2d`, `12h`, `2w`). Useful for
         /// "what changed since yesterday" snapshots when no manifest
         /// or batch tag applies.
         // trace:TASK-232 | ai:claude
@@ -9873,7 +9874,8 @@ pub enum Command {
         id: Option<String>,
 
         /// Bulk-archive every spec last touched before this duration
-        /// (e.g. `30d`, `12h`, or RFC3339). Pairs with `--status`.
+        /// (e.g. `30d`, `12h`, `2w`, an ISO date interpreted as local
+        /// midnight, or RFC3339). Pairs with `--status`.
         // trace:STORY-441 | ai:claude
         #[clap(long, value_name = "DURATION", conflicts_with = "id")]
         older_than: Option<String>,
