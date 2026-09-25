@@ -1,0 +1,40 @@
+id: 01a0da43-e25a-7f40-86bb-c2a662aaff4e
+spec_id: BUG-1629
+agreed_id: BUG-1629
+title: Auto-complete phase 1 refuses a child that lost its lease and handoff receipt
+description: |-
+  Observed in QCI during an autonomous Codex drain on 2026-09-24.
+
+  ## Failure
+  After STORY-52 phase 2 failed, the orchestrator attempted NFR-56 and aborted phase 1 in 101ms: `the child session 01a0d53e neither retained its session lease nor wrote its orchestrator handoff receipt. Resume the recorded child with aida queue work NFR-56 --resume; unrelated active leases were ignored.`
+
+  The originating QCI telemetry record was BUG-58. This was not a product-code failure; the child session did not establish durable coordination state.
+
+  ## Expected
+  A phase-1 launch either creates/retains its lease and handoff receipt before the orchestrator advances, or atomically rolls back and retries without leaving a confusing child-session recovery instruction. The parent should not proceed to dependent work after this state loss.
+
+  ## Acceptance
+  - Deterministic scenario test simulates child startup losing lease/receipt.
+  - The orchestrator emits a precise retry/recovery state and no orphan lease.
+  - A retry can either resume a valid child or start a clean replacement exactly once.
+  - Parent drain dependency handling does not treat the failed child as completed or unlock dependents.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T20:31:17.082914486Z
+modified_at: 2026-09-25T20:31:17.082914486Z
+req_type: Bug
+tags:
+- handoff
+- lease
+- orchestrator
+- regression
+- severity:major
+filed_at:
+  code_sha: 99698621ba5890d30a9d128655537987cfd239d4
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 1df2e0445e
+  vendor: codex
