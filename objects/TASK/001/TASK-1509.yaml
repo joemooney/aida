@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:37:41.846102430Z
-modified_at: 2026-09-25T10:52:08.824629298Z
+modified_at: 2026-09-25T12:01:19.793406621Z
 req_type: Task
 comments:
 - id: 01a0d7ed-aab4-7302-bc92-8efe9c7d1d84
@@ -16,6 +16,18 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved. This is a bounded follow-up that TASK-1502''s review split out.'
   created_at: 2026-09-25T09:37:52.308049605Z
   modified_at: 2026-09-25T09:37:52.308049605Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d871-01b1-7f61-974e-b74077130524
+  author: joe
+  content: |-
+    Review: REQUEST CHANGES — independent review of claude/task-1509 @ fd946cf368. Tests pass: time_bound 4/4, tail 94, digest 33, doctor 148, usage 58, calibration 49. verify-manual.py passes 4/4 against the branch debug binary. No SPEC-IDs in /// help; MCP usage schema (mcp.rs:8298) matches the help and docs/cli/08-reporting.md 'Time bounds'. Checked live: tail keeps 30s/30/10min/2hours (the shared parser rejects them first, then the tail fallback runs, headless_tail.rs:951-966); usage 7d; digest v0.15.0 resolves as a tag; DST gap refused for usage/digest under TZ=America/Los_Angeles. Digest order (shared grammar, then git ref, digest.rs:110-121) is right, and a DST refusal cannot shadow a real ref, because git ref names cannot contain ':' or spaces. Exclusions are right: defer --until is a CONDITION (cli.rs:10012); db reconcile-status, doc coverage, field-study and changelog take refs, tags or ranges; record prune and agent gc take u64 days.
+    BLOCKING (1): doctor --since resolves a git ref BEFORE the shared grammar (lib.rs:24947-24966, git log -1 --format=%cI <since>). Every NNNd with N>=100 is valid hex and at least 4 chars, so it resolves as an abbreviated SHA. Verified in this repo: 'git log -1 500d' gives 2026-05-15, and 'aida doctor --category completed-without-commit --since 500d --json' reports total 565, the same as --since 2026-05-15T07:30:01-07:00, while 501d and 2025-05-13 report 719. 499d is also a SHA hit (379). 1000d resolves to a tree, git prints nothing, and it falls through by luck. The help and docs now advertise durations for doctor (cli.rs:11352, 07-project-setup.md:188), so this is a correctness bug. Fix: try parse_since_arg_at first and use the git ref as the fallback, as digest does, or pass --end-of-options / rev-parse --verify refs only. Add a regression test with a hex-looking duration. The test comment at time_bound_flags_tests.rs:231 ('shared forms are tried first') is false for doctor, and the '2d' case at :256 does not exercise the ordering.
+    SHOULD-FIX (2): scripts/check-removed-flags.sh now has a new hit: the literal 'aida usage --unused' at time_bound_flags_tests.rs:90. main is already red on that script (CHANGELOG graph --tree hits), but this adds a source-tree violation. Build the label so it doesn't match, e.g. concat!, or exclude the tests file in the script.
+    SHOULD-FIX (3): usage now echoes free-form values into its header, usage_cmd.rs:1003 'top commands in the last {}': it prints 'in the last 2 weeks ago' and 'in the last 2026-09-01'. Phrase it as 'since <value>' or normalize it.
+    DOCTOR DEFAULT (question 2): the move of GIT_CANONICAL_MIGRATION_CUTOFF (doctor_cmd.rs:2882) to local midnight is harmless in size (<=14h), but it makes a fixed migration constant give machine-dependent results (CI in UTC vs dev in MST give different counts). Pin it to '2026-06-01T00:00:00Z' so it stays UTC. Non-blocking, but trivial.
+    NITS: the guard (every_time_bound_flag_is_classified) is real for flags named since/until/older-than/unused/duration; I checked that a new such flag changes 'found' and fails the assert_eq. It is blind to other names (--before/--after/--window/--max-age), and the flag-to-parser mapping is hand-maintained: approvals and archive map to 'shared', not the parse_time_bound_at they call, contrary to the :9 doc claim. Clock and zone injection is hermetic (fixed now, FixedOffset). The git-fallback test uses Utc::now() and the ambient global git config (commit.gpgsign would break it). Pre-existing and not new here: 'usage --since 99999999999999d' panics in chrono TimeDelta::days, which the shared parser now exposes on more flags; worth a checked_ follow-up. Value name Nd->WINDOW: verify-manual checks flags, not metavars (passes), and check-removed-flags matches literal flag spellings, so the rename breaks neither.
+  created_at: 2026-09-25T12:01:19.793406621Z
+  modified_at: 2026-09-25T12:01:19.793406621Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
