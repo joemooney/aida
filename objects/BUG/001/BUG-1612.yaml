@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:51:09.557186527Z
-modified_at: 2026-09-25T05:30:11.647300836Z
+modified_at: 2026-09-25T06:32:40.587358340Z
 req_type: Bug
 tags:
 - concurrency
@@ -82,6 +82,12 @@ comments:
     Non-blocking: the supervisor now emits SpecReDriven only after a successful save. test_distributed.sh now also removes the store .gitignore (info/exclude path). Filed BUG-1614 (REST add-comment swaps author and content, found while testing).
   created_at: 2026-09-25T05:30:11.647300836Z
   modified_at: 2026-09-25T05:30:11.647300836Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d744-1d8b-7213-b60a-f4b668de06ca
+  author: joe
+  content: 'Strict review round 3: APPROVE (fresh Opus reviewer). Baseline and disk fingerprints are correct on every path, and every server save goes through the helper with a 409/ABORTED reload. The BUG-610 test_distributed failure is a harness race: `aida list | grep -q` with SIGPIPE under pipefail. Main fails the same way at the same rate (branch 1/25, main 2/25); the refusal path never touches the store. Queued for batch 65.'
+  created_at: 2026-09-25T06:32:40.587358340Z
+  modified_at: 2026-09-25T06:32:40.587358340Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: b4984d495336027fed771caed71bc429dc1fd20c
