@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:38:32.393127411Z
-modified_at: 2026-09-25T01:41:36.188350953Z
+modified_at: 2026-09-25T01:41:56.850921182Z
 req_type: Spike
 tags:
 - architecture
@@ -179,5 +179,11 @@ comments:
   content: 'CORRECTION (fact-check, 2026-09-24), commit 3f73c169f7 on claude/spike-86. (1) The earlier claim that 0 source files mention Beads was too broad. Product source has 0 hits (aida-*/src). Across all tracked .rs/.ts/.tsx/.py/.sh files the only mention is scripts/demo-lifecycle-authority.sh, 4 times, a demo contrasting AIDA with Beads rather than interop code. The T3 verdict stands. (2) The measuring scripts are now committed under docs/positioning/spike-86-scripts/ and pinned to main 9154924fd2, aida-store 788c4e050d and absolute window anchors. Run python3 docs/positioning/spike-86-scripts/report.py, then corpus.py. They regenerate every figure exactly: 50.9% control and 6.6% intent over 30 days. The 90-day MCP commit count is 50, not 49.'
   created_at: 2026-09-25T01:41:36.188350953Z
   modified_at: 2026-09-25T01:41:36.188350953Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d639-f1f2-7d22-98ec-f38578b2c592
+  author: joe
+  content: 'Fact-check: APPROVE (fresh reviewer). Its integer counts reproduce exactly or within drift. Both corrections were applied in 3f73c169f7: the Beads claim is narrowed and the measurement scripts are committed and pinned. Queued for batch 60. The six operator decisions in section 8 are Joe''s.'
+  created_at: 2026-09-25T01:41:56.850921182Z
+  modified_at: 2026-09-25T01:41:56.850921182Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 human_only: true
