@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:58:16.548025058Z
-modified_at: 2026-09-25T08:52:59.559366663Z
+modified_at: 2026-09-25T09:37:06.475644177Z
 req_type: Task
 tags:
 - cli
@@ -26,6 +26,17 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved and queued (sign-off). Concrete, bounded and testable.'
   created_at: 2026-09-25T08:03:02.729860174Z
   modified_at: 2026-09-25T08:03:02.729860174Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d7ec-f7ab-7b42-85f9-082f8fc4f10d
+  author: joe
+  content: |-
+    Review: REQUEST CHANGES — independent review of claude/task-1502 @ 455fb9ec20. Tests: history 44/44, queue_progress 24/24, archive 39/39 pass; verify-manual.py all OK; no SPEC-ID in help. All production callers route through local_offset_now() (history.rs:336, :544; lib.rs:33795; parse_since_arg wrapper queue_cmd.rs:6848 for archive/queue progress/proxy approvals/status activity/review classes). Relative h/d/w/m, RFC3339 zone-honoring, validate_window_order, and archive/queue-progress backward compat are correct.
+    BLOCKING (1): DST handling is wrong and the ambiguity error cannot fire. local_offset_now() (queue_cmd.rs:6859) snapshots TODAY's offset as a FixedOffset, and FixedOffset::from_local_datetime(..).single() (queue_cmd.rs:6892) always returns Single, so the 'ambiguous or doesn't exist' branch (:6895) is dead code. It's also incorrect for every date on the other side of a DST boundary, not just 'the rare day a transition falls on it' as the comment at :6854 says: in America/Los_Angeles today (PDT), --since 2026-01-15 resolves to 2026-01-15T07:00Z = Jan 14 23:00 PST, not local midnight. fmt_window_ts (history.rs:292) then prints '-0700' for a January instant, which hides the error. Fix: make parse_since_arg_at generic over Tz: TimeZone (tests pass FixedOffset, production passes chrono::Local) so each date gets its own offset and .single() really detects a gap or ambiguity; render the Window line the same way; add a DST test (e.g. chrono-tz, or a test TimeZone impl). This machine is MST (no DST), which is why it wasn't observed here.
+    SHOULD-FIX (2): the documented history forms regressed. The old help said 'ISO 8601'; naive ISO datetimes (2026-05-01T10:00, '2026-05-01 10:00') used to reach git and are now rejected. The spec says to preserve the existing absolute forms, so accept a NaiveDateTime as local time. The MCP schema used to advertise 'relative expressions supported by git' with example '24 hours ago' (mcp.rs:7352 now shows '24h'); MCP callers passing git phrases now get an error. Call out that contract change in the release notes or changelog.
+    SHOULD-FIX (3): the doc accuracy claims are false. git approxidate does NOT resolve a bare date to local midnight; it uses the current time of day (verified: git rev-parse --since=2026-05-01 -> May 1 02:29:53 local). Fix queue_cmd.rs:6836, :6885 and docs/cli/08-reporting.md:69. history.rs:208 says --since=30m 'matches nothing' (verified correct: git reads it as Sep 30), but the test comment at history.rs:2134 says 'matched everything'.
+    NITS: the doc block at history.rs:198 is attached to 'type ResolvedWindow' (:217), not to resolve_history_window. The shared parser now accepts w and ISO dates, but the help for queue proxy approvals (cli.rs:9355) and status --activity --since (cli.rs:10170) still lists only d/h/m. The broaden-scope comment asked for an audit of every --since/--until: digest --since, calibration/assess --since, tail --since and review classes keep separate grammars (digest reads bare dates on its own terms). Fold them in or file a follow-up. Also: the spec is already status Done before this review, and the earlier review and local-midnight PROXY DECISION comments are not in the substrate.
+  created_at: 2026-09-25T09:37:06.475644177Z
+  modified_at: 2026-09-25T09:37:06.475644177Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
