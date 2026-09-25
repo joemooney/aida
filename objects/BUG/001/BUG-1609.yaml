@@ -24,12 +24,12 @@ description: |-
   - Auto-queue-review and review help text is forge-neutral or provider-specific.
 
   This is a concrete live instance of the remaining call-site migration tracked by STORY-621.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:58:10.530410659Z
-modified_at: 2026-09-25T00:26:17.497230260Z
+modified_at: 2026-09-25T01:08:28.611422444Z
 req_type: Bug
 tags:
 - forge
@@ -54,6 +54,20 @@ comments:
   created_at: 2026-09-25T00:26:17.497230260Z
   modified_at: 2026-09-25T00:26:17.497230260Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d61b-4d3b-7e93-9c53-abf5ffa91df2
+  author: aida-auto-bump
+  timestamp: 2026-09-25T01:08:28.603548693Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d61b-4d43-7010-af83-982fa1cde89d
+  timestamp: 2026-09-25T01:08:28.611421223Z
+  agent: aida
+  commit_sha: a052addddafee14f59ca10b0db26fb59e68263e9
+  summary: Completed via merge a052addd
 filed_at:
   code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
   branch: main
@@ -65,3 +79,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-25T00:10:58.143634666Z
   implemented_by: joe
+  completed_at: 2026-09-25T01:08:28.603544781Z
+  completion_sha: a052addddafee14f59ca10b0db26fb59e68263e9
