@@ -1,0 +1,29 @@
+id: 01a0d7a1-8b46-7c81-acf2-46978c1f9114
+spec_id: BUG-1616
+agreed_id: BUG-1616
+title: aida history drops add/delete events on commits git reports as renames (default rename detection in git show --name-status)
+description: |-
+  Found by the TASK-1505 advisor review. The history event walk calls `git show --name-status` with git's default rename detection. The last 3,000 store commits contain 426 rename lines; for example, one commit pairs BUG-389 with BUG-390 as a rename. The walk reads both paths as a single path, the two blob reads fail, and it silently emits neither the delete event nor the add event. The digest view is affected the same way.
+
+  ## Acceptance
+  - The history walk and the digest disable rename detection (`--no-renames`) and report adds and deletes as separate events.
+  - A regression test uses a fixture store with a delete plus an add that git would pair as a rename, and asserts both events.
+  - The live store's `aida history events` over a window containing a known rename pair shows both events.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T08:14:43.526012291Z
+modified_at: 2026-09-25T08:14:43.526012291Z
+req_type: Bug
+tags:
+- data-integrity
+- history
+filed_at:
+  code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
