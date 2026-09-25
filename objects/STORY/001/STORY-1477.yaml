@@ -1,0 +1,57 @@
+id: 01a0da7c-be06-7262-9a06-fdbd736cc59a
+spec_id: STORY-1477
+agreed_id: STORY-1477
+title: aida history --template/--fields with named, scoped, saveable templates (user/project/builtin)
+description: |
+  `aida history` output layout is fixed: the `--full` block view or `--oneline`. Users want to choose which fields appear and how they are laid out, and to keep named layouts they can reuse and share.
+
+  ## Design
+  - **`--template <name|string>`** follows git's `--pretty` pattern. A value containing `{` is an inline format string; otherwise it is looked up as a template name. The flag is deliberately not called `--format`, because `--format human|toon|json` already means the output encoding.
+  - **Placeholders:** `{commit}`, `{date[:strftime]}`, `{author}`, `{id}`, `{type}`, `{priority}`, `{title}`, `{kind}` (added/status/comment/tags/rel/…), `{event}` (the rendered summary), `{from}`, `{to}`, `{comment}`. Escape `{{`/`}}`.
+  - **Built-in templates** (`full`, `oneline`, plus a couple of new ones such as `approvals`) ship with the binary and are read-only. The existing `--oneline` and `--full` layouts become aliases of the built-ins.
+  - **`--fields <csv>`** selects and orders columns, matching `aida list --fields` / `aida search --fields` (STORY-734). It applies to human, toon and json output. `--template` is free-form and applies to human output only.
+  - **`--save-as-template [scope:]name`** saves the `--template` string used on that same run. It fails if no `--template` string was given, and fails if the name exists unless `--force` is passed.
+  - **Scopes** (the qualifier is optional):
+    - `user:` is the default. Stored in `~/.aida/config.toml` under `[history.templates]`. Personal and machine-wide.
+    - `project:` is stored in the tracked `.aida/config.toml` under `[history.templates]`. It is shared through the normal code-review path. After saving, the command prints that the file changed and needs committing.
+    - `builtin:` is read-only. Using it with `--save-as-template` is an error.
+    - No `global:` qualifier. Machine-wide is what `user:` already means, and a third writable scope would be ambiguous.
+  - **Resolution order for an unqualified name:** user → project → builtin, so a personal version shadows a shared one, much like a shell alias. A qualified name (`project:approvals`) bypasses the lookup order.
+  - **Listing and management:** `aida history templates` lists every template with its scope, its format string, and whether a higher-priority scope shadows it. `templates rm [scope:]name` deletes one.
+
+  ## Decision for the advisor: where project templates live
+  The recommendation is the tracked `.aida/config.toml`. Project config already lives there, it is reviewed via PR, and it adds no new store object kind. The alternative is to store project templates in the aida-store, for example as `meta` requirements, the way AI prompts already are. Teammates would then receive them on `aida pull` with no code PR, but a formatting preference would become a requirement-graph object and the store's scope would widen. Record the choice as an ADR before implementation.
+
+  ## Acceptance
+  - `aida history --since 2h --template '{date:%H:%M} {id} {event}'` renders one line per event using exactly that layout.
+  - An unknown placeholder or an unknown template name errors and lists the valid placeholders or available templates.
+  - `--oneline` and `--full` produce byte-identical output to `--template oneline` and `--template full`.
+  - `--fields id,date,event` works for human, toon and json output. An unknown field errors and lists the valid set.
+  - `--save-as-template approvals` writes to `~/.aida/config.toml`. `--save-as-template project:approvals` writes to `.aida/config.toml` and prints a reminder to commit. `builtin:x` is refused. An existing name is refused unless `--force` is passed.
+  - An unqualified name resolves user → project → builtin, and `aida history templates` shows any shadowing.
+  - `aida history templates rm [scope:]name` removes a template and refuses builtins.
+  - `--template` composes with every existing filter, including TASK-1512's `--to`/`--from`/`--created`.
+  - The MCP `history` tool gains `template`/`fields` parameters, so the CLI and MCP stay in parity.
+  - Tests cover placeholder rendering, `strftime`, escaping, scope resolution and shadowing, save/overwrite/remove, and the alias equivalence.
+
+  ## Follow-ups (not in scope)
+  - Saved *views*, i.e. storing filters (`--to approved --since 7d`) together with a template.
+  - The same `--template` mechanism for `aida list` / `aida search`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T21:33:23.334328053Z
+modified_at: 2026-09-25T21:33:23.334328053Z
+req_type: Story
+tags:
+- aida:history
+- cli
+filed_at:
+  code_sha: 5b98d7cfb3485889468fe1fa78a09924b04f49af
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: claude
+  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
