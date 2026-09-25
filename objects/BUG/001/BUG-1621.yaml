@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:32:48.018202563Z
-modified_at: 2026-09-25T12:32:57.837959398Z
+modified_at: 2026-09-25T12:32:59.543325411Z
 req_type: Bug
+comments:
+- id: 01a0d88d-fe97-73f2-a6ea-ccf801b6f1f3
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved, high priority, because it is an unattended path with no floors. Implement it after TASK-1492 merges, so it can reuse the new pipeline. It needs a strict review.'
+  created_at: 2026-09-25T12:32:59.543325411Z
+  modified_at: 2026-09-25T12:32:59.543325411Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
   branch: main
