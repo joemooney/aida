@@ -950,7 +950,7 @@ pub(crate) fn parse_since_at<Tz: chrono::TimeZone>(
 ) -> Result<Duration> {
     match crate::queue_cmd::parse_since_arg_at(s, now, tz) {
         Ok(at) => Ok((now - at).to_std().unwrap_or(Duration::ZERO)),
-        Err(e) if e.is::<crate::queue_cmd::AmbiguousLocalTime>() => {
+        Err(e) if crate::queue_cmd::is_definitive_time_bound_error(&e) => {
             Err(anyhow!("invalid --since value: {e}"))
         }
         Err(_) => parse_tail_only_duration(s).map_err(|_| {
@@ -986,16 +986,20 @@ fn parse_tail_only_duration(s: &str) -> Result<Duration> {
     let n: u64 = num_part
         .parse()
         .map_err(|_| anyhow!("--since `{}` has an unparseable numeric prefix", s))?;
-    let secs = match unit_part {
-        "" | "s" | "sec" | "secs" | "second" | "seconds" => n,
-        "m" | "min" | "mins" | "minute" | "minutes" => n * 60,
-        "h" | "hr" | "hrs" | "hour" | "hours" => n * 3600,
-        "d" | "day" | "days" => n * 86400,
+    let unit_secs: u64 = match unit_part {
+        "" | "s" | "sec" | "secs" | "second" | "seconds" => 1,
+        "m" | "min" | "mins" | "minute" | "minutes" => 60,
+        "h" | "hr" | "hrs" | "hour" | "hours" => 3600,
+        "d" | "day" | "days" => 86400,
         other => bail!(
             "--since unit `{}` is not recognized (use s/m/h/d, e.g. `10m`)",
             other
         ),
     };
+    // trace:TASK-1509 | ai:claude
+    let secs = n
+        .checked_mul(unit_secs)
+        .ok_or_else(|| anyhow!("--since `{}` is out of range", s))?;
     Ok(Duration::from_secs(secs))
 }
 

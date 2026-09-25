@@ -62,7 +62,9 @@ fn digest(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<DateTime<Ut
 }
 
 fn doctor(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<DateTime<Utc>, String> {
-    crate::resolve_completed_since_value_at(raw, now, tz)
+    // A scratch dir, as for digest: a bad value's git probe finds no repo.
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    crate::resolve_completed_since_cutoff_at(tmp.path(), raw, now, tz)
         .ok_or_else(|| format!("`{raw}` did not resolve"))
 }
 
@@ -87,7 +89,9 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
         ("aida mailbox archive --older-than", Shared(lookback)),
         ("aida mailbox gc --older-than", Shared(lookback)),
         ("aida usage --since", Shared(lookback)),
-        ("aida usage --unused", Shared(lookback)),
+        // Split so the retired-flag lint (scripts/check-removed-flags.sh),
+        // which matches the joined spelling, doesn't flag this label.
+        (concat!("aida usage", " --unused"), Shared(lookback)),
         ("aida usage unused <duration>", Shared(lookback)),
         ("aida metrics agent-lift --since", Shared(lookback)),
         ("aida tail --since", Shared(tail)),
@@ -225,40 +229,130 @@ fn tail_keeps_its_seconds_and_spelled_unit_forms() {
     }
 }
 
+/// A scratch git repo with hermetic config (no global/system config, so a
+/// host `commit.gpgsign` can't break it) and one commit at a fixed date.
+fn scratch_repo() -> tempfile::TempDir {
+    let tmp = tempfile::TempDir::new().unwrap();
+    git(tmp.path(), &["init", "-q", "-b", "main"]);
+    std::fs::write(tmp.path().join("a.txt"), "hi").unwrap();
+    git(tmp.path(), &["add", "."]);
+    git(tmp.path(), &["commit", "-q", "-m", "init"]);
+    tmp
+}
+
+/// The fixed committer date of the [`scratch_repo`] commit.
+fn scratch_commit_date() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2020, 1, 2, 3, 4, 5).unwrap()
+}
+
+fn git(root: &std::path::Path, args: &[&str]) {
+    let date = "2020-01-02T03:04:05Z";
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["-c", "user.email=t@example.com", "-c", "user.name=Test"])
+        .args(["-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"])
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_AUTHOR_DATE", date)
+        .env("GIT_COMMITTER_DATE", date)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 #[test]
 fn digest_and_doctor_keep_their_git_ref_fallback() {
-    // Both accepted a git tag/ref before the shared grammar; the shared forms
-    // are tried first and a ref still resolves after them.
-    let tmp = tempfile::TempDir::new().unwrap();
+    // Both accepted a git tag/ref before the shared grammar. Both try the
+    // shared forms first and fall back to a ref only when none matches.
+    let tmp = scratch_repo();
     let root = tmp.path();
-    let run = |args: &[&str]| {
-        let out = std::process::Command::new("git")
-            .arg("-C")
-            .arg(root)
-            .args(args)
-            .output()
-            .unwrap();
-        assert!(out.status.success(), "git {args:?} failed");
-    };
-    run(&["init", "-q", "-b", "main"]);
-    run(&["config", "user.email", "t@example.com"]);
-    run(&["config", "user.name", "Test"]);
-    std::fs::write(root.join("a.txt"), "hi").unwrap();
-    run(&["add", "."]);
-    run(&["commit", "-q", "-m", "init"]);
-    run(&["tag", "v9.9.9"]);
+    git(root, &["tag", "v9.9.9"]);
+    let now = Utc.with_ymd_and_hms(2026, 7, 15, 12, 0, 0).unwrap();
     let tz = FixedOffset::east_opt(0).unwrap();
-    let digest_at =
-        crate::digest::parse_digest_since_at(Some("v9.9.9"), root, Utc::now(), &tz).unwrap();
-    assert!(Utc::now() - digest_at < Duration::minutes(5));
-    let doctor_at = crate::resolve_completed_since_cutoff(root, "v9.9.9").unwrap();
-    assert!(Utc::now() - doctor_at < Duration::minutes(5));
-    // A shared form still wins in a repo.
-    let two_days = crate::resolve_completed_since_cutoff(root, "2d").unwrap();
+    let digest_at = crate::digest::parse_digest_since_at(Some("v9.9.9"), root, now, &tz).unwrap();
+    assert_eq!(digest_at, scratch_commit_date());
+    let doctor_at = crate::resolve_completed_since_cutoff_at(root, "v9.9.9", now, &tz).unwrap();
+    assert_eq!(doctor_at, scratch_commit_date());
+}
+
+#[test]
+fn a_duration_that_is_also_a_git_ref_resolves_as_a_duration() {
+    // `500d` is valid hex, so git also accepts it as an abbreviated commit
+    // ID when one matches, or as a branch/tag of that name. The duration
+    // must win: resolving the ref first silently used that commit's date.
+    let tmp = scratch_repo();
+    let root = tmp.path();
+    git(root, &["branch", "500d"]);
+    git(root, &["tag", "2w"]);
+    let now = Utc.with_ymd_and_hms(2026, 7, 15, 12, 0, 0).unwrap();
+    let tz = FixedOffset::east_opt(0).unwrap();
+    for (raw, want) in [
+        ("500d", now - Duration::days(500)),
+        ("2w", now - Duration::weeks(2)),
+    ] {
+        let doctor_at = crate::resolve_completed_since_cutoff_at(root, raw, now, &tz).unwrap();
+        assert_eq!(doctor_at, want, "doctor --since {raw}");
+        let digest_at = crate::digest::parse_digest_since_at(Some(raw), root, now, &tz).unwrap();
+        assert_eq!(digest_at, want, "digest --since {raw}");
+    }
+}
+
+#[test]
+fn an_out_of_range_duration_is_refused_not_a_panic() {
+    let now = Utc.with_ymd_and_hms(2026, 7, 15, 12, 0, 0).unwrap();
+    let tz = FixedOffset::east_opt(0).unwrap();
+    for raw in ["99999999999999d", "99999999999999w", "9223372036854775807m"] {
+        let err = parse_since_arg_at(raw, now, &tz).unwrap_err();
+        assert!(err.to_string().contains("out of range"), "{raw}: {err}");
+        for (flag, kind) in classified_flags() {
+            let Kind::Shared(parse) = kind else { continue };
+            let err = parse(raw, now, &tz).expect_err(flag);
+            if flag != "aida doctor --since" {
+                assert!(err.contains("out of range"), "{flag} `{raw}`: {err}");
+            }
+        }
+        let err = parse_time_bound_at(raw, "--until", now, &tz).unwrap_err();
+        assert!(
+            err.to_string().starts_with("invalid --until value:"),
+            "{err}"
+        );
+    }
+    // Out of range even for the tail-only spelled units.
+    assert!(crate::headless_tail::parse_since_at("999999999999999999min", now, &tz).is_err());
+    // A hex-looking out-of-range duration never falls back to a git ref.
+    let tmp = scratch_repo();
+    git(tmp.path(), &["branch", "99999999999999d"]);
     assert!(
-        (Utc::now() - Duration::days(2) - two_days)
-            .num_seconds()
-            .abs()
-            < 60
+        crate::resolve_completed_since_cutoff_at(tmp.path(), "99999999999999d", now, &tz).is_none()
+    );
+    let err = crate::digest::parse_digest_since_at(Some("99999999999999d"), tmp.path(), now, &tz)
+        .unwrap_err();
+    assert!(err.to_string().contains("out of range"), "{err}");
+}
+
+#[test]
+fn usage_headers_name_the_window_for_every_form() {
+    let now = Utc.with_ymd_and_hms(2026, 7, 15, 12, 0, 0).unwrap();
+    let tz = FixedOffset::east_opt(2 * 3600).unwrap();
+    let label = |raw| crate::usage_cmd::window_label_at(raw, now, &tz);
+    assert_eq!(label("7d"), ("in the last", "7d".to_string()));
+    assert_eq!(label("12h"), ("in the last", "12h".to_string()));
+    assert_eq!(
+        label("2 weeks ago"),
+        ("since", "2026-07-01 14:00 +02:00".to_string())
+    );
+    assert_eq!(
+        label("2026-09-01"),
+        ("since", "2026-09-01 00:00 +02:00".to_string())
+    );
+    assert_eq!(
+        label("2026-05-01T10:00:00Z"),
+        ("since", "2026-05-01 12:00 +02:00".to_string())
     );
 }

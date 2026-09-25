@@ -24940,44 +24940,49 @@ fn criterion_trace_suffix(suffix: &str) -> bool {
     matches!(rest.len(), 5 | 6) && rest.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-/// Resolve a `--since` value to a UTC cutoff: first try it as a git ref/tag and
-/// take that commit's committer date; failing that, parse it with the shared
+/// Resolve a `--since` value to a UTC cutoff: first parse it with the shared
 /// time-bound grammar (a relative duration, an ISO date at local midnight, a
-/// zone-less ISO datetime, or RFC3339). None if it resolves to neither.
+/// zone-less ISO datetime, or RFC3339); failing that, try it as a git
+/// ref/tag and take that commit's committer date. The grammar goes first so
+/// a duration such as `500d` is never read as an abbreviated commit ID. None
+/// if it resolves to neither, or if it matches the grammar but cannot be
+/// resolved (a DST gap/overlap, an out-of-range duration).
 /// trace:TASK-673 | ai:claude
 // trace:TASK-1509 | ai:claude
 fn resolve_completed_since_cutoff(
     project_root: &std::path::Path,
     since: &str,
 ) -> Option<chrono::DateTime<chrono::Utc>> {
-    use std::process::Command as PCmd;
-    let out = PCmd::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["log", "-1", "--format=%cI", since])
-        .output()
-        .ok();
-    if let Some(o) = out {
-        if o.status.success() {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&s) {
-                return Some(dt.with_timezone(&chrono::Utc));
-            }
-        }
-    }
-    resolve_completed_since_value_at(since, chrono::Utc::now(), &chrono::Local)
+    resolve_completed_since_cutoff_at(project_root, since, chrono::Utc::now(), &chrono::Local)
 }
 
-/// The non-git half of [`resolve_completed_since_cutoff`]: the shared
-/// time-bound grammar (relative duration, `<N> <unit>s ago`, ISO date at
-/// local midnight, zone-less ISO datetime in local time, or RFC3339).
+/// [`resolve_completed_since_cutoff`] against an explicit `now` and timezone.
 // trace:TASK-1509 | ai:claude
-fn resolve_completed_since_value_at<Tz: chrono::TimeZone>(
+fn resolve_completed_since_cutoff_at<Tz: chrono::TimeZone>(
+    project_root: &std::path::Path,
     since: &str,
     now: chrono::DateTime<chrono::Utc>,
     tz: &Tz,
 ) -> Option<chrono::DateTime<chrono::Utc>> {
-    queue_cmd::parse_since_arg_at(since, now, tz).ok()
+    use std::process::Command as PCmd;
+    match queue_cmd::parse_since_arg_at(since, now, tz) {
+        Ok(t) => return Some(t),
+        Err(e) if queue_cmd::is_definitive_time_bound_error(&e) => return None,
+        Err(_) => {}
+    }
+    let out = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "-1", "--format=%cI", since.trim(), "--"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    chrono::DateTime::parse_from_rfc3339(&s)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
 /// One-line bubblewrap (`bwrap`) OS-sandbox availability status, shared by

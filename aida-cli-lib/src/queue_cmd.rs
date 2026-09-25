@@ -6951,24 +6951,59 @@ pub(crate) fn parse_since_arg_at<Tz: chrono::TimeZone>(
         split_last_char(trimmed)
     };
     let n: i64 = num_str.parse().map_err(|_| invalid())?;
+    // Checked arithmetic: a huge count is refused, never a panic.
+    // trace:TASK-1509 | ai:claude
     let delta = match unit {
-        "d" => chrono::Duration::days(n),
-        "h" => chrono::Duration::hours(n),
-        "m" => chrono::Duration::minutes(n),
-        "w" => chrono::Duration::weeks(n),
+        "d" => chrono::Duration::try_days(n),
+        "h" => chrono::Duration::try_hours(n),
+        "m" => chrono::Duration::try_minutes(n),
+        "w" => chrono::Duration::try_weeks(n),
         _ => anyhow::bail!(
             "invalid --since unit `{}`: use m/h/d/w, `<N> <unit>s ago`, an ISO \
              date or datetime, or RFC3339",
             unit
         ),
     };
-    Ok(now - delta)
+    delta
+        .and_then(|d| now.checked_sub_signed(d))
+        .ok_or_else(|| anyhow::Error::new(TimeBoundOutOfRange(trimmed.to_string())))
+}
+
+/// A relative duration too large to resolve to a representable instant
+/// (e.g. `99999999999999d`). Kept as a distinct error type, like
+/// [`AmbiguousLocalTime`], so callers surface it verbatim instead of
+/// retrying the value as something else.
+// trace:TASK-1509 | ai:claude
+#[derive(Debug)]
+pub(crate) struct TimeBoundOutOfRange(pub String);
+
+impl std::fmt::Display for TimeBoundOutOfRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "`{}` is out of range: the duration reaches too far back to \
+             resolve to a date",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for TimeBoundOutOfRange {}
+
+/// True when a [`parse_since_arg_at`] error is a definitive answer about a
+/// value that does match the grammar (a DST gap/overlap, or an out-of-range
+/// duration), rather than "not this grammar". Callers with a fallback (git
+/// ref, tail-only units) must report these instead of retrying the value.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn is_definitive_time_bound_error(e: &anyhow::Error) -> bool {
+    e.is::<AmbiguousLocalTime>() || e.is::<TimeBoundOutOfRange>()
 }
 
 /// [`parse_since_arg_at`] with an error labeled for the flag that produced
 /// it (`parse_since_arg_at`'s own message always says `--since`, which would
 /// misname a bad `--until` or `--older-than`). A DST gap/overlap error is kept
-/// verbatim so the caller learns why the value was refused.
+/// verbatim so the caller learns why the value was refused; so is an
+/// out-of-range duration.
 // trace:TASK-1509 | ai:claude
 pub(crate) fn parse_time_bound_at<Tz: chrono::TimeZone>(
     raw: &str,
@@ -6977,8 +7012,8 @@ pub(crate) fn parse_time_bound_at<Tz: chrono::TimeZone>(
     tz: &Tz,
 ) -> Result<chrono::DateTime<chrono::Utc>> {
     parse_since_arg_at(raw, now, tz).map_err(|e| {
-        if let Some(dst) = e.downcast_ref::<AmbiguousLocalTime>() {
-            return anyhow::anyhow!("invalid {flag} value: {dst}");
+        if is_definitive_time_bound_error(&e) {
+            return anyhow::anyhow!("invalid {flag} value: {e}");
         }
         anyhow::anyhow!(
             "invalid {flag} value `{raw}` — expected a relative duration \
@@ -7000,7 +7035,8 @@ pub(crate) fn parse_lookback_at<Tz: chrono::TimeZone>(
     now: chrono::DateTime<chrono::Utc>,
     tz: &Tz,
 ) -> Result<chrono::Duration> {
-    Ok(now - parse_time_bound_at(raw, flag, now, tz)?)
+    let at = parse_time_bound_at(raw, flag, now, tz)?;
+    Ok(now.signed_duration_since(at))
 }
 
 /// [`parse_lookback_at`] against the wall clock and the system timezone.

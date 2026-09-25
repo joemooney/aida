@@ -109,9 +109,10 @@ pub(crate) fn parse_digest_since_at<Tz: chrono::TimeZone>(
     }
     match crate::queue_cmd::parse_since_arg_at(trimmed, now, tz) {
         Ok(t) => return Ok(t),
-        // A local time inside a DST gap/overlap is a real answer, not a
-        // cue to go looking for a git ref of that name.
-        Err(e) if e.is::<crate::queue_cmd::AmbiguousLocalTime>() => {
+        // A local time inside a DST gap/overlap, or an out-of-range
+        // duration, is a real answer, not a cue to go looking for a git ref
+        // of that name.
+        Err(e) if crate::queue_cmd::is_definitive_time_bound_error(&e) => {
             anyhow::bail!("invalid --since value: {e}")
         }
         Err(_) => {}
