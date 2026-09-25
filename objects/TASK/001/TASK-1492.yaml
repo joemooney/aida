@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:04:13.382715808Z
-modified_at: 2026-09-25T12:32:46.872441394Z
+modified_at: 2026-09-25T15:10:59.631801331Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -87,6 +87,27 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): accept the strict review. Rework: B1: record the re-drive attempt with a fallible write (try_emit) BEFORE the status change; if the write fails, don''t requeue, and hold re-drive for the rest of the tick. B2: open a mail-latency episode only when the notification was actually sent or deferred for quiet hours, never when suppressed; the mock gets a ''suppressed'' outcome and a test. Should-fix: give the notify command a bounded timeout within the tick deadline; make manual supervise --max count applied re-drives again; document per-clone attempt counting and the rotation limit; add tests for an unreadable-but-present events file, the probe wiring, and the cap branch driven from the tick. The pre-existing unattended ''supervise watch --execute'' without floors is filed separately.'
   created_at: 2026-09-25T12:32:46.872441394Z
   modified_at: 2026-09-25T12:32:46.872441394Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d91e-a62f-7880-8cc0-ff9125550b9b
+  author: joe
+  content: |-
+    Strict re-review: REQUEST CHANGES — reviewed 2ebf5bcf58. One narrow blocker is left, and everything else passes.
+
+    BLOCKER N1 (notify timeout leaves an orphaned grandchild): notify.rs:675 spawns 'sh -c' with no process group, and notify.rs:730 calls child.kill(), which signals sh only. Reproduced in a throwaway copy with command 'sleep 7.123 ; true' and a 500ms bound: the call returned after about 503ms, 'killed'. After the test process had exited, 'sleep 7.123' was still alive, reparented to the user subreaper (ppid 1876). The stderr-drain thread also stays blocked on the pipe the orphan holds. A timed-out notify opens no episode, so every tick retries. A hanging notify command (curl, or a pipeline) therefore leaks one orphan and one thread per tick, unattended, all night. The existing test (notify.rs 'sleep 5') passes only because dash execs a simple command directly. Fix: spawn in its own process group (CommandExt::process_group(0)), kill the group (killpg / kill(-pgid, SIGKILL)) and then wait(). Add a test with a compound command ('sleep N; true') that asserts no survivor.
+
+    VERIFIED
+    B1: supervisor_requeue writes SpecReDriven through events::emit_recorded (it refuses when AIDA_EVENTS_DISABLE is set, and try_emit surfaces open/write errors) BEFORE return_to_flight. The parked check is made first, so a moved spec gets no record. A failed append leaves the spec parked and holds the rest of the pass, both in apply_requeue (tick) and in apply_decisions (manual --execute). 'supervise watch --execute' goes through the same function. Two ticks are serialised by shift.lock. A race between the tick and manual supervise can only over-count: both record, one wins the status-checked write. That is fail-safe. An events file replaced mid-tick means the append goes to the new file (it is recorded), and a truncation or replacement resets the count, the same class as the documented rotation limit. There is no path that re-queues without a record.
+    B2: DirectDelivery; an episode opens only on Sent or Deferred. Suppressed is reported and retried, and NotConfigured or Err opens nothing.
+    Timeout: notify_timeout = clamp(remaining, 1s, 15s). 90s + 15s < 120s, and it is tested. The parent sh is killed and reaped (no zombie), but see N1.
+    supervise --max: plan without max; apply counts launches (applied), matching the loop on main. Tested.
+    Docs: the per-clone count and the one-generation rotation are in autonomous-drain.md.
+    Deadlock: test at story_1218_shift_tick_tests.rs:2510 drops the first guard. No other test in the file nests EnvVarsGuard or EnvVarGuard. story_1218 with --test-threads=1: 56 passed in 12.6s.
+    Floors: the rework adds no merge, approve, hold-clear or authority path.
+    Tests (CARGO_BUILD_JOBS=3, timeout 600): shift 64, supervis 55, requeue 35, events 65, notify 22, mailbox 47, all pass.
+    Mutations: (a) requeue-first with best-effort emit makes 3 tests FAIL (supervisor_requeue_unrecordable_attempt_leaves_spec_parked, unrecorded_attempt_holds_the_rest_of_the_pass, shift_redrive_unwritable_events_file_requeues_nothing). (b) dropping the hold-rest-of-pass makes 1 FAIL (only incidentally, through the overwritten reason; a transient-then-recover case would make it direct). (c) suppressed treated as sent makes shift_mail_latency_suppressed_notify_is_not_an_episode FAIL.
+    Minor, non-blocking: apply_requeue exits with ? at supervisor.rs (the loop) and skips the queue add for specs already moved to Approved when a later return_to_flight errors (an A7 gap on the error path).
+  created_at: 2026-09-25T15:10:59.631801331Z
+  modified_at: 2026-09-25T15:10:59.631801331Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
