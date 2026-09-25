@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:58:16.548025058Z
-modified_at: 2026-09-25T09:37:11.714468416Z
+modified_at: 2026-09-25T09:37:40.477498579Z
 req_type: Task
 tags:
 - cli
@@ -43,6 +43,12 @@ comments:
   content: 'Review correction: ''review classes'' DOES use the shared parse_since_arg (lib.rs:87955). Its help (cli.rs:1004/7064) just lists only d/h/m, the same doc nit as proxy approvals. The separate-grammar list is digest, calibration/assess and tail. Verdict unchanged: REQUEST CHANGES.'
   created_at: 2026-09-25T09:37:11.714468416Z
   modified_at: 2026-09-25T09:37:11.714468416Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d7ed-7c7d-77c0-ba5d-c7fc8a5fa67c
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe), recorded late because it was earlier only in the dispatch brief. A bare ISO date means LOCAL midnight, via the local zone. Rework per the review: (1) Resolve bare dates and zone-less datetimes against chrono::Local (make the parser generic over TimeZone; tests use FixedOffset). The zone shown must be the resolved instant''s own offset. Add a DST test. The ambiguous/nonexistent error must be reachable. (2) Keep the old absolute forms: zone-less ISO datetimes (''2026-05-01T10:00'', ''2026-05-01 10:00'') are read as local time. For MCP/help backward compatibility, also accept ''<N> <unit>(s) ago'' phrases (minute/hour/day/week). (3) Correct the docs: do not claim git parity. Say plainly that a bare date means local midnight. Fix the test comment at history.rs:2134. (4) Fix the nits: the doc placement, and the help text for proxy approvals, status --activity and review classes should list w and ISO dates. (5) Moving digest, calibration/assess and tail onto the shared parser is a follow-up, filed separately, not part of this slice.'
+  created_at: 2026-09-25T09:37:40.477498579Z
+  modified_at: 2026-09-25T09:37:40.477498579Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
