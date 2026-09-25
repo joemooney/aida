@@ -4405,23 +4405,23 @@ impl<'a> McpServer<'a> {
                     let new_status = new_status.clone();
                     let now = chrono::Utc::now();
                     let mut moved_to: Option<RequirementStatus> = None;
+                    // Per-spec compare-and-swap under the store write lock; the
+                    // status recheck below runs on the copy read under it. trace:BUG-1612 | ai:claude
                     self.storage
-                        .update_atomically(|s| {
-                            if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                                // STORY-1429: compare-and-swap on the copy read
-                                // under the write. trace:STORY-1429 | ai:claude
-                                if r.status != current_status {
-                                    moved_to = Some(r.status.clone());
-                                    return;
-                                }
-                                r.set_status_from_str(&format!("{:?}", new_status));
-                                r.modified_at = now;
-                                // TASK-1477: the `queue_rework` MCP tool can also
-                                // reopen a Completed spec — clear the stale
-                                // completed_at so the next completion stamps a
-                                // fresh date. trace:TASK-1477 | ai:claude
-                                crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                        .update_spec_atomically(req, |r| {
+                            // STORY-1429: compare-and-swap on the copy read
+                            // under the write. trace:STORY-1429 | ai:claude
+                            if r.status != current_status {
+                                moved_to = Some(r.status.clone());
+                                return;
                             }
+                            r.set_status_from_str(&format!("{:?}", new_status));
+                            r.modified_at = now;
+                            // TASK-1477: the `queue_rework` MCP tool can also
+                            // reopen a Completed spec — clear the stale
+                            // completed_at so the next completion stamps a
+                            // fresh date. trace:TASK-1477 | ai:claude
+                            crate::completion::clear_completed_at_on_reopen(r, &current_status);
                         })
                         .map_err(|e| e.to_string())?;
                     if let Some(actual) = moved_to {

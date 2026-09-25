@@ -7892,20 +7892,20 @@ pub(crate) fn handle_queue_rework(
                 let new_status = new_status.clone();
                 let now = chrono::Utc::now();
                 let mut moved_to: Option<RequirementStatus> = None;
-                storage.update_atomically(|s| {
-                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                        if r.status != current_status {
-                            moved_to = Some(r.status.clone());
-                            return;
-                        }
-                        r.set_status_from_str(&format!("{:?}", new_status));
-                        r.modified_at = now;
-                        // TASK-1477: `queue rework` can reopen a Completed spec
-                        // (Completed -> InProgress is `rework_smart_target`'s
-                        // default) — clear the stale completed_at so the next
-                        // completion stamps a fresh date. trace:TASK-1477 | ai:claude
-                        crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                // Per-spec compare-and-swap under the store write lock; the
+                // status recheck below runs on the copy read under it. trace:BUG-1612 | ai:claude
+                storage.update_spec_atomically(req, |r| {
+                    if r.status != current_status {
+                        moved_to = Some(r.status.clone());
+                        return;
                     }
+                    r.set_status_from_str(&format!("{:?}", new_status));
+                    r.modified_at = now;
+                    // TASK-1477: `queue rework` can reopen a Completed spec
+                    // (Completed -> InProgress is `rework_smart_target`'s
+                    // default) — clear the stale completed_at so the next
+                    // completion stamps a fresh date. trace:TASK-1477 | ai:claude
+                    crate::completion::clear_completed_at_on_reopen(r, &current_status);
                 })?;
                 if let Some(actual) = moved_to {
                     anyhow::bail!(
