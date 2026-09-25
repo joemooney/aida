@@ -3,12 +3,12 @@ spec_id: BUG-1623
 agreed_id: BUG-1623
 title: Notify timeout path follow-ups after TASK-1492 (error-path cleanup, stdin bound, macOS waitid, docs)
 description: 'Non-blocking items from the TASK-1492 final review: m1 notify.rs ~733: if exited_unreaped errors, still kill the group and reap. m2 ~704: bound the stdin write, or write it inside the timeout loop. m3: fix the comment about the reader thread. m4: check waitid behaviour on macOS, or restrict the path to Linux. m5: add a test for apply_requeue_with queuing approved specs before a store error. m6: document in docs/autonomous-drain.md that notify background children are killed on exit.'
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T15:30:53.823179350Z
-modified_at: 2026-09-25T19:01:45.773019523Z
+modified_at: 2026-09-25T19:46:09.447524362Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -67,6 +67,20 @@ comments:
   created_at: 2026-09-25T19:01:27.821489180Z
   modified_at: 2026-09-25T19:01:27.821489180Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0da1a-919e-7e40-8825-5f9b51c5ee7b
+  author: aida-auto-bump
+  timestamp: 2026-09-25T19:46:09.438423836Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0da1a-91a7-76e2-976f-e4ed3b363306
+  timestamp: 2026-09-25T19:46:09.447521916Z
+  agent: implementer
+  commit_sha: 99698621ba5890d30a9d128655537987cfd239d4
+  summary: Completed via merge 99698621
 filed_at:
   code_sha: b821736ce75455f3858816002777b451fd4aaf03
   branch: main
@@ -75,3 +89,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T19:46:09.438395270Z
+  completion_sha: 99698621ba5890d30a9d128655537987cfd239d4
