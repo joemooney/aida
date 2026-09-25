@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:05:05.396905144Z
-modified_at: 2026-09-25T02:07:07.535882992Z
+modified_at: 2026-09-25T16:19:32.460728761Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-24-shift-tick.md
@@ -22,6 +22,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): deferred. It re-checks the max_failures default, which needs real wave data first.'
   created_at: 2026-09-25T02:07:07.535882992Z
   modified_at: 2026-09-25T02:07:07.535882992Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d95d-67ec-7bb1-9ff0-133a06a7df9c
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): stays a draft on purpose. It can''t be done until there is data from five real shift nights; the shift started 2026-09-25 06:18. Revisit around 2026-09-30.'
+  created_at: 2026-09-25T16:19:32.460728761Z
+  modified_at: 2026-09-25T16:19:32.460728761Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 deferred: true
 deferred_at: 2026-09-25T02:07:04.431097669Z
