@@ -14,11 +14,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:32:30.170344847Z
-modified_at: 2026-09-25T08:40:18.400416594Z
+modified_at: 2026-09-25T08:52:24.242961856Z
 req_type: Task
 tags:
 - papercut
 - shift
+comments:
+- id: 01a0d7c4-0a32-7bc2-a8ce-963d786cc098
+  author: joe
+  content: 'Strict review: APPROVE (fresh Opus reviewer). Batch matching is exact and fails closed, there is no double counting, pid reuse is handled through the start identity, and the save ordering is correct. Non-blocking: add a table test for the lock_command_names_batch edge forms. Queued for batch 66.'
+  created_at: 2026-09-25T08:52:24.242961856Z
+  modified_at: 2026-09-25T08:52:24.242961856Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 010221fdf3c730a0d802d04a26b267e1a068d79a
   branch: main
