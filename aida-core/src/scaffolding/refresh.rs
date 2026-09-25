@@ -71,24 +71,31 @@ pub fn delivery_tracked_skill(rel: &Path) -> Option<(&'static str, String)> {
         .then_some((*pack, name))
 }
 
-/// Names recorded in `pack_dir`'s [`DELIVERED_MANIFEST`] (empty when absent).
+/// Names recorded in `pack_dir`'s [`DELIVERED_MANIFEST`].
+///
+/// Fails closed: only a missing manifest (`NotFound`) means "nothing
+/// delivered yet". Any other read failure (permissions, invalid UTF-8, a
+/// directory in its place) is an error, so callers never treat an unreadable
+/// manifest as empty and re-create a skill the user deleted.
 // trace:STORY-1475 | ai:claude
-pub fn delivered_skills(pack_dir: &Path) -> Vec<String> {
-    std::fs::read_to_string(pack_dir.join(DELIVERED_MANIFEST))
-        .map(|s| {
-            s.lines()
-                .map(str::trim)
-                .filter(|l| !l.is_empty() && !l.starts_with('#'))
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
+pub fn delivered_skills(pack_dir: &Path) -> std::io::Result<Vec<String>> {
+    match std::fs::read_to_string(pack_dir.join(DELIVERED_MANIFEST)) {
+        Ok(s) => Ok(s
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(str::to_string)
+            .collect()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e),
+    }
 }
 
-/// Record `name` in `pack_dir`'s [`DELIVERED_MANIFEST`]. Idempotent.
+/// Record `name` in `pack_dir`'s [`DELIVERED_MANIFEST`]. Idempotent. Never
+/// overwrites a manifest it could not read, and replaces it atomically.
 // trace:STORY-1475 | ai:claude
 pub fn record_delivered_skill(pack_dir: &Path, name: &str) -> std::io::Result<()> {
-    let mut names = delivered_skills(pack_dir);
+    let mut names = delivered_skills(pack_dir)?;
     if names.iter().any(|n| n == name) {
         return Ok(());
     }
@@ -99,7 +106,7 @@ pub fn record_delivered_skill(pack_dir: &Path, name: &str) -> std::io::Result<()
          # re-created by `aida scaffold refresh`, so deleting it sticks.\n{}\n",
         names.join("\n")
     );
-    std::fs::write(pack_dir.join(DELIVERED_MANIFEST), body)
+    crate::write_atomic(&pack_dir.join(DELIVERED_MANIFEST), body)
 }
 
 use anyhow::{Context, Result};
@@ -311,6 +318,33 @@ impl RefreshReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:STORY-1475 | ai:claude
+    #[test]
+    fn delivered_manifest_missing_is_empty_but_unreadable_is_an_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(delivered_skills(tmp.path()).unwrap().is_empty());
+
+        record_delivered_skill(tmp.path(), "aida-orchestrate").unwrap();
+        record_delivered_skill(tmp.path(), "aida-orchestrate").unwrap();
+        assert_eq!(
+            delivered_skills(tmp.path()).unwrap(),
+            vec!["aida-orchestrate".to_string()]
+        );
+
+        // Invalid UTF-8: an error, and never overwritten by a record.
+        let manifest = tmp.path().join(DELIVERED_MANIFEST);
+        std::fs::write(&manifest, [0xff, 0xfe, 0x00]).unwrap();
+        assert!(delivered_skills(tmp.path()).is_err());
+        assert!(record_delivered_skill(tmp.path(), "other").is_err());
+        assert_eq!(std::fs::read(&manifest).unwrap(), vec![0xff, 0xfe, 0x00]);
+
+        // A directory in the manifest's place: an error too.
+        let other = tempfile::tempdir().unwrap();
+        std::fs::create_dir(other.path().join(DELIVERED_MANIFEST)).unwrap();
+        assert!(delivered_skills(other.path()).is_err());
+        assert!(record_delivered_skill(other.path(), "aida-orchestrate").is_err());
+    }
     use crate::scaffolding::wrap_with_aida_header;
     use std::path::Path;
 

@@ -87,7 +87,7 @@ Rules for these mechanics:
 - **Several implementers at once.** A headless `aida queue work` blocks until
   its session exits. To run several in parallel without harness jobs, detach
   each one with its own log, for example
-  `nohup aida queue work <SPEC> --vendor codex --no-human > .aida/orchestrate-<SPEC>.log 2>&1 &`,
+  `nohup aida queue work <SPEC> --vendor codex --no-human --strict > .aida/orchestrate-<SPEC>.log 2>&1 &`,
   then follow progress with `aida ps` and `aida tail <SPEC>`.
 - **Leases.** `aida agent new --spec <SPEC>` refuses while another session
   holds that spec's lease. Launch a reviewer **without** `--spec` (it holds no
@@ -101,7 +101,7 @@ Rules for these mechanics:
 - **Roles.** `aida agent new --role` accepts only `implementer`, `advisor`,
   `reviewer` and `integrator` (see `aida agent list-roles`).
 - **Session context.** Only Claude sessions resume a conversation
-  (`aida queue work <SPEC> --resume`). For Codex and Antigravity, a session
+  (`aida queue work <SPEC> --resume --strict`). For Codex and Antigravity, a session
   that exited is re-started with the findings in its brief:
   `aida agent new <claude|codex|antigravity> --resume latest` reopens the latest ended matching
   session, where the vendor supports it.
@@ -119,7 +119,7 @@ Rules for these mechanics:
   review, to `claude` or `codex`.
 - **`aida agent new antigravity`** does start agy interactively, but in the
   terminal it runs in. From a harness shell with no terminal, use headless
-  `aida queue work --no-human` instead, or ask the operator to run the command
+  `aida queue work <SPEC> --no-human --strict` instead, or ask the operator to run the command
   in another terminal.
 - **Only Claude can detach an interactive seat** (`aida agent new claude --bg`).
   An `aida agent new codex` or `aida agent new antigravity` seat takes over the
@@ -167,7 +167,7 @@ Put each open item in one bucket:
 | `awaiting_signoff` in `burndown plan` (approved, not yet queued) | Sign off by queueing it (step 2), or run the sketch gate first if it is architecture-class. |
 | `ready` in `burndown plan` | Dispatch an implementer (step 4), unless it is architecture-class and has no posted `ADVISOR SIGNOFF: APPROVED`. The sketch-gate row wins. |
 | Approved but architecture, authority, autonomy or store-integrity class | Sketch gate first (step 3). |
-| `supervised` / keystone | A guided session with the operator (`aida queue work <SPEC> --guided --vendor claude\|codex`), or report it. |
+| `supervised` / keystone | A guided session with the operator (`aida queue work <SPEC> --guided --strict --vendor claude\|codex`), or report it. |
 | `serialize_held`, `parked`, unmet blocked-by, pending decision | Report it. Don't dispatch. |
 | `in-progress` | Check the handoff's IN FLIGHT list and `aida ps` **before** re-dispatching. Only an orphan with no live session is re-dispatched. |
 | Needs humans, a live run, or an operator decision | Report it. Never fake it. |
@@ -244,7 +244,9 @@ Then launch the session. Pick the vendor per spec.
 the sign-off (step 2), so dispatch only specs you have queued with
 `aida queue add <SPEC>`. Without `--strict`, `aida queue work` silently queues
 an approved but unqueued spec itself, which would skip that sign-off, so
-always pass `--strict`.
+pass `--strict` on **every** `aida queue work` call this skill makes. There
+are no exemptions here; the `--drain` pointer under "Skip if" is a different
+workflow, not a dispatch from this loop.
 
 ```bash
 # headless, no terminal needed (the spec must already be queued)
@@ -322,12 +324,15 @@ reviewer.
   re-drive the spec on the same branch.
 
   ```bash
+  aida session end <old-session-id> -y            # only if its worktree still has the branch checked out
   aida queue rework <SPEC> --reason "<findings>"   # records the findings, re-queues the spec
   aida queue work <SPEC> --vendor codex --no-human --strict --branch <implementer-branch>
   ```
 
-  Use `--vendor codex` or `--vendor agy` (agy only for bounded, non-strict
-  work). Pass `--branch` with the implementer's existing branch. Without it
+  End the old session first when its worktree still has the branch checked
+  out: git will not check the same branch out in a second worktree. Use
+  `--vendor codex`, or `--vendor agy` only for bounded, mechanical work (never
+  for specs that need a strict review). Pass `--branch` with the implementer's existing branch. Without it
   the new session does **not** reliably reuse that branch: `aida queue work`
   reuses an open PR's branch only when the spec is still In Progress or Done,
   and `aida queue rework` moves a Done spec back to Approved. The new session
