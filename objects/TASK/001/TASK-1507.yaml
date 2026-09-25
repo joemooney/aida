@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T14:45:41.754902721Z
+modified_at: 2026-09-25T15:50:07.066694684Z
 req_type: Task
 tags:
 - cache
@@ -158,6 +158,30 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): accept the re-review. Rework: B2, when recording each merge, store the commit times that occur on both sides (rev-list --timestamp M^1 ^M^2 and M^2 ^M^1); fall back whenever the served range contains one of those tied times. This replaces the boundary-only R4. N2a: also treat the tip as live when ''git for-each-ref --contains <tip>'' finds a ref, so a branch switch doesn''t trigger a reset. T1: add tests that pin the unknown-watermark guard (a partial build with zero chunks must not serve) and the two boundary comparisons. N4b is accepted as negligible.'
   created_at: 2026-09-25T14:45:41.754902721Z
   modified_at: 2026-09-25T14:45:41.754902721Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d942-77da-7660-bbad-50c89fa84d75
+  author: joe
+  content: |-
+    Strict review round 3: REQUEST CHANGES — reviewed 9367c950fb (independent reviewer, throwaway worktree, since removed). Suites on the unmodified branch: task_1507 36/36, history 93/93, cache 57/57.
+
+    BLOCKERS
+    B3 (B2 is incomplete: fork-point ties). history_cache.rs:813-845 records only times present on both M^i ^M^j and M^j ^M^i. Commits in the shared region (the merge base and its ancestors) are in neither set, but git's walk still reorders them. Plain-git proof: R(1000), A(1100, the fork point), side B(1100, child of A), D(1150), main C(1200), merge M(1300). `git log` gives M C D A B: the parent A comes before its child B, because A is queued when C pops and B only when D pops, and the tie is FIFO. merge_ties = {1200} ∩ {1150,1100} = empty, so the index serves B before A. Reproduced on a COMPLETE index with build_dated_merge(side [0,50], main [200], merge 300): `-n 3` serves the side commit's event where the walk returns EPIC-1 on the base. The SET is wrong, not only the order. It also fails on partial states (chunk 1 x6, -n 4) and after catch-up (-n 5). There is no skew, so R3 does not catch it. Fix (conservative): per merge, store the times of every commit in the symmetric range (both sides). Fall back when the served range (ts >= lower) holds such a time AND more than one commit has that second (EXISTS on commits GROUP BY commit_ts HAVING COUNT > 1, or a stored set of duplicated seconds). A tie whose partner is not yet back-filled lies at or below the watermark, so R2 already covers it. Add the fork-point fixture as a regression test (complete, partial and catch-up).
+
+    B4 (new; catch-up, pre-existing code, not caught by earlier rounds). history_cache.rs:1161-1163. A budgeted catch-up commits at a "closed" boundary C when count(tip..C) == indexed. It never checks that the old tip is an ancestor of C. `rev-list --reverse --topo-order tip..head` across a merge starts with the side branch, so when the budget expires there, tip_sha moves onto a side commit. The indexed set is then ancestors(old tip) ∪ {side prefix}, a strict superset of ancestors(C). Reproduced: side [100,200,300], main [150], merge 600, after [700]. A complete index at merge^1, then a budgeted index run leaves tip_sha = the first side commit.
+     (a) WRONG ANSWER: a reader whose HEAD is that side commit (another worktree of the store) is served 3 events where the walk gives 2 (the main-line FR-3 event is included).
+     (b) WEDGE: every later catch-up fails with "UNIQUE constraint failed: commits.sha", because tip..head now contains the already-indexed main-line commits. serve_at returns Err, which is not corruption, so nothing heals it. The index stays dead until an explicit `cache rebuild --history`.
+     Realistic trigger: a reconcile merge that brings in a side branch larger than the 1.5 s MCP budget allows. Fix: also require is_ancestor(old_tip, C) at the boundary (or commit only at first-parent descendants of the tip). Also consider treating a UNIQUE/constraint error as "reset the index". Add a regression test (complete index at merge^1, zero-budget catch-up, assert tip ∈ descendants(old tip) and no error on the next catch-up).
+
+    NON-BLOCKING
+    N2a-b (performance only, but deterministic). history_cache.rs:761-771 and :1053-1054. `aida store compact` creates the branch aida-store-pre-squash-<ts> at the OLD tip before rewriting (aida-core/src/git_ops.rs:2386). for-each-ref --contains therefore reports the old tip as live, and after every real compact the index never resets. The "root commit changed" reset at :1068 is never reached. Every history query then falls back for as long as the backup branch exists. A stale remote-tracking ref (refs/remotes/origin/aida-store at the old tip) behaves the same. Both reproduced. Correctness is intact: query() requires tip == HEAD, and the index at the old tip is still valid for that tip. The existing compact test (tests:665) simulates compact without the backup branch, which is why it passes. Fix: check whether the root changed BEFORE the liveness test, and limit liveness to worktree HEADs plus local branches other than backup branches, or reset once the old tip is not an ancestor of any worktree HEAD. Add the backup branch to the compact test.
+
+    VERIFIED OK
+    - B2 cross-side ties: octopus merges (pairwise over all parents, 4 fixtures), nested merges (4 fixtures), --id with ties (3 ids x all cut/since probes), and catch-up across a tie merge from merge^1, merge^2 and after, over partial states. Every served answer matched the walk except the fork-point shape above. N1b covers --id on side paths.
+    - N2a: a branch switch does not reset, and readers behind the tip do not reset.
+    - T1: the zero-chunk test kills the unknown-watermark mutant, and the boundary-equal test kills ts >= u. The old base_ts mutant no longer applies (R4 was dropped).
+    - Mutation sweep, task_1507 filter; all 15 mutants killed: R1 candidate order (2 failing tests), R1 event order (3), R2 boundary >= (1), R2 since >= (3), R2 unknown watermark (1), R3 off (1), B2 off (2), B2 ts > lower (2), B2 not recorded (2), N1b off (1), N2 off (2), N2a off (1), N3 checkpoint on close (1), N3 bound_wal no-op (1), N4 ignore held lock (1).
+  created_at: 2026-09-25T15:50:07.066694684Z
+  modified_at: 2026-09-25T15:50:07.066694684Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
