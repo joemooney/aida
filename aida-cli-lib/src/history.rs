@@ -465,23 +465,30 @@ pub fn collect_event_records(
 }
 
 /// Returns `(events, archived_hidden_count, window_exhausted)`.
-/// `window_exhausted` is true when the `git log -n<max_commits>` walk was
-/// itself capped (returned exactly `max_commits` commits — there may be
-/// more/earlier history beyond it) AND fewer than `opts.limit` matching
-/// events were found. A short result because the *real* history
-/// legitimately ran out (the walk returned fewer commits than the cap) is
-/// NOT exhaustion — there was nothing more to find regardless of window
-/// size.
+/// `window_exhausted` is true when the commit walk found at least one more
+/// commit beyond `max_commits` (real history continues past the cap — see
+/// the over-fetch-by-one comment on the `git log` call below) AND fewer
+/// than `opts.limit` matching events were found. History that is exactly
+/// `max_commits` commits long, or shorter, is NOT exhaustion — there was
+/// nothing more to find regardless of window size.
 // trace:BUG-1617 | ai:claude
 fn collect_filtered_events(
     store_path: &Path,
     opts: &HistoryOpts,
 ) -> Result<(Vec<Event>, usize, bool)> {
     // Build a `git log` command bounded by --since / --until / --max_commits.
+    // BUG-1617 review fix: over-fetch by one commit. `-n<max_commits>` alone
+    // can't distinguish "history is exactly max_commits commits long" (not
+    // exhausted — that's everything) from "there's more beyond the cap"
+    // (exhausted) — both return exactly `max_commits` lines. Asking for one
+    // extra and only ever DECODING the first `max_commits` (truncated right
+    // after the log call, below) gives an unambiguous signal at the cost of
+    // one extra `git log` line, not one extra `git show`.
+    // trace:BUG-1617 | ai:claude
     let mut log_args: Vec<String> = vec![
         "log".into(),
         "--pretty=format:%H%x09%aI%x09%ae".into(),
-        format!("-n{}", opts.max_commits),
+        format!("-n{}", opts.max_commits.saturating_add(1)),
     ];
     if let Some(s) = &opts.since {
         log_args.push(format!("--since={}", s));
@@ -509,7 +516,17 @@ fn collect_filtered_events(
     }
 
     let log_output = run_git(store_path, &log_args)?;
-    let commits: Vec<CommitMeta> = log_output.lines().filter_map(parse_log_line).collect();
+    let mut commits: Vec<CommitMeta> = log_output.lines().filter_map(parse_log_line).collect();
+
+    // More than `max_commits` came back only because we asked for one extra
+    // as a probe — that extra commit means real history continues past the
+    // cap. Exactly `max_commits` (or fewer) means the cap either wasn't hit
+    // or landed exactly on the true end of history; either way, nothing is
+    // being hidden. Truncate back down to `max_commits` before doing any of
+    // the expensive per-commit `git show` work below — the probe commit
+    // itself is never decoded into events. trace:BUG-1617 | ai:claude
+    let commit_walk_capped = commits.len() > opts.max_commits;
+    commits.truncate(opts.max_commits);
 
     let mut events: Vec<Event> = Vec::new();
 
@@ -605,13 +622,11 @@ fn collect_filtered_events(
         })
         .collect();
 
-    // BUG-1617: was the commit walk itself capped? `-n<max_commits>` returns
-    // exactly `max_commits` lines when there was at least that much history
-    // to walk; fewer means we reached the true start of history and nothing
-    // is being hidden. Checked BEFORE truncating `filtered` to `opts.limit`
-    // below, since a limit-satisfying result is never "exhausted" even if
-    // the walk happened to be capped too. trace:BUG-1617 | ai:claude
-    let commit_walk_capped = commits.len() >= opts.max_commits;
+    // BUG-1617: `commit_walk_capped` (computed above, right after the log
+    // call) already tells us whether real history continues past the cap.
+    // Combine with "did we still fall short of --limit" — a limit-satisfying
+    // result is never "exhausted" even if the walk was also capped.
+    // trace:BUG-1617 | ai:claude
     let window_exhausted = commit_walk_capped && filtered.len() < opts.limit;
 
     filtered.truncate(opts.limit);
@@ -2016,6 +2031,70 @@ mod tests {
         assert!(
             !window_exhausted,
             "real history ran out, not the window — must not be flagged as exhausted"
+        );
+    }
+
+    /// BUG-1617 review fix: the exact-boundary case the naive
+    /// `commits.len() >= max_commits` check got wrong — history that is
+    /// *exactly* `max_commits` commits long is a coincidence, not
+    /// exhaustion. 4 flips + 1 seed = 5 commits total, `max_commits: 5`, and
+    /// a `--limit` nowhere near met (10). Before the over-fetch-by-one fix
+    /// this reported `window_exhausted: true`; it must report `false` —
+    /// there is nothing beyond the cap to widen toward.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_not_exhausted_when_history_is_exactly_max_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 4);
+
+        let opts = HistoryOpts {
+            limit: 10,
+            max_commits: 5,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        // 4 status-change flips + 1 Added (the seed) = 5, all of history.
+        assert_eq!(events.len(), 5);
+        assert!(
+            !window_exhausted,
+            "history is exactly max_commits long — that IS everything, not exhaustion"
+        );
+    }
+
+    /// BUG-1617 review fix: the sibling of the exactly-at-cap case above —
+    /// history is one commit LONGER than `max_commits` (5 flips + 1 seed = 6
+    /// commits, `max_commits: 5`), so there genuinely is more beyond the
+    /// window. Only the newest `max_commits` commits should be decoded
+    /// (the oldest — the seed's Added event — must NOT appear), and
+    /// `window_exhausted` must be true.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn collect_filtered_events_exhausted_when_history_is_one_more_than_max_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_status_flip_fixture(root, 5);
+
+        let opts = HistoryOpts {
+            limit: 10,
+            max_commits: 5,
+            max_commits_explicit: false,
+            ..base_opts()
+        };
+        let (events, _, window_exhausted) = collect_filtered_events(root, &opts).unwrap();
+        // Only the 5 newest commits are decoded — all 5 are StatusChange
+        // flips; the oldest (seed/Added) commit falls outside the window.
+        assert_eq!(events.len(), 5);
+        assert!(
+            events
+                .iter()
+                .all(|e| matches!(e.kind, EventKind::StatusChange { .. })),
+            "the oldest (seed/Added) commit must fall outside the window"
+        );
+        assert!(
+            window_exhausted,
+            "history continues one commit past the cap — expected window_exhausted=true"
         );
     }
 
