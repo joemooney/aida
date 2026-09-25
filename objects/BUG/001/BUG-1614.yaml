@@ -1,0 +1,28 @@
+id: 01a0d6f4-b91a-7ee1-8057-256ad77a3a94
+spec_id: BUG-1614
+agreed_id: BUG-1614
+title: aida-server REST add-comment swaps comment author and content
+description: |-
+  Found while writing the BUG-1612 server tests. add_comment_legacy (aida-server/src/rest.rs) calls aida_core::Comment::new(body.content, body.author...), but Comment::new takes (author, content). A REST comment is stored with the author as its text and the text as its author.
+
+  ## Acceptance
+  - REST add-comment stores content as content and author as author (the gRPC path is checked for the same swap).
+  - A test posts a comment and asserts both fields.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T05:05:57.530829138Z
+modified_at: 2026-09-25T05:05:57.530829138Z
+req_type: Bug
+tags:
+- bug
+- server
+filed_at:
+  code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
