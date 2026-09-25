@@ -1,62 +1,14 @@
 - user_id: joe
-  requirement_id: 01a0d6bd-c0e1-74c3-bc9f-79c0e5293a50
-  position: 1000
-  added_by: joe
-  added_at: 2026-09-25T08:02:59.333233561Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d6ed-b064-7d52-a4e0-ac750bc3ace8
-  position: 2000
-  added_by: joe
-  added_at: 2026-09-25T08:03:02.062000375Z
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0d690-9e8a-72f1-a753-ee587125c211
   position: 3000
   added_by: joe
   added_at: 2026-09-25T08:03:05.081126691Z
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0d6f4-b91a-7ee1-8057-256ad77a3a94
-  position: 4000
-  added_by: joe
-  added_at: 2026-09-25T08:03:16.362343185Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d771-acb7-7211-b60f-c786feb3f50f
-  position: 5000
-  added_by: joe
-  added_at: 2026-09-25T08:03:16.966668085Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d668-3ada-7450-8713-fe4e422276b2
-  position: 6000
-  added_by: joe
-  added_at: 2026-09-25T08:03:17.887533585Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d64e-0571-7910-954e-613d10f4e7e2
-  position: 7000
-  added_by: joe
-  added_at: 2026-09-25T08:03:18.670771197Z
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0d64e-56c6-74d2-8b0c-26bd42b7bfcc
   position: 8000
   added_by: joe
   added_at: 2026-09-25T08:03:19.549397080Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d7a1-8b46-7c81-acf2-46978c1f9114
-  position: 9000
-  added_by: joe
-  added_at: 2026-09-25T08:16:15.845482239Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d7a1-b23a-7b50-9060-fac7626d9af6
-  position: 10000
-  added_by: joe
-  added_at: 2026-09-25T08:16:18.061455854Z
   added_by_machine: imac
 - user_id: joe
   requirement_id: 01a0d7a1-cfb9-7ed2-add8-b69091986e6d
