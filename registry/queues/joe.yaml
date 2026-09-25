@@ -4,3 +4,9 @@
   added_by: joe
   added_at: 2026-09-25T08:02:59.333233561Z
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0d6ed-b064-7d52-a4e0-ac750bc3ace8
+  position: 2000
+  added_by: joe
+  added_at: 2026-09-25T08:03:02.062000375Z
+  added_by_machine: imac
