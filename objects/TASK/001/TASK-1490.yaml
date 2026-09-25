@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - The drain preview and state-file member list use aida_core::pickability::pickability(), the same verdict as dispatch. Blocked members are shown as skipped, with their blocker.
   - A test covers a preview that includes a blocked dependent.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T23:54:06.265475487Z
-modified_at: 2026-09-25T00:22:59.583992791Z
+modified_at: 2026-09-25T01:08:29.606805756Z
 req_type: Task
 tags:
 - drain
@@ -25,6 +25,20 @@ comments:
   created_at: 2026-09-25T00:22:59.583992791Z
   modified_at: 2026-09-25T00:22:59.583992791Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d61b-511e-79d3-a9e4-45613ad3f966
+  author: aida-auto-bump
+  timestamp: 2026-09-25T01:08:29.598491663Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d61b-5126-7d02-ad5c-68c722a47850
+  timestamp: 2026-09-25T01:08:29.606804809Z
+  agent: aida
+  commit_sha: a052addddafee14f59ca10b0db26fb59e68263e9
+  summary: Completed via merge a052addd
 filed_at:
   code_sha: c7d35baa35b4965c961adec0b1d68a098e3701e9
   branch: main
@@ -33,3 +47,7 @@ filed_at:
   aida_build_sha: '1992299315'
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T01:08:29.598487537Z
+  completion_sha: a052addddafee14f59ca10b0db26fb59e68263e9
