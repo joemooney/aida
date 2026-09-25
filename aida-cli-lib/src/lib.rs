@@ -5800,6 +5800,7 @@ fn run() -> Result<()> {
             spec,
             no_agent,
             allow_stale_base,
+            target_branch,
             cmd,
         } => {
             // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives the
@@ -5815,7 +5816,7 @@ fn run() -> Result<()> {
                 ),
                 (None, Some(review_cmd)) => handle_review_command(review_cmd, &storage)?,
                 (None, None) => {
-                    let _ = (no_agent, allow_stale_base);
+                    let _ = (no_agent, allow_stale_base, target_branch);
                     anyhow::bail!("pass a spec id (`aida review <SPEC>`) or a subcommand (`prompt` / `assemble`)");
                 }
             }
@@ -44766,7 +44767,19 @@ fn try_auto_queue_pr_review(
     desc.push_str("- Approve and merge, or request changes by spec id.\n");
     desc.push_str("- Mark this story `completed` once the PR is merged.\n");
 
-    let title = format!("Review PR-{}: {}", pr.number, pr.title);
+    // BUG-1609: the story title carries the forge-correct label ("Review
+    // MR-N" for GitLab), not a hardcoded "Review PR-N". Downstream,
+    // `parse_review_scope` reads this prefix back into `plan.review_target`'s
+    // `ReviewForge` — a GitHub-shaped title on a GitLab MR silently made the
+    // whole reviewer-preflight chain (stale-base check, intermediate-only
+    // check, `pr_base_head`) treat the MR as a GitHub PR and shell out to
+    // `gh`, which then fabricated a GitHub-shaped `pr-N` fallback head for a
+    // branch `gh` had never heard of. trace:BUG-1609 | ai:claude
+    let title = format!(
+        "Review {}: {}",
+        format_review_label(review_forge, pr.number),
+        pr.title
+    );
     let new_id = match aida_subcmd_add_review_story(project_root, &title, &desc) {
         Some(id) => id,
         None => {
@@ -72107,6 +72120,10 @@ mod pull_summary_status_change_tests;
 mod queue_work_tests;
 
 #[cfg(test)]
+#[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]
+mod bug_1609_gitlab_reviewer_preflight_tests;
+
+#[cfg(test)]
 #[path = "tests/queue_rework_tests.rs"]
 mod queue_rework_tests;
 
@@ -85029,9 +85046,12 @@ fn review_branch_no_change_context_card(
 }
 
 // trace:BUG-816 | ai:codex
-fn review_open_change_hint(forge: crate::forge::ForgeKind, branch: &str) -> String {
+// trace:BUG-1610 | ai:claude — `base` is now always explicit (see
+// `ForgeKind::create_cmd_for_branch`), so this hint never lets the forge
+// infer (and possibly mis-infer) the target branch.
+fn review_open_change_hint(forge: crate::forge::ForgeKind, branch: &str, base: &str) -> String {
     let push = format!("git push -u origin {}", shell_quote(branch));
-    match forge.create_cmd_for_branch(branch) {
+    match forge.create_cmd_for_branch(branch, base) {
         Some(create) => format!("{push} && {create}"),
         None => push,
     }
@@ -85663,6 +85683,7 @@ fn handle_review_spec(
     spec: &str,
     no_agent: bool,
     allow_stale_base: bool,
+    target_branch: Option<&str>,
 ) -> Result<()> {
     let project_root = store_path
         .parent()
@@ -85778,8 +85799,34 @@ fn handle_review_spec(
                 "  {} the held draft {change_noun} is closed or was never opened.",
                 crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
             );
+            // BUG-1610: resolve the intended base BEFORE offering to open a
+            // change, and verify it — a bare `--source-branch` create with
+            // no explicit base can silently target the source branch itself
+            // when it became the project default (remote main never
+            // pushed). An explicit `--target-branch` always wins over
+            // whatever a previous attempt saved; the saved state itself
+            // never has source == target (`write_mr_recovery_state` refuses
+            // that pair). trace:BUG-1610 | ai:claude
+            let recovery_path = crate::pr_cmd::mr_recovery_path(project_root, &spec_id);
+            let saved_recovery = crate::pr_cmd::read_mr_recovery_state(&recovery_path);
+            let default_base = crate::forge::default_branch_of(project_root);
+            let base = crate::pr_cmd::resolve_mr_target_branch(
+                target_branch,
+                saved_recovery.as_ref(),
+                &default_base,
+            );
+            let base_check = crate::pr_cmd::preflight_mr_base(project_root, branch, &base);
+            if base_check != crate::pr_cmd::MrBasePreflight::Ok {
+                println!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                    crate::pr_cmd::mr_base_diagnosis_message(forge, base_check, branch, &base)
+                        .yellow()
+                );
+                return Ok(());
+            }
             // AC-5: offer to (re)open a PR before review.
-            let open_change_cmd = review_open_change_hint(forge, branch);
+            let open_change_cmd = review_open_change_hint(forge, branch, &base);
             if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
                 let card = review_branch_no_change_context_card(
                     &spec_id,
@@ -85802,6 +85849,14 @@ fn handle_review_spec(
                         "  {} then re-run {} once the {change_noun} is open.",
                         crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                         format!("aida review {spec_id}").cyan()
+                    );
+                    let _ = crate::pr_cmd::write_mr_recovery_state(
+                        &recovery_path,
+                        &crate::pr_cmd::MrRecoveryState {
+                            spec: spec_id.clone(),
+                            source_branch: branch.clone(),
+                            target_branch: base.clone(),
+                        },
                     );
                     return Ok(());
                 }

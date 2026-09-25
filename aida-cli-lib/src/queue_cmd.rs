@@ -271,7 +271,7 @@ pub(crate) fn advance_dispatch(
             let backend = advance_backend(store_path)?;
             if let Err(e) = handle_review_spec(
                 &backend, store_path, display, /* no_agent */ false,
-                /* allow_stale_base */ false,
+                /* allow_stale_base */ false, /* target_branch */ None,
             ) {
                 eprintln!(
                     "  {} review of {} did not complete: {}",
@@ -9351,6 +9351,25 @@ pub(crate) fn review_round_from_comments(comments: &[aida_core::Comment]) -> usi
         + 1
 }
 
+/// STORY-281 / TASK-480: whether the reviewer pre-flight checks
+/// (stale-base, intermediate-only) apply to this queue-work plan, and if
+/// so, the PR/MR number to check against.
+///
+/// BUG-1609: this used to be inlined at each call site as a match on
+/// `Some((ReviewForge::GitHub, pr_n))`, which silently skipped every GitLab
+/// MR — not because the checks themselves are GitHub-only
+/// (`preflight_stale_base_check` / `preflight_intermediate_only_check` read
+/// metadata through the forge-routed `fetch_change_info_via_forge`,
+/// GitLab-safe since STORY-621 slice 2), but because the call sites never
+/// reached them for GitLab. Pulling the predicate out to a named,
+/// independently-testable function makes "any forge with a review target,
+/// not just GitHub" a pinned invariant instead of an inlined pattern that
+/// can silently narrow again.
+// trace:BUG-1609 | ai:claude
+pub(crate) fn reviewer_preflight_pr_n(review_target: Option<(ReviewForge, u64)>) -> Option<u64> {
+    review_target.map(|(_, n)| n)
+}
+
 // BUG-1213: keep durable-history round derivation on the same path used to
 /// assemble the production pickup prompt, so callers cannot accidentally
 /// reintroduce a constant round.
@@ -10092,22 +10111,29 @@ pub(crate) fn handle_queue_work(
         }
     }
 
-    // STORY-281: reviewer pre-flight stale-base check. Fires only when
-    // the resolved scope is a GitHub PR AND the inferred role is the
-    // reviewer — every other pickup (implementer, dialog, architect,
-    // GitLab MR) skips this branch. The check is also no-op'd when the
-    // pickup is `--no-launch` (no reviewer session about to run) and
-    // when the user passed `--list-sessions` (already exited above).
+    // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
+    // resolved scope is ANY forge's PR/MR AND the inferred role is the
+    // reviewer — every other pickup (implementer, dialog, architect) skips
+    // this branch. The check is also no-op'd when the pickup is
+    // `--no-launch` (no reviewer session about to run) and when the user
+    // passed `--list-sessions` (already exited above).
+    //
+    // BUG-1609: this used to match only `(ReviewForge::GitHub, pr_n)`, so a
+    // GitLab MR silently skipped the check entirely — not because the check
+    // itself was GitHub-only (`preflight_stale_base_check` reads metadata
+    // through the forge-routed `fetch_change_info_via_forge`, GitLab-safe
+    // since STORY-621 slice 2), but because this call site never reached it
+    // for GitLab. trace:BUG-1609 | ai:claude
     //
     // Behaviour mirrors the orchestrator's phase-3 pre-flight:
     //   Current        → silent proceed
     //   StaleNoOverlap → warning, proceed
     //   StaleOverlap   → refuse (anyhow::bail!) unless allow_stale_base
-    //   Err (gh / fetch) → warning, proceed (never block on transient infra)
+    //   Err (gh/glab / fetch) → warning, proceed (never block on transient infra)
     //
     // trace:STORY-281 | ai:claude
     if !no_launch && role == "reviewer" {
-        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+        if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
             if let Some(root) = project_root_for_config.as_deref() {
                 match preflight_stale_base_check(root, pr_n) {
                     Ok(pr_rebase::StaleBaseOutcome::Current) => {}
@@ -10149,12 +10175,17 @@ pub(crate) fn handle_queue_work(
 
     // TASK-480: reviewer pre-flight intermediate-only check. Sibling
     // substrate-as-bouncer gate to the STORY-281 stale-base refusal
-    // above — same scoping (reviewer + GitHub PR + launching). Refuses a
-    // PR whose diff is exclusively intermediate/generated paths (build
-    // outputs, gitignored files, lockfiles with no source change)
+    // above — same scoping (reviewer + any forge's PR/MR + launching).
+    // Refuses a PR/MR whose diff is exclusively intermediate/generated paths
+    // (build outputs, gitignored files, lockfiles with no source change)
     // because such a fix is not reproducible. The check is a
     // PROGRAMMATIC GATE here, not skill-template instruction text
     // (BUG-280-class lesson). Fails open on infra error.
+    //
+    // BUG-1609: was gated on `ReviewForge::GitHub` like its stale-base
+    // sibling above, so GitLab MRs never ran it even though
+    // `preflight_intermediate_only_check` is itself forge-routed.
+    // trace:BUG-1609 | ai:claude
     //
     //   Clean                   → silent proceed
     //   SourcePlusIntermediate  → warning, proceed (flag-but-allow)
@@ -10162,7 +10193,7 @@ pub(crate) fn handle_queue_work(
     //
     // trace:TASK-480 | ai:claude
     if !no_launch && role == "reviewer" {
-        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+        if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
             if let Some(root) = project_root_for_config.as_deref() {
                 let allow = allow_intermediate_only
                     || std::env::var("AIDA_ALLOW_INTERMEDIATE_ONLY")

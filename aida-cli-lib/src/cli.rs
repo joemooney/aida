@@ -1915,21 +1915,24 @@ pub enum SessionManifestCommand {
 // trace:STORY-90 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum PrCommand {
-    /// File the reviewer story for the PR open on the current branch and
-    /// queue it to the `reviewer` role. Idempotent: skips when a
-    /// `Review PR-<n>:` story already exists for the PR. Detects the PR
-    /// via `gh pr list --head <branch>` (so `gh` must be on PATH and
-    /// authenticated).
+    /// File the reviewer story for the change (PR/MR) open on the current
+    /// branch and queue it to the `reviewer` role. Idempotent: skips when a
+    /// `Review PR-<n>:` / `Review MR-<n>:` story already exists for it.
+    /// Detects the change through the configured Forge — GitHub via `gh`
+    /// (looks up the branch's open PR), GitLab via `glab` (looks up the
+    /// branch's open MR) — so that provider's CLI must be on PATH and
+    /// authenticated.
     ///
-    /// Intended trigger: `/aida-pr` runs this right after `gh pr create`
-    /// succeeds — the agent already has the PR open, the commit range,
-    /// and the spec list cached, but the auto-queue logic does its own
-    /// gh detection so the call is self-contained.
+    /// Intended trigger: `/aida-pr` runs this right after the change opens
+    /// (`gh pr create` / `glab mr create`) — the agent already has it open,
+    /// the commit range, and the spec list cached, but the auto-queue logic
+    /// does its own forge detection so the call is self-contained.
     ///
     /// `aida session end` also fires this as a backup, so a forgotten
-    /// /aida-pr (or a raw `gh pr create`) still ends up routed to the
-    /// reviewer. The idempotency guard means both firing is fine.
-    // trace:STORY-90 | ai:claude
+    /// /aida-pr (or a raw `gh pr create` / `glab mr create`) still ends up
+    /// routed to the reviewer. The idempotency guard means both firing is
+    /// fine.
+    // trace:STORY-90 trace:BUG-1609 | ai:claude
     AutoQueueReview {
         /// Branch to look up the PR for. Defaults to the current
         /// branch via `git branch --show-current`.
@@ -12031,6 +12034,16 @@ pub enum Command {
         // trace:BUG-510 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         allow_stale_base: bool,
+
+        /// Explicit base branch to target when AC-5 offers to open a
+        /// change from a branch with no open PR/MR. Always wins over any
+        /// base saved from a previous offer (`.aida/mr-recovery/<spec>.json`)
+        /// — use this to correct a stuck recovery, e.g. when a GitLab
+        /// project's default branch became the feature branch itself
+        /// because remote `main` was never pushed.
+        // trace:BUG-1610 | ai:claude
+        #[clap(long, value_name = "BRANCH")]
+        target_branch: Option<String>,
 
         #[clap(subcommand)]
         cmd: Option<ReviewCommand>,
