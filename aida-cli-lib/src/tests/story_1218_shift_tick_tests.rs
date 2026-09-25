@@ -46,6 +46,7 @@ fn probes(candidates: Vec<Candidate>) -> Probes {
     fingerprint.sort();
     Probes {
         lock: LockView::Free,
+        lock_holder: None,
         foreign_claim: None,
         no_human_ack: Some("~/.aida/no-human-acknowledged".to_string()),
         budget: Some(crate::runaway_seats::BudgetEvidence {
@@ -175,6 +176,24 @@ fn shift_tick_launches_wave_when_lock_free_and_event_names_it() {
     assert_eq!(
         mock.saves.last().unwrap().waves.last().unwrap().pid,
         Some(4242)
+    );
+    // TASK-1497: the pid is saved right after the spawn, before the event.
+    // trace:TASK-1497 | ai:claude
+    let spawn_at = pos("spawn");
+    let pid_save = mock.calls[spawn_at..]
+        .iter()
+        .position(|x| x == "save")
+        .map(|i| i + spawn_at)
+        .expect("a save after the spawn");
+    assert!(pid_save < pos("emit"), "{:?}", mock.calls);
+    let saves_before_emit = mock.calls[..pos("emit")]
+        .iter()
+        .filter(|x| *x == "save")
+        .count();
+    assert_eq!(
+        mock.saves[saves_before_emit - 1].waves.last().unwrap().pid,
+        Some(4242),
+        "the save before the event carries the pid"
     );
     // The event names the wave.
     assert_eq!(mock.events.len(), 1);
@@ -1410,4 +1429,87 @@ fn shift_deadline_rechecked_between_tag_and_spawn() {
     let intent = state.waves.last().expect("intent kept for reuse");
     assert_eq!(intent.pid, None);
     assert_eq!(state.waves_in_day(now()), 0);
+}
+
+fn pid_less_intent(at: DateTime<Utc>, specs: &[&str]) -> WaveRecord {
+    WaveRecord {
+        pid: None,
+        ..launched_wave(at, specs)
+    }
+}
+
+fn live_lock_of(p: &mut Probes, pid: u32, batch: &str) {
+    p.lock = LockView::Running(pid);
+    p.lock_holder = Some(LockHolder {
+        pid,
+        pid_start: Some(format!("start-{pid}")),
+        command: format!("queue work --auto-complete --batch {batch}"),
+    });
+}
+
+/// TASK-1497: a tick killed after the spawn but before the pid was saved
+/// leaves a pid-less intent while its wave runs. The next tick sees the
+/// wave's live drain lock naming the intent's batch and counts the wave as
+/// launched: waves-per-day, the per-spec cap, and progress settlement.
+// trace:TASK-1497 | ai:claude
+#[test]
+fn shift_killed_after_spawn_before_pid_save_is_counted() {
+    let earlier = now() - Duration::minutes(15);
+    let batch = shift_batch_name(earlier);
+    let mut state = ShiftState {
+        waves: vec![pid_less_intent(earlier, &["TASK-1", "TASK-2"])],
+        ..Default::default()
+    };
+    assert_eq!(state.waves_in_day(now()), 0, "an intent alone is uncounted");
+    let mut p = probes(vec![drain("TASK-1"), drain("TASK-2")]);
+    live_lock_of(&mut p, 9999, &batch);
+    let (r, mock) = run(&cfg_on(), &p, &mut state, &ctx());
+    assert!(r.launched.is_none() && mock.spawns.is_empty() && mock.tags.is_empty());
+    assert_eq!(state.waves.len(), 1, "adopted, not duplicated");
+    assert_eq!(state.waves[0].pid, Some(9999), "the lock holder's pid");
+    assert_eq!(state.waves[0].pid_start.as_deref(), Some("start-9999"));
+    // Waves-per-day counts it.
+    assert_eq!(state.waves_in_day(now()), 1);
+    // The per-spec cap counts it, at the intent's time.
+    assert_eq!(state.spec_waves.get("TASK-1"), Some(&vec![earlier]));
+    assert_eq!(state.spec_waves.get("TASK-2"), Some(&vec![earlier]));
+    // It is the in-flight wave, and is not settled while its lock is live.
+    assert!(!guard(&r, "wave-in-flight").pass);
+    assert!(state.waves[0].outcome.is_none());
+    assert!(
+        mock.saves.last().unwrap().waves[0].pid == Some(9999),
+        "the adoption is persisted"
+    );
+
+    // The wave dies without a QueueDrained: zero progress (A8(a)).
+    let mut after = probes(vec![drain("TASK-1"), drain("TASK-2")]);
+    after.last_wave_alive = false;
+    run(&cfg_on(), &after, &mut state, &ctx());
+    let o = state.waves[0].outcome.clone().expect("settled");
+    assert!(!o.progress);
+    assert_eq!(state.consecutive_zero_progress, 1);
+}
+
+/// TASK-1497: a live lock held by some OTHER drain (a manual drain, another
+/// batch) is not the killed tick's wave; the intent stays uncounted.
+// trace:TASK-1497 | ai:claude
+#[test]
+fn shift_pid_less_intent_not_adopted_by_a_foreign_drain_lock() {
+    let earlier = now() - Duration::minutes(15);
+    for command in [
+        "queue work --auto-complete --batch shift-20200101-0000".to_string(),
+        "burndown run --status approved".to_string(),
+    ] {
+        let mut state = ShiftState {
+            waves: vec![pid_less_intent(earlier, &["TASK-1"])],
+            ..Default::default()
+        };
+        let mut p = probes(vec![drain("TASK-1")]);
+        live_lock_of(&mut p, 9999, "unused");
+        p.lock_holder.as_mut().unwrap().command = command;
+        run(&cfg_on(), &p, &mut state, &ctx());
+        assert_eq!(state.waves[0].pid, None);
+        assert_eq!(state.waves_in_day(now()), 0);
+        assert!(state.spec_waves.is_empty());
+    }
 }
