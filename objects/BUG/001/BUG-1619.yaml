@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T10:28:40.353023115Z
-modified_at: 2026-09-25T12:02:09.989526016Z
+modified_at: 2026-09-25T12:20:54.502709598Z
 req_type: Bug
 comments:
 - id: 01a0d81c-5785-76e0-85e6-8ad996f8bf6f
@@ -34,6 +34,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): the review approved it, but I''m folding the medium finding in before merge, because it touches the never-zero-drivers rule. (1) Before a fresh install writes anything, check is-enabled for the timer name. If systemd already knows the unit (anything but not-found), refuse without writing, so cleanup can never disable a timer loaded from another directory. If the state is Unknown, also refuse. (2) Fix the shift.rs wording for the second-file-write failure. (4) Make the shift enable hint agree with label() for disabled and stopped timers. Finding 3, the leftover .aida-tmp, is cosmetic; remove it on rename failure only if that''s trivial.'
   created_at: 2026-09-25T12:02:09.989526016Z
   modified_at: 2026-09-25T12:02:09.989526016Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d882-ee66-7de1-9740-e8df283a2adc
+  author: joe
+  content: 'Strict re-review (delta 44f60824d1..7c78a73102): REQUEST CHANGES — one fail-open in the guard plus one user-facing string defect; everything else is sound. Tests (throwaway worktree): task_1491 49/49, schedule 158/158, shift 45/45. Revert checks: disabling the guard (if false && none_existed) fails 3 tests (refuses_elsewhere, refuses_unknown, proceeds_not_found); dropping the tmp remove fails failed_rename test. B1 (blocking) schedule_driver.rs:997 classify_fresh_probe — the old-systemd heuristic (stdout empty && !success && stderr contains ''No such file or directory'') also matches the REAL no-user-bus error. Reproduced on this machine (systemd 255): env -u DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR=/nonexistent systemctl --user is-enabled x.timer -> stderr ''Failed to connect to bus: No such file or directory'', stdout empty, exit 1. A scratch test confirmed classify_fresh_probe returns NotFound for it. So the exact Unknown case the proxy decision says to refuse is treated as fresh and the install proceeds; with a flapping bus (probe fails, daemon-reload/enable succeed) we are back to n1: enable acts on another directory''s unit and a later failure''s cleanup disables it. The fake no_bus uses ''No medium found'' (tests:139, :1470), which is why the tests miss this. Fix: key the legacy path on the is-enabled-specific prefix (''Failed to get unit file state for <timer>:'' + ''No such file or directory''), and treat anything containing ''Failed to connect to bus'' as Unknown; add a classifier case with the real bus-ENOENT text. B2 (should-fix, user-facing) schedule_driver.rs:513 and :518 — the two refusal format strings are missing their trailing backslash line continuations, so each message contains runs of ~18 spaces mid-sentence (''reports                  "enabled"''). VERIFIED OK: guard runs before create_dir_all (:539) and any write; the refusal returns Unchanged, cron untouched, so never-zero-drivers holds; the guard is skipped on a repair (none_existed false). enabled-runtime/indirect/masked-runtime -> Known, alias/generated/transient/bad -> Unknown (both refuse); is-enabled states are not localized (de_DE still prints not-found), and a localized old-systemd stderr just falls to Unknown (fail closed). timer_enabled wording, the Disabled/Stopped hint, and the tmp cleanup are correct and tested. Tests use FakeHost/tempdirs only; real systemctl/unit_dir/crontab stay cfg(test)-guarded.'
+  created_at: 2026-09-25T12:20:54.502709598Z
+  modified_at: 2026-09-25T12:20:54.502709598Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: ddb82d40b95d7b8764ff6318c215df791196ee8e
