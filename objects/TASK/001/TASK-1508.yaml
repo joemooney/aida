@@ -1,0 +1,28 @@
+id: 01a0d7a1-efbd-7881-a8a1-ac3318dd905a
+spec_id: TASK-1508
+agreed_id: TASK-1508
+title: 'TASK-1505 slice 2: doctor line, MCP output fields, fallback footer'
+description: |-
+  Slice 2 of TASK-1505, per the ADVISOR SIGNOFF (amendment A9 and the slice-2 items). Depends on slice 1 (TASK-1507).
+
+  ## Acceptance
+  - As listed in the TASK-1505 ADVISOR SIGNOFF for slice 2.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T08:15:09.245084901Z
+modified_at: 2026-09-25T08:15:09.245084901Z
+req_type: Task
+tags:
+- cache
+- history
+- parent:TASK-1505
+filed_at:
+  code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
