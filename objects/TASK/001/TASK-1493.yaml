@@ -3,12 +3,12 @@ spec_id: TASK-1493
 agreed_id: TASK-1493
 title: 'Slice 2: systemd user timer driver, driver switch rules, doctor DriverStatus (A12, A13)'
 description: ''
-status: Draft
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:04:46.612450395Z
-modified_at: 2026-09-25T02:04:46.612450395Z
+modified_at: 2026-09-25T02:06:01.627812975Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-24-shift-tick.md
