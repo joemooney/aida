@@ -14,12 +14,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T06:32:41.902621659Z
-modified_at: 2026-09-25T06:54:45.532568239Z
+modified_at: 2026-09-25T07:01:33.033238364Z
 req_type: Bug
 tags:
 - ci
 - flaky
 - test
+comments:
+- id: 01a0d75e-8ce9-7132-bac9-b7b72ce92bef
+  author: joe
+  content: 'Review: APPROVE. The fresh reviewer''s round-1 set -e regression was fixed in c7cc6e816f: all three LIST assignments are guarded, and I verified the delta. The loop passed 20/20. Queued for batch 65 with BUG-1612.'
+  created_at: 2026-09-25T07:01:33.033238364Z
+  modified_at: 2026-09-25T07:01:33.033238364Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: dce27130ca391f4e587993afadb05b1447a6643f
   branch: main
