@@ -22,12 +22,12 @@ description: |-
   - Regression coverage exercises the real queue resolver/status transitions used by `--drain`.
 
   Regression context: STORY-449 documents and tests both the failure cap and dependent skip, but the observed queue-wide drain violated both guarantees.
-status: Completed
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:57:33.141469956Z
-modified_at: 2026-09-25T01:08:28.136767071Z
+modified_at: 2026-09-25T16:46:29.980811379Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -53,6 +53,11 @@ comments:
   created_at: 2026-09-24T23:54:05.380199476Z
   modified_at: 2026-09-24T23:54:05.380199476Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d976-165c-7fd0-a847-255d6b6f1468
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (a052add) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-09-25T16:46:29.980809916Z
+  modified_at: 2026-09-25T16:46:29.980809916Z
 history:
 - id: 01a0d61b-4b61-7631-8b2f-90e4baebed3b
   author: aida-auto-bump
@@ -61,6 +66,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a0d976-165c-7fd0-a847-25484d2a9e29
+  author: aida-auto-bump
+  timestamp: 2026-09-25T16:46:29.980807097Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 processing_record:
 - id: 01a0d61b-4b68-7301-9174-b9781ef38269
   timestamp: 2026-09-25T01:08:28.136765425Z
@@ -74,7 +86,3 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 81c37e2cb
   vendor: codex
-implementation_info:
-  implemented: false
-  completed_at: 2026-09-25T01:08:28.129176107Z
-  completion_sha: a052addddafee14f59ca10b0db26fb59e68263e9
