@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T06:31:24.916031923Z
-modified_at: 2026-09-25T08:15:47.044722011Z
+modified_at: 2026-09-25T08:16:07.253405819Z
 req_type: Task
 tags:
 - cache
@@ -231,6 +231,12 @@ comments:
     The trailing IDs on each slice PR must name the slice so the merge does not complete TASK-1505 early.
   created_at: 2026-09-25T08:13:59.048946359Z
   modified_at: 2026-09-25T08:13:59.048946359Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d7a2-d255-7642-a000-9f73f6360f37
+  author: joe
+  content: 'Orchestrator: the advisor signed off with amendments A1-A10. Split as required: BUG-1616 (rename detection, prerequisite), BUG-1617 (truncation notice), TASK-1507 (slice 1) and TASK-1508 (slice 2). TASK-1505 is tagged closure:pending until both slices merge.'
+  created_at: 2026-09-25T08:16:07.253405819Z
+  modified_at: 2026-09-25T08:16:07.253405819Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: dce27130ca391f4e587993afadb05b1447a6643f
