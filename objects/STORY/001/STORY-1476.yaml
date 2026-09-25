@@ -1,0 +1,20 @@
+id: 01a0d99d-2d6d-7353-aff2-5dec706adddf
+spec_id: STORY-1476
+agreed_id: STORY-1476
+title: Require trusted-config opt-in before graded review runs spec-authored acceptance commands
+description: 'From the BUG-1624 audit. graded_review::execute_graded_review runs acceptance commands written in the spec itself through bash -c. The store is shared across nodes, so anyone who can write a spec can choose commands that run on the reviewer''s machine, including unattended in the drain. Proposal: run spec-authored commands only when trusted local or repo config opts in (for example an allowlist of command prefixes or a [review] run_acceptance_commands = true in the trusted layer). Otherwise mark those criteria as needing manual verification. Acceptance: default behaviour, the opt-in mechanism, a test showing a spec-authored command does not run without opt-in, and migration notes.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T17:29:11.789280036Z
+modified_at: 2026-09-25T17:29:11.789280036Z
+req_type: Story
+filed_at:
+  code_sha: 41d8244b9b2537f5b9396a6a95ff4917cf8c6609
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
