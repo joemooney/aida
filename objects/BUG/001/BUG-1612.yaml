@@ -10,12 +10,12 @@ description: |-
   - A concurrent add of a different spec between load and save is never deleted (test with two writers).
   - A concurrent modification of the same spec is detected, and the operation retries or refuses; it never silently clobbers.
   - Audit every caller of update_atomically and save() on the git store, and list any remaining whole-store writers with their justification.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:51:09.557186527Z
-modified_at: 2026-09-25T07:22:25.139547103Z
+modified_at: 2026-09-25T08:02:00.494049991Z
 req_type: Bug
 tags:
 - concurrency
@@ -95,6 +95,20 @@ comments:
   created_at: 2026-09-25T07:22:25.139547103Z
   modified_at: 2026-09-25T07:22:25.139547103Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d795-e6a6-76c0-acfb-117bc647a50e
+  author: aida-auto-bump
+  timestamp: 2026-09-25T08:02:00.486883921Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0d795-e6ae-7311-9bfd-f3b4dcfbf1ac
+  timestamp: 2026-09-25T08:02:00.494048445Z
+  agent: aida
+  commit_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
+  summary: Completed via merge c52d3734
 filed_at:
   code_sha: b4984d495336027fed771caed71bc429dc1fd20c
   branch: main
@@ -103,3 +117,7 @@ filed_at:
   aida_build_sha: c7d35baa35
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T08:02:00.486859271Z
+  completion_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
