@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:20.548044413Z
-modified_at: 2026-09-25T01:14:59.350475416Z
+modified_at: 2026-09-25T01:20:29.419135402Z
 req_type: Story
 tags:
 - autonomy
@@ -199,5 +199,103 @@ comments:
     - whether auto-tagging `batch:shift-*` (a store write each wave) is preferred over a new explicit spec-list flag on `queue work`.
   created_at: 2026-09-25T01:14:59.350475416Z
   modified_at: 2026-09-25T01:14:59.350475416Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d626-4ceb-79d2-8045-79b39672a606
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF: APPROVED, with binding amendments (A1–A16). Fold them into docs/plans/2026-09-24-story-1218-shift-tick.md before any code is written. The build stays GUIDED, with a human-reviewed PR per slice and no auto-merge. I am independent of the sketch author.
+
+    ## Sketch claims checked against the code
+    - Jobs killed after 120s: CONFIRMED. `SCHEDULED_COMMAND_TIMEOUT = 120s` in maintenance_schedule.rs. `run_with_kill_timeout` calls `command_output_with_timeout`, which spawns each child with `process_group(0)` and kills the whole group with `killpg` on timeout. A wave started with `setsid` gets its own session and process group, so that group kill cannot reach it. Detaching is therefore required, and it works.
+    - `supervise redrive --execute` blocks: CONFIRMED. `supervisor::launch_redrive` calls `Command::new(aida).args(["queue","work",spec,"--auto-complete","--force-claim","--no-human","both"]).status()`, which waits in the foreground, once per spec in turn. It also passes `--force-claim`, so the tick must not reuse it.
+    - No `[watchdog]` section, so the 6B built-in default applies: CONFIRMED. `.aida/config.toml` has no `[watchdog]` section. `runaway_seats::policy()` defaults to `daily_token_budget = 6_000_000_000` with `budget_alert_pct = 90`. The runaway_seats module doc also says Codex sessions are NOT covered (see A8).
+    - Cron marker and legacy-line handling after BUG-1605: CONFIRMED, with one gap. `line_has_marker` anchors on the trailing `# aida-schedule-tick:<canon>` and ignores commented-out lines. `line_is_legacy_tick_line` requires ` cd <repo> &&` (quoted or unquoted) followed by an aida-binary token and then `schedule tick`, and also ignores commented-out lines. `crontab_after_install` folds the marked line and all legacy lines into one. GAP: `crontab_after_uninstall` removes only MARKED lines, not legacy ones. "Installing systemd removes this repo's cron line including legacy lines" is therefore new behaviour that needs its own pure function (A12).
+    - New finding: `events::read_all` reads only the live `.aida/events.jsonl`. Once the file passes 5 MiB it is renamed to `events.jsonl.1`, and after that the ADR-26 attempt count starts again from zero. `AIDA_EVENTS_DISABLE` turns `emit` into a no-op, so no attempts are ever counted. See A6.
+    - New finding: ADR-26 fork C requires automatic re-drive to be OFF by default. No `[drain] supervise` knob exists in the code yet, so this tick would be the first automatic caller of re-drive. See A5.
+    - New finding: `.aida/config.toml` is tracked in git. See A1.
+    - New finding: `--no-human` refuses to run from a non-terminal stdin unless the no-human acknowledgement has been given. See A3.
+
+    ## Q1: Is running shift tick as a job inside `schedule tick` the right home?
+    YES. It keeps one driver, one tick lock, one ledger, and the existing CronJobFailed routing, and it avoids a second scheduler (STORY-1226). Setting `hook_allowed: false` is correct. The 120s kill is survivable because the wave is detached. A detached wave is not a leak, provided it is tracked and bounded. That is covered by the `last_launch` pid and pid_start, the drain lock, and the drain caps, plus A2, A7 and A8. The binding conditions:
+
+    A1. Keep the enable switch out of committed config. `[shift] enabled` in the tracked `.aida/config.toml` would turn on unattended drain launches for every clone that has a driver installed. The `[[schedule.jobs]] night-shift` registry entry may be committed. The enable switch itself must live in a layer this clone owns, either a gitignored `.aida/` marker or `~/.aida/config.toml` keyed by the canonical repo path. `shift enable` and `shift disable` write that local layer. `--dry-run` prints which layer enabled it. Test: with the committed config alone, the tick launches nothing.
+
+    A2. Spawn the wave hygienically:
+    - `setsid`, stdin set to /dev/null, stdout and stderr sent to the log file. The wave must never inherit the substrate child's pipes.
+    - Remove `AIDA_DRAIN_FORCE`, `AIDA_DRAIN_BORROW`, `AIDA_DRAIN_LOCK_STALE_SECS`, `AIDA_EVENTS_DISABLE` and `AIDA_SCHEDULE_CHILD` from the child's environment. Keep `AIDA_SCHEDULE_INVOKER` for attribution, and add "systemd" to usage.rs's documented values.
+    - Test: `shift_wave_env_scrubbed_and_stdio_detached`. It extends `shift_wave_argv_never_forces`.
+
+    A3. No-human acknowledgement. The tick must NEVER set `AIDA_NO_HUMAN_ACKNOWLEDGED` itself, because that would amount to forcing a flag. Add a `no-human-ack` guard that fails closed unless the persisted `aida no-human acknowledge` marker is present. `shift enable` checks for the marker and tells the operator the command to run.
+
+    A4. Exit codes and CronJobFailed. A guard refusal, a no-op, or a live lock is exit 0, never a job failure. Otherwise every refused tick becomes a CronJobFailed routed to the advisor seat, which is the BUG-1589 wake storm. Only an internal error exits non-zero (state file unreadable, spawn failed, store write failed). Also give the tick an internal deadline of about 90s: after that it skips the optional steps (reap, mail) and never starts a spawn it cannot finish recording. The order must be safe to kill at any point: record the launch intent in shift-state, tag, spawn, then record the pid. A tick that was killed between tagging and spawning leaves an untouched `batch:shift-*` set, and the next tick REUSES it instead of tagging new specs.
+
+    ## Q2: Are the safety guards complete? What stops a runaway loop across ticks?
+    The guards listed are necessary but not sufficient. Add the following.
+
+    A5. ADR-26 default-off. The re-drive step is a separate opt-in, `[shift] redrive = false` by default, set in the same local layer as A1. Enabling the shift does NOT enable automatic re-drive. `--dry-run` reports the re-drive step as "off (ADR-26 default)". This honours ADR-26 fork C until the operator flips it after watching real parks.
+
+    A6. The re-drive cap must hold. `plan_redrives` reads attempts from BOTH `events.jsonl` and `events.jsonl.1`. Add a `redrive-evidence` guard that fails, so no re-drive happens that tick, when `AIDA_EVENTS_DISABLE` is truthy in the tick process or the event stream cannot be read. The tick-side split must also carry out the ADR-26 cap branch, not just requeue: reclassify to needs-human, emit `ReclassifiedNeedsHuman`, and file the cap finding. Otherwise a spec that has hit the cap sits silently in NeedsAttention. Test `shift_redrive_cap_survives_event_rotation`: 3 SpecReDriven events are in the archive and the live file is empty, and the spec must not be re-driven.
+
+    A7. Re-driven specs need a queue entry. The implementer dequeues at pickup, so a parked spec is usually NOT in the queue. Setting its status back to Approved alone means the "joins this tick's wave" claim is false, because `drain_mode_ready_specs` reads the queue. `apply_requeue` must make sure a queue entry exists, re-adding it at the head in oldest-parked order. Test: a transient park is re-driven, and the spec appears in the next wave's argv/specs. Never add `--force-claim` for a re-drive. If the spec cannot be claimed without it, that is a park for a human.
+
+    A8. Circuit breakers across ticks. These are kept in `.aida/shift-state.json`, which is NOT ADR-26 attempt state and so does not violate fork B. They must not be derived from events, because events rotate. An unparseable state file blocks launches; a missing one on the first run is treated as fresh.
+    (a) If a wave's pid is dead and there is no QueueDrained event for it, the wave counts as zero progress, never as unknown.
+    (b) After 2 consecutive zero-progress waves, the tick stops launching and notifies once. Launching resumes only after `aida shift resume` or a change to the queue that a human made.
+    (c) A spec may appear in at most 2 shift waves in 24h without reaching a terminal event. After that it is excluded and escalated once.
+    (d) `max_waves_per_day` (default 8) is counted from shift-state.
+    This, together with ADR-26's lifetime cap of 3 re-drives, is what stops "re-queue the same parked spec every 15 minutes". The worst case per spec is 3 supervised re-drives with backoff, then needs-human.
+
+    A9. Budget evidence covers the whole wave. The watchdog aggregates do not cover Codex seats, and the 80% check cannot see spend it does not measure. `budget-evidence` fails in any of these cases:
+    - the resolved vendor for any phase in the wave is not covered by the aggregates;
+    - the watchdog's last run was `degraded` or `unknown`;
+    - the aggregates are more than 1h old.
+    An explicit local `[shift] allow_uncovered_vendors = ["codex"]` may override the first case, and dry-run prints that. The wave argv must ALWAYS include `--max-runtime` and `--max-iterations <wave_size>` alongside `--max-tokens`. `--max` counts only ships, and `--max-tokens` only sees tokens that were reported. The value passed to `--max-tokens` is min(wave_budget, stop_threshold minus spent_24h), where stop_threshold = budget_stop_pct of the budget, not the full remaining daily allowance.
+
+    A10. Lock parity across clones. `probe_lock` sees only this clone's `.aida/drain.lock`. The `lock-free` guard must also check the shared drain claim on aida-store (STORY-638). Otherwise a tick in clone A launches every 10 minutes into a refusal while clone B is draining.
+
+    A11. Two selection floors in addition to execution_mode:
+    - only an EXPLICIT `execution_mode == Some(Drain)` counts. A missing mode or one resolved by default never selects a spec;
+    - exclude any spec that `presence::is_keystone_class` flags, or that has a live merge hold, even if its mode says drain. This is the one-keystone-classifier invariant.
+    The configured-batch mode fails closed as sketched. `--dry-run` prints the queue user it resolved under the scheduler's environment.
+
+    ## Q3: Driver choice, KillMode, and removing the other driver
+    Offering systemd and cron with one driver per repo is right. `KillMode=process` is CORRECT and REQUIRED for this design: `setsid` does not leave the cgroup, and when a oneshot's main process exits, systemd kills the rest of the cgroup. It is also what we want on `systemctl --user stop` or on uninstall, because stopping the tick must never kill a drain in the middle of an integration. Unit corrections:
+
+    A12. Timer and unit shape:
+    - `OnUnitInactiveSec` alone NEVER fires the first time. Add `OnActiveSec=1min` and `OnBootSec=2min`.
+    - Drop `Persistent=true`. It applies only to `OnCalendar` timers and does nothing here.
+    - Add `TimeoutStartSec=15min` as a backstop against a wedged tick.
+    - Set NO `MemoryMax`, `CPUQuota` or similar resource limits. They would silently constrain the wave that is left behind in the cgroup.
+    - Document the expected journal line "left-over process" in the runbook.
+    - Test `systemd_unit_has_killmode_process_and_first_fire_trigger`.
+    - A `systemd-run --user` transient unit per wave is a better long-term shape: separate cgroup, journal and `systemctl` stop per wave. It is not binding. File it as a follow-up.
+
+    A13. Rules for the driver switch:
+    (a) Install the new driver and verify it first (`systemctl --user is-enabled` on the timer, or a crontab read-back). Only then remove the old one. A failure part-way leaves both drivers, which is harmless under the tick lock and flagged by doctor, and never leaves none.
+    (b) Cron removal uses a NEW pure function, `crontab_after_driver_switch(existing, marker)`. It removes this repo's ACTIVE marked line and ACTIVE legacy lines using the BUG-1605 predicates only. Commented-out lines, other repos' lines (including repos whose path is a prefix of this one) and unrelated lines must come through byte-for-byte. Print every line removed. Tests cover a prefix-path sibling repo, commented marked and legacy lines, an unrelated user line, and a missing trailing newline.
+    (c) Removing systemd only runs `disable --now` on the `.timer`. It never stops the `.service`. It deletes a unit file only if the file carries our `aida-schedule-tick:<canon>` marker. If a file with our name but no marker exists, the installer refuses and does not overwrite it.
+    (d) Never use sudo. Only print the reminder to enable linger.
+
+    ## Q4: Default max_failures
+    DECISION: 2, not 3, as the unattended shift default; manual drains keep their own default. Under a tick, relaunching is cheap and bounded, by max_waves_per_day and the no-progress breaker in A8. So the per-wave cap should stop quickly: with `retry_transient = 2`, three shelves already means up to 9 burnt implementer runs in one wave. Clamp the value to 1..=wave_size. It is configurable through `[shift] max_failures`. The plan file must say this default is a choice, not a finding from SPIKE-82. After 5 shift nights, file a follow-up to re-derive it from the ShiftTick and QueueDrained outcomes.
+
+    ## Q5: Auto-tag or a new spec-list flag?
+    DECISION: auto-tag `batch:shift-YYYYMMDD-HHMM`. `--batch` is the existing, proven path for draining several members: the lock records the specs (BUG-759), drain status names the batch, and humans can see and undo the tags. A new spec-list flag would widen `queue work`, which is the entry point that launches drains, for no safety gain. Conditions:
+    - a spec carries at most one `batch:shift-*` tag, and re-tagging replaces it;
+    - an un-launched shift batch is reused (see A4);
+    - tagging happens under `shift.lock` while the drain lock is free;
+    - `--dry-run` writes no tags.
+
+    ## Q6: Slices
+    The proposed slice 1 is too big for a keystone review. Required split, one PR each, each human-reviewed:
+    - Slice 1: tick core. Local enable, guards (including A3, A9, A10, A11), selection, detached launch with A2 and A4, circuit breakers (A8), ShiftTick, dry-run, `shift status`, the status line, reap. It is driven by the EXISTING cron driver only. No re-drive.
+    - Slice 2: systemd driver. `install-systemd`, the driver switch (A12, A13), and doctor's `DriverStatus`. On-box acceptance: `list-timers` output plus one journal tick attached to the PR.
+    - Slice 3: the re-drive step (A5, A6, A7), the mail-latency escalation, and cold-boot. Cold-boot also spawns detached, stays under the same budget-evidence guard, and is capped at 1 per hour per seat and at most 4 per day in total.
+
+    ## Non-binding
+    - The status line says "wave shift-0924-2210", which exposes a batch tag. An outcome phrasing reads better, e.g. "night shift: on · last check 4m ago · working 6 items".
+    - If the canonical exe is under a `target/` directory that belongs to a git worktree, the installer should warn, because a drain rebuild will swap the binary under the timer.
+  created_at: 2026-09-25T01:20:29.419135402Z
+  modified_at: 2026-09-25T01:20:29.419135402Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
