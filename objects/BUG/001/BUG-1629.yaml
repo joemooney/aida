@@ -18,12 +18,12 @@ description: |-
   - The orchestrator emits a precise retry/recovery state and no orphan lease.
   - A retry can either resume a valid child or start a clean replacement exactly once.
   - Parent drain dependency handling does not treat the failed child as completed or unlock dependents.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T20:31:17.082914486Z
-modified_at: 2026-09-25T20:31:17.082914486Z
+modified_at: 2026-09-25T22:31:43.884644961Z
 req_type: Bug
 tags:
 - handoff
