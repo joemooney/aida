@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-25T04:32:59.490165542Z
+modified_at: 2026-09-25T08:03:14.294698815Z
 req_type: Task
 tags:
 - agent-launch
@@ -34,3 +34,16 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: cb07ece7f0
   vendor: codex
+decision_request:
+  question: TASK-1499 scaffolds a launch profile that sets writable roots and permission metadata. Approve that permission-shaping part?
+  choices:
+  - label: Approve all
+    consequence: Portable binary resolution plus the permission profile
+    resolution: Orchestrator implements it
+  - label: Portability only
+    consequence: Binary resolution and diagnostics only; the permission profile moves to a separate spec
+    resolution: Split, then approve the safe half
+  - label: Hold
+    consequence: Wait for STORY-1473
+    resolution: Leave as draft
+  asked_at: 2026-09-25T08:03:14.294698815Z
