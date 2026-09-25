@@ -67,7 +67,8 @@ This skill needs four harness capabilities:
 - a way to stop a stuck job (`TaskStop`).
 
 **Implementation and review must always run in separate sessions.** Without
-subagents, launch them with `aida queue work <SPEC>` (the spec must be queued),
+subagents, launch them with `aida queue work <SPEC> --strict` (the spec must be
+queued; `--strict` refuses to auto-queue an unsigned-off spec),
 or with `aida agent new` told to push a branch and not open a PR. You can also
 route review to another seat. If no second session is available, stop at
 pushed branches and report. **Never review your own diff.**
