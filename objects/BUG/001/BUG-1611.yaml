@@ -14,12 +14,12 @@ description: |-
   - zen auto-approve runs the approval authority predicate, and `[autopilot] approve = \"auto\"` cannot approve without it.
   - Refusal messages do not suggest re-running with an env-var role override.
   - A test covers each write site.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T01:20:51.335669387Z
-modified_at: 2026-09-25T01:20:51.335669387Z
+modified_at: 2026-09-25T01:21:27.806340805Z
 req_type: Bug
 tags:
 - authority
