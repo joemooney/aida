@@ -12,7 +12,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:09.245084901Z
-modified_at: 2026-09-25T08:15:18.510271558Z
+modified_at: 2026-09-25T08:15:59.091471191Z
 req_type: Task
 tags:
 - cache
@@ -25,6 +25,10 @@ relationships:
 - rel_type: BlockedBy
   target_id: 01a0d7a1-cfb9-7ed2-add8-b69091986e6d
   created_at: 2026-09-25T08:15:18.510264732Z
+  created_by: joe
+- rel_type: Parent
+  target_id: 01a0d742-f5f4-7a03-b805-b2e5ed5906b7
+  created_at: 2026-09-25T08:15:59.091467714Z
   created_by: joe
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
