@@ -1,0 +1,36 @@
+id: 01a0d70a-8f34-7030-8602-b8f47f9f39c0
+spec_id: TASK-1503
+agreed_id: TASK-1503
+title: Refresh delivers skills new since a pack was installed without resurrecting deleted ones
+description: |
+  Follow-up to STORY-1475. `aida scaffold refresh` never creates files. This keeps the TASK-1170 edit-preserving contract, because a missing skill looks the same as one the user deleted on purpose. The result is that a skill AIDA starts shipping after a pack was installed never reaches that pack. STORY-1475 works around this with a one-name allow-list (`REFRESH_DELIVERED_SKILLS = ["aida-orchestrate"]` in aida-cli-lib/src/scaffold_refresh.rs).
+
+  Replace the allow-list with a general mechanism. For example, give each pack a delivered-skills manifest (such as `.codex/skills/.aida-delivered` or a section in `.aida/`) that records every skill name AIDA has ever written into it. Refresh creates a missing skill only when its name has never been delivered. A skill that was delivered and is now missing counts as deleted and stays deleted.
+
+  ## Acceptance
+  - On first init or apply, and whenever refresh writes a file, the pack's manifest records the skill names it delivered.
+  - Refresh creates a missing skill in an installed pack only when the manifest has never recorded that name. A delivered-then-deleted skill is never recreated.
+  - A pack installed before the manifest existed is seeded from the skill directories present on disk. That first refresh creates nothing.
+  - The manifest covers the Claude, Codex and Antigravity skill packs, or the spec states and justifies which packs are left out.
+  - `REFRESH_DELIVERED_SKILLS` is removed, and aida-orchestrate is delivered through the manifest.
+  - Tests cover: a new skill delivered, a deleted skill not recreated, a legacy pack seeded without any creation, and a symlinked skill left untouched.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T05:29:48.596407578Z
+modified_at: 2026-09-25T05:29:48.596407578Z
+req_type: Task
+tags:
+- antigravity
+- codex
+- refresh
+- scaffolding-pack
+filed_at:
+  code_sha: b348f531d44eb6da32add84237a3343bf461963f
+  branch: claude/story-1475
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
