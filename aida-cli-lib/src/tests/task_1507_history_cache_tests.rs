@@ -1429,7 +1429,7 @@ fn task_1507_skewed_commit_falls_back_near_it_only() {
 
 #[test]
 fn task_1507_boundary_tie_inside_merge_region_falls_back() {
-    // R4: a side and a main commit in the same second inside the merge's
+    // B2 (was R4): a side and a main commit in the same second inside the merge's
     // parallel region; then a parent/child tie on one line after it.
     let mut fx = Fixture::new();
     build_dated_merge(&mut fx, &[300], &[300], 600, &[900, 900]);
@@ -1642,4 +1642,156 @@ fn task_1507_prune_skips_other_versions_whose_lock_is_held() {
         assert!(dir.join(f).exists(), "{f} belongs to a running indexer");
     }
     drop(held);
+}
+
+// ---------------------------------------------------------------------------
+// Second rework: cross-branch same-second ties anywhere in the served range
+// (B2), ref-aware rewrite detection (N2a), and pinned guards (T1).
+// trace:TASK-1507 | ai:claude
+// ---------------------------------------------------------------------------
+
+#[test]
+fn task_1507_cross_branch_same_second_ties_fall_back_anywhere_in_range() {
+    // The reviewer's fixtures: git orders same-second commits from the two
+    // sides of a merge first-parent-first, which seq cannot express.
+    for (side, main) in [
+        (&[300][..], &[300][..]),
+        (&[100, 300][..], &[200, 300][..]),
+        (&[250, 400][..], &[100, 250][..]),
+    ] {
+        let mut fx = Fixture::new();
+        build_dated_merge(&mut fx, side, main, 600, &[700]);
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        let run = |o: &HistoryOpts| test_support::query_only(&fx.store, &fx.db, o).unwrap();
+        let label = format!("side {side:?} main {main:?}");
+        assert!(run(&opts()).is_none(), "[{label}] unbounded");
+        let mut o = opts();
+        o.since = Some(rfc3339(BASE_TS + 50));
+        assert!(run(&o).is_none(), "[{label}] --since below the tie");
+        let mut o = opts();
+        o.max_commits = 5;
+        o.max_commits_explicit = true;
+        assert!(run(&o).is_none(), "[{label}] --max-commits 5");
+        // Clear of every tied second: served, exactly.
+        for (what, o) in [
+            ("--max-commits 2", {
+                let mut o = opts();
+                o.max_commits = 2;
+                o
+            }),
+            ("--since after the ties", {
+                let mut o = opts();
+                o.since = Some(rfc3339(BASE_TS + 500));
+                o
+            }),
+        ] {
+            let (walk, _, x) = collect_filtered_events_git(&fx.store, &o).unwrap();
+            let got = run(&o).unwrap_or_else(|| panic!("[{label}] {what} did not serve"));
+            assert_same(&got, &(walk, x), &format!("{label} {what}"));
+        }
+    }
+}
+
+#[test]
+fn task_1507_branch_switch_in_one_checkout_does_not_reset() {
+    // N2a: one store checkout switches to a diverged branch and back. The
+    // old tip is still on a branch, so this is not a rewrite.
+    let mut fx = Fixture::new();
+    build_linear(&mut fx);
+    assert_parity(&fx, &opts(), "initial");
+    let built_at = test_support::meta(&fx.db, "built_at");
+    let count = test_support::commit_count(&fx.db);
+    fx.git(&["checkout", "-q", "-b", "other", "HEAD~3"]);
+    let s = Spec::new("STORY-50", "Story", "On another branch");
+    fx.put(&s);
+    fx.commit("add STORY-50");
+    assert!(serve(&fx, &opts()).is_none(), "diverged branch falls back");
+    fx.git(&["checkout", "-q", "aida-store"]);
+    assert_parity(&fx, &opts(), "back on the indexed branch");
+    assert_eq!(test_support::meta(&fx.db, "built_at"), built_at);
+    assert_eq!(test_support::meta(&fx.db, "last_reset_reason"), None);
+    assert_eq!(test_support::commit_count(&fx.db), count);
+}
+
+#[test]
+fn task_1507_partial_index_before_any_chunk_never_serves() {
+    // T1: after a reset and before chunk 0 the watermark is unknown.
+    let mut fx = Fixture::new();
+    build_linear(&mut fx);
+    test_support::partial_build(&fx.store, &fx.db, 5, 0).unwrap();
+    assert_eq!(test_support::commit_count(&fx.db), 0);
+    for (label, o) in [
+        ("everything", opts()),
+        ("-n 1", {
+            let mut o = opts();
+            o.limit = 1;
+            o
+        }),
+        ("--since", {
+            let mut o = opts();
+            o.since = Some(rfc3339(BASE_TS));
+            o
+        }),
+    ] {
+        assert!(
+            test_support::query_only(&fx.store, &fx.db, &o)
+                .unwrap()
+                .is_none(),
+            "[{label}] must fall back"
+        );
+    }
+}
+
+#[test]
+fn task_1507_boundary_equal_to_watermark_falls_back() {
+    // T1: an indexed boundary in the same second as the newest unfilled
+    // commit is not "strictly newer" than the watermark.
+    let mut fx = Fixture::new();
+    let mut s = Spec::new("FR-1", "Functional", "Ties");
+    for (off, st) in [
+        (0, "Draft"),
+        (200, "Approved"),
+        (200, "Done"),
+        (200, "Draft"),
+        (300, "Approved"),
+    ] {
+        s.status = st.into();
+        fx.put(&s);
+        fx.commit_at(BASE_TS + off, "update FR-1");
+    }
+    // Chunks of one: the three newest commits are indexed; the newest
+    // unfilled one shares its second with the two below the top.
+    test_support::partial_build(&fx.store, &fx.db, 1, 3).unwrap();
+    assert_eq!(
+        test_support::meta(&fx.db, "unfilled_max_ts"),
+        Some((BASE_TS + 200).to_string())
+    );
+    let run = |o: &HistoryOpts| test_support::query_only(&fx.store, &fx.db, o).unwrap();
+    // A capped window whose last row sits on the watermark second.
+    let mut o = opts();
+    o.max_commits = 2;
+    o.max_commits_explicit = true;
+    assert!(run(&o).is_none(), "window boundary ts == watermark");
+    // A limit cut landing on that second.
+    let top = collect_filtered_events_git(&fx.store, &{
+        let mut o = opts();
+        o.max_commits = 1;
+        o
+    })
+    .unwrap()
+    .0
+    .len();
+    let mut o = opts();
+    o.limit = top + 1;
+    assert!(run(&o).is_none(), "-n boundary ts == watermark");
+    let mut o = opts();
+    o.since = Some(rfc3339(BASE_TS + 200));
+    assert!(run(&o).is_none(), "since == watermark");
+    // Strictly above it: served, exactly.
+    let mut o = opts();
+    o.max_commits = 1;
+    o.max_commits_explicit = true;
+    let (walk, _, x) = collect_filtered_events_git(&fx.store, &o).unwrap();
+    let got = run(&o).expect("boundary above the watermark serves");
+    assert_same(&got, &(walk, x), "boundary above the watermark");
 }

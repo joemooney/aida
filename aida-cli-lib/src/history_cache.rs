@@ -37,9 +37,11 @@ use crate::history::{self, CommitMeta, Event, EventKind, HistoryOpts};
 
 /// Bump when the tables or their meaning change.
 /// v2: date-priority order (`events.commit_ts`), the `unfilled_max_ts`
-/// back-fill watermark, and the `merges`, `merge_paths` and `skew` tables.
+/// back-fill watermark, and the `merge_paths` and `skew` tables.
+/// v3: `merge_ties` (same-second commits on both sides of a merge)
+/// replaces the boundary-only `merges` table.
 // trace:TASK-1507 | ai:claude
-pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 2;
+pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 3;
 
 /// Bump whenever `decode_into_events`, `diff_modified` or `EventKind`
 /// changes meaning or serialized shape. A bump gives the index a new file
@@ -359,11 +361,9 @@ CREATE INDEX IF NOT EXISTS events_spec ON events(spec_id COLLATE NOCASE, commit_
 CREATE INDEX IF NOT EXISTS events_type ON events(req_type COLLATE NOCASE, commit_seq);
 CREATE INDEX IF NOT EXISTS events_kind ON events(kind, commit_seq);
 CREATE INDEX IF NOT EXISTS events_author ON events(author, commit_seq);
-CREATE TABLE IF NOT EXISTS merges (
-    seq      INTEGER PRIMARY KEY,
-    merge_ts INTEGER NOT NULL,
-    base_ts  INTEGER NOT NULL
-);
+CREATE TABLE IF NOT EXISTS merge_ties (
+    ts INTEGER PRIMARY KEY
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS merge_paths (
     path TEXT PRIMARY KEY
 ) WITHOUT ROWID;
@@ -750,14 +750,26 @@ fn git_lines(store: &Path, args: &[&str]) -> Result<Vec<String>> {
         .collect())
 }
 
-/// Whether some other checkout of the store (a git worktree whose HEAD is
-/// not `head`) is at or past the indexed `tip`. That separates a reader on
-/// an older or diverged checkout, which must leave the shared index alone,
-/// from a real rewrite, where no checkout has the indexed tip any more.
+/// Whether some ref, or some other checkout of the store (a git worktree
+/// whose HEAD is not `head`), still contains the indexed `tip`. That
+/// separates a reader on an older, diverged or switched checkout, which
+/// must leave the shared index alone, from a real rewrite, where nothing
+/// has the indexed tip any more.
 /// Any doubt (git failure, unknown object) answers `false`, which keeps the
 /// old reset-on-rewrite behavior.
 // trace:TASK-1507 | ai:claude
 fn tip_is_live_elsewhere(store: &Path, tip: &str, head: &str) -> bool {
+    // trace:TASK-1507 | ai:claude
+    // N2a: a branch (or any ref) that still contains the tip means this
+    // checkout switched away from it, not that history was rewritten.
+    if git_lines(
+        store,
+        &["for-each-ref", "--contains", tip, "--format=%(refname)"],
+    )
+    .is_ok_and(|refs| !refs.is_empty())
+    {
+        return true;
+    }
     let Ok(lines) = git_lines(store, &["worktree", "list", "--porcelain"]) else {
         return false;
     };
@@ -788,43 +800,48 @@ fn git_commit_times(store: &Path, shas: &[String]) -> Result<HashMap<String, i64
 }
 
 /// Record a merge commit for the coverage rules:
-/// - `merges`: its time and the oldest merge-base time of its parents, so
-///   a cut whose boundary is a same-second tie inside the merge's parallel
-///   region falls back (R4). No merge base (joined histories) or any git
-///   failure records the most conservative region.
+/// - `merge_ties`: every commit time present on both sides of the merge
+///   (`M^i ^M^j` and `M^j ^M^i`). git's walk orders same-second commits
+///   from different sides by queue insertion (first parent first), which
+///   `seq` cannot express, so a served range holding such a time falls
+///   back (B2).
 /// - `merge_paths`: every path touched on either side since the base
 ///   (`M^1...M^k`). `git log -- <path>` simplifies TREESAME side branches
 ///   away and the index does not, so `--id` on these paths uses the walk
 ///   (N1b).
 // trace:TASK-1507 | ai:claude
-fn record_merge(tx: &Connection, store: &Path, seq: i64, raw: &RawCommit) -> Result<()> {
+fn record_merge(tx: &Connection, store: &Path, raw: &RawCommit) -> Result<()> {
     if raw.parents.len() < 2 {
         return Ok(());
     }
-    let first = &raw.parents[0];
-    let mut base_ts = i64::MAX;
-    for other in &raw.parents[1..] {
-        let bases = git_lines(store, &["merge-base", "--all", first, other]).unwrap_or_default();
-        let times = git_commit_times(store, &bases).unwrap_or_default();
-        if bases.is_empty() || times.len() != bases.len() {
-            base_ts = i64::MIN;
-        } else if let Some(&t) = times.values().min() {
-            base_ts = base_ts.min(t);
-        }
-        let range = format!("{first}...{other}");
-        let paths = git_lines(
-            store,
-            &["log", "--format=", "--name-only", "--no-renames", &range],
-        )?;
-        let mut ins = tx.prepare_cached("INSERT OR IGNORE INTO merge_paths (path) VALUES (?1)")?;
-        for path in &paths {
-            ins.execute([path])?;
+    let side_times = |from: &str, not: &str| -> Result<HashSet<i64>> {
+        let exclude = format!("^{not}");
+        Ok(
+            git_lines(store, &["rev-list", "--timestamp", from, &exclude])?
+                .iter()
+                .filter_map(|l| l.split_once(' ')?.0.parse::<i64>().ok())
+                .collect(),
+        )
+    };
+    let mut tie = tx.prepare_cached("INSERT OR IGNORE INTO merge_ties (ts) VALUES (?1)")?;
+    let mut ins = tx.prepare_cached("INSERT OR IGNORE INTO merge_paths (path) VALUES (?1)")?;
+    for (i, a) in raw.parents.iter().enumerate() {
+        for b in &raw.parents[i + 1..] {
+            let a_side = side_times(a, b)?;
+            let b_side = side_times(b, a)?;
+            for ts in a_side.intersection(&b_side) {
+                tie.execute([ts])?;
+            }
+            let range = format!("{a}...{b}");
+            let paths = git_lines(
+                store,
+                &["log", "--format=", "--name-only", "--no-renames", &range],
+            )?;
+            for path in &paths {
+                ins.execute([path])?;
+            }
         }
     }
-    tx.execute(
-        "INSERT OR REPLACE INTO merges (seq, merge_ts, base_ts) VALUES (?1, ?2, ?3)",
-        params![seq, raw.commit_ts, base_ts],
-    )?;
     Ok(())
 }
 
@@ -1071,7 +1088,7 @@ impl HistoryCache {
         let tx = self.conn.transaction()?;
         tx.execute_batch(
             "DELETE FROM events; DELETE FROM touches; DELETE FROM commits; DELETE FROM meta;
-             DELETE FROM merges; DELETE FROM merge_paths; DELETE FROM skew;",
+             DELETE FROM merge_ties; DELETE FROM merge_paths; DELETE FROM skew;",
         )?;
         let now = now_rfc3339();
         for (k, v) in [
@@ -1129,7 +1146,7 @@ impl HistoryCache {
             let dec = decode_commit(&raw, &mut blobs)?;
             insert_commit(&tx, next_seq, &raw, &dec)?;
             // trace:TASK-1507 | ai:claude
-            record_merge(&tx, store, next_seq, &raw)?;
+            record_merge(&tx, store, &raw)?;
             seen.push((raw.sha.clone(), raw.commit_ts, raw.parents.clone()));
             next_seq += 1;
             indexed += 1;
@@ -1320,7 +1337,7 @@ impl HistoryCache {
                 }
                 let dec = decode_commit(&raw, &mut blobs)?;
                 insert_commit(&tx, next_seq, &raw, &dec)?;
-                record_merge(&tx, store, next_seq, &raw)?;
+                record_merge(&tx, store, &raw)?;
                 next_seq -= 1;
                 i += 1;
                 last = Some(raw);
@@ -1360,8 +1377,9 @@ impl HistoryCache {
     ///   a cut (the last kept row of the `max_commits` window, or the
     ///   commit of the `limit`-th match), or else `--since` (R2);
     /// - no clock-skewed edge may reach into the served range (R3);
-    /// - a cut boundary may not be a same-second tie inside a merge's
-    ///   parallel region, where git's tie order is not `seq` (R4);
+    /// - the served range may not hold a second in which commits on both
+    ///   sides of a merge were made, where git's tie order is not `seq`
+    ///   (B2);
     /// - `--id` on a path touched across a merge uses the walk, because
     ///   `git log -- <path>` simplifies TREESAME side branches away (N1b).
     // trace:TASK-1507 | ai:claude
@@ -1521,18 +1539,17 @@ impl HistoryCache {
         if skewed {
             return Ok(None);
         }
-        // R4: a same-second tie at the boundary inside a merge's parallel
-        // region, where git's tie order need not follow `seq`.
-        if let Some((b_ts, b_seq)) = boundary {
-            let tied_in_merge: bool = tx.query_row(
-                "SELECT EXISTS(SELECT 1 FROM commits WHERE commit_ts = ?1 AND seq != ?2)
-                    AND EXISTS(SELECT 1 FROM merges WHERE base_ts <= ?1 AND ?1 <= merge_ts)",
-                params![b_ts, b_seq],
-                |r| r.get(0),
-            )?;
-            if tied_in_merge {
-                return Ok(None);
-            }
+        // B2 (replaces the boundary-only R4): a second holding commits from
+        // both sides of a merge, anywhere in the served range, where git's
+        // tie order (first parent first) need not follow `seq`.
+        // trace:TASK-1507 | ai:claude
+        let cross_tie: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM merge_ties WHERE ?1 IS NULL OR ts >= ?1)",
+            [lower],
+            |r| r.get(0),
+        )?;
+        if cross_tie {
+            return Ok(None);
         }
 
         let window_exhausted = capped && events.len() < opts.limit;
