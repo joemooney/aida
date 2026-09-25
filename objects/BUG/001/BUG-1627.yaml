@@ -1,0 +1,20 @@
+id: 01a0d9d0-32d2-7823-a376-d53c9bb99907
+spec_id: BUG-1627
+agreed_id: BUG-1627
+title: Session-env hardening follow-ups after BUG-1624 (no-launch hint, NUL panic, AIDA_AGENT_TYPE trust, test env restore)
+description: 'Low findings from BUG-1624''s security re-review. (a) queue_cmd.rs ~11703: the queue work --no-launch hint still says ''source .aida/session-env.sh''; point to aida worktree enter instead. (b) lib.rs ~40472: a NUL byte in an allowed value makes std::env::set_var panic; skip such values. (c) The file still controls AIDA_AGENT_TYPE, which turns on the advisor code-gate agent exemption and adds a mailbox identity; take it from the lease, or accept only known agent types. (d) bug_1624_apply_session_env_to_process_ignores_non_allowlisted_names should restore PATH and LD_PRELOAD in case of a regression. Acceptance: a test for each.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T18:24:55.506358857Z
+modified_at: 2026-09-25T18:24:55.506358857Z
+req_type: Bug
+filed_at:
+  code_sha: 1df2e0445e433eb9bef4af0dc02c93a6712f7c80
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
