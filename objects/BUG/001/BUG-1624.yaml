@@ -1,0 +1,20 @@
+id: 01a0d944-b2d1-74d0-9c77-4b27700714f1
+spec_id: BUG-1624
+agreed_id: BUG-1624
+title: 'Shell injection: forge default branch name interpolated into a shell command in implementer_preflight'
+description: 'Found during the BUG-1622 audit. implementer_preflight.rs ~409 builds a shell command string that contains the forge''s default branch name. A crafted branch name (from a repo or forge the operator doesn''t control) could inject shell syntax. Fix: pass the value as an argv element, not through a shell, or quote it robustly and validate it against git''s ref-name rules. Grep for other shell strings (sh -c, bash -c, format! into Command::new("sh")) that interpolate store-, config- or forge-derived values. Acceptance: a regression test where a default branch name containing '';'', ''$()'' or backticks runs nothing, plus a documented audit of every sh -c site.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T15:52:33.233412803Z
+modified_at: 2026-09-25T15:52:33.233412803Z
+req_type: Bug
+filed_at:
+  code_sha: b821736ce75455f3858816002777b451fd4aaf03
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
