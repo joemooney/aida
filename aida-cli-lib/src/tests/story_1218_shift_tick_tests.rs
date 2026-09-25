@@ -54,6 +54,7 @@ fn probes(candidates: Vec<Candidate>) -> Probes {
             last_verdict: Some("ok".to_string()),
         }),
         vendor: "claude".to_string(),
+        vendor_error: None,
         watchdog_failures: 0,
         load: Some((1.0, 8)),
         memory: Some((16 << 30, 4 << 30)),
@@ -75,6 +76,7 @@ fn ctx() -> TickCtx {
         launch_allowed: true,
         state_error: None,
         log_path: PathBuf::from("/nonexistent/shift-wave.log"),
+        clock: None,
     }
 }
 
@@ -802,7 +804,13 @@ fn shift_no_progress_wave_not_relaunched() {
         ..Default::default()
     };
     save_state_to(&state_path(tmp.path()), &stopped).unwrap();
-    resume_command(tmp.path()).unwrap();
+    let mut yes = |_: &str| Ok(true);
+    let mut human = Operator {
+        stdin_tty: true,
+        agent_mode: false,
+        confirm: &mut yes,
+    };
+    resume_command(tmp.path(), &mut human).unwrap();
     let resumed = load_state(&state_path(tmp.path())).unwrap();
     assert!(resumed.breaker.is_none());
     assert_eq!(resumed.consecutive_zero_progress, 0);
@@ -1105,4 +1113,301 @@ fn shift_enable_writes_only_the_local_layer_and_registers_the_job() {
         !body.contains("[shift]"),
         "the switch never lands in the project config"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Review round 1: operator gate, launch-path vendor, deadline, pid window
+// ---------------------------------------------------------------------------
+
+fn stopped_state() -> ShiftState {
+    ShiftState {
+        breaker: Some(Breaker {
+            tripped_at: now(),
+            reason: "2 consecutive shift waves made no progress".into(),
+            queue_fingerprint: vec![],
+        }),
+        consecutive_zero_progress: 2,
+        ..Default::default()
+    }
+}
+
+/// `aida shift enable` arms unattended launches: it refuses without a human
+/// at an interactive terminal, refuses in agent mode, and writes nothing
+/// unless the human answers yes. Never touches the real `~/.aida`.
+#[test]
+fn shift_enable_requires_a_human_at_a_tty_and_a_yes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("repo");
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    let layer = tmp.path().join("home").join(".aida").join(LOCAL_LAYER_FILE);
+    let key = repo_key(&root);
+    let enabled = |layer: &Path| build_config(None, read_toml(layer).as_ref(), &key, "L").enabled;
+
+    for (tty, agent, label) in [
+        (false, false, "not a TTY"),
+        (true, true, "agent mode"),
+        (false, true, "both"),
+    ] {
+        let mut asked = false;
+        let mut confirm = |_: &str| {
+            asked = true;
+            Ok(true)
+        };
+        let mut op = Operator {
+            stdin_tty: tty,
+            agent_mode: agent,
+            confirm: &mut confirm,
+        };
+        let err = enable_command(&root, &layer, &mut op).unwrap_err();
+        assert!(
+            format!("{err}").contains("interactive terminal"),
+            "{label}: {err}"
+        );
+        assert!(!asked, "{label}: refused before prompting");
+        assert!(!layer.exists(), "{label}: nothing written");
+        assert!(!root.join(".aida").join("config.toml").exists(), "{label}");
+    }
+
+    let mut no = |_: &str| Ok(false);
+    let mut op = Operator {
+        stdin_tty: true,
+        agent_mode: false,
+        confirm: &mut no,
+    };
+    enable_command(&root, &layer, &mut op).unwrap();
+    assert!(!layer.exists(), "declined: nothing written");
+
+    let mut yes = |q: &str| {
+        assert!(q.contains("[y/N]"), "{q}");
+        Ok(true)
+    };
+    let mut op = Operator {
+        stdin_tty: true,
+        agent_mode: false,
+        confirm: &mut yes,
+    };
+    enable_command(&root, &layer, &mut op).unwrap();
+    assert!(enabled(&layer));
+
+    // Disabling is always safe: no gate, no prompt.
+    disable_command(&root, &layer).unwrap();
+    assert!(!enabled(&layer));
+}
+
+/// `aida shift resume` clears the no-progress breaker: same floor.
+#[test]
+fn shift_resume_requires_a_human_at_a_tty_and_a_yes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = state_path(tmp.path());
+    save_state_to(&path, &stopped_state()).unwrap();
+    for (tty, agent) in [(false, false), (true, true)] {
+        let mut confirm = |_: &str| Ok(true);
+        let mut op = Operator {
+            stdin_tty: tty,
+            agent_mode: agent,
+            confirm: &mut confirm,
+        };
+        assert!(resume_command(tmp.path(), &mut op).is_err());
+        assert!(
+            load_state(&path).unwrap().breaker.is_some(),
+            "refused: still stopped"
+        );
+    }
+    let mut no = |_: &str| Ok(false);
+    let mut op = Operator {
+        stdin_tty: true,
+        agent_mode: false,
+        confirm: &mut no,
+    };
+    resume_command(tmp.path(), &mut op).unwrap();
+    assert!(
+        load_state(&path).unwrap().breaker.is_some(),
+        "declined: still stopped"
+    );
+    let mut yes = |_: &str| Ok(true);
+    let mut op = Operator {
+        stdin_tty: true,
+        agent_mode: false,
+        confirm: &mut yes,
+    };
+    resume_command(tmp.path(), &mut op).unwrap();
+    assert!(load_state(&path).unwrap().breaker.is_none());
+    assert_eq!(operator_gate_refusal("resume", true, false), None);
+}
+
+/// A9: the probe resolves the vendor the way `queue work` launches. With
+/// `[agents] enabled` listing only a non-claude profile and no explicit
+/// vendor, the wave would spend on that profile, so the claude-only
+/// watchdog evidence does not cover it and the guard refuses.
+#[test]
+fn shift_budget_guard_uses_the_launch_path_vendor() {
+    let _env = crate::test_env::EnvVarGuard::unset("AIDA_HEADLESS_VENDOR");
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+    std::fs::write(
+        tmp.path().join(".aida").join("agents.toml"),
+        "[agents]\nenabled = [\"codex\"]\n",
+    )
+    .unwrap();
+    let (vendor, err) = resolve_wave_vendor(tmp.path());
+    assert!(
+        vendor != "claude" || err.is_some(),
+        "the launch resolves to the only enabled profile (or refuses): {vendor} {err:?}"
+    );
+    let mut p = probes(vec![drain("TASK-1")]);
+    p.vendor = vendor;
+    p.vendor_error = err;
+    let (r, mock) = run(&cfg_on(), &p, &mut ShiftState::default(), &ctx());
+    assert!(!guard(&r, "budget-evidence").pass);
+    assert!(mock.spawns.is_empty());
+
+    // A resolution error alone refuses, even for a covered vendor name.
+    let mut p = probes(vec![drain("TASK-1")]);
+    p.vendor_error = Some("no agent launch profiles are enabled".into());
+    let (r, _) = run(&cfg_on(), &p, &mut ShiftState::default(), &ctx());
+    let g = guard(&r, "budget-evidence");
+    assert!(
+        !g.pass && g.detail.contains("cannot resolve"),
+        "{}",
+        g.detail
+    );
+}
+
+/// A4: the clock is re-read after the reap and again before the spawn. A
+/// slow reap that eats the reserve stops the launch; the tick still exits
+/// cleanly.
+#[test]
+fn shift_deadline_rechecked_after_reap_before_spawn() {
+    struct SlowReap(Mock);
+    impl ShiftExec for SlowReap {
+        fn reap(&mut self) -> usize {
+            std::thread::sleep(StdDuration::from_millis(300));
+            self.0.reap()
+        }
+        fn tag_batch(&mut self, b: &str, s: &[String]) -> Result<()> {
+            self.0.tag_batch(b, s)
+        }
+        fn spawn_wave(&mut self, a: &[String], l: &Path) -> Result<(u32, Option<String>)> {
+            self.0.spawn_wave(a, l)
+        }
+        fn save_state(&mut self, s: &ShiftState) -> Result<()> {
+            self.0.save_state(s)
+        }
+        fn emit(&mut self, k: EventKind) {
+            self.0.emit(k)
+        }
+    }
+    let c = TickCtx::from_clock(
+        now(),
+        false,
+        Instant::now(),
+        LAUNCH_RESERVE + StdDuration::from_millis(150),
+        PathBuf::from("/nonexistent/x.log"),
+    );
+    assert!(c.launch_allowed, "launch looked possible before the reap");
+    let mut exec = SlowReap(Mock::default());
+    let r = tick_core(
+        &cfg_on(),
+        &probes(vec![drain("TASK-1")]),
+        &mut ShiftState::default(),
+        &c,
+        &mut exec,
+    )
+    .unwrap();
+    assert!(exec.0.calls.contains(&"reap".to_string()));
+    assert!(exec.0.spawns.is_empty() && r.launched.is_none());
+    assert!(!guard(&r, "deadline").pass);
+}
+
+/// A4: a tick killed after the spawn but before the pid was recorded leaves
+/// an intent with no pid while the wave runs. The wave holds the drain
+/// lock, so the next tick's lock guard stops a second launch of the same
+/// batch; once the wave is gone, members it took are no longer eligible.
+#[test]
+fn shift_killed_between_spawn_and_pid_record_is_held_by_the_drain_lock() {
+    let earlier = now() - Duration::minutes(15);
+    let mut state = ShiftState {
+        waves: vec![WaveRecord {
+            batch: shift_batch_name(earlier),
+            specs: vec!["TASK-1".into(), "TASK-2".into()],
+            at: earlier,
+            argv: Vec::new(),
+            pid: None,
+            pid_start: None,
+            log: None,
+            outcome: None,
+        }],
+        ..Default::default()
+    };
+    let mut p = probes(vec![drain("TASK-1"), drain("TASK-2")]);
+    p.lock = LockView::Running(9999);
+    let (r, mock) = run(&cfg_on(), &p, &mut state, &ctx());
+    assert!(r.reused_batch, "it recognises the interrupted batch");
+    assert!(!guard(&r, "lock-free").pass);
+    assert!(r.launched.is_none() && mock.spawns.is_empty() && mock.tags.is_empty());
+
+    // The wave finished: it took TASK-1; TASK-2 is still queued and eligible.
+    let mut after = probes(
+        vec![RequirementStatus::Completed, RequirementStatus::Approved]
+            .into_iter()
+            .zip(["TASK-1", "TASK-2"])
+            .map(|(st, id)| Candidate {
+                status: st,
+                ..drain(id)
+            })
+            .collect(),
+    );
+    after.lock = LockView::Free;
+    let (r2, mock2) = run(&cfg_on(), &after, &mut state, &ctx());
+    assert_eq!(r2.launched.unwrap().specs, vec!["TASK-2"]);
+    assert_eq!(mock2.spawns.len(), 1);
+}
+
+/// A4: the last clock read sits between tagging and spawning. A slow store
+/// write that eats the reserve leaves the intent (no pid) for the next tick
+/// to reuse, and spawns nothing.
+#[test]
+fn shift_deadline_rechecked_between_tag_and_spawn() {
+    struct SlowTag(Mock);
+    impl ShiftExec for SlowTag {
+        fn reap(&mut self) -> usize {
+            self.0.reap()
+        }
+        fn tag_batch(&mut self, b: &str, s: &[String]) -> Result<()> {
+            std::thread::sleep(StdDuration::from_millis(400));
+            self.0.tag_batch(b, s)
+        }
+        fn spawn_wave(&mut self, a: &[String], l: &Path) -> Result<(u32, Option<String>)> {
+            self.0.spawn_wave(a, l)
+        }
+        fn save_state(&mut self, s: &ShiftState) -> Result<()> {
+            self.0.save_state(s)
+        }
+        fn emit(&mut self, k: EventKind) {
+            self.0.emit(k)
+        }
+    }
+    let c = TickCtx::from_clock(
+        now(),
+        false,
+        Instant::now(),
+        LAUNCH_RESERVE + StdDuration::from_millis(200),
+        PathBuf::from("/nonexistent/x.log"),
+    );
+    let mut exec = SlowTag(Mock::default());
+    let mut state = ShiftState::default();
+    let r = tick_core(
+        &cfg_on(),
+        &probes(vec![drain("TASK-1")]),
+        &mut state,
+        &c,
+        &mut exec,
+    )
+    .unwrap();
+    assert!(exec.0.calls.contains(&"tag".to_string()));
+    assert!(exec.0.spawns.is_empty() && r.launched.is_none());
+    assert!(!guard(&r, "deadline").pass);
+    let intent = state.waves.last().expect("intent kept for reuse");
+    assert_eq!(intent.pid, None);
+    assert_eq!(state.waves_in_day(now()), 0);
 }

@@ -715,8 +715,11 @@ pub(crate) struct Probes {
     /// A3: where the persisted no-human acknowledgement was found.
     pub no_human_ack: Option<String>,
     pub budget: Option<crate::runaway_seats::BudgetEvidence>,
-    /// Resolved headless vendor of the wave's phases.
+    /// Resolved headless vendor of the wave's phases — resolved the way
+    /// `queue work` resolves it at launch (`[agents] enabled` included).
     pub vendor: String,
+    /// The launch-path vendor resolution failed; the budget guard refuses.
+    pub vendor_error: Option<String>,
     /// Runaway-seat watchdog failures within the quiet window.
     pub watchdog_failures: usize,
     /// (1-minute load, logical CPUs); `None` = unreadable.
@@ -750,9 +753,22 @@ pub(crate) struct TickCtx {
     pub state_error: Option<String>,
     /// Where the wave log goes.
     pub log_path: PathBuf,
+    /// The live deadline clock (start, budget). `None` in tests that drive
+    /// the booleans directly. Re-read after the reap and again right before
+    /// the spawn, so a slow reap or store write cannot push a spawn past the
+    /// scheduler's kill (A4).
+    pub clock: Option<(Instant, StdDuration)>,
 }
 
 impl TickCtx {
+    /// May a launch still start? The static flag AND the live clock.
+    pub(crate) fn launch_ok(&self) -> bool {
+        self.launch_allowed
+            && self
+                .clock
+                .is_none_or(|(started, deadline)| started.elapsed() + LAUNCH_RESERVE <= deadline)
+    }
+
     pub(crate) fn from_clock(
         now: DateTime<Utc>,
         dry_run: bool,
@@ -768,6 +784,7 @@ impl TickCtx {
             launch_allowed: elapsed + LAUNCH_RESERVE <= deadline,
             state_error: None,
             log_path,
+            clock: Some((started, deadline)),
         }
     }
 }
@@ -919,10 +936,11 @@ pub(crate) fn evaluate_guards(
             None => "breaker closed".to_string(),
         },
     ));
+    let launch_ok = ctx.launch_ok();
     v.push(verdict(
         "deadline",
-        ctx.launch_allowed,
-        if ctx.launch_allowed {
+        launch_ok,
+        if launch_ok {
             "time to launch"
         } else {
             "too close to the tick deadline to launch"
@@ -932,6 +950,13 @@ pub(crate) fn evaluate_guards(
 }
 
 fn budget_evidence_verdict(cfg: &ShiftConfig, p: &Probes, now: DateTime<Utc>) -> GuardVerdict {
+    if let Some(err) = &p.vendor_error {
+        return verdict(
+            "budget-evidence",
+            false,
+            format!("cannot resolve the vendor the wave would launch: {err}"),
+        );
+    }
     let Some(b) = &p.budget else {
         return verdict(
             "budget-evidence",
@@ -1241,20 +1266,31 @@ pub(crate) fn tick_core(
         if sel.auto_tag {
             exec.tag_batch(&batch, &sel.specs)?;
         }
-        let (pid, pid_start) = exec.spawn_wave(&report.argv, &ctx.log_path)?;
-        if let Some(last) = state.waves.last_mut() {
-            last.pid = Some(pid);
-            last.pid_start = pid_start;
+        // A4: re-read the clock after the reap, intent write and tagging.
+        // Too late to spawn safely: leave the recorded intent (no pid) for
+        // the next tick, which reuses this batch instead of tagging anew.
+        if !ctx.launch_ok() {
+            if let Some(g) = report.guards.iter_mut().find(|g| g.name == "deadline") {
+                g.pass = false;
+                g.detail =
+                    "deadline reached before the spawn; the next check reuses this batch".into();
+            }
+        } else {
+            let (pid, pid_start) = exec.spawn_wave(&report.argv, &ctx.log_path)?;
+            if let Some(last) = state.waves.last_mut() {
+                last.pid = Some(pid);
+                last.pid_start = pid_start;
+            }
+            for spec in &sel.specs {
+                state.spec_waves.entry(spec.clone()).or_default().push(now);
+            }
+            report.launched = Some(ShiftLaunch {
+                batch,
+                specs: sel.specs.clone(),
+                pid,
+                argv: report.argv.clone(),
+            });
         }
-        for spec in &sel.specs {
-            state.spec_waves.entry(spec.clone()).or_default().push(now);
-        }
-        report.launched = Some(ShiftLaunch {
-            batch,
-            specs: sel.specs.clone(),
-            pid,
-            argv: report.argv.clone(),
-        });
     }
 
     // 6. One event, only when the tick acted or its verdicts changed.
@@ -1289,6 +1325,22 @@ pub(crate) fn tick_core(
 // ---------------------------------------------------------------------------
 // Gathering (production inputs)
 // ---------------------------------------------------------------------------
+
+/// The vendor the wave will actually spend, resolved through the SAME
+/// launch preflight `queue work` uses (`resolve_enabled_headless_vendor`, so
+/// an `[agents] enabled` profile list is honoured). An error is returned as
+/// the second element and makes the budget-evidence guard refuse.
+pub(crate) fn resolve_wave_vendor(project_root: &Path) -> (String, Option<String>) {
+    match crate::session::resolve_enabled_headless_vendor(project_root) {
+        Ok(v) => (v.as_str().to_string(), None),
+        Err(e) => (
+            crate::session::resolve_headless_vendor(project_root)
+                .as_str()
+                .to_string(),
+            Some(format!("{e:#}")),
+        ),
+    }
+}
 
 fn no_human_ack_source(project_root: &Path) -> Option<String> {
     if dirs::home_dir()
@@ -1459,6 +1511,7 @@ fn gather_probes(
             }
         }
     }
+    let (wave_vendor, wave_vendor_error) = resolve_wave_vendor(project_root);
     Probes {
         lock,
         foreign_claim,
@@ -1470,9 +1523,8 @@ fn gather_probes(
                 .join("state.json"),
             now,
         ),
-        vendor: crate::session::resolve_headless_vendor(project_root)
-            .as_str()
-            .to_string(),
+        vendor: wave_vendor.clone(),
+        vendor_error: wave_vendor_error.clone(),
         watchdog_failures,
         load,
         memory,
@@ -1824,21 +1876,60 @@ fn status_command(
     Ok(())
 }
 
-fn enable_command(project_root: &Path, enable: bool) -> Result<()> {
-    let path = local_layer_path().context("could not resolve the home directory")?;
+/// Who is asking, and how to ask them. `aida shift enable` and
+/// `aida shift resume` arm (or re-arm) unattended drain launches, so they
+/// carry the same human-at-a-terminal floor as `aida merge-hold clear`: an
+/// interactive stdin, not agent output mode, and an explicit y/N. The seams
+/// are injectable so tests never read a real terminal or `~/.aida`.
+pub(crate) struct Operator<'a> {
+    pub stdin_tty: bool,
+    pub agent_mode: bool,
+    pub confirm: &'a mut dyn FnMut(&str) -> Result<bool>,
+}
+
+/// PURE: why `verb` must refuse for this caller, if it must.
+pub(crate) fn operator_gate_refusal(
+    verb: &str,
+    stdin_tty: bool,
+    agent_mode: bool,
+) -> Option<String> {
+    let why = if agent_mode {
+        "agent output mode is on"
+    } else if !stdin_tty {
+        "stdin is not an interactive terminal"
+    } else {
+        return None;
+    };
+    Some(format!(
+        "`aida shift {verb}` lets the scheduler launch unattended drains, so it needs a human \
+         at an interactive terminal ({why}). Run it yourself in a terminal; an agent cannot \
+         arm the night shift."
+    ))
+}
+
+/// Gate + confirmation. `Ok(false)` = the human declined.
+fn operator_approves(verb: &str, question: &str, op: &mut Operator<'_>) -> Result<bool> {
+    if let Some(msg) = operator_gate_refusal(verb, op.stdin_tty, op.agent_mode) {
+        anyhow::bail!("{msg}");
+    }
+    (op.confirm)(question)
+}
+
+/// `aida shift enable`. Gated: it arms unattended launches.
+fn enable_command(project_root: &Path, layer: &Path, op: &mut Operator<'_>) -> Result<()> {
     let key = repo_key(project_root);
-    write_local_enabled(&path, &key, enable)?;
-    if !enable {
-        println!(
-            "night shift: off for {key} ({}). A wave already running is not stopped.",
-            path.display()
-        );
+    let question = format!(
+        "Let the scheduler launch unattended drain waves for {key} while nobody is at the keyboard? [y/N] "
+    );
+    if !operator_approves("enable", &question, op)? {
+        println!("night shift: not enabled (declined).");
         return Ok(());
     }
+    write_local_enabled(layer, &key, true)?;
     println!("night shift: on for {key}");
     println!(
         "  switch: {} (local to this machine, never committed)",
-        path.display()
+        layer.display()
     );
     let config = project_root.join(".aida").join("config.toml");
     let added = crate::config_edit::ensure_array_table_entry(
@@ -1876,11 +1967,31 @@ fn enable_command(project_root: &Path, enable: bool) -> Result<()> {
     Ok(())
 }
 
-fn resume_command(project_root: &Path) -> Result<()> {
+/// `aida shift disable`. Never gated: turning launches off is always safe.
+fn disable_command(project_root: &Path, layer: &Path) -> Result<()> {
+    let key = repo_key(project_root);
+    write_local_enabled(layer, &key, false)?;
+    println!(
+        "night shift: off for {key} ({}). A wave already running is not stopped.",
+        layer.display()
+    );
+    Ok(())
+}
+
+/// `aida shift resume`. Gated: it clears the no-progress breaker.
+fn resume_command(project_root: &Path, op: &mut Operator<'_>) -> Result<()> {
     let path = state_path(project_root);
     let mut state = load_state(&path)?;
-    if state.breaker.is_none() {
+    let Some(breaker) = state.breaker.clone() else {
         println!("night shift: not stopped — nothing to resume.");
+        return Ok(());
+    };
+    let question = format!(
+        "The night shift stopped itself: {}. Allow it to launch again? [y/N] ",
+        breaker.reason
+    );
+    if !operator_approves("resume", &question, op)? {
+        println!("night shift: still stopped (declined).");
         return Ok(());
     }
     state.breaker = None;
@@ -1888,6 +1999,17 @@ fn resume_command(project_root: &Path) -> Result<()> {
     save_state_to(&path, &state)?;
     println!("night shift: resumed — the next check may launch again.");
     Ok(())
+}
+
+fn real_operator_gate(f: impl FnOnce(&mut Operator<'_>) -> Result<()>) -> Result<()> {
+    use std::io::IsTerminal;
+    let mut confirm = |q: &str| crate::prompt_yes_no(q, false);
+    let mut op = Operator {
+        stdin_tty: std::io::stdin().is_terminal(),
+        agent_mode: crate::agent_output_mode(),
+        confirm: &mut confirm,
+    };
+    f(&mut op)
 }
 
 pub(crate) fn handle_shift_command(
@@ -1916,9 +2038,15 @@ pub(crate) fn handle_shift_command(
             }
         },
         ShiftCommand::Status { json } => status_command(project_root, backend, *json)?,
-        ShiftCommand::Enable => enable_command(project_root, true)?,
-        ShiftCommand::Disable => enable_command(project_root, false)?,
-        ShiftCommand::Resume => resume_command(project_root)?,
+        ShiftCommand::Enable => {
+            let layer = local_layer_path().context("could not resolve the home directory")?;
+            real_operator_gate(|op| enable_command(project_root, &layer, op))?
+        }
+        ShiftCommand::Disable => {
+            let layer = local_layer_path().context("could not resolve the home directory")?;
+            disable_command(project_root, &layer)?
+        }
+        ShiftCommand::Resume => real_operator_gate(|op| resume_command(project_root, op))?,
     }
     Ok(())
 }

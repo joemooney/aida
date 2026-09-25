@@ -1337,7 +1337,8 @@ few shift nights.
 - [ ] Confirm the `watchdog` job is enabled and has run in the last hour
   (`aida schedule status`); the shift refuses without its evidence.
 - [ ] `aida schedule install-cron` if `aida shift status` shows no driver.
-- [ ] `aida shift enable` (writes `~/.aida/shift-local.toml` for this clone
+- [ ] `aida shift enable` at your own terminal (it refuses in an agent
+  session or without a TTY, and asks y/N; writes `~/.aida/shift-local.toml` for this clone
   and registers the `night-shift` job).
 - [ ] **Preflight:** `aida shift tick --dry-run`. Read every `FAIL` line, the
   exact wave command and the specs it would include. It writes nothing.

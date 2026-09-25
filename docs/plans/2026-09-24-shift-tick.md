@@ -53,6 +53,14 @@ dry-run, `shift status`, the status line, reap — on the EXISTING cron driver.
   **Rationale**: `.aida/config.toml` is tracked; a committed switch would arm
   unattended launches in every clone with a driver. The home layer is never
   inside a repository, so it cannot be committed by accident.
+- **Operator gate (review round 1).** `aida shift enable` and
+  `aida shift resume` arm or re-arm unattended launches, so both refuse
+  unless stdin is an interactive terminal AND agent output mode is off, and
+  both then require an explicit y/N (default no). This is the same
+  human-at-a-terminal floor as `aida merge-hold clear` / the `pr ship` hold
+  release. `aida shift disable` is never gated: turning launches off is
+  always safe. TTY, agent-mode and confirm are injected (`Operator`) so tests
+  never read a terminal or the real `~/.aida`.
 - **A2 — hygienic spawn.** `setsid` (via `pre_exec`), stdin `/dev/null`,
   stdout+stderr to `.aida/shift-wave-<stamp>.log`; `AIDA_DRAIN_FORCE`,
   `AIDA_DRAIN_BORROW`, `AIDA_DRAIN_LOCK_STALE_SECS`, `AIDA_EVENTS_DISABLE`,
@@ -65,7 +73,11 @@ dry-run, `shift status`, the status line, reap — on the EXISTING cron driver.
 - **A4 — exit codes, deadline, kill-safe order.** Refusal, no-op, live lock,
   disabled: exit 0. Only internal errors exit non-zero (state unreadable,
   spawn failed, store write failed). Internal deadline 90s: past it, reap is
-  skipped, and a launch is not started unless 30s remain. Order: record
+  skipped, and a launch is not started unless 30s remain. The clock is
+  re-read after the reap and again between tagging and spawning; a spawn
+  that would start late is skipped and its intent left for reuse. A tick
+  killed after the spawn but before the pid write is held by the wave's
+  drain lock on the next tick. Order: record
   intent (`last_launch` with no pid) → tag → spawn → record pid. A record
   with no pid is an un-launched batch that the next tick REUSES (re-filtered
   for eligibility) instead of tagging new specs.
@@ -88,6 +100,9 @@ dry-run, `shift status`, the status line, reap — on the EXISTING cron driver.
   `--max-tokens` = min(wave budget, stop threshold − spent 24h) where stop
   threshold = `budget_stop_pct` (default 80) of the daily budget (the
   watchdog's, 6B built-in).
+  The wave's vendor is resolved through the launch path's
+  `resolve_enabled_headless_vendor` (honouring `[agents] enabled`), and a
+  resolution error refuses.
 - **A10 — cross-clone lock parity.** `lock-free` consults the shared drain
   claim on the local `.aida-store` checkout (the drain lock claim under
   its coordination directory, read-only, no pull) through `coordination::decide_claim`; a live foreign
@@ -255,6 +270,12 @@ Guards (all must pass to launch): `enabled`, `wave-in-flight`, `lock-free`,
 - `shift_dry_run_on_fixture_queue_prints_argv_specs_guards_mail_and_writes_nothing`
 - `shift_auto_tag_replaces_prior_shift_tag` (Q5, real fixture store)
 - `shift_quiet_tick_emits_no_event`
+- `shift_enable_requires_a_human_at_a_tty_and_a_yes` (operator gate; disable ungated)
+- `shift_resume_requires_a_human_at_a_tty_and_a_yes` (operator gate)
+- `shift_budget_guard_uses_the_launch_path_vendor` (A9, `[agents] enabled`)
+- `shift_deadline_rechecked_after_reap_before_spawn` (A4)
+- `shift_deadline_rechecked_between_tag_and_spawn` (A4)
+- `shift_killed_between_spawn_and_pid_record_is_held_by_the_drain_lock` (A4)
 - `schedule_command_table_shift_tick_not_hook_allowed`
 - `status_line_silent_when_shift_disabled`
 - `budget_evidence_reads_trailing_day_and_last_verdict` (runaway_seats)

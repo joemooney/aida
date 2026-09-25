@@ -2563,11 +2563,14 @@ pub enum ShiftCommand {
     /// Turn the night shift on for THIS clone only. The switch is written to
     /// `~/.aida/shift-local.toml` (keyed by this repo's path), never to the
     /// committed project config, and the `night-shift` job is registered.
+    /// Needs a human at an interactive terminal and an explicit yes; an agent
+    /// session cannot enable it.
     Enable,
     /// Turn the night shift off for this clone.
     Disable,
     /// Allow launches again after the night shift stopped itself because
-    /// consecutive waves made no progress.
+    /// consecutive waves made no progress. Needs a human at an interactive
+    /// terminal and an explicit yes.
     Resume,
 }
 
