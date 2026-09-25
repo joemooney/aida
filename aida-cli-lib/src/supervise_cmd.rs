@@ -88,6 +88,16 @@ pub(crate) fn handle_supervise_command(
 }
 
 fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Path) -> Result<()> {
+    if let Some(line) = nudge_pass(backend, store_path)? {
+        println!("{line}");
+    }
+    Ok(())
+}
+
+/// One nudge pass. Returns the one-line outcome for the caller to print
+/// (`None` when nothing was due), so `watch --json` can keep it off stdout.
+// trace:BUG-1623 | ai:claude
+fn nudge_pass(backend: &aida_core::CachedGitBackend, store_path: &Path) -> Result<Option<String>> {
     let project_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
@@ -103,7 +113,7 @@ fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Pa
     let body = std::fs::read_to_string(events::events_path(project_root)).unwrap_or_default();
     let stuck = stuck_items_from_events(&body, &titles);
     if stuck.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
 
     let state_path = nudge_state_path(project_root);
@@ -111,17 +121,17 @@ fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Pa
     let now_ms = Utc::now().timestamp_millis();
     let due = due_stuck_items(&stuck, &state, now_ms, DEFAULT_MIN_INTERVAL_MS);
     if due.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
 
     if let Some(advisor) = live_advisor_recipient(project_root) {
         send_advisor_nudge(project_root, &advisor, &due)?;
         record_nudged(&mut state, &due, now_ms);
         write_nudge_state(&state_path, &state)?;
-        println!(
+        Ok(Some(format!(
             "nudged {advisor} about {} transiently parked spec(s)",
             due.len()
-        );
+        )))
     } else {
         let message = format_operator_notification(&due);
         let outcome = notify::send_direct(
@@ -133,21 +143,20 @@ fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Pa
         if outcome.configured {
             record_nudged(&mut state, &due, now_ms);
             write_nudge_state(&state_path, &state)?;
-            println!(
+            Ok(Some(format!(
                 "operator notified about {} transiently parked spec(s) (sent {}, suppressed {}, pending {})",
                 due.len(),
                 outcome.sent,
                 outcome.suppressed,
                 outcome.pending
-            );
+            )))
         } else {
-            println!(
+            Ok(Some(format!(
                 "no live advisor and [notify].command is unset; {} transiently parked spec(s) need attention",
                 due.len()
-            );
+            )))
         }
     }
-    Ok(())
 }
 
 fn display_id(req: &aida_core::Requirement) -> Option<String> {
@@ -441,22 +450,48 @@ fn run_watch_pass(
         &mut queue_add_implementer,
     )?;
 
-    if json {
-        println!("{}", serde_json::to_string(&report)?);
-    } else {
-        print_watch_report(&report, execute);
-    }
-
-    // Compose the other shipped reflex: nudge advisor stalls.
-    // Nudge sends a real mailbox message / notification, so it only fires under
-    // --execute; a dry-run pass has no side effects.
-    if execute {
-        let _ = handle_supervise_nudge(backend, store_path);
-    }
+    emit_pass_output(
+        &report,
+        execute,
+        json,
+        &mut || nudge_pass(backend, store_path).ok().flatten(),
+        &mut std::io::stdout(),
+        &mut std::io::stderr(),
+    )?;
 
     // Surface only human-decision items.
     if !json {
         print_awaiting_surface();
+    }
+    Ok(())
+}
+
+/// Print one pass's report, then run the nudge reflex (only under
+/// --execute: it sends a real mailbox message / notification, so a dry run
+/// has no side effects). With --json the nudge line goes to `err`, so `out`
+/// stays exactly one JSON document per pass.
+// trace:BUG-1623 | ai:claude
+fn emit_pass_output(
+    report: &WatchReport,
+    execute: bool,
+    json: bool,
+    nudge: &mut dyn FnMut() -> Option<String>,
+    out: &mut dyn std::io::Write,
+    err: &mut dyn std::io::Write,
+) -> Result<()> {
+    if json {
+        writeln!(out, "{}", serde_json::to_string(report)?)?;
+    } else {
+        print_watch_report(report, execute);
+    }
+    if execute {
+        if let Some(line) = nudge() {
+            if json {
+                writeln!(err, "{line}")?;
+            } else {
+                writeln!(out, "{line}")?;
+            }
+        }
     }
     Ok(())
 }
