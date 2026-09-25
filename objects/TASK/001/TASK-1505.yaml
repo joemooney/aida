@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T06:31:24.916031923Z
-modified_at: 2026-09-25T06:32:20.319413190Z
+modified_at: 2026-09-25T06:34:30.995898395Z
 req_type: Task
 tags:
 - cache
@@ -22,6 +22,11 @@ comments:
   content: 'Design refinement: treat the history cache as append-only by default. When the aida-store HEAD is a descendant of the indexed HEAD, decode only the new commits and extend the cache. Do not rebuild merely because the cache is old. Rebuild or repair only for corruption, incompatible schema, missing indexed commits, or detected non-fast-forward/history rewrite; record the reason and source-head transition in cache metadata.'
   created_at: 2026-09-25T06:32:20.319413190Z
   modified_at: 2026-09-25T06:32:20.319413190Z
+- id: 01a0d745-ccd3-7360-a7f4-10907e926ee1
+  author: joe
+  content: 'Additional refinement: record last_append_at, last_event_at, indexed store HEAD, and indexed commit timestamp. A cheap latest-event timestamp comparison may skip unnecessary scans, but timestamps are only a fast-path hint because commit clocks and rebases can be non-monotonic. HEAD ancestry / commit identity remains the correctness check before extending the append-only cache.'
+  created_at: 2026-09-25T06:34:30.995898395Z
+  modified_at: 2026-09-25T06:34:30.995898395Z
 filed_at:
   code_sha: dce27130ca391f4e587993afadb05b1447a6643f
   branch: main
