@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T12:22:47.613968161Z
+modified_at: 2026-09-25T12:23:19.307794120Z
 req_type: Task
 tags:
 - cache
@@ -94,6 +94,12 @@ comments:
   content: 'Correction to my strict review, B1: the probe ran 56 (chunk size x since) combinations, not 49. 8 of them were wrongly served. The finding is unchanged.'
   created_at: 2026-09-25T12:22:47.613968161Z
   modified_at: 2026-09-25T12:22:47.613968161Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d885-240b-72b0-8ebd-0eb97e646b5a
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept the strict review. Rework: B1 (use rev-list --topo-order --timestamp; per chunk, record the newest time among commits not yet filled; serve --since only when since is newer than that; add a regression test with an old-dated side branch). N2 (if HEAD is behind the index tip, fall back to the walk; never reset the shared index). N3 (avoid the checkpoint/fsync on close, e.g. SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE; measure the catch-up again). N4 (prune_other_versions must not delete .lock files in use). N1 (topo order vs walk order under -n/--max-commits cuts across interleaved merges) goes to an independent advisor for an OQ3 ruling. Until that ruling, the rework must be safe by default: when a cut applies and the served range contains a merge, fall back to the walk.'
+  created_at: 2026-09-25T12:23:19.307794120Z
+  modified_at: 2026-09-25T12:23:19.307794120Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
