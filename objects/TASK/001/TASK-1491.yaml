@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:03:52.561229247Z
-modified_at: 2026-09-25T10:28:13.814349474Z
+modified_at: 2026-09-25T10:28:53.204278285Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -98,6 +98,12 @@ comments:
     n5 N3's dual-driver-with-no-jobs path is covered only by the pure predicate scheduler_driver_check_needed; acceptable given the real-host test guards.
   created_at: 2026-09-25T10:28:13.814349474Z
   modified_at: 2026-09-25T10:28:13.814349474Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d81c-5f54-7753-9142-a9abd366e01f
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): strict re-review approved. The non-blocking items 1-4 are filed as BUG-1619. Integrating in the next batch together with TASK-1506. The on-box acceptance (shift install --systemd-user, list-timers, a journal tick) needs Joe at a TTY and gates STORY-1218 closure, not this merge.'
+  created_at: 2026-09-25T10:28:53.204278285Z
+  modified_at: 2026-09-25T10:28:53.204278285Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
