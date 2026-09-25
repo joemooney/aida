@@ -1,0 +1,26 @@
+id: 01a0d81c-2d21-7433-b98e-98b85beab348
+spec_id: BUG-1619
+agreed_id: BUG-1619
+title: 'Schedule driver: tidy messages and partial-install cleanup after TASK-1491'
+description: |-
+  Non-blocking findings from TASK-1491's strict re-review:
+  (1) schedule_driver.rs: a fresh install that fails at restart/start or the post-check leaves the unit files and an enabled timer. A failed write of the second file leaves the first behind. Extend fresh-install cleanup to these steps; delete marker-carrying files only.
+  (2) The Repaired message says 'was running an older invocation' even on a plain re-enable or restart. Reword it by cause.
+  (3) shift.rs: 'scheduler driver is unchanged' is inaccurate when a repair rewrote the files before failing.
+  (4) shift.rs: 'aida shift enable' prints 'needed: a scheduler driver' for Unknown. It should say unknown, like label().
+  Acceptance: fake-host tests for each case. No real crontab or systemctl in tests.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T10:28:40.353023115Z
+modified_at: 2026-09-25T10:28:40.353023115Z
+req_type: Bug
+filed_at:
+  code_sha: ddb82d40b95d7b8764ff6318c215df791196ee8e
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
