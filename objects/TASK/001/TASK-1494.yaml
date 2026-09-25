@@ -1,0 +1,22 @@
+id: 01a0d64e-ee4d-7553-9297-5f6489786937
+spec_id: TASK-1494
+agreed_id: TASK-1494
+title: 'Slice 3: re-drive step, mail-latency escalation, cold-boot (A5, A6, A7)'
+description: ''
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T02:04:52.173185594Z
+modified_at: 2026-09-25T02:04:52.173185594Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-09-24-shift-tick.md
+filed_at:
+  code_sha: a276969ea936d46b488ec50e058b70773e1ca994
+  branch: claude/story-1218
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c7d35baa35
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
