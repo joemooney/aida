@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:50:20.038947417Z
-modified_at: 2026-09-25T01:12:54.211460043Z
+modified_at: 2026-09-25T01:15:50.530625766Z
 req_type: Story
 tags:
 - aida:queue
@@ -130,4 +130,51 @@ comments:
     - A TUI, and deduplicating comments across clones.
   created_at: 2026-09-25T01:12:54.211460043Z
   modified_at: 2026-09-25T01:12:54.211460043Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d622-0b82-7710-8829-d2906cc92908
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF: APPROVED, with the binding amendments below. (Independent advisor seat. I checked the sketch's code claims against main a052adddda.)
+
+    VERIFIED CLAIMS
+    - Four exit doors confirmed: handle_queue_rework (queue_cmd.rs:7308), the edit door (git_backend_cmd.rs:5797), tool_queue_rework_inner (mcp.rs:4272) and handle_supervise_command (supervisor.rs:93/177). No fifth door exists: queue advance --approve is reachable only from Ungroomed, and doctor/tracker writes do not leave NeedsAttention.
+    - Race confirmed. handle_queue_rework reads current_status before the write. Inside update_atomically it then writes new_status with no re-check and no lease check. For an InProgress spec it only warns, and --force silences the warning.
+    - Duplicate reason comment confirmed. The reason goes into the audit note, and then goes in again as a separate comment. This happens in both the CLI door and the MCP door.
+    - Re-entry confirmed. The drain's stall guard (auto_complete.rs ~5186) only catches a head that was already shipped. A spec that was shelved and then requeued can therefore become the head again in a running drain. forget_batch_disposition deduplicates it, so today a re-shelve does NOT count against the budget again.
+
+    CORRECTIONS TO THE SKETCH (factual; each one feeds an amendment)
+    C1. "All four doors call it inside their update_atomically closure" is wrong for two doors. The edit door does read-modify-write through backend.update_requirement(&req) (git_backend_cmd.rs:5993), and it changes many other fields in the same write. The supervisor does backend.load() and then a whole-store backend.save(). A compare-and-swap run on a copy loaded before the lock does nothing.
+    C2. "Each re-drive costs a human keystroke" is wrong. Rework is gated on advisor authority. requeue.rs's own module docs say that a non-TTY advisor agent and an orchestrated phase both hold that authority. Only clearing `needs-human` needs a TTY human. An agent can therefore requeue a shelve that was never escalated, with no human involved.
+    C3. The supervisor "leaves attention_reason in place", but that can never matter: classify_requirement returns NeedsHuman for any spec that has an attention_reason. Routing the supervisor through the owner is still correct. The point is consistency, not a live bug.
+    C4. live_spec_claim_by_other is a pure predicate over leases plus is_live. It has no "unknown" outcome. The fail-closed handling for unknown lease state must live in the caller, and the sketch should not describe it as a property of the gate.
+
+    BINDING AMENDMENTS
+    A1. Owner shape. Split the owner in two:
+      (i) A pure `requeue::return_to_flight(&mut Requirement, expected: &RequirementStatus, target, &ReturnCtx) -> ReturnOutcome`. It compares status against `expected` on the copy it is handed, clears the markers, writes the single audit note, and changes nothing else.
+      (ii) Each door calls it on a copy read INSIDE its own atomic write. The CLI and MCP rework doors already use update_atomically. The edit door must move its NeedsAttention exit into update_atomically, or use update_requirement_versioned and refuse on a version conflict. The supervisor must switch from the whole-store load/save to a per-spec update_atomically. Pin a test for each door showing that the status check happens under the lock.
+      The owner covers every exit from NeedsAttention, not only exits to Approved. `aida edit --status rejected|draft|superseded` goes through it too, and the target is a parameter. Rename it (for example `leave_needs_attention`) if "return_to_flight" reads wrong for Rejected. Choosing the name is up to you.
+    A2. Supervisor events. The supervisor keeps emitting SpecReDriven. It is the attempt record that supervisor_redrive_state counts. SpecRequeued{via:"supervisor"} is emitted too, and supervisor_redrive_state must NOT count SpecRequeued. Add a test that a human requeue of a spec neither advances nor resets the supervisor's attempt count.
+    A3. The lease gate is not affected by --force. A live lease held by another session refuses under every flag. That covers the CLI door and MCP `force:true`, for both NeedsAttention and the InProgress metadata-only path. The refusal names the holder and `aida session end <id>`. --force keeps its existing meaning: it overrides the guard on Completed/Rejected specs.
+    A4. Handle unknown lease state (PRIN-5: missing evidence is not good evidence). If the lease directory cannot be read, a lease cannot be parsed, or the liveness probe errors, the caller refuses before it writes anything. Add a test for each input: the directory, the parse and the probe. Note in the decision record that the gate only sees leases in the local clone, so the cross-clone case remains the "converge, maybe two audit comments" case you already accepted.
+    A5. Keep the surface small. The interactive loop lives ONLY on `aida queue rework` / `aida rework` with no ID, at a TTY. `aida findings list` stays a non-interactive listing: it prints the hint rows plus a one-line tip, "N parked — `aida rework` to triage them one keystroke each", and never prompts. Bare `aida findings` may offer to enter the loop, the same way bare `aida questions` offers its answer loop. Nothing else prompts. Keys are [r] [s] [o] [q]. When a DecisionRequest is pending, [r] is not shown. [d] hands that ONE spec to the existing questions answer path and then returns to the loop. It does not add a second decision UI.
+    A6. Loop output with no ID and no TTY: print the hint rows and exit 0. Then `aida rework --work` with no ID is a usage error. So is any other flag that needs a specific spec: --status, --reason, --resume, --for.
+    A7. "No drain running". Print "no drain is running — start one with …" only when the drain lock gives a definite answer. If the lock state cannot be read, say that you cannot tell. Never auto-launch (out of scope, as the sketch says).
+    A8. Decision record: state accurately who can resume. Resume authority is advisor authority (a TTY human or the advisor seat). Specs a human escalated, tagged `needs-human`, can be resumed only by a TTY human. Option (a) is rejected because it would give resume to whatever did the triage, with no audit or bounding step. Do not state that every resume is a human keystroke (see C2).
+    A9. Docs: update the "Triage path" block in docs/autonomous-drain.md to lead with `aida rework` (the loop) and `aida rework <ID>`. Keep `aida edit --status rejected` for dropping a spec. Correct the "--max-failures safety cap" paragraph to match the budget answer below.
+
+    ANSWER TO THE OPEN QUESTION (failure budget)
+    Decision: YES. A requeued spec that shelves again in the same drain spends the failure budget again. The budget counts shelve EVENTS, not distinct specs.
+    Why:
+    1. The sketch leans "no" because of the premise "each re-drive costs a human keystroke". That premise is false (C2). A non-TTY advisor agent can requeue a shelve that was never escalated, over and over. The budget is then the drain's only automatic circuit breaker. If distinct-spec counting lets one spec shelve without limit, that breaker has a hole.
+    2. Under PRIN-5, a second failure after triage is MORE evidence that something is wrong: the triage was wrong, or the environment is. It is not less. Counting it again errs toward stopping, which is the safe direction for an unattended run. Every re-run also costs a full pipeline in tokens and CI.
+    3. The operator doc already says the drain "stops … after N shelves". Counting events makes the code match the doc.
+    Implementation: keep a separate monotonic `shelve_events: usize` in each drain loop (sequential, pipelined and chain, per batch as today). failure_budget_exhausted and the `shelved.len() + 1 > cap` checks switch to it. The `shelved` list and forget_batch_disposition stay exactly as they are, so they keep reporting FINAL dispositions and the BUG-852 reporting contract holds. This also means an automatic in-drain retry (BUG-852's shelve-once-retry path) counts its first shelve. That is intended: the failure really happened. drain_batch_retry_then_ship_removes_prior_shelve must still pass. Its reporting assertions do not change, because no cap is set.
+    Pin it with tests: `drain_batch_requeued_spec_reshelve_spends_budget_twice` (--max-failures 2, one spec shelves, is requeued and shelves again: the drain stops with exit 2 and the spec is listed once in `shelved`), plus a pipelined twin.
+
+    SCOPE
+    The scope is right for heft 4. It is one coherent seam: one owner, one surface, the race closures and the decision record. With A5 applied, the surface adds no new verb or new flag. The only new user-facing behaviour is that an optional ID opens the loop. If the PR grows past review size, split it as (1) owner, race and lease closures, event and budget, then (2) the loop and preview. Slice (1) must land first. Out-of-scope items are confirmed as listed.
+
+    The design is sound. Implement it with A1–A9 and the budget decision above.
+  created_at: 2026-09-25T01:15:50.530625766Z
+  modified_at: 2026-09-25T01:15:50.530625766Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
