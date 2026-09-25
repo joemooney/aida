@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:05:25.253633460Z
-modified_at: 2026-09-25T02:05:25.253633460Z
+modified_at: 2026-09-25T02:07:10.198006027Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-24-shift-tick.md
@@ -16,6 +16,9 @@ relationships:
 - rel_type: Child
   target_id: 01a0b5e0-7244-7451-89a9-f8c561574633
   created_at: 2026-09-25T02:05:33.057283138Z
+deferred: true
+deferred_at: 2026-09-25T02:07:10.198006027Z
+deferred_until: the systemd driver (TASK-1491) has merged and a per-wave unit is wanted for isolation or accounting
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
   branch: claude/story-1218
