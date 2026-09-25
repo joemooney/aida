@@ -550,7 +550,7 @@ fn merge_registries(
     }
 }
 
-fn global_home() -> Option<PathBuf> {
+pub(crate) fn global_home() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("AIDA_HOME") {
         if !p.is_empty() {
             return Some(PathBuf::from(p));
@@ -2497,7 +2497,47 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // STORY-1218: the night-shift tick. Never on the per-turn hook path:
+        // a hook must not be able to launch a drain. The tick itself is a
+        // no-op unless this clone's local layer enables it.
+        // trace:STORY-1218 | ai:claude
+        (
+            &["shift tick"],
+            ScheduledCommand {
+                display: "shift tick",
+                args: &["shift", "tick"],
+                hook_allowed: false,
+            },
+        ),
     ]
+}
+
+/// STORY-1218: every registered job (project + global layer) whose command
+/// is `command`, as `(name, enabled)`. Used by the night-shift guards (is the
+/// watchdog job running?) and by `aida shift enable` (is the tick job
+/// registered?). A registry that fails to parse reads as no jobs.
+// trace:STORY-1218 | ai:claude
+pub(crate) fn jobs_running_command(project_root: &Path, command: &str) -> Vec<(String, bool)> {
+    let Ok(Some(config)) = load_registry(project_root) else {
+        return Vec::new();
+    };
+    config
+        .tasks
+        .iter()
+        .filter(|t| t.command.as_ref().is_some_and(|c| c.display == command))
+        .map(|t| (t.name.clone(), t.enabled))
+        .collect()
+}
+
+/// STORY-1218: is this repo's cron driver line installed? `None` = could not
+/// tell (no crontab, unsupported platform).
+// trace:STORY-1218 | ai:claude
+pub(crate) fn cron_driver_installed(project_root: &Path) -> Option<bool> {
+    match cron_driver_status(project_root) {
+        CronDriverStatus::Installed => Some(true),
+        CronDriverStatus::Missing => Some(false),
+        CronDriverStatus::Unknown(_) => None,
+    }
 }
 
 fn parse_scheduled_command(s: &str) -> Result<ScheduledCommand> {
@@ -2976,6 +3016,17 @@ mod tests {
             Some(raw) => build_config(raw, JobSource::Project),
             None => Ok(None),
         }
+    }
+
+    // trace:STORY-1218 | ai:claude
+    #[test]
+    fn schedule_command_table_shift_tick_not_hook_allowed() {
+        let cmd = parse_scheduled_command("shift tick").unwrap();
+        assert_eq!(cmd.args, &["shift", "tick"]);
+        assert!(
+            !cmd.hook_allowed,
+            "a per-turn hook tick must never be able to launch a drain"
+        );
     }
 
     #[test]

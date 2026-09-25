@@ -81,6 +81,8 @@ mod solo_cmd;
 mod status_cmd;
 mod supervise_cmd;
 mod supervisor;
+// trace:STORY-1218 | ai:claude
+mod shift;
 mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;
@@ -5432,6 +5434,13 @@ fn run() -> Result<()> {
         Command::Supervise(_) => {
             anyhow::bail!(
                 "aida supervise commands are only available in git-canonical (distributed) mode. \
+                 Run `aida init` (defaults to distributed) first."
+            );
+        }
+        // trace:STORY-1218 | ai:claude
+        Command::Shift(_) => {
+            anyhow::bail!(
+                "aida shift commands are only available in git-canonical (distributed) mode. \
                  Run `aida init` (defaults to distributed) first."
             );
         }

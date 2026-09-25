@@ -529,6 +529,27 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 pr.map(|p| format!(" on PR #{p}")).unwrap_or_default()
             ),
         ),
+        // trace:STORY-1218 | ai:claude
+        EventKind::ShiftTick {
+            launched,
+            refused,
+            breaker,
+            escalated,
+            ..
+        } => (
+            "shift-tick",
+            if let Some(b) = breaker {
+                format!("night shift stopped launching: {b}")
+            } else if !escalated.is_empty() {
+                format!("night shift escalated {}", escalated.join(", "))
+            } else if let Some(l) = launched {
+                format!("night shift launched {} spec(s)", l.specs.len())
+            } else if !refused.is_empty() {
+                format!("night shift holding: {}", refused.join(", "))
+            } else {
+                "night shift tick".to_string()
+            },
+        ),
         EventKind::Unknown => (
             "unknown",
             "unrecognized event (newer drain binary?)".to_string(),

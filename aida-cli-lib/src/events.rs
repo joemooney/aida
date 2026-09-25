@@ -383,6 +383,34 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         actor: Option<String>,
     },
+    /// STORY-1218: one night-shift tick that ACTED (launched a wave, reaped,
+    /// found a stale drain lock, tripped a breaker, escalated a spec) or whose
+    /// refusing-guard set changed since the previous tick. A quiet tick emits
+    /// nothing. Actionable only when it carries a breaker trip or an
+    /// escalation — a routine launch is followed by the wave's own
+    /// `QueueDrained`, which is the wake.
+    // trace:STORY-1218 | ai:claude
+    ShiftTick {
+        /// The wave this tick launched, when it launched one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        launched: Option<ShiftLaunch>,
+        /// Finished sessions reaped this tick.
+        #[serde(default)]
+        reaped: usize,
+        /// A drain lock whose pid is dead. The tick leaves the file; the next
+        /// drain stale-reclaims it through the ordinary acquire path.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        recovered_stale_pid: Option<u32>,
+        /// Names of the guards that refused a launch this tick.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        refused: Vec<String>,
+        /// Set once when a circuit breaker stops launches.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        breaker: Option<String>,
+        /// Specs excluded from further shift waves and escalated, once each.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        escalated: Vec<String>,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -397,6 +425,20 @@ pub enum EventKind {
 pub(crate) struct IneligibleBatchMember {
     pub(crate) spec: String,
     pub(crate) reason: String,
+}
+
+/// The wave a [`EventKind::ShiftTick`] launched.
+// trace:STORY-1218 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShiftLaunch {
+    /// Batch name (without the `batch:` prefix).
+    pub batch: String,
+    /// Member specs, in queue order.
+    pub specs: Vec<String>,
+    /// Pid of the detached `aida queue work` process.
+    pub pid: u32,
+    /// The exact argv handed to `aida`.
+    pub argv: Vec<String>,
 }
 
 impl EventKind {
@@ -422,6 +464,10 @@ impl EventKind {
             | EventKind::SpecReDriven { .. }
             // STORY-1436: a correct refusal is recorded for counting, not a wake.
             | EventKind::GateHeld { .. } => false,
+            // STORY-1218: a tick wakes only for what needs a human.
+            EventKind::ShiftTick {
+                breaker, escalated, ..
+            } => breaker.is_some() || !escalated.is_empty(),
             // Real decision points — wake the supervisor.
             EventKind::ReclassifiedNeedsHuman { .. }
             | EventKind::CiTerminal { .. }
@@ -497,6 +543,7 @@ impl EventKind {
             EventKind::CronJobFailed { .. } => "CronJobFailed",
             EventKind::MailReceived { .. } => "MailReceived",
             EventKind::GateHeld { .. } => "GateHeld",
+            EventKind::ShiftTick { .. } => "ShiftTick",
             EventKind::Unknown => "Unknown",
         }
     }
@@ -532,6 +579,7 @@ impl EventKind {
             "DispositionChanged",
             "ExecutionModeChanged",
             "GateHeld",
+            "ShiftTick",
         ]
     }
 }

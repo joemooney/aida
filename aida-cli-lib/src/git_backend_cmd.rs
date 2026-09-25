@@ -1073,6 +1073,10 @@ pub(crate) fn handle_git_backend_command(
             // trace:STORY-1052 | ai:codex
             return supervise_cmd::handle_supervise_command(supervise_cmd, &backend, store_path);
         }
+        Command::Shift(shift_cmd) => {
+            // trace:STORY-1218 | ai:claude
+            return crate::shift::handle_shift_command(shift_cmd, &backend, store_path);
+        }
         Command::Node(node_cmd) => {
             return node_cmd::handle_node_command(node_cmd, store_path);
         }

@@ -2534,6 +2534,43 @@ pub enum BurndownCommand {
     },
 }
 
+/// The night shift: a scheduler-run tick that launches bounded drain waves
+/// while nobody is at the keyboard. Off unless enabled for this clone.
+// trace:STORY-1218 | ai:claude
+#[derive(Subcommand, Debug, Clone)]
+pub enum ShiftCommand {
+    /// Run one night-shift check: reap finished sessions, then launch the next
+    /// bounded drain wave only if every safety guard passes. Refusals exit 0.
+    /// Registered as the `night-shift` job of `aida schedule tick`; safe to run
+    /// by hand. Does nothing unless the night shift is enabled for this clone.
+    Tick {
+        /// Print the exact wave command, the specs it would include, every
+        /// guard with its value, and the enable source, then exit without
+        /// writing anything (no tags, no state, no event, no launch).
+        #[clap(long)]
+        dry_run: bool,
+        /// Emit the tick report as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Show whether the night shift is on for this clone, where that setting
+    /// lives, the cron driver, the last check and wave, and the guard verdicts.
+    Status {
+        /// Emit JSON instead of text.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Turn the night shift on for THIS clone only. The switch is written to
+    /// `~/.aida/shift-local.toml` (keyed by this repo's path), never to the
+    /// committed project config, and the `night-shift` job is registered.
+    Enable,
+    /// Turn the night shift off for this clone.
+    Disable,
+    /// Allow launches again after the night shift stopped itself because
+    /// consecutive waves made no progress.
+    Resume,
+}
+
 /// Lightweight supervisor helpers for product/advisor stop-gap loops.
 // trace:STORY-1052 | ai:codex
 #[derive(Subcommand, Debug)]
@@ -10944,6 +10981,12 @@ pub enum Command {
     // trace:STORY-1052 | ai:codex
     #[clap(subcommand)]
     Supervise(SuperviseCommand),
+
+    /// Night shift: launch bounded drain waves from the scheduler while no
+    /// seat is awake, behind fail-closed guards. Off unless enabled per clone.
+    // trace:STORY-1218 | ai:claude
+    #[clap(subcommand)]
+    Shift(ShiftCommand),
 
     /// Robust unattended autonomous-progress: safely drain the approved ready
     /// set from ANYWHERE. Resolves the project explicitly (no cwd/wrong-store
