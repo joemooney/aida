@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:03:52.561229247Z
-modified_at: 2026-09-25T09:34:25.660307578Z
+modified_at: 2026-09-25T09:48:27.960803380Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -54,6 +54,28 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved. It carries the STORY-1218 advisor-signed amendments (A5-A7 or A12/A13) verbatim, so the design was already signed off. Implement it after slice 1 merges.'
   created_at: 2026-09-25T02:06:54.254438788Z
   modified_at: 2026-09-25T02:06:54.254438788Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d7f7-5db8-7d60-aedf-e5a7d415bd50
+  author: joe
+  content: |-
+    Strict review: REQUEST CHANGES — one PRIN-5 blocker (unknown state collapsed into a verdict). Everything else is sound. Tests: task_1491 26/26, --lib schedule 135, shift 41, doctor 148, all green.
+
+    BLOCKER
+    B1 schedule_driver.rs:666-669. systemd_driver_status_with maps every is-enabled result whose stdout is not 'enabled' to Disabled. I checked this on the box: with no user bus (env -i, cron, ssh without pam_systemd, agent sandboxes), systemctl --user is-enabled prints 'Failed to connect to bus: No medium found' to stderr, prints nothing on stdout and exits 1. So a working systemd-only repo is reported as 'timer exists but is disabled', and doctor emits scheduler-tick-not-installed (maintenance_schedule.rs:2128-2131). It should emit driver-unknown. Related: DriverStatus::label (schedule_driver.rs:630-641) returns 'none installed' for cron=Missing + systemd=Unknown and for cron=Unknown + systemd=Missing, and doctor:2128 picks the finding from the cron status alone, so an Unknown systemd status plus a Missing cron still gives not-installed. Fix: map empty stdout or an unrecognised state to Unknown(stderr). Recognise disabled|masked|static|linked|indirect|not-found as Disabled or Missing. In doctor and in label(), make any Unknown with nothing installed report as unknown. Add FakeHost tests for the no-bus case.
+
+    NON-BLOCKING
+    N1 (low, injection) schedule_driver.rs:248,262 write WorkingDirectory= and Description= unquoted. Quotes, dollar signs and spaces in the middle are fine (systemd-analyze verify is clean on a crafted path), and % and newlines are refused. But systemd strips trailing whitespace, so a repo path ending in a space cds into the sibling path without the space, and unit_has_marker trim_end means we never match our own units. A trailing backslash continues the line and swallows Environment=. No directive injection is possible, but tick_invocation should also refuse trailing whitespace and a trailing backslash.
+    N2 schedule_driver.rs:377-383: AlreadyUpToDate is reported even when that run re-enabled or restarted a disabled timer. Is-enabled also does not check is-active, so a stopped but enabled timer counts as Installed.
+    N3 maintenance_schedule.rs:2187 returns early when there are no jobs, so in practice the dual-driver finding never fires with 0 jobs (the test comment at tests:571 says 'flagged even with no registered jobs'). Harmless because shift install registers night-shift, but the comment overstates it.
+    N4 maintenance_schedule.rs:2252-2290: the aida init offer (pre-existing) checks the stdin and stdout TTY but not agent_output_mode, unlike driver_gate_refusal. It is now a second cron-install path with a weaker floor. Route it through driver_gate_refusal.
+    N5 shift.rs install_command enables the shift before the driver switch. If the switch fails, the shift is left enabled with no driver. That is harmless, but say so in the error.
+    N6 The A12 follow-up (systemd-run --user transient unit per wave) is not filed: aida search systemd-run finds only this spec.
+    N7 RealDriverHost::read_crontab (schedule_driver.rs:76) is not cfg(test)-guarded. It is read-only and pre-existing, but doctor and shift status unit tests can still spawn the real crontab -l.
+    N8 The unit dir follows the shell's XDG_CONFIG_HOME, and the user manager may use a different one. That fails safe (enable errors and nothing is removed) but orphans the unit files.
+
+    VERIFIED OK: the cron line is byte-identical (same shell_quote, argv and marker, both paths canonical). The whole-line marker is prefix-safe. crontab_after_driver_switch keeps commented, prefix-sibling and unrelated lines and CRLF byte-for-byte. The switch installs and verifies before it removes, so there are never zero drivers. Removal only runs disable --now on the timer, deletes only marked files and refuses foreign ones. No sudo, and the linger reminder only prints on Linger=no. The TTY and agent gate covers install-cron, install-systemd and shift install, and AIDA_AGENT_OUTPUT=0 cannot bypass the stdin-TTY check. No MCP or integration-test path reaches the installers. The cfg(test) guards are real for systemctl, the unit dir, crontab writes and linger. A12: OnActiveSec=1min plus OnBootSec=2min plus OnUnitInactiveSec=10min gives a first fire on enable+start, KillMode=process is correct for the setsid wave in the oneshot cgroup, TimeoutStartSec=15min is sane given the 120s ceiling per job, there are no resource limits and no Persistent=. ExecStart and Environment quoting (backslash, double quote, dollar as $$) passes systemd-analyze verify. There are no SPEC IDs in --help text.
+  created_at: 2026-09-25T09:48:27.960803380Z
+  modified_at: 2026-09-25T09:48:27.960803380Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
