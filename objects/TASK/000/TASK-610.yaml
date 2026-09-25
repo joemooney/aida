@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-06-06T04:19:10.902302419Z
+modified_at: 2026-09-25T20:18:59.029758227Z
 req_type: Task
 tags:
 - docs
@@ -17,5 +17,11 @@ tags:
 - kind:doc-asset
 - marketing
 - presentation
+comments:
+- id: 01a0da38-9f55-78a0-ab99-05b386e68621
+  author: mcp
+  content: Updated the untracked upper-management deck source/output on 2026-09-25. Preserved the Sep 15 published snapshot as a historical baseline, added one Sep 16-25 delta slide with struck-through prior values, refreshed cumulative evidence to code HEAD 99698621ba and aida-store 55e5df2a, updated weekly velocity through partial W39, and regenerated 17-slide PPTX + speaker notes. Verified via LibreOffice PDF conversion, 17 rendered 1600x900 PNGs, contact-sheet review, individual review of slides 2/4/5/9/17, PPTX ZIP integrity, and 17/17 embedded notes. No commit or push performed.
+  created_at: 2026-09-25T20:18:59.029745174Z
+  modified_at: 2026-09-25T20:18:59.029745174Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
