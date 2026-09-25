@@ -116,6 +116,27 @@ thread_local! {
 }
 
 #[cfg(test)]
+thread_local! {
+    /// Tests: how many catch-up boundary probes (`rev-list --count`) ran.
+    static BOUNDARY_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Count one catch-up boundary probe (tests read the count). Always true,
+/// so it can sit in a condition chain.
+// trace:TASK-1507 | ai:claude
+fn count_boundary_probe() -> bool {
+    #[cfg(test)]
+    BOUNDARY_PROBES.with(|c| c.set(c.get() + 1));
+    true
+}
+
+/// Tests: take (and reset) the boundary-probe count.
+#[cfg(test)]
+pub(crate) fn take_boundary_probes() -> usize {
+    BOUNDARY_PROBES.with(|c| c.replace(0))
+}
+
+#[cfg(test)]
 pub(crate) fn fail_next_reset() {
     FAIL_NEXT_RESET.with(|c| c.set(true));
 }
@@ -1252,7 +1273,14 @@ impl HistoryCache {
                         );
                     }
                     let is_desc = descendants.as_ref().is_some_and(|d| d.contains(&raw.sha));
+                    // B6: probe only merges. Every earlier descendant was
+                    // already probed (the budget had expired), so a valid
+                    // non-merge boundary's parent, appended just before it,
+                    // would have been valid first. Probing every descendant
+                    // made this path quadratic.
                     if is_desc
+                        && raw.parents.len() > 1
+                        && count_boundary_probe()
                         && aida_core::git_ops::rev_list_count(
                             store,
                             &format!("{tip}..{}", raw.sha),
@@ -1266,6 +1294,7 @@ impl HistoryCache {
                     continue;
                 }
                 probes += 1;
+                count_boundary_probe();
                 // trace:TASK-1507 | ai:claude
                 // B4: the batch must also descend from the old tip, or the
                 // new tip could land on a side branch whose ancestors are
@@ -1683,8 +1712,11 @@ impl HistoryCache {
         // Conservative `--id` rule (round-4 proxy decision): `git log --
         // <path>` simplifies merges, which the index cannot mirror in
         // general, so an `--id` query whose served range holds any merge
-        // uses the walk. A dropped commit is an ancestor of such a merge,
-        // so no merge below `lower` can affect the range (skew is R3's).
+        // uses the walk. This rule alone does NOT cover everything a merge
+        // below `lower` can change: the capped window's +1 probe candidate
+        // (and so `window_exhausted`) can be a commit that git simplifies
+        // away below `lower`. The global `merge_paths` check above (N1b)
+        // covers that case; both are needed.
         if id_path.is_some() {
             let merge_in_range: bool = tx.query_row(
                 "SELECT EXISTS(SELECT 1 FROM commits

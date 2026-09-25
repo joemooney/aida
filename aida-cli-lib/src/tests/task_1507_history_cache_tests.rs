@@ -2566,7 +2566,10 @@ mod sweep {
         fx.drop_index();
     }
 
+    /// Slow (about 40 s of git processes): run with `--ignored`. CI runs it
+    /// nightly in cross-platform.yml.
     #[test]
+    #[ignore = "slow random sweep; run with --ignored (nightly CI)"]
     fn task_1507_random_dag_sweep_fixed_seeds() {
         let mut bad = Vec::new();
         // Kept small: each graph costs a few seconds of git processes.
@@ -2676,5 +2679,194 @@ mod sweep {
             .unwrap()
             .expect("served once caught up");
         assert_same(&got, &(walk, x), "after the long side branch");
+    }
+
+    // Round 6 (T3, T4, B6).
+    // trace:TASK-1507 | ai:claude
+
+    #[test]
+    fn task_1507_id_plus_one_probe_below_an_ours_merge() {
+        // T3: an ours-merge drops the side commit that added FR-1; a later
+        // main commit adds FR-1. `--id FR-1 --max-commits 1` has no merge
+        // in its served range, but its +1 probe candidate (the dropped
+        // side commit) decides window_exhausted. The global merge_paths
+        // check must route it to the walk, or it must match exactly.
+        let mut d = Dag::new();
+        let mut st = State::new();
+        st.insert("BUG-3", Spec::new("BUG-3", "Bug", "b"));
+        let root = d.write_commit(&[], st.clone(), BASE_TS, "root");
+        let mut side = st.clone();
+        side.insert("FR-1", Spec::new("FR-1", "Functional", "f"));
+        let s1 = d.write_commit(&[root.clone()], side, BASE_TS + 10, "side fr1");
+        let mut a = st.clone();
+        a.get_mut("BUG-3").unwrap().status = "Done".into();
+        let a1 = d.write_commit(&[root.clone()], a.clone(), BASE_TS + 20, "main");
+        let m = d.write_commit(&[a1, s1], a.clone(), BASE_TS + 30, "ours");
+        let mut b = a.clone();
+        b.insert("FR-1", Spec::new("FR-1", "Functional", "f"));
+        let b1 = d.write_commit(&[m], b, BASE_TS + 40, "fr1 on main");
+        d.set_head(&b1);
+        let fx = &d.fx;
+        let mut probes = Vec::new();
+        for (max, status) in [(1usize, false), (2, false), (1, true), (2, true)] {
+            let mut o = opts();
+            o.id_filter = Some("FR-1".into());
+            o.max_commits = max;
+            o.max_commits_explicit = true;
+            o.status_changes_only = status;
+            probes.push((format!("--id FR-1 --max-commits {max} status={status}"), o));
+        }
+        let walks = walk_all(fx, &probes);
+        let mut bad = Vec::new();
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        compare(&mut bad, fx, &probes, &walks, "complete");
+        for c in 1..=3usize {
+            for k in 1..=5usize.div_ceil(c) {
+                fx.drop_index();
+                test_support::partial_build(&fx.store, &fx.db, c, k).unwrap();
+                compare(&mut bad, fx, &probes, &walks, &format!("partial c{c} x{k}"));
+            }
+        }
+        assert!(bad.is_empty(), "{bad:#?}");
+    }
+
+    /// A side branch of `side_len` commits merged into main (which the
+    /// index already holds), then `after` more main commits. Returns
+    /// (dag, merge sha, head sha).
+    fn long_side_then_more(side_len: i64, after: i64) -> (Dag, String, String) {
+        let mut d = Dag::new();
+        let mut st = State::new();
+        st.insert("FR-1", Spec::new("FR-1", "Functional", "fr"));
+        let root = d.write_commit(&[], st.clone(), BASE_TS, "root");
+        let mut prev = root.clone();
+        let mut s = st.clone();
+        for i in 0..side_len {
+            s.get_mut("FR-1").unwrap().description = format!("side {i}");
+            prev = d.write_commit(&[prev.clone()], s.clone(), BASE_TS + 10 + i, "side");
+        }
+        let mut a = st.clone();
+        a.insert("BUG-3", Spec::new("BUG-3", "Bug", "b"));
+        let a1 = d.write_commit(&[root.clone()], a.clone(), BASE_TS + 5, "main");
+        d.set_head(&a1);
+        history_cache::rebuild_full_at(&d.fx.store, &d.fx.db).unwrap();
+        let mut ms = s.clone();
+        ms.insert("BUG-3", a["BUG-3"].clone());
+        let m = d.write_commit(&[a1, prev], ms.clone(), BASE_TS + 500, "merge");
+        let mut h = m.clone();
+        for i in 0..after {
+            ms.get_mut("BUG-3").unwrap().description = format!("after {i}");
+            h = d.write_commit(&[h.clone()], ms.clone(), BASE_TS + 600 + i, "after");
+        }
+        d.set_head(&h);
+        (d, m, h)
+    }
+
+    #[test]
+    fn task_1507_long_side_branch_commits_at_the_merge_before_head() {
+        // T4: the N6 path's own commit: the first zero-budget call must
+        // stop AT the merge (not roll back, not only reach HEAD).
+        let (d, m, h) = long_side_then_more(60, 5);
+        test_support::index(&d.fx.store, &d.fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
+        assert_eq!(
+            test_support::meta(&d.fx.db, "tip_sha").as_deref(),
+            Some(m.as_str()),
+            "the first call commits at the merge"
+        );
+        for _ in 0..10 {
+            test_support::index(&d.fx.store, &d.fx.db, Budget::for_duration(Duration::ZERO))
+                .unwrap();
+        }
+        assert_eq!(
+            test_support::meta(&d.fx.db, "tip_sha").as_deref(),
+            Some(h.as_str())
+        );
+        assert_parity(&d.fx, &opts(), "after the long side branch");
+    }
+
+    fn fast_import(store: &Path, stream: &str) {
+        use std::io::Write;
+        let mut ch = Command::new("git")
+            .arg("-C")
+            .arg(store)
+            .args(["fast-import", "--quiet", "--force"])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        ch.stdin
+            .take()
+            .unwrap()
+            .write_all(stream.as_bytes())
+            .unwrap();
+        assert!(ch.wait().unwrap().success());
+    }
+
+    #[test]
+    fn task_1507_catch_up_past_the_probe_cap_probes_only_merges() {
+        // B6: HEAD fast-forwards to another hub's merge whose FIRST parent
+        // forked before our tip. Reverse topo lists that foreign line, then
+        // K of our descendants that can never be a boundary. Past the probe
+        // cap only merges are probed, so the cost stays bounded.
+        const K: usize = 500;
+        let fx = Fixture::new();
+        let mut s = String::new();
+        let mut mark = 0usize;
+        let mut t = BASE_TS;
+        let mut commit = |s: &mut String, r: &str, parents: &[usize], t: i64| -> usize {
+            mark += 1;
+            s.push_str(&format!(
+                "commit {r}\nmark :{mark}\ncommitter a <a@b> {t} +0000\ndata 1\nc\n"
+            ));
+            if let Some(p) = parents.first() {
+                s.push_str(&format!("from :{p}\n"));
+            }
+            for p in parents.iter().skip(1) {
+                s.push_str(&format!("merge :{p}\n"));
+            }
+            s.push_str(&format!("M 644 inline f{mark}\ndata 1\nx\n"));
+            mark
+        };
+        let root = commit(&mut s, "refs/heads/aida-store", &[], t);
+        let mut b = root;
+        for _ in 0..3 {
+            t += 1;
+            b = commit(&mut s, "refs/heads/aida-store", &[b], t);
+        }
+        let mut x = b;
+        for _ in 0..3 {
+            t += 1;
+            x = commit(&mut s, "refs/heads/aida-store", &[x], t);
+        }
+        let mut sd = b;
+        for _ in 0..K {
+            t += 1;
+            sd = commit(&mut s, "refs/heads/side", &[sd], t);
+        }
+        let mut ours = x;
+        for _ in 0..K {
+            t += 1;
+            ours = commit(&mut s, "refs/heads/ours", &[ours], t);
+        }
+        t += 1;
+        commit(&mut s, "refs/heads/aida-store", &[sd, ours], t);
+        s.push_str(&format!("reset refs/tags/X\nfrom :{x}\n"));
+        fast_import(&fx.store, &s);
+        let head = fx.git(&["rev-parse", "aida-store"]).trim().to_string();
+        let xs = fx.git(&["rev-parse", "X"]).trim().to_string();
+        fx.git(&["update-ref", "refs/heads/aida-store", &xs]);
+        fx.git(&["symbolic-ref", "HEAD", "refs/heads/aida-store"]);
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        fx.git(&["update-ref", "refs/heads/aida-store", &head]);
+        history_cache::take_boundary_probes();
+        test_support::index(&fx.store, &fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
+        let probes = history_cache::take_boundary_probes();
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(head.as_str()),
+            "one zero-budget call reaches HEAD"
+        );
+        assert!(
+            probes <= 40,
+            "{probes} boundary probes for {K} non-boundary descendants"
+        );
     }
 }

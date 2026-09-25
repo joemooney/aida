@@ -216,6 +216,21 @@ jobs:
           fi
           cargo test -p aida-cli-lib gitlab_live_mr_round_trip -- --ignored --nocapture
 
+  # TASK-1507: the history index's random-DAG parity sweep is too slow for
+  # the PR suite (about 40 s of git processes), so it is #[ignore]d there and
+  # run nightly here, like the gitlab_live smoke above. trace:TASK-1507 | ai:claude
+  history-index-sweep:
+    name: History index random sweep
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Run the ignored random DAG sweep
+        run: cargo test -p aida-cli-lib --lib task_1507_random_dag_sweep -- --ignored --nocapture
+
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
