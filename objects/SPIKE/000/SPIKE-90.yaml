@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T13:55:45.638264382Z
-modified_at: 2026-09-25T13:55:45.638264382Z
+modified_at: 2026-09-25T14:01:24.358448684Z
 req_type: Spike
 tags:
 - architecture
@@ -17,6 +17,12 @@ tags:
 - spike
 - sqlite
 - stale-read
+comments:
+- id: 01a0d8de-f086-7381-9da3-8b6cedc00a67
+  author: joe
+  content: 'Operational refinement: snapshot creation may be asynchronous/best-effort after a successful write when the snapshot interval has elapsed, so the user-facing write is not delayed by copying the database. Do not rely on an untracked in-process task that dies when the CLI exits; evaluate a bounded scheduler/worker or durable maintenance request. Snapshot work needs its own single-flight lock, must not block the primary cache writer, and must atomically replace only a validated snapshot. A failed or abandoned snapshot leaves the previous read-only copy intact.'
+  created_at: 2026-09-25T14:01:24.358448684Z
+  modified_at: 2026-09-25T14:01:24.358448684Z
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
   branch: main
