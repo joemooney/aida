@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:58:16.548025058Z
-modified_at: 2026-09-25T09:37:06.475644177Z
+modified_at: 2026-09-25T09:37:11.714468416Z
 req_type: Task
 tags:
 - cli
@@ -37,6 +37,12 @@ comments:
     NITS: the doc block at history.rs:198 is attached to 'type ResolvedWindow' (:217), not to resolve_history_window. The shared parser now accepts w and ISO dates, but the help for queue proxy approvals (cli.rs:9355) and status --activity --since (cli.rs:10170) still lists only d/h/m. The broaden-scope comment asked for an audit of every --since/--until: digest --since, calibration/assess --since, tail --since and review classes keep separate grammars (digest reads bare dates on its own terms). Fold them in or file a follow-up. Also: the spec is already status Done before this review, and the earlier review and local-midnight PROXY DECISION comments are not in the substrate.
   created_at: 2026-09-25T09:37:06.475644177Z
   modified_at: 2026-09-25T09:37:06.475644177Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d7ed-0c22-73c1-89fb-18202b3d7fc4
+  author: joe
+  content: 'Review correction: ''review classes'' DOES use the shared parse_since_arg (lib.rs:87955). Its help (cli.rs:1004/7064) just lists only d/h/m, the same doc nit as proxy approvals. The separate-grammar list is digest, calibration/assess and tail. Verdict unchanged: REQUEST CHANGES.'
+  created_at: 2026-09-25T09:37:11.714468416Z
+  modified_at: 2026-09-25T09:37:11.714468416Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
