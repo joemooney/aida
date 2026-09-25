@@ -1,0 +1,42 @@
+id: 01a0da1b-aa45-7071-b093-751afdea8528
+spec_id: BUG-1628
+agreed_id: BUG-1628
+title: Auto-complete generates a malformed sibling worktree path for SPEC-style IDs
+description: |-
+  Observed in QCI on 2026-09-25.
+
+  ## Reproduction
+  1. Queue approved task `SPEC-016` for the implementer.
+  2. Run `aida queue work SPEC-016 --auto-complete through-ci --no-human=both --vendor codex --user joe --role implementer`.
+  3. Phase 1 refuses sibling workspace `/home/joe.mooney/ai/aida-spec016` on branch `spec-016-work` before acquiring a lease.
+  4. No worktree exists at that path and the spec is restored to Approved.
+  5. In the same repository, `aida queue work SPEC-016 --dry-run --vendor codex --user joe --role implementer` correctly resolves branch `spec-016` and worktree `/home/joe.mooney/ai/qci-spec-016`.
+  6. Normal pickup with `--no-launch` successfully creates the pooled worktree and lease.
+
+  ## Expected
+  The autonomous and ordinary pickup paths use the same branch/worktree resolver for every valid stored requirement ID. A first-phase auto-complete launch must not synthesize a path outside the project naming convention or refuse before a lease is created.
+
+  ## Acceptance
+  - Regression test covers a `SPEC-016` / nonstandard canonical-prefix requirement through `--auto-complete` phase-1 planning.
+  - Auto-complete and ordinary pickup resolve identical branch/worktree paths.
+  - The path includes the project slug and does not drop separators from the requirement ID.
+  - A failed phase-1 setup names the resolver mismatch instead of a generic sibling-workspace refusal.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T19:47:21.285378119Z
+modified_at: 2026-09-25T19:47:21.285378119Z
+req_type: Bug
+tags:
+- autonomous-drain
+- regression
+- severity:major
+- workspace-path
+filed_at:
+  code_sha: 1df2e0445e433eb9bef4af0dc02c93a6712f7c80
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 1df2e0445e
+  vendor: codex
