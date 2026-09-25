@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T12:23:19.307794120Z
+modified_at: 2026-09-25T14:08:55.781293748Z
 req_type: Task
 tags:
 - cache
@@ -100,6 +100,26 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): accept the strict review. Rework: B1 (use rev-list --topo-order --timestamp; per chunk, record the newest time among commits not yet filled; serve --since only when since is newer than that; add a regression test with an old-dated side branch). N2 (if HEAD is behind the index tip, fall back to the walk; never reset the shared index). N3 (avoid the checkpoint/fsync on close, e.g. SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE; measure the catch-up again). N4 (prune_other_versions must not delete .lock files in use). N1 (topo order vs walk order under -n/--max-commits cuts across interleaved merges) goes to an independent advisor for an OQ3 ruling. Until that ruling, the rework must be safe by default: when a cut applies and the served range contains a merge, fall back to the walk.'
   created_at: 2026-09-25T12:23:19.307794120Z
   modified_at: 2026-09-25T12:23:19.307794120Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d8e5-d3e5-7490-9012-516aef817b15
+  author: joe
+  content: |-
+    MEASUREMENTS after rework (N3), 2026-09-25. Release build of claude/task-1507 at b61e37f04e. Store: a fresh clone of aida-store at 346d45df (37,769 commits, 25,762 events); neither the live store nor ~/.aida was touched. Host load average 4-6.
+
+    Full build (aida cache rebuild --history, schema v2): 18.8 s, and 12.3 s on a second run; 73 MB max RSS. The rebuild now ends with the WAL truncated to 0 bytes.
+
+    First attempt (NO_CKPT_ON_CLOSE only): a one-commit catch-up with --id got WORSE, at 2.0-3.2 s. strace showed one fsync of history.db taking 1.07 s on every run. The rebuild had left a 7.6 MB WAL behind. Each new process re-reads a WAL it never reset as un-checkpointed, so SQLite's auto-checkpoint copied all of it again on every commit. Fix: turn wal_autocheckpoint off. The index writer (the lock holder) runs wal_checkpoint(TRUNCATE) itself once the WAL passes 4 MB, and always after an explicit rebuild.
+
+    After the fix, one new commit plus the query, with the requirements cache refreshed beforehand so only the history index is timed:
+    - history events --id TASK-1505 -n 50: 0.03-0.09 s (5 runs); the git walk takes 0.68 s
+    - history events --since 1d -n 50: 0.06-0.10 s (3 runs)
+    - strace: 0 fsync calls on history.db*; the WAL stays small (about 260 KB after 10 catch-ups)
+    - warm (no new commit): 0.02 s
+    Before the rework this was 0.65-3.5 s, most of it the fsyncs of the close-time checkpoint.
+
+    A plain aida history events call straight after a new commit still takes 0.9-1.7 s wall. All of that is the requirements cache (cache.db) refreshing for the moved HEAD: 13 fsyncs on cache.db-wal, 0.06-0.2 s each. It is outside the history index and was also included in the earlier figures.
+  created_at: 2026-09-25T14:08:55.781293748Z
+  modified_at: 2026-09-25T14:08:55.781293748Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
