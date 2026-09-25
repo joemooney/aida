@@ -3,12 +3,12 @@ spec_id: BUG-1622
 agreed_id: BUG-1622
 title: Git option injection via --since git-ref fallback in doctor and digest; doctor silently ignores an invalid --since
 description: 'Found in TASK-1509''s re-review. (1) The git-ref fallbacks pass the raw user value to ''git log'' (lib.rs ~24976 in doctor, digest.rs ~135), so ''--since=--output=<path>'' makes git write a file. CLI only, not MCP. Fix: pass --end-of-options (or validate that the value isn''t an option) at every place a user value becomes a git rev argument; grep for others. (2) doctor --since with a garbage or out-of-range value silently applies no cutoff and exits 0. It should fail with a clear error like the other flags. (3) Nits: doctor''s help lists ''git ref/tag'' first; tail''s out-of-range message is generic. Acceptance: a regression test shows an option-like value is refused or treated as a ref name, never as a git option; doctor errors on an invalid --since.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:45:01.179683029Z
-modified_at: 2026-09-25T12:45:18.937337018Z
+modified_at: 2026-09-25T14:19:26.235405342Z
 req_type: Bug
 comments:
 - id: 01a0d899-46d9-7102-8936-dc8e08960384
