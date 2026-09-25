@@ -136,7 +136,8 @@ impl DriverHost for FakeHost {
             return Ok(CommandOutput {
                 success: false,
                 stdout: String::new(),
-                stderr: "Failed to connect to bus: No medium found\n".to_string(),
+                // The real systemd 255 no-user-bus error. trace:BUG-1619 | ai:claude
+                stderr: "Failed to connect to bus: No such file or directory\n".to_string(),
             });
         }
         Ok(match args {
@@ -1443,12 +1444,10 @@ fn bug_1619_fresh_probe_classifier() {
         stdout: stdout.to_string(),
         stderr: stderr.to_string(),
     };
+    let probe = |o: &CommandOutput| classify_fresh_probe(o, "x.timer");
+    assert_eq!(probe(&out(false, "not-found\n", "")), FreshProbe::NotFound);
     assert_eq!(
-        classify_fresh_probe(&out(false, "not-found\n", "")),
-        FreshProbe::NotFound
-    );
-    assert_eq!(
-        classify_fresh_probe(&out(
+        probe(&out(
             false,
             "",
             "Failed to get unit file state for x.timer: No such file or directory\n"
@@ -1456,15 +1455,15 @@ fn bug_1619_fresh_probe_classifier() {
         FreshProbe::NotFound
     );
     assert_eq!(
-        classify_fresh_probe(&out(false, "disabled\n", "")),
+        probe(&out(false, "disabled\n", "")),
         FreshProbe::Known("disabled".to_string())
     );
     assert_eq!(
-        classify_fresh_probe(&out(true, "enabled\n", "")),
+        probe(&out(true, "enabled\n", "")),
         FreshProbe::Known("enabled".to_string())
     );
     assert!(matches!(
-        classify_fresh_probe(&out(
+        probe(&out(
             false,
             "",
             "Failed to connect to bus: No medium found\n"
@@ -1472,9 +1471,82 @@ fn bug_1619_fresh_probe_classifier() {
         FreshProbe::Unknown(_)
     ));
     assert!(matches!(
-        classify_fresh_probe(&out(true, "bogus\n", "")),
+        probe(&out(true, "bogus\n", "")),
         FreshProbe::Unknown(_)
     ));
+}
+
+// The real no-user-bus error (systemd 255: exit 1, empty stdout) also ends
+// in "No such file or directory"; it must be Unknown, never NotFound.
+// trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_fresh_probe_real_bus_enoent_is_unknown() {
+    let out = |success: bool, stdout: &str, stderr: &str| CommandOutput {
+        success,
+        stdout: stdout.to_string(),
+        stderr: stderr.to_string(),
+    };
+    let real_bus = "Failed to connect to bus: No such file or directory\n";
+    match classify_fresh_probe(&out(false, "", real_bus), "x.timer") {
+        FreshProbe::Unknown(why) => {
+            assert!(why.contains("Failed to connect to bus"), "{why}")
+        }
+        other => panic!("bus ENOENT classified as {other:?}"),
+    }
+    // Bus failure wins even if stdout claimed not-found.
+    assert!(matches!(
+        classify_fresh_probe(&out(false, "not-found\n", real_bus), "x.timer"),
+        FreshProbe::Unknown(_)
+    ));
+    // Other bus/connection failures are Unknown too.
+    for stderr in [
+        "Failed to connect to user scope bus via local transport: No such file or directory\n",
+        "Failed to get D-Bus connection: No such file or directory\n",
+        "Failed to connect to bus: Connection refused\n",
+    ] {
+        assert!(
+            matches!(
+                classify_fresh_probe(&out(false, "", stderr), "x.timer"),
+                FreshProbe::Unknown(_)
+            ),
+            "{stderr}"
+        );
+    }
+    // The legacy not-found path needs the is-enabled prefix for this exact
+    // timer; any other ENOENT text is ambiguous and fails closed.
+    for stderr in [
+        "No such file or directory\n",
+        "Failed to get unit file state for other.timer: No such file or directory\n",
+        "Failed to get unit file state for x.timer: Permission denied\n",
+        "Something else: No such file or directory\n",
+    ] {
+        assert!(
+            matches!(
+                classify_fresh_probe(&out(false, "", stderr), "x.timer"),
+                FreshProbe::Unknown(_)
+            ),
+            "{stderr}"
+        );
+    }
+}
+
+// Both refusal messages read as prose: no runs of spaces left by a lost
+// line continuation. trace:BUG-1619 | ai:claude
+#[test]
+fn bug_1619_fresh_install_refusals_have_no_double_spaces() {
+    let mut host = FakeHost::new();
+    host.elsewhere = Some("enabled");
+    let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+    let known = format!("{err:#}");
+    assert!(known.contains("already knows"), "{known}");
+    assert!(!known.contains("  "), "double space in: {known}");
+
+    let mut host = FakeHost::new();
+    host.no_bus = true;
+    let err = switch_driver(&mut host, &inv(), Driver::Systemd).unwrap_err();
+    let unknown = format!("{err:#}");
+    assert!(unknown.contains("could not tell"), "{unknown}");
+    assert!(!unknown.contains("  "), "double space in: {unknown}");
 }
 
 // trace:BUG-1619 | ai:claude

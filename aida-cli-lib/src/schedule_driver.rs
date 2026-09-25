@@ -504,18 +504,26 @@ pub(crate) fn install_systemd_units(
     // trace:BUG-1619 | ai:claude
     if none_existed {
         let probe = match host.systemctl_user(&["is-enabled", &units.timer_name]) {
-            Ok(out) => classify_fresh_probe(&out),
+            Ok(out) => classify_fresh_probe(&out, &units.timer_name),
             Err(e) => FreshProbe::Unknown(format!("{e:#}")),
         };
         let refusal = match probe {
             FreshProbe::NotFound => None,
             FreshProbe::Known(state) => Some(format!(
-                "systemd already knows {timer} (`systemctl --user is-enabled` reports                  {state:?}), but its unit file is not in {dir}. Another install of this repo's                  timer is loaded from a different unit directory (for example a different                  XDG_CONFIG_HOME, or ~/.local/share/systemd/user). Refusing to install over it;                  check `systemctl --user status {timer}` and remove the other copy first",
+                // trace:BUG-1619 | ai:claude
+                "systemd already knows {timer} (`systemctl --user is-enabled` reports \
+                 {state:?}), but its unit file is not in {dir}. Another install of this repo's \
+                 timer is loaded from a different unit directory (for example a different \
+                 XDG_CONFIG_HOME, or ~/.local/share/systemd/user). Refusing to install over it; \
+                 check `systemctl --user status {timer}` and remove the other copy first",
                 timer = units.timer_name,
                 dir = dir.display(),
             )),
             FreshProbe::Unknown(why) => Some(format!(
-                "could not tell whether systemd already knows {timer} ({why}). Refusing to                  install without that check; make sure the systemd user manager is reachable                  (`systemctl --user status`) and run the install again",
+                // trace:BUG-1619 | ai:claude
+                "could not tell whether systemd already knows {timer} ({why}). Refusing to \
+                 install without that check; make sure the systemd user manager is reachable \
+                 (`systemctl --user status`) and run the install again",
                 timer = units.timer_name,
             )),
         };
@@ -984,17 +992,43 @@ pub(crate) enum FreshProbe {
     Unknown(String),
 }
 
-/// PURE: classify `is-enabled` for the fresh-install check. Newer systemd
-/// prints `not-found`; older releases print nothing on stdout and a "No
-/// such file or directory" error on stderr. Any other known state means the
-/// unit exists somewhere. Anything else (no user bus) is unknown.
+/// PURE: classify `is-enabled <timer_name>` for the fresh-install check.
+/// Newer systemd prints `not-found`; older releases print nothing on stdout
+/// and `Failed to get unit file state for <timer_name>: No such file or
+/// directory` on stderr. Any other known state means the unit exists
+/// somewhere. Everything else is unknown, so the check fails closed: in
+/// particular a bus/connection failure, which can also end in "No such file
+/// or directory" (`Failed to connect to bus: No such file or directory`).
 // trace:BUG-1619 | ai:claude
-pub(crate) fn classify_fresh_probe(out: &CommandOutput) -> FreshProbe {
+pub(crate) fn classify_fresh_probe(out: &CommandOutput, timer_name: &str) -> FreshProbe {
     let stdout = out.stdout.trim();
+    let stderr = out.stderr.trim();
+    // A bus or connection failure is never "not found", whatever errno text
+    // follows it. trace:BUG-1619 | ai:claude
+    const BUS_FAILURES: [&str; 5] = [
+        "Failed to connect to bus",
+        "Failed to connect to user scope bus",
+        "Failed to get D-Bus connection",
+        "Transport endpoint is not connected",
+        "Connection refused",
+    ];
+    if BUS_FAILURES.iter().any(|m| stderr.contains(m)) {
+        return FreshProbe::Unknown(format!(
+            "`systemctl --user is-enabled {timer_name}` could not reach the user manager: {stderr}"
+        ));
+    }
     if stdout == "not-found" {
         return FreshProbe::NotFound;
     }
-    if stdout.is_empty() && !out.success && out.stderr.contains("No such file or directory") {
+    // Old systemd: only the is-enabled message for this exact unit counts.
+    // trace:BUG-1619 | ai:claude
+    let legacy_prefix = format!("Failed to get unit file state for {timer_name}:");
+    if stdout.is_empty()
+        && !out.success
+        && stderr
+            .lines()
+            .any(|l| l.starts_with(&legacy_prefix) && l.contains("No such file or directory"))
+    {
         return FreshProbe::NotFound;
     }
     match classify_is_enabled(out) {
