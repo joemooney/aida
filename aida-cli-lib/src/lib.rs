@@ -40495,8 +40495,21 @@ fn trusted_session_env(body: &str, running_exe: &std::path::Path) -> Vec<(String
         if !SESSION_ENV_NAMES.contains(&name.as_str()) || out.iter().any(|(n, _)| *n == name) {
             continue;
         }
+        // A NUL byte can't be carried by an env var (`set_var` panics), so a
+        // value containing one is dropped. trace:BUG-1627 | ai:claude
+        if value.contains('\0') {
+            continue;
+        }
         let value = match name.as_str() {
             "CARGO_TARGET_DIR" if !std::path::Path::new(&value).is_absolute() => continue,
+            // Any non-empty AIDA_AGENT_TYPE turns on the advisor code-gate
+            // agent carve-out and adds a type mailbox identity, and the session
+            // lease does not record the type. So only a known agent type is
+            // taken, in its canonical spelling. trace:BUG-1627 | ai:claude
+            "AIDA_AGENT_TYPE" => match trusted_agent_type(&value) {
+                Some(canonical) => canonical,
+                None => continue,
+            },
             "AIDA_BIN" => {
                 if !(running_exe.is_absolute() && running_exe.is_file()) {
                     continue;
@@ -40508,6 +40521,19 @@ fn trusted_session_env(body: &str, running_exe: &std::path::Path) -> Vec<(String
         out.push((name, value));
     }
     out
+}
+
+/// The canonical spelling of a known agent type (`claude`, `codex`,
+/// `antigravity`, `shell`, `web`), or `None` for anything
+/// [`agent_registry::normalize_agent_type`] does not recognize.
+// trace:BUG-1627 | ai:claude
+fn trusted_agent_type(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let canonical = agent_registry::normalize_agent_type(raw.to_string());
+    (canonical != "other").then_some(canonical)
 }
 
 /// Inverse of `shell_single_quote` for the narrow shape we write.
@@ -107296,3 +107322,8 @@ mod bug_1622_git_option_injection_tests;
 #[cfg(test)]
 #[path = "tests/bug_1624_shell_and_git_guard_tests.rs"]
 mod bug_1624_shell_and_git_guard_tests;
+
+// trace:BUG-1627 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1627_session_env_hardening_tests.rs"]
+mod bug_1627_session_env_hardening_tests;
