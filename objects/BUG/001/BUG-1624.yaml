@@ -8,8 +8,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T15:52:33.233412803Z
-modified_at: 2026-09-25T18:24:19.902982285Z
+modified_at: 2026-09-25T18:25:33.476939675Z
 req_type: Bug
+tags:
+- docs:impacted
 comments:
 - id: 01a0d944-d2b8-7893-b058-c72cdf4cce92
   author: joe
