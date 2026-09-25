@@ -8327,6 +8327,19 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_prompt: bool,
 
+        /// For a launch that actually executes: print launch-time diagnostics
+        /// (resolved vendor/client, role, spec/session/name, working
+        /// directory, prompt source and whether context was injected,
+        /// guidance files discovered, generated child argv with sensitive
+        /// values redacted, process registration, and child exit/result
+        /// information) before/around spawn. Distinct from `--no-exec`,
+        /// which previews and exits without launching; `--verbose` launches.
+        /// Never prints secrets, tokens, full prompt contents, or sensitive
+        /// environment values. Normal (non-verbose) output is unchanged.
+        // trace:TASK-1498 | ai:claude
+        #[clap(long)]
+        verbose: bool,
+
         /// Initial message to pass to the spawned Claude session.
         // trace:BUG-1294 | ai:claude
         #[clap(long, allow_hyphen_values = true)]
@@ -8451,6 +8464,19 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_prompt: bool,
 
+        /// For a launch that actually executes: print launch-time diagnostics
+        /// (resolved vendor/client, role, spec/session/name, working
+        /// directory, prompt source and whether context was injected,
+        /// guidance files discovered, generated child argv with sensitive
+        /// values redacted, process registration, and child exit/result
+        /// information) before/around spawn. Distinct from `--no-exec`,
+        /// which previews and exits without launching; `--verbose` launches.
+        /// Never prints secrets, tokens, full prompt contents, or sensitive
+        /// environment values. Normal (non-verbose) output is unchanged.
+        // trace:TASK-1498 | ai:claude
+        #[clap(long)]
+        verbose: bool,
+
         /// Initial message to pass to the spawned Codex session.
         // trace:BUG-1294 | ai:claude
         #[clap(long, allow_hyphen_values = true)]
@@ -8558,6 +8584,19 @@ pub enum AgentNewCommand {
         // trace:TASK-1467 | ai:claude
         #[clap(long)]
         show_prompt: bool,
+
+        /// For a launch that actually executes: print launch-time diagnostics
+        /// (resolved vendor/client, role, spec/session/name, working
+        /// directory, prompt source and whether context was injected,
+        /// guidance files discovered, generated child argv with sensitive
+        /// values redacted, process registration, and child exit/result
+        /// information) before/around spawn. Distinct from `--no-exec`,
+        /// which previews and exits without launching; `--verbose` launches.
+        /// Never prints secrets, tokens, full prompt contents, or sensitive
+        /// environment values. Normal (non-verbose) output is unchanged.
+        // trace:TASK-1498 | ai:claude
+        #[clap(long)]
+        verbose: bool,
 
         /// Initial message to pass to the spawned Antigravity session.
         // trace:BUG-1294 | ai:claude

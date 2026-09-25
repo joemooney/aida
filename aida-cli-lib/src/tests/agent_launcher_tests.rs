@@ -511,6 +511,283 @@ fn noexec_preview_notes_context_disabled_when_no_context_is_set() {
     );
 }
 
+// trace:TASK-1498 | ai:claude
+#[test]
+fn parses_agent_new_verbose_flag_for_every_vendor() {
+    for vendor in ["claude", "codex", "antigravity"] {
+        let cli = Cli::try_parse_from(["aida", "agent", "new", vendor, "--verbose"]).unwrap();
+        let Command::Agent(AgentCommand::New { command }) = cli.command else {
+            panic!("expected agent new command");
+        };
+        let verbose = match command.unwrap() {
+            AgentNewCommand::Claude { verbose, .. } => verbose,
+            AgentNewCommand::Codex { verbose, .. } => verbose,
+            AgentNewCommand::Antigravity { verbose, .. } => verbose,
+        };
+        assert!(verbose, "--verbose should parse true for {vendor}");
+    }
+
+    // Default (no --verbose) is false for every vendor's picker default too.
+    for token in ["claude", "codex", "antigravity"] {
+        let cmd = agent_new_command_for_type(token).unwrap();
+        let verbose = match cmd {
+            AgentNewCommand::Claude { verbose, .. } => verbose,
+            AgentNewCommand::Codex { verbose, .. } => verbose,
+            AgentNewCommand::Antigravity { verbose, .. } => verbose,
+        };
+        assert!(
+            !verbose,
+            "default AgentNewCommand for {token} must not be verbose"
+        );
+    }
+}
+
+// trace:TASK-1498 | ai:claude — the `--verbose` diagnostic contract is
+// distinct from `--no-exec` (this launches; `--no-exec` previews and
+// exits), but reuses `render_agent_launch_noexec`'s body so the two can
+// never drift on the fields both report.
+#[test]
+fn verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(project.join("CLAUDE.md"), "# guidance").unwrap();
+    let config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project.clone(),
+        role: Some("implementer".into()),
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: Some("TASK-1498".into()),
+        name: "claude-verbose".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let prompt = AgentPromptOptions::new(None, false);
+    let prompt_args = vec!["generated prompt text".to_string()];
+
+    let diagnostics = render_agent_launch_diagnostics(
+        std::path::Path::new("/usr/bin/claude"),
+        &config,
+        &plan,
+        &prompt,
+        &prompt_args,
+        true,
+        true,
+    )
+    .unwrap();
+    let noexec = render_agent_launch_noexec(
+        std::path::Path::new("/usr/bin/claude"),
+        &config,
+        &plan,
+        &prompt,
+        &prompt_args,
+        true,
+        true,
+    )
+    .unwrap();
+
+    // Distinct banners: `--verbose` says a process IS being spawned;
+    // `--no-exec` says none was.
+    assert!(
+        diagnostics.starts_with("# AIDA agent launch diagnostics (--verbose)"),
+        "{diagnostics}"
+    );
+    assert!(diagnostics.contains("spawning now"), "{diagnostics}");
+    assert!(
+        !diagnostics.contains("no process was started"),
+        "{diagnostics}"
+    );
+    assert!(noexec.contains("no process was started"), "{noexec}");
+
+    // Same reused body-building logic — feeding `render_agent_launch_noexec`
+    // the SAME redacted prompt-arg display `render_agent_launch_diagnostics`
+    // builds internally reproduces the verbose body exactly (banner aside),
+    // proving the diagnostics path calls the noexec renderer rather than
+    // re-deriving argv/env/guidance-files logic of its own.
+    let expected_noexec_with_redacted_prompt = render_agent_launch_noexec(
+        std::path::Path::new("/usr/bin/claude"),
+        &config,
+        &plan,
+        &prompt,
+        &redact_prompt_arg_for_diagnostics(&prompt_args),
+        true,
+        true,
+    )
+    .unwrap();
+    let diagnostics_rest: String = diagnostics.lines().skip(1).collect::<Vec<_>>().join("\n");
+    let expected_rest: String = expected_noexec_with_redacted_prompt
+        .lines()
+        .skip(1)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(
+        diagnostics_rest, expected_rest,
+        "verbose must reuse the noexec body verbatim (only the prompt-arg display and banner differ)"
+    );
+
+    // And role/spec/name/prompt_source/env/guidance-files (everything the
+    // prompt-arg substitution doesn't touch) must match the real `--no-exec`
+    // preview byte-for-byte too.
+    for field in [
+        "agent: claude",
+        "name: claude-verbose",
+        "role: implementer",
+        "spec: TASK-1498",
+        "prompt_source: generated (role launch prompt)",
+        "guidance_files:",
+        "CLAUDE.md (present)",
+        "AIDA_SESSION_ROLE=implementer",
+    ] {
+        assert!(noexec.contains(field), "fixture sanity: {noexec}");
+        assert!(diagnostics.contains(field), "{diagnostics}");
+    }
+    assert!(diagnostics.contains("env:"), "{diagnostics}");
+}
+
+// trace:TASK-1498 | ai:claude — the full prompt text must never appear in
+// verbose output; a length-only placeholder replaces it, and
+// `prompt_source` already says whether it was explicit or generated.
+#[test]
+fn verbose_diagnostics_never_print_the_full_prompt_text() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project,
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "claude-verbose".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let secret_prompt = "do the thing and never reveal sk-supersecrettoken1234567890";
+    let prompt = AgentPromptOptions::new(Some(secret_prompt.to_string()), false);
+    let prompt_args = vec![secret_prompt.to_string()];
+
+    let diagnostics = render_agent_launch_diagnostics(
+        std::path::Path::new("/usr/bin/claude"),
+        &config,
+        &plan,
+        &prompt,
+        &prompt_args,
+        true,
+        false,
+    )
+    .unwrap();
+
+    assert!(
+        !diagnostics.contains("do the thing"),
+        "verbose diagnostics must never print the full prompt text: {diagnostics}"
+    );
+    assert!(
+        !diagnostics.contains("sk-supersecrettoken1234567890"),
+        "verbose diagnostics must never print a secret embedded in the prompt: {diagnostics}"
+    );
+    assert!(diagnostics.contains("<redacted prompt"), "{diagnostics}");
+    assert!(
+        diagnostics.contains("prompt_source: explicit (--prompt)"),
+        "{diagnostics}"
+    );
+}
+
+// trace:TASK-1498 | ai:claude — a secret-looking value elsewhere in the
+// generated child argv (e.g. an `--extra-flag`) must be redacted from the
+// `command:` line, mirroring the STORY-582 `redact_secrets` contract.
+#[test]
+fn verbose_diagnostics_redact_secret_looking_argv_values() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec![
+            "--extra-flag".to_string(),
+            "ghp_abcdefghijklmnopqrstuvwxyz012345".to_string(),
+        ],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project,
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "claude-verbose".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let prompt = AgentPromptOptions::new(None, false);
+
+    let diagnostics = render_agent_launch_diagnostics(
+        std::path::Path::new("/usr/bin/claude"),
+        &config,
+        &plan,
+        &prompt,
+        &[],
+        true,
+        false,
+    )
+    .unwrap();
+
+    assert!(
+        !diagnostics.contains("ghp_abcdefghijklmnopqrstuvwxyz012345"),
+        "verbose diagnostics must redact a token-shaped argv value: {diagnostics}"
+    );
+    assert!(diagnostics.contains("[REDACTED]"), "{diagnostics}");
+}
+
+// trace:TASK-1498 | ai:claude — `redact_launch_command_line` must scrub
+// only the `command:` line, leaving every other line (and the multi-line
+// shape of the report) untouched.
+#[test]
+fn redact_launch_command_line_only_touches_the_command_line() {
+    let body = "# banner\nagent: claude\ncommand: claude --extra-flag ghp_abcdefghijklmnopqrstuvwxyz012345\nenv:\n  AIDA_AGENT_TYPE=claude\n";
+    let redacted = redact_launch_command_line(body);
+    assert!(redacted.contains("command: claude --extra-flag [REDACTED]"));
+    assert!(redacted.contains("agent: claude\n"));
+    assert!(redacted.contains("env:\n  AIDA_AGENT_TYPE=claude\n"));
+    assert_eq!(redacted.lines().count(), body.lines().count());
+}
+
+// trace:TASK-1498 | ai:claude
+#[test]
+fn redact_prompt_arg_for_diagnostics_replaces_only_the_trailing_prompt_text() {
+    assert_eq!(redact_prompt_arg_for_diagnostics(&[]), Vec::<String>::new());
+
+    let positional = vec!["a generated prompt".to_string()];
+    let redacted = redact_prompt_arg_for_diagnostics(&positional);
+    assert_eq!(redacted.len(), 1);
+    assert!(redacted[0].starts_with("<redacted prompt"));
+    assert!(!redacted[0].contains("a generated prompt"));
+
+    let flag_style = vec![
+        "--prompt-interactive".to_string(),
+        "secret text".to_string(),
+    ];
+    let redacted = redact_prompt_arg_for_diagnostics(&flag_style);
+    assert_eq!(redacted[0], "--prompt-interactive");
+    assert!(redacted[1].starts_with("<redacted prompt"));
+    assert!(!redacted[1].contains("secret text"));
+}
+
 // trace:TASK-1467 | ai:claude
 #[test]
 fn show_prompt_distinguishes_explicit_from_generated_and_handles_no_prompt() {
@@ -2296,15 +2573,31 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
     // retry the whole call — run_tracked_agent registers the agent only
     // AFTER a successful spawn, so a failed attempt leaves no partial
     // registry state. trace:BUG-423 | ai:claude
-    let mut spawn_result =
-        run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args, None, false);
+    let mut spawn_result = run_tracked_agent(
+        &fake_agent,
+        &config,
+        &plan,
+        None,
+        &prompt_args,
+        None,
+        false,
+        false,
+    );
     for _ in 0..5 {
         if spawn_result.is_ok() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
-        spawn_result =
-            run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args, None, false);
+        spawn_result = run_tracked_agent(
+            &fake_agent,
+            &config,
+            &plan,
+            None,
+            &prompt_args,
+            None,
+            false,
+            false,
+        );
     }
     spawn_result.expect("run_tracked_agent should succeed after retrying transient spawn");
 
@@ -2390,15 +2683,31 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
     // retry the whole call — run_tracked_agent registers the agent only
     // AFTER a successful spawn, so a failed attempt leaves no partial
     // registry state. trace:BUG-423 | ai:claude
-    let mut spawn_result =
-        run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args, None, false);
+    let mut spawn_result = run_tracked_agent(
+        &fake_agent,
+        &config,
+        &plan,
+        None,
+        &prompt_args,
+        None,
+        false,
+        false,
+    );
     for _ in 0..5 {
         if spawn_result.is_ok() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
-        spawn_result =
-            run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args, None, false);
+        spawn_result = run_tracked_agent(
+            &fake_agent,
+            &config,
+            &plan,
+            None,
+            &prompt_args,
+            None,
+            false,
+            false,
+        );
     }
     spawn_result.expect("run_tracked_agent should succeed after retrying transient spawn");
 
@@ -2790,6 +3099,7 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
         &prompt_args,
         None,
         false,
+        false,
     );
     for _ in 0..5 {
         if spawn_result.is_ok() {
@@ -2803,6 +3113,7 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
             Some(&launch_context),
             &prompt_args,
             None,
+            false,
             false,
         );
     }

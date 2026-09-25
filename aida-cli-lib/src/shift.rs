@@ -305,7 +305,9 @@ pub(crate) struct WaveOutcome {
 
 /// One shift wave. `pid == None` is a recorded launch intent whose spawn
 /// never happened (the tick was killed between tagging and spawning); the
-/// next tick reuses its batch (A4).
+/// next tick reuses its batch (A4). An intent whose wave DID start (the
+/// tick died before saving the pid) is adopted once its drain lock is seen
+/// live (TASK-1497).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct WaveRecord {
     pub batch: String,
@@ -705,11 +707,26 @@ pub(crate) enum LockView {
     Stale(u32),
 }
 
+/// Who holds a live drain lock: enough to recognise a shift wave whose pid
+/// was never recorded (TASK-1497).
+// trace:TASK-1497 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LockHolder {
+    pub pid: u32,
+    pub pid_start: Option<String>,
+    /// The command the drain recorded in its lock, e.g.
+    /// `queue work --auto-complete --batch shift-20260924-2210`.
+    pub command: String,
+}
+
 /// Everything the tick reads from the machine and the store. Gathered by
 /// [`gather_probes`] in production and built by hand in tests.
 #[derive(Debug, Clone)]
 pub(crate) struct Probes {
     pub lock: LockView,
+    /// The holder of a LIVE drain lock (`lock == Running`), else `None`.
+    // trace:TASK-1497 | ai:claude
+    pub lock_holder: Option<LockHolder>,
     /// A10: a live drain claim held by ANOTHER clone.
     pub foreign_claim: Option<String>,
     /// A3: where the persisted no-human acknowledgement was found.
@@ -1170,6 +1187,40 @@ fn prune_state(state: &mut ShiftState, now: DateTime<Utc>) {
     });
 }
 
+/// Does a drain-lock command name `batch` as its `--batch`?
+// trace:TASK-1497 | ai:claude
+fn lock_command_names_batch(command: &str, batch: &str) -> bool {
+    let words: Vec<&str> = command.split_whitespace().collect();
+    words.windows(2).any(|w| w[0] == "--batch" && w[1] == batch)
+}
+
+/// A4 kill window: a tick killed after the spawn but before the pid was
+/// saved leaves a pid-less intent while its wave runs. When the live drain
+/// lock is held by a drain of that intent's batch, the wave DID launch:
+/// adopt the holder's pid so the wave counts toward waves-per-day, the
+/// per-spec cap and progress settlement. Returns true when it adopted.
+// trace:TASK-1497 | ai:claude
+fn adopt_launched_intent(state: &mut ShiftState, p: &Probes) -> bool {
+    let (LockView::Running(_), Some(holder)) = (p.lock, &p.lock_holder) else {
+        return false;
+    };
+    let Some(intent) = state.pending_intent() else {
+        return false;
+    };
+    if !lock_command_names_batch(&holder.command, &intent.batch) {
+        return false;
+    }
+    let (at, specs) = (intent.at, intent.specs.clone());
+    if let Some(last) = state.waves.last_mut() {
+        last.pid = Some(holder.pid);
+        last.pid_start = holder.pid_start.clone();
+    }
+    for spec in specs {
+        state.spec_waves.entry(spec).or_default().push(at);
+    }
+    true
+}
+
 /// One tick over already-gathered inputs. Mutates `state` (the caller
 /// passes a clone on a dry run) and performs side effects only through
 /// `exec`, and never on a dry run.
@@ -1199,8 +1250,21 @@ pub(crate) fn tick_core(
         report.reaped = exec.reap();
     }
 
-    // 2. Breakers: prune, settle the last wave, resume on a queue change.
+    // 2. Breakers: prune, adopt a launched pid-less intent, settle the last
+    // wave, resume on a queue change.
     prune_state(state, now);
+    // trace:TASK-1497 | ai:claude
+    let adopted_probes;
+    let probes = if adopt_launched_intent(state, probes) {
+        // The adopted wave holds a live lock, so it is the live last wave.
+        adopted_probes = Probes {
+            last_wave_alive: true,
+            ..probes.clone()
+        };
+        &adopted_probes
+    } else {
+        probes
+    };
     let tripped = settle_last_wave(state, probes, now);
     if tripped.is_none() {
         if let Some(b) = &state.breaker {
@@ -1284,6 +1348,10 @@ pub(crate) fn tick_core(
             for spec in &sel.specs {
                 state.spec_waves.entry(spec.clone()).or_default().push(now);
             }
+            // TASK-1497: persist the pid at once, before the event, so a kill
+            // from here on cannot lose the launch record.
+            // trace:TASK-1497 | ai:claude
+            exec.save_state(state)?;
             report.launched = Some(ShiftLaunch {
                 batch,
                 specs: sel.specs.clone(),
@@ -1407,10 +1475,18 @@ fn gather_probes(
     state: &ShiftState,
     now: DateTime<Utc>,
 ) -> Probes {
-    let lock = match crate::drain_lock::probe_lock(project_root) {
-        crate::drain_lock::LockStatus::None => LockView::Free,
-        crate::drain_lock::LockStatus::Running(l) => LockView::Running(l.pid),
-        crate::drain_lock::LockStatus::Stale(l) => LockView::Stale(l.pid),
+    // trace:TASK-1497 | ai:claude
+    let (lock, lock_holder) = match crate::drain_lock::probe_lock(project_root) {
+        crate::drain_lock::LockStatus::None => (LockView::Free, None),
+        crate::drain_lock::LockStatus::Running(l) => (
+            LockView::Running(l.pid),
+            Some(LockHolder {
+                pid: l.pid,
+                pid_start: l.pid_start_time,
+                command: l.command,
+            }),
+        ),
+        crate::drain_lock::LockStatus::Stale(l) => (LockView::Stale(l.pid), None),
     };
     let foreign_claim = crate::coordination::live_foreign_lock_claim(
         &project_root.join(".aida-store"),
@@ -1514,6 +1590,7 @@ fn gather_probes(
     let (wave_vendor, wave_vendor_error) = resolve_wave_vendor(project_root);
     Probes {
         lock,
+        lock_holder,
         foreign_claim,
         no_human_ack: no_human_ack_source(project_root),
         budget: crate::runaway_seats::budget_evidence(
