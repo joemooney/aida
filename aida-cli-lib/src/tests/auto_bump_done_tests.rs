@@ -3771,6 +3771,10 @@ fn auto_bump_completes_with_unmet_stretch_and_records_debt() {
 #[test]
 fn auto_bump_required_still_holds_and_met_stretch_writes_no_debt() {
     let (_tmp, project_root, store_path) = init_test_project();
+    // BUG-1618: pin the ambient project root / TTY / session role and hold the
+    // env lock, so an inherited AIDA_SESSION_ROLE (or a sibling test swapping
+    // AIDA_* env mid-run) cannot change what the bump path sees.
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&project_root, None); // trace:BUG-1618 | ai:claude
     seed_spec_at(&store_path, "STORY-9386", "Done");
     mutate_spec(&store_path, "STORY-9386", |r| {
         r.description = "## Closure\n- [ ] required, open\n- [ ] reach (stretch)\n".to_string();

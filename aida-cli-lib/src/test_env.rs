@@ -309,6 +309,52 @@ mod tests {
         assert!(std::env::var(KEY).is_err());
     }
 
+    /// BUG-1618: the leased-worktree case, simulated without touching any real
+    /// store. A temp project root carries a roster that makes `joe` an advisor
+    /// (the shape a leased worktree's `.aida-store` symlink exposes). Pinned
+    /// through the ambient seam, that roster DOES grant authority to `joe`
+    /// (positive control: the seam really reaches the roster), and
+    /// `AmbientGuard::hermetic` over the same root does NOT: its fixed test
+    /// identity is absent from the roster, the role is cleared and stdin is
+    /// pinned to non-TTY.
+    // trace:BUG-1618 | ai:claude
+    #[test]
+    fn hermetic_guard_defeats_a_leased_advisor_roster() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        std::fs::write(
+            store.join("registry").join("team.toml"),
+            "[members]\njoe = \"advisor\"\n",
+        )
+        .unwrap();
+
+        // Positive control: the rostered user, resolved via the seam's root.
+        {
+            let _env = EnvVarsGuard::apply(&[
+                ("AIDA_USER", Some("joe")),
+                ("AIDA_SESSION_ROLE", None),
+                ("AIDA_ROLE_INSTANCE", None),
+                ("AIDA_AUTO_COMPLETE", None),
+                ("AIDA_AUTO_COMPLETE_TOKEN", None),
+            ]);
+            let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+                project_root: tmp.path().to_path_buf(),
+                stdin_is_terminal: false,
+            }));
+            let granted = crate::has_advisor_authority();
+            crate::test_ambient::replace(prev);
+            assert!(granted, "the fake roster must grant joe advisor authority");
+        }
+
+        let _ambient = AmbientGuard::hermetic(tmp.path(), None);
+        assert!(
+            !crate::has_advisor_authority(),
+            "the hermetic guard must not inherit the leased roster's advisor role"
+        );
+    }
+
     /// `reset` mutates the value without releasing the lock — used by
     /// tests that loop over many spellings for a single key.
     #[test]
