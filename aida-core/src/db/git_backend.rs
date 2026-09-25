@@ -54,11 +54,34 @@ pub(crate) struct SaveReport {
     /// Objects absent from the saved store that were kept because the store
     /// was not loaded with them (added concurrently, or no load snapshot).
     pub(crate) kept_unloaded: Vec<String>,
-    /// Specs in the saved store that were NOT written (or deleted) because
-    /// their object changed on disk after the load; the in-memory copies are
-    /// stale for these.
-    pub(crate) not_written: Vec<String>,
+    /// Specs this store did not change whose object changed on disk after
+    /// the load; they were not written, and the in-memory copies are stale.
+    pub(crate) stale_untouched: Vec<String>,
 }
+
+/// A whole-store save refused because specs it would write (or delete)
+/// changed on disk after the store was loaded. Nothing was written.
+/// Downcast from the `anyhow::Error` to detect it.
+// trace:BUG-1612 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoreConflictError {
+    /// The conflicting spec ids.
+    pub specs: Vec<String>,
+}
+
+impl std::fmt::Display for StoreConflictError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "refusing to save: {} changed on disk after this store was loaded, and this \
+             save changes {} too (a concurrent edit). Nothing was written; reload and retry.",
+            self.specs.join(", "),
+            if self.specs.len() == 1 { "it" } else { "them" }
+        )
+    }
+}
+
+impl std::error::Error for StoreConflictError {}
 
 /// What `update_atomically_tracked` wrote.
 // trace:BUG-1612 | ai:claude
@@ -736,173 +759,173 @@ impl GitBackend {
     }
 
     /// Whole-store save (the `DatabaseBackend::save` body), under the store
-    /// write lock, reporting the objects it kept because the store was not
-    /// loaded with them.
+    /// write lock.
+    ///
+    /// With a load snapshot (a store from `load()`), this is a per-spec
+    /// compare-and-swap, planned in full before anything is written:
+    /// - a spec whose file is unchanged since the snapshot is written;
+    /// - a spec whose file changed on disk after the snapshot (a concurrent
+    ///   edit), and that this store left untouched, is skipped: the disk copy
+    ///   is newer and nothing of the caller's is lost;
+    /// - a spec whose file changed on disk AND that this store also changed is
+    ///   a conflict: the save writes NOTHING and returns a
+    ///   [`StoreConflictError`], because writing would revert the concurrent
+    ///   edit and skipping would drop the caller's;
+    /// - an absent object is deleted only if the snapshot holds it unchanged.
+    ///
+    /// After writing, the snapshot is refreshed for every object written,
+    /// created or deleted, so the same store can be saved again. A store with
+    /// no snapshot deletes nothing, and a spec whose on-disk `modified_at` is
+    /// newer than the incoming copy is a conflict (TASK-1161).
     // trace:BUG-1612 | ai:claude
     pub(crate) fn save_reporting(&self, store: &RequirementsStore) -> Result<SaveReport> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         let _lock = self.lock_store()?;
-        // Save metadata
-        let meta = Self::extract_metadata(store);
-        self.save_metadata(&meta)?;
 
-        // Collect existing object files for deletion tracking
         let existing = object_store::list_objects(&self.objects_root)?;
         let existing_specs: std::collections::HashSet<String> =
             existing.iter().map(|(s, _)| s.clone()).collect();
 
-        // Track which specs are in the current store, plus the subset we
-        // actually had to write. With deterministic serde the on-disk YAML
-        // for an unchanged requirement matches what we'd serialize, so we
-        // compare-then-skip to avoid spurious writes (and the noisy commits
-        // they produce). trace:BUG-1-040 | ai:claude
+        let snapshot = store.loaded_objects.as_ref();
         let mut current_specs = std::collections::HashSet::new();
-        let mut written_specs: Vec<String> = Vec::new();
-        // Stale-write guard: a full-store save carries whole Requirement
-        // structs loaded at some earlier point. If the on-disk copy has a
-        // strictly NEWER `modified_at` than the incoming copy, a concurrent
-        // targeted write (e.g. `aida edit`) landed in between — overwriting
-        // would silently revert its core-field edits (tags/status/priority/
-        // title). Skip the stale spec and warn instead; the BUG-756 field
-        // preservation above/below only protects fields the caller never
-        // loaded, not fields it loaded an old value of.
-        // trace:TASK-1161 | ai:claude
-        let mut stale_skipped: Vec<String> = Vec::new();
+        let mut to_write: Vec<Requirement> = Vec::new();
+        let mut conflicts: Vec<String> = Vec::new();
+        let mut stale_untouched: Vec<String> = Vec::new();
+        // Specs whose in-memory copy already equals the (newer) disk copy.
+        let mut already_current: Vec<(String, u64)> = Vec::new();
         // CR-8: a spec with no on-disk object is being CREATED by this save
         // (findings / report / legacy full-store filing paths) — stamp its
         // filing provenance. Captured lazily, once per save.
         // trace:CR-8 | ai:claude
         let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
-        // BUG-1612: with a load snapshot, this save is a per-spec
-        // compare-and-swap. A spec whose file changed on disk since the load
-        // (a concurrent edit, whatever its `modified_at`), or that appeared
-        // after the load, is not written: the in-memory copy predates it.
-        // trace:BUG-1612 | ai:claude
-        let snapshot = store.loaded_objects.as_deref();
-        let mut changed_since_load: Vec<String> = Vec::new();
+
         for req in &store.requirements {
-            if let Some(ref spec_id) = req.spec_id {
-                current_specs.insert(spec_id.clone());
-                let disk_text = object_store::read_object_text(&self.objects_root, spec_id)?;
-                if let (Some(snapshot), Some(text)) = (snapshot, disk_text.as_deref()) {
-                    let unchanged = snapshot
-                        .get(spec_id)
-                        .is_some_and(|fp| *fp == object_store::content_fingerprint(text));
-                    if !unchanged {
-                        if serde_yaml::to_string(req)? != text {
-                            changed_since_load.push(spec_id.clone());
-                        }
-                        continue;
-                    }
-                }
-                let disk = disk_text
-                    .as_deref()
-                    .map(serde_yaml::from_str::<Requirement>);
-                let req_to_write = match disk {
-                    Some(Ok(disk)) => {
-                        if disk.modified_at > req.modified_at {
-                            stale_skipped.push(spec_id.clone());
-                            continue;
-                        }
-                        Self::preserve_full_save_only_fields(req.clone(), &disk)
-                    }
-                    // Absent (or unparseable, as before): this save creates it.
-                    _ => {
-                        let mut created = req.clone();
-                        if created.filed_at.is_none() {
-                            let p =
-                                filing_provenance.get_or_insert_with(crate::provenance::capture);
-                            crate::provenance::stamp_with(&mut created, p);
-                        }
-                        created
-                    }
+            let Some(ref spec_id) = req.spec_id else {
+                continue;
+            };
+            current_specs.insert(spec_id.clone());
+            let disk_text = object_store::read_object_text(&self.objects_root, spec_id)?;
+            if let Some(snapshot) = snapshot {
+                let loaded_fp = snapshot.get(spec_id);
+                let disk_fp = disk_text.as_deref().map(object_store::content_fingerprint);
+                let unchanged_since_load = match (loaded_fp, disk_fp) {
+                    (Some(l), Some(d)) => l == d,
+                    // New in this session and still absent: this save creates it.
+                    (None, None) => true,
+                    _ => false,
                 };
-                if object_store::write_object_if_changed(&self.objects_root, &req_to_write)? {
-                    written_specs.push(spec_id.clone());
+                if !unchanged_since_load {
+                    let mine = serde_yaml::to_string(req)?;
+                    if disk_text.as_deref() == Some(mine.as_str()) {
+                        already_current.push((spec_id.clone(), disk_fp.unwrap_or_default()));
+                    } else if loaded_fp
+                        .is_some_and(|l| l == object_store::content_fingerprint(&mine))
+                    {
+                        // Untouched by this caller; the disk copy is newer.
+                        stale_untouched.push(spec_id.clone());
+                    } else {
+                        conflicts.push(spec_id.clone());
+                    }
+                    continue;
                 }
             }
-        }
-        if !stale_skipped.is_empty() {
-            eprintln!(
-                "Warning: skipped {} stale spec(s) during full-store save: {} \
-                 (on-disk copy is newer than the copy being saved — a concurrent \
-                 edit landed after this store was loaded; re-load to pick it up)",
-                stale_skipped.len(),
-                stale_skipped.join(", ")
-            );
+            let disk = disk_text
+                .as_deref()
+                .map(serde_yaml::from_str::<Requirement>);
+            let req_to_write = match disk {
+                Some(Ok(disk)) => {
+                    // Stale-write guard (no snapshot): a strictly NEWER
+                    // on-disk `modified_at` means a concurrent targeted write
+                    // landed after this copy was taken. trace:TASK-1161
+                    if snapshot.is_none() && disk.modified_at > req.modified_at {
+                        conflicts.push(spec_id.clone());
+                        continue;
+                    }
+                    Self::preserve_full_save_only_fields(req.clone(), &disk)
+                }
+                // Absent (or unparseable, as before): this save creates it.
+                _ => {
+                    let mut created = req.clone();
+                    if created.filed_at.is_none() {
+                        let p = filing_provenance.get_or_insert_with(crate::provenance::capture);
+                        crate::provenance::stamp_with(&mut created, p);
+                    }
+                    created
+                }
+            };
+            to_write.push(req_to_write);
         }
 
-        // Delete object files that are no longer in the store.
-        //
-        // Safety: never delete a file we couldn't parse. `current_specs` is
-        // built from the in-memory store, which `load()` populates by
-        // skipping-and-warning on parse failures (see
-        // `object_store::load_all_objects`). An unparseable file is therefore
-        // absent from `current_specs` *not because the user deleted it* but
-        // because this binary couldn't read it — typically because a newer
-        // binary wrote a serde variant this one doesn't recognize. Deleting
-        // here silently destroys the other binary's work and is the
-        // exact failure mode BUG-96 documents (incident 2026-05-13: six
-        // STORY/VIS/CON/ADR/PRIN/TERM files removed by a single
-        // `aida add`). Skip-and-warn mirrors the load-side policy so the
-        // file survives until a binary that *can* parse it runs.
-        // trace:BUG-96 | ai:claude
-        //
-        // BUG-1612: never delete an object this store was not loaded with. A
-        // spec another writer added after the caller's `load()` is absent from
-        // the in-memory store but was never removed by the caller; deleting it
-        // silently destroys that writer's work. Only objects listed in the
-        // store's load snapshot (`loaded_objects`), unchanged since the load, are deletable; a store
-        // with no snapshot (built in memory, not loaded from this store)
-        // deletes nothing.
-        // trace:BUG-1612 | ai:claude
-        let mut deleted_specs: Vec<String> = Vec::new();
+        // Deletion plan. Safety: never delete a file we couldn't parse
+        // (BUG-96: a newer binary's serde variant would be destroyed), and
+        // never delete an object this store was not loaded with, or one that
+        // changed on disk after the load (BUG-1612: another writer's work).
+        // trace:BUG-96 trace:BUG-1612 | ai:claude
+        let mut to_delete: Vec<String> = Vec::new();
         let mut preserved_unparseable: Vec<String> = Vec::new();
         let mut kept_unloaded: Vec<String> = Vec::new();
         for spec_id in &existing_specs {
-            if !current_specs.contains(spec_id) {
-                // Deletable only if loaded AND unchanged since the load.
-                let loaded_fp = snapshot.and_then(|s| s.get(spec_id));
-                let Some(loaded_fp) = loaded_fp else {
-                    kept_unloaded.push(spec_id.clone());
-                    continue;
-                };
-                let now_fp = object_store::read_object_text(&self.objects_root, spec_id)?
-                    .map(|t| object_store::content_fingerprint(&t));
-                if now_fp != Some(*loaded_fp) {
-                    changed_since_load.push(spec_id.clone());
-                    continue;
+            if current_specs.contains(spec_id) {
+                continue;
+            }
+            let Some(loaded_fp) = snapshot.and_then(|s| s.get(spec_id)) else {
+                kept_unloaded.push(spec_id.clone());
+                continue;
+            };
+            let Some(text) = object_store::read_object_text(&self.objects_root, spec_id)? else {
+                continue;
+            };
+            if object_store::content_fingerprint(&text) != loaded_fp {
+                conflicts.push(spec_id.clone());
+                continue;
+            }
+            if serde_yaml::from_str::<Requirement>(&text).is_err() {
+                preserved_unparseable.push(spec_id.clone());
+                continue;
+            }
+            to_delete.push(spec_id.clone());
+        }
+
+        if !conflicts.is_empty() {
+            conflicts.sort();
+            return Err(StoreConflictError { specs: conflicts }.into());
+        }
+
+        // ---- write phase ----
+        let meta = Self::extract_metadata(store);
+        self.save_metadata(&meta)?;
+        let mut written_specs: Vec<String> = Vec::new();
+        for req in &to_write {
+            let spec_id = req.spec_id.as_deref().unwrap_or_default();
+            if object_store::write_object_if_changed(&self.objects_root, req)? {
+                written_specs.push(spec_id.to_string());
+            }
+            if let Some(snapshot) = snapshot {
+                if let Some(text) = object_store::read_object_text(&self.objects_root, spec_id)? {
+                    snapshot.set(spec_id, object_store::content_fingerprint(&text));
                 }
-                if object_store::read_object(&self.objects_root, spec_id).is_err() {
-                    preserved_unparseable.push(spec_id.clone());
-                    continue;
-                }
-                let _ = object_store::delete_object(&self.objects_root, spec_id);
-                deleted_specs.push(spec_id.clone());
             }
         }
+        if let Some(snapshot) = snapshot {
+            for (spec_id, fp) in &already_current {
+                snapshot.set(spec_id, *fp);
+            }
+        }
+        let mut deleted_specs: Vec<String> = Vec::new();
+        for spec_id in &to_delete {
+            let _ = object_store::delete_object(&self.objects_root, spec_id);
+            if let Some(snapshot) = snapshot {
+                snapshot.remove(spec_id);
+            }
+            deleted_specs.push(spec_id.clone());
+        }
+
         if !preserved_unparseable.is_empty() {
             eprintln!(
                 "Warning: preserved {} unparseable object file(s) during save: {} \
                  (a binary that can parse them will pick them up)",
                 preserved_unparseable.len(),
                 preserved_unparseable.join(", ")
-            );
-        }
-        if !changed_since_load.is_empty() {
-            eprintln!(
-                "Warning: skipped {} spec(s) during full-store save: {} \
-                 (changed on disk after this store was loaded — a concurrent \
-                 edit; re-load to pick it up)",
-                changed_since_load.len(),
-                changed_since_load.join(", ")
-            );
-        }
-        if !kept_unloaded.is_empty() && snapshot.is_some() {
-            eprintln!(
-                "Note: kept {} object(s) added after this store was loaded: {}",
-                kept_unloaded.len(),
-                kept_unloaded.join(", ")
             );
         }
 
@@ -919,12 +942,10 @@ impl GitBackend {
         };
         self.auto_commit(&message);
         kept_unloaded.sort();
-        let mut not_written = changed_since_load;
-        not_written.extend(stale_skipped);
-        not_written.sort();
+        stale_untouched.sort();
         Ok(SaveReport {
             kept_unloaded,
-            not_written,
+            stale_untouched,
         })
     }
 
@@ -1169,6 +1190,21 @@ impl GitBackend {
             let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
             self.auto_commit_paths(&message, &path_refs);
         }
+        // Keep the returned store's load snapshot current, so a caller that
+        // later saves it does not mistake these writes for concurrent edits.
+        if let Some(snapshot) = store.loaded_objects.as_ref() {
+            for req in &summary.written {
+                let Some(sid) = req.spec_id.as_deref() else {
+                    continue;
+                };
+                if let Some(text) = object_store::read_object_text(&self.objects_root, sid)? {
+                    snapshot.set(sid, object_store::content_fingerprint(&text));
+                }
+            }
+            for (sid, _) in &removed {
+                snapshot.remove(sid);
+            }
+        }
         Ok((store, summary))
     }
 }
@@ -1190,7 +1226,7 @@ impl DatabaseBackend for GitBackend {
         let (requirements, snapshot) =
             object_store::load_all_objects_with_fingerprints(&self.objects_root)?;
         let mut store = self.assemble_store(meta, requirements);
-        store.loaded_objects = Some(std::sync::Arc::new(snapshot));
+        store.loaded_objects = Some(crate::models::LoadSnapshot::new(snapshot));
         Ok(store)
     }
 
@@ -1873,7 +1909,14 @@ mod tests {
                 _ => {}
             }
         }
-        backend.save(&stale_store).unwrap();
+        // BUG-1612: the stale copy of TASK-100 was edited AND changed on disk
+        // after the load, so the save is a conflict: it refuses and writes
+        // nothing (not even the sibling), instead of dropping either edit.
+        let err = backend.save(&stale_store).unwrap_err();
+        let conflict = err
+            .downcast_ref::<StoreConflictError>()
+            .expect("a typed store conflict");
+        assert_eq!(conflict.specs, vec!["TASK-100".to_string()]);
 
         // The concurrent edit survives — nothing from the stale copy landed.
         let after = backend
@@ -1896,8 +1939,20 @@ mod tests {
             base + chrono::Duration::seconds(10),
             "on-disk modified_at must stay the newer edit's timestamp"
         );
+        let sib = backend
+            .get_requirement_by_spec_id("TASK-101")
+            .unwrap()
+            .unwrap();
+        assert_eq!(sib.title, "Sibling", "a refused save writes nothing");
 
-        // The non-stale sibling still writes through the same save.
+        // Reload and retry: the sibling edit lands.
+        let mut fresh_store = backend.load().unwrap();
+        for r in fresh_store.requirements.iter_mut() {
+            if r.spec_id.as_deref() == Some("TASK-101") {
+                r.title = "Sibling updated".into();
+            }
+        }
+        backend.save(&fresh_store).unwrap();
         let sib = backend
             .get_requirement_by_spec_id("TASK-101")
             .unwrap()
@@ -3316,48 +3371,194 @@ mod tests {
     }
 
     /// A whole-store save of a stale snapshot never reverts a concurrent edit
-    /// (even one that kept `modified_at`), never deletes a spec that was
-    /// concurrently edited, and still writes the caller's own changes.
+    /// (even one that kept `modified_at`) to a spec it did not touch, and
+    /// still writes its own changes.
     // trace:BUG-1612 | ai:claude
     #[test]
-    fn bug1612_stale_save_is_compare_and_swap_per_spec() {
+    fn bug1612_stale_save_skips_untouched_concurrent_edits() {
         let (_dir, root, backend, seeded) = bug1612_git_store(3);
         let objects = root.join("objects");
         let mut stale = backend.load().unwrap();
-
-        // Concurrent edits after the load, modified_at untouched.
         backend
             .update_spec_atomically(&seeded[0], |r| r.title = "concurrent".into())
             .unwrap();
-        backend
-            .update_spec_atomically(&seeded[1], |r| r.title = "concurrent 2".into())
-            .unwrap();
-
-        // The stale caller edits TASK-3, and removes TASK-2 (edited meanwhile).
         for r in stale.requirements.iter_mut() {
             if r.spec_id.as_deref() == Some("TASK-3") {
                 r.title = "mine".into();
             }
         }
-        stale
-            .requirements
-            .retain(|r| r.spec_id.as_deref() != Some("TASK-2"));
         let report = backend.save_reporting(&stale).unwrap();
-
         assert_eq!(
             object_store::read_object(&objects, "TASK-1").unwrap().title,
-            "concurrent",
-            "a stale save must not revert a concurrent edit"
-        );
-        assert_eq!(
-            object_store::read_object(&objects, "TASK-2").unwrap().title,
-            "concurrent 2",
-            "a stale save must not delete a concurrently edited spec"
+            "concurrent"
         );
         assert_eq!(
             object_store::read_object(&objects, "TASK-3").unwrap().title,
             "mine"
         );
-        assert_eq!(report.not_written, vec!["TASK-1", "TASK-2"]);
+        assert_eq!(report.stale_untouched, vec!["TASK-1"]);
+    }
+
+    /// Editing, or removing, a spec that changed on disk after the load is a
+    /// conflict: the save returns a typed error and writes nothing.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_stale_save_conflict_is_an_error_and_writes_nothing() {
+        let (_dir, root, backend, seeded) = bug1612_git_store(3);
+        let objects = root.join("objects");
+        let mut stale = backend.load().unwrap();
+        backend
+            .update_spec_atomically(&seeded[0], |r| r.title = "concurrent 1".into())
+            .unwrap();
+        backend
+            .update_spec_atomically(&seeded[1], |r| r.title = "concurrent 2".into())
+            .unwrap();
+        for r in stale.requirements.iter_mut() {
+            match r.spec_id.as_deref() {
+                Some("TASK-1") => r.title = "clobber".into(),
+                Some("TASK-3") => r.title = "mine".into(),
+                _ => {}
+            }
+        }
+        stale
+            .requirements
+            .retain(|r| r.spec_id.as_deref() != Some("TASK-2"));
+        let err = backend.save(&stale).unwrap_err();
+        let conflict = err.downcast_ref::<StoreConflictError>().unwrap();
+        assert_eq!(conflict.specs, vec!["TASK-1", "TASK-2"]);
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-1").unwrap().title,
+            "concurrent 1"
+        );
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-2").unwrap().title,
+            "concurrent 2"
+        );
+        assert_eq!(
+            object_store::read_object(&objects, "TASK-3").unwrap().title,
+            "Spec 3",
+            "a refused save writes nothing"
+        );
+    }
+
+    /// One loaded store saved repeatedly (the aida-server pattern): every
+    /// save lands, including repeated edits of one spec, a spec created in
+    /// the session and then edited, and one created and then deleted.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_repeated_saves_of_one_loaded_store_all_land() {
+        let (_dir, root, backend, _) = bug1612_git_store(2);
+        let objects = root.join("objects");
+        let title = |sid: &str| object_store::read_object(&objects, sid).unwrap().title;
+        let mut store = backend.load().unwrap();
+        let edit = |store: &mut RequirementsStore, sid: &str, t: &str| {
+            let r = store
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some(sid))
+                .unwrap();
+            r.title = t.into();
+        };
+
+        // Second and third edits to the same spec.
+        edit(&mut store, "TASK-1", "first");
+        backend.save(&store).unwrap();
+        edit(&mut store, "TASK-1", "second");
+        backend.save(&store).unwrap();
+        edit(&mut store, "TASK-1", "third");
+        backend.save(&store).unwrap();
+        assert_eq!(title("TASK-1"), "third");
+
+        // Create in session, then edit.
+        let mut fresh = Requirement::new("created".into(), "d".into());
+        fresh.spec_id = Some("TASK-10".into());
+        store.requirements.push(fresh);
+        backend.save(&store).unwrap();
+        edit(&mut store, "TASK-10", "created then edited");
+        backend.save(&store).unwrap();
+        assert_eq!(title("TASK-10"), "created then edited");
+
+        // Create in session, then delete.
+        let mut doomed = Requirement::new("doomed".into(), "d".into());
+        doomed.spec_id = Some("TASK-11".into());
+        store.requirements.push(doomed);
+        backend.save(&store).unwrap();
+        assert!(object_store::object_exists(&objects, "TASK-11").unwrap());
+        store
+            .requirements
+            .retain(|r| r.spec_id.as_deref() != Some("TASK-11"));
+        backend.save(&store).unwrap();
+        assert!(!object_store::object_exists(&objects, "TASK-11").unwrap());
+
+        // A clone has its own snapshot: saving a clone does not make the
+        // original's stale copy look current.
+        let mut original = backend.load().unwrap();
+        let mut clone = original.clone();
+        edit(&mut clone, "TASK-2", "from clone");
+        backend.save(&clone).unwrap();
+        edit(&mut original, "TASK-2", "from original");
+        assert!(backend
+            .save(&original)
+            .unwrap_err()
+            .downcast_ref::<StoreConflictError>()
+            .is_some());
+        assert_eq!(title("TASK-2"), "from clone");
+    }
+
+    /// After `update_atomically` returns, saving the returned store is not
+    /// mistaken for a concurrent edit.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_store_returned_by_atomic_update_can_be_saved() {
+        let (_dir, root, backend, _) = bug1612_git_store(1);
+        let mut store = backend
+            .update_atomically(|s| s.requirements[0].title = "atomic".into())
+            .unwrap();
+        store.requirements[0].title = "then saved".into();
+        backend.save(&store).unwrap();
+        assert_eq!(
+            object_store::read_object(&root.join("objects"), "TASK-1")
+                .unwrap()
+                .title,
+            "then saved"
+        );
+    }
+
+    /// The store write lock file is empty and never staged, even in a store
+    /// with no `.gitignore` and a whole-tree `git add -A .` (db sync /
+    /// auto-push). It is excluded from git the first time it is taken.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_lock_file_is_never_staged() {
+        let (_dir, root, backend, _) = bug1612_git_store(1);
+        assert!(!root.join(".gitignore").exists());
+        let mut r = Requirement::new("more".into(), "d".into());
+        r.spec_id = Some("TASK-2".into());
+        backend.add_requirement(r).unwrap();
+        let lock = root.join(".aida").join("store-write.lock");
+        assert!(lock.exists());
+        assert_eq!(
+            std::fs::metadata(&lock).unwrap().len(),
+            0,
+            "lock file stays empty"
+        );
+
+        let git = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .unwrap();
+            String::from_utf8(out.stdout).unwrap()
+        };
+        git(&["add", "-A", "."]);
+        git(&["commit", "-q", "-m", "sync"]);
+        let tracked = git(&["ls-files"]);
+        assert!(
+            !tracked.contains("store-write.lock"),
+            "the lock file must never be committed: {tracked}"
+        );
+        assert!(git(&["status", "--porcelain"]).trim().is_empty());
     }
 }

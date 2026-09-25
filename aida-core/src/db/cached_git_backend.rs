@@ -772,7 +772,7 @@ impl DatabaseBackend for CachedGitBackend {
         let _lock = self.inner.lock_store()?;
         let report = self.inner.save_reporting(store)?;
         let head = self.current_head_sha();
-        if report.kept_unloaded.is_empty() && report.not_written.is_empty() {
+        if report.kept_unloaded.is_empty() && report.stale_untouched.is_empty() {
             self.with_cache_schema_retry("rebuild cache after save", || {
                 self.cache.rebuild_from_store(store, &head)
             })?;
@@ -2064,5 +2064,57 @@ mod tests {
         backend.save(&stale).unwrap();
         assert!(crate::object_store::object_exists(&objects, "TASK-2").unwrap());
         assert_eq!(cached_status(&backend, late_id), "Draft");
+    }
+
+    /// BUG-1612: the aida-server pattern: one store loaded once and saved
+    /// after every mutation through a boxed backend. Every mutation lands on
+    /// disk and in the cache.
+    // trace:BUG-1612 | ai:claude
+    #[test]
+    fn bug1612_server_style_repeated_saves_all_land() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend: Box<dyn DatabaseBackend> =
+            Box::new(CachedGitBackend::open(&store_root, &cache_path).unwrap());
+        backend
+            .add_requirement(sample_req("TASK-1", "one"))
+            .unwrap();
+        let mut store = backend.load().unwrap();
+        let objects = store_root.join("objects");
+
+        for (i, status) in ["Approved", "In Progress", "Completed"].iter().enumerate() {
+            store.requirements[0].title = format!("edit {i}");
+            store.requirements[0].set_status_from_str(status);
+            backend.save(&store).unwrap();
+            assert_eq!(
+                crate::object_store::read_object(&objects, "TASK-1")
+                    .unwrap()
+                    .title,
+                format!("edit {i}")
+            );
+        }
+        let created = sample_req("TASK-2", "created");
+        let created_id = created.id;
+        store.requirements.push(created);
+        backend.save(&store).unwrap();
+        store.requirements[1].title = "created then edited".into();
+        backend.save(&store).unwrap();
+        store.requirements.retain(|r| r.id != created_id);
+        backend.save(&store).unwrap();
+        assert!(!crate::object_store::object_exists(&objects, "TASK-2").unwrap());
+        assert_eq!(
+            cached_status(&backend_as_cached(&*backend), store.requirements[0].id),
+            "Completed"
+        );
+    }
+
+    fn backend_as_cached(b: &dyn DatabaseBackend) -> CachedGitBackend {
+        CachedGitBackend::open(
+            b.path(),
+            &b.path().parent().unwrap().join(".aida").join("cache.db"),
+        )
+        .unwrap()
     }
 }

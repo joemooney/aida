@@ -171,6 +171,20 @@ pass "aida init --distributed creates worktree layout"
 git worktree list 2>/dev/null | grep -q "aida-store" || fail "aida-store branch not in worktree list"
 pass ".aida-store/ is a git worktree on orphan branch"
 
+# BUG-1612: the store write lock (.aida/store-write.lock) is taken by every
+# store write and must never be committed, even by a whole-tree `git add -A .`
+# (db sync / auto-push), in a freshly initialized store.
+AIDA_SESSION_ROLE=advisor $AIDA add --title "lock staging probe" --type task --status approved >/dev/null 2>&1 || fail "BUG-1612: add failed"
+[ -f "$PROJ_DIR/.aida-store/.aida/store-write.lock" ] || fail "BUG-1612: store write lock was not taken"
+$AIDA db sync >/dev/null 2>&1 || true
+git -C "$PROJ_DIR/.aida-store" add -A . >/dev/null 2>&1
+git -C "$PROJ_DIR/.aida-store" commit -q -m "sync probe" >/dev/null 2>&1 || true
+if git -C "$PROJ_DIR/.aida-store" ls-files | grep -q "store-write.lock"; then
+  fail "BUG-1612: store-write.lock was committed to the store"
+fi
+[ ! -s "$PROJ_DIR/.aida-store/.aida/store-write.lock" ] || fail "BUG-1612: store lock file is not empty"
+pass "BUG-1612: init + add + sync never stage the store write lock"
+
 cd "$PROJECT_ROOT"
 
 # ============================================================================

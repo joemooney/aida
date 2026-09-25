@@ -5143,12 +5143,63 @@ pub struct RequirementsStore {
     /// deletes an absent object ONLY when it is listed here unchanged (the
     /// caller loaded it and then removed it), and it skips writing a spec
     /// whose file changed on disk since the load (a concurrent edit it would
-    /// otherwise revert). `None` (a store not loaded from a git store) deletes
-    /// nothing. Runtime-only; never serialized.
+    /// otherwise revert). Each successful save refreshes it for the objects it
+    /// wrote, created and deleted, so one loaded store can be saved repeatedly.
+    /// `None` (a store not loaded from a git store) deletes nothing.
+    /// Runtime-only; never serialized.
     // trace:BUG-1612 | ai:claude
     #[serde(skip)]
     #[ts(skip)]
-    pub loaded_objects: Option<std::sync::Arc<std::collections::BTreeMap<String, u64>>>,
+    pub loaded_objects: Option<LoadSnapshot>,
+}
+
+/// Load snapshot of a git-canonical store: object id -> fingerprint of the
+/// object file's text as last loaded or written through this store.
+///
+/// Interior-mutable so `save(&store)` can refresh it after a write; a clone is
+/// a deep copy, so two clones of one store never share (and corrupt) each
+/// other's view of what is on disk.
+// trace:BUG-1612 | ai:claude
+#[derive(Default)]
+pub struct LoadSnapshot(std::sync::Mutex<std::collections::BTreeMap<String, u64>>);
+
+impl LoadSnapshot {
+    pub fn new(map: std::collections::BTreeMap<String, u64>) -> Self {
+        Self(std::sync::Mutex::new(map))
+    }
+
+    fn map(&self) -> std::sync::MutexGuard<'_, std::collections::BTreeMap<String, u64>> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Fingerprint recorded for `id`, if the store saw that object.
+    pub fn get(&self, id: &str) -> Option<u64> {
+        self.map().get(id).copied()
+    }
+
+    /// Record that `id` now holds content with fingerprint `fp`.
+    pub fn set(&self, id: &str, fp: u64) {
+        self.map().insert(id.to_string(), fp);
+    }
+
+    /// Record that `id` no longer exists.
+    pub fn remove(&self, id: &str) {
+        self.map().remove(id);
+    }
+}
+
+impl Clone for LoadSnapshot {
+    fn clone(&self) -> Self {
+        Self::new(self.map().clone())
+    }
+}
+
+impl std::fmt::Debug for LoadSnapshot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LoadSnapshot({} objects)", self.map().len())
+    }
 }
 
 /// Wrapper for Arc<dyn Dispenser> that implements Debug and Clone.

@@ -42,14 +42,27 @@ impl ServerState {
     /// Save the current store to disk and update mtime to prevent unnecessary reloads.
     /// Uses block_in_place for PostgreSQL compatibility (sync postgres crate can't run
     /// inside a Tokio async context without this).
+    ///
+    /// A git-store save that conflicts with a concurrent on-disk edit writes
+    /// nothing and fails (BUG-1612). The in-memory store is then stale, so it
+    /// is reloaded from disk and the request fails with `ABORTED`: the caller
+    /// retries against the current state instead of losing the edit silently.
+    // trace:BUG-1612 | ai:claude
     async fn save(&self) -> Result<(), Status> {
-        let store = self.store.read().await;
-        let backend = &self.backend;
-        tokio::task::block_in_place(|| {
-            backend
-                .save(&store)
-                .map_err(|e| Status::internal(format!("Failed to save: {}", e)))
-        })?;
+        let result = {
+            let store = self.store.read().await;
+            let backend = &self.backend;
+            tokio::task::block_in_place(|| backend.save(&store))
+        };
+        if let Err(e) = result {
+            if e.downcast_ref::<aida_core::StoreConflictError>().is_some() {
+                if let Err(reload_err) = self.reload().await {
+                    tracing::warn!("Reload after save conflict failed: {}", reload_err);
+                }
+                return Err(Status::aborted(format!("{e}")));
+            }
+            return Err(Status::internal(format!("Failed to save: {}", e)));
+        }
         self.mark_saved().await;
         Ok(())
     }

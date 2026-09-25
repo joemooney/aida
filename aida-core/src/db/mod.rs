@@ -39,7 +39,7 @@ pub use cache_lock::{
 #[cfg(feature = "native")]
 pub use cached_git_backend::CachedGitBackend;
 #[cfg(feature = "native")]
-pub use git_backend::GitBackend;
+pub use git_backend::{GitBackend, StoreConflictError};
 // BUG-675: the queue-user case-fold resolver, exposed so the aida-cli statusline
 // `queue_depth` path can resolve identity IDENTICALLY to `aida queue list`.
 #[cfg(feature = "native")]

@@ -1,8 +1,11 @@
 //! Store write lock for the git-canonical requirements store.
 //!
 //! Every write to a git store's `objects/` tree and `metadata.yaml` runs under
-//! one advisory file lock at `<store>/.aida/store-write.lock` (the store's
-//! `.gitignore` already ignores `.aida/*.lock`). Holding it for the whole
+//! one advisory file lock at `<store>/.aida/store-write.lock`. The file is
+//! always empty (it is never rewritten, so it never shows up as a change),
+//! and `.aida/*.lock` is excluded from git in every store the lock is taken
+//! in: via the store `.gitignore` where present, else the store worktree's
+//! `info/exclude`, so `git add -A` can never commit it. Holding it for the whole
 //! read-modify-write window turns a per-spec update into a compare-and-swap:
 //! the writer re-reads the object under the lock, so no other lock-respecting
 //! writer can land between that read and the write.
@@ -19,7 +22,6 @@ use anyhow::{Context, Result};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -74,6 +76,35 @@ fn timeout() -> Duration {
     Duration::from_secs(secs)
 }
 
+/// Store roots whose lock exclusion is already confirmed in this process.
+static EXCLUDED: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Make sure `.aida/*.lock` can never be committed from the store at `root`.
+/// Checked once per process per store: a `.gitignore` line is enough (no git
+/// call); otherwise the pattern is added to the worktree's `info/exclude`. A
+/// directory that is not a git worktree root yet is re-checked next time.
+// trace:BUG-1612 | ai:claude
+fn ensure_lock_excluded(root: &Path) {
+    let key = lock_key(root);
+    let mut done = EXCLUDED.lock().unwrap_or_else(|p| p.into_inner());
+    if done.contains(&key) {
+        return;
+    }
+    let ignored = std::fs::read_to_string(root.join(".gitignore"))
+        .map(|g| g.lines().any(|l| l.trim() == ".aida/*.lock"))
+        .unwrap_or(false);
+    if ignored {
+        done.push(key);
+        return;
+    }
+    if !root.join(".git").exists() {
+        return;
+    }
+    if crate::git_ops::ensure_store_lock_excluded(root).is_ok() {
+        done.push(key);
+    }
+}
+
 /// Acquire the store write lock for the git store rooted at `root`.
 // trace:BUG-1612 | ai:claude
 pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
@@ -95,7 +126,8 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
     let dir = root.join(".aida");
     std::fs::create_dir_all(&dir).with_context(|| format!("Failed to create {}", dir.display()))?;
     let path = dir.join(STORE_WRITE_LOCK_FILE);
-    let mut file = OpenOptions::new()
+    ensure_lock_excluded(root);
+    let file = OpenOptions::new()
         .create(true)
         .read(true)
         .write(true)
@@ -111,15 +143,11 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
             Ok(()) => break,
             Err(e) if crate::file_lock::is_lock_contended(&e) => {
                 if start.elapsed() >= limit {
-                    let mut holder = String::new();
-                    let _ = file.read_to_string(&mut holder);
-                    let holder = holder.trim();
                     anyhow::bail!(
-                        "Timed out after {}s waiting for the store write lock {} (held by: {}). \
+                        "Timed out after {}s waiting for the store write lock {}. \
                          Another AIDA command is writing the store; retry when it finishes.",
                         limit.as_secs(),
-                        path.display(),
-                        if holder.is_empty() { "unknown" } else { holder }
+                        path.display()
                     );
                 }
                 std::thread::sleep(Duration::from_millis(20));
@@ -131,16 +159,6 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
             }
         }
     }
-
-    // Diagnostic holder record; the lock itself is the flock, not the text.
-    let _ = file.set_len(0);
-    let _ = file.seek(SeekFrom::Start(0));
-    let _ = writeln!(
-        file,
-        "pid {} since {}",
-        std::process::id(),
-        chrono::Utc::now().to_rfc3339()
-    );
 
     HELD.with(|held| held.borrow_mut().insert(key.clone(), 1));
     Ok(StoreWriteGuard {
