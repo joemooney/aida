@@ -211,6 +211,62 @@ pub(crate) fn read_receipts(
     out
 }
 
+/// Unread mail for one recipient: how many, and the oldest one's timestamp
+/// (epoch millis).
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RecipientUnread {
+    pub(crate) count: i64,
+    pub(crate) oldest_ts: i64,
+}
+
+/// PURE: per agent recipient, the unread messages in an already-merged
+/// (`merge_dedup`) mailbox, measured against each recipient's read
+/// watermark. Deleted, retracted and archived messages never count; mail to a
+/// non-agent recipient is not per-seat mail.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn unread_by_recipient(
+    merged: &[Message],
+    watermarks: &std::collections::HashMap<String, i64>,
+) -> std::collections::BTreeMap<String, RecipientUnread> {
+    let mut out: std::collections::BTreeMap<String, RecipientUnread> = Default::default();
+    for m in merged {
+        if m.deleted || m.retracted || m.archived {
+            continue;
+        }
+        let aida_core::mailbox::Recipient::Agent(to) = &m.to else {
+            continue;
+        };
+        if m.timestamp <= watermarks.get(to).copied().unwrap_or(0) {
+            continue;
+        }
+        let slot = out.entry(to.clone()).or_insert(RecipientUnread {
+            count: 0,
+            oldest_ts: m.timestamp,
+        });
+        slot.count += 1;
+        slot.oldest_ts = slot.oldest_ts.min(m.timestamp);
+    }
+    out
+}
+
+/// Per recipient, the unread mail read the same way the `when` predicate
+/// snapshot reads it (local + canonical layers through `merge_dedup`, then
+/// the read watermarks). Unlike the snapshot, a read failure is an error: an
+/// unattended escalation must not mistake an unreadable mailbox for an empty
+/// one.
+// trace:TASK-1492 | ai:claude
+pub(crate) fn oldest_unread_by_recipient(
+    project_root: &Path,
+    store_root: &Path,
+) -> Result<std::collections::BTreeMap<String, RecipientUnread>> {
+    let local = read_local_messages(project_root)?;
+    let canonical = read_canonical_messages(store_root)?;
+    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
+    let watermarks = read_all_watermarks(project_root)?;
+    Ok(unread_by_recipient(&merged, &watermarks))
+}
+
 /// Read every recorded read-watermark, keyed by agent id. Absent dir → empty.
 pub(crate) fn read_all_watermarks(
     project_root: &Path,

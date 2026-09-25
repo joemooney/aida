@@ -301,3 +301,34 @@ cargo test -p aida-cli-lib --lib shift
 
 - Builds on: SPIKE-82, STORY-1226, BUG-538, STORY-638, STORY-1462, TASK-1298
 - See also: docs/spikes/2026-09-18-spike-82-night-shift-post-mortem.md
+
+## Slice 3 (TASK-1492): re-drive, mail latency (cold-boot deferred)
+
+<!-- trace:TASK-1492 | ai:claude -->
+
+- **A5**: `redrive` is read only from the local layer (`~/.aida/shift-local.toml`,
+  beside `enabled`); a committed `redrive` is ignored. Default off; dry-run
+  prints `re-drive: off (ADR-26 default)`.
+- **A6**: `events::read_redrive_history_strict` folds `events.jsonl.1` and
+  `events.jsonl`; it errors when `AIDA_EVENTS_DISABLE` is truthy, a present
+  file is unreadable, or neither file exists. That error fails the
+  `redrive-evidence` guard (no re-drive, no reclassification that tick).
+  `supervisor::plan_redrives` is pure; `apply_cap` carries out the ADR-26 cap
+  branch (needs-human tag, `ReclassifiedNeedsHuman`, cap finding). The manual
+  `aida supervise` now also counts the archive.
+- **A7**: `supervisor::apply_requeue` re-queues through the one requeue owner
+  and, given a `QueueTarget`, upserts each applied spec at the head of the
+  wave user's queue (`for_role = implementer`) in oldest-parked order. The
+  tick prepends the re-queued specs to this tick's candidates. No force flag.
+- Re-drive guards (separate from launch guards): `redrive-evidence`,
+  `redrive-lock-free` (local lock, foreign claim, live shift wave),
+  `redrive-breaker` (a re-queue would change the queue fingerprint and
+  silently resume a tripped breaker), `redrive-state`, `redrive-deadline`.
+  Floors: explicit drain mode, not keystone-class, no live merge hold.
+- **Mail latency**: `mailbox_store::oldest_unread_by_recipient` (shared pure
+  core with `collect_snapshot`); `shift::mail_escalations` is once per episode
+  per recipient (`ShiftState.mail_episodes`); one combined `notify` call per
+  tick so notify's per-rule `min_interval` cannot swallow a second recipient.
+  A breaker trip also notifies (rule `shift-breaker`).
+- **Cold-boot**: not built. Open questions returned to the advisor (see the
+  TASK-1492 comments).
