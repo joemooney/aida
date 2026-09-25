@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-23T06:22:50.628320905Z
+modified_at: 2026-09-25T01:13:23.198549533Z
 req_type: Story
 tags:
 - audit
@@ -120,5 +120,71 @@ comments:
   content: 'PROXY DECISION (Claude for the operator, overnight burn-down; design calls delegated). Question and ruling (recommended option adopted): Blocker STORY-1353 is now Completed (42b7147bf0) so this is unblocked, but the spec itself flags open design forks before implementation can start; primary question: who may ISSUE a grant - human only, or may an advisor delegate one? Per PRIN-5 fail-closed, recommend human-only issuance, time-boxed-only scope (no batch/epic) for v1, and immediate refusal (no grace window) on expiry. Now IMPLEMENT-ready.'
   created_at: 2026-09-23T06:22:50.628320905Z
   modified_at: 2026-09-23T06:22:50.628320905Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d61f-cbfe-72d0-a34f-02b507caa3b9
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): aida grant, a time-boxed and ledgered grant for DISPOSITIONAL acts only.
+
+    STATUS OF THE BLOCKER. STORY-1353 is Completed (merged 42b7147bf0), so the blocked-by edge is satisfied. This sketch builds on what it shipped: dispatch_authority_from / has_dispatch_authority (dispatch), advisor_authority_from / has_advisor_authority (disposition), and integrity_floor_authority_from / has_integrity_floor_authority (floors, human at a TTY), all in aida-cli-lib/src/lib.rs. BUG-1566 is also Completed, so pr ship and merge-hold clear now apply the same floor. Nothing upstream is blocking. The remaining gate is advisor signoff on this sketch. The 2026-09-22 PROXY DECISION on this spec settled forks 1-3 (human-only issuance, time-only scope, no grace window). The sketch adopts those rulings. Fork 1 decides how authority can propagate, so the advisor should confirm it explicitly and not inherit it from the proxy ruling. Every ruling here fails closed, so widening later only adds behaviour.
+
+    1. DISPOSITIONAL ACTS (a closed enum, DispositionAct; any act not listed here is not grantable)
+      approve     - edit --status across the approval boundary (the transition_guard == RequiresAdvisorAuthority pairs: Draft/NeedsAttention -> Approved+). Also: queue advance approve, add --status approved (intake downgrade), and the answer-promotes-draft path.
+      reject      - queue advance reject, and edit --status rejected wherever it is gated today.
+      close       - queue advance complete / the BUG-543 complete path. This is closing a spec. It is not a merge.
+      classify    - edit --mode and add --mode (STORY-776 / TASK-1267 execution_mode), plus MCP execution_mode.
+      rework-flip - the queue rework status flip that is gated by status_advance_requires_advisor_authority (BUG-1470).
+      promote     - findings promote (the GateAuthority.advisor leg).
+      Already ungated today, so a grant adds nothing: park/punt to NeedsAttention, defer/undefer, archive/unarchive. ADVISOR RULING NEEDED: the spec lists archiving as grant-covered, but archive_cmd.rs has no authority gate at all. Either (a) gate archive on advisor authority as a separate prerequisite task, which then makes it grantable, or (b) drop archive from v1. I recommend (b), because (a) tightens a gate and should not be bundled with a new authority object.
+      NEVER GRANTABLE (IntegrityFloor enum, refused by name whatever the grant says): SupervisedMerge (queue integrate / merging a supervised PR), MergeHoldClear (merge-hold clear and the pr ship release sites), IndependenceOverride (reviewing or merging one's own implementation), ShipWithoutGreenRequiredCheck, ForcePush / history rewrite of main or aida-store, MergeGate (db merge-gate short-ID assignment), issuing or widening a grant, and combining a grant with --force on any gated command. A grant also never makes a seat count as "human present".
+
+    2. GRANT MODEL
+      Surface: aida grant advisor --holder <seat> --for <dur> --reason <text>, plus aida grant list [--all] [--json], aida grant revoke <GRANT-ID> --reason <text>, aida grant check <act> [--json] (read-only, exit 0 = live, 1 = denied), and aida grant verify.
+      Issue: only when has_integrity_floor_authority() holds and stdout is also a TTY, followed by a y/N confirmation that echoes holder, acts and expiry. There is no advisor delegation and no issuing under a grant. The only valid role argument is `advisor`, and it confers DISPOSITION only (any other role argument is refused). --holder is required, with no default. The holder is a seat name (for example `product`) resolved through effective_role_with_roster. A companion instance (current_role_instance_is_companion) never matches.
+      Scope v1: time only, covering every act in the DispositionAct enum. The object carries `scope: all` so that --scope batch:/EPIC- can be added later without breaking existing grants.
+      Expiry: --for is required. A cap is set by [grant] max_duration (default 12h, and the config can only lower it). expires_at is absolute UTC. A clock that cannot be parsed or read means denied. Expiry is checked at every gated write with no grace window: writes already in flight complete, and the next one is refused.
+      Revoke: anyone may revoke, because revoking only narrows authority. That includes the holder, the advisor and any TTY. It takes effect on the next check with no restart, because every check re-reads the store. Revocation is a separate immutable record and never edits the grant.
+      Lifetime: a grant survives the session ending and a machine restart until it expires or is revoked. That is intended, because time is the bound.
+
+    3. LEDGER (tracked in aida-store, not runtime state. It has to be team- and QA-auditable across hubs, which .aida/ runtime state cannot be.)
+      grants/<GRANT-ID>.yaml: id, role=advisor, holder, issuer (user and session), issued_on_tty=true, reason, issued_at, expires_at, scope, genesis_hash. The file is immutable once written.
+      grants/<GRANT-ID>/events/<ulid>.yaml: kind (use | revoke | floor-refused), act, spec, from->to, actor, session, at, reason, prev (the sha256 of the previous event in this grant's chain, or genesis_hash for the first event).
+      Append-only: event files are create-only (the CAS write refuses an existing path) and are written with a CAS push-wins loop modelled on schedule_ledger::write_batch_cas_opts. A use event and the spec write it authorizes go in ONE store commit. If the ledger write fails, the dispositional write does not happen. The commit also carries an `Aida-Grant: <GRANT-ID>` trailer.
+      Tamper-evident, not tamper-proof: aida grant verify recomputes each chain and fails if any file under grants/** shows an M or D in git history. The same check runs as an aida doctor check. Anyone with push rights can still rewrite the branch, so this is a guardrail and not security. That is the same framing aida team set-role already uses.
+
+    4. HOW SEATS CHECK A GRANT (the substrate enforces it; seats do not decide for themselves)
+      New pure core: disposition_authority_from(role, is_tty, orchestrated, grant: GrantLookup, act) -> DispositionAuthority { Native, Granted(GrantId), Denied(DenyReason) }.
+      GrantLookup is { Live(Grant), Absent, Unverifiable(err) }. Following PRIN-5, "unreadable" is its own case and never collapses into "absent". Absent, Expired and Revoked all produce the SAME refusal text. Unverifiable is also denied, with one extra diagnostic line.
+      Order: Native (advisor role, TTY, or a corroborated orchestrator, exactly as today) -> Granted -> Denied. The advisor seat never needs a grant. The orchestrator seat acts under its own corroborated authority and never consults or inherits a grant. Grant lookup keys on the caller's own seat, so drain child phases (implementer and reviewer) can never match a grant held by product.
+      Floor sites (handle_merge_hold Clear, pr_ship::ship_hold_gate / ship_hold_release_refusal_for, GatedOp::Integrate and MergeGate) stay grant-blind. When a live grant exists for the caller, they refuse naming the floor ("a grant never covers <floor>") and record a floor-refused event through the existing STORY-1436 floor-refusal log.
+      Skills and role files (/aida-away, product) run `aida grant check <act>` as a preflight and escalate when it is denied. The authoritative check is still the one at the write.
+
+    5. INTERACTION WITH "PROXY DECISION" COMMENTS
+      Today a PROXY DECISION is free text, visible by default (DEFAULT_VISIBLE_COMMENT_MARKERS), and carries no authority. Under this design:
+      (a) A dispositional write under a grant makes the STORY-1173 [aida:proxy-approval] entry derivable. collect_proxy_approval_entries synthesizes it from the use event: decision=act, proxy=actor, authorized-by=issuer, grant=GRANT-ID, reasoning=the act's reason, falling back to the grant's reason. The `independent` field stays absent (failing) unless it is supplied explicitly, as STORY-1173 requires. No hand-written comment is needed.
+      (b) PROXY DECISION stays the place for narrative and rationale on design-fork rulings. Those rulings are not gated writes, and this design does not grant them.
+      (c) When a grant is live, aida comment add stamps "grant: <GRANT-ID>" onto any PROXY DECISION comment. aida approvals --unbacked lists PROXY DECISION comments that have no grant-use event and no native-authority commit within +/-10 minutes, so a narrative with no authority behind it is visible rather than silent.
+      (d) This design does not remove the AIDA_SESSION_ROLE=advisor env leg. Until that leg is retired, a grant is optional, and the ledger only becomes complete once the env leg is gone. Follow-up spec: retire the env leg for non-rostered, non-TTY seats.
+
+    6. FILES TO TOUCH (by symbol)
+      aida-core/src/grant.rs (new): Grant, GrantEvent, DispositionAct, IntegrityFloor, GrantLookup, evaluate_grant(now, seat, act, grants, events), chain_hash.
+      aida-cli-lib/src/grant_cmd.rs (new): handle_grant_command (issue/list/revoke/check/verify), load_grants, write_grant_event_with_spec (one commit).
+      cli.rs: Command::Grant, GrantCommand.
+      lib.rs: disposition_authority_from and has_disposition_authority(act), which replace has_advisor_authority() at the dispositional sites; the answer-promotion site near BUG-526; GateAuthority (findings promote); handle_merge_hold Clear (floor note); DEFAULT_VISIBLE_COMMENT_MARKERS (stamping).
+      git_backend_cmd.rs: the edit --status promotion gate, edit --mode, add --mode, the intake downgrade, and collect_proxy_approval_entries / parse_proxy_approval_comment (derived entries).
+      queue_cmd.rs: AdvanceAction::Approve, reject, and complete gates; the BUG-1470 rework flip gate.
+      mcp.rs: mcp_caller_has_advisor_authority -> disposition-aware; mcp_status_gate_message; the execution_mode gate. MCP must honour grants with the same parity as the CLI, or it becomes a side door or a mismatch.
+      pr_cmd.rs / pr_ship.rs: floor refusal naming, grant-aware. permissions.rs: IntegrityFloor naming shared with the refusal text.
+      doctor_cmd.rs: the grant chain check.
+      aida-core/templates: the /aida-away skill, the product and advisor role files, and the discipline doc on the three authorities (edit the masters, then make sync-templates). docs/architecture/roles-seats-and-personas.md: a Grant row.
+
+    7. NAMED TESTS
+      grant::tests: live_grant_permits_each_disposition_act (one per act); expired_revoked_absent_refuse_with_identical_text; unverifiable_store_fails_closed_distinct_from_absent; holder_mismatch_denies; companion_instance_never_matches; orchestrated_child_does_not_inherit_grant; grant_never_covers_floor_{supervised_merge,merge_hold_clear,independence_override,ship_without_green_check,force_push,merge_gate} (one per floor, each naming the floor); grant_plus_force_refused; issue_refused_without_tty; issue_refused_over_max_duration; issue_refused_for_non_advisor_role; revoke_effective_on_next_check_without_restart; chain_verify_detects_edited_event; verify_detects_modified_or_deleted_grant_in_history.
+      Integration: disposition_write_and_use_event_share_one_commit; ledger_write_failure_aborts_disposition; grant_use_derives_proxy_approval_entry (via aida approvals --json, grant id present, independent absent); mcp_cli_parity_under_live_grant; approvals_unbacked_lists_proxy_decision_without_grant.
+
+    8. OUT OF SCOPE
+      Dispatch (STORY-1353, already shipped). Any grant that relaxes an integrity floor. Advisor delegation of grants. --scope batch/epic (the schema is reserved for it). Grace windows. Retiring the AIDA_SESSION_ROLE env leg (follow-up). Gating archive/defer (a separate ruling, see section 1). Hardening TTY detection against a pseudo-terminal that fakes a human (a known limitation shared with the existing floor). Cross-hub clock-skew correction beyond the duration cap. Autopilot/groom execution authority.
+  created_at: 2026-09-25T01:13:23.198549533Z
+  modified_at: 2026-09-25T01:13:23.198549533Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
