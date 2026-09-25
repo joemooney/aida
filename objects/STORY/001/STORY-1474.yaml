@@ -37,10 +37,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:44:20.512933062Z
-modified_at: 2026-09-25T04:44:31.870256367Z
+modified_at: 2026-09-25T04:54:01.531776472Z
 req_type: Story
 tags:
 - autonomy
+- docs:impacted
 - orchestrator
 - scaffolding-pack
 - skill
