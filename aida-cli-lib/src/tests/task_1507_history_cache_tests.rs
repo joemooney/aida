@@ -666,7 +666,9 @@ fn history_cache_rebuilds_after_store_compact_squash() {
     let mut fx = Fixture::new();
     build_linear(&mut fx);
     assert_parity(&fx, &opts(), "initial");
-    // What `store compact --squash` leaves: one root commit, same tree.
+    // What `store compact --squash` leaves: one root commit, same tree,
+    // and a backup branch at the old tip (which must not keep it "live").
+    fx.git(&["branch", "aida-store-pre-squash-1", "HEAD"]);
     let squashed = fx
         .git(&["commit-tree", "HEAD^{tree}", "-m", "squashed"])
         .trim()
@@ -1794,4 +1796,345 @@ fn task_1507_boundary_equal_to_watermark_falls_back() {
     let (walk, _, x) = collect_filtered_events_git(&fx.store, &o).unwrap();
     let got = run(&o).expect("boundary above the watermark serves");
     assert_same(&got, &(walk, x), "boundary above the watermark");
+}
+
+// ---------------------------------------------------------------------------
+// Round 4: fork-point ties (B3), ancestor-checked partial catch-up and
+// self-repair (B4), compact-aware liveness (N2a-b). The reviewer's probes,
+// kept as regression tests.
+// trace:TASK-1507 | ai:claude
+// ---------------------------------------------------------------------------
+
+fn all_probes(fx: &Fixture) -> Vec<(String, HistoryOpts)> {
+    let mut p = cut_probes(fx);
+    p.extend(since_probes(fx));
+    p
+}
+
+/// Complete index: every served probe must equal the walk. Returns
+/// (served, fell back).
+fn check_complete(fx: &Fixture, probes: &[(String, HistoryOpts)], tag: &str) -> (usize, usize) {
+    let walks = walk_all(fx, probes);
+    fx.drop_index();
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    let (mut s, mut f) = (0, 0);
+    for ((label, o), walk) in probes.iter().zip(&walks) {
+        match test_support::query_only(&fx.store, &fx.db, o).unwrap() {
+            Some(got) => {
+                assert_same(&got, walk, &format!("{tag} complete: {label}"));
+                s += 1;
+            }
+            None => f += 1,
+        }
+    }
+    (s, f)
+}
+
+#[test]
+fn task_1507_fork_point_tie_complete_and_partial() {
+    // B3: the side branch's first commit shares a second with its parent,
+    // the fork point. git gives the fork point first (FIFO), seq the child.
+    let mut fx = Fixture::new();
+    build_dated_merge(&mut fx, &[0, 50], &[200], 300, &[]);
+    let probes = all_probes(&fx);
+    let (served, _) = check_complete(&fx, &probes, "fork-point");
+    assert!(served > 0, "cuts above the tie still serve");
+    for n in [3usize, 4, 5] {
+        let mut o = opts();
+        o.limit = n;
+        assert!(
+            test_support::query_only(&fx.store, &fx.db, &o)
+                .unwrap()
+                .is_none(),
+            "-n {n} reaches the fork-point tie"
+        );
+    }
+    let mut fx = Fixture::new();
+    build_dated_merge(&mut fx, &[0, 50], &[200], 300, &[400]);
+    let probes = all_probes(&fx);
+    check_partial_states(&fx, &probes);
+}
+
+#[test]
+fn task_1507_octopus_merge_ties() {
+    for (b2, b3, main) in [
+        (&[100][..], &[100][..], &[200][..]),
+        (&[0][..], &[50][..], &[200][..]),
+        (&[100, 150][..], &[120][..], &[100][..]),
+        (&[120][..], &[0, 150][..], &[120][..]),
+    ] {
+        let mut fx = Fixture::new();
+        let base = Spec::new("EPIC-1", "Epic", "Base");
+        fx.put(&base);
+        fx.commit_at(BASE_TS, "base");
+        for (name, offs, id) in [("b2", b2, "BUG-2"), ("b3", b3, "BUG-3")] {
+            fx.git(&["checkout", "-q", "-b", name, "aida-store"]);
+            let mut s = Spec::new(id, "Bug", name);
+            for (i, off) in offs.iter().enumerate() {
+                s.status = STATUSES[i % 3].into();
+                fx.put(&s);
+                fx.commit_at(BASE_TS + off, name);
+            }
+        }
+        fx.git(&["checkout", "-q", "aida-store"]);
+        let mut m = Spec::new("FR-4", "Functional", "main");
+        for (i, off) in main.iter().enumerate() {
+            m.status = STATUSES[i % 3].into();
+            fx.put(&m);
+            fx.commit_at(BASE_TS + off, "main");
+        }
+        git_in(
+            &fx.store,
+            &["merge", "-q", "--no-ff", "--no-edit", "b2", "b3"],
+            BASE_TS + 500,
+        );
+        fx.clock = BASE_TS + 500;
+        let parents = fx.git(&["rev-list", "--parents", "-n1", "HEAD"]);
+        assert_eq!(parents.split_whitespace().count(), 4, "octopus");
+        let probes = all_probes(&fx);
+        let tag = format!("octopus {b2:?} {b3:?} {main:?}");
+        check_complete(&fx, &probes, &tag);
+        check_partial_states(&fx, &probes);
+    }
+}
+
+#[test]
+fn task_1507_nested_merge_ties() {
+    // The outer side branch contains an inner merge.
+    for (inner, side, main) in [
+        (&[100][..], &[80][..], &[100][..]),
+        (&[60][..], &[60][..], &[200][..]),
+        (&[10][..], &[60][..], &[10][..]),
+        (&[0][..], &[60][..], &[200][..]),
+    ] {
+        let mut fx = Fixture::new();
+        let base = Spec::new("EPIC-1", "Epic", "Base");
+        fx.put(&base);
+        fx.commit_at(BASE_TS, "base");
+        fx.git(&["checkout", "-q", "-b", "side"]);
+        fx.git(&["checkout", "-q", "-b", "inner"]);
+        let mut a = Spec::new("BUG-5", "Bug", "inner");
+        for (i, off) in inner.iter().enumerate() {
+            a.status = STATUSES[i % 3].into();
+            fx.put(&a);
+            fx.commit_at(BASE_TS + off, "inner");
+        }
+        fx.git(&["checkout", "-q", "side"]);
+        let mut b = Spec::new("BUG-6", "Bug", "side");
+        for (i, off) in side.iter().enumerate() {
+            b.status = STATUSES[i % 3].into();
+            fx.put(&b);
+            fx.commit_at(BASE_TS + off, "side");
+        }
+        fx.merge_at(BASE_TS + 250, "inner", &[]);
+        fx.git(&["checkout", "-q", "aida-store"]);
+        let mut m = Spec::new("FR-7", "Functional", "main");
+        for (i, off) in main.iter().enumerate() {
+            m.status = STATUSES[i % 3].into();
+            fx.put(&m);
+            fx.commit_at(BASE_TS + off, "main");
+        }
+        fx.merge_at(BASE_TS + 300, "side", &[]);
+        let probes = all_probes(&fx);
+        let tag = format!("nested {inner:?} {side:?} {main:?}");
+        check_complete(&fx, &probes, &tag);
+        check_partial_states(&fx, &probes);
+    }
+}
+
+#[test]
+fn task_1507_catch_up_across_tie_merges_from_partial_states() {
+    // Index a partial state before the merge (from merge^1, merge^2, or
+    // one commit below HEAD), then catch up with a zero and an unbounded
+    // budget. Every served answer must equal the walk; nothing may error.
+    for (side, main) in [
+        (&[300][..], &[300][..]),
+        (&[100, 300][..], &[200, 300][..]),
+        (&[0, 50][..], &[200][..]),
+    ] {
+        let mut fx = Fixture::new();
+        build_dated_merge(&mut fx, side, main, 600, &[700, 800]);
+        let merged = fx.head();
+        let probes = all_probes(&fx);
+        let walks = walk_all(&fx, &probes);
+        for pre in ["aida-store~1", "aida-store~2^1", "aida-store~2^2"] {
+            for chunks in 0..=4usize {
+                fx.drop_index();
+                fx.git(&["checkout", "-q", "--detach", pre]);
+                if fx.head() == merged {
+                    continue;
+                }
+                test_support::partial_build(&fx.store, &fx.db, 1, chunks).unwrap();
+                fx.git(&["checkout", "-q", "aida-store"]);
+                let tag = format!("{side:?}/{main:?} from {pre} x{chunks}");
+                for budget in [Budget::for_duration(Duration::ZERO), Budget::unbounded()] {
+                    test_support::index(&fx.store, &fx.db, budget)
+                        .unwrap_or_else(|e| panic!("[{tag}] catch-up failed: {e:#}"));
+                    for ((label, o), walk) in probes.iter().zip(&walks) {
+                        if let Some(got) = test_support::query_only(&fx.store, &fx.db, o).unwrap() {
+                            assert_same(&got, walk, &format!("{tag}: {label}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn task_1507_id_queries_with_merge_ties() {
+    for (side, main, after) in [
+        (&[300][..], &[300][..], &[700][..]),
+        (&[0, 50][..], &[200][..], &[300][..]),
+    ] {
+        let mut fx = Fixture::new();
+        build_dated_merge(&mut fx, side, main, 600, &[]);
+        let mut e = Spec::new("EPIC-1", "Epic", "Base");
+        for (i, off) in after.iter().enumerate() {
+            e.status = STATUSES[i % 3].into();
+            fx.put(&e);
+            fx.commit_at(BASE_TS + off, "after: EPIC-1");
+        }
+        let mut probes = Vec::new();
+        for id in ["EPIC-1", "BUG-2", "FR-3"] {
+            for (l, mut o) in all_probes(&fx) {
+                o.id_filter = Some(id.into());
+                probes.push((format!("--id {id} {l}"), o));
+            }
+        }
+        check_complete(&fx, &probes, &format!("id {side:?} {main:?}"));
+        check_partial_states(&fx, &probes);
+    }
+}
+
+#[test]
+fn task_1507_budgeted_catch_up_never_moves_the_tip_onto_a_side_branch() {
+    // B4: a complete index at merge^1, then a catch-up whose budget runs
+    // out inside the side branch.
+    let mut fx = Fixture::new();
+    build_dated_merge(&mut fx, &[100, 200, 300], &[150], 600, &[700]);
+    fx.git(&["checkout", "-q", "--detach", "aida-store~1^1"]);
+    let old_tip = fx.head();
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    fx.git(&["checkout", "-q", "aida-store"]);
+    test_support::index(&fx.store, &fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
+    let tip = test_support::meta(&fx.db, "tip_sha").unwrap();
+    let is_anc = |a: &str, b: &str| {
+        Command::new("git")
+            .arg("-C")
+            .arg(&fx.store)
+            .args(["merge-base", "--is-ancestor", a, b])
+            .status()
+            .unwrap()
+            .success()
+    };
+    assert!(
+        is_anc(&old_tip, &tip),
+        "the new tip descends from the old one"
+    );
+
+    // A reader checked out at the first side commit (another worktree).
+    let side1 = fx
+        .git(&["rev-parse", "aida-store~1^2~2"])
+        .trim()
+        .to_string();
+    let wt = fx.tmp.path().join("side-wt");
+    fx.git(&[
+        "worktree",
+        "add",
+        "-q",
+        "--detach",
+        wt.to_str().unwrap(),
+        &side1,
+    ]);
+    let o = opts();
+    let (walk, _, x) = collect_filtered_events_git(&wt, &o).unwrap();
+    if let Some(got) = test_support::query_only(&wt, &fx.db, &o).unwrap() {
+        assert_same(&got, &(walk, x), "reader at a side commit");
+    }
+    // The main checkout keeps catching up.
+    test_support::index(&fx.store, &fx.db, Budget::unbounded()).unwrap();
+    assert_parity(&fx, &opts(), "after the catch-up finishes");
+}
+
+#[test]
+fn task_1507_inconsistent_index_resets_instead_of_wedging() {
+    // B4: an index whose tip sits on a side commit (what the old boundary
+    // rule could leave) makes the next catch-up re-insert indexed commits.
+    // That query falls back and resets; the next one serves again.
+    let mut fx = Fixture::new();
+    build_dated_merge(&mut fx, &[100, 200, 300], &[150], 600, &[700]);
+    fx.git(&["checkout", "-q", "--detach", "aida-store~1^1"]);
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    fx.git(&["checkout", "-q", "aida-store"]);
+    let side1 = fx
+        .git(&["rev-parse", "aida-store~1^2~2"])
+        .trim()
+        .to_string();
+    // Plant the wedged state: side1 indexed as the tip, beside merge^1.
+    fx.git(&["checkout", "-q", "--detach", &side1]);
+    let one = history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS);
+    assert!(one.is_ok(), "reader at side1 does not error: {one:?}");
+    test_support::set_meta(&fx.db, "tip_sha", &side1);
+    fx.git(&["checkout", "-q", "aida-store"]);
+    let o = opts();
+    let first = history_cache::serve_at(&fx.store, &fx.db, &o, GENEROUS);
+    assert!(first.is_err(), "the inconsistent catch-up falls back");
+    assert_eq!(
+        test_support::meta(&fx.db, "last_reset_reason").as_deref(),
+        Some("the index disagreed with the store history")
+    );
+    assert_parity(&fx, &opts(), "the index is usable again");
+}
+
+#[test]
+fn task_1507_compact_with_backup_branch_resets() {
+    // N2a-b: what the real `store compact` does, backup branch first.
+    let mut fx = Fixture::new();
+    build_linear(&mut fx);
+    assert_parity(&fx, &opts(), "initial");
+    fx.git(&["branch", "aida-store-pre-squash-1", "HEAD"]);
+    let squashed = fx
+        .git(&["commit-tree", "HEAD^{tree}", "-m", "squashed"])
+        .trim()
+        .to_string();
+    fx.git(&["reset", "-q", "--soft", &squashed]);
+    assert_parity(&fx, &opts(), "after compact");
+    assert!(test_support::meta(&fx.db, "last_reset_reason")
+        .unwrap()
+        .contains("root commit changed"));
+    fx.commit("one more");
+    assert_parity(&fx, &opts(), "after compact + commit");
+}
+
+#[test]
+fn task_1507_stale_remote_tracking_ref_does_not_block_reset() {
+    let mut fx = Fixture::new();
+    build_linear(&mut fx);
+    assert_parity(&fx, &opts(), "initial");
+    fx.git(&["update-ref", "refs/remotes/origin/aida-store", "HEAD"]);
+    fx.git(&["reset", "-q", "--hard", "HEAD~2"]);
+    fx.commit("rewritten");
+    assert_parity(&fx, &opts(), "after a rewrite with a stale remote ref");
+    assert_eq!(
+        test_support::meta(&fx.db, "last_reset_reason").as_deref(),
+        Some("store history was rewritten")
+    );
+}
+
+#[test]
+fn task_1507_pre_squash_backup_branch_never_keeps_a_rewritten_tip_live() {
+    // N2a-b: even when the root survives a rewrite, a `store compact`
+    // backup branch at the old tip does not count as a live checkout.
+    let mut fx = Fixture::new();
+    build_linear(&mut fx);
+    assert_parity(&fx, &opts(), "initial");
+    fx.git(&["branch", "aida-store-pre-squash-2", "HEAD"]);
+    fx.git(&["reset", "-q", "--hard", "HEAD~2"]);
+    fx.commit("rewritten");
+    assert_parity(&fx, &opts(), "after a rewrite with a backup branch");
+    assert_eq!(
+        test_support::meta(&fx.db, "last_reset_reason").as_deref(),
+        Some("store history was rewritten")
+    );
 }

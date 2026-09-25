@@ -40,8 +40,10 @@ use crate::history::{self, CommitMeta, Event, EventKind, HistoryOpts};
 /// back-fill watermark, and the `merge_paths` and `skew` tables.
 /// v3: `merge_ties` (same-second commits on both sides of a merge)
 /// replaces the boundary-only `merges` table.
+/// v4: `merge_region_ts` (every commit time in a merge's parallel region,
+/// fork point included) replaces `merge_ties`.
 // trace:TASK-1507 | ai:claude
-pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 3;
+pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 4;
 
 /// Bump whenever `decode_into_events`, `diff_modified` or `EventKind`
 /// changes meaning or serialized shape. A bump gives the index a new file
@@ -284,6 +286,41 @@ fn is_busy(err: &anyhow::Error) -> bool {
     })
 }
 
+/// The index disagrees with the store history it claims to hold (a
+/// commit indexed twice, a catch-up that does not end at HEAD). It is
+/// repaired by a reset, never left to fail every later query.
+// trace:TASK-1507 | ai:claude
+#[derive(Debug)]
+struct Inconsistent(String);
+
+impl std::fmt::Display for Inconsistent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "history index inconsistent with the store: {}", self.0)
+    }
+}
+
+impl std::error::Error for Inconsistent {}
+
+fn inconsistent(msg: String) -> anyhow::Error {
+    anyhow::Error::new(Inconsistent(msg))
+}
+
+/// A constraint violation (such as a commit indexed twice) or an
+/// [`Inconsistent`] error.
+// trace:TASK-1507 | ai:claude
+fn is_inconsistent(err: &anyhow::Error) -> bool {
+    err.chain().any(|c| {
+        c.downcast_ref::<Inconsistent>().is_some()
+            || c.downcast_ref::<rusqlite::Error>().is_some_and(|e| {
+                matches!(
+                    e,
+                    rusqlite::Error::SqliteFailure(code, _)
+                        if code.code == rusqlite::ErrorCode::ConstraintViolation
+                )
+            })
+    })
+}
+
 /// NotADatabase / DatabaseCorrupt: the file is not a usable database.
 fn is_corrupt(err: &anyhow::Error) -> bool {
     err.chain().any(|c| {
@@ -361,7 +398,7 @@ CREATE INDEX IF NOT EXISTS events_spec ON events(spec_id COLLATE NOCASE, commit_
 CREATE INDEX IF NOT EXISTS events_type ON events(req_type COLLATE NOCASE, commit_seq);
 CREATE INDEX IF NOT EXISTS events_kind ON events(kind, commit_seq);
 CREATE INDEX IF NOT EXISTS events_author ON events(author, commit_seq);
-CREATE TABLE IF NOT EXISTS merge_ties (
+CREATE TABLE IF NOT EXISTS merge_region_ts (
     ts INTEGER PRIMARY KEY
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS merge_paths (
@@ -750,8 +787,8 @@ fn git_lines(store: &Path, args: &[&str]) -> Result<Vec<String>> {
         .collect())
 }
 
-/// Whether some ref, or some other checkout of the store (a git worktree
-/// whose HEAD is not `head`), still contains the indexed `tip`. That
+/// Whether a local branch, or some other checkout of the store (a git
+/// worktree whose HEAD is not `head`), still contains the indexed `tip`. That
 /// separates a reader on an older, diverged or switched checkout, which
 /// must leave the shared index alone, from a real rewrite, where nothing
 /// has the indexed tip any more.
@@ -760,14 +797,24 @@ fn git_lines(store: &Path, args: &[&str]) -> Result<Vec<String>> {
 // trace:TASK-1507 | ai:claude
 fn tip_is_live_elsewhere(store: &Path, tip: &str, head: &str) -> bool {
     // trace:TASK-1507 | ai:claude
-    // N2a: a branch (or any ref) that still contains the tip means this
-    // checkout switched away from it, not that history was rewritten.
+    // N2a: a local branch that still contains the tip means this checkout
+    // switched away from it, not that history was rewritten. Remote-tracking
+    // refs and `store compact`'s pre-squash backup branches do not count:
+    // they keep a rewritten tip reachable on purpose.
     if git_lines(
         store,
-        &["for-each-ref", "--contains", tip, "--format=%(refname)"],
+        &[
+            "for-each-ref",
+            "--contains",
+            tip,
+            "--format=%(refname)",
+            "refs/heads",
+        ],
     )
-    .is_ok_and(|refs| !refs.is_empty())
-    {
+    .is_ok_and(|refs| {
+        refs.iter()
+            .any(|r| !r.starts_with("refs/heads/aida-store-pre-squash-"))
+    }) {
         return true;
     }
     let Ok(lines) = git_lines(store, &["worktree", "list", "--porcelain"]) else {
@@ -800,11 +847,13 @@ fn git_commit_times(store: &Path, shas: &[String]) -> Result<HashMap<String, i64
 }
 
 /// Record a merge commit for the coverage rules:
-/// - `merge_ties`: every commit time present on both sides of the merge
-///   (`M^i ^M^j` and `M^j ^M^i`). git's walk orders same-second commits
-///   from different sides by queue insertion (first parent first), which
-///   `seq` cannot express, so a served range holding such a time falls
-///   back (B2).
+/// - `merge_region_ts`: the time of every commit in the merge's parallel
+///   region, meaning both sides (`M^i...M^j`) and the merge bases. git's
+///   walk orders same-second commits there by queue insertion, not by
+///   ancestry: a merge queues its first parent first, and a fork point can
+///   come before its own side-branch child. `seq` cannot express that, so
+///   a served range holding such a second shared with another commit falls
+///   back (B2, B3).
 /// - `merge_paths`: every path touched on either side since the base
 ///   (`M^1...M^k`). `git log -- <path>` simplifies TREESAME side branches
 ///   away and the index does not, so `--id` on these paths uses the walk
@@ -814,25 +863,24 @@ fn record_merge(tx: &Connection, store: &Path, raw: &RawCommit) -> Result<()> {
     if raw.parents.len() < 2 {
         return Ok(());
     }
-    let side_times = |from: &str, not: &str| -> Result<HashSet<i64>> {
-        let exclude = format!("^{not}");
-        Ok(
-            git_lines(store, &["rev-list", "--timestamp", from, &exclude])?
-                .iter()
-                .filter_map(|l| l.split_once(' ')?.0.parse::<i64>().ok())
-                .collect(),
-        )
-    };
-    let mut tie = tx.prepare_cached("INSERT OR IGNORE INTO merge_ties (ts) VALUES (?1)")?;
+    let mut region = tx.prepare_cached("INSERT OR IGNORE INTO merge_region_ts (ts) VALUES (?1)")?;
     let mut ins = tx.prepare_cached("INSERT OR IGNORE INTO merge_paths (path) VALUES (?1)")?;
     for (i, a) in raw.parents.iter().enumerate() {
         for b in &raw.parents[i + 1..] {
-            let a_side = side_times(a, b)?;
-            let b_side = side_times(b, a)?;
-            for ts in a_side.intersection(&b_side) {
-                tie.execute([ts])?;
-            }
             let range = format!("{a}...{b}");
+            for line in git_lines(store, &["rev-list", "--timestamp", &range])? {
+                if let Some(ts) = line
+                    .split_once(' ')
+                    .and_then(|(t, _)| t.parse::<i64>().ok())
+                {
+                    region.execute([ts])?;
+                }
+            }
+            // No merge base (joined histories) is not an error.
+            let bases = git_lines(store, &["merge-base", "--all", a, b]).unwrap_or_default();
+            for ts in git_commit_times(store, &bases)?.values() {
+                region.execute([ts])?;
+            }
             let paths = git_lines(
                 store,
                 &["log", "--format=", "--name-only", "--no-renames", &range],
@@ -1048,11 +1096,28 @@ impl HistoryCache {
             Some(_) if !versions_ok => self.reset(store, head, Some("index format changed"))?,
             Some(tip) if tip == head => {}
             Some(tip) => {
+                let recorded = self.meta("store_root_sha")?.unwrap_or_default();
+                let replaced = || {
+                    aida_core::git_ops::root_commits(store, head)
+                        .map(|r| r.join(","))
+                        .unwrap_or_default()
+                        != recorded
+                };
                 if aida_core::git_ops::is_ancestor(store, &tip, head)? {
                     let _ = self.catch_up(store, &tip, head, budget)?;
-                } else if aida_core::git_ops::is_ancestor(store, head, &tip)?
-                    || tip_is_live_elsewhere(store, &tip, head)
-                {
+                } else if aida_core::git_ops::is_ancestor(store, head, &tip)? {
+                    // trace:TASK-1507 | ai:claude
+                    // A reader behind the shared index: fall back, no reset.
+                } else if replaced() {
+                    // trace:TASK-1507 | ai:claude
+                    // Checked before liveness: `store compact` keeps the old
+                    // tip on a backup branch, but the history was replaced.
+                    self.reset(
+                        store,
+                        head,
+                        Some("the store history was replaced (its root commit changed)"),
+                    )?;
+                } else if tip_is_live_elsewhere(store, &tip, head) {
                     // trace:TASK-1507 | ai:claude
                     // This reader is on an older or diverged checkout (a
                     // store worktree behind the shared index, or an undo)
@@ -1060,16 +1125,7 @@ impl HistoryCache {
                     // has. The index stays as it is; this query falls back
                     // to the git walk because the tip is not its HEAD.
                 } else {
-                    let recorded = self.meta("store_root_sha")?.unwrap_or_default();
-                    let current = aida_core::git_ops::root_commits(store, head)
-                        .map(|r| r.join(","))
-                        .unwrap_or_default();
-                    let reason = if recorded != current {
-                        "the store history was replaced (its root commit changed)"
-                    } else {
-                        "store history was rewritten"
-                    };
-                    self.reset(store, head, Some(reason))?;
+                    self.reset(store, head, Some("store history was rewritten"))?;
                 }
             }
         }
@@ -1088,7 +1144,7 @@ impl HistoryCache {
         let tx = self.conn.transaction()?;
         tx.execute_batch(
             "DELETE FROM events; DELETE FROM touches; DELETE FROM commits; DELETE FROM meta;
-             DELETE FROM merge_ties; DELETE FROM merge_paths; DELETE FROM skew;",
+             DELETE FROM merge_region_ts; DELETE FROM merge_paths; DELETE FROM skew;",
         )?;
         let now = now_rfc3339();
         for (k, v) in [
@@ -1158,9 +1214,14 @@ impl HistoryCache {
                     return Ok(false);
                 }
                 probes += 1;
+                // trace:TASK-1507 | ai:claude
+                // B4: the batch must also descend from the old tip, or the
+                // new tip could land on a side branch whose ancestors are
+                // not exactly the indexed rows.
                 let closed =
                     aida_core::git_ops::rev_list_count(store, &format!("{tip}..{}", raw.sha))?
-                        == indexed;
+                        == indexed
+                        && aida_core::git_ops::is_ancestor(store, tip, &raw.sha)?;
                 if closed {
                     record_skew_for(&tx, store, &seen)?;
                     Self::finish_append(&tx, &raw, new_root.then_some(store))?;
@@ -1170,7 +1231,10 @@ impl HistoryCache {
             }
             if indexed == total {
                 if raw.sha != head {
-                    anyhow::bail!("catch-up ended at {} instead of HEAD {head}", raw.sha);
+                    return Err(inconsistent(format!(
+                        "catch-up ended at {} instead of HEAD {head}",
+                        raw.sha
+                    )));
                 }
                 record_skew_for(&tx, store, &seen)?;
                 Self::finish_append(&tx, &raw, new_root.then_some(store))?;
@@ -1178,7 +1242,9 @@ impl HistoryCache {
                 return Ok(true);
             }
         }
-        anyhow::bail!("catch-up saw {indexed} of {total} commits in {tip}..{head}")
+        Err(inconsistent(format!(
+            "catch-up saw {indexed} of {total} commits in {tip}..{head}"
+        )))
     }
 
     fn finish_append(tx: &Connection, newest: &RawCommit, roots_from: Option<&Path>) -> Result<()> {
@@ -1333,7 +1399,10 @@ impl HistoryCache {
             let mut i = 0usize;
             while let Some(raw) = stream.next_commit()? {
                 if chunk.get(i).map(|r| r.sha.as_str()) != Some(raw.sha.as_str()) {
-                    anyhow::bail!("back-fill order mismatch at {}", raw.sha);
+                    return Err(inconsistent(format!(
+                        "back-fill order mismatch at {}",
+                        raw.sha
+                    )));
                 }
                 let dec = decode_commit(&raw, &mut blobs)?;
                 insert_commit(&tx, next_seq, &raw, &dec)?;
@@ -1343,7 +1412,10 @@ impl HistoryCache {
                 last = Some(raw);
             }
             if i != chunk.len() {
-                anyhow::bail!("back-fill decoded {i} of {} commits", chunk.len());
+                return Err(inconsistent(format!(
+                    "back-fill decoded {i} of {} commits",
+                    chunk.len()
+                )));
             }
             let last = last.context("empty back-fill chunk")?;
             let now = now_rfc3339();
@@ -1377,9 +1449,9 @@ impl HistoryCache {
     ///   a cut (the last kept row of the `max_commits` window, or the
     ///   commit of the `limit`-th match), or else `--since` (R2);
     /// - no clock-skewed edge may reach into the served range (R3);
-    /// - the served range may not hold a second in which commits on both
-    ///   sides of a merge were made, where git's tie order is not `seq`
-    ///   (B2);
+    /// - the served range may not hold a second, inside a merge's parallel
+    ///   region (fork point included), shared by more than one commit,
+    ///   where git's tie order is not `seq` (B2, B3);
     /// - `--id` on a path touched across a merge uses the walk, because
     ///   `git log -- <path>` simplifies TREESAME side branches away (N1b).
     // trace:TASK-1507 | ai:claude
@@ -1539,12 +1611,16 @@ impl HistoryCache {
         if skewed {
             return Ok(None);
         }
-        // B2 (replaces the boundary-only R4): a second holding commits from
-        // both sides of a merge, anywhere in the served range, where git's
-        // tie order (first parent first) need not follow `seq`.
+        // B2/B3: a second inside some merge's parallel region (fork point
+        // included) that more than one commit shares, anywhere in the
+        // served range. git orders such ties by queue insertion, which
+        // `seq` need not follow. A partner not yet back-filled lies at or
+        // below the watermark, which R2 already keeps out of the range.
         // trace:TASK-1507 | ai:claude
         let cross_tie: bool = tx.query_row(
-            "SELECT EXISTS(SELECT 1 FROM merge_ties WHERE ?1 IS NULL OR ts >= ?1)",
+            "SELECT EXISTS(SELECT 1 FROM merge_region_ts r
+                 WHERE (?1 IS NULL OR r.ts >= ?1)
+                   AND (SELECT COUNT(*) FROM commits c WHERE c.commit_ts = r.ts) > 1)",
             [lower],
             |r| r.get(0),
         )?;
@@ -1620,6 +1696,23 @@ pub(crate) fn serve_at(
     let mut cache = HistoryCache::open(db_path).map_err(|e| heal(e, locked))?;
     if locked {
         if let Err(e) = cache.ensure_fresh(store, &head, Budget::for_duration(budget)) {
+            // trace:TASK-1507 | ai:claude
+            // B4: an index that disagrees with the store is reset (or, if
+            // that fails, deleted) so the next query rebuilds it; this
+            // query falls back.
+            if is_inconsistent(&e)
+                && cache
+                    .reset(
+                        store,
+                        &head,
+                        Some("the index disagreed with the store history"),
+                    )
+                    .is_err()
+            {
+                drop(cache);
+                remove_db_files(db_path);
+                return Err(e);
+            }
             drop(cache);
             return Err(heal(e, locked));
         }
