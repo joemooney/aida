@@ -24,12 +24,12 @@ description: |-
   - Auto-queue-review and review help text is forge-neutral or provider-specific.
 
   This is a concrete live instance of the remaining call-site migration tracked by STORY-621.
-status: Completed
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T21:58:10.530410659Z
-modified_at: 2026-09-25T01:08:28.611422444Z
+modified_at: 2026-09-25T16:46:30.301351785Z
 req_type: Bug
 tags:
 - forge
@@ -54,6 +54,11 @@ comments:
   created_at: 2026-09-25T00:26:17.497230260Z
   modified_at: 2026-09-25T00:26:17.497230260Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d976-179d-75c2-87e4-19ad400cf75e
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (a052add) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-09-25T16:46:30.301350366Z
+  modified_at: 2026-09-25T16:46:30.301350366Z
 history:
 - id: 01a0d61b-4d3b-7e93-9c53-abf5ffa91df2
   author: aida-auto-bump
@@ -62,6 +67,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a0d976-179d-75c2-87e4-1997cf032a29
+  author: aida-auto-bump
+  timestamp: 2026-09-25T16:46:30.301347739Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 processing_record:
 - id: 01a0d61b-4d43-7010-af83-982fa1cde89d
   timestamp: 2026-09-25T01:08:28.611421223Z
@@ -75,9 +87,3 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 81c37e2cb
   vendor: codex
-implementation_info:
-  implemented: true
-  implemented_at: 2026-09-25T00:10:58.143634666Z
-  implemented_by: joe
-  completed_at: 2026-09-25T01:08:28.603544781Z
-  completion_sha: a052addddafee14f59ca10b0db26fb59e68263e9
