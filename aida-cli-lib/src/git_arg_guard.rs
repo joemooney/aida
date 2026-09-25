@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn dash_values_are_refused_with_the_flag_named() {
-        for v in ["--output=/tmp/x", "-o", "  --all", "-"] {
+        for v in ["--output=injected.x", "-o", "  --all", "-"] {
             let err = reject_option_like("--since", v).unwrap_err().to_string();
             assert!(err.contains("--since"), "{err}");
             assert!(err.contains("starts with `-`"), "{err}");

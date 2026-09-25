@@ -269,7 +269,7 @@ fn a_verdict_never_stores_a_reviewed_sha_that_is_not_a_commit_id() {
         )
         .unwrap()
     };
-    let obj = build("--output=/tmp/x");
+    let obj = build("--output=injected.x");
     assert!(
         obj.get("reviewed_sha").is_none_or(|v| v.is_null()),
         "{obj:?}"
@@ -314,7 +314,11 @@ fn store_trailer_must_be_a_commit_id() {
         crate::store_cmd::parse_paired_store_sha(good).as_deref(),
         Some("0123456789abcdef0123456789abcdef01234567")
     );
-    for bad in ["Aida-Store: --output=/tmp/x\n", "Aida-Store: main\n", "\n"] {
+    for bad in [
+        "Aida-Store: --output=injected.x\n",
+        "Aida-Store: main\n",
+        "\n",
+    ] {
         assert_eq!(crate::store_cmd::parse_paired_store_sha(bad), None, "{bad}");
     }
 }
