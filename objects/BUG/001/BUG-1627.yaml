@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T18:24:55.506358857Z
-modified_at: 2026-09-25T19:14:40.125990217Z
+modified_at: 2026-09-25T19:41:48.412217086Z
 req_type: Bug
 comments:
 - id: 01a0d9d0-a9d4-7ff0-b491-7779493683bf
@@ -16,6 +16,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved as a bounded follow-up to BUG-1624.'
   created_at: 2026-09-25T18:25:25.972572159Z
   modified_at: 2026-09-25T18:25:25.972572159Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0da16-95fc-77d2-9b2d-e7e5035920f5
+  author: joe
+  content: 'Strict security review: APPROVE — reviewed 7fb5e27a69 (full diff against origin/main). (a) The queue work --no-launch hint (queue_cmd.rs:11701-11708) now prints ''aida worktree enter <scope>'', matching the BUG-1624 hint at lib.rs:36803. No ''source .aida/session-env.sh'' hint is left. (b) trusted_session_env (lib.rs:40498-40502) drops any value containing NUL before the per-name match. It is the only source for apply_session_env_to_process (lib.rs:40467; callers lib.rs:36733 and queue_cmd.rs:11767) and for session_env_eval_lines (lib.rs:63369). Names are compile-time constants and AIDA_BIN comes from current_exe, so set_var can no longer panic on file input. I checked the other ~40 non-test set_var sites; none takes session-env input. (c) normalize_agent_type (agent_registry.rs:1655) is an exact match after ASCII-lowercasing and stripping _/-. There is no prefix or substring match. Non-ASCII passes through unchanged and falls to ''other''. trusted_agent_type (lib.rs:40530) rejects ''other'' and empty input, and emits only the canonical spelling. So the env value is one of claude/codex/antigravity/shell/web, and every consumer sees the canonical string: the code gate (advisor_code_gate.rs:236), the mailbox identity (lib.rs:21490, which normalizes again, idempotent), user_alias.rs:309 and review_recorded_by (lib.rs:89021). lease_agent_type (lib.rs:73308) still reads the raw file, but it only displays the value and maps it to a finite set. Residual risk, which I accept: a committed file can still claim a valid type and switch on the code-gate carve-out and one well-known type inbox. That is acceptable. The gate is documented as a guardrail, and its other signals (CLAUDE_CODE_CHILD_SESSION, a .claude/worktrees/agent- cwd) are equally forgeable. A hostile branch already runs code via build.rs and tests. Also, the effect is now bounded to 5 fixed identities, and the is_interactive_human_caller effect fails safe. A non-blocking hardening option: record agent_type on the lease at session start and read it from there. (d) EnvVarsGuard::snapshot (test_env.rs:108-123) takes the shared ENV_LOCK (poison-tolerant) and records var_os without mutating. Drop restores each key while the lock is still held (fields drop after Drop::drop), including on panic unwind. TESTS: bug_1627 5/5, bug_1624 12/12, session_env 20/20, advisor_code_gate 19/19, statusline 287/287. fmt is clean. MUTATIONS: removing the NUL filter fails 2 bug_1627 tests, one of them a real set_var panic at std env.rs. Removing the agent-type allowlist fails 2 bug_1627 tests plus bug_1624_session_env_allowlists_names_and_ignores_file_aida_bin. The tests use only tempdirs and ''/w/...'' literal strings that are never touched, with no /tmp and no ~/.aida or live store. The modified BUG-1624 tests are still valid. The allowlist test still pins the exact output, so any leaked name fails it. The eval test moved the hostile quoting payload to an absolute CARGO_TARGET_DIR, which is kept, so it still proves that a real sh eval runs nothing. The ignores_non_allowlisted test now holds the env lock and restores PATH, LD_PRELOAD and PROMPT_COMMAND. OUT OF SCOPE, pre-existing, Low: queue_cmd.rs:11475 set_vars AIDA_SESSION_ROLE from a store-derived queue for_role (infer_queue_work_role, queue_cmd.rs:9598). I did not check whether a NUL there is rejected on write; it is store-trusted input, so at most a DoS.'
+  created_at: 2026-09-25T19:41:48.412217086Z
+  modified_at: 2026-09-25T19:41:48.412217086Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 1df2e0445e433eb9bef4af0dc02c93a6712f7c80
