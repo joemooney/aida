@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T18:50:20.038947417Z
-modified_at: 2026-09-25T03:26:21.767234806Z
+modified_at: 2026-09-25T04:32:51.186015732Z
 req_type: Story
 tags:
 - aida:queue
@@ -194,4 +194,10 @@ comments:
   content: 'REVIEW FIXES pushed as 4f49ff4581 (rebased onto b4984d4953 with BUG-1611). Changes: the lease gate reads only real <id>.toml leases (companions, staging files and mcp-claim markers are skipped), retries an unparseable lease once, and treats it as unknown only when it could name the spec. Session start, harness register, aida claim and the review lease write with write_atomic. Every NeedsAttention door now uses a targeted single-spec write with a status re-read just before it, per the proxy decision until BUG-1612 lands; none uses update_atomically on the git store. The edit door now runs the lease gate. PENDING: the monitor contract is still at 1.4.0 because batch 62 (STORY-1218, ShiftTick) had not landed when this was pushed. After it lands, rebase and move SpecRequeued to 1.5.0.'
   created_at: 2026-09-25T03:26:21.767234806Z
   modified_at: 2026-09-25T03:26:21.767234806Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d6d6-69f2-7520-9eb7-7907d04f4962
+  author: joe
+  content: 'Review round 3: APPROVE. The lease scan includes live mcp-claims, as pickup does. Lease writes are atomic. Env-lock fixes make the requeue, queue, lease and doctor suites stable. Rounds 1 and 2 were strict Opus reviews. Queued for batch 63.'
+  created_at: 2026-09-25T04:32:51.186015732Z
+  modified_at: 2026-09-25T04:32:51.186015732Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
