@@ -5,6 +5,7 @@
 // trace:STORY-771 | ai:claude
 
 use crate::*;
+use serde::{Deserialize, Serialize};
 
 /// `aida pr <subcommand>` dispatcher. trace:STORY-90 | ai:claude
 pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
@@ -4183,6 +4184,216 @@ pub(crate) fn git_path_is_ignored(project_root: &std::path::Path, path: &str) ->
         .map(|s| s.success())
         .unwrap_or(false)
 }
+
+// ---------------------------------------------------------------------------
+// BUG-1610: pre-MR-creation base check + `--target-branch`-overridable
+// recovery state.
+//
+// A GitLab project whose remote `main` is never pushed lets the FIRST pushed
+// branch become the project's default. `aida review <SPEC>` then offers to
+// open a change from that branch with no explicit base — `glab mr create
+// --source-branch <branch>` (no `--target-branch`) silently targets the
+// project default, i.e. the SAME branch, and GitLab later refuses to merge
+// it ("You must be on a different branch other than <branch>"). Diagnosing
+// this BEFORE offering the create command turns a confusing later `glab`
+// failure into an immediate, actionable refusal naming both branches.
+// trace:BUG-1610 | ai:claude
+
+/// Outcome of checking the intended base before offering to create a
+/// change.
+// trace:BUG-1610 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MrBasePreflight {
+    /// The base exists on the remote and differs from the source — safe to
+    /// offer.
+    Ok,
+    /// `origin` has no `refs/heads/<base>` — the intended base was never
+    /// pushed.
+    MissingRemoteBase,
+    /// The base and the source branch are the same ref.
+    SourceEqualsBase,
+    /// `origin` could not be reached (offline, auth, hung connection), so
+    /// the base could not be verified either way. Fails closed: no offer.
+    OriginUnreachable,
+}
+
+/// Check whether `base` is a safe MR/PR target for `source_branch`: it must
+/// exist on `origin` and must not be the same ref as the source. Only talks
+/// to the remote (`git ls-remote`) — no local fetch required, so it is
+/// correct even against a bare fixture `origin` with nothing fetched yet.
+// trace:BUG-1610 | ai:claude
+pub(crate) fn preflight_mr_base(
+    project_root: &std::path::Path,
+    source_branch: &str,
+    base: &str,
+) -> MrBasePreflight {
+    if base == source_branch {
+        return MrBasePreflight::SourceEqualsBase;
+    }
+    // Bounded the same way as `probe_branch_on_origin` (BUG-257): a hung
+    // HTTPS dial must not freeze `aida review`, and no credential prompt may
+    // block it. `--exit-code` exits 2 only when origin answered and has no
+    // such ref; any other failure means origin was not reached.
+    // trace:BUG-1610 | ai:claude
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .args([
+            "-c",
+            "http.lowSpeedLimit=1000",
+            "-c",
+            "http.lowSpeedTime=10",
+            "ls-remote",
+            "--exit-code",
+            "--heads",
+            "origin",
+            base,
+        ])
+        .output();
+    match out {
+        Ok(o) if o.status.success() && !o.stdout.is_empty() => MrBasePreflight::Ok,
+        Ok(o) if o.status.code() == Some(2) => MrBasePreflight::MissingRemoteBase,
+        _ => MrBasePreflight::OriginUnreachable,
+    }
+}
+
+/// Refusal text for a non-`Ok` [`MrBasePreflight`] — names both branches and
+/// gives the exact, provider-correct recovery sequence instead of letting
+/// the caller offer an impossible change-create.
+// trace:BUG-1610 | ai:claude
+pub(crate) fn mr_base_diagnosis_message(
+    forge_kind: crate::forge::ForgeKind,
+    outcome: MrBasePreflight,
+    source_branch: &str,
+    base: &str,
+) -> String {
+    let change_noun = forge_kind.change_noun();
+    let condition = match outcome {
+        MrBasePreflight::Ok => return String::new(),
+        MrBasePreflight::OriginUnreachable => {
+            return format!(
+                "not offering a {change_noun} from `{source_branch}`: could not reach \
+                 `origin` to confirm that `{base}` exists there. Check the network or \
+                 credentials and run the command again."
+            );
+        }
+        MrBasePreflight::MissingRemoteBase => format!(
+            "the intended base `{base}` does not exist on `origin`. This usually \
+             happens when the repository was initialized before `{base}` was pushed, \
+             so the forge made `{source_branch}` the project's default branch instead"
+        ),
+        MrBasePreflight::SourceEqualsBase => format!(
+            "it is also the intended base `{base}` (the project's current default \
+             branch) — a change cannot merge into itself"
+        ),
+    };
+    let mut msg = format!(
+        "refusing to offer a {change_noun} from `{source_branch}` — {condition}.\n\n\
+         Recovery:\n  1. git push -u origin {base}\n"
+    );
+    match forge_kind {
+        crate::forge::ForgeKind::GitLab => {
+            msg.push_str(&format!(
+                "  2. glab repo update --defaultBranch {base}\n  \
+                 3. glab mr create --source-branch {source_branch} --target-branch {base}"
+            ));
+        }
+        crate::forge::ForgeKind::GitHub => {
+            msg.push_str(&format!(
+                "  2. gh repo edit --default-branch {base}\n  \
+                 3. gh pr create --head {source_branch} --base {base}"
+            ));
+        }
+        crate::forge::ForgeKind::None => {
+            msg.push_str("  2. open the change against that base through your forge's UI");
+        }
+    }
+    msg
+}
+
+/// Persisted state of a change offered/attempted via `aida review`'s AC-5
+/// (re)open-a-change prompt — enough to remember which base a retry should
+/// target without the operator re-typing it every time.
+// trace:BUG-1610 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct MrRecoveryState {
+    pub spec: String,
+    pub source_branch: String,
+    pub target_branch: String,
+}
+
+/// `.aida/mr-recovery/<spec>.json` under the project root — mirrors
+/// [`crate::punt::hold_signal_path`]'s convention for small, spec-scoped JSON
+/// markers.
+// trace:BUG-1610 | ai:claude
+pub(crate) fn mr_recovery_path(project_root: &std::path::Path, spec: &str) -> std::path::PathBuf {
+    project_root
+        .join(".aida")
+        .join("mr-recovery")
+        .join(format!("{spec}.json"))
+}
+
+/// Write a recovery-state marker, creating `.aida/mr-recovery/` if needed.
+///
+/// Refuses (returns `Err`, writes nothing) when `source_branch ==
+/// target_branch` — persisting that pair is exactly the self-referential
+/// state BUG-1610 observed a hand-run `glab mr create --source-branch
+/// <branch>` (no `--target-branch`) leave behind when the branch was also
+/// the project's default. A later, corrected `--target-branch` retry must
+/// never read that broken pair back (see [`resolve_mr_target_branch`]), so
+/// it must never be written in the first place — enforced here rather than
+/// trusted to every call site.
+// trace:BUG-1610 | ai:claude
+pub(crate) fn write_mr_recovery_state(
+    path: &std::path::Path,
+    state: &MrRecoveryState,
+) -> Result<()> {
+    if state.source_branch == state.target_branch {
+        anyhow::bail!(
+            "refusing to save MR recovery state for {} with source == target (`{}`)",
+            state.spec,
+            state.source_branch
+        );
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(state)?)?;
+    Ok(())
+}
+
+/// Read a recovery-state marker. `None` when absent or unparseable — either
+/// way the caller falls back to the resolved default base.
+// trace:BUG-1610 | ai:claude
+pub(crate) fn read_mr_recovery_state(path: &std::path::Path) -> Option<MrRecoveryState> {
+    let body = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&body).ok()
+}
+
+/// Resolve the target branch for a (re)tried change-create. An explicit
+/// `--target-branch` ALWAYS wins over whatever a previous attempt saved —
+/// a corrected retry must never be silently overridden by stale recovery
+/// state (the exact BUG-1610 failure: `--recover --target-branch main`
+/// still failing because a saved `story-52-work -> story-52-work` pair won).
+// trace:BUG-1610 | ai:claude
+pub(crate) fn resolve_mr_target_branch(
+    explicit_target_branch: Option<&str>,
+    saved: Option<&MrRecoveryState>,
+    default_base: &str,
+) -> String {
+    if let Some(t) = explicit_target_branch {
+        return t.to_string();
+    }
+    if let Some(s) = saved {
+        return s.target_branch.clone();
+    }
+    default_base.to_string()
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1610_mr_base_recovery_tests.rs"]
+mod bug_1610_mr_base_recovery_tests;
 
 #[cfg(test)]
 #[path = "tests/task_471_stale_base_preflight_tests.rs"]

@@ -6367,7 +6367,14 @@ pub(crate) fn handle_git_backend_command(
                 if *guided {
                     handle_guided_human_review(spec)?;
                 } else {
-                    handle_review_spec(&backend, store_path, spec, *no_agent, *allow_stale_base)?;
+                    handle_review_spec(
+                        &backend,
+                        store_path,
+                        spec,
+                        *no_agent,
+                        *allow_stale_base,
+                        None,
+                    )?;
                 }
             }
             _ => {
@@ -7559,6 +7566,7 @@ pub(crate) fn handle_git_backend_command(
             spec,
             no_agent,
             allow_stale_base,
+            target_branch,
             cmd,
         } => {
             // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives a
@@ -7573,6 +7581,7 @@ pub(crate) fn handle_git_backend_command(
                         spec_id,
                         *no_agent,
                         *allow_stale_base,
+                        target_branch.as_deref(),
                     )?;
                 }
                 (None, Some(review_cmd)) => {

@@ -420,6 +420,7 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
             deferred: false,
             execution_mode: None,
             tags: Default::default(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-944".to_string(),
@@ -428,6 +429,7 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
             deferred: false,
             execution_mode: None,
             tags: Default::default(),
+            blocked: None,
         },
     ];
 
@@ -451,6 +453,7 @@ fn auto_complete_head_skips_deferred_candidates() {
             deferred: true,
             execution_mode: None,
             tags: Default::default(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1208".to_string(),
@@ -459,6 +462,7 @@ fn auto_complete_head_skips_deferred_candidates() {
             deferred: false,
             execution_mode: None,
             tags: Default::default(),
+            blocked: None,
         },
     ];
 
@@ -483,6 +487,7 @@ fn auto_complete_head_skips_release_tagged_candidates() {
             tags: ["release workflow meta-task aida:release".to_string()]
                 .into_iter()
                 .collect(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1126".to_string(),
@@ -491,6 +496,7 @@ fn auto_complete_head_skips_release_tagged_candidates() {
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Drain),
             tags: Default::default(),
+            blocked: None,
         },
     ];
 
@@ -516,6 +522,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Guided),
             tags: Default::default(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1121".to_string(),
@@ -524,6 +531,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Operator),
             tags: Default::default(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1122".to_string(),
@@ -532,6 +540,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Decide),
             tags: Default::default(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1123".to_string(),
@@ -540,6 +549,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Drain),
             tags: Default::default(),
+            blocked: None,
         },
     ];
 
@@ -3332,4 +3342,285 @@ fn closed_refusal_does_not_count_as_outstanding() {
         crate::queue_cmd::QueueFreshPickup::AwaitingMerge,
         "a CLOSED refusal must not resurrect as rework"
     );
+}
+
+// --- BUG-1608: queue-wide drain honours BlockedBy + the failure budget -------
+
+/// BUG-1608 fixture: a real git-backed store with `STORY-52` (prerequisite,
+/// status `prereq_status`), `NFR-56` (Approved, `BlockedBy → STORY-52`), and
+/// optionally an independent Approved `TASK-60`, all queued for the
+/// implementer in that order.
+fn bug_1608_fixture(
+    prereq_status: RequirementStatus,
+    with_independent: bool,
+) -> (tempfile::TempDir, Storage) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let storage = Storage::new(&root);
+
+    let mut prereq = Requirement::new("prerequisite".to_string(), String::new());
+    prereq.spec_id = Some("STORY-52".to_string());
+    prereq.status = prereq_status;
+    let mut dependent = Requirement::new("dependent".to_string(), String::new());
+    dependent.spec_id = Some("NFR-56".to_string());
+    dependent.status = RequirementStatus::Approved;
+    dependent.relationships.push(Relationship {
+        rel_type: aida_core::RelationshipType::BlockedBy,
+        target_id: prereq.id,
+        created_at: None,
+        created_by: None,
+    });
+    let mut reqs = vec![prereq, dependent];
+    if with_independent {
+        let mut independent = Requirement::new("independent".to_string(), String::new());
+        independent.spec_id = Some("TASK-60".to_string());
+        independent.status = RequirementStatus::Approved;
+        reqs.push(independent);
+    }
+    let ids: Vec<Uuid> = reqs.iter().map(|r| r.id).collect();
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements = reqs;
+    backend.save(&store).unwrap();
+    for (i, id) in ids.into_iter().enumerate() {
+        storage
+            .queue_add(QueueEntry {
+                user_id: "u".into(),
+                requirement_id: id,
+                position: 1000 * (i as i64 + 1),
+                added_by: "u".into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: Some("implementer".into()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })
+            .unwrap();
+    }
+    (dir, storage)
+}
+
+fn bug_1608_set_status(storage: &Storage, spec: &str, status: RequirementStatus) {
+    storage
+        .update_atomically(|s| {
+            if let Some(r) = s
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some(spec))
+            {
+                r.status = status.clone();
+            }
+        })
+        .unwrap();
+}
+
+fn bug_1608_real_driver(storage: &Storage) -> RealNextNDriver<'_> {
+    RealNextNDriver {
+        storage,
+        user_id: "u".to_string(),
+        role_override: Some("implementer".to_string()),
+        variant: auto_complete::AutoCompleteVariant::Full,
+        json: true,
+        permission_mode: None,
+        no_human: None,
+        escalate_mode: auto_complete::EscalateMode::Blocks,
+        steal: false,
+        force_claim: false,
+        allow_stale_base: false,
+        no_auto_rebase: false,
+        token_meter: None,
+        role_skipped: Vec::new(),
+        seen_role_skips: std::collections::HashSet::new(),
+        pipeline_depth: 1,
+        pipelined_children: std::collections::HashMap::new(),
+        pipelined_result_paths: std::collections::HashMap::new(),
+        next_pipelined_handle: 1,
+    }
+}
+
+/// Drives the REAL queue-wide head resolver ([`RealNextNDriver::next_head`])
+/// and simulates each member's lifecycle as real status transitions in the
+/// store: `shelve` specs go In Progress → Needs Attention (a phase-2 shelve),
+/// everything else In Progress → Completed.
+struct Bug1608Driver<'a> {
+    real: RealNextNDriver<'a>,
+    shelve: Vec<&'static str>,
+    runs: Vec<String>,
+}
+
+impl auto_complete::BatchDriver for Bug1608Driver<'_> {
+    fn next_head(&mut self) -> Option<String> {
+        self.real.next_head()
+    }
+
+    fn run_spec(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
+        self.runs.push(spec.to_string());
+        let storage = self.real.storage;
+        bug_1608_set_status(storage, spec, RequirementStatus::InProgress);
+        if self.shelve.contains(&spec) {
+            bug_1608_set_status(storage, spec, RequirementStatus::NeedsAttention);
+            let mut result = auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci);
+            result.shelved_reason = Some(aida_core::FailureReason {
+                phase: "ci".to_string(),
+                phase_index: 2,
+                kind: "failed".to_string(),
+                detail: "no usable origin".to_string(),
+                recovery_hint: None,
+                shelved_by: None,
+                shelved_at: chrono::Utc::now(),
+            });
+            return result;
+        }
+        bug_1608_set_status(storage, spec, RequirementStatus::Completed);
+        auto_complete::OrchestrationResult::ok()
+    }
+}
+
+fn bug_1608_drain(
+    storage: &Storage,
+    shelve: Vec<&'static str>,
+    max_failures: Option<usize>,
+) -> (auto_complete::BatchDrainResult, Vec<String>) {
+    let mut driver = Bug1608Driver {
+        real: bug_1608_real_driver(storage),
+        shelve,
+        runs: Vec::new(),
+    };
+    let mut result = auto_complete::drain_batch(&mut driver, Some(99), max_failures);
+    // Same composition `handle_auto_complete_next_n` performs.
+    result.skipped.extend(driver.real.role_skipped);
+    (result, driver.runs)
+}
+
+/// BUG-1608 acceptance (the observed incident): queue-wide drain with
+/// `--max-failures 1`, STORY-52 shelves in phase 2 — the drain stops before a
+/// second launch; NFR-56 (BlockedBy STORY-52) is never started.
+// trace:BUG-1608 | ai:claude
+#[test]
+fn bug_1608_queue_wide_drain_max_failures_one_stops_after_first_shelve() {
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    let (result, runs) = bug_1608_drain(&storage, vec!["STORY-52"], Some(1));
+    assert_eq!(runs, vec!["STORY-52"], "no second spec may launch");
+    assert_eq!(result.shelved, vec!["STORY-52"]);
+    assert_eq!(result.exit_code, auto_complete::DRIVE_EXIT_HARD_FAIL);
+    assert!(matches!(
+        result.outcome,
+        auto_complete::BatchDrainOutcome::Failed(auto_complete::Phase::Ci)
+    ));
+}
+
+/// BUG-1608: with budget to spare, the dependent of a shelved spec is skipped
+/// (and reported with its blocker) in the same drain, while independent work
+/// continues.
+// trace:BUG-1608 | ai:claude
+#[test]
+fn bug_1608_dependent_of_shelved_spec_is_skipped_in_same_drain() {
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    let (result, runs) = bug_1608_drain(&storage, vec!["STORY-52"], Some(5));
+    assert_eq!(runs, vec!["STORY-52", "TASK-60"]);
+    assert!(!runs.iter().any(|s| s == "NFR-56"));
+    assert_eq!(result.shelved, vec!["STORY-52"]);
+    assert_eq!(result.shipped, vec!["TASK-60"]);
+    assert_eq!(
+        result.skipped,
+        vec![(
+            "NFR-56".to_string(),
+            "blocked-by STORY-52 (Needs Attention)".to_string()
+        )]
+    );
+    assert_eq!(result.exit_code, auto_complete::DRIVE_EXIT_SHELVED);
+}
+
+/// BUG-1608: Done is not Completed — a dependent of a Done prerequisite (e.g.
+/// merged-pending-verification, or a pushed branch) is not pickable, through
+/// either the queue-wide resolver or the single-head pickup.
+// trace:BUG-1608 | ai:claude
+#[test]
+fn bug_1608_dependent_of_done_but_not_completed_prereq_is_not_picked() {
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Done, false);
+    let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert!(pick.is_none(), "NFR-56 must not be picked: {pick:?}");
+    assert_eq!(
+        blocked,
+        vec![(
+            "NFR-56".to_string(),
+            "blocked-by STORY-52 (Done)".to_string()
+        )]
+    );
+    let err = resolve_auto_complete_head(&storage, "u", Some("implementer"))
+        .expect_err("single-head pickup must refuse the blocked dependent");
+    assert!(err.to_string().contains("nothing to drive"), "{err}");
+
+    // Positive control: once the prerequisite is Completed, the edge is met.
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
+    let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert_eq!(pick.map(|p| p.spec), Some("NFR-56".to_string()));
+    assert!(blocked.is_empty());
+}
+
+/// BUG-1608 / PRIN-5: a `BlockedBy` edge whose target cannot be resolved
+/// (dangling — dependency state unknown) fails closed: not picked.
+// trace:BUG-1608 | ai:claude
+#[test]
+fn bug_1608_unknown_dependency_state_fails_closed() {
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, false);
+    storage
+        .update_atomically(|s| {
+            if let Some(r) = s
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some("NFR-56"))
+            {
+                r.relationships[0].target_id = Uuid::now_v7();
+            }
+        })
+        .unwrap();
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
+    let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert!(pick.is_none(), "unknown dependency must not be picked");
+    assert_eq!(blocked.len(), 1);
+    assert_eq!(blocked[0].0, "NFR-56");
+}
+
+/// TASK-1490: the drain preview's member list must apply the same
+/// `aida_core::pickability::pickability()` verdict dispatch uses (BUG-1608),
+/// not a status-only view. NFR-56 (Approved, `BlockedBy → STORY-52` while
+/// STORY-52 is only Approved, not Completed) must not appear as a preview
+/// member — it must show up as skipped, with its blocker — even though
+/// `next 99` has ample room and NFR-56's status alone is drivable.
+// trace:TASK-1490 | ai:claude
+#[test]
+fn drain_preview_reports_blocked_dependent_as_skipped_not_a_member() {
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    let (members, skipped) =
+        crate::queue_cmd::drain_preview_head_members(&storage, "u", Some("implementer"), 99)
+            .expect("preview resolves");
+
+    let member_ids: Vec<&str> = members.iter().map(|(id, _, _)| id.as_str()).collect();
+    assert_eq!(
+        member_ids,
+        vec!["STORY-52", "TASK-60"],
+        "the blocked dependent NFR-56 must not be listed as a member: {member_ids:?}"
+    );
+    assert_eq!(
+        skipped,
+        vec![(
+            "NFR-56".to_string(),
+            "blocked-by STORY-52 (Approved)".to_string()
+        )],
+        "NFR-56 must be reported skipped, with its blocker"
+    );
+
+    // Positive control: once the prerequisite is Completed, the dependent
+    // becomes a member and drops out of skipped. STORY-52 itself is no
+    // longer status-drivable once Completed, so it drops off the preview too
+    // — the same status filter `auto_complete_head_drivable` always applied.
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
+    let (members, skipped) =
+        crate::queue_cmd::drain_preview_head_members(&storage, "u", Some("implementer"), 99)
+            .expect("preview resolves");
+    let member_ids: Vec<&str> = members.iter().map(|(id, _, _)| id.as_str()).collect();
+    assert_eq!(member_ids, vec!["NFR-56", "TASK-60"]);
+    assert!(skipped.is_empty());
 }

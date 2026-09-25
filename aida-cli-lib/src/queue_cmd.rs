@@ -271,7 +271,7 @@ pub(crate) fn advance_dispatch(
             let backend = advance_backend(store_path)?;
             if let Err(e) = handle_review_spec(
                 &backend, store_path, display, /* no_agent */ false,
-                /* allow_stale_base */ false,
+                /* allow_stale_base */ false, /* target_branch */ None,
             ) {
                 eprintln!(
                     "  {} review of {} did not complete: {}",
@@ -9351,6 +9351,25 @@ pub(crate) fn review_round_from_comments(comments: &[aida_core::Comment]) -> usi
         + 1
 }
 
+/// STORY-281 / TASK-480: whether the reviewer pre-flight checks
+/// (stale-base, intermediate-only) apply to this queue-work plan, and if
+/// so, the PR/MR number to check against.
+///
+/// BUG-1609: this used to be inlined at each call site as a match on
+/// `Some((ReviewForge::GitHub, pr_n))`, which silently skipped every GitLab
+/// MR — not because the checks themselves are GitHub-only
+/// (`preflight_stale_base_check` / `preflight_intermediate_only_check` read
+/// metadata through the forge-routed `fetch_change_info_via_forge`,
+/// GitLab-safe since STORY-621 slice 2), but because the call sites never
+/// reached them for GitLab. Pulling the predicate out to a named,
+/// independently-testable function makes "any forge with a review target,
+/// not just GitHub" a pinned invariant instead of an inlined pattern that
+/// can silently narrow again.
+// trace:BUG-1609 | ai:claude
+pub(crate) fn reviewer_preflight_pr_n(review_target: Option<(ReviewForge, u64)>) -> Option<u64> {
+    review_target.map(|(_, n)| n)
+}
+
 // BUG-1213: keep durable-history round derivation on the same path used to
 /// assemble the production pickup prompt, so callers cannot accidentally
 /// reintroduce a constant round.
@@ -10092,22 +10111,29 @@ pub(crate) fn handle_queue_work(
         }
     }
 
-    // STORY-281: reviewer pre-flight stale-base check. Fires only when
-    // the resolved scope is a GitHub PR AND the inferred role is the
-    // reviewer — every other pickup (implementer, dialog, architect,
-    // GitLab MR) skips this branch. The check is also no-op'd when the
-    // pickup is `--no-launch` (no reviewer session about to run) and
-    // when the user passed `--list-sessions` (already exited above).
+    // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
+    // resolved scope is ANY forge's PR/MR AND the inferred role is the
+    // reviewer — every other pickup (implementer, dialog, architect) skips
+    // this branch. The check is also no-op'd when the pickup is
+    // `--no-launch` (no reviewer session about to run) and when the user
+    // passed `--list-sessions` (already exited above).
+    //
+    // BUG-1609: this used to match only `(ReviewForge::GitHub, pr_n)`, so a
+    // GitLab MR silently skipped the check entirely — not because the check
+    // itself was GitHub-only (`preflight_stale_base_check` reads metadata
+    // through the forge-routed `fetch_change_info_via_forge`, GitLab-safe
+    // since STORY-621 slice 2), but because this call site never reached it
+    // for GitLab. trace:BUG-1609 | ai:claude
     //
     // Behaviour mirrors the orchestrator's phase-3 pre-flight:
     //   Current        → silent proceed
     //   StaleNoOverlap → warning, proceed
     //   StaleOverlap   → refuse (anyhow::bail!) unless allow_stale_base
-    //   Err (gh / fetch) → warning, proceed (never block on transient infra)
+    //   Err (gh/glab / fetch) → warning, proceed (never block on transient infra)
     //
     // trace:STORY-281 | ai:claude
     if !no_launch && role == "reviewer" {
-        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+        if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
             if let Some(root) = project_root_for_config.as_deref() {
                 match preflight_stale_base_check(root, pr_n) {
                     Ok(pr_rebase::StaleBaseOutcome::Current) => {}
@@ -10149,12 +10175,17 @@ pub(crate) fn handle_queue_work(
 
     // TASK-480: reviewer pre-flight intermediate-only check. Sibling
     // substrate-as-bouncer gate to the STORY-281 stale-base refusal
-    // above — same scoping (reviewer + GitHub PR + launching). Refuses a
-    // PR whose diff is exclusively intermediate/generated paths (build
-    // outputs, gitignored files, lockfiles with no source change)
+    // above — same scoping (reviewer + any forge's PR/MR + launching).
+    // Refuses a PR/MR whose diff is exclusively intermediate/generated paths
+    // (build outputs, gitignored files, lockfiles with no source change)
     // because such a fix is not reproducible. The check is a
     // PROGRAMMATIC GATE here, not skill-template instruction text
     // (BUG-280-class lesson). Fails open on infra error.
+    //
+    // BUG-1609: was gated on `ReviewForge::GitHub` like its stale-base
+    // sibling above, so GitLab MRs never ran it even though
+    // `preflight_intermediate_only_check` is itself forge-routed.
+    // trace:BUG-1609 | ai:claude
     //
     //   Clean                   → silent proceed
     //   SourcePlusIntermediate  → warning, proceed (flag-but-allow)
@@ -10162,7 +10193,7 @@ pub(crate) fn handle_queue_work(
     //
     // trace:TASK-480 | ai:claude
     if !no_launch && role == "reviewer" {
-        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+        if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
             if let Some(root) = project_root_for_config.as_deref() {
                 let allow = allow_intermediate_only
                     || std::env::var("AIDA_ALLOW_INTERMEDIATE_ONLY")
@@ -10799,6 +10830,23 @@ pub(crate) fn handle_queue_work(
         }
     }
 
+    // BUG-1607: preflight the resolved launch vendor BEFORE `session_start`
+    // below mints a lease/worktree — both vendor SUPPORT (an interactive
+    // launch refuses Agy; this used to be checked only after session_start,
+    // at the `launch_vendor == Agy && !no_human` bail further down, leaving
+    // an orphaned lease/worktree behind exactly like the bug this fixes) and
+    // binary reachability (`launch_vendor` above, via
+    // `resolve_enabled_headless_vendor`, only checks the `[agents] enabled`
+    // config, not whether the binary is installed — the observed failure:
+    // `vendor: codex` resolved correctly, then the launch itself hardcoded
+    // `claude`, or on a genuinely codex-only machine `codex` was never
+    // installed). `--no-launch` is exempt: it deliberately defers the
+    // launch, so neither check should block the setup-only prep.
+    // trace:BUG-1607 | ai:claude
+    if !no_launch {
+        session::preflight_launch_vendor(launch_vendor, !no_human)?;
+    }
+
     // Set AIDA_SESSION_ROLE for the exec'd claude (and for any in-process
     // logic the rest of this command runs against). session_start reads
     // it to record the lease's role field when --role isn't passed; we
@@ -11170,6 +11218,7 @@ pub(crate) fn handle_queue_work(
             quiet,
             &verdict_path,
             contained,
+            launch_vendor,
         );
     }
     // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
@@ -11201,13 +11250,16 @@ pub(crate) fn handle_queue_work(
         );
         return session::exec_codex_session(&prompt, codex_bypass, resolved_model.as_deref());
     }
-    if launch_vendor == session::HeadlessVendor::Agy && !no_human {
-        anyhow::bail!(
-            "interactive queue work does not support vendor `agy` yet. Recovery: re-run with \
-             `--no-human` for a headless AGY launch, choose `--vendor claude` or `--vendor codex`, \
-             or use `--no-launch`."
-        );
-    }
+    // BUG-1607: an interactive Agy launch is now refused by
+    // `preflight_launch_vendor` above, BEFORE `session_start` minted the
+    // lease/worktree this function is already holding by this point — so
+    // `launch_vendor == Agy && !no_human` can no longer reach here. No
+    // per-arm Agy handling needed below either: `match launch` only spawns
+    // Claude.
+    debug_assert!(
+        !(launch_vendor == session::HeadlessVendor::Agy && !no_human),
+        "BUG-1607: preflight_launch_vendor must refuse an interactive Agy launch before this point"
+    );
     match launch {
         QueueWorkLaunch::Resume(id) => {
             if no_human {
@@ -11379,9 +11431,16 @@ pub(crate) fn run_standalone_reviewer(
     quiet: bool,
     verdict_path: &std::path::Path,
     contained: bool,
+    // BUG-1607: the ALREADY-RESOLVED launch vendor (flag > `[agents]` config >
+    // default, filtered to an enabled+installed profile — the same contract
+    // `handle_queue_work` resolves for the implementer path). Every arm below
+    // reuses this value instead of re-deriving or hardcoding `claude`, so a
+    // codex-routed standalone reviewer actually launches `codex`.
+    // trace:BUG-1607 | ai:claude
+    launch_vendor: session::HeadlessVendor,
 ) -> Result<()> {
-    // Spawn claude, wait, and capture the headless JSONL log path (None
-    // for an interactive review — there is no stream-json log).
+    // Spawn the resolved vendor, wait, and capture the headless JSONL log
+    // path (None for an interactive review — there is no stream-json log).
     let (status, log_path): (std::process::ExitStatus, Option<std::path::PathBuf>) = match launch {
         QueueWorkLaunch::Resume(id) => {
             if no_human {
@@ -11418,6 +11477,23 @@ pub(crate) fn run_standalone_reviewer(
                 )?;
                 (status, Some(log_path))
             } else {
+                // BUG-1607: `handle_queue_work` already refuses a
+                // non-Claude `--resume` before minting the launch decision
+                // (headless resume currently only supports the Claude
+                // session model), so `launch_vendor` here is guaranteed
+                // Claude. Guard it anyway — this function is unit-tested
+                // directly, so the invariant must hold even when this arm
+                // is reached without going through that outer gate.
+                // trace:BUG-1607 | ai:claude
+                if launch_vendor != session::HeadlessVendor::Claude {
+                    anyhow::bail!(
+                        "resuming an interactive reviewer session currently supports only the \
+                         Claude session model, but the resolved launch vendor is `{}`. \
+                         Recovery: start a fresh `{}` reviewer instead of `--resume`.",
+                        launch_vendor.as_str(),
+                        launch_vendor.as_str()
+                    );
+                }
                 eprintln!(
                     "{} {}",
                     crate::glyph(crate::glyphs::Glyph::FlowActive)
@@ -11439,7 +11515,6 @@ pub(crate) fn run_standalone_reviewer(
         }
         QueueWorkLaunch::Fresh(id) => {
             if no_human {
-                let launch_vendor = session::resolve_enabled_headless_vendor(project_root)?;
                 let log_path = project_root
                     .join(".aida")
                     .join("headless-logs")
@@ -11485,26 +11560,47 @@ pub(crate) fn run_standalone_reviewer(
                 (status, Some(log_path))
             } else {
                 let name = session::derive_session_name(scope, branch, role);
-                eprintln!(
-                    "{} {}",
-                    crate::glyph(crate::glyphs::Glyph::FlowActive)
-                        .green()
-                        .bold(),
-                    format!(
-                        "launching claude reviewer in {} ({}, prompt `{}`)",
-                        worktree.display(),
-                        claude_posture_display(permission_mode, contained),
-                        prompt
-                    )
-                    .cyan()
-                );
-                let status = session::spawn_claude_session(
+                // BUG-1607: build the launch plan through the ONE shared
+                // resolver instead of hardcoding `claude` — this was the
+                // actual bug: the resolver upstream correctly printed
+                // `vendor: codex`, but this arm always spawned `claude`
+                // regardless, failing after the lease + worktree already
+                // existed. trace:BUG-1607 | ai:claude
+                let plan = session::interactive_reviewer_launch_plan(
+                    launch_vendor,
                     permission_mode,
                     name.as_deref(),
                     prompt,
                     &id,
                     contained,
                 )?;
+                let posture = match launch_vendor {
+                    session::HeadlessVendor::Claude => {
+                        claude_posture_display(permission_mode, contained)
+                    }
+                    session::HeadlessVendor::Codex | session::HeadlessVendor::Agy => {
+                        if permission_mode == Some("bypassPermissions") {
+                            "bypass".to_string()
+                        } else {
+                            "native".to_string()
+                        }
+                    }
+                };
+                eprintln!(
+                    "{} {}",
+                    crate::glyph(crate::glyphs::Glyph::FlowActive)
+                        .green()
+                        .bold(),
+                    format!(
+                        "launching {} reviewer in {} ({}, prompt `{}`)",
+                        launch_vendor.as_str(),
+                        worktree.display(),
+                        posture,
+                        prompt
+                    )
+                    .cyan()
+                );
+                let status = session::spawn_reviewer_launch_plan(&plan)?;
                 (status, None)
             }
         }
@@ -11631,6 +11727,13 @@ pub(crate) struct AutoCompleteHeadCandidate {
     pub(crate) deferred: bool,
     pub(crate) execution_mode: Option<aida_core::ExecutionMode>,
     pub(crate) tags: std::collections::HashSet<String>,
+    /// BUG-1608: the STORY-333 pickability verdict, resolved against the
+    /// store at candidate-build time. `Some(label)` (e.g. `blocked-by STORY-52
+    /// (Needs Attention)`) means the head picker must skip it; `None` means
+    /// pickable. Built fresh on every head resolution, so a blocker shelved
+    /// earlier in the same drain is seen.
+    // trace:BUG-1608 | ai:claude
+    pub(crate) blocked: Option<String>,
 }
 
 impl AutoCompleteHeadCandidate {
@@ -11651,6 +11754,9 @@ pub(crate) struct AutoCompleteHeadPick {
     pub(crate) deferred_skipped: Vec<String>,
     pub(crate) guided_or_operator_skipped: Vec<(String, aida_core::ExecutionMode)>,
     pub(crate) release_skipped: Vec<String>,
+    /// BUG-1608: drivable-status candidates skipped because the pickability
+    /// gate refused them — `(id, reason label)`, e.g. an unmet `BlockedBy`.
+    pub(crate) blocked_skipped: Vec<(String, String)>,
 }
 
 /// The auto-complete engine always starts with a phase-1 implementer unless
@@ -11698,6 +11804,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
     let mut deferred_skipped = Vec::new();
     let mut guided_or_operator_skipped = Vec::new();
     let mut release_skipped = Vec::new();
+    let mut blocked_skipped = Vec::new();
     for candidate in candidates {
         if let Some(for_role) = candidate.for_role.as_deref() {
             let routed = canonical_role_name(for_role);
@@ -11725,6 +11832,16 @@ pub(crate) fn pick_auto_complete_head_for_role(
             continue;
         }
         if auto_complete_head_drivable(&candidate.status) {
+            // BUG-1608: an Approved/Planned status is necessary but not
+            // sufficient — a `BlockedBy` dependent stays unpickable until its
+            // prerequisite is Completed (Done, NeedsAttention, a pushed branch
+            // do not count). The queue-wide drain previously checked status
+            // only, so it launched NFR-56 right after its blocker STORY-52
+            // shelved. trace:BUG-1608 | ai:claude
+            if let Some(reason) = &candidate.blocked {
+                blocked_skipped.push((candidate.id.clone(), reason.clone()));
+                continue;
+            }
             return Some(AutoCompleteHeadPick {
                 spec: candidate.id.clone(),
                 status_skipped,
@@ -11732,6 +11849,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 deferred_skipped,
                 guided_or_operator_skipped,
                 release_skipped,
+                blocked_skipped,
             });
         }
         status_skipped.push((candidate.id.clone(), candidate.status.clone()));
@@ -11768,21 +11886,33 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
                     deferred: r.deferred,
                     execution_mode: r.execution_mode,
                     tags: r.tags.clone(),
+                    // BUG-1608: PRIN-5 fail closed — `pickability` treats a
+                    // dangling or non-Completed `BlockedBy` target as blocked,
+                    // so unknown dependency state never reads as pickable.
+                    // trace:BUG-1608 | ai:claude
+                    blocked: match aida_core::pickability::pickability(r, &store) {
+                        aida_core::pickability::Pickability::Pickable => None,
+                        aida_core::pickability::Pickability::Blocked(reason) => {
+                            Some(aida_core::pickability::pickability_reason_label(&reason))
+                        }
+                    },
                 })
         })
         .collect())
 }
 
-/// Build the `(display_id, status)` candidate list for the active role's
-/// queue in pickup order (queue position ascending, same as `aida queue
-/// next`) — the shared input to [`pick_auto_complete_head`] for both
-/// single-head pickup (TASK-292) and the `nextN` drain (TASK-293).
-/// trace:TASK-292 TASK-293 | ai:claude
-pub(crate) fn auto_complete_head_candidates(
+/// Build the `(display_id, status, blocked)` candidate list for the active
+/// role's queue in pickup order (queue position ascending, same as `aida
+/// queue next`) — the shared input to [`auto_complete_head_candidates`]
+/// (status only, for [`pick_auto_complete_head`]) and, since TASK-1490, to
+/// the drain preview and drain-state member list, both of which need the
+/// carried BUG-1608 pickability verdict rather than the status alone.
+// trace:TASK-292 TASK-293 TASK-1490 | ai:claude
+pub(crate) fn auto_complete_head_candidates_with_blocked(
     storage: &Storage,
     user_id: &str,
     role_override: Option<&str>,
-) -> Result<Vec<(String, RequirementStatus)>> {
+) -> Result<Vec<(String, RequirementStatus, Option<String>)>> {
     let effective_role = effective_auto_complete_role(role_override);
     Ok(
         auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role))?
@@ -11805,7 +11935,30 @@ pub(crate) fn auto_complete_head_candidates(
                     .map(|r| canonical_role_name(r) == effective_role)
                     .unwrap_or(true)
             })
-            .map(|candidate| (candidate.id, candidate.status))
+            .map(|candidate| (candidate.id, candidate.status, candidate.blocked))
+            .collect(),
+    )
+}
+
+/// Build the `(display_id, status)` candidate list for the active role's
+/// queue in pickup order (queue position ascending, same as `aida queue
+/// next`) — the shared input to [`pick_auto_complete_head`] for both
+/// single-head pickup (TASK-292) and the `nextN` drain (TASK-293).
+///
+/// This view drops the BUG-1608 pickability verdict; a caller that must
+/// distinguish a blocked dependent from a merely undrivable status (the
+/// drain preview and drain-state member list, TASK-1490) should call
+/// [`auto_complete_head_candidates_with_blocked`] instead.
+/// trace:TASK-292 TASK-293 | ai:claude
+pub(crate) fn auto_complete_head_candidates(
+    storage: &Storage,
+    user_id: &str,
+    role_override: Option<&str>,
+) -> Result<Vec<(String, RequirementStatus)>> {
+    Ok(
+        auto_complete_head_candidates_with_blocked(storage, user_id, role_override)?
+            .into_iter()
+            .map(|(id, status, _blocked)| (id, status))
             .collect(),
     )
 }
@@ -11829,6 +11982,10 @@ pub(crate) fn resolve_auto_complete_head(
         Some(pick) => {
             for (id, routed) in &pick.role_skipped {
                 eprintln!("skipped {id} — routed for {routed}");
+            }
+            // trace:BUG-1608 | ai:claude
+            for (id, reason) in &pick.blocked_skipped {
+                eprintln!("skipped {id} — {reason}");
             }
             for id in &pick.deferred_skipped {
                 eprintln!("skipped {id} — deferred — skipped");
@@ -11951,6 +12108,20 @@ pub(crate) fn resolve_auto_complete_head(
                     "skipped {id} — needs guided/operator session ({mode}); use `aida queue work {id} --guided`, `aida do {id}`, or de-risk it with `aida derisk {id}`"
                 );
             }
+            // BUG-1608: name every drivable-status item the dependency gate
+            // held back, with its blocker, so the refusal is never silent.
+            // trace:BUG-1608 | ai:claude
+            for candidate in candidates.iter().filter(|c| {
+                c.for_role
+                    .as_deref()
+                    .map(|r| canonical_role_name(r) == role_label)
+                    .unwrap_or(true)
+                    && auto_complete_head_drivable(&c.status)
+            }) {
+                if let Some(reason) = &candidate.blocked {
+                    eprintln!("skipped {} — {reason}", candidate.id);
+                }
+            }
             // The queue has items, but every one is in-flight or terminal —
             // name the first few so it's clear *why* there's nothing to
             // drive, without dumping a long stale list.
@@ -11984,7 +12155,7 @@ pub(crate) fn resolve_auto_complete_head(
             } else {
                 anyhow::bail!(
                     "no drivable item in the queue for {role_label}; nothing to drive — \
-                     {} queued item{} in-flight or terminal: {detail}{suffix}",
+                     {} queued item{} in-flight, terminal, or blocked: {detail}{suffix}",
                     skipped.len(),
                     if skipped.len() == 1 { "" } else { "s" },
                 )
@@ -12044,9 +12215,11 @@ fn preview_queue_work_drain(
 
     if let NextKeyword::Count(n) = next_kw {
         let limit = n.max(1);
-        let members = drain_preview_head_members(storage, user_id, role_override, limit)?;
+        let (members, skipped) =
+            drain_preview_head_members(storage, user_id, role_override, limit)?;
         println!("  target: next {limit}");
         print_drain_preview_members("queue head", members.into_iter(), Some(limit));
+        print_drain_preview_skipped(&skipped);
         return Ok(());
     }
 
@@ -12080,23 +12253,37 @@ fn preview_queue_work_drain(
     }
 
     let limit = max.unwrap_or(99).max(1);
-    let members = drain_preview_head_members(storage, user_id, role_override, limit)?;
+    let (members, skipped) = drain_preview_head_members(storage, user_id, role_override, limit)?;
     println!("  target: queue head");
     print_drain_preview_members("queue head", members.into_iter(), Some(limit));
+    print_drain_preview_skipped(&skipped);
     Ok(())
 }
 
-fn drain_preview_head_members(
+/// Drivable head-of-queue members for the drain preview, alongside the
+/// dependents skipped to reach them. TASK-1490: applies the same
+/// `aida_core::pickability::pickability()` verdict the real drain gates
+/// dispatch on (BUG-1608), so a `BlockedBy` dependent that the drain would
+/// skip is reported as skipped here too, rather than listed as a member the
+/// preview implies would run.
+// trace:TASK-1490 | ai:claude
+pub(crate) fn drain_preview_head_members(
     storage: &Storage,
     user_id: &str,
     role_override: Option<&str>,
     limit: usize,
-) -> Result<Vec<(String, String, String)>> {
-    let candidates = auto_complete_head_candidates(storage, user_id, role_override)?;
+) -> Result<(Vec<(String, String, String)>, Vec<(String, String)>)> {
+    let candidates = auto_complete_head_candidates_with_blocked(storage, user_id, role_override)?;
     let store = storage.load()?;
     let mut members = Vec::new();
-    for (id, status) in candidates {
+    let mut skipped = Vec::new();
+    for (id, status, blocked) in candidates {
         if !auto_complete_head_drivable(&status) {
+            continue;
+        }
+        // trace:TASK-1490 | ai:claude
+        if let Some(reason) = blocked {
+            skipped.push((id, reason));
             continue;
         }
         let title = store
@@ -12108,7 +12295,7 @@ fn drain_preview_head_members(
             break;
         }
     }
-    Ok(members)
+    Ok((members, skipped))
 }
 
 fn print_drain_preview_members<I>(label: &str, members: I, max: Option<usize>)
@@ -12134,6 +12321,28 @@ where
         };
         println!("    {:>2}. {} [{}]{}", i + 1, id, status, title_suffix);
     }
+}
+
+/// Report the `BlockedBy` dependents a drain preview skipped to reach its
+/// member list — the same `(spec, reason)` shape and wording the real
+/// drain's post-run summary uses for its skipped list (see
+/// `emit_next_n_drain_summary`), so the preview never implies a blocked
+/// dependent would run.
+// trace:TASK-1490 | ai:claude
+fn print_drain_preview_skipped(skipped: &[(String, String)]) {
+    if skipped.is_empty() {
+        return;
+    }
+    let kn = skipped.len();
+    let render: Vec<String> = skipped
+        .iter()
+        .map(|(spec, reason)| format!("{spec} ({reason})"))
+        .collect();
+    println!(
+        "  {kn} dependent spec{} skipped: {}",
+        if kn == 1 { "" } else { "s" },
+        render.join(", ")
+    );
 }
 
 /// When an autonomous head pickup finds nothing for the selected role, name

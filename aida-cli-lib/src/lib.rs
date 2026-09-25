@@ -5800,6 +5800,7 @@ fn run() -> Result<()> {
             spec,
             no_agent,
             allow_stale_base,
+            target_branch,
             cmd,
         } => {
             // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives the
@@ -5815,7 +5816,7 @@ fn run() -> Result<()> {
                 ),
                 (None, Some(review_cmd)) => handle_review_command(review_cmd, &storage)?,
                 (None, None) => {
-                    let _ = (no_agent, allow_stale_base);
+                    let _ = (no_agent, allow_stale_base, target_branch);
                     anyhow::bail!("pass a spec id (`aida review <SPEC>`) or a subcommand (`prompt` / `assemble`)");
                 }
             }
@@ -44766,7 +44767,19 @@ fn try_auto_queue_pr_review(
     desc.push_str("- Approve and merge, or request changes by spec id.\n");
     desc.push_str("- Mark this story `completed` once the PR is merged.\n");
 
-    let title = format!("Review PR-{}: {}", pr.number, pr.title);
+    // BUG-1609: the story title carries the forge-correct label ("Review
+    // MR-N" for GitLab), not a hardcoded "Review PR-N". Downstream,
+    // `parse_review_scope` reads this prefix back into `plan.review_target`'s
+    // `ReviewForge` — a GitHub-shaped title on a GitLab MR silently made the
+    // whole reviewer-preflight chain (stale-base check, intermediate-only
+    // check, `pr_base_head`) treat the MR as a GitHub PR and shell out to
+    // `gh`, which then fabricated a GitHub-shaped `pr-N` fallback head for a
+    // branch `gh` had never heard of. trace:BUG-1609 | ai:claude
+    let title = format!(
+        "Review {}: {}",
+        format_review_label(review_forge, pr.number),
+        pr.title
+    );
     let new_id = match aida_subcmd_add_review_story(project_root, &title, &desc) {
         Some(id) => id,
         None => {
@@ -72107,6 +72120,14 @@ mod pull_summary_status_change_tests;
 mod queue_work_tests;
 
 #[cfg(test)]
+#[path = "tests/bug_1607_reviewer_vendor_tests.rs"]
+mod bug_1607_reviewer_vendor_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]
+mod bug_1609_gitlab_reviewer_preflight_tests;
+
+#[cfg(test)]
 #[path = "tests/queue_rework_tests.rs"]
 mod queue_rework_tests;
 
@@ -85029,9 +85050,12 @@ fn review_branch_no_change_context_card(
 }
 
 // trace:BUG-816 | ai:codex
-fn review_open_change_hint(forge: crate::forge::ForgeKind, branch: &str) -> String {
+// trace:BUG-1610 | ai:claude — `base` is now always explicit (see
+// `ForgeKind::create_cmd_for_branch`), so this hint never lets the forge
+// infer (and possibly mis-infer) the target branch.
+fn review_open_change_hint(forge: crate::forge::ForgeKind, branch: &str, base: &str) -> String {
     let push = format!("git push -u origin {}", shell_quote(branch));
-    match forge.create_cmd_for_branch(branch) {
+    match forge.create_cmd_for_branch(branch, base) {
         Some(create) => format!("{push} && {create}"),
         None => push,
     }
@@ -85650,6 +85674,63 @@ fn review_is_terminal_noop(status: &RequirementStatus) -> bool {
     )
 }
 
+/// BUG-1607: resolve (and preflight) the vendor `handle_review_spec` will
+/// launch the interactive reviewer with — the SAME shared contract
+/// `aida queue work` resolves for the implementer/reviewer launch (flag >
+/// `[agents]` project/user config > default, filtered to an enabled AND
+/// installed profile). This verb has no `--vendor` flag of its own, so a
+/// Codex-only project (no Claude installed) must be picked up from config
+/// alone.
+///
+/// `None` only for `no_agent` (no launch, so no vendor is needed) — every
+/// other refusal (disabled profile, unreachable binary, unsupported
+/// interactive vendor) propagates as `Err` from here, BEFORE
+/// `handle_review_spec` acquires the review lease below it. Previously
+/// there was no resolution here at all: the launch always hardcoded
+/// `claude`, so the command reached "running reviewer" holding a live
+/// lease and then failed with a raw ENOENT.
+///
+/// Split out from `handle_review_spec` (which gates on an interactive TTY
+/// and therefore cannot run inside `cargo test`) so an automated test can
+/// exercise this exact resolution-and-preflight code directly.
+// trace:BUG-1607 | ai:claude
+fn review_spec_resolve_vendor(
+    project_root: &std::path::Path,
+    no_agent: bool,
+) -> Result<Option<session::HeadlessVendor>> {
+    if no_agent {
+        return Ok(None);
+    }
+    let vendor = session::resolve_enabled_headless_vendor(project_root)?;
+    session::preflight_launch_vendor(vendor, true)?;
+    Ok(Some(vendor))
+}
+
+/// BUG-1607: build + spawn the interactive reviewer [`session::ReviewerLaunchPlan`]
+/// for `vendor` — the exact launch `handle_review_spec` runs once a human is
+/// confirmed at an interactive terminal. Split out for the same testability
+/// reason as [`review_spec_resolve_vendor`]: `handle_review_spec` itself
+/// gates on a TTY and cannot run under `cargo test`, but this is the real
+/// launch code, not a reimplemented stand-in for it.
+// trace:BUG-1607 | ai:claude
+fn review_spec_launch_reviewer(
+    vendor: session::HeadlessVendor,
+    session_name: &str,
+    prompt: &str,
+    session_id: &str,
+) -> Result<std::process::ExitStatus> {
+    let plan = session::interactive_reviewer_launch_plan(
+        vendor,
+        None,
+        Some(session_name),
+        prompt,
+        session_id,
+        false,
+    )
+    .map_err(|e| anyhow::anyhow!("aida review: {e}"))?;
+    session::spawn_reviewer_launch_plan(&plan).context("failed to launch the reviewer")
+}
+
 /// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
 /// counterpart to `aida queue work`. Resolves the spec's review surface,
 /// runs the existing headless reviewer tier (`/aida-review`) over the diff
@@ -85663,6 +85744,7 @@ fn handle_review_spec(
     spec: &str,
     no_agent: bool,
     allow_stale_base: bool,
+    target_branch: Option<&str>,
 ) -> Result<()> {
     let project_root = store_path
         .parent()
@@ -85778,8 +85860,34 @@ fn handle_review_spec(
                 "  {} the held draft {change_noun} is closed or was never opened.",
                 crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
             );
+            // BUG-1610: resolve the intended base BEFORE offering to open a
+            // change, and verify it — a bare `--source-branch` create with
+            // no explicit base can silently target the source branch itself
+            // when it became the project default (remote main never
+            // pushed). An explicit `--target-branch` always wins over
+            // whatever a previous attempt saved; the saved state itself
+            // never has source == target (`write_mr_recovery_state` refuses
+            // that pair). trace:BUG-1610 | ai:claude
+            let recovery_path = crate::pr_cmd::mr_recovery_path(project_root, &spec_id);
+            let saved_recovery = crate::pr_cmd::read_mr_recovery_state(&recovery_path);
+            let default_base = crate::forge::default_branch_of(project_root);
+            let base = crate::pr_cmd::resolve_mr_target_branch(
+                target_branch,
+                saved_recovery.as_ref(),
+                &default_base,
+            );
+            let base_check = crate::pr_cmd::preflight_mr_base(project_root, branch, &base);
+            if base_check != crate::pr_cmd::MrBasePreflight::Ok {
+                println!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                    crate::pr_cmd::mr_base_diagnosis_message(forge, base_check, branch, &base)
+                        .yellow()
+                );
+                return Ok(());
+            }
             // AC-5: offer to (re)open a PR before review.
-            let open_change_cmd = review_open_change_hint(forge, branch);
+            let open_change_cmd = review_open_change_hint(forge, branch, &base);
             if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
                 let card = review_branch_no_change_context_card(
                     &spec_id,
@@ -85802,6 +85910,14 @@ fn handle_review_spec(
                         "  {} then re-run {} once the {change_noun} is open.",
                         crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                         format!("aida review {spec_id}").cyan()
+                    );
+                    let _ = crate::pr_cmd::write_mr_recovery_state(
+                        &recovery_path,
+                        &crate::pr_cmd::MrRecoveryState {
+                            spec: spec_id.clone(),
+                            source_branch: branch.clone(),
+                            target_branch: base.clone(),
+                        },
                     );
                     return Ok(());
                 }
@@ -85878,6 +85994,11 @@ fn handle_review_spec(
              read-only surface without launching one, add --no-agent."
         );
     }
+
+    // BUG-1607: resolve (and preflight) the launch vendor — see
+    // `review_spec_resolve_vendor`'s doc for why this is BEFORE the lease
+    // below is acquired, and why it is split out as its own function.
+    let review_vendor = review_spec_resolve_vendor(project_root, no_agent)?;
 
     // BUG-511: hold a session lease scoped to the spec while the review
     // runs — same substrate as `aida queue work`, so the footer / `aida
@@ -86036,9 +86157,15 @@ fn handle_review_spec(
         "BUG-721: non-interactive review must be refused before the reviewer launch"
     );
     let name = format!("review-{}", spec_id.to_ascii_lowercase());
+    // BUG-1607: launch through the SAME shared plan resolver
+    // `run_standalone_reviewer` uses, instead of hardcoding `claude` — see
+    // `review_spec_launch_reviewer`'s doc. `review_vendor` is always `Some`
+    // here — the only `None` arm (`no_agent`) already returned above.
+    // trace:BUG-1607 | ai:claude
+    let vendor = review_vendor
+        .expect("review_vendor is Some whenever no_agent is false (already returned above)");
     let status: std::process::ExitStatus =
-        session::spawn_claude_session(None, Some(&name), &prompt, &session_id, false)
-            .context("failed to launch the reviewer")?;
+        review_spec_launch_reviewer(vendor, &name, &prompt, &session_id)?;
     if !status.success() {
         eprintln!(
             "  {} the reviewer exited non-zero ({})",
@@ -93974,26 +94101,57 @@ fn parse_next_count(raw: &str) -> Result<usize> {
 /// drivable head of the active role's queue, or `None` when nothing drivable
 /// remains (the drain is then complete). A store/queue read failure is fatal —
 /// it is not "drained" and would recur on every iteration. trace:TASK-293
+/// Resolve the next `nextN` / queue-wide drain head. Returns the pick plus
+/// the entries skipped to reach it: `role_skipped` as `(id, routed role)` and
+/// (BUG-1608) `blocked_skipped` as `(id, pickability reason)` — dependents
+/// whose `BlockedBy` prerequisite is not Completed. The candidates are
+/// re-read from storage on every call, so a blocker shelved by the previous
+/// member is seen by the very next pick.
+#[allow(clippy::type_complexity)]
 fn resolve_next_n_head(
     storage: &Storage,
     user_id: &str,
     role_override: Option<&str>,
-) -> (Option<AutoCompleteHeadPick>, Vec<(String, String)>) {
+) -> (
+    Option<AutoCompleteHeadPick>,
+    Vec<(String, String)>,
+    Vec<(String, String)>,
+) {
     let effective_role = effective_auto_complete_role(role_override);
     match auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role)) {
         Ok(candidates) => {
             let pick = pick_auto_complete_head_for_role(&candidates, &effective_role);
-            let role_skipped = match &pick {
-                Some(pick) => pick.role_skipped.clone(),
-                None => candidates
-                    .iter()
-                    .filter_map(|candidate| {
-                        let routed = candidate.for_role.as_deref().map(canonical_role_name)?;
-                        (routed != effective_role).then(|| (candidate.id.clone(), routed))
-                    })
-                    .collect(),
+            let (role_skipped, blocked_skipped) = match &pick {
+                Some(pick) => (pick.role_skipped.clone(), pick.blocked_skipped.clone()),
+                None => (
+                    candidates
+                        .iter()
+                        .filter_map(|candidate| {
+                            let routed = candidate.for_role.as_deref().map(canonical_role_name)?;
+                            (routed != effective_role).then(|| (candidate.id.clone(), routed))
+                        })
+                        .collect(),
+                    // trace:BUG-1608 | ai:claude
+                    candidates
+                        .iter()
+                        .filter(|candidate| {
+                            candidate
+                                .for_role
+                                .as_deref()
+                                .map(|r| canonical_role_name(r) == effective_role)
+                                .unwrap_or(true)
+                                && auto_complete_head_drivable(&candidate.status)
+                        })
+                        .filter_map(|candidate| {
+                            candidate
+                                .blocked
+                                .clone()
+                                .map(|reason| (candidate.id.clone(), reason))
+                        })
+                        .collect(),
+                ),
             };
-            (pick, role_skipped)
+            (pick, role_skipped, blocked_skipped)
         }
         Err(e) => {
             eprintln!(
@@ -94364,7 +94522,7 @@ struct RealNextNDriver<'a> {
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
     fn next_head(&mut self) -> Option<String> {
-        let (pick, role_skipped) =
+        let (pick, role_skipped, blocked_skipped) =
             resolve_next_n_head(self.storage, &self.user_id, self.role_override.as_deref());
         for (spec, role) in &role_skipped {
             if self.seen_role_skips.insert(spec.clone()) {
@@ -94373,7 +94531,31 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
                     .push((spec.clone(), format!("routed for {role}")));
             }
         }
-        pick.map(|pick| pick.spec)
+        // BUG-1608: a dependent whose prerequisite is not Completed is
+        // skipped and reported with its blocker. The reason is refreshed when
+        // the blocker's state moves (e.g. In Progress → Needs Attention after
+        // a shelve) so the summary names the blocker's final state.
+        // trace:BUG-1608 | ai:claude
+        for (spec, reason) in &blocked_skipped {
+            match self.role_skipped.iter_mut().find(|(s, _)| s == spec) {
+                Some(entry) if &entry.1 != reason => {
+                    eprintln!("skipped {spec} — {reason}");
+                    entry.1 = reason.clone();
+                }
+                Some(_) => {}
+                None => {
+                    eprintln!("skipped {spec} — {reason}");
+                    self.role_skipped.push((spec.clone(), reason.clone()));
+                }
+            }
+        }
+        let pick = pick.map(|pick| pick.spec);
+        // A dependent skipped earlier whose blocker has since Completed is
+        // picked now — it is no longer "skipped". trace:BUG-1608 | ai:claude
+        if let Some(spec) = &pick {
+            self.role_skipped.retain(|(s, _)| s != spec);
+        }
+        pick
     }
 
     fn run_spec(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
@@ -94648,14 +94830,24 @@ fn handle_auto_complete_next_n(
 
     // STORY-301: write the drain-state file — the drivable queue head, capped
     // at N, is the member list. Best-effort. trace:STORY-301 | ai:claude
+    //
+    // TASK-1490: apply the same `aida_core::pickability::pickability()`
+    // verdict dispatch is gated on (BUG-1608) before capping at N. A
+    // `BlockedBy` dependent is skipped here exactly as `resolve_next_n_head`
+    // skips it once the live drain reaches it, so the state file never
+    // predicts a member the drain will not actually run.
     let drain_root = find_main_worktree_root().ok();
     if let Some(root) = &drain_root {
-        if let Ok(candidates) = auto_complete_head_candidates(storage, user_id, role_override) {
+        if let Ok(candidates) =
+            auto_complete_head_candidates_with_blocked(storage, user_id, role_override)
+        {
             let specs: Vec<String> = candidates
                 .into_iter()
-                .filter(|(_, status)| auto_complete_head_drivable(status))
+                .filter(|(_, status, _)| auto_complete_head_drivable(status))
+                // trace:TASK-1490 | ai:claude
+                .filter(|(_, _, blocked)| blocked.is_none())
                 .take(n)
-                .map(|(id, _)| id)
+                .map(|(id, _, _)| id)
                 .collect();
             let pipeline_depth = DrainTuning::resolve(root).pipeline_depth();
             let _ = drain_state::DrainState::new_next_n(n, &specs)

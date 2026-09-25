@@ -4756,6 +4756,20 @@ struct InFlightMember {
     handle: PipelinedHandle,
 }
 
+/// BUG-1608: has the `--max-failures` budget been spent? `max_failures = N`
+/// (N ≥ 1) allows exactly N shelves; once the Nth lands the drain must stop
+/// BEFORE it dispatches another spec. The check therefore runs right after a
+/// shelve is recorded, not when the next failure arrives — the old
+/// `shelved + 1 > cap` test only fired on the (N+1)th failure, so a cap of one
+/// let a second spec launch after the first shelve. `0` keeps its documented
+/// meaning ("the first failure stops the drain"): that case never reaches a
+/// shelve, because `shelved + 1 > 0` already routes the first failure to the
+/// hard stop.
+// trace:BUG-1608 | ai:claude
+fn failure_budget_exhausted(shelved: usize, max_failures: Option<usize>) -> bool {
+    max_failures.is_some_and(|cap| shelved >= cap)
+}
+
 fn apply_batch_result(
     head: String,
     result: OrchestrationResult,
@@ -4773,7 +4787,22 @@ fn apply_batch_result(
             .unwrap_or(false);
         if result.shelved_reason.is_some() && !over_failure_budget {
             forget_batch_disposition(&head, shipped, punted, escalated, shelved, skipped);
-            shelved.push(head);
+            shelved.push(head.clone());
+            // BUG-1608: the budget is spent the moment the Nth shelve lands —
+            // stop here, before the scheduler launches another member.
+            // trace:BUG-1608 | ai:claude
+            if failure_budget_exhausted(shelved.len(), max_failures) {
+                return Some(BatchDrainResult {
+                    shipped: shipped.clone(),
+                    punted: punted.clone(),
+                    escalated: escalated.clone(),
+                    shelved: shelved.clone(),
+                    skipped: skipped.clone(),
+                    stopped_at: Some(head),
+                    outcome: BatchDrainOutcome::Failed(phase),
+                    exit_code: DRIVE_EXIT_HARD_FAIL,
+                });
+            }
             return None;
         }
         return Some(BatchDrainResult {
@@ -5189,7 +5218,22 @@ pub(crate) fn drain_batch_with_caps(
                     &mut shelved,
                     &mut skipped,
                 );
-                shelved.push(head);
+                shelved.push(head.clone());
+                // BUG-1608: stop as soon as the Nth shelve lands — never pick
+                // (let alone run) another head on a spent failure budget.
+                // trace:BUG-1608 | ai:claude
+                if failure_budget_exhausted(shelved.len(), max_failures) {
+                    return BatchDrainResult {
+                        shipped,
+                        punted,
+                        escalated,
+                        shelved,
+                        skipped,
+                        stopped_at: Some(head),
+                        outcome: BatchDrainOutcome::Failed(phase),
+                        exit_code: DRIVE_EXIT_HARD_FAIL,
+                    };
+                }
                 continue;
             }
             return BatchDrainResult {
@@ -11696,8 +11740,10 @@ mod tests {
 
     /// EPIC-28: the `max_failures` safety cap stops the drain when too
     /// many specs shelve in a row — the environment is probably broken.
-    /// `max_failures = 2` means the third shelvable failure flips back
-    /// to the historical `Failed(phase)` stop. trace:EPIC-28 | ai:claude
+    /// BUG-1608: `max_failures = 2` allows exactly two shelves; the drain
+    /// stops the moment the second lands, before it dispatches a third
+    /// member. (It used to dispatch C and only stop on C's failure.)
+    // trace:EPIC-28 trace:BUG-1608 | ai:claude
     #[test]
     fn drain_batch_caps_at_max_failures_and_stops() {
         let mut driver = MockBatchDriver::new(&["A", "B", "C", "D", "E"])
@@ -11705,17 +11751,74 @@ mod tests {
             .shelving("B", Phase::Ci)
             .shelving("C", Phase::Ci);
         let result = drain_batch(&mut driver, None, Some(2));
-        // First two shelve and the drain continues; the third trips the cap.
         assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
-        // TASK-1054: a hard-stop (over the failure budget) is the canonical
+        // TASK-1054: a hard-stop (failure budget spent) is the canonical
         // hard-fail code 3, NOT the CI phase index 2 — which would collide with
         // the EPIC-28 `2 = shelved` sentinel. trace:TASK-1054 | ai:claude
         assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
         assert_eq!(result.shelved, vec!["A", "B"]);
-        assert_eq!(result.stopped_at, Some("C".to_string()));
-        // D and E were never attempted — the cap stops the drain.
-        assert!(!driver.runs.iter().any(|s| s == "D"));
-        assert!(!driver.runs.iter().any(|s| s == "E"));
+        assert_eq!(result.stopped_at, Some("B".to_string()));
+        // C, D and E were never attempted — the spent budget stops the drain.
+        assert_eq!(driver.runs, vec!["A", "B"]);
+    }
+
+    /// BUG-1608: `--max-failures 1` — the first shelved failure spends the
+    /// whole budget, so the drain stops before dispatching another spec.
+    // trace:BUG-1608 | ai:claude
+    #[test]
+    fn drain_batch_max_failures_one_stops_after_first_shelve() {
+        let mut driver =
+            MockBatchDriver::new(&["STORY-52", "TASK-2", "TASK-3"]).shelving("STORY-52", Phase::Ci);
+        let result = drain_batch(&mut driver, None, Some(1));
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.shelved, vec!["STORY-52"]);
+        assert_eq!(result.stopped_at, Some("STORY-52".to_string()));
+        assert_eq!(
+            driver.runs,
+            vec!["STORY-52"],
+            "no second spec may launch once the budget of one is spent"
+        );
+    }
+
+    /// BUG-1608: `--max-failures 0` keeps its documented meaning — the first
+    /// failure stops the drain (and is not counted as a tolerated shelve).
+    // trace:BUG-1608 | ai:claude
+    #[test]
+    fn drain_batch_max_failures_zero_stops_at_first_failure() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]).shelving("TASK-1", Phase::Ci);
+        let result = drain_batch(&mut driver, None, Some(0));
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert!(result.shelved.is_empty());
+        assert_eq!(result.stopped_at, Some("TASK-1".to_string()));
+        assert_eq!(driver.runs, vec!["TASK-1"]);
+    }
+
+    /// BUG-1608: the pipelined scheduler honours the same budget — after the
+    /// first shelve with a cap of one it launches nothing further.
+    // trace:BUG-1608 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_max_failures_one_launches_nothing_after_shelve() {
+        let mut driver = MockPipelinedBatchDriver::new(&["TASK-A", "TASK-B", "TASK-C"], 2)
+            .shelving_through_ci("TASK-A", Phase::Ci);
+        let mut cap_stop = None;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            Some(1),
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut cap_stop,
+        );
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.shelved, vec!["TASK-A"]);
+        assert!(
+            !driver.events.iter().any(|e| e == "start:TASK-C"),
+            "TASK-C must not launch after the budget is spent: {:?}",
+            driver.events
+        );
     }
 
     /// EPIC-28: regression — a clean drain (nothing shelved, nothing

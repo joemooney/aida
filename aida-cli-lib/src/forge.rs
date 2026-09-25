@@ -202,15 +202,24 @@ impl ForgeKind {
     /// title/body from that branch's head commit in the shell command itself.
     /// This is for user-facing hints where AIDA knows the branch but is not
     /// opening the change directly. It must not rely on the caller's cwd branch.
+    ///
+    /// `base` is always spelled out explicitly (`--target-branch` / `--base`)
+    /// rather than left for the forge to infer. BUG-1610: a GitLab project
+    /// whose default branch became the feature branch itself (remote `main`
+    /// never pushed) made an implicit `glab mr create --source-branch
+    /// <branch>` silently target that same branch — an MR that can never
+    /// merge. Always naming the base here closes that hole at the source.
     // trace:BUG-816 | ai:codex
-    pub fn create_cmd_for_branch(self, branch: &str) -> Option<String> {
+    // trace:BUG-1610 | ai:claude
+    pub fn create_cmd_for_branch(self, branch: &str, base: &str) -> Option<String> {
         let branch = crate::shell_quote(branch);
+        let base = crate::shell_quote(base);
         match self {
             ForgeKind::GitHub => Some(format!(
-                "gh pr create --head {branch} --title \"$(git log -1 --format=%s {branch})\" --body \"$(git log -1 --format=%b {branch})\""
+                "gh pr create --head {branch} --base {base} --title \"$(git log -1 --format=%s {branch})\" --body \"$(git log -1 --format=%b {branch})\""
             )),
             ForgeKind::GitLab => Some(format!(
-                "glab mr create --source-branch {branch} --title \"$(git log -1 --format=%s {branch})\" --description \"$(git log -1 --format=%b {branch})\""
+                "glab mr create --source-branch {branch} --target-branch {base} --title \"$(git log -1 --format=%s {branch})\" --description \"$(git log -1 --format=%b {branch})\""
             )),
             ForgeKind::None => None,
         }
@@ -4175,14 +4184,17 @@ mod tests {
         );
         assert_eq!(ForgeKind::None.create_cmd(), None);
         assert_eq!(
-            ForgeKind::GitHub.create_cmd_for_branch("bug-816"),
-            Some("gh pr create --head bug-816 --title \"$(git log -1 --format=%s bug-816)\" --body \"$(git log -1 --format=%b bug-816)\"".to_string())
+            ForgeKind::GitHub.create_cmd_for_branch("bug-816", "main"),
+            Some("gh pr create --head bug-816 --base main --title \"$(git log -1 --format=%s bug-816)\" --body \"$(git log -1 --format=%b bug-816)\"".to_string())
         );
         assert_eq!(
-            ForgeKind::GitLab.create_cmd_for_branch("bug-816"),
-            Some("glab mr create --source-branch bug-816 --title \"$(git log -1 --format=%s bug-816)\" --description \"$(git log -1 --format=%b bug-816)\"".to_string())
+            ForgeKind::GitLab.create_cmd_for_branch("bug-816", "main"),
+            Some("glab mr create --source-branch bug-816 --target-branch main --title \"$(git log -1 --format=%s bug-816)\" --description \"$(git log -1 --format=%b bug-816)\"".to_string())
         );
-        assert_eq!(ForgeKind::None.create_cmd_for_branch("bug-816"), None);
+        assert_eq!(
+            ForgeKind::None.create_cmd_for_branch("bug-816", "main"),
+            None
+        );
         assert_eq!(
             ForgeKind::GitLab.view_cmd("9"),
             Some("glab mr view 9".to_string())
