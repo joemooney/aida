@@ -1,0 +1,20 @@
+id: 01a0d7f7-e8c3-7673-8b75-e553e0a9f30e
+spec_id: TASK-1510
+agreed_id: TASK-1510
+title: Run each unattended drain wave in its own systemd-run --user transient unit
+description: 'Follow-up from TASK-1491''s A12 amendment. Under the systemd driver, the tick currently relies on KillMode=process so the detached drain wave survives when the tick exits. Instead, launch each wave via systemd-run --user as its own transient unit, for isolation, per-wave journal and clean stop. Acceptance: when the systemd driver is active, a wave runs in its own transient unit, visible in systemctl --user list-units. The cron driver is unchanged. The tests use the DriverHost seam and never call the real systemctl.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-25T09:49:03.555549390Z
+modified_at: 2026-09-25T09:49:03.555549390Z
+req_type: Task
+filed_at:
+  code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cb07ece7f0
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
