@@ -3,12 +3,12 @@ spec_id: BUG-1622
 agreed_id: BUG-1622
 title: Git option injection via --since git-ref fallback in doctor and digest; doctor silently ignores an invalid --since
 description: 'Found in TASK-1509''s re-review. (1) The git-ref fallbacks pass the raw user value to ''git log'' (lib.rs ~24976 in doctor, digest.rs ~135), so ''--since=--output=<path>'' makes git write a file. CLI only, not MCP. Fix: pass --end-of-options (or validate that the value isn''t an option) at every place a user value becomes a git rev argument; grep for others. (2) doctor --since with a garbage or out-of-range value silently applies no cutoff and exits 0. It should fail with a clear error like the other flags. (3) Nits: doctor''s help lists ''git ref/tag'' first; tail''s out-of-range message is generic. Acceptance: a regression test shows an option-like value is refused or treated as a ref name, never as a git option; doctor errors on an invalid --since.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:45:01.179683029Z
-modified_at: 2026-09-25T16:31:25.392966449Z
+modified_at: 2026-09-25T16:51:14.862724928Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -69,6 +69,20 @@ comments:
   created_at: 2026-09-25T16:02:35.378512079Z
   modified_at: 2026-09-25T16:02:35.378512079Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d97a-6f1f-7993-a3d6-f52f8b4acc4e
+  author: aida-auto-bump
+  timestamp: 2026-09-25T16:51:14.847395345Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0d97a-6f2e-7522-8279-e999ada0551b
+  timestamp: 2026-09-25T16:51:14.862721371Z
+  agent: implementer
+  commit_sha: 41d8244b9b2537f5b9396a6a95ff4917cf8c6609
+  summary: Completed via merge 41d8244b
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
   branch: main
@@ -77,3 +91,7 @@ filed_at:
   aida_build_sha: cb07ece7f0
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T16:51:14.847362352Z
+  completion_sha: 41d8244b9b2537f5b9396a6a95ff4917cf8c6609
