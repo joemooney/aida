@@ -9,12 +9,12 @@ description: |-
   - State is saved immediately after the pid is recorded, before the ShiftTick event is emitted.
   - A pending intent with no pid whose drain lock is observed live is counted as launched.
   - A test covers the kill-after-spawn window being counted.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:32:30.170344847Z
-modified_at: 2026-09-25T02:32:30.170344847Z
+modified_at: 2026-09-25T08:04:16.738488918Z
 req_type: Task
 tags:
 - papercut
