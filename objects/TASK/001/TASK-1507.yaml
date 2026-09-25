@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:01.049365852Z
-modified_at: 2026-09-25T14:08:55.781293748Z
+modified_at: 2026-09-25T14:45:14.819828739Z
 req_type: Task
 tags:
 - cache
@@ -120,6 +120,38 @@ comments:
     A plain aida history events call straight after a new commit still takes 0.9-1.7 s wall. All of that is the requirements cache (cache.db) refreshing for the moved HEAD: 13 fsyncs on cache.db-wal, 0.06-0.2 s each. It is outside the history index and was also included in the earlier figures.
   created_at: 2026-09-25T14:08:55.781293748Z
   modified_at: 2026-09-25T14:08:55.781293748Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d907-13c3-72c1-b89b-3f2564891581
+  author: joe
+  content: |-
+    Strict re-review: REQUEST CHANGES — reviewed b61e37f04e (independent reviewer, throwaway worktree, since removed). Suites: task_1507 32/32, history 89/89, cache 53/53.
+
+    BLOCKER
+    B2 (R1/R5 exact order; this is the implementer's open note, and it also affects cuts). Same-second commits on different sides of a merge are served in seq order, but git's walk orders them by priority-queue insertion order (a merge queues its first parent before its second). The R4 guard checks only the cut boundary (history_cache.rs:1524-1536). The order keys at :1423, :1432 and :1461 therefore serve a wrong order for interior ties. Reproduced on a COMPLETE index (rebuild_full_at) with build_dated_merge:
+    - side [300], main [300], merge 600, after [700]: unbounded, and --since base+50: served side-then-main, the walk gives main-then-side.
+    - side [100,300], main [200,300]: unbounded, --since, and --max-commits 5 (the boundary is the unique 200 commit, so R4 does not fire): all served in the wrong order.
+    - side [250,400], main [100,250]: same result.
+    The set is right and the order is not. This breaks R1/R5 byte parity and the rule that the index is transparent (the advisor rejected (d) for exactly this). It is not acceptable as-is. seq cannot express git's tie order in general: a tie can resolve either way depending on which child was popped first (the side [100,250]/[250,400] case matched only by luck). Today's live store happens to match, because the advisor measured that a full-rebuild topo seq reproduces git log. Catch-up-built seq and future reconcile merges with same-second commits (3,727 commits already share a second) will not.
+    Fix, cheap and exact enough: at record_merge time, store in a tie table the commit times present on BOTH `rev-list --timestamp M^1 ^M^2` and `M^2 ^M^1`. Fall back for any served range (ts >= min(boundary, since), or all of history when unbounded) that contains one of them. This subsumes the boundary-only R4. Add the three fixtures above as regression tests (unbounded, --since, and a cut with a unique boundary).
+
+    NON-BLOCKING
+    N2a. history_cache.rs:760-770, 1036-1056. A real rewrite is detected as: the tip is not an ancestor of HEAD, HEAD is not an ancestor of the tip, and no OTHER worktree HEAD contains the tip. Branch refs are ignored. Probe: a single store checkout that switches to a diverged branch resets the shared index ("store history was rewritten"). Switching back resets it again, a ping-pong full rebuild. A worktree HEAD that still contains the old tip (for example, a stale or prunable worktree entry) blocks the reset after a real rewrite, so every query falls back until it moves. That is only a performance cost. Suggest also treating the tip as live when `git for-each-ref --contains <tip>` lists any ref other than the reader's own checkout. Readers behind the tip do not reset (verified).
+    T1 (test gaps, found by mutation; the code is correct):
+    - :1384 unknown-watermark guard: disabling it passes every test. My probe partial_build(chunks=0) then query_only(opts / -n 1) kills it. Please add it: after a reset, before chunk 0, the index must not serve.
+    - :1502 `ts > u` changed to `>=` survives, including my tie probe. It looks safe by defence in depth: an indexed/unfilled tie is either same-line (the unfilled parent ranks lower) or cross-branch (R4). Still, a test should pin it.
+    - :1529 `base_ts <= ?1` changed to `<` survives. There is no fixture with a tie at exactly the merge-base second.
+    N4b. :1714-1719 unlinks another version's lock file while holding it. A process of that version already blocked in acquire_blocking on the old inode could then run beside a new lock-file holder. This needs an explicit old-version rebuild racing a prune, so it is negligible.
+
+    VERIFIED OK
+    - B1/R2: the watermark is the max ts of the unfilled topo suffix, written in each chunk's transaction (:1289-1336). A cut is served only on boundary > u, and --since only on s > u (:1500-1509). The probe side [10,20,1100] / main [1000,1100,1200,1300] ties an unfilled commit's second with an indexed one. Across all partial states (chunks 1-3), with every since ts-1/ts/ts+1 and every -n/--max-commits cut: 532 served, 0 mismatches.
+    - R1: ordered by (ts DESC, seq DESC) with a tuple window bound. Schema v2.
+    - R3: sound. Any disorder above `lower` needs a skew edge with parent_ts >= lower (the last skew edge on the path to an in-range commit). The since-stop case is covered the same way. Edges are recorded for all anchor ancestors in chunk 0, before anything is served.
+    - R4 (boundary) and N1b are enforced, and the merge_paths check is global, so it is conservative.
+    - N3: only the lock holder writes, and bound_wal runs after every locked serve (:1611-1613). The WAL is therefore bounded at about 4 MB plus one run's writes. If an ensure_fresh error skips it (:1605-1607), the next holder does it. It cannot grow while no holder runs, because readers never write. TRUNCATE with synchronous=NORMAL syncs the database before truncating, so it is crash-safe, and meta shares each transaction.
+    - N4: held locks are skipped (busy prefix match), and free ones are removed only while held.
+    - Mutations killed: R2 since >=; watermark off-by-one; seq-primary order (candidates and events); tie-break ASC; R3 off, strict, and not recorded; R4 off; N1b off; N2 off and elsewhere-off; N3 bound no-op; N4 off.
+  created_at: 2026-09-25T14:45:14.819828739Z
+  modified_at: 2026-09-25T14:45:14.819828739Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
