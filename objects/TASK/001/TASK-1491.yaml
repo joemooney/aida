@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T02:03:52.561229247Z
-modified_at: 2026-09-25T09:49:01.952443368Z
+modified_at: 2026-09-25T10:28:13.814349474Z
 req_type: Task
 tags:
 - autonomy keystone orchestrator reliability
@@ -82,6 +82,22 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): accept the strict review. Rework: B1 (an unreadable systemd state is Unknown, never Disabled; label and doctor report driver-unknown; add a fake-host test with no user bus). Also fix N1 (tick_invocation refuses a trailing space and a trailing backslash), N2 (the status check includes is-active; re-enabling reports Repaired), N3 (fix the test comment, or run the dual-driver check even with no jobs; prefer the latter if it''s cheap), N4 (route the aida init cron offer through driver_gate_refusal), N5 (the error says the shift is enabled with no driver change), N8 (remove the written unit files if enable fails). N6 is filed as a follow-up. N7 is accepted as is (read-only).'
   created_at: 2026-09-25T09:49:01.952443368Z
   modified_at: 2026-09-25T09:49:01.952443368Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d81b-c576-7261-9845-be6299329cd4
+  author: joe
+  content: |-
+    Strict re-review: APPROVE — all seven rework items verified at 5049f8474e, no blockers, no regressions in the verify-before-remove or TTY-floor invariants. Tests (fresh worktree, target-review): --lib schedule 142/142, shift 42/42, doctor 149/149, task_1491 33/33; verify-manual.py all OK with the branch debug binary on PATH.
+
+    VERIFIED: B1 classify_is_enabled/classify_is_active map empty stdout, stderr-only and unrecognised states to Unknown (no-bus FakeHost test asserts Unknown + label 'unknown' + doctor driver-unknown); unknown_reasons() drives both label() and doctor, and a confirmed install still wins over an unknown peer. N1 tick_invocation refuses trailing whitespace/backslash for repo and exe; inner spaces/backslashes OK. N2 timer_state checks is-enabled then is-active; Stopped exists; re-enable/restart of unchanged files reports Repaired, a second run AlreadyUpToDate. N3 doctor reads the marked timer FILE only (RealDriverHost::unit_dir, no systemctl) and only when jobs==0 and nothing overdue; systemctl/crontab run only when that file exists; under cfg(test) unit_dir bails so tests never read ~/.config. N4 init offer routed through driver_gate_refusal (+ stdout TTY) and now uses switch_driver(Cron). N5 wording present and tested. N8 cleanup only when wrote && none_existed, via remove_marked_files which deletes only files carrying our marker; failed repair leaves files (tested). Regression hunt: switch_to_systemd only removes cron after install_systemd_units returns Ok, which requires timer_state == Installed, so Stopped/Unknown/Disabled all bail with cron kept; switch_to_cron removes systemd only after crontab read-back — never zero drivers. TTY+agent floor intact on install-cron, install-systemd, shift install (operator_gate_refusal) and init offer. Real crontab write, systemctl, unit dir and linger all cfg(test)-guarded; tests use tempdir HOME/layer.
+
+    NON-BLOCKING (follow-up or next touch):
+    n1 schedule_driver.rs:379/398/400 — a fresh install that fails at restart/start or at the post-start verify leaves both unit files and an ENABLED timer (cleanup covers only daemon-reload/enable, per the proxy's N8 wording). Fails safe (cron kept; worst case dual driver after next login, which doctor flags), but the message says only 'other driver left in place'. Same for a write failure on the 2nd file at :367 (first file orphaned).
+    n2 schedule_driver.rs:916 — Repaired message says 'was running an older invocation and has been rewritten', now also printed for a pure re-enable/restart (N2). Reword.
+    n3 shift.rs:2035 — 'scheduler driver is unchanged' is inaccurate when a repair rewrote the unit files before failing, or per n1.
+    n4 shift.rs:2084 — aida shift enable prints 'needed: a scheduler driver' when status is Unknown (e.g. no user bus); PRIN-5 says unknown, not none. Use unknown_reasons() like label().
+    n5 N3's dual-driver-with-no-jobs path is covered only by the pure predicate scheduler_driver_check_needed; acceptable given the real-host test guards.
+  created_at: 2026-09-25T10:28:13.814349474Z
+  modified_at: 2026-09-25T10:28:13.814349474Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: a276969ea936d46b488ec50e058b70773e1ca994
