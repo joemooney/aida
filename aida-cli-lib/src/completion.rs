@@ -79,14 +79,33 @@ pub(crate) fn transition_to_completed(
     Ok(into)
 }
 
+/// BUG-1647: what [`transition_to_completed_atomically`] did, judged on the
+/// copy read under the store lock.
+// trace:BUG-1647 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AtomicCompletion {
+    /// The spec no longer exists; nothing was written.
+    Gone,
+    /// The spec moved into Completed and the ship record was emitted.
+    Completed,
+    /// It was already Completed; nothing was added, written or emitted.
+    AlreadyCompleted,
+    /// It is in another final status (Rejected or Superseded); nothing was
+    /// written. Carries that status.
+    Refused(RequirementStatus),
+}
+
 /// [`transition_to_completed`] as one per-spec atomic write: re-read `target`
 /// under the store lock, move that copy into Completed, let `prepare` add the
 /// caller's history, comments and timestamps, and write only that spec, so a
 /// concurrent edit made after the caller's read is kept. The ship record is
-/// emitted after the write lands. Returns `None` when the spec no longer
-/// exists (nothing is written), else whether it was an into-Completed
-/// transition.
-// trace:BUG-1638 | ai:claude
+/// emitted after the write lands.
+///
+/// BUG-1647: the copy read under the lock decides. Already Completed: nothing
+/// is added (so `prepare` never runs and no duplicate comment or history
+/// lands) and nothing is emitted. Rejected or Superseded: refused, nothing is
+/// written. So a real completion emits exactly one ship record.
+// trace:BUG-1638 trace:BUG-1647 | ai:claude
 pub(crate) fn transition_to_completed_atomically<B: aida_core::db::DatabaseBackend>(
     backend: &B,
     target: &Requirement,
@@ -95,25 +114,30 @@ pub(crate) fn transition_to_completed_atomically<B: aida_core::db::DatabaseBacke
     sha: &str,
     closed_by: &str,
     prepare: impl FnOnce(&mut Requirement, &RequirementStatus),
-) -> Result<Option<bool>> {
-    let mut prior = None;
+) -> Result<AtomicCompletion> {
+    let mut outcome = AtomicCompletion::Gone;
     let written = backend.update_spec_atomically(target, |r| {
-        let p = mark_completed(r);
-        prepare(r, &p);
-        prior = Some(p);
+        if matches!(r.status, RequirementStatus::Completed) {
+            outcome = AtomicCompletion::AlreadyCompleted;
+            return;
+        }
+        if aida_core::conflict::is_terminal_status(&r.status) {
+            outcome = AtomicCompletion::Refused(r.status.clone());
+            return;
+        }
+        let prior = mark_completed(r);
+        prepare(r, &prior);
+        outcome = AtomicCompletion::Completed;
     })?;
     if written.is_none() {
-        return Ok(None);
+        return Ok(AtomicCompletion::Gone);
     }
-    let into = prior
-        .as_ref()
-        .is_some_and(|p| crate::is_into_completed_transition(p, "Completed"));
-    if into {
+    if outcome == AtomicCompletion::Completed {
         if let Some(project_root) = project_root {
             emit_spec_completed(project_root, spec_id, sha, None, closed_by);
         }
     }
-    Ok(Some(into))
+    Ok(outcome)
 }
 
 /// Clear a stale `implementation_info.completed_at` when a status edit takes
