@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T13:02:58.706655428Z
-modified_at: 2026-09-26T15:06:42.806113391Z
+modified_at: 2026-09-26T15:06:47.244517104Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -25,6 +25,12 @@ comments:
   created_at: 2026-09-26T14:04:09.261970197Z
   modified_at: 2026-09-26T14:04:09.261970197Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de41-284c-7c22-99b4-e7c5a5139ad9
+  author: joe
+  content: 'Orchestrator cleanup: status set to done. The branch is pushed, approved, and in integration batch 97; the implementer session had exited without setting it. The worktree is kept until the batch merges.'
+  created_at: 2026-09-26T15:06:47.244517104Z
+  modified_at: 2026-09-26T15:06:47.244517104Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de41-16f6-7573-bac0-95057b873e2a
   author: joe
