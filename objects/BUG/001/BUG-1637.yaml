@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:13:30.973906114Z
-modified_at: 2026-09-26T02:56:44.061517258Z
+modified_at: 2026-09-26T03:16:46.769163170Z
 req_type: Bug
 comments:
 - id: 01a0db10-005c-7da3-afd4-a3255820e41b
@@ -46,6 +46,31 @@ comments:
     - Green: aida-core conflict 68. aida-cli-lib --lib: bug_1637 10, doctor 157, queue 497, mcp 166, orchestr 103, history 120, digest 34. aida-server 16.
   created_at: 2026-09-26T02:56:44.061517258Z
   modified_at: 2026-09-26T02:56:44.061517258Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dbb7-2031-7d72-ad36-6fba759a7f9d
+  author: joe
+  content: |-
+    Strict re-review: APPROVE — claude/bug-1637 @ 1a236aef47 (delta 14ddf4c6a0..1a236aef47). Both blockers are fixed and every non-blocking item is addressed.
+
+    VERIFIED
+    1. Phase-1 restore (lib.rs:46775-46785, apply_phase1_restore at lib.rs:46648) and zen auto-approve (lib.rs:98618-98635) now check and write inside update_spec_atomically. GitBackend::update_spec_atomically_with_subject re-reads the object under the lock, runs the FnOnce closure on that copy, and skips the write when the serialized result is unchanged, so a refusal writes nothing. Zen bails before record_autopilot_execution (caller at lib.rs:98361-98370). No lease has been taken at that point, so a failure cannot leave a partial audit or a dangling lease. zen_approve_flip now accepts only Draft (lib.rs:46589), which matches classify_eligibility's NeedsApproval route (zen_drive.rs:76) and the gate's recorded PriorState draft. The authority re-check also runs on the copy read under the lock.
+    2. findings promote --auto-complete records Draft->Completed under get_default_author() through record_promote_completion (lib.rs:522, 6747). This is the same author the promote comments use. mark_completed records no history, so nothing is recorded twice.
+    3. PR-open Done (lib.rs:9057-9064) and the lease-take bump (lib.rs:31522-31531) are atomic. The Ok(false) and None paths print nothing. The lease-take lease file is written before the bump and is intentionally kept on refusal, which the lease-take doc comment describes.
+    4. docs/aida/doctor.md:30 is updated.
+    5. The phase-1 prior is captured under the lock (lib.rs:98847-98854), and a refused bump returns None, as before.
+    6. No new TOCTOU or double recording. Each closure makes one set_status_recorded call, and the captured flags are overwritten per invocation (FnOnce).
+
+    TESTS
+    - Green: bug_1637 16, zen 76, orchestr 103, findings 127, session 333. The fixtures use tempdirs. No file under ~/.aida changed and the live store was untouched.
+    - Mutation (throwaway worktree, since removed). Reverting zen to a pre-lock read plus a blind update_requirement fails zen_auto_approve_does_not_overwrite_a_spec_that_became_terminal. Reverting PR-open to a blind write fails NO test.
+
+    NON-BLOCKING
+    a. PR-open, lease-take and restore have helper-level race tests only. pr_open_and_lease_take_do_not_overwrite_a_spec_that_became_terminal and phase1_restore_does_not_overwrite_a_spec_that_became_terminal call update_spec_atomically plus the helper directly, not ensure_spec_done_after_pr, bump_spec_in_progress_at_lease_take or restore_phase1_status_on_lease_failure. Those functions do their own read, so a deterministic race needs a seam, such as an injectable pre-write hook. The code is correct by inspection. Consider a seam in a follow-up.
+    b. restore_phase1_status_on_lease_failure ignores apply_phase1_restore's bool and returns Ok(()) (lib.rs:46782-46785). The caller (lib.rs:93576-93585) then prints 'status restored to X' even when the restore was refused because the spec had become terminal. The message was already misleading before this change; returning the bool would make it accurate.
+    c. zen_auto_approve's bail message reads 'is now Draft, not Draft' when the spec was deleted between the read and the write (update_spec_atomically returns None, so seen keeps the pre-read status). This is cosmetic.
+    d. The findings promote write is still a blind backend.update_requirement (lib.rs:6751). This predates BUG-1637 and is out of its scope.
+  created_at: 2026-09-26T03:16:46.769163170Z
+  modified_at: 2026-09-26T03:16:46.769163170Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 193a7c9769995ddd7b643b626af8fdb576bbf20b
