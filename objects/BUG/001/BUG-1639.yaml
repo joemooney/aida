@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T04:47:41.715373320Z
-modified_at: 2026-09-26T16:01:29.224730646Z
+modified_at: 2026-09-26T16:01:41.930708429Z
 req_type: Bug
 tags:
 - antigravity
@@ -264,6 +264,12 @@ comments:
     2. (minor, pre-existing) The Claude catch-all loop re-adds a skill whose handwritten block was disabled by its include_* flag, because it skips only paths that already exist. It is harmless today because --no-skills also clears generate_skills. Note it for A1's shared flag table; no fix required in this spec.
   created_at: 2026-09-26T16:00:07.819074731Z
   modified_at: 2026-09-26T16:00:07.819074731Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0de73-6e2a-7a71-913a-439614fdd816
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): ADVISOR SIGNOFF APPROVED with amendments A1-A9; implement slice 1 AS AMENDED; BUG-1639 closes on slice 1. Children: TASK-1519 (migration), TASK-1520 (dev-repo sync), TASK-1521 (vendor verification, which gates retiring the legacy dirs). The main bug the advisor found (doctor/apply/upgrade/status/diff ignore the saved agent selection, so Claude-only projects are told 23 Codex skills are missing) is fixed by A5/A7 in this slice, so no separate spec. Strict review (it writes into user projects'' shared skill dirs).'
+  created_at: 2026-09-26T16:01:41.930708429Z
+  modified_at: 2026-09-26T16:01:41.930708429Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 execution_mode: drive
 filed_at:
