@@ -1,0 +1,36 @@
+id: 01a0deff-8ed6-7351-a048-6b9f48eceda0
+spec_id: STORY-1487
+agreed_id: STORY-1487
+title: 'Capture-coverage report as a product metric: trailer share, criteria share, criterion-to-test share (and make ''aida criteria gap'' real)'
+description: |
+  From SPIKE-86 (report section 7.7, operator comment 2 point 3), adopted by OPERATOR DECISION on SPIKE-86 (Joe, 2026-09-26). Under VIS-2 the promise to a user is "your project is better placed to be rebuilt", so a user needs to see how well-placed it currently is. Capture coverage is therefore a PRODUCT metric, not a maintainer dashboard. It also closes a tooling gap: `aida criteria gap` is cited in SPIKE-86 and STORY-1425 but is not a subcommand (`aida criteria <SPEC>` reads "gap" as a spec ID).
+
+  Add a project-level capture-coverage report (for example `aida criteria coverage`, or `aida criteria gap` as the corpus-wide form; name decided in the implementation).
+
+  Acceptance:
+  1. The report prints, for a configurable window (default 90 days) and for all time: (a) share of commits whose subject ends in a (SPEC-ID) trailer; (b) share of authored work specs (machine-filed failure stubs and Review-PR records excluded) that carry parseable acceptance criteria; (c) share of those criteria with at least one traced test (trace:<SPEC>.ACn); (d) count of trace:<SPEC> comments in tracked source.
+  2. Each figure shows numerator and denominator, not only a percentage, and --json emits the same fields.
+  3. Run against AIDA at a pinned commit, figures (a) to (c) agree with docs/positioning/spike-86-scripts/ output for the same window within 1 percentage point (test or documented check).
+  4. `aida criteria gap` either works as the corpus-wide report or errors with a message pointing at the new command; it never treats "gap" as a spec ID (test).
+  5. Works on a project with no criteria traces at all (reports 0 of N, exit 0) (test).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:34:45.334160782Z
+modified_at: 2026-09-26T18:34:45.334160782Z
+req_type: Story
+tags:
+- criteria
+- from-spike:SPIKE-86
+- measurement
+- north-star
+- reconstitution
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
