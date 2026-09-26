@@ -3,12 +3,12 @@ spec_id: BUG-1632
 agreed_id: BUG-1632
 title: Automated status writers without status history can still overwrite a terminal status (BUG-1625 follow-up)
 description: 'From BUG-1625''s strict review. The terminal-status merge guard depends on status-history author evidence. These automated writers change status without recording history under an automated author, so a newer write can still overwrite Completed/Rejected/Superseded: the orchestrator shelve (lib.rs ~46440), queue_cmd.rs ~8168, the MCP punt (mcp.rs ~3097), and requeue return_to_flight (requeue.rs ~265). Fix: record status history under an automated author (add each to AUTOMATED_STATUS_AUTHORS), or give each its own guard that refuses to leave a terminal status. Acceptance: a test per writer shows a terminal spec is not regressed through the merge.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T23:04:57.154408021Z
-modified_at: 2026-09-26T00:24:02.644682878Z
+modified_at: 2026-09-26T01:17:56.835375719Z
 req_type: Bug
 comments:
 - id: 01a0dad1-3798-7742-9a2e-b6206b761297
@@ -37,6 +37,20 @@ comments:
   created_at: 2026-09-26T00:24:02.644682878Z
   modified_at: 2026-09-26T00:24:02.644682878Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0db4a-542f-7780-b3a3-400d7ab1a236
+  author: aida-auto-bump
+  timestamp: 2026-09-26T01:17:56.655670846Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0db4a-54e3-7192-9f0e-4cf13fbb9986
+  timestamp: 2026-09-26T01:17:56.835373509Z
+  agent: implementer
+  commit_sha: 979c3137dbe68423d036015b4fb3f6caaa0e3863
+  summary: Completed via merge 979c3137
 filed_at:
   code_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
   branch: main
@@ -45,3 +59,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T01:17:56.655648186Z
+  completion_sha: 979c3137dbe68423d036015b4fb3f6caaa0e3863
