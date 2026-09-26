@@ -3,12 +3,12 @@ spec_id: BUG-1664
 agreed_id: BUG-1664
 title: Mutating sweeps (queue list auto-gc, queue gc, archive --older-than, post-pull archive sweep) act on the cache snapshot without re-validating the spec, so a stale snapshot can delete live queue entrie
 description: 'From TASK-1515''s round-3 strict review, reproduced on a 4,528-spec store copy with a branch build: with a stale snapshot, ''aida queue gc'' committed ''gc dead queue entries'' and deleted a live, reopened entry; the archive paths re-read the spec but only check the archived flag, not status or age, so they would archive a reopened spec. On main a lock error fails these commands, but main also serves stale snapshots under the foreign-writer skip (ensure_cache_fresh_for_read), so VERIFY whether main is exposed through that path. Fix regardless: before each destructive sweep action, re-validate against the authoritative object (status, archived flag, age), or require a strict freshness check and skip with a note when stale. Acceptance: tests with a deliberately stale snapshot (lock held or foreign-writer sidecar) prove queue gc keeps a reopened entry and archive skips a reopened or recent spec; the main-exposure check result is recorded on the spec.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:41.976532939Z
-modified_at: 2026-09-26T19:05:16.870728604Z
+modified_at: 2026-09-26T21:02:47.241385493Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -78,6 +78,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0df87-15be-7872-8c90-3267bde1f02f
+  author: aida-auto-bump
+  timestamp: 2026-09-26T21:02:47.230331420Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0df87-15c9-74c1-89b1-51ccdd8a9a8c
+  timestamp: 2026-09-26T21:02:47.241384495Z
+  agent: implementer
+  commit_sha: 2e01ffe4ab06c30ac99d44d18438a1b156ef455d
+  summary: Completed via merge 2e01ffe4
 filed_at:
   code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
   branch: main
@@ -86,3 +99,7 @@ filed_at:
   aida_build_sha: b331809ce7
   vendor: antigravity
   session: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T21:02:47.230327525Z
+  completion_sha: 2e01ffe4ab06c30ac99d44d18438a1b156ef455d
