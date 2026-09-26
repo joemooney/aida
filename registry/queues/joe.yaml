@@ -11,20 +11,6 @@
   added_at: 2026-09-25T09:49:19.500319472Z
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0db05-4d4e-7a92-9ddf-d3ce07010a42
-  position: 15000
-  added_by: joe
-  note: proxy groom 2026-09-25
-  added_at: 2026-09-26T05:30:21.731098094Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 01a0da65-5aa5-7b73-9c93-ea74fa9d41f3
-  position: 16000
-  added_by: joe
-  note: proxy groom 2026-09-25
-  added_at: 2026-09-26T05:30:39.266022020Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a0da7c-be06-7262-9a06-fdbd736cc59a
   position: 17000
   added_by: joe
@@ -32,39 +18,11 @@
   added_at: 2026-09-26T05:30:47.588947664Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0dbb7-86bc-7623-bf6a-3f4af906c348
-  position: 19000
-  added_by: joe
-  note: proxy groom 2026-09-25
-  added_at: 2026-09-26T05:31:07.696568356Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 01a0d70a-8f34-7030-8602-b8f47f9f39c0
-  position: 21000
-  added_by: joe
-  note: proxy groom 2026-09-25
-  added_at: 2026-09-26T05:31:18.924866627Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a0dc0a-5c93-75b1-8704-cdacd85b64ce
   position: 22000
   added_by: joe
   note: proxy groom 2026-09-25
   added_at: 2026-09-26T05:31:31.760177636Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 01a0d8d9-c566-7802-94c7-29ea05612944
-  position: 23000
-  added_by: joe
-  note: proxy groom 2026-09-25
-  added_at: 2026-09-26T05:31:37.029712928Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 01a0dbed-1c13-7862-9c54-4c47103d8ac2
-  position: 24000
-  added_by: joe
-  note: proxy groom 2026-09-25
-  added_at: 2026-09-26T05:31:42.269443456Z
   for_role: implementer
 - user_id: joe
   requirement_id: 01a0db2d-c579-7e33-ab6b-174e64568ccc
