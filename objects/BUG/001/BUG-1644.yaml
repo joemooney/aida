@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:45:55.970714904Z
-modified_at: 2026-09-26T11:42:51.846684402Z
+modified_at: 2026-09-26T12:11:38.359204287Z
 req_type: Bug
 tags:
 - cache
@@ -63,6 +63,29 @@ comments:
     Fix #1 (and ideally #2 and #3), then approve.
   created_at: 2026-09-26T11:42:51.846684402Z
   modified_at: 2026-09-26T11:42:51.846684402Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dda0-cdf7-7e70-b842-a9f1e71ace11
+  author: joe
+  content: |-
+    Review round 2 (strict Opus reviewer), branch claude/bug-1644 @3783de7d6e, reviewed as git diff 77a67a256e..3783de7d6e. VERDICT: APPROVE WITH NITS. Round-1 blocker #1 is fixed, and #2, #3, #5, #6 and #7 are addressed. No blocking findings remain.
+    Tests run (CARGO_BUILD_JOBS=3), all green: aida-core --lib bug_1644 8/8, cache_lock 21/21, cache 127/127; aida-cli-lib --lib bug_1644 2/2, doctor_ 161/161, worktree 224/224, session_ 246/246. A non-test cargo check -p aida-core -p aida-cli-lib passes, and the changed code adds no warnings (all 17 are pre-existing dead-code warnings in unrelated functions), which confirms the cfg(test) gating compiles in production.
+    (5) Resolve-once lock path, scrutinised:
+    - Cache::open resolves cache_lock_info_path(&path) once, before open_connection_with_retry, and stores it in Cache.lock_info_path.
+    - Every with_cache_write call site (schema drop and apply, set_meta, truncate, rebuild, drift reset, upsert, epic recompute, delete) passes &self.lock_info_path, or the local variable at open. Claim (write_lock_info_at), heartbeat (touch_own_lock_info_at), exhaustion observation (observe_lock_info_file), dead-owner cleanup (clear_dead_owner_lock_info_at) and release (remove_lock_info_at) therefore all use one path.
+    - The CachedGitBackend read guard uses foreign_writer_holds_lock_at(self.cache.lock_info_path()).
+    - Writers and readers agree because every process derives the path with the same function. For a non-symlink path the result is byte-identical to the pre-fix path.
+    - Dangling link at open: resolved hop by hop to <main>/.aida/cache.db.lock-info with a canonical parent. SQLite then creates the database at the link target, so this is the same file a main-checkout writer uses.
+    - Old cache-path variants: foreign_writer_holds_lock, write_cache_lock_info and remove_cache_lock_info are now #[cfg(test)], and touch and clear were renamed to _at. observe_cache_lock and read_cache_lock_info remain public but are symlink-correct and have no production callers.
+    (2) The extraction is a faithful move: identical link list, conditions, error propagation (?) and unlink list, and #[cfg(unix)] is preserved on the start site. retire runs at both sites as before. The new test bug_1644_symlink_sites_retire_dead_stray_and_keep_live_stray covers dead and live strays at both sites.
+    Mutations (all reverted, tree clean):
+    - M1, Cache::open resolves lock_info_path lexically: CAUGHT by bug_1644_worktree_reader_serves_snapshot_behind_main_writer, which also reproduced the stall (61 s run).
+    - M2, with_cache_write claims the sidecar at the lexical path while release, heartbeat and guard use the resolved one: NOT caught (bug_1644 and the 127 cache tests all pass).
+    NITS, non-blocking:
+    N1 [LOW, coverage] aida-core/src/db/cache.rs:697: no test proves that a production write through a symlinked cache path records its claim at the shared location. bug_1644_worktree_writer_records_sidecar_at_shared_location exercises only the test-only write_cache_lock_info. The code is correct by inspection. Fix: in cache.rs tests, call with_cache_write(&wt_cache, &cache_lock_info_path(&wt_cache), ...) with a closure that asserts the shared sidecar exists and names this pid while the lexical sidecar does not. Or open Cache via the worktree symlink and assert inside a write.
+    N2 [NIT] cache.rs:627/710: open_connection_inner still uses with_cache_retry, which resolves the path per call. This affects only the enrichment observation when an open is lock-exhausted. Optionally thread the open-time lock_info_path through open_connection_with_retry for full resolve-once consistency.
+    N3 [carried from round 1, follow-up] Lock records have no host or pid-namespace identity (round-1 #4, TASK-1484 scope). Not a blocker for this bug.
+  created_at: 2026-09-26T12:11:38.359204287Z
+  modified_at: 2026-09-26T12:11:38.359204287Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
