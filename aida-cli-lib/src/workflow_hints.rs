@@ -303,6 +303,43 @@ pub(crate) fn configured_spec_prefixes(store: &aida_core::RequirementsStore) -> 
     prefixes
 }
 
+/// BUG-1629: [`configured_spec_prefixes`] for the store at `store_path`,
+/// read-only and cheap: one `metadata.yaml` read (type definitions, id
+/// config, allowed prefixes) plus the in-use prefixes, taken from the
+/// `objects/<PREFIX>/` directory names instead of parsing every object.
+/// Nothing is created — a missing store or `objects/` directory just
+/// contributes nothing.
+// trace:BUG-1629 | ai:claude
+pub(crate) fn configured_spec_prefixes_at(store_path: &std::path::Path) -> Vec<String> {
+    let metadata = aida_core::GitBackend::read_metadata_only(store_path).unwrap_or_default();
+    let mut prefixes = configured_spec_prefixes(&metadata);
+    if let Ok(entries) = std::fs::read_dir(store_path.join("objects")) {
+        prefixes.extend(
+            entries
+                .flatten()
+                .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+                .filter_map(|entry| entry.file_name().to_str().map(str::to_ascii_uppercase))
+                .filter(|prefix| {
+                    !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_alphabetic())
+                }),
+        );
+    }
+    prefixes.sort();
+    prefixes.dedup();
+    prefixes
+}
+
+/// BUG-1629: the configured prefixes of the project at `project_root` — the
+/// single lookup both auto-complete phase 1 and `aida queue done` use, so
+/// their branch-ownership checks agree. Read-only; a project with no
+/// distributed store falls back to the built-in prefixes.
+// trace:BUG-1629 | ai:claude
+pub(crate) fn project_spec_prefixes(project_root: &std::path::Path) -> Vec<String> {
+    aida_core::store_locate::detect_distributed_store_from(project_root)
+        .map(|store_path| configured_spec_prefixes_at(&store_path))
+        .unwrap_or_default()
+}
+
 /// BUG-1628: the prefixes that count as requirement IDs when scanning a
 /// branch name: the built-ins, the caller-supplied configured prefixes, and
 /// the target spec's own prefix (a stored requirement ID is its own evidence
@@ -379,9 +416,9 @@ pub(crate) fn branch_belongs_to_spec_with_prefixes(
         })
 }
 
-fn branch_names_requirement(branch: &str, spec: &str) -> bool {
+fn branch_names_requirement(branch: &str, spec: &str, configured_prefixes: &[String]) -> bool {
     let target_prefix = requirement_id_parts(spec).map(|(prefix, _)| prefix);
-    let prefixes = recognised_prefixes(target_prefix.as_deref(), &[]);
+    let prefixes = recognised_prefixes(target_prefix.as_deref(), configured_prefixes);
     !branch_requirement_ids(branch, &prefixes).is_empty()
 }
 
@@ -401,17 +438,22 @@ pub(crate) struct QueueDoneCommitEvidence {
 /// A target-named branch passes. On an unscoped branch, readable commit
 /// evidence refuses only when commits exclusively name other requirements;
 /// `--force` is the ledgered override.
+/// BUG-1629: `configured_prefixes` (see [`project_spec_prefixes`]) are the
+/// same prefixes auto-complete phase 1 checks with, so `queue done` and
+/// phase 1 agree on which branch names a requirement.
 // trace:BUG-1244 | ai:codex
+// trace:BUG-1629 | ai:claude
 pub(crate) fn queue_done_ownership(
     branch: &str,
     spec: &str,
     commit_evidence: Option<&QueueDoneCommitEvidence>,
     force: bool,
+    configured_prefixes: &[String],
 ) -> QueueDoneOwnership {
-    if branch_belongs_to_spec(branch, spec) {
+    if branch_belongs_to_spec_with_prefixes(branch, spec, configured_prefixes) {
         return QueueDoneOwnership::Proceed;
     }
-    let foreign_branch = branch_names_requirement(branch, spec);
+    let foreign_branch = branch_names_requirement(branch, spec, configured_prefixes);
     if !foreign_branch {
         if let Some(evidence) = commit_evidence {
             if evidence.commits_seen == 0
@@ -1439,11 +1481,11 @@ mod tests {
         assert!(!branch_belongs_to_spec("story-1221", "BUG-1628"));
         // queue-done ownership proceeds on the custom-prefix branch.
         assert_eq!(
-            queue_done_ownership("spec-016", "SPEC-016", None, false),
+            queue_done_ownership("spec-016", "SPEC-016", None, false, &[]),
             QueueDoneOwnership::Proceed
         );
         assert!(matches!(
-            queue_done_ownership("spec-9", "SPEC-016", None, false),
+            queue_done_ownership("spec-9", "SPEC-016", None, false, &[]),
             QueueDoneOwnership::Refuse(reason) if reason.contains("different requirement")
         ));
     }
@@ -1467,6 +1509,82 @@ mod tests {
             assert!(prefixes.contains(&"CR".to_string()), "{prefixes:?}");
         }
         assert!(!prefixes.iter().any(|p| p.starts_with('$')));
+    }
+
+    // BUG-1629: `queue done` recognises configured prefixes, so a branch
+    // naming another configured-prefix requirement is foreign — the same
+    // answer auto-complete phase 1 gives for that branch.
+    // trace:BUG-1629 | ai:claude
+    #[test]
+    fn bug_1629_queue_done_ownership_uses_configured_prefixes() {
+        let configured = vec!["QX".to_string()];
+        let evidence = QueueDoneCommitEvidence {
+            commits_seen: 0,
+            spec_ids: vec![],
+        };
+        assert!(matches!(
+            queue_done_ownership("qx-7", "SPEC-016", Some(&evidence), false, &configured),
+            QueueDoneOwnership::Refuse(reason) if reason.contains("different requirement")
+        ));
+        assert!(!branch_belongs_to_spec_with_prefixes(
+            "qx-7",
+            "SPEC-016",
+            &configured
+        ));
+        // Without the configured prefix the branch is unscoped and passes on
+        // empty commit evidence — the disagreement this fix removes.
+        assert_eq!(
+            queue_done_ownership("qx-7", "SPEC-016", Some(&evidence), false, &[]),
+            QueueDoneOwnership::Proceed
+        );
+        // Mixed branch naming both the target and a configured foreign ID.
+        assert!(matches!(
+            queue_done_ownership("spec-016-qx-7", "SPEC-016", None, false, &configured),
+            QueueDoneOwnership::Refuse(_)
+        ));
+    }
+
+    // BUG-1629: the prefix lookup is read-only and cheap: metadata plus
+    // `objects/<PREFIX>/` directory names, never a full store load, and it
+    // never creates `objects/`.
+    // trace:BUG-1629 | ai:claude
+    #[test]
+    fn bug_1629_configured_spec_prefixes_at_is_read_only_and_cheap() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = temp.path().join("store");
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::write(
+            store.join("metadata.yaml"),
+            "name: t\nallowed_prefixes:\n  - qx\n",
+        )
+        .unwrap();
+        let prefixes = configured_spec_prefixes_at(&store);
+        assert!(prefixes.contains(&"QX".to_string()), "{prefixes:?}");
+        assert!(prefixes.contains(&"BUG".to_string()), "{prefixes:?}");
+        assert!(
+            !store.join("objects").exists(),
+            "the lookup must not create objects/"
+        );
+
+        // In-use prefixes come from directory names; an object that does not
+        // parse is never read.
+        std::fs::create_dir_all(store.join("objects").join("SPEC").join("000")).unwrap();
+        std::fs::write(
+            store
+                .join("objects")
+                .join("SPEC")
+                .join("000")
+                .join("SPEC-016.yaml"),
+            "{ not: valid: yaml",
+        )
+        .unwrap();
+        let prefixes = configured_spec_prefixes_at(&store);
+        assert!(prefixes.contains(&"SPEC".to_string()), "{prefixes:?}");
+
+        let missing = temp.path().join("missing");
+        let prefixes = configured_spec_prefixes_at(&missing);
+        assert!(prefixes.contains(&"BUG".to_string()));
+        assert!(!missing.exists(), "a missing store is never created");
     }
 
     #[test]
@@ -1510,6 +1628,7 @@ mod tests {
                         spec_ids: vec![],
                     }),
                     false,
+                    &[],
                 ),
                 QueueDoneOwnership::Proceed
             );
@@ -1522,6 +1641,7 @@ mod tests {
                         spec_ids: vec!["BUG-1236".into()],
                     }),
                     false,
+                    &[],
                 ),
                 QueueDoneOwnership::Proceed
             );
@@ -1534,7 +1654,7 @@ mod tests {
             commits_seen: 1,
             spec_ids: vec!["STORY-1221".into()],
         };
-        let outcome = queue_done_ownership("pr-1948", "BUG-1236", Some(&evidence), false);
+        let outcome = queue_done_ownership("pr-1948", "BUG-1236", Some(&evidence), false, &[]);
         let QueueDoneOwnership::Refuse(reason) = outcome else {
             panic!("queue done must refuse, got {outcome:?}");
         };
@@ -1549,7 +1669,7 @@ mod tests {
             spec_ids: vec!["STORY-1221".into(), "BUG-1236".into()],
         };
         assert!(matches!(
-            queue_done_ownership("story-1221", "BUG-1236", Some(&evidence), false,),
+            queue_done_ownership("story-1221", "BUG-1236", Some(&evidence), false, &[]),
             QueueDoneOwnership::Refuse(_)
         ));
     }
@@ -1561,7 +1681,7 @@ mod tests {
             spec_ids: vec![],
         };
         assert_eq!(
-            queue_done_ownership("feature/no-spec", "BUG-1236", Some(&evidence), false),
+            queue_done_ownership("feature/no-spec", "BUG-1236", Some(&evidence), false, &[]),
             QueueDoneOwnership::Proceed
         );
     }
@@ -1569,10 +1689,10 @@ mod tests {
     #[test]
     fn queue_done_command_force_explicitly_overrides_unreadable_evidence() {
         assert!(matches!(
-            queue_done_ownership("main", "BUG-1236", None, false),
+            queue_done_ownership("main", "BUG-1236", None, false, &[]),
             QueueDoneOwnership::Refuse(_)
         ));
-        let outcome = queue_done_ownership("main", "BUG-1236", None, true);
+        let outcome = queue_done_ownership("main", "BUG-1236", None, true, &[]);
         let QueueDoneOwnership::Forced(reason) = outcome else {
             panic!("--force must produce a recorded override, got {outcome:?}");
         };
