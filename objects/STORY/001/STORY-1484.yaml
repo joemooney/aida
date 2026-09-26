@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-09-26T09:53:34.808753187Z
+modified_at: 2026-09-26T11:43:25.995544149Z
 req_type: Story
 tags:
 - cache
@@ -45,6 +45,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe), per the SPIKE-90 advisor review: approved WITH SKETCH (needs advisor signoff). The sketch must cover: (1) state-deciding paths that read the stale-tolerant cache today (the write-path ID ambiguity guard, the handle_integrate merge gate, queue gc, the archive sweeps, session reap, rules_sync, the completion findings step) get a strict variant or a YAML re-check; (2) remove the contradiction: an inline refresh must fail fast, then file the request and serve stale, and a lock error in incremental refresh must not escalate to a full rebuild; (5) the worker stamps the HEAD it actually loaded, with an opt-out for CI and tests. Correction (1) is a risk that exists TODAY: prioritise it.'
   created_at: 2026-09-26T09:53:34.808753187Z
   modified_at: 2026-09-26T09:53:34.808753187Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd86-fb2b-7072-b817-319385a743ac
+  author: joe
+  content: 'Scope note from the BUG-1644 strict review, finding 4 (orchestrator proxy): lock-info records carry no host or pid-namespace identity. A writer in another container or on another host sharing a mounted .aida looks dead against the local process table, so its record can be deleted by retire_stray_worktree_lock_info, post-write dead-owner cleanup or doctor heal. SQLite still holds the real lock, so there is no unprotected write, only lost diagnostics. The sketch must add hostname and pid-namespace identity to lock records and treat a mismatch as unknown (keep the record).'
+  created_at: 2026-09-26T11:43:25.995544149Z
+  modified_at: 2026-09-26T11:43:25.995544149Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
