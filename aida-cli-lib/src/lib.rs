@@ -67629,19 +67629,10 @@ fn detect_store_path(repo: &std::path::Path) -> Option<std::path::PathBuf> {
         return None;
     }
     let content = std::fs::read_to_string(&config_path).ok()?;
-    for line in content.lines() {
-        let line = line.trim();
-        if line.starts_with("store_path") {
-            if let Some(val) = line.split('=').nth(1) {
-                let val = val.trim().trim_matches('"').trim_matches('\'');
-                let sp = repo.join(val);
-                if sp.exists() && sp.is_dir() && aida_core::git_ops::is_git_repo(&sp) {
-                    return Some(sp);
-                }
-            }
-        }
-    }
-    None
+    // trace:BUG-1650 | ai:claude
+    let val = aida_core::store_locate::store_path_value(&content)?;
+    let sp = repo.join(val);
+    (sp.exists() && sp.is_dir() && aida_core::git_ops::is_git_repo(&sp)).then_some(sp)
 }
 
 /// HEAD-poll an URL until it returns 200 or `timeout` elapses. Used by

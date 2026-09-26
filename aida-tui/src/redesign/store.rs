@@ -886,22 +886,12 @@ fn resolve_store_path(project_root: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Extract `store_path = "<value>"` from a `config.toml` body (a focused
-/// line-scan rather than a full TOML parse, matching aida-cli's reader).
-/// trace:STORY-693 | ai:claude
+/// Extract the `store_path` value from a `config.toml` body via aida-core's
+/// shared TOML-first reader, so the TUI agrees with aida-cli on every value a
+/// writer can produce.
+// trace:STORY-693 trace:BUG-1650 | ai:claude
 fn store_path_value(content: &str) -> Option<String> {
-    for line in content.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("store_path") {
-            if let Some(val) = rest.split('=').nth(1) {
-                let val = val.trim().trim_matches('"').trim_matches('\'');
-                if !val.is_empty() {
-                    return Some(val.to_string());
-                }
-            }
-        }
-    }
-    None
+    aida_core::store_locate::store_path_value(content)
 }
 
 /// BUG-331: resolve `<main-worktree>/<rel_store>` from inside a git worktree
@@ -1467,6 +1457,18 @@ mod tests {
             "store_type = \"worktree\"\nstore_path = \".aida-store\"\nbranch = \"aida-store\"\n";
         assert_eq!(store_path_value(cfg), Some(".aida-store".to_string()));
         assert_eq!(store_path_value("# nothing here\n"), None);
+    }
+
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_store_path_value_reads_quote_and_equals() {
+        for value in ["../has\"quote=eq", "../it's", "C:\\x\\y"] {
+            let cfg = format!(
+                "[deployment]\nstore_path = {}\n",
+                aida_core::toml_quote::toml_string(value)
+            );
+            assert_eq!(store_path_value(&cfg).as_deref(), Some(value), "{cfg:?}");
+        }
     }
 
     // --- EPIC focus picker + persistence (STORY-697) ---------------------

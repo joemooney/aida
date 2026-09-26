@@ -1004,7 +1004,11 @@ pub fn write_forge_config_provider(project_dir: &Path, kind: ForgeKind) -> Resul
         if in_forge {
             if let Some((key, _val)) = line.split_once('=') {
                 if key.trim() == "provider" {
-                    lines.push(format!("provider = \"{}\"", kind.config_token()));
+                    // trace:BUG-1650 | ai:claude
+                    lines.push(format!(
+                        "provider = {}",
+                        aida_core::toml_quote::toml_string(kind.config_token())
+                    ));
                     changed = true;
                     continue;
                 }
@@ -1158,8 +1162,9 @@ pub fn init_forge_config_section(project_root: &Path) -> String {
          # otherwise pure-git (works direct-to-default-branch; merge = git\n\
          # ancestry + (SPEC-ID)-trailer auto-complete, no forge needed).\n\
          [forge]\n\
-         provider = \"{}\"\n",
-        kind.config_token()
+         provider = {}\n",
+        // trace:BUG-1650 | ai:claude
+        aida_core::toml_quote::toml_string(kind.config_token())
     )
 }
 

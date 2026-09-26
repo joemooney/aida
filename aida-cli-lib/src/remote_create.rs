@@ -131,15 +131,16 @@ pub fn known_hosts_path() -> Option<PathBuf> {
 }
 
 /// Parse the `[[gitlab_host]]` array-of-tables from a `remotes.toml` body.
-/// Hand-rolled (mirrors the project's other section parsers) to avoid a serde
-/// round-trip for a tiny file. Pure over its `&str` input → unit-testable.
+/// Pure over its `&str` input → unit-testable.
 /// trace:STORY-537 | ai:claude
 ///
 /// A body that parses as TOML is read through the `toml` crate, so quoted
 /// values (a label containing `"` or `#`) come back exactly as
-/// [`serialize_known_hosts`] wrote them; the line scan stays as the lenient
-/// fallback for a hand-edited file that is not valid TOML.
-// trace:BUG-1649 | ai:claude
+/// [`serialize_known_hosts`] wrote them. `ssh_port` is accepted as an integer
+/// or as a numeric string (`"2222"`, which older hand edits used), so the next
+/// save does not drop it. A hand-edited file that is not valid TOML falls back
+/// to a lenient line scan that strips `"` or `'` quotes.
+// trace:BUG-1649 trace:BUG-1650 | ai:claude
 pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
     if let Ok(table) = toml_body.parse::<toml::Table>() {
         return table
@@ -154,10 +155,7 @@ pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
                         (!host.is_empty()).then(|| KnownHost {
                             host,
                             label: t.get("label").and_then(|v| v.as_str()).map(String::from),
-                            ssh_port: t
-                                .get("ssh_port")
-                                .and_then(|v| v.as_integer())
-                                .and_then(|n| u16::try_from(n).ok()),
+                            ssh_port: t.get("ssh_port").and_then(ssh_port_value),
                         })
                     })
                     .collect()
@@ -194,17 +192,28 @@ pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
         }
         if let (Some(entry), Some((key, val))) = (cur.as_mut(), line.split_once('=')) {
             let key = key.trim();
-            let val = val.trim().trim_matches('"');
+            // trace:BUG-1650 | ai:claude
+            let val = val.trim().trim_matches('"').trim_matches('\'');
             match key {
                 "host" => entry.host = val.to_string(),
                 "label" => entry.label = Some(val.to_string()),
-                "ssh_port" => entry.ssh_port = val.parse::<u16>().ok(),
+                "ssh_port" => entry.ssh_port = val.trim().parse::<u16>().ok(),
                 _ => {}
             }
         }
     }
     flush(&mut cur, &mut hosts);
     hosts
+}
+
+/// `ssh_port` as a TOML integer or a numeric string, when it fits a `u16`.
+// trace:BUG-1650 | ai:claude
+fn ssh_port_value(v: &toml::Value) -> Option<u16> {
+    match v {
+        toml::Value::Integer(n) => u16::try_from(*n).ok(),
+        toml::Value::String(s) => s.trim().parse::<u16>().ok(),
+        _ => None,
+    }
 }
 
 /// Serialize known hosts back to a `remotes.toml` body. Pure → round-trippable.
@@ -2347,6 +2356,45 @@ hosts:
             ssh_port: None,
         }]);
         assert!(plain.contains("host = \"gitlab.corp.com\"\nlabel = \"corp\"\n"));
+    }
+
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_string_ssh_port_survives_parse_and_resave() {
+        let body = "[[gitlab_host]]\nhost = \"gitlab.example.com\"\nssh_port = \"2222\"\n";
+        let parsed = parse_known_hosts(body);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].ssh_port, Some(2222));
+        // The next save writes the port back (as an integer) instead of dropping it.
+        let resaved = serialize_known_hosts(&parsed);
+        assert_eq!(parse_known_hosts(&resaved), parsed);
+        let table: toml::Table = toml::from_str(&resaved).unwrap();
+        assert_eq!(
+            table["gitlab_host"].as_array().unwrap()[0]["ssh_port"].as_integer(),
+            Some(2222)
+        );
+        // Out-of-range or non-numeric strings are ignored, not misread.
+        for bad in ["\"70000\"", "\"ssh\"", "true"] {
+            let body = format!("[[gitlab_host]]\nhost = \"h\"\nssh_port = {bad}\n");
+            assert_eq!(parse_known_hosts(&body)[0].ssh_port, None, "{bad}");
+        }
+    }
+
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_line_fallback_strips_single_quotes() {
+        // `not valid toml` forces the line-scan fallback.
+        let body = "not valid toml\n[[gitlab_host]]\nhost = 'gitlab.example.com'\nlabel = 'work'\nssh_port = '2222'\n";
+        assert!(body.parse::<toml::Table>().is_err());
+        let parsed = parse_known_hosts(body);
+        assert_eq!(
+            parsed,
+            vec![KnownHost {
+                host: "gitlab.example.com".to_string(),
+                label: Some("work".to_string()),
+                ssh_port: Some(2222),
+            }]
+        );
     }
 
     #[test]
