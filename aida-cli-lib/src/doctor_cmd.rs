@@ -801,7 +801,7 @@ fn codex_ignores_prompt_dir_finding(dir: &std::path::Path) -> Option<DoctorFindi
 /// initialized project changes nothing, so the lane-safe fix is to restore the
 /// skill from the embedded templates by hand.
 // trace:BUG-1645 | ai:claude
-const MEMORY_LANE_SKILL_ACTION: &str = "Memory-lane project: do not run `aida scaffold upgrade` (it installs the full skill set). Restore the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.codex/skills/aida-capture/SKILL.md`).";
+const MEMORY_LANE_SKILL_ACTION: &str = "Memory-lane project: do not run `aida scaffold upgrade` (it installs the full skill set). Restore or refresh the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.codex/skills/aida-capture/SKILL.md`).";
 
 fn scan_scaffold_drift(
     project_root: &std::path::Path,
