@@ -8,8 +8,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:39:06.781621127Z
-modified_at: 2026-09-26T23:39:06.781621127Z
+modified_at: 2026-09-26T23:39:12.153723189Z
 req_type: Task
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a0deff-8ed6-7351-a048-6b9f48eceda0
+  created_at: 2026-09-26T23:39:12.153712339Z
+  created_by: joe
 filed_at:
   code_sha: 9791e5eaac5cb4b0083aeaa32744c5900e396fc1
   branch: main
