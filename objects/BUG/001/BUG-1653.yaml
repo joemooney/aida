@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T13:48:58.178656696Z
-modified_at: 2026-09-26T15:38:56.914580410Z
+modified_at: 2026-09-26T15:39:39.076505214Z
 req_type: Bug
 comments:
 - id: 01a0ddfa-2332-79e0-a81d-1ecc15894d89
@@ -22,6 +22,18 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): keep the BUG-1645 manual-restore hint as is. Don''t suggest aida scaffold refresh for lane projects, because refresh also touches the AGENTS.md block and the discipline pack.'
   created_at: 2026-09-26T15:38:56.914580410Z
   modified_at: 2026-09-26T15:38:56.914580410Z
+  session_id: 156a4900-9e60-4f0b-9739-948c3b0efd27
+- id: 01a0de5f-3ec4-7230-880d-d1f747bb6e30
+  author: joe
+  content: |-
+    Review (fresh Opus reviewer): PARTIAL, leaning REQUEST CHANGES (session ended before I ran any tests). Reviewed ebb25adb13 by reading the code only.
+    (a) PASS by reasoning. codex_skill_raw is a verbatim move of the old generate_codex_skill body: the same portable-then-skills lookup and the same fallback string. generate_codex_skill just delegates to it, so the full-scaffold bytes for the codex and antigravity packs cannot change. The claude pack path in the full scaffold is untouched. rendered_pack_skill for .claude/skills reads skills/<name>.md and wraps it at <pack>/<name>/SKILL.md. That is the same path create_artifact normalizes to, and wrap_with_aida_header only uses the path to spot shell, JSON and TOML files, so its output matches. Nit: the .claude branch repeats the lookup-with-fallback; a small claude_skill_raw helper would stop it drifting.
+    (b) PASS by reading. The refresh test asserts installed.is_empty() on both runs and skill_names == [aida-capture, aida-learn] for both packs. Memory-lane still sets plan.partial=true. The footprint looks preserved.
+    (c) FINDING 1 (medium): there is no migration for existing memory-lane projects that hold the old UNWRAPPED files. refresh_file (aida-core/src/scaffolding/refresh.rs:608) returns KeptUnmarked for header-less files because scaffold_refresh.rs:270 passes adopt_unmarked=false. doctor check_file_status gives NoHeader, which is counted as modified, so scaffold-drift/project fires forever. Re-running memory-lane init without --force skips existing files. The only ways out are init --force (it also rewrites CLAUDE.md) or the hand-copy in MEMORY_LANE_SKILL_ACTION. Fix: in the project-pack refresh, when a file in a memory-lane skill (MEMORY_LANE_SKILLS in .claude/.codex skills) is Unmarked AND normalize_lf(on_disk) equals the raw pre-header template (EMBEDDED skills/<name>.md, or codex_skill_raw for codex), treat it as pristine and overwrite it with the wrapped content. Optionally also accept the raw bytes of earlier released templates. Otherwise adopt it with an .aida-bak backup (adopt_unmarked=true scoped to those 4 paths). Add a test: write the raw unwrapped template, refresh, expect Refreshed plus no drift in doctor. Also point doctor's lane action at refresh once that works.
+    (d) By reading, the tests look hermetic: tempdirs and RequirementsStore::default/new. NOT verified: the doctor test calls scan_scaffold_drift, which reads ~/.codex/prompts through home_dir(), but its assertion filters to the project and codex-skills-missing ids, so it should be unaffected.
+    UNCHECKED: no cargo tests were run (aida-cli-lib init/scaffold/bug_1645/bug_1653/doctor_/refresh; aida-core scaffold/report), make check-templates was not run, and no before/after scaffold byte comparison was done in a temp dir.
+  created_at: 2026-09-26T15:39:39.076505214Z
+  modified_at: 2026-09-26T15:39:39.076505214Z
   session_id: 156a4900-9e60-4f0b-9739-948c3b0efd27
 history:
 - id: 01a0de4a-3d07-7e31-a2cf-072b48d6e33c
