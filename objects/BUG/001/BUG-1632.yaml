@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T23:04:57.154408021Z
-modified_at: 2026-09-25T23:49:56.425009441Z
+modified_at: 2026-09-26T00:24:02.644682878Z
 req_type: Bug
 comments:
 - id: 01a0dad1-3798-7742-9a2e-b6206b761297
@@ -16,6 +16,26 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved as a bounded follow-up from a review.'
   created_at: 2026-09-25T23:05:39.480809919Z
   modified_at: 2026-09-25T23:05:39.480809919Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0db18-fb54-74c1-8f91-bac14689ac31
+  author: joe
+  content: |-
+    Strict review: APPROVE — claude/bug-1632 @ 791c444a1a. No blockers.
+
+    VERIFIED
+    - Author choices are safe. Each of the four writers only moves a spec toward NeedsAttention or Approved and never legitimately needs to leave a terminal status. Shelve (lib.rs:46468) and MCP punt (mcp.rs:~965) refuse a terminal source through forbidden_attention_transition. The supervisor's requeue goes through return_to_flight, which applies only from NeedsAttention under the write. The loop guard runs only when current_status==NeedsAttention (queue_cmd.rs:8187). So adding them to AUTOMATED_STATUS_AUTHORS only stops a concurrent terminal status from being overwritten by NA/Approved, and none of these has a legitimate need to do that. The supervisor never needs to move a Completed spec. Loop guard marked automated after a human 'queue rework': in the same run, the human return_to_flight entry (NA->Approved, caller-authored) sits beside the loop-guard entry, so the history is mixed, the guard is off, and the net status equals base anyway. The automated author matters only when the rework already synced, which is the case the test covers. MCP queue_rework stays deliberate (automated:false, caller author).
+    - Human reopen still wins. Any non-automated new status entry on the non-terminal side disables the guard. Tested both directions: requeue_human_return_still_wins_the_merge, and orchestrator_shelve_after_a_human_reopen_still_merges (mixed history: human reopen, then automated shelve).
+    - Determinism: the guard is symmetric in ours/theirs. Every new merge test asserts both orientations.
+    - automated flag: ReturnCtx is pub(crate) and has no Deserialize. The only 'automated: true' is supervisor.rs:571. It cannot be set from config or MCP (mcp.rs:4397 sets false).
+    - Mutation checks (throwaway worktree): removing the four names from the list fails exactly the five merge tests (4 in bug_1632_status_writer_tests plus supervisor_requeue_never_regresses_a_terminal_status_on_merge). Making the guard ignore authorship fails the two human-wins tests. The new tests are in-memory or tempdir and never touch ~/.aida.
+    - Green: aida-core conflict 66. aida-cli-lib --lib: bug_1632 6, requeue 42, supervis 73, mcp 165, orchestr 100.
+
+    NON-BLOCKING FOLLOW-UPS
+    1. There is a fifth history-less automated status writer: the BUG-369 orchestrator phase-1 bump (lib.rs:97921, Approved/Planned/Draft->InProgress). With base Approved, a human Rejected on the other clone, and a newer phase-1 bump, plain LWW still regresses Rejected->InProgress. It should use record_status_transition under ORCHESTRATOR_SHELVE_AUTHOR or a sibling author.
+    2. loop_guard_park (queue_cmd.rs:7701) has no terminal check inside the CAS closure, unlike shelve and punt. A local race that completes the spec between the status read and the park would move Completed->NA. This was already true before this change. Gate it with forbidden_attention_transition for consistency.
+    3. Side effect of recording human requeue history: if the non-terminal side has a human requeue followed by a stale automated auto-bump, the guard is now off (mixed history). Before this change it fired, because the requeue left no evidence. This is concurrent human intent on both sides falling back to LWW, which is acceptable by design, but worth noting.
+  created_at: 2026-09-26T00:24:02.644682878Z
+  modified_at: 2026-09-26T00:24:02.644682878Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
