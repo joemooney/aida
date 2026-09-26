@@ -1,0 +1,20 @@
+id: 01a0de70-0384-7e61-8f00-5cd44ddc6dcf
+spec_id: TASK-1517
+agreed_id: TASK-1517
+title: Per-wave resource limits for systemd-run drain waves (MemoryHigh/MemoryMax, CPU/IO weights, TasksMax, delegation doctor warning)
+description: 'Split from TASK-1510 by advisor amendment A8. After TASK-1510 runs each drain wave in its own transient unit, add resource limits so an out-of-memory wave kills only itself (the 2026-09-25 oomd terminal-kill class). Scope: MemoryHigh/MemoryMax (advisor defaults 40%/50% of total memory), lower CPU/IO weights, TasksMax, wave_memory_* config keys, a wave-limits guard, and a doctor warning when the user manager lacks memory-controller delegation (warn only, never force a fallback). Needs its own SKETCH plus ADVISOR SIGNOFF. blocked-by TASK-1510.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T15:57:58.020230325Z
+modified_at: 2026-09-26T15:57:58.020230325Z
+req_type: Task
+filed_at:
+  code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: b331809ce7
+  vendor: antigravity
+  session: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
