@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:45:55.970714904Z
-modified_at: 2026-09-26T11:15:35.165235084Z
+modified_at: 2026-09-26T11:42:51.846684402Z
 req_type: Bug
 tags:
 - cache
@@ -36,6 +36,33 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe), per the SPIKE-90 advisor review: approved; land first. Added acceptance: fix both symlink sites (lib.rs ~36540 and ~41310), fall back safely when the cache file doesn''t exist yet, and have STORY-1484''s refresh lock use the same path helper.'
   created_at: 2026-09-26T09:52:58.226179277Z
   modified_at: 2026-09-26T09:52:58.226179277Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd86-75c6-7763-b969-591e6147773f
+  author: joe
+  content: |-
+    Review (fresh strict Opus reviewer), branch claude/bug-1644 @77a67a256e. VERDICT: REQUEST CHANGES (one small blocking fix, #1; the rest are nits or follow-ups). The design is sound: the sidecar is resolved from the symlink-resolved cache, and the non-symlink path is byte-identical to the old code, so Windows and single-checkout users see no change. busy_timeout and the retry ladder are untouched.
+    Tests run (CARGO_BUILD_JOBS=3), all green: aida-core --lib bug_1644 8/8, cache_lock 21/21, cache 127/127; aida-cli-lib --lib bug_1644 1/1, doctor_ 160/160, worktree 224/224; fmt clean.
+    Mutation A (retire does remove_file without the liveness check): CAUGHT by bug_1644_doctor_checks_shared_and_stray_worktree_lock_info (doctor_cmd.rs:7682).
+    Mutation B (delete both retire_stray_worktree_lock_info call sites): NOT caught (bug_1644, session_, and worktree filters all pass). Tree reverted and clean.
+
+    FINDINGS
+    1. [MEDIUM, blocking] aida-core/src/db/cache_lock.rs:985: assert_eq!(cache_lock_info_path(&wt_cache), writer_sidecar) compares a canonicalized path against a lexical one. It is #[cfg(unix)], so it runs on macOS, where tempdir() is under /var/folders and canonicalizes to /private/var. The assertion therefore fails deterministically in the nightly/path-triggered cross-platform macOS job (cross-platform.yml runs cargo test --workspace). Fix: build bug_1644_layout under std::fs::canonicalize(root.path()), or compare canonicalize() of both sides as the next assertion already does.
+    2. [LOW] lib.rs:36652 and lib.rs:41407: the two BUG-52 call sites have no test coverage (mutation B survives). The SPIKE-90 acceptance ('both symlink sites') is met by the code but not pinned. Fix: add a session_start/session_end test (temp dirs) that plants a dead-owner stray beside a symlinked cache.db and asserts it is gone, plus a live-owner stray that is kept. Or at least unit-test a helper that session_end calls.
+    3. [LOW, test flake] doctor_cmd.rs:7664 and 7686 use pid 999_999 as 'dead'. pid_max here is 4194304, so that pid can be live and the test would flip to Alive. Use the 0x7fff_fffe DEAD constant pattern from cache_lock.rs tests (or u32::MAX-1).
+    4. [LOW, pre-existing, now wider] Dead-owner determination (b): the record carries no host or pid-namespace identity. A writer in another container or host that shares the bind-mounted .aida is classified against the local pid table, reads as Dead (pid absent, or starttime mismatch as pid_reused), and its record is deleted by retire, clear_dead_owner, or doctor heal. For strays the harm is limited to old binaries' diagnostics and BUG-664 guard, and SQLite remains the real lock, so no unguarded write is possible. Follow-up (TASK-1484 scope, not this bug): record hostname plus /proc/self/ns/pid inode and fail closed (Unknown) on mismatch. PID reuse on the same host is correctly handled by the start-identity check.
+    5. [NIT] Canonicalization race (c): shared_cache_path is recomputed on every call (write/touch/remove/clear). If the worktree's cache.db symlink is removed or replaced while a command runs (for example a concurrent session end), the release resolves to a different path and this process's own record leaks as a dead-owner record until the next successful write reclaims it. This is diagnostics-only and self-healing. Consider resolving the lock-info path once when the Cache opens and storing it.
+    6. [NIT] lib.rs:23613: arm order. A LIVE stray that is also past its soft deadline hits the generic 'cache lock held by live pid' arm and loses the 'per-worktree … current binaries never read it' explanation. Put the is_stray arm first, or append the note.
+    7. [NIT, exotic config] If a user symlinks MAIN's .aida/cache.db elsewhere (for example to a faster disk), the main checkout's sidecar also moves to the resolved location, and doctor will label main/.aida/cache.db.lock-info as 'per-worktree' when it is an old-binary main sidecar. During a mixed-binary window there, new readers in main no longer see an old writer in main. Rollout-only and fail-safe (the ladder still arbitrates). A wording tweak ('lexical-path' instead of 'per-worktree') would suffice.
+
+    HUNT RESULTS
+    (a) Mixed-binary rollout: fail-safe. Old worktree writers stay invisible to new readers, the same as before the fix, so there is no regression. New worktree writers become visible to old main readers, which is an improvement. Both sides use create_new claims and pid-checked release, and SQLite arbitrates, so neither side can delete the other's live record except via the pre-existing #4 path.
+    (d) Grep of lock-info, cache_path.with* and cache.db- found no remaining derivation from the unresolved path. touch_own_lock_info's temp file and every read/write/remove/observe/enrich path go through cache_lock_info_path. The only lexical derivation is the intentional stray probe. The -wal/-shm symlinks are unchanged (SQLite resolves them itself).
+    (c) Relative, chained, dangling and loop links are covered. A cross-filesystem target is fine (the temp-file rename stays beside the target). A regular-file cache.db in main is unchanged. The stray probe requires is_file, so a symlinked lock-info is never treated as a stray.
+    (e) SPIKE-90 acceptance: a safe fallback for a missing or dangling cache is present. cache_sidecar_path(cache, suffix) is exported for STORY-1484's refresh.lock. Both symlink sites are wired but untested (#2).
+    (f) Hermetic: tempdirs only, and no real ~/.aida or live cache access.
+    Fix #1 (and ideally #2 and #3), then approve.
+  created_at: 2026-09-26T11:42:51.846684402Z
+  modified_at: 2026-09-26T11:42:51.846684402Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
