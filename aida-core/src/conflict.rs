@@ -421,8 +421,54 @@ pub fn merge_spec_three_way(
 /// `reconcile-status` sweep. A status change authored by anyone else — a
 /// human `aida edit`, an agent session acting explicitly — is an intentional
 /// transition.
-// trace:BUG-1625 | ai:claude
-pub const AUTOMATED_STATUS_AUTHORS: &[&str] = &["aida-auto-bump", "aida-reconcile"];
+///
+/// BUG-1632 adds the automated writers that used to change status without any
+/// history, so the guard could not see them: the orchestrator shelve, the
+/// `queue rework` repeated-findings loop guard, the MCP `post_punt` tool and the
+/// re-drive supervisor's requeue. Each now records its status transition under
+/// its own name below.
+// trace:BUG-1625 trace:BUG-1632 | ai:claude
+pub const AUTOMATED_STATUS_AUTHORS: &[&str] = &[
+    "aida-auto-bump",
+    "aida-reconcile",
+    ORCHESTRATOR_SHELVE_AUTHOR,
+    LOOP_GUARD_AUTHOR,
+    MCP_PUNT_AUTHOR,
+    SUPERVISOR_REQUEUE_AUTHOR,
+];
+
+/// History author for the orchestrator's shelve (a failed phase parks the spec
+/// in NeedsAttention).
+// trace:BUG-1632 | ai:claude
+pub const ORCHESTRATOR_SHELVE_AUTHOR: &str = "aida-orchestrator";
+/// History author for the `queue rework` loop guard that returns a spec to
+/// NeedsAttention when identical review findings recur.
+// trace:BUG-1632 | ai:claude
+pub const LOOP_GUARD_AUTHOR: &str = "aida-loop-guard";
+/// History author for the MCP `post_punt` tool's flip to NeedsAttention.
+// trace:BUG-1632 | ai:claude
+pub const MCP_PUNT_AUTHOR: &str = "aida-mcp-punt";
+/// History author for the re-drive supervisor's NeedsAttention -> Approved
+/// requeue.
+// trace:BUG-1632 | ai:claude
+pub const SUPERVISOR_REQUEUE_AUTHOR: &str = "aida-supervisor";
+
+/// Append a status history entry `from -> req.status` under `author` when the
+/// status actually changed. Automated writers pass one of the
+/// [`AUTOMATED_STATUS_AUTHORS`] so the BUG-1625 merge guard can see them.
+// trace:BUG-1632 | ai:claude
+pub fn record_status_transition(
+    req: &mut Requirement,
+    author: &str,
+    from: &crate::models::RequirementStatus,
+) {
+    if &req.status == from {
+        return;
+    }
+    let change =
+        Requirement::field_change("status", format!("{:?}", from), format!("{:?}", req.status));
+    req.record_change(author.to_string(), vec![change]);
+}
 
 /// True when `author` is one of [`AUTOMATED_STATUS_AUTHORS`].
 // trace:BUG-1625 | ai:claude
@@ -2370,5 +2416,39 @@ mod tests {
         assert!(is_automated_status_author("aida-auto-bump"));
         assert!(is_automated_status_author("aida-reconcile"));
         assert!(!is_automated_status_author("joe"));
+    }
+
+    /// BUG-1632: the automated writers that used to leave no status history
+    /// now record one under a name the guard counts as automated, and the
+    /// helper records nothing when the status did not change.
+    // trace:BUG-1632 | ai:claude
+    #[test]
+    fn bug1632_automated_writer_authors_are_recognized() {
+        for author in [
+            ORCHESTRATOR_SHELVE_AUTHOR,
+            LOOP_GUARD_AUTHOR,
+            MCP_PUNT_AUTHOR,
+            SUPERVISOR_REQUEUE_AUTHOR,
+        ] {
+            assert!(is_automated_status_author(author), "{author}");
+        }
+
+        let base = make_req("Spec", "In Progress");
+        let mut unchanged = base.clone();
+        record_status_transition(&mut unchanged, MCP_PUNT_AUTHOR, &base.status);
+        assert!(unchanged.history.is_empty());
+
+        let mut completed = base.clone();
+        completed.set_status_from_str("Completed");
+        completed.modified_at = at("2026-09-25T01:00:00Z");
+        let mut punted = base.clone();
+        punted.set_status_from_str("Needs Attention");
+        record_status_transition(&mut punted, MCP_PUNT_AUTHOR, &base.status);
+        punted.modified_at = at("2026-09-25T02:00:00Z");
+        assert_eq!(punted.history.len(), 1);
+        for (ours, theirs) in [(&punted, &completed), (&completed, &punted)] {
+            let merged = merge_spec_three_way(&base, ours, theirs);
+            assert_eq!(merged.status, crate::models::RequirementStatus::Completed);
+        }
     }
 }

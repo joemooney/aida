@@ -8962,6 +8962,61 @@ fn doctor_scrub_collisions() -> Result<()> {
     std::process::exit(1);
 }
 
+/// The one-line history index freshness summary `aida doctor fsck` prints
+/// under cache freshness. Pure, so the wording is testable. `enabled` is
+/// whether `AIDA_HISTORY_CACHE` leaves the index switched on.
+// trace:TASK-1508 | ai:claude
+pub(crate) fn history_index_doctor_line(
+    st: &crate::history_cache::HistoryCacheStatus,
+    enabled: bool,
+) -> String {
+    if !enabled {
+        return "history index switched off (AIDA_HISTORY_CACHE=0) — `aida history` reads \
+                git directly and does not build or update it."
+            .to_string();
+    }
+    let running = if st.indexer_running {
+        " (indexing now)"
+    } else {
+        ""
+    };
+    if !st.exists {
+        return format!(
+            "history index not built yet{running} — `aida history` builds it as it goes, \
+             or run `aida cache rebuild --history`."
+        );
+    }
+    if let Some(err) = &st.error {
+        return format!(
+            "history index unreadable ({err}) — `aida history` reads git directly until \
+             `aida cache rebuild --history` replaces it."
+        );
+    }
+    let fresh = st.tip.is_some() && st.tip == st.head;
+    if !fresh {
+        return format!(
+            "history index behind the store{running} — it catches up on the next \
+             `aida history` query."
+        );
+    }
+    if st.complete {
+        format!(
+            "history index up to date{running}: {} event(s) covering the whole store history.",
+            st.events
+        )
+    } else {
+        let reach = st
+            .floor_commit_at
+            .as_deref()
+            .map(|at| format!(" back to {at}"))
+            .unwrap_or_default();
+        format!(
+            "history index up to date for recent history{reach}{running}; older history \
+             is still filling in (run `aida cache rebuild --history` to finish now)."
+        )
+    }
+}
+
 /// Compose every diagnostic into a single report. Exits non-zero on any
 // problem so it can gate CI. trace:EPIC-19 | ai:claude
 fn doctor_fsck() -> Result<()> {
@@ -9090,6 +9145,22 @@ fn doctor_fsck() -> Result<()> {
         println!(
             "  {} cache missing — run `aida cache rebuild` if list/search are slow.",
             "·".dimmed()
+        );
+    }
+    // The history index is informational here: a missing, filling or
+    // behind index only means slower `aida history` answers, never a
+    // wrong one, so it never marks fsck as failed.
+    // trace:TASK-1508 | ai:claude
+    if store_path.is_dir() {
+        println!(
+            "  {} {}",
+            "·".dimmed(),
+            history_index_doctor_line(
+                &crate::history_cache::status(&store_path),
+                crate::history_cache::cache_enabled_from(
+                    std::env::var("AIDA_HISTORY_CACHE").ok().as_deref()
+                ),
+            )
         );
     }
     println!();

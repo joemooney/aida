@@ -5857,6 +5857,7 @@ pub(crate) fn handle_git_backend_command(
                         author: get_default_author(),
                         clear_escalation: crate::requeue::caller_may_clear_escalation(),
                         reason: None,
+                        automated: false, // trace:BUG-1632 | ai:claude
                     };
                     let target = req.status.clone();
                     req.status = RequirementStatus::NeedsAttention;

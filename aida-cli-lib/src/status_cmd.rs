@@ -1082,10 +1082,10 @@ fn collect_absence_change_digest(
         deferred_only_specs: None,
         exclude_meta: true,
     };
-    let Ok((events, _window_exhausted)) = history::collect_event_records(store_path, &opts) else {
+    let Ok(records) = history::collect_event_records(store_path, &opts) else {
         return AbsenceChangeDigest::default();
     };
-    summarize_absence_events(&events)
+    summarize_absence_events(&records.events)
 }
 
 fn summarize_absence_events(events: &[history::HistoryEventRecord]) -> AbsenceChangeDigest {

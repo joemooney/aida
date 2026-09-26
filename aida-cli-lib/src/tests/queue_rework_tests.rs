@@ -1447,6 +1447,7 @@ fn storage_door_status_check_happens_under_the_write() {
         author: "t".into(),
         clear_escalation: true,
         reason: None,
+        automated: false, // trace:BUG-1632 | ai:claude
     };
     // The caller believed it was NeedsAttention; the store says InProgress.
     let (outcome, _) = crate::requeue::return_to_flight_in_storage(
@@ -1483,6 +1484,7 @@ fn backend_door_status_check_happens_under_the_write() {
         author: "t".into(),
         clear_escalation: true,
         reason: None,
+        automated: false, // trace:BUG-1632 | ai:claude
     };
     let (outcome, _) = crate::requeue::return_to_flight_in_backend(
         &backend,

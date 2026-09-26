@@ -7690,6 +7690,21 @@ pub(crate) fn needs_attention_parks(store: &aida_core::RequirementsStore) -> Vec
     parks
 }
 
+/// The BUG-1213 loop guard's write: return the spec to NeedsAttention after
+/// identical review findings recurred.
+///
+/// BUG-1632: the guard's decision is automated even when a person ran `queue
+/// rework`, so the transition is recorded under
+/// [`aida_core::conflict::LOOP_GUARD_AUTHOR`], which the BUG-1625 merge guard
+/// recognizes.
+// trace:BUG-1213 trace:BUG-1632 | ai:claude
+pub(crate) fn loop_guard_park(r: &mut Requirement) {
+    let from = r.status.clone();
+    r.status = RequirementStatus::NeedsAttention;
+    aida_core::conflict::record_status_transition(r, aida_core::conflict::LOOP_GUARD_AUTHOR, &from);
+    r.modified_at = chrono::Utc::now();
+}
+
 /// One line saying why a spec is parked: the shelve's failure, the punt, or
 /// the escalation.
 fn park_reason_line(r: &Requirement) -> String {
@@ -8028,6 +8043,7 @@ pub(crate) fn handle_queue_rework(
                     // escalation to a human. trace:TASK-1311 | ai:claude
                     clear_escalation: crate::requeue::caller_may_clear_escalation(),
                     reason: reason.map(str::to_string),
+                    automated: false, // trace:BUG-1632 | ai:claude
                 };
                 let (outcome, _) = crate::requeue::return_to_flight_in_storage(
                     storage,
@@ -8164,10 +8180,11 @@ pub(crate) fn handle_queue_rework(
                 // return the spec to NeedsAttention and route an explicit
                 // advisor finding + brief instead.
                 // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
-                storage.update_spec_atomically(req, |r| {
-                    r.status = RequirementStatus::NeedsAttention;
-                    r.modified_at = chrono::Utc::now();
-                })?;
+                // BUG-1632: the loop guard's decision is automated even when a
+                // person ran `queue rework`, so it records the transition under
+                // an automated author the BUG-1625 merge guard recognizes.
+                // trace:BUG-1632 | ai:claude
+                storage.update_spec_atomically(req, loop_guard_park)?;
                 let note = format!(
                     "Identical reviewer findings recurred twice for {display_id}; do not \
                      requeue a third implementer round until an advisor chooses a different \
