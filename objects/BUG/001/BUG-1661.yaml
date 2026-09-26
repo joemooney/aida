@@ -3,12 +3,12 @@ spec_id: BUG-1661
 agreed_id: BUG-1661
 title: 'Pre-commit hook and docs polish: rg -nE in user-facing-text docs (-E is --encoding), hook treats //// as a doc comment, cargo-fmt step claims ''drift fixed'' when cargo itself fails'
 description: 'From TASK-1516''s round-2 review. (a) docs/user-facing-text-conventions.md has several ''rg -nE ...'' commands; in ripgrep -E means --encoding, so they fail with ''unknown encoding''; use ''rg -n''. (b) aida-core/templates/hooks/aida-pre-commit.sh treats ''////'' lines as doc comments, but Rust treats them as plain comments; exclude 4+ slashes. (c) The hook''s cargo-fmt step prints ''drift fixed and re-staged'' even when cargo fails (e.g. no rustup default toolchain); report the failure honestly and don''t claim a fix. Edit the template master, then make sync-templates. Acceptance: tests in tests/test_precommit_provenance_move.sh for (b) and (c) (fake failing cargo on PATH); the doc commands run.'
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:15:56.790261134Z
-modified_at: 2026-09-26T21:57:20.246676154Z
+modified_at: 2026-09-26T22:01:50.918920409Z
 req_type: Bug
 comments:
 - id: 01a0de80-abf1-7470-a857-4046ec387efa
@@ -44,6 +44,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0dfbd-2846-76d1-b92f-0a437281fc4b
+  author: joe
+  timestamp: 2026-09-26T22:01:50.918915206Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
