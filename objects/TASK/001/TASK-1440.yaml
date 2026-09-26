@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T16:08:01.637576942Z
-modified_at: 2026-09-24T12:51:53.450620751Z
+modified_at: 2026-09-26T05:29:37.576055404Z
 req_type: Task
 tags:
 - benchmark
@@ -34,4 +34,10 @@ comments:
   content: 'CORRECTION (proxy, 2026-09-24): reopened. This task was completed on the strength of the ''human comprehension pilot'' doc on feat/jev-integration (commit 131c43c063). A review found the doc reports blind human trials and metrics with no supporting evidence. It was committed 2 minutes after the code, and its corpus table gives the wrong titles for EPIC-55, EPIC-9, BUG-406 and ADR-10. The claimed results can''t be treated as evidence. Re-do it with a real, reproducible evaluation, or reject it.'
   created_at: 2026-09-24T12:51:53.450620751Z
   modified_at: 2026-09-24T12:51:53.450620751Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc30-c028-7ef3-85da-173f2bfafbcd
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): re-checked, still Joe''s; blocked by TASK-1437. Recommended default: reject with TASK-1437 (the EPIC-72 tooling shipped; the human benchmark is optional).'
+  created_at: 2026-09-26T05:29:37.576055404Z
+  modified_at: 2026-09-26T05:29:37.576055404Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
