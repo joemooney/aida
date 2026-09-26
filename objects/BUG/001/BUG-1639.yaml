@@ -32,11 +32,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T04:47:41.715373320Z
-modified_at: 2026-09-26T05:24:25.565042277Z
+modified_at: 2026-09-26T05:25:23.000543134Z
 req_type: Bug
 tags:
 - antigravity
 - codex
+- needs-sketch
 - parity
 - scaffolding
 - skills
@@ -116,6 +117,7 @@ comments:
   created_at: 2026-09-26T05:11:40.095580744Z
   modified_at: 2026-09-26T05:11:40.095580744Z
   session_id: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
+execution_mode: drive
 filed_at:
   code_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
   branch: main
