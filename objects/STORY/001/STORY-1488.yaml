@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:50:34.977218919Z
-modified_at: 2026-09-26T21:51:50.481805030Z
+modified_at: 2026-09-26T22:06:53.719646193Z
 req_type: Story
 comments:
 - id: 01a0dfb3-fed1-7473-aacc-9045d61d8434
@@ -23,6 +23,138 @@ comments:
   content: 'OPERATOR DECISION (Joe, 2026-09-26 14:51): agreed to the plan — measure first; slice 1 = mechanical lib.rs module split in a quiet window between batches; slice 2+ = crate extraction kept only where measured incremental-build time improves. Sketch + advisor signoff before code.'
   created_at: 2026-09-26T21:51:50.481805030Z
   modified_at: 2026-09-26T21:51:50.481805030Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfc1-c717-7af1-a358-c16d0f672f59
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): split aida-cli-lib — slice 1 mechanical lib.rs split, slice 2+ crate extraction
+
+    Studied on origin/main b9a986e (2026-09-26). Facts: aida-cli-lib = 497k lines (src/**), lib.rs = 110,098 lines with 2,225 top-level fns (6 `pub`, 202 `pub(crate)`, ~2,020 private) + 136 structs/enums + 292 `#[cfg(test)]` decls (241 of them `#[path = "tests/..."]` stubs, 51 inline test mods). 253 sibling modules; 269 files in src/tests (28 declared from modules, the rest from lib.rs). `run()` alone is 2,988 lines (L3625–6612). Precedent: STORY-771/SPIKE-78 extracted queue/drain/pr/mcp/status/solo/zen/orchestrator clusters with `use crate::*;` in the module and `use <mod>::*;` back in the root — slice 1 repeats that recipe at scale. Prior scoping in docs/plans/2026-07-17-story-772-crate-split-scoping.md already concluded the bin/lib split gives ~0% and "the real lever is splitting the lib itself" — this spec is that follow-up.
+
+    OWNER / TRIGGER
+    - Owner: one implementer seat (claude) under guided-implement (keystone/architecture class; blast radius = every in-flight branch). Advisor signs off this sketch; reviewer role verifies the named checks, not the code.
+    - Trigger: operator request 2026-09-26. Sequencing: (0) baseline timings recorded on this spec (acceptance 1) -> (1) slice 1 PR in a declared quiet window -> (2) rebase helper + note -> (3) slice 2 crates one per child spec. Recommend `aida decompose` into child TASKs (baseline / step A / step B moves / rebase helper / kernel crate / base crate / ...) so the `(ID)` trailer completes a child at each merge instead of completing this story on slice 1.
+
+    SLICE 1 MODULE MAP (flat src/*.rs, approx lines, what moves; symbols name the anchors)
+    Residual lib.rs (target ≈ 4–5k): mod tree + `use <mod>::*;` block (L1–370), `glyph()` shim, `main_entry`/`register_filing_identity`/sigpipe (L945–1132), `run()` dispatch (L3625–6612, moved whole later if wanted), the alias rewrites `run()` calls first (L3389–3624), the trailing `#[path]` test decls whose tests span several domains.
+    New modules (≈45 files; all ≤ 6k; acceptance cap 15k):
+    - kernel.rs ≈ 0.6k: find_project_root/_from, authority_*_is_terminal (L34582), home_dir/aida_home_dir (L49285), aida_exe_path/resolve_aida_exe (L101463), current_user_id (L92370), get_default_author (L502), build_sha_short (L1159), read_project_config_value/config_lookup (L20071), canonical_role_name/sh_single_quote (L22876), command_output_with_timeout/resolve_forge_cli/resolve_gh_binary/resolve_forge_binary (L42385–42640), prompt_yes_no (L18257), copy_to_clipboard (L54155), parse_days_arg (L68036), resolve_current_session_id (L84085), is_terminal_status(_str), parse_requirement_id, strip_toml_inline_comment, `#[cfg(test)] mod test_ambient` (L34628). These are the 42 helpers referenced by >=3 modules; their closure (comments/strings stripped) is 97 items / ~2.7k lines with one stray edge (parse_days_arg -> queue_cmd::parse_lookback, invert it).
+    - output_format.rs ≈ 0.8k: agent_output_mode, OUTPUT_FORMAT_OVERRIDE (OnceLock), output_format_is_json, toon_list_fields, render_list_fields_table, handle_tail_cli (L2283–3089).
+    - upgrade_release.rs ≈ 2.1k: L1132–2282 (mode normalisation + drain-merge classification tests), L55007–55257 (ShaMatch/classify_sha_match), L67522–67906 (handle_release/handle_dev_release), L83030–83318 (workspace version/install method/banner/confirm).
+    - findings_gate.rs ≈ 2.1k: L502–944 (PromoteAutoComplete, findings_dismiss…), L6613–7354, L9841–10446 (GateAuthority, promote_finding_to_gate), L14072–14401 (reviewer-verdict findings).
+    - questions.rs ≈ 2.6k: L7355–9048, L9414–9840, L42815–43272 (headless-log question detection).
+    - pr_merge_gate.rs ≈ 0.4k: L9049–9413 (drain_merge_approval_gate, stamp_pr_review_verdict, ensure_spec_done_after_pr) — foreign block inside questions.
+    - advisor_cmd_root.rs ≈ 1.0k: L10447–11097 + L103846–104190 (AdvisorPass, effective_calibration_mode).
+    - punt_done.rs ≈ 1.0k: L11098–12052.
+    - scaffold_init.rs ≈ 1.3k: L12053–12537, L13069–13292 (gitignore), L28823–29164 (user AIDA instructions), L91904–92036 (OBE scaffold prune).
+    - memory_doc.rs ≈ 0.5k: L12537–13068 (fnv1a_hex, split_md_frontmatter, MemoryDriftReport).
+    - store_sync.rs ≈ 2.4k: L425–501 (StoreSyncConfig types), L13340–14071 (detect_distributed_store, InitPushPlan), L17283–17697, L23087–23300 (StoreDriftVerdict), L48895–49395 (CacheFreshness, bg fetch).
+    - store_push_pull.rs ≈ 3.4k: L68160–70279 (handle_push_command, fan_out_mirror_push), L70279–71572 (handle_pull_command, cascade_rebase_stacked_branches, fetch).
+    - db_reconcile.rs ≈ 3.4k: L71572–74989 (auto_bump_done_to_completed_with 800-line fn, ClosureHold, handle_db_reconcile_status).
+    - rel_cards.rs ≈ 2.2k: L14443–14935 (edge add/remove), L83319–84098 (rel type matching, RelRow), L84099–84281 (tree), L84282–84465 (comments, open_user_guide -> help.rs), L84466–85037 (cards).
+    - stakeholder_role.rs ≈ 0.4k: L15018–15410 (StakeholderAction, enforce_stakeholder_role_capabilities).
+    - brief.rs ≈ 1.2k: L15411–16607.
+    - config_init.rs ≈ 1.0k: L16625–17266 (validate_status_input pub, ConfigSnapshot, Ultraplan/autopilot/worktree-pool config sections), L17698–18042 (policy readers).
+    - requirements_cli.rs ≈ 2.4k: L18059–20070 (add/list/show/edit/delete, parse_status/priority/type), L21450–21518, L92037–92369 (grep).
+    - db_block.rs ≈ 1.3k: L20120–21444 (handle_db_check_collisions, handle_block_command, block auto-allocation) — config_lookup/read_project_config_value peel off to kernel.rs.
+    - mailbox_root.rs ≈ 0.5k: L21592–22029 (MailboxPolicy, MailboxResolveFailure). RoleState/RoleActivity (L21519–21591) go to role.rs.
+    - role.rs ≈ 1.6k: L21519–21591, L22030–23082 (load_role, pick_role_with_header, scaffold_starter_roles), L50190–50773 (effective_role, advisor_authority_from, has_integrity_floor_authority, team/protected gates).
+    - statusline_root.rs ≈ 0.6k: L23110–23300 header block, L49790–50190, L51013–51043 (OrchestratorBadge), statusline_project_root*.
+    - doctor_root.rs ≈ 1.7k: L23313–24721 (DoctorFinding, collect_doctor_findings, scan_completed_without_commit) + L24722–25020 GC headers.
+    - worktree_gc.rs ≈ 3.0k: L25021–25386, L25387–25719 (salvage/trace-walk; walk_source_for_traces -> trace.rs), L34667–35084 (find_main_worktree_root, StrandedPrimary), L50773–51013, L62841–64460 (handle_worktree_command, pool adopt/destroy, enter/exit).
+    - agent_launch.rs ≈ 4.2k: L25720–25998 (session/terminal/agent thin dispatchers), L25999–26386 (dispatch health), L26387–26736 (agent_new picker), L26737–28390 (agent_new_*, resume), L29234–30987 (prepare_agent_launch, run_tracked_agent).
+    - agent_config.rs ≈ 0.5k: L28390–28823 + L29164–29234 (agents.toml posture readers/writers).
+    - agent_registry_root.rs ≈ 0.6k: L30987–31589 (agent_ls/gc/stop/register, ChildSignalForwarder).
+    - leases.rs ≈ 3.6k: L31589–33551 (SessionLease + list_leases + lease gates), L46244–46623 (LeaseStateGlyph impl, session_leases), L46623–47426 (prune candidates, shelve flips, phase1 status bump/restore), L109032–109538 (DrainResolution, stale-lease recovery).
+    - merge_hold_cmd.rs ≈ 1.0k: L33551–34503 (handle_merge_hold 762-line fn, StaleHold).
+    - session_start.rs ≈ 2.3k: L35084–37419 (session_start 1,244-line fn + preflight/pool/dirty gates).
+    - session_end.rs ≈ 2.6k: L40472–42183 (session_end 795-line fn + resolve_session_to_end).
+    - session_misc.rs ≈ 1.8k: L47426–48895 (prune/show/handoff/manifest, load_store_for_lookup -> kernel), L109539–109871 (queue-work manifest/launch).
+    - review_gates.rs ≈ 1.6k: L37439–38444 (rework verdicts, stale-check warnings; L38030–38124 queue hint -> queue_misc), L45651–46222 (auto-queue PR review).
+    - ci_probe.rs ≈ 1.1k: L38124–38444, L39655–40472 (CiProbe, decide_ci_action, wait_for_ci_terminal).
+    - status_sections.rs ≈ 3.3k: L38444–39655, L74989–76791 (StatusTransition, collect_*_facts, print_status_* sections, print_status_json).
+    - status_prs.rs ≈ 2.9k: L52453–53130 (in-flight buckets), L76791–79666 (WorktreeRecord, collect_open_prs, PR head-state rollup, unshipped work).
+    - status_awaiting.rs ≈ 3.4k: L79666–83029 (cleanup/awaiting reports, hygiene/identity, fast status, dev-context CI).
+    - ps_integrate.rs ≈ 2.8k: L64460–65260 (PsRow, SeatActivity, linux/non-linux probe pairs), L65260–65811 (handle_integrate), L65811–67048 (RunningWorkSpec/gather_running_work/handle_ps — shared by ps and integrate, one home).
+    - pr_lookup.rs ≈ 2.4k: L42183–42815 (OpenPrInfo, PrLookup, forge binary resolution -> kernel), L43272–44289 (detect_open/merged_pr, PrCreditMatch), L87363–88082 (resolve_pr_to_spec pub, pick_pr_spec).
+    - plan_followups.rs ≈ 1.4k: L44289–45651 (extract_plan_followups). plan_report.rs ≈ 1.5k: L51043–52011 (PlanReport, compute_plan_report, lint_skills), L53959–54145, L54271–54660 (ultraplan prompt assembly). plan_intent.rs ≈ 2.2k: L60413–62609 (spec dryrun/interview, handle_intent, handle_why*).
+    - trace.rs ≈ 3.5k: L52011–52307, L53130–53959 (GitLinkage, collect_git_linkage, resolve_default_branch_ref -> kernel), L85243–86984 (trailer gate, trace check, diff coverage), L86985–87362 (doc suggest).
+    - help.rs ≈ 0.5k: L54660–55007 (tiered help, help-all, topics) + open_user_guide.
+    - tui_entry.rs ≈ 0.15k: L54145–54271 the `#[cfg(feature = "tui")]`/`#[cfg(not(...))]` handle_tui_command pair (moves as a pair; only tui cfg sites in lib.rs).
+    - autopilot_intake.rs ≈ 1.0k: L55257–56008 (autopilot subcommands), L56008–56242 (handle_intake_command).
+    - burndown_run.rs ≈ 2.8k: L56242–58594 (handle_burndown_run, integrate_wave_prs, DrainOverlay, status/explain), L67048–67522 (burndown plan).
+    - human.rs ≈ 1.8k: L58594–59720 (reviews_awaiting_human, handle_list_human, advisor worklist), L59720–60413 (unblock/audit sweep).
+    - claim.rs ≈ 0.25k: L62609–62841 (handle_claim/unclaim).
+    - usage_mcp_helpers.rs ≈ 0.25k: L67906–68160 (server locate/log pump, UsageRow/aggregate_events; parse_days_arg -> kernel).
+    - queue_misc.rs ≈ 0.9k: L92370–92797 minus current_user_id (queue role filter, mail sender identity), L92798–93030 (stack/headless/worker handlers), L38030–38124, L52307–52453 (batch tags).
+    - drain_gate.rs ≈ 1.7k: L93031–94724 (NoHumanGate, handle_from_pr, unattended refusals, run_plan_prelude, run_auto_complete).
+    - drain_batch.rs ≈ 2.4k: L94725–97131 (RealBatchDriver, RealSingleBranchDriver, cluster PR). drain_next_n.rs ≈ 1.7k: L97132–98872 (RealNextNDriver + failure-bug drafting).
+    - zen_drive_root.rs ≈ 1.1k: L85038–85242 (drafted-thought preview), L98873–99799 (run_do_drive, run_zen_drive, zen_auto_approve).
+    - phase_gates.rs ≈ 2.5k: L99800–100919 (phase1 scope/queue prep, phase3 verdict resolution incl. spec_verdict_fallback_for_phase3), L101749–102340 (DrainTuning, PhaseWatchdog).
+    - orchestrator_leases.rs ≈ 1.8k: L100920–101748 (Phase1Workspace, OrchestratedLeaseReceipt, build_implementer_phase_args; aida_exe_path -> kernel), L104191–105171 (push_branch_from_implementer_worktree, open_orchestrator_pr_*).
+    - phase_driver.rs ≈ 5.4k: L102341–103845 (DrainConfigToml, read_drain_config, RealPhaseDriver + inherent impl, ResumeEntry — constructed from drain_cmd.rs L1023, so pub(crate) fields), L105172–109031 (the single 3,611-line `impl auto_complete::PhaseDriver for RealPhaseDriver`, ci-fix prompt, AutonomyMode). Moves as one unit with its struct.
+    Tail L109872–110098 (truncate_str + ~35 `#[path]` test decls): each decl moves next to the domain its test targets when unambiguous, else stays in lib.rs.
+    Stray-symbol relocations flagged by the audit (must be in the manifest, not "fixed" ad hoc): RoleState/RoleActivity out of the mailbox block; statusline_project_root* out of role; walk_source_for_traces/parse_trace_id_token out of worktree_gc; current_git_branch (L46222) -> kernel; working_tree_is_dirty (ultraplan block) -> kernel; resolve_mail_sender_* out of the queue block; mcp_serve_project_root stays with store_sync.
+
+    VISIBILITY CHANGES
+    Private-at-crate-root is visible to every module in the crate, i.e. it already equals `pub(crate)`. So step A makes the change semantically a no-op: prefix every private top-level fn/struct/enum/type/const/static/trait in lib.rs, every field of those structs, and every method in root-level `impl` blocks with `pub(crate)` (about 2,000 items, ~500 fields, ~150 methods; the 6 `pub` items and the 202 existing `pub(crate)` are untouched; enum variants need nothing). Struct fields matter concretely: SessionLease is field-constructed in 37 files, RealPhaseDriver 9, RoleState 8, DoctorFinding 4, plus ResumeEntry/GitLinkage/PlanReport/WorktreeStatusRow/UsageRow from other files. Alternative (minimal: only the ~250 items referenced across files) is a smaller diff but needs compiler-driven iteration and leaves the next mover to repeat it; recommend uniform. dead_code analysis is unchanged by pub(crate). Each new module starts with `use crate::*;` (the root's private `use anyhow::{Context, Result}`, `colored::Colorize`, `serde::*`, `HashSet`, `IsTerminal`, `Uuid` and every `use <mod>::*;` are re-exported through that glob exactly as queue_cmd.rs relies on today — it has no anyhow/colored imports yet uses `Result<` 40x and `.green()` 260x), and lib.rs gains `mod <new>; use <new>::*;`. No `pub(super)`, no re-export shims, no renames.
+
+    MECHANICS (how the move is done and proven)
+    Two-phase, one PR, one commit per new module:
+    - Commit A "visibility": scripted (`scripts/split-lib/visibility.py` — regex on `^fn|^struct|...`, `^    fn` inside root impls, `^    name:` inside root structs) then `cargo fmt`. Proof: token-level diff — tokenize old and new lib.rs (strip whitespace, drop `pub(crate)` tokens) and require identity; `git diff -w --word-diff` shows only `pub(crate)` insertions and rustfmt re-wraps.
+    - Commits B1..Bn "move <module>": `scripts/split-lib/move.py` driven by a manifest `docs/plans/2026-09-26-story-1488-split-manifest.toml` listing for each target file the item anchors as the exact first line of each item (content-anchored, never line numbers, so the same script replays on any branch). The script cuts each item span (leading `///`/`//`/`#[...]` lines through the item's closing brace, plus an immediately following `#[cfg(test)]` block that names the item) verbatim, prepends the fixed 4-line header (`//! <purpose>`, `// trace:STORY-1488 | ai:claude`, blank, `use crate::*;`), writes src/<target>.rs, and inserts `mod <target>; use <target>::*;` into the root block. Proof per commit: (1) `git diff --color-moved=zebra --color-moved-ws=allow-indentation-change -M --stat` — every moved block shows as moved, nothing else red/green besides the header lines; (2) multiset check: `sort` of non-blank lines of old lib.rs == `sort` of non-blank lines of (new lib.rs + all new files) minus the allowed header/`mod`/`use` lines — `diff` output must be empty; (3) `cargo fmt --all -- --check` passes with no reformat (top-level items keep column 0 so rustfmt is a no-op); (4) `cargo build` and `cargo clippy --workspace` warning count unchanged (a new `unused_imports` on `use crate::*` is impossible here; a new dead_code warning means a test module lost its owner — fix the manifest, not the code); (5) `cargo test --workspace` green, same test count as baseline (3,149 in src/tests + 148 inline lib.rs + 3,685 in modules); (6) golden outputs byte-identical: `aida --help`, `aida help-all`, `aida list --format toon`, `aida status --format json` on the dev store; (7) `tests/test_mcp_stdio.sh --skip-agent-contract`.
+    Exactly three non-move edits, listed in the PR: merge_hold.rs:2223 `include_str!("lib.rs")` (scans the MergeHoldAction::Clear arm) -> the new merge_hold_cmd.rs; src/tests/bug_1186_reviewer_seat_tests.rs:87 `include_str!("../lib.rs")` (scans the PhaseDriver review phase) -> `../phase_driver.rs`; src/tests/resolve_aida_exe_tests.rs:56 (allows one `current_exe()` in lib.rs) -> kernel.rs. `#[path = "tests/..."]` decls need no edit only because the new files are flat siblings of lib.rs in src/ (a `src/status/ps.rs` layout would resolve `#[path]` against src/status/ and break 241 decls) — flat layout is therefore a slice-1 constraint, not taste.
+    Pre-commit gate (aida-pre-commit.sh, TASK-144): moved `///` provenance lines are credited by trimmed exact match against the `-` side of the staged diff, so pure moves pass. It is O(removed lines) subprocess spawns (~2 per line): a single 110k-line commit would take minutes; per-module commits (5–8k lines) keep it at seconds and give per-module color-moved review. lib.rs holds 2,298 `///` lines with SPEC-IDs (835 `trace:`) — all credited, since step A never touches `///` lines. Commit form: `[AI:claude] refactor(cli-lib): move <domain> out of lib.rs (TASK-<child>)`.
+
+    CONFLICT STRATEGY (fleet is not quiet: 8 branches with lib.rs edits pushed in the last 30 min; 344 of 588 commits in 30 days touch lib.rs; 1,372 unmerged remote branches)
+    - Declared window, ≤ 2 h: operator runs `aida shift disable` (night-shift job, enabled 2026-09-26 #2212) and `aida drain stop`, waits for the current `chore(integrate): batch N` to merge and `aida ps` to show no implementer seats, then the split PR is opened against that exact main, reviewed by the checks above only, and merged first. Branch the split from the merged batch commit so no in-flight PR is between base and split.
+    - In-flight branches (predict with `aida pr rebase --check`, which runs git merge-tree): ship `scripts/split-lib/relocate-hunks.sh`: for each commit on the branch, take its lib.rs hunks, find each hunk's context lines (byte-identical after the move) with a unique grep across src/*.rs at the split commit, rewrite the `--- a/aida-cli-lib/src/lib.rs` / `+++` headers to that file, and `git apply --3way`; hunks that touch lines the split did not move apply to lib.rs unchanged; ambiguous hunks are listed for manual placement. Recipe in the rebase note: `git rebase --onto <split-commit> <pre-split-main> <branch>` with `git rerere` on, then the script for conflicted commits. Same helper works for unpushed worktrees. Codex seats get the note by one operator paste (they do not read the mailbox); claude seats via `aida mail`.
+    - After the window: re-enable shift; the next drain wave rebases normally.
+
+    SLICE 2 CANDIDATE CRATES (dependency-ordered, from the census; all numbers are qualified-path counts, exact for non-glob modules)
+    Module graph: 253 modules, 332 module->module edges, 3 SCCs only (statusline_* x4, compete/compete_cmd, history/history_cache) — the real cycle is root items <-> modules, i.e. lib.rs. Root coupling: 38 modules use `use crate::*` (72.4k lines: the *_cmd clusters, doctor_cmd, init_cmd, git_backend_cmd, session_reap, statusline_cmd…) — these stay in the top crate; 74 modules (58.5k lines) reference no root item at all and depend only on each other (LAYER-0: cli 15.8k, events, review_verdict, integrate, pr_rebase, punt, permissions, process_probe, notify, team, worktree, worktree_lock, schedule, ship, metrics, drain_resume, drain_summary…); 64 more modules (52.2k lines) depend on the root only through the kernel closure (LAYER-1: auto_complete 13.4k, token_ledger, evaluator, glyphs/glyph_config, schedule_driver, supervisor, status_display, status_cleanup, health_*, help_*, user_alias, workflow_hints, init_bootstrap, first_run, forge_profiles…); the remaining 77 non-glob modules (113k lines: mcp 13.9k, session 6.7k, forge 5.6k, burndown 5.2k, maintenance_schedule 4.8k, awaiting_you 4.6k, history 4.4k, shift 3.7k, agent_registry, merge_hold, drain_state, pr_ship, digest…) are each blocked by 1–6 root items that slice 1 turns into module-level edges (e.g. burndown needs wait_for_ci_terminal from ci_probe; forge needs OpenPrInfo/PrLookup from pr_lookup; session needs 5 session helpers) — recompute layering after slice 1.
+    Crates, one per child spec, each kept only if the measured incremental time improves (acceptance 3):
+    - 2a aida-cli-kernel (~5k): kernel.rs + output_format.rs + glyphs + glyph_config + not_found + build.rs (owns AIDA_BUILD_* stamps: build_sha_short uses env!("AIDA_BUILD_GIT_SHA")). test_env/test_home/test_ambient become a normal (non-cfg(test)) `aida-cli-testkit` dev-dependency crate (test_env is used by 59 files across future crates; cfg(test) modules are not visible cross-crate). OUTPUT_FORMAT_OVERRIDE static lives here with a pub setter called by dispatch.
+    - 2b aida-cli-base (~58k): LAYER-0 as-is, cli.rs foremost — 105 clap derive types whose proc-macro expansion is paid on every rebuild of the crate today. Depends on aida-core (+ kernel for glyph if any base module uses it; none does today).
+    - 2c aida-cli-engine (~30k): auto_complete + autoprogress + drain_state/drain_lock/drain_caps + phase_driver/phase_gates/drain_batch/drain_next_n + token_ledger — the drain engine; blocked until its root deps are in kernel/base (post-slice-1 recompute).
+    - 2d one or two LAYER-1 domain crates (scaffold/init/health/help ≈ 20k) if 2b shows the per-crate win holds.
+    - top: aida-cli-lib keeps dispatch, the 38 glob clusters, mcp, sessions, and every test that spans domains. Cross-crate items become plain `pub` on internal crates marked `publish = false` — feasible only if aida-cli-lib is not published to crates.io (open question 1); otherwise `pub` + `#[doc(hidden)]` and lockstep publishing in scripts/release.sh.
+    Coherence: the 16 `impl X for Y` in lib.rs are local-trait or local-type (e.g. `impl LeaseStateGlyph for aida_core::LeaseState`, `impl auto_complete::PhaseDriver for RealPhaseDriver` where the trait is in the engine crate and the type in the top crate — legal); the orphan rule only bites if trait and type both move below the impl — audit per crate move.
+
+    EXPECTED WIN AND MEASUREMENT
+    Slice 1: incremental codegen partitions by source module, so today a one-line edit in lib.rs re-codegens the 110k-line root CGU; after the split only the touched ~2–5k-line module's CGU is redone (front-end still type-checks the crate, query-incremental). Expect a measurable drop in the one-line-edit rebuild, not in clean builds. Slice 2: crates below the edited one are not recompiled at all; cli.rs derive expansion is isolated; the single unit-test binary becomes N smaller ones built in parallel (test link time is dominated by that binary today).
+    Protocol (acceptance 1, recorded on this spec before slice 1; repeated after each slice, same machine, CARGO_BUILD_JOBS=3, sccache + mold as in ~/.cargo/config.toml since 2026-09-26, rustc version and `cargo build --timings` HTML attached): (a) clean `cargo build -p aida-cli` dev and release; (b) one-line edit (`let _ = 0;` in a rarely built fn) in lib.rs, in cli.rs, and in a leaf module, then `cargo build -p aida-cli` wall time, 3 runs, median; (c) `cargo test -p aida-cli-lib --no-run` clean and after the same edits; (d) `cargo check -p aida-cli-lib` after the lib.rs edit. Keep-if-improves applies to (b)-lib.rs and (c).
+
+    RISKS
+    - Step A regex over-reach (an `impl` block inside a fn, a struct literal at column 0) — mitigated by the token-level identity proof and by building after step A alone.
+    - Name collisions between globs: two new modules exporting the same name would make bare uses ambiguous; impossible from a partition of one namespace, but a module-local private helper in an existing module that shadows a root name keeps shadowing (unchanged behaviour). Any ambiguity error is a manifest bug.
+    - Test modules losing their owner: a `#[cfg(test)] mod x { use super::*; }` moved with a different item resolves through the glob anyway, but a test that reaches a private item of another new module now needs pub(crate) — covered by uniform step A.
+    - Static/thread_local ownership: OUTPUT_FORMAT_OVERRIDE (L2326), DOCTOR_CATEGORY_ALIASES (L24335), thread_locals at L42542/44786/47130 move with their accessor fns (no cross-module access exists).
+    - `#![recursion_limit = "256"]` stays on the crate root (mcp json! macro); the crate that hosts mcp.rs in slice 2 needs it.
+    - Feature flags: only the tui pair and `mod client`/server_cmd (remote) are cfg-gated in lib.rs; keep both features in the top crate so no feature plumbing is needed until a crate hosting them exists.
+    - Generated code: src/generated/aida.rs is committed, used only by client.rs (remote) — untouched in slice 1.
+    - Blame continuity: `git blame -C -C -C` and `git log --follow` still attribute; note in the rebase doc.
+    - Hook runtime on huge commits (see mechanics) and reviewer fatigue: reviewer verifies the seven checks and the three listed edits, nothing else.
+    - Fleet churn: any branch merged between baseline and the split branch point invalidates the manifest — the script is content-anchored so re-running it on the fresh main is minutes; the window discipline above is what bounds it.
+    - Slice 2 visibility explosion (STORY-772's finding) is real for the 77 blocked modules; the gate is the post-slice-1 recompute, not a guess.
+
+    VERIFICATION CHECKS (named)
+    V1 token-identity of step A; V2 color-moved + multiset diff per move commit; V3 fmt/clippy/warning-count parity; V4 `cargo test --workspace` green with unchanged test count; V5 CLI golden outputs byte-identical; V6 `tests/test_mcp_stdio.sh --skip-agent-contract`; V7 no lib.rs > 5k lines and no new file > 6k (`wc -l`); V8 the three include_str/path retargets are the only non-move hunks (`git diff --stat` on those files); V9 `aida pr rebase --check` prediction list + helper dry-run on the two largest in-flight branches before merge; V10 baseline and post-split timings on this spec.
+
+    OUT OF SCOPE
+    Any behaviour or output change; renaming or de-duplicating helpers; tightening visibility below pub(crate); splitting `run()` into per-command arms; nested directory layout; moving/renaming src/tests; changing clap types in cli.rs; build-profile or linker changes (mold/sccache already on); reducing test count; changing publication.
+
+    OPEN QUESTIONS
+    1. Is aida-cli-lib published to crates.io (manifest has keywords/categories; release.sh mentions "published release" but I found no cargo publish)? Decides plain `pub` + `publish = false` internal crates vs lockstep publishing.
+    2. Uniform `pub(crate)` for every moved item/field/method (recommended, provable no-op) vs minimal annotation of the ~250 cross-file items?
+    3. `run()` (3k lines, touches every domain): keep in lib.rs for slice 1 (lib.rs ≈ 4–5k) or move whole to dispatch.rs (lib.rs ≈ 1k, dispatch.rs becomes the hotspot)?
+    4. ~45 flat files in src/ acceptable (required to keep 241 `#[path = "tests/..."]` decls untouched), or do we accept editing those decls to allow src/<domain>/ directories?
+    5. Who declares the ≤ 2 h quiet window and when — right after the next integrate batch? Should the 8 currently active lib.rs branches land first or rebase after with the helper?
+    6. Slice 2 order: kernel -> base (cli.rs) -> engine as proposed, or base first (largest, no root deps, no kernel crate needed) to get the earliest measurable win?
+    7. Baseline machine/time: builds are capped at CARGO_BUILD_JOBS=3 and share the box with drain waves; timing runs need the same quiet window or a dedicated slot to be comparable.
+    8. Child-spec structure: one TASK per slice/crate so the `(ID)` trailer completes the right thing — decompose now or at signoff?
+  created_at: 2026-09-26T22:06:53.719646193Z
+  modified_at: 2026-09-26T22:06:53.719646193Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: b9a986e9fbe3912a0415963c8344ddca4830b700
