@@ -1,0 +1,36 @@
+id: 01a0defe-2beb-7090-8c9b-f3a63a450b88
+spec_id: ADR-59
+agreed_id: ADR-59
+title: 'Successor to the Trojan-horse framing: the TUI is a view onto the control plane, not the product''s face; the humble first surface is aida why plus the memory lane'
+description: |
+  DECISION: The TUI is a view onto the control plane, not the product's face. The humble first surface is `aida why` plus the memory lane; depth is discovered through the store, not through the TUI.
+
+  CONTEXT: the 2026-05-14 Trojan-horse framing (CLAUDE.md, docs/agents/aida-repository-guide.md, OVERVIEW.md "Public face: the TUI is the product", README item 6, EPIC-26) chose surface simplicity on purpose: "a TUI wrapping Claude Code sessions ... the actual value surfaces through use." SPIKE-86 found it unsupported as positioning: over 30 days the TUI took 1,277 of 176,968 attributed changed lines and 0.7% of authored specs, and the removal test shows the CLI and MCP cover every operation without it.
+
+  CHOSEN: replace the Trojan-horse framing as positioning (SPIKE-86 thesis T4 superseded). The tactic it carried, "look humble, let depth be discovered", is kept and moves to `aida why <file:line>` and the memory lane.
+
+  REJECTED: reaffirming the TUI as the product's face; the engineering and usage record do not support it.
+
+  CONSEQUENCES: the Trojan-horse passages in OVERVIEW.md, README.md and docs/agents/aida-repository-guide.md are replaced (separate docs filing). Feature polish is tested against "does this make the store easier to consult?" rather than "does this make the TUI's quiet depth stronger?".
+
+  SOURCE: SPIKE-86 report section 7.5, adopted by OPERATOR DECISION on SPIKE-86 (Joe, 2026-09-26).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:33:14.475824967Z
+modified_at: 2026-09-26T18:33:14.475824967Z
+req_type: Decision
+tags:
+- decision-record
+- from-spike:SPIKE-86
+- positioning
+- tui
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
