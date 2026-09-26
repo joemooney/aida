@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:16:11.890546672Z
-modified_at: 2026-09-26T04:50:53.979698552Z
+modified_at: 2026-09-26T05:40:34.892502393Z
 req_type: Bug
 tags:
 - aida:history
@@ -28,6 +28,29 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved after independent triage (confirmed or plausible on main 6bc5859).'
   created_at: 2026-09-25T22:32:32.574551050Z
   modified_at: 2026-09-25T22:32:32.574551050Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc3a-c7cc-7e30-b3a2-3389edef7e3f
+  author: joe
+  content: |-
+    Strict review: REQUEST CHANGES — reviewed 78291b4bdb. Two blockers, both reproduced with the built binary on a throwaway clone of the store.
+
+    (1) Spurious relationship events, a regression. yaml_edge_set (aida-cli-lib/src/history.rs:1844-1853) handles only a String or a !Custom Tagged rel_type. The current canonical custom-edge format is a mapping (rel_type: {custom: <name>}, models.rs:1137), so it hits '_ => return None' and the edge is dropped. On a store migration commit (ce01121e 'chore: update 1269 requirements', which rewrote !Custom x as {custom: x}), the before-set has the edge and the after-set does not. The feed now emits 823 false 'relationships: -X → implemented-by Y' removals on that one commit (e.g. aida history TASK-291 --full). On main, ra==rb, so there was no event. In addition, every custom edge added after the migration is never named: alone it shows as a count, and mixed with a standard edge it undercounts, because line 1823 takes counts from edges only. Fix: accept a Mapping {custom|Custom: name}, and add an index-vs-walk parity test that has real rel_type/target_id edges (the task_1507 sweep fixture writes 'rel:'/'target:' at task_1507_history_cache_tests.rs:88, so it never exercises edges).
+
+    (2) --json output is not valid JSON outside agent mode. run() prints the 'Window: …' line to STDOUT whenever !agent_output_mode() (history.rs:434-438). --json does not flip agent mode (--format json does), so 'aida history --json --since 2h' at a TTY, under a pty harness, with AIDA_AGENT_OUTPUT=0, or with --format human --json all print 'Window: …' before the '{'. Fix: skip that line (or send it to stderr) when json is set, and add a test.
+
+    Otherwise OK:
+    - Decoder bump to 2 renames the index file (history-v5-2.db), so the old file is ignored.
+    - Target resolution runs after both index and walk, on identical unresolved edges, so it cannot make them diverge. A deleted target falls back to a short UUID; tested behaviour, no failure.
+    - The gate change is safe: the only global --json is history's (cli.rs:12944), and --kind bails explicitly.
+    - The TOON table escapes cells. Nothing in-repo parses the old agent-mode blocks.
+    - --json has the same shape as the MCP history tool (mcp.rs:2605; could reuse events_json).
+    - Human single-spec views are unchanged. Agent-mode 'events --id X' is now a TOON table, which is fine.
+
+    Perf, non-blocking: resolve_edge_targets reads up to 4.5k object files on any relationship event, and always a full scan when a target is deleted. 'events --limit 300' ran in 1.6s. Consider the cache.db uuid→spec_id map.
+
+    Tests: bug_1631 4/4, history 127, task_1507 56, sweep (--ignored) ok, task_1508 8, mcp 166, bug_1502_format_json_audit 6, all pass. Mutation check: dropping the spec ID from the header fails bug_1631_multi_spec_feed_… as it should. Tests use tempdirs only.
+  created_at: 2026-09-26T05:40:34.892502393Z
+  modified_at: 2026-09-26T05:40:34.892502393Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 5b98d7cfb3485889468fe1fa78a09924b04f49af
