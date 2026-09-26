@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:29:48.596407578Z
-modified_at: 2026-09-26T08:59:20.607625638Z
+modified_at: 2026-09-26T08:59:47.999457073Z
 req_type: Task
 tags:
 - antigravity
@@ -79,6 +79,12 @@ comments:
     Sound: the v2 format and parsing, unreadable-manifest and symlinked-pack fail-closed, atomic writes (a race between refreshes can only lose an update, never corrupt the file), manifest recorded before files on refresh, and the per-directory design (works for .agents/skills). Removing REFRESH_DELIVERED_SKILLS delivers nothing init would not: refresh uses the same preview plus the persisted agent selection, and config-excluded skills come only from --no-skills, which removes whole packs. A fresh install delivers everything, matching the old init. The .claude/commands exclusion is justified: flat command files are not a skill pack, and refresh still never creates them. Must fix before merge: (1) and (2). (3) needs either the fix or explicit re-approval.
   created_at: 2026-09-26T08:59:20.607625638Z
   modified_at: 2026-09-26T08:59:20.607625638Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dcf1-2b9f-75f2-a01b-8d662a2d44c5
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe), revised after strict review: a legacy (pre-manifest) pack stays fail-closed only for automatic REFRESH. An explicit ''aida init'' or ''aida scaffold upgrade'' on a legacy pack delivers the missing skills ONCE, then writes the manifest from what exists. That was the pre-manifest behaviour, and the explicit command is operator intent. Doctor keeps suggesting ''scaffold upgrade'' for legacy packs. After that first explicit run, deletions are honoured as opt-outs.'
+  created_at: 2026-09-26T08:59:47.999457073Z
+  modified_at: 2026-09-26T08:59:47.999457073Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
