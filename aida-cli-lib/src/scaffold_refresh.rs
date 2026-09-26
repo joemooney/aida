@@ -267,10 +267,14 @@ pub(crate) fn refresh_agent_packs_at(
     // A memory-lane project from before the footprint was saved is
     // recognised from its packs, so it is not seeded with ~50 unconfirmed
     // skills and told to upgrade. trace:BUG-1645 | ai:claude
+    let footprint = crate::init_cmd::effective_init_footprint(project_root);
     let full_footprint = !matches!(
-        crate::init_cmd::effective_init_footprint(project_root),
+        footprint,
         Some(crate::cli::InitFootprint::Minimal | crate::cli::InitFootprint::MemoryLane)
     );
+    // A memory-lane project stays a memory lane: only its lane skills and
+    // its lane AGENTS.md block are refreshed. trace:BUG-1662 | ai:claude
+    let memory_lane = footprint == Some(crate::cli::InitFootprint::MemoryLane);
     let deliveries = if full_footprint {
         plan_refresh_deliveries(project_root, &preview)
     } else {
@@ -361,11 +365,17 @@ pub(crate) fn refresh_agent_packs_at(
     // trace:TASK-1503 | ai:claude
     record_refresh_deliveries(project_root, &preview, &deliveries);
 
-    if let Some(agents) = agents_md_block_refresh(project_root, &preview) {
+    if let Some(agents) = agents_md_block_refresh(project_root, &preview, memory_lane) {
         packs.push(agents);
     }
 
-    if let Ok(report) = crate::ensure_discipline_pack_scaffold(project_root, true) {
+    // trace:BUG-1662 | ai:claude
+    let discipline = if memory_lane {
+        None
+    } else {
+        crate::ensure_discipline_pack_scaffold(project_root, true).ok()
+    };
+    if let Some(report) = discipline {
         if report.relocated > 0 || report.written > 0 {
             let mut refresh = RefreshReport::default();
             refresh.refreshed = report
@@ -480,18 +490,30 @@ pub(crate) fn agents_md_block_enabled(project_root: &Path) -> bool {
 /// with no AGENTS.md, an agent profile that doesn't generate one, a symlinked
 /// destination, or the `[scaffold] agents_md_block = false` opt-out all leave
 /// the file exactly as it is.
+///
+/// A memory-lane project keeps its memory-lane block: the block is refreshed
+/// in place from the memory-lane template (keeping its storage line), never
+/// replaced with the full conventions block. A memory-lane project whose
+/// block is not the memory-lane block is left alone.
 // trace:BUG-838 | ai:claude
+// trace:BUG-1662 | ai:claude
 fn agents_md_block_refresh(
     project_root: &Path,
     preview: &aida_core::scaffolding::ScaffoldPreview,
+    memory_lane: bool,
 ) -> Option<PackRefresh> {
     if !agents_md_block_enabled(project_root) {
         return None;
     }
-    let artifact = preview
-        .artifacts
-        .iter()
-        .find(|a| a.path == Path::new("AGENTS.md"))?;
+    let full_block = if memory_lane {
+        None
+    } else {
+        let artifact = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new("AGENTS.md"))?;
+        Some(artifact.content.as_str())
+    };
     let dest = project_root.join("AGENTS.md");
     let mut report = RefreshReport::default();
     if dest
@@ -505,8 +527,11 @@ fn agents_md_block_refresh(
         );
     } else {
         let existing = std::fs::read_to_string(&dest).ok()?;
-        let (merged, _) =
-            aida_core::scaffolding::merge_agents_md_aida_block(&existing, &artifact.content);
+        let generated = match full_block {
+            Some(block) => block.to_string(),
+            None => crate::init_cmd::current_memory_lane_block(&existing)?,
+        };
+        let (merged, _) = aida_core::scaffolding::merge_agents_md_aida_block(&existing, &generated);
         if aida_core::scaffolding::generated_text_matches(&merged, &existing) {
             report.record(
                 Path::new("AGENTS.md"),
@@ -573,6 +598,15 @@ fn codex_prompts_refresh(dest: Option<&Path>) -> Option<PackRefresh> {
         location: dir.display().to_string(),
         report,
     })
+}
+
+/// Is this a memory-lane project (saved footprint, or recognised from its
+/// skill packs when it predates the saved footprint)? Refresh keeps such a
+/// project a memory lane.
+// trace:BUG-1662 | ai:claude
+pub(crate) fn is_memory_lane(project_root: &Path) -> bool {
+    crate::init_cmd::effective_init_footprint(project_root)
+        == Some(crate::cli::InitFootprint::MemoryLane)
 }
 
 /// Print the per-pack summary. Silent about packs that had nothing installed.
@@ -2052,5 +2086,150 @@ global = true
         // Claude-only skills never reach a non-Claude pack.
         assert!(!codex.join("aida-burndown").exists());
         assert!(!codex.join("aida-solo").exists());
+    }
+
+    // ── BUG-1662: refresh keeps a memory-lane project a memory lane ──
+
+    /// Every file under `root` with its bytes, for a before/after tree diff.
+    // trace:BUG-1662 | ai:claude
+    fn tree_snapshot(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+        fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
+            for entry in std::fs::read_dir(dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(root, &path, out);
+                } else {
+                    let rel = path.strip_prefix(root).unwrap().to_path_buf();
+                    out.insert(rel, std::fs::read(&path).unwrap());
+                }
+            }
+        }
+        let mut out = BTreeMap::new();
+        walk(root, root, &mut out);
+        out
+    }
+
+    /// A memory-lane project (footprint saved or not) refreshed changes
+    /// nothing: no discipline pack, no `.gitignore` allow-list, and the
+    /// AGENTS.md block stays the memory-lane block.
+    // trace:BUG-1662 | ai:claude
+    #[test]
+    fn bug_1662_memory_lane_refresh_adds_no_discipline_pack_and_keeps_lane_block() {
+        for persist_footprint in [true, false] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let store = aida_core::RequirementsStore::default();
+            if persist_footprint {
+                std::fs::create_dir_all(root.join(".aida")).unwrap();
+                crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::MemoryLane)
+                    .unwrap();
+            }
+            crate::init_cmd::write_memory_lane_scaffolding(
+                root,
+                &store,
+                ".aida-store",
+                false,
+                false,
+            )
+            .unwrap();
+            assert!(is_memory_lane(root), "persist={persist_footprint}");
+            let before = tree_snapshot(root);
+            for _ in 0..2 {
+                let packs = refresh_agent_packs_at(root, None, None);
+                assert!(
+                    packs.iter().all(|p| p.label != "Discipline pack"),
+                    "persist={persist_footprint}"
+                );
+            }
+            let after = tree_snapshot(root);
+            assert_eq!(
+                before.keys().collect::<Vec<_>>(),
+                after.keys().collect::<Vec<_>>(),
+                "persist={persist_footprint}: refresh added or removed files"
+            );
+            assert!(
+                before == after,
+                "persist={persist_footprint}: bytes changed"
+            );
+            assert!(!root.join(".aida/discipline").exists());
+            assert!(!root.join(".gitignore").exists());
+            let agents = std::fs::read_to_string(root.join("AGENTS.md")).unwrap();
+            assert!(agents.contains("# AIDA Memory Lane"), "{agents}");
+            assert!(!agents.contains("# AIDA Conventions"), "{agents}");
+        }
+    }
+
+    /// A full-footprint project's refresh is unchanged: it installs the
+    /// discipline pack and merges the full conventions block into AGENTS.md,
+    /// keeping the user's content.
+    // trace:BUG-1662 | ai:claude
+    #[test]
+    fn bug_1662_full_footprint_refresh_is_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::Full).unwrap();
+        std::fs::write(root.join("AGENTS.md"), "# AGENTS.md\n\nMy own notes.\n").unwrap();
+        assert!(!is_memory_lane(root));
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert!(
+            packs.iter().any(|p| p.label == "Discipline pack"),
+            "{:?}",
+            packs.iter().map(|p| &p.label).collect::<Vec<_>>()
+        );
+        assert!(root.join(".aida/discipline/README.md").is_file());
+        let agents = std::fs::read_to_string(root.join("AGENTS.md")).unwrap();
+        assert!(agents.contains("My own notes."), "{agents}");
+        assert!(agents.contains("# AIDA Conventions"), "{agents}");
+        assert!(!agents.contains("# AIDA Memory Lane"), "{agents}");
+    }
+
+    /// An outdated memory-lane AGENTS.md block is refreshed in place from
+    /// the memory-lane template, keeping its storage line and the user's
+    /// content outside the block. A block the user replaced with something
+    /// else is left alone.
+    // trace:BUG-1662 | ai:claude
+    #[test]
+    fn bug_1662_memory_lane_block_template_change_is_applied_in_place() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = aida_core::RequirementsStore::default();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::MemoryLane).unwrap();
+        crate::init_cmd::write_memory_lane_scaffolding(root, &store, "my/store.db", false, false)
+            .unwrap();
+        let path = root.join("AGENTS.md");
+        let fresh = std::fs::read_to_string(&path).unwrap();
+        // An older memory-lane template, plus user notes after the block.
+        let outdated =
+            fresh.replace("## Daily Commands", "## Old Commands") + "\n## My notes\n\nKeep me.\n";
+        assert_ne!(outdated, fresh);
+        std::fs::write(&path, &outdated).unwrap();
+
+        let packs = refresh_agent_packs_at(root, None, None);
+        let agents_row = packs
+            .iter()
+            .find(|p| p.label == "AGENTS.md AIDA block")
+            .expect("AGENTS.md row");
+        assert_eq!(agents_row.report.changed(), 1);
+        let refreshed = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(refreshed, fresh + "\n## My notes\n\nKeep me.\n");
+        assert!(refreshed.contains("Storage: my/store.db"), "{refreshed}");
+        assert!(!refreshed.contains("# AIDA Conventions"), "{refreshed}");
+
+        // A second refresh has nothing to do.
+        let again = refresh_agent_packs_at(root, None, None);
+        let row = again
+            .iter()
+            .find(|p| p.label == "AGENTS.md AIDA block")
+            .expect("AGENTS.md row");
+        assert_eq!(row.report.changed(), 0);
+
+        // A non-lane block in a memory-lane project is not replaced.
+        let custom =
+            "# AGENTS.md\n\n<!-- AIDA-AUTOGEN-BEGIN -->\nmine\n<!-- AIDA-AUTOGEN-END -->\n";
+        std::fs::write(&path, custom).unwrap();
+        refresh_agent_packs_at(root, None, None);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), custom);
     }
 }

@@ -803,11 +803,13 @@ fn codex_ignores_prompt_dir_finding(dir: &std::path::Path) -> Option<DoctorFindi
 // trace:BUG-1645 | ai:claude
 const MEMORY_LANE_SKILL_ACTION: &str = "Memory-lane project: do not run `aida scaffold upgrade` (it installs the full skill set). Restore or refresh the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.agents/skills/aida-capture/SKILL.md`).";
 
-/// The fix for drifted memory-lane skills: a manual restore by copy. Refresh
-/// and upgrade both write far more than a memory-lane project installed, so
-/// neither is suggested here.
+/// The fix for drifted memory-lane skills. Refresh keeps a memory-lane project
+/// a memory lane and updates an unedited skill; an edited one is kept, so the
+/// manual restore by copy stays the fallback. Upgrade installs the full skill
+/// set and is never suggested here.
 // trace:BUG-1653 | ai:claude
-const MEMORY_LANE_DRIFT_ACTION: &str = "Memory-lane project: restore or refresh the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.agents/skills/aida-capture/SKILL.md`). A skill you edited can be inspected first with `aida scaffold diff`.";
+// trace:BUG-1662 | ai:claude
+const MEMORY_LANE_DRIFT_ACTION: &str = "Memory-lane project: run `aida scaffold refresh` to update unedited skills (it keeps the project a memory lane). A skill you edited is kept: inspect it with `aida scaffold diff`, and to restore it run `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.agents/skills/aida-capture/SKILL.md`).";
 
 fn scan_scaffold_drift(
     project_root: &std::path::Path,
@@ -6708,10 +6710,11 @@ hostname = "localhost"
         }
     }
 
-    /// BUG-1653: the lane drift hint is a manual restore by copy. It never
-    /// recommends `aida scaffold refresh` or `upgrade`, which write far more
-    /// than a memory-lane project installed. Refresh's header-less migration
-    /// still clears the finding for an unedited skill.
+    /// BUG-1653: the lane drift hint never recommends `upgrade`, which
+    /// installs the full skill set. Since BUG-1662 it points at refresh (which
+    /// keeps the project a memory lane) with a manual restore for an edited
+    /// skill. Refresh's header-less migration clears the finding for an
+    /// unedited skill.
     // trace:BUG-1653 | ai:claude
     #[test]
     fn bug_1653_doctor_memory_lane_drift_hint_is_manual_restore() {
@@ -6738,7 +6741,7 @@ hostname = "localhost"
             finding.action
         );
         assert!(
-            !finding.action.contains("aida scaffold refresh"),
+            finding.action.contains("aida scaffold refresh"),
             "{}",
             finding.action
         );
