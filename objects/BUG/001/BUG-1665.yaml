@@ -3,12 +3,12 @@ spec_id: BUG-1665
 agreed_id: BUG-1665
 title: 'scripts/check-removed-flags.sh fails on main: it flags old mode-selecting flag names quoted in CHANGELOG.md history lines'
 description: 'Running scripts/check-removed-flags.sh on main prints matches such as CHANGELOG.md:740 (BUG-534 ''aida graph --tree''), :1315 and :1465, plus ''old mode-selecting CLI flags found; use subcommands instead''. Those are historical release notes, not live usage. Every integration preflight since at least batch 90 has reported SH_FAIL for it, so it is ignored as noise, which hides real regressions. Fix: exclude CHANGELOG.md (and other dated or historical artifacts) from the scan, or scope it to live docs, help and skill sources; then make the script exit non-zero on a real match so the gate is meaningful. Acceptance: passes on main; a planted ''--tree'' in a live doc fails it.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T17:56:28.757797631Z
-modified_at: 2026-09-26T18:37:14.875866341Z
+modified_at: 2026-09-26T19:19:02.392031175Z
 req_type: Bug
 comments:
 - id: 01a0dedc-aa89-7c22-99f0-0f64a1f7e0e3
@@ -25,6 +25,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0df28-19f8-71d1-8af4-b239457b8f8c
+  author: aida-session-start
+  timestamp: 2026-09-26T19:19:02.392030613Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 7c6faed6902114a6d1cf1b7843df6e1ef2175da5
