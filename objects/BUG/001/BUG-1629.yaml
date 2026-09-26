@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T20:31:17.082914486Z
-modified_at: 2026-09-26T05:27:17.857535899Z
+modified_at: 2026-09-26T05:28:49.751649993Z
 req_type: Bug
 tags:
 - handoff
@@ -48,6 +48,12 @@ comments:
   content: 'Scope addition from BUG-1628''s strict review (same phase-1 area, fold in here): (1) lib.rs ~104004: the resolver runs a second time after the phase-1 check accepts, and ''.ok().flatten()'' discards errors. A failure in that window launches the implementer without a pinned worktree (the BUG-1244 problem). Use the checked value, never re-resolve. (2) Add a test that a live lease wins over the resolver. (3) queue_done_ownership should use the configured prefixes, so queue done and phase 1 agree. (4) known_spec_prefixes loads the whole store and creates the objects dir as a side effect; make it read-only and cheap. (5) The explicit --branch reuse race (TASK-245 rule) versus ordinary pickup.'
   created_at: 2026-09-26T05:21:12.368427623Z
   modified_at: 2026-09-26T05:21:12.368427623Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc30-0557-7b50-9a16-5d2f34f566bc
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): drain-ready. Mode drive (orchestrator lease/handoff path, high severity). Acceptance already sharp. BUG-1638 is serialized behind it (both touch phase-1 lease/status restore). Watch for overlap with in-flight BUG-1628 (auto-complete).'
+  created_at: 2026-09-26T05:28:49.751649993Z
+  modified_at: 2026-09-26T05:28:49.751649993Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
