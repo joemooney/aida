@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:53:28.895586926Z
-modified_at: 2026-09-26T15:54:09.145868131Z
+modified_at: 2026-09-26T18:37:10.376666468Z
 req_type: Bug
 comments:
 - id: 01a0de6c-8579-7430-ad2a-113591c01f00
@@ -25,6 +25,7 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+execution_mode: drain
 filed_at:
   code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
   branch: main
