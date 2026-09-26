@@ -67335,41 +67335,304 @@ struct LegStatus {
     pending: bool,
 }
 
-/// TASK-106: describe what the code leg of `aida push` will do, without
-/// touching origin. trace:TASK-106 | ai:claude
-fn push_code_leg_status(project_root: &std::path::Path) -> LegStatus {
-    use aida_core::git_ops;
-    if !git_ops::has_remote(project_root, "origin") {
-        return LegStatus {
+/// BUG-1626: total time budget for refreshing `origin/<branch>` before a
+/// push — shared by the `git fetch` and its `ls-remote` fallback, so the
+/// worst case is this value, not a multiple of it. A hung or offline remote
+/// degrades the plan to "remote state unknown" instead of stalling.
+// trace:BUG-1626 | ai:claude
+const PUSH_REMOTE_REFRESH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// BUG-1626: how much the code leg knows about the remote branch it would
+/// push to. Before this, the plan read only the locally cached
+/// `origin/<branch>` ref, so a remote that had advanced since the last fetch
+/// was reported as "up to date".
+// trace:BUG-1626 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RemoteBranchFreshness {
+    /// `git fetch` just refreshed `origin/<branch>` — ahead/behind is authoritative.
+    Fresh,
+    /// origin reachable, but it has no such branch — first publish.
+    Absent,
+    /// origin could not be consulted (offline, timeout, auth, detached HEAD).
+    Unknown(String),
+}
+
+/// BUG-1626: refresh `origin/<branch>` from the live remote with a bounded
+/// fetch. On failure, `ls-remote --exit-code` distinguishes "the branch does
+/// not exist on origin" (exit 2) from "origin unreachable". Both calls draw
+/// on ONE `timeout` budget.
+// trace:BUG-1626 | ai:claude
+fn refresh_remote_branch_state(
+    project_root: &std::path::Path,
+    branch: &str,
+    timeout: std::time::Duration,
+) -> RemoteBranchFreshness {
+    if branch == "HEAD" || branch.trim().is_empty() {
+        return RemoteBranchFreshness::Unknown("detached HEAD".to_string());
+    }
+    if branch.starts_with('-') {
+        return RemoteBranchFreshness::Unknown(format!("unsafe branch name `{branch}`"));
+    }
+    let deadline = std::time::Instant::now() + timeout;
+    let refspec = format!("+refs/heads/{branch}:refs/remotes/origin/{branch}");
+    match run_git_with_timeout(
+        project_root,
+        &["fetch", "--quiet", "--no-tags", "origin", &refspec],
+        timeout,
+    ) {
+        Ok(status) if status.success() => RemoteBranchFreshness::Fresh,
+        Ok(_) => {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return RemoteBranchFreshness::Unknown(format!(
+                    "`git fetch origin {branch}` failed and the refresh budget is spent"
+                ));
+            }
+            let head_ref = format!("refs/heads/{branch}");
+            match run_git_with_timeout(
+                project_root,
+                &["ls-remote", "--exit-code", "--heads", "origin", &head_ref],
+                remaining,
+            ) {
+                Ok(s) if s.code() == Some(2) => RemoteBranchFreshness::Absent,
+                _ => RemoteBranchFreshness::Unknown(format!("`git fetch origin {branch}` failed")),
+            }
+        }
+        Err(e) => RemoteBranchFreshness::Unknown(e.to_string()),
+    }
+}
+
+/// BUG-1626: the code leg's pre-push state, gathered ONCE per `aida push`
+/// from freshly fetched remote state and reused by the plan, the TASK-494
+/// no-op check, and the decision to skip a pointless push.
+// trace:BUG-1626 | ai:claude
+struct CodeLegPlan {
+    branch: String,
+    freshness: RemoteBranchFreshness,
+    /// (ahead, behind) vs `origin/<branch>` AFTER the refresh; `None` when
+    /// there is no tracking ref.
+    ahead_behind: Option<(u32, u32)>,
+    /// True when origin pushes to the same URL(s) it fetches from. When a
+    /// `pushurl` / `pushInsteadOf` points elsewhere, fetch freshness says
+    /// nothing about the push target, so the no-op skip is not taken.
+    push_matches_fetch: bool,
+}
+
+/// BUG-1626: does `origin` push to exactly the URL(s) it fetches from?
+/// Unreadable config counts as "no" — the safe answer is to push.
+// trace:BUG-1626 | ai:claude
+fn origin_push_url_matches_fetch(project_root: &std::path::Path) -> bool {
+    let urls = |push: bool| -> Option<Vec<String>> {
+        let mut args = vec!["remote", "get-url", "--all"];
+        if push {
+            args.push("--push");
+        }
+        args.push("origin");
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(&args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())?;
+        let mut v: Vec<String> = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        v.sort();
+        Some(v)
+    };
+    match (urls(false), urls(true)) {
+        (Some(fetch), Some(push)) => !fetch.is_empty() && fetch == push,
+        _ => false,
+    }
+}
+
+impl CodeLegPlan {
+    /// Assumes `origin` exists (callers check `has_remote` first).
+    fn gather(project_root: &std::path::Path, timeout: std::time::Duration) -> Self {
+        let branch =
+            aida_core::git_ops::current_branch(project_root).unwrap_or_else(|_| "HEAD".to_string());
+        let freshness = refresh_remote_branch_state(project_root, &branch, timeout);
+        let ahead_behind = ahead_behind_vs_ref(project_root, &branch, &format!("origin/{branch}"));
+        let push_matches_fetch = origin_push_url_matches_fetch(project_root);
+        Self {
+            branch,
+            freshness,
+            ahead_behind,
+            push_matches_fetch,
+        }
+    }
+
+    /// True only when FRESH remote state proves there is nothing local to
+    /// publish. A stale or unknown remote never counts as "nothing to push".
+    /// A separate push URL is never judged by fetch state.
+    fn nothing_to_push(&self) -> bool {
+        self.push_matches_fetch
+            && self.freshness == RemoteBranchFreshness::Fresh
+            && matches!(self.ahead_behind, Some((0, _)))
+    }
+
+    fn status(&self) -> LegStatus {
+        let b = &self.branch;
+        let plural = |n: u32| if n == 1 { "" } else { "s" };
+        let (detail, pending) = match (&self.freshness, self.ahead_behind) {
+            (RemoteBranchFreshness::Fresh, Some((0, _))) if !self.push_matches_fetch => (
+                format!(
+                    "{b} → origin (no new commits for origin's fetch URL; origin has a separate push URL — will push)"
+                ),
+                true,
+            ),
+            (RemoteBranchFreshness::Unknown(why), _) => (
+                format!(
+                    "{b} → origin (remote state unknown — could not refresh origin/{b}: {why}; will attempt push)"
+                ),
+                true,
+            ),
+            (RemoteBranchFreshness::Absent, _) | (RemoteBranchFreshness::Fresh, None) => {
+                (format!("{b} → origin (new branch — will publish)"), true)
+            }
+            (RemoteBranchFreshness::Fresh, Some((0, 0))) => {
+                (format!("{b} → origin (up to date, nothing to push)"), false)
+            }
+            (RemoteBranchFreshness::Fresh, Some((0, behind))) => (
+                format!(
+                    "{b} → origin (behind origin by {behind} commit{}, nothing to push — run `aida pull`)",
+                    plural(behind)
+                ),
+                false,
+            ),
+            (RemoteBranchFreshness::Fresh, Some((ahead, 0))) => (
+                format!("{b} → origin ({ahead} commit{} ahead)", plural(ahead)),
+                true,
+            ),
+            (RemoteBranchFreshness::Fresh, Some((ahead, behind))) => (
+                format!(
+                    "{b} → origin (diverged: {ahead} ahead, {behind} behind — push will be rejected; \
+                     rebase first with `git pull --rebase origin {b}`)"
+                ),
+                true,
+            ),
+        };
+        LegStatus {
+            label: "code",
+            detail,
+            pending,
+        }
+    }
+}
+
+/// TASK-106: describe what the code leg of `aida push` will do.
+/// BUG-1626: built from a freshly fetched [`CodeLegPlan`], never from the
+/// cached tracking ref alone.
+// trace:TASK-106 | ai:claude
+fn push_code_leg_status(plan: Option<&CodeLegPlan>) -> LegStatus {
+    match plan {
+        Some(plan) => plan.status(),
+        None => LegStatus {
             label: "code",
             detail: "no `origin` remote — will skip".to_string(),
             pending: false,
-        };
-    }
-    let branch = git_ops::current_branch(project_root).unwrap_or_else(|_| "HEAD".to_string());
-    match ahead_behind_vs_ref(project_root, &branch, &format!("origin/{}", branch)) {
-        Some((0, _)) => LegStatus {
-            label: "code",
-            detail: format!("{} → origin (up to date, nothing to push)", branch),
-            pending: false,
-        },
-        Some((ahead, _)) => LegStatus {
-            label: "code",
-            detail: format!(
-                "{} → origin ({} commit{} ahead)",
-                branch,
-                ahead,
-                if ahead == 1 { "" } else { "s" }
-            ),
-            pending: true,
-        },
-        // No `origin/<branch>` ref yet — first push of a new branch.
-        None => LegStatus {
-            label: "code",
-            detail: format!("{} → origin (new branch — will publish)", branch),
-            pending: true,
         },
     }
+}
+
+/// BUG-1626: the outcome of one `aida push` leg, retained so a rejected leg
+/// is never laundered into a zero exit by the other leg succeeding.
+// trace:BUG-1626 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PushLegOutcome {
+    /// Out of scope (`--code-only` / `--store-only`).
+    NotRequested,
+    /// In scope but skipped (no `origin`, no orphan worktree).
+    Skipped,
+    Pushed,
+    /// Fresh remote state proved there was nothing to publish.
+    UpToDate,
+    Failed(String),
+}
+
+/// BUG-1626: the "Push anyway? [y/N]" gate used by the merged-PR and
+/// behind-main checks. Without a terminal it does not prompt (stdin would
+/// read EOF and silently abort with exit 0); it fails nonzero and names the
+/// flag that skips the check. A declined prompt is also nonzero, so
+/// scripted and interactive runs agree: nothing pushed ⇒ nonzero exit.
+// trace:BUG-1626 | ai:claude
+fn confirm_push_anyway(
+    interactive: bool,
+    reason: &str,
+    fix_hint: &str,
+    read_answer: impl FnOnce() -> String,
+) -> Result<()> {
+    if !interactive {
+        anyhow::bail!(
+            "aida push stopped before pushing: {reason}. There is no terminal to confirm, \
+             so nothing was pushed. {fix_hint} To push anyway, re-run with --no-rebase-check."
+        );
+    }
+    eprintln!("  Push anyway? [y/N] (or pass --no-rebase-check to skip this check)");
+    let answer = read_answer();
+    if matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+        Ok(())
+    } else {
+        anyhow::bail!("aida push aborted: {reason}. Nothing was pushed. {fix_hint}")
+    }
+}
+
+fn read_stdin_answer() -> String {
+    use std::io::Write;
+    let _ = std::io::stderr().flush();
+    let mut answer = String::new();
+    let _ = std::io::stdin().read_line(&mut answer);
+    answer
+}
+
+/// BUG-1626: `None` when no requested leg failed; otherwise the error text
+/// naming which leg failed, which (if any) succeeded, and how to recover.
+// trace:BUG-1626 | ai:claude
+fn push_failure_summary(
+    code: &PushLegOutcome,
+    store: &PushLegOutcome,
+    branch: &str,
+) -> Option<String> {
+    let code_failed = matches!(code, PushLegOutcome::Failed(_));
+    let store_failed = matches!(store, PushLegOutcome::Failed(_));
+    if !code_failed && !store_failed {
+        return None;
+    }
+    let describe = |label: &str, o: &PushLegOutcome| -> Option<String> {
+        match o {
+            PushLegOutcome::NotRequested => None,
+            PushLegOutcome::Skipped => Some(format!("{label} leg skipped")),
+            PushLegOutcome::Pushed => Some(format!("{label} leg pushed")),
+            PushLegOutcome::UpToDate => Some(format!("{label} leg already up to date")),
+            PushLegOutcome::Failed(why) => Some(format!("{label} leg FAILED ({why})")),
+        }
+    };
+    let parts: Vec<String> = [describe("code", code), describe("store", store)]
+        .into_iter()
+        .flatten()
+        .collect();
+    let headline = if code == &PushLegOutcome::Pushed || store == &PushLegOutcome::Pushed {
+        "partial success"
+    } else {
+        "failed"
+    };
+    let mut msg = format!("aida push {headline} — {}.", parts.join("; "));
+    if code_failed {
+        msg.push_str(&format!(
+            "\n  Recover code: `aida pull --code-only` (or `git pull --rebase origin {branch}` \
+             if the branch diverged), then `aida push --code-only`."
+        ));
+    }
+    if store_failed {
+        msg.push_str(
+            "\n  Recover store: `aida pull --store-only` (or `aida db sync --pull`), \
+             then `aida push --store-only`.",
+        );
+    }
+    Some(msg)
 }
 
 /// TASK-106: describe what the orphan-store leg of `aida push` will do.
@@ -67550,9 +67813,14 @@ fn run_git_with_timeout(
     args: &[&str],
     timeout: std::time::Duration,
 ) -> Result<std::process::ExitStatus> {
+    // BUG-1626: output is discarded, so a credential prompt would be an
+    // invisible hang until the timeout — fail fast instead.
+    // trace:BUG-1626 | ai:claude
     let mut child = std::process::Command::new("git")
         .current_dir(cwd)
         .args(args)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
@@ -68141,16 +68409,47 @@ fn handle_push_command(
     // TASK-106: pre-push summary. Show what each in-scope leg will do
     // BEFORE touching origin; prompt only when both legs have commits
     // (the ambiguous case — a single-leg push is no surprise).
+    // BUG-1626: the code-leg state is gathered ONCE from a bounded fetch, so
+    // the plan, the no-op check and the push decision all agree and none of
+    // them trusts a stale `origin/<branch>`. trace:BUG-1626 | ai:claude
+    let code_plan: Option<CodeLegPlan> =
+        if !store_only && git_ops::has_remote(&project_root, "origin") {
+            Some(CodeLegPlan::gather(
+                &project_root,
+                PUSH_REMOTE_REFRESH_TIMEOUT,
+            ))
+        } else {
+            None
+        };
+    // BUG-1626: per-leg outcomes — any failed leg makes the command exit
+    // nonzero, in scripted and interactive runs alike. trace:BUG-1626
+    let mut code_outcome = if store_only {
+        PushLegOutcome::NotRequested
+    } else {
+        PushLegOutcome::Skipped
+    };
+    let mut store_outcome = if code_only {
+        PushLegOutcome::NotRequested
+    } else {
+        PushLegOutcome::Skipped
+    };
+    let code_branch = code_plan
+        .as_ref()
+        .map(|p| p.branch.clone())
+        .unwrap_or_else(|| "<branch>".to_string());
+
     {
         let mut legs: Vec<LegStatus> = Vec::new();
         if !store_only {
-            legs.push(push_code_leg_status(&project_root));
+            legs.push(push_code_leg_status(code_plan.as_ref()));
         }
         if !code_only {
             legs.push(push_store_leg_status(store_path));
         }
+        // BUG-1626: a declined plan pushes nothing, so it exits nonzero like
+        // every other no-push outcome. trace:BUG-1626 | ai:claude
         if !confirm_push_plan(&legs, no_rebase_check) {
-            return Ok(());
+            anyhow::bail!("aida push aborted at the plan prompt. Nothing was pushed.");
         }
     }
 
@@ -68161,9 +68460,8 @@ fn handle_push_command(
                 "  {} no `origin` remote — skipping code push",
                 "Note:".dimmed()
             );
-        } else {
-            let branch =
-                git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
+        } else if let Some(plan) = code_plan.as_ref() {
+            let branch = plan.branch.clone();
 
             // TASK-494: when the code-leg has NOTHING to push (branch is
             // up-to-date with `origin/<branch>`), the merged-branch +
@@ -68173,10 +68471,9 @@ fn handle_push_command(
             // unpushed commits (the real-risk case) and when the branch was
             // never pushed (`None` ≠ nothing-to-push → whole branch is unpushed).
             // trace:TASK-494 | ai:claude
-            let code_nothing_to_push = matches!(
-                ahead_behind_vs_ref(&project_root, &branch, &format!("origin/{branch}")),
-                Some((0, _))
-            );
+            // BUG-1626: judged from the freshly fetched plan — a stale or
+            // unreachable remote is never "nothing to push".
+            let code_nothing_to_push = plan.nothing_to_push();
 
             // BUG-88: warn when pushing to a branch whose PR has
             // already merged. New commits land on `origin/<branch>`
@@ -68220,21 +68517,18 @@ fn handle_push_command(
                         "·".dimmed(),
                         "git checkout -b <new-branch> origin/main && git cherry-pick <sha>".cyan()
                     );
-                    eprintln!(
-                        "  Push anyway? [y/N] (or pass --no-rebase-check to skip this check)"
-                    );
-                    use std::io::Write;
-                    let _ = std::io::stderr().flush();
-                    let mut answer = String::new();
-                    let _ = std::io::stdin().read_line(&mut answer);
-                    if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-                        eprintln!(
-                            "{}",
-                            "Push aborted. Open a follow-up PR or move the commits to a fresh branch."
-                                .dimmed()
-                        );
-                        return Ok(());
-                    }
+                    // BUG-1626: never read stdin without a terminal, and
+                    // never exit 0 when nothing was pushed.
+                    // trace:BUG-1626 | ai:claude
+                    confirm_push_anyway(
+                        std::io::stdin().is_terminal(),
+                        &format!(
+                            "branch {branch} was the head of already-merged PR-{}",
+                            pr.number
+                        ),
+                        "Open a follow-up PR or move the commits to a fresh branch.",
+                        read_stdin_answer,
+                    )?;
                 }
             }
 
@@ -68269,31 +68563,65 @@ fn handle_push_command(
                         "Rebase first to avoid stale-base review noise:".dimmed()
                     );
                     eprintln!("    {}", "git pull --rebase origin main".cyan());
-                    eprintln!(
-                        "  Push anyway? [y/N] (or pass --no-rebase-check to skip this check)"
-                    );
-                    use std::io::Write;
-                    let _ = std::io::stderr().flush();
-                    let mut answer = String::new();
-                    let _ = std::io::stdin().read_line(&mut answer);
-                    if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-                        eprintln!(
-                            "{}",
-                            "Push aborted. Rebase and re-run `aida push`.".dimmed()
-                        );
-                        return Ok(());
-                    }
+                    // BUG-1626: same terminal gate as the merged-PR check.
+                    // trace:BUG-1626 | ai:claude
+                    confirm_push_anyway(
+                        std::io::stdin().is_terminal(),
+                        &format!(
+                            "{branch} is {behind} commit{} behind main",
+                            if behind == 1 { "" } else { "s" }
+                        ),
+                        "Rebase and re-run `aida push`.",
+                        read_stdin_answer,
+                    )?;
                 }
             }
 
             println!("{} {} → origin", "Pushing code".cyan().bold(), branch);
-            let res = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&project_root)
-                .args(["push", "origin", &branch])
-                .status();
+            // BUG-1626: fresh remote state proves origin already has every
+            // local commit — skip the pointless (and, when behind, doomed)
+            // `git push`. trace:BUG-1626 | ai:claude
+            let res = if code_nothing_to_push {
+                None
+            } else {
+                Some(
+                    std::process::Command::new("git")
+                        .arg("-C")
+                        .arg(&project_root)
+                        .args(["push", "origin", &branch])
+                        .status(),
+                )
+            };
             match res {
-                Ok(s) if s.success() => {
+                None => {
+                    code_outcome = PushLegOutcome::UpToDate;
+                    println!(
+                        "  {}",
+                        "code push complete (origin already has these commits)".green()
+                    );
+                    if let Some((0, behind)) = plan.ahead_behind.filter(|(_, b)| *b > 0) {
+                        // Behind origin: the local branch is stale, so fanning
+                        // it out would push an old tip at the mirrors.
+                        eprintln!(
+                            "  {} origin/{} has {} commit{} not in your branch — run `aida pull`.",
+                            "Note:".dimmed(),
+                            branch,
+                            behind,
+                            if behind == 1 { "" } else { "s" }
+                        );
+                    } else {
+                        // BUG-1626: exactly level with origin — still fan out,
+                        // exactly as the old no-op `git push` path did. This
+                        // is how a lagging mirror catches up after the
+                        // everyday merge → `aida pull` → `aida push` flow,
+                        // and how recorded mirror drift gets cleared.
+                        // trace:BUG-1626 | ai:claude
+                        fan_out_mirror_push(&project_root, &branch, &project_root);
+                        gitlab_mirror_link::sync_mirror_ci_link(&project_root, &branch);
+                    }
+                }
+                Some(Ok(s)) if s.success() => {
+                    code_outcome = PushLegOutcome::Pushed;
                     println!("  {}", "code push complete".green());
                     // STORY-760: fan the code branch out to every mirror hub so
                     // `aida push` can't leave one behind. Best-effort.
@@ -68304,14 +68632,23 @@ fn handle_push_command(
                     // commit status. Never fails or delays this push.
                     gitlab_mirror_link::sync_mirror_ci_link(&project_root, &branch);
                 }
-                Ok(s) => {
+                // BUG-1626: retain the rejection (and still attempt the
+                // independent store leg) instead of warning and exiting 0.
+                // trace:BUG-1626 | ai:claude
+                Some(Ok(s)) => {
                     eprintln!(
                         "  {} git push exited with status {}",
                         "Warning:".yellow().bold(),
                         s
                     );
+                    code_outcome = PushLegOutcome::Failed(format!(
+                        "git push origin {branch} exited {s}; origin may have commits you do not have"
+                    ));
                 }
-                Err(e) => anyhow::bail!("git push failed: {}", e),
+                Some(Err(e)) => {
+                    eprintln!("  {} git push failed: {}", "Warning:".yellow().bold(), e);
+                    code_outcome = PushLegOutcome::Failed(format!("could not run git push: {e}"));
+                }
             }
         }
     }
@@ -68320,14 +68657,14 @@ fn handle_push_command(
     // BUG-44: only print the "Pushing store..." header when we'll actually
     // attempt a push. Mirroring the code-push leg above, which prints only
     // a Note line when there's no origin.
-    if !code_only {
-        if !git_ops::is_git_repo(store_path) {
-            println!(
-                "  {} no orphan worktree — skipping store push",
-                "Note:".dimmed()
-            );
-            return Ok(());
-        }
+    // BUG-1626: no early return on a missing orphan worktree — that would
+    // launder a failed code leg into a zero exit. trace:BUG-1626 | ai:claude
+    if !code_only && !git_ops::is_git_repo(store_path) {
+        println!(
+            "  {} no orphan worktree — skipping store push",
+            "Note:".dimmed()
+        );
+    } else if !code_only {
         let store_has_origin = git_ops::has_remote(store_path, "origin");
         if store_has_origin {
             println!("{} aida-store → origin", "Pushing store".cyan().bold());
@@ -68357,22 +68694,36 @@ fn handle_push_command(
                 git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
             match git_ops::push(store_path, "origin", &branch) {
                 Ok(true) => {
+                    store_outcome = PushLegOutcome::Pushed;
                     println!("  {}", "store push complete".green());
                     // STORY-760: fan the store branch out to every mirror hub.
                     fan_out_mirror_push(store_path, &branch, &project_root);
                 }
+                // BUG-1626: a rejected store push is a failed leg, not a
+                // warning over a zero exit. trace:BUG-1626 | ai:claude
                 Ok(false) => {
                     eprintln!(
                         "  {} push rejected — pull/rebase first (`aida db sync --pull`)",
                         "Warning:".yellow().bold()
                     );
+                    store_outcome = PushLegOutcome::Failed(format!(
+                        "git push origin {branch} rejected; origin has store commits you do not have"
+                    ));
                 }
-                Err(e) => anyhow::bail!("store push failed: {}", e),
+                Err(e) => {
+                    eprintln!("  {} store push failed: {}", "Warning:".yellow().bold(), e);
+                    store_outcome = PushLegOutcome::Failed(format!("store push failed: {e}"));
+                }
             }
         }
     }
 
-    Ok(())
+    // BUG-1626: any failed leg → nonzero exit with a partial-success summary
+    // naming the failed leg and its recovery command. trace:BUG-1626 | ai:claude
+    match push_failure_summary(&code_outcome, &store_outcome, &code_branch) {
+        None => Ok(()),
+        Some(summary) => Err(anyhow::anyhow!(summary)),
+    }
 }
 
 /// TASK-106: print the pre-pull plan — which legs are in scope and the
@@ -68505,6 +68856,410 @@ fn store_pull_failure_hint(store_path: &std::path::Path, err_display: &str) -> S
              the store is not mid-rebase. Re-run `aida pull` or `aida db sync --pull`.",
             err_display
         )
+    }
+}
+
+// trace:BUG-1626 | ai:claude
+#[cfg(test)]
+mod bug_1626_push_fresh_state_tests {
+    use super::{
+        confirm_push_anyway, handle_push_command, push_failure_summary, CodeLegPlan,
+        PushLegOutcome, RemoteBranchFreshness,
+    };
+    use std::path::Path;
+    use std::time::Duration;
+
+    const T: Duration = Duration::from_secs(20);
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "core.hooksPath=/dev/null",
+            ])
+            .args(args)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .output()
+            .expect("spawn git");
+        assert!(
+            out.status.success(),
+            "git {:?} in {} failed: {}",
+            args,
+            dir.display(),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn commit(dir: &Path, file: &str) {
+        std::fs::write(dir.join(file), file).expect("write");
+        git(dir, &["add", file]);
+        git(dir, &["commit", "-q", "-m", file]);
+    }
+
+    /// A bare remote `name.git` seeded with one commit on `branch`, plus a
+    /// clone of it at `clone_dir`.
+    fn remote_with_clone(
+        root: &Path,
+        name: &str,
+        branch: &str,
+        clone_dir: &Path,
+    ) -> std::path::PathBuf {
+        let bare = root.join(format!("{name}.git"));
+        std::fs::create_dir_all(&bare).expect("mkdir bare");
+        git(&bare, &["init", "-q", "--bare", "-b", branch]);
+        std::fs::create_dir_all(clone_dir).expect("mkdir clone");
+        git(clone_dir, &["init", "-q", "-b", branch]);
+        git(
+            clone_dir,
+            &["remote", "add", "origin", bare.to_str().unwrap()],
+        );
+        commit(clone_dir, &format!("{name}-seed.txt"));
+        git(clone_dir, &["push", "-q", "-u", "origin", branch]);
+        bare
+    }
+
+    fn second_clone(bare: &Path, dir: &Path) {
+        let out = std::process::Command::new("git")
+            .args(["clone", "-q", bare.to_str().unwrap(), dir.to_str().unwrap()])
+            .output()
+            .expect("clone");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// Project repo `proj` (code, branch main) with an orphan-store clone at
+    /// `proj/.aida-store` (branch aida-store). Returns (code_bare, store_bare).
+    fn project(root: &Path) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+        let proj = root.join("proj");
+        let code_bare = remote_with_clone(root, "code", "main", &proj);
+        std::fs::write(proj.join(".git/info/exclude"), ".aida-store/\n.aida/\n").unwrap();
+        let store = proj.join(".aida-store");
+        let store_bare = remote_with_clone(root, "store", "aida-store", &store);
+        (proj, code_bare, store_bare)
+    }
+
+    fn advance_remote(root: &Path, bare: &Path, name: &str) {
+        let other = root.join(format!("other-{name}"));
+        second_clone(bare, &other);
+        commit(&other, &format!("{name}-remote-advance.txt"));
+        git(&other, &["push", "-q", "origin", "HEAD"]);
+    }
+
+    fn bare_head(bare: &Path, branch: &str) -> String {
+        git(bare, &["rev-parse", &format!("refs/heads/{branch}")])
+    }
+
+    #[test]
+    fn stale_tracking_ref_is_not_reported_up_to_date() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, code_bare, _) = project(tmp.path());
+        advance_remote(tmp.path(), &code_bare, "code");
+        // Local HEAD == stale local origin/main, remote has advanced.
+        assert_eq!(
+            git(&proj, &["rev-parse", "HEAD"]),
+            git(&proj, &["rev-parse", "origin/main"])
+        );
+
+        let plan = CodeLegPlan::gather(&proj, T);
+        assert_eq!(plan.freshness, RemoteBranchFreshness::Fresh);
+        assert_eq!(plan.ahead_behind, Some((0, 1)));
+        let status = plan.status();
+        assert!(!status.detail.contains("up to date"), "{}", status.detail);
+        assert!(
+            status.detail.contains("behind origin by 1 commit"),
+            "{}",
+            status.detail
+        );
+    }
+
+    #[test]
+    fn unreachable_remote_reports_unknown_not_up_to_date() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, _, _) = project(tmp.path());
+        let gone = tmp.path().join("gone.git");
+        git(
+            &proj,
+            &["remote", "set-url", "origin", gone.to_str().unwrap()],
+        );
+
+        let plan = CodeLegPlan::gather(&proj, T);
+        assert!(matches!(plan.freshness, RemoteBranchFreshness::Unknown(_)));
+        assert!(!plan.nothing_to_push());
+        let status = plan.status();
+        assert!(status.detail.contains("unknown"), "{}", status.detail);
+        assert!(!status.detail.contains("up to date"), "{}", status.detail);
+    }
+
+    #[test]
+    fn missing_remote_branch_is_new_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, _, _) = project(tmp.path());
+        git(&proj, &["checkout", "-q", "-b", "feature"]);
+        let plan = CodeLegPlan::gather(&proj, T);
+        assert_eq!(plan.freshness, RemoteBranchFreshness::Absent);
+        assert!(plan.status().detail.contains("new branch"));
+    }
+
+    #[test]
+    fn rejected_code_push_exits_nonzero_after_attempting_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, code_bare, store_bare) = project(tmp.path());
+        let store = proj.join(".aida-store");
+        advance_remote(tmp.path(), &code_bare, "code");
+        commit(&proj, "local-only.txt"); // diverged → non-fast-forward
+        commit(&store, "store-local.txt");
+        let store_head = git(&store, &["rev-parse", "HEAD"]);
+
+        let err = handle_push_command(&store, false, false, None, true, true)
+            .expect_err("a rejected code leg must fail the command");
+        let msg = err.to_string();
+        assert!(msg.contains("partial success"), "{msg}");
+        assert!(msg.contains("code leg FAILED"), "{msg}");
+        assert!(msg.contains("store leg pushed"), "{msg}");
+        assert!(msg.contains("aida pull --code-only"), "{msg}");
+        // The independent store leg was still attempted and landed.
+        assert_eq!(bare_head(&store_bare, "aida-store"), store_head);
+    }
+
+    #[test]
+    fn rejected_store_push_exits_nonzero() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, code_bare, store_bare) = project(tmp.path());
+        let store = proj.join(".aida-store");
+        advance_remote(tmp.path(), &store_bare, "store");
+        commit(&store, "store-local.txt"); // diverged store
+        commit(&proj, "code-local.txt");
+        let code_head = git(&proj, &["rev-parse", "HEAD"]);
+
+        let err = handle_push_command(&store, false, false, None, true, true)
+            .expect_err("a rejected store leg must fail the command");
+        let msg = err.to_string();
+        assert!(msg.contains("partial success"), "{msg}");
+        assert!(msg.contains("store leg FAILED"), "{msg}");
+        assert!(msg.contains("aida pull --store-only"), "{msg}");
+        assert_eq!(bare_head(&code_bare, "main"), code_head);
+    }
+
+    #[test]
+    fn both_legs_succeed_exit_zero() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, code_bare, store_bare) = project(tmp.path());
+        let store = proj.join(".aida-store");
+        commit(&proj, "code-local.txt");
+        commit(&store, "store-local.txt");
+        let code_head = git(&proj, &["rev-parse", "HEAD"]);
+        let store_head = git(&store, &["rev-parse", "HEAD"]);
+
+        handle_push_command(&store, false, false, None, true, true).expect("both legs push");
+        assert_eq!(bare_head(&code_bare, "main"), code_head);
+        assert_eq!(bare_head(&store_bare, "aida-store"), store_head);
+    }
+
+    #[test]
+    fn behind_code_leg_skips_push_and_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, code_bare, _) = project(tmp.path());
+        advance_remote(tmp.path(), &code_bare, "code");
+        let remote_head = bare_head(&code_bare, "main");
+        let store = proj.join(".aida-store");
+        handle_push_command(&store, true, false, None, true, true)
+            .expect("nothing to publish is not a failure");
+        assert_eq!(bare_head(&code_bare, "main"), remote_head);
+    }
+
+    #[test]
+    fn missing_store_worktree_does_not_launder_code_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, code_bare, _) = project(tmp.path());
+        advance_remote(tmp.path(), &code_bare, "code");
+        commit(&proj, "local-only.txt");
+        let not_a_store = proj.join("no-store-here");
+        let err = handle_push_command(&not_a_store, false, false, None, true, true)
+            .expect_err("code failure must survive a skipped store leg");
+        assert!(err.to_string().contains("code leg FAILED"), "{err}");
+    }
+
+    #[test]
+    fn up_to_date_push_still_catches_up_a_lagging_mirror() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, code_bare, _) = project(tmp.path());
+        // Mirror hub sits at the seed commit; origin then advances via a
+        // normal push, and the mirror is left behind (the fan-out failed or
+        // the push happened elsewhere).
+        let mirror = tmp.path().join("mirror.git");
+        std::fs::create_dir_all(&mirror).unwrap();
+        git(&mirror, &["init", "-q", "--bare", "-b", "main"]);
+        git(
+            &proj,
+            &["remote", "add", "gitlab", mirror.to_str().unwrap()],
+        );
+        git(&proj, &["push", "-q", "gitlab", "main"]);
+        commit(&proj, "merged-on-github.txt");
+        git(&proj, &["push", "-q", "origin", "main"]);
+        let head = git(&proj, &["rev-parse", "HEAD"]);
+        assert_ne!(bare_head(&mirror, "main"), head, "mirror should lag");
+        std::fs::create_dir_all(proj.join(".aida")).unwrap();
+        std::fs::write(
+            proj.join(".aida/config.toml"),
+            "[store.sync]\nmirror_remotes = [\"gitlab\"]\n",
+        )
+        .unwrap();
+
+        let plan = CodeLegPlan::gather(&proj, T);
+        assert!(plan.nothing_to_push(), "origin is level: skip path");
+        handle_push_command(&proj.join(".aida-store"), true, false, None, true, true)
+            .expect("up-to-date push succeeds");
+        assert_eq!(bare_head(&code_bare, "main"), head);
+        assert_eq!(
+            bare_head(&mirror, "main"),
+            head,
+            "mirror caught up on the skip path"
+        );
+    }
+
+    #[test]
+    fn separate_push_url_is_always_pushed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, code_bare, _) = project(tmp.path());
+        // Push target is a different repository that lags the fetch URL.
+        let push_target = tmp.path().join("push-target.git");
+        let out = std::process::Command::new("git")
+            .args([
+                "clone",
+                "-q",
+                "--bare",
+                code_bare.to_str().unwrap(),
+                push_target.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        commit(&proj, "only-on-fetch-url.txt");
+        git(&proj, &["push", "-q", "origin", "main"]);
+        git(
+            &proj,
+            &[
+                "remote",
+                "set-url",
+                "--push",
+                "origin",
+                push_target.to_str().unwrap(),
+            ],
+        );
+        let head = git(&proj, &["rev-parse", "HEAD"]);
+
+        let plan = CodeLegPlan::gather(&proj, T);
+        assert_eq!(plan.ahead_behind, Some((0, 0)));
+        assert!(!plan.push_matches_fetch);
+        assert!(
+            !plan.nothing_to_push(),
+            "fetch state must not skip a separate push URL"
+        );
+        assert!(
+            !plan.status().detail.contains("up to date"),
+            "{}",
+            plan.status().detail
+        );
+        handle_push_command(&proj.join(".aida-store"), true, false, None, true, true)
+            .expect("push to the push URL");
+        assert_eq!(bare_head(&push_target, "main"), head);
+    }
+
+    #[test]
+    fn up_to_date_code_leg_is_not_reported_as_pushed() {
+        let msg = push_failure_summary(
+            &PushLegOutcome::UpToDate,
+            &PushLegOutcome::Failed("rejected".into()),
+            "main",
+        )
+        .unwrap();
+        assert!(msg.contains("code leg already up to date"), "{msg}");
+        assert!(!msg.contains("code leg pushed"), "{msg}");
+        assert!(!msg.contains("partial success"), "{msg}");
+    }
+
+    #[test]
+    fn push_anyway_gate_never_prompts_without_a_terminal() {
+        let err = confirm_push_anyway(false, "feature is 1 commit behind main", "Rebase.", || {
+            panic!("must not read stdin without a terminal")
+        })
+        .expect_err("non-interactive must fail, not exit 0 unpushed");
+        let msg = err.to_string();
+        assert!(msg.contains("no terminal"), "{msg}");
+        assert!(msg.contains("--no-rebase-check"), "{msg}");
+        assert!(msg.contains("nothing was pushed"), "{msg}");
+
+        assert!(confirm_push_anyway(true, "r", "h", || "n\n".to_string()).is_err());
+        assert!(confirm_push_anyway(true, "r", "h", String::new).is_err());
+        assert!(confirm_push_anyway(true, "r", "h", || "yes\n".to_string()).is_ok());
+    }
+
+    #[test]
+    fn behind_main_check_without_terminal_exits_nonzero_unpushed() {
+        use std::io::IsTerminal;
+        if std::io::stdin().is_terminal() {
+            // The gate would (correctly) prompt; covered by the unit test above.
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let (proj, code_bare, _) = project(tmp.path());
+        git(&proj, &["checkout", "-q", "-b", "feature"]);
+        commit(&proj, "feature.txt");
+        advance_remote(tmp.path(), &code_bare, "code");
+        git(&proj, &["fetch", "-q", "origin"]);
+
+        let err = handle_push_command(&proj.join(".aida-store"), true, false, None, false, true)
+            .expect_err("a behind-main branch with no terminal must not exit 0");
+        assert!(err.to_string().contains("behind main"), "{err}");
+        let has_feature = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&code_bare)
+            .args(["rev-parse", "--verify", "--quiet", "refs/heads/feature"])
+            .status()
+            .unwrap()
+            .success();
+        assert!(!has_feature, "nothing may be pushed");
+    }
+
+    #[test]
+    fn summary_is_none_when_nothing_failed() {
+        assert_eq!(
+            push_failure_summary(&PushLegOutcome::Pushed, &PushLegOutcome::Pushed, "main"),
+            None
+        );
+        assert_eq!(
+            push_failure_summary(
+                &PushLegOutcome::Skipped,
+                &PushLegOutcome::NotRequested,
+                "main"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn summary_names_single_failed_leg_without_partial_success() {
+        let msg = push_failure_summary(
+            &PushLegOutcome::NotRequested,
+            &PushLegOutcome::Failed("rejected".into()),
+            "main",
+        )
+        .unwrap();
+        assert!(msg.starts_with("aida push failed"), "{msg}");
+        assert!(!msg.contains("code leg"), "{msg}");
+        assert!(msg.contains("aida push --store-only"), "{msg}");
     }
 }
 
