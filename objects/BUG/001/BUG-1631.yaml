@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:16:11.890546672Z
-modified_at: 2026-09-26T06:21:37.330754513Z
+modified_at: 2026-09-26T06:45:21.372764718Z
 req_type: Bug
 tags:
 - aida:history
@@ -75,6 +75,12 @@ comments:
     TESTS (worktree target, CARGO_BUILD_JOBS=3): bug_1631 9/9, history 132, task_1507 56, mcp 166, sweep (--ignored) ok, aida-cli bug_1502_format_json_audit 7/7. Everything ran in tempdirs or a clone with its own HOME and AIDA_STORE. Neither ~/.aida nor the live store was touched.
   created_at: 2026-09-26T06:21:37.330754513Z
   modified_at: 2026-09-26T06:21:37.330754513Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc76-155c-7c33-9f18-d73d26f1ccf1
+  author: joe
+  content: 'Orchestrator delta check (9d9ec8a107): APPROVE. It makes exactly the three prescribed round-3 changes, each pinned. (1) The sweep asserts at least 3 custom-edge events per stored form (tagged 3, mapping 7) with 0 mismatches. (2) cache.db is used only when source_head_sha matches the store HEAD; stale-renumber and fresh-cache tests added; the comment is corrected. (3) Multiset edge diff with an exact-count test; decoder bumped to 4. Integrating.'
+  created_at: 2026-09-26T06:45:21.372764718Z
+  modified_at: 2026-09-26T06:45:21.372764718Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 5b98d7cfb3485889468fe1fa78a09924b04f49af
