@@ -4532,7 +4532,10 @@ pub enum ConfigPermissionsCommand {
     },
 
     /// Apply a named agent permission posture to local or user config files.
+    /// `bypass` must be confirmed by a person at an interactive terminal; it is
+    /// refused when stdin or stdout is not a terminal.
     // trace:STORY-1128 | ai:codex
+    // trace:BUG-1667 | ai:claude
     Set {
         /// Permission posture to write.
         tier: ConfigPermissionTier,
