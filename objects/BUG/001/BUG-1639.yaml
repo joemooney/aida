@@ -15,12 +15,24 @@ description: |
   - `aida-handoff` is scaffolded into `.codex/skills/aida-handoff/SKILL.md` and `.antigravity/skills/aida-handoff/SKILL.md`, and delivered to existing installs by `aida scaffold refresh`.
   - The Codex and Antigravity pack lists are **derived** from the Claude skill set minus an explicit, commented exclusion list (skills that are Claude-only and have no `skills-portable/` body), rather than hand-listed.
   - A test fails when a Claude skill master exists that is neither shipped to Codex/Antigravity nor on the exclusion list, so future skills cannot silently miss the other vendors.
+
+
+  ## Groomed acceptance (proxy, 2026-09-25) — supersedes the Acceptance list above where they differ
+  The discovery test matrix is done (comment 2026-09-25 22:09: Codex 0.157.0 and Antigravity 1.2.11 both discover .agents/skills/; Codex silently skips a symlinked SKILL.md). Adopted:
+  - Canonical non-Claude pack is .agents/skills/<name>/SKILL.md, shared by Codex and Antigravity. SKILL.md there is always a REGULAR FILE (portable body from skills-portable/ when present, else the master). .codex/skills and .antigravity/skills are no longer written for new installs; existing ones are left in place and reported by scaffold status as legacy.
+  - ONE derived inventory (the Claude skill set minus a commented Claude-only exclusion list) feeds the scaffolder, scaffold refresh, and make sync-templates / make check-templates. codex_skill_defs / antigravity_skill_defs hand lists are removed. A test fails when a skill master is neither shipped nor on the exclusion list.
+  - aida-handoff (and the other missing skills, e.g. aida-human-audit, aida-fleet-watch, aida-grill, aida-triage, unless excluded with a reason) are delivered to new installs and to existing installs via scaffold refresh (uses TASK-1503's delivered-skills manifest).
+  - AIDA manages only aida-* entries under .agents/skills/. Test: apply, refresh and prune leave a non-aida skill directory byte-identical.
+  - Dev repo: make sync-templates writes regular-file copies into .agents/skills/aida-*/SKILL.md; make check-templates fails on any byte drift. No hard links. In this repo .agents/ stays untracked (gitignored); third-party skills there are the operator's local choice.
+  - aida doctor flags any .agents/skills/*/SKILL.md that is a symlink (Codex will not load it).
+  - docs/agents/seat-parity.md and docs/agents/porting-claude-code-to-codex.md record the matrix with vendor versions, and BUG-1117's .codex/skills claim is corrected.
+  - OUT OF SCOPE: the "single-location" layout where .claude/skills/aida-X/SKILL.md becomes a symlink to .agents/skills. That is a separate operator decision; .claude/skills is unchanged here.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T04:47:41.715373320Z
-modified_at: 2026-09-26T05:11:40.095580744Z
+modified_at: 2026-09-26T05:23:23.859578891Z
 req_type: Bug
 tags:
 - antigravity
