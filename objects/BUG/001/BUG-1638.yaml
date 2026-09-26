@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T03:17:13.020743486Z
-modified_at: 2026-09-26T09:34:32.936620087Z
+modified_at: 2026-09-26T10:23:47.732051307Z
 req_type: Bug
 tags:
 - batch:groom-2026-09-25
@@ -36,6 +36,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): drain-ready. Added an Acceptance section (one testable criterion per item). Mode drain, blocked-by BUG-1629 (shared phase-1 restore code).'
   created_at: 2026-09-26T05:28:52.610727807Z
   modified_at: 2026-09-26T05:28:52.610727807Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd3e-1214-7ed2-a5e4-fa67fdf22437
+  author: joe
+  content: 'Review (fresh strict Opus reviewer): APPROVE WITH NITS on dd413e2a35. Verified: the race hook is cfg(test)-only (the thread_local, the inject fn and the seam body; the release body is just ''let _ = store_root''). The hook runs outside the store lock, and the ship record is emitted after the lock is released. No nested store lock anywhere. A mutation to non-atomic writes (clone + update_requirement in all 3 writers + both findings writes + transition_to_completed_atomically) failed 10/13 bug_1638 tests: all 7 race tests plus the 3 findings tests. Restoring the zen deleted check and forcing Restored on refusal failed 3 more. A scratch test (reverted) confirmed exactly one SpecCompleted per into-Completed transition, none on a re-promote of an already-Completed spec and none on a deleted one. Automated authors keep their invariants: pr_open/lease_take/phase1_restore refuse terminal specs on the copy read under the lock, and status history stays attributed. Tests pass: bug_1638 13, bug_1637|orchestr|zen|findings|auto_complete 543, story_1418|bug479|harness_lease|bug_1632|bug_1625 33. fmt clean, no clippy warnings on the changed lines. NITS (non-blocking, follow-up OK): (1) Low lib.rs findings_promote_approve_write ~620: on a deleted finding or a CAS failure it bails with ''nothing was changed'', but queue_promoted_finding already added a queue entry. Fix the wording (name the queue entry and the command that removes it), or remove the entry on failure. (2) Low lib.rs ~622: the approve closure does not re-check status under the lock, so a finding that went Completed/Rejected meanwhile is reopened to Approved and queued. This is caller-authored, so it is not a BUG-1625 breach and not a regression. Fix: refuse when r.status is terminal and bail ''is now X'', as zen does. (3) Low lib.rs findings_promote_auto_complete_write ~595 and completion.rs transition_to_completed_atomically: prepare always runs, so a re-promote of an already-Completed spec appends a duplicate ''Auto-completed on promote'' comment and prints ''status -> Completed''. It also overrides a concurrent Rejected. Fix: skip the comments and history when prior is Completed (and refuse on Rejected/Superseded), then report ''already Completed''. (4) Nit tests: no committed test pins SpecCompleted exactly-once for transition_to_completed_atomically. Add one modelled on story_1418''s transition_to_completed_emits_only_on_a_real_transition. (5) Nit lib.rs ~94160: the Refused line prints even under --json while Restored is gated on !json (stderr, harmless). It also mixes {prior:?} with {seen} Display. (6) Follow-up: findings dismiss (~6726) is the same class; it still writes a stale read through update_requirement. File it as a sibling bug.'
+  created_at: 2026-09-26T10:23:47.732051307Z
+  modified_at: 2026-09-26T10:23:47.732051307Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
 filed_at:
