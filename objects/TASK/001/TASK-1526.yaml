@@ -1,0 +1,20 @@
+id: 01a0df0e-7bdb-7aa3-a0ed-95c5e5ac6b34
+spec_id: TASK-1526
+agreed_id: TASK-1526
+title: Single-flight cache refresh and stale labels (slice B)
+description: 'Slice B of STORY-1484, implemented exactly per the ADVISOR SIGNOFF on STORY-1484: amendments A2-A6 and A9-A13, plus the TASK-1515 review nits folded into the STORY-1484 sketch, and the Q1-Q4 answers there. Acceptance = those amendments, each with its named test; fixtures and fake HOME only.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:51:03.515884243Z
+modified_at: 2026-09-26T18:51:03.515884243Z
+req_type: Task
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
