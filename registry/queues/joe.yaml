@@ -80,3 +80,10 @@
   note: proxy groom 2026-09-25
   added_at: 2026-09-26T05:31:37.029712928Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a0dbed-1c13-7862-9c54-4c47103d8ac2
+  position: 24000
+  added_by: joe
+  note: proxy groom 2026-09-25
+  added_at: 2026-09-26T05:31:42.269443456Z
+  for_role: implementer
