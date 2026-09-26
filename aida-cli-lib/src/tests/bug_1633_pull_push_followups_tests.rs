@@ -688,3 +688,48 @@ fn bug_1633_push_behind_origin_summary_says_nothing_to_push() {
     assert!(msg.contains("code leg nothing to push"), "{msg}");
     assert!(!msg.contains("already up to date"), "{msg}");
 }
+
+/// BUG-1648: plan paths are recorded with `/` on every OS, and markers and
+/// `followup-src:` tags that older Windows builds wrote with `\` still dedup
+/// when read back.
+// trace:BUG-1648 | ai:claude
+#[test]
+fn bug_1648_backslash_plan_paths_read_back_as_forward_slash() {
+    let root = Path::new("proj");
+    assert_eq!(
+        plan_rel_path(&root.join("docs").join("plans").join("x.md"), root),
+        "docs/plans/x.md"
+    );
+
+    let marker = format!(
+        "{FOLLOWUPS_MARKER} extracted from docs/plans\\a.md, docs/plans/b.md\nfiled 0 task(s)"
+    );
+    assert_eq!(
+        parse_extracted_plans_from_marker(&marker),
+        vec!["docs/plans/a.md".to_string(), "docs/plans/b.md".to_string()]
+    );
+
+    let mut parent = spec("BUG-9900", "Completed");
+    let mut child = aida_core::Requirement::new("Harden it".to_string(), String::new());
+    child.spec_id = Some("TASK-9901".to_string());
+    child
+        .tags
+        .insert(format!("{FOLLOWUP_SRC_TAG_PREFIX}docs/plans\\a.md"));
+    parent.relationships.clear();
+    let store = aida_core::RequirementsStore {
+        requirements: vec![parent, child],
+        ..Default::default()
+    };
+    assert!(followup_filed_in_store(
+        &store,
+        "BUG-9900",
+        "harden it",
+        "docs/plans/a.md"
+    ));
+    assert!(!followup_filed_in_store(
+        &store,
+        "BUG-9900",
+        "harden it",
+        "docs/plans/b.md"
+    ));
+}

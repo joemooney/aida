@@ -34,6 +34,10 @@ fn git_project(temp: &tempfile::TempDir) -> std::path::PathBuf {
 /// Write a lease file with an explicit scope (the wiring-test fixture uses
 /// the branch as scope, which cannot model a same-scope lease).
 fn write_lease(root: &std::path::Path, id: &str, scope: &str, branch: &str, worktree: &str) {
+    // A TOML-escaped path: a Windows path in a basic string (`"C:\Users..."`)
+    // reads `\U` as an escape, so the lease failed to parse and was skipped.
+    // trace:BUG-1648 | ai:claude
+    let worktree = toml::Value::String(worktree.to_string()).to_string();
     std::fs::write(
         root.join(".aida")
             .join("sessions")
@@ -43,7 +47,7 @@ fn write_lease(root: &std::path::Path, id: &str, scope: &str, branch: &str, work
              scope = \"{scope}\"\n\
              slug = \"{branch}\"\n\
              owner = \"test\"\n\
-             worktree_path = \"{worktree}\"\n\
+             worktree_path = {worktree}\n\
              branch = \"{branch}\"\n\
              started_at = \"2026-09-24T00:00:00Z\"\n\
              hostname = \"test\"\n"
