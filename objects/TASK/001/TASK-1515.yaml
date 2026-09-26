@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:41.012539596Z
-modified_at: 2026-09-26T14:43:22.426042731Z
+modified_at: 2026-09-26T15:41:58.905872111Z
 req_type: Task
 tags:
 - cache
@@ -54,6 +54,20 @@ comments:
   created_at: 2026-09-26T14:43:22.426042731Z
   modified_at: 2026-09-26T14:43:22.426042731Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de61-60f9-72e0-80d3-33448aac8a95
+  author: joe
+  content: |-
+    Review round 2 (fresh strict Opus reviewer): PARTIAL, REQUEST CHANGES on origin/claude/task-1515 @ ee4ed8600f (the session ended early). Checked: the delta 9dcdb6e0f9..ee4ed8600f in aida-core; aida-core --lib task_1515 10/10 ok on 3 runs (84s, 105s, 114s, no flakes); aida-core --lib cache 138 ok / 1 ignored. NOT checked: cache_lock, bug_1644, aida-cli-lib --lib cache, doctor_, --lib mcp, and the mutation run. No mutation was applied, and the tree is clean at ee4ed8600f.
+    FINDINGS:
+    1. HIGH (must fix): cached_git_backend.rs:149-155 and 172-183. The write-path ID ambiguity guard now silently uses a stale cache. get_requirement_unambiguous, which about 40 mutating CLI call sites use (assign, edit, link, import-plan, lib.rs, git_backend_cmd.rs), calls id_candidates, and that goes through ensure_cache_fresh_for_read. Before this rework, an incremental lock error returned Err, and the Err(_) arm fell back to the AUTHORITATIVE full-store scan. Now the lock error becomes Ok(stale snapshot). A duplicate or agreed-id collision introduced by an external commit (a pull, another agent) is then missed, and the write silently picks one object. That is the exact hazard SPIKE-90 correction 1 and STORY-1484 guard against, and a regression from round 1. (The BUG-664 foreign-writer skip already had this hole. The rework widens it to every lock-error case.) Fix: in get_requirement_unambiguous, if cache_snapshot_is_stale() is true after id_candidates, take the authoritative scan branch. Alternatively, give id_candidates a strict variant for this caller. Add a test: external commit adds a colliding agreed_id, hold the lock, then get_requirement_unambiguous must return AmbiguousIdError. id_collisions itself (git_backend_cmd.rs:179, the list relabel) is a pure read and is classified correctly. spec_id_collisions (aida add) stays strict, which is correct. list/search/degrees/descendants/pending_decision_count are reads, which is correct. load and list_requirements stay strict, which is correct.
+    2. MEDIUM: cached_git_backend.rs:561-567 with 364. When the new HEAD-moved check declines, the caller runs full_rebuild(&head) using the head captured BEFORE the reads. The rebuild loads the newer worktree and stamps the older SHA, so the comment 'the full rebuild reads and stamps one consistent HEAD' is false. The effect self-heals: newer rows labelled older are re-applied by the next incremental. But on a busy store the decline also turns a cheap incremental into a full rebuild, whose lock error is NOT served stale on the read path, so reads can fail more often. Fix: on a HEAD-moved decline, re-capture HEAD and retry the incremental from the recorded head (bounded, for example 2 attempts) before any full rebuild. Or at least pass the current HEAD to full_rebuild and correct the comment. Add a test asserting the stamped SHA equals the HEAD the rows came from.
+    3. LOW ((c) is mostly OK): the stale serve cannot reach an inconsistent cache on the incremental path. A pending migration makes source_head_sha None, so the path goes to full_rebuild, whose lock error propagates. An empty or cleared SHA also forces a full rebuild. The one remaining gap predates this change: the BUG-664 foreign_writer_holds_lock_at skip (line 392) returns Ok even while migration_pending(), so new-schema queries run against old-schema tables. Drift errors heal through with_cache_schema_retry, but a column whose meaning changed would be served silently. Fix: skip the foreign-writer shortcut when self.cache.migration_pending(). Also consider calling note_stale_read on that skip, so both stale serves are labelled.
+    4. LOW ((b) stderr): hooks all use 2>/dev/null, and MCP stdio already writes to stderr (profile line), so JSON-RPC and TOON on stdout are unaffected. Two problems remain. (i) The note is once per PROCESS, so a long-lived MCP server labels only its first stale read, and later tool results arrive stale with no signal to the agent. SPIKE-90 rule 4 asks for a label. Suggest a stale flag in the structured MCP response, or re-arm the note per request in server mode. (ii) The wording 'refresh in progress' can be false: a lock error means another writer holds the cache, not that a refresh is running. Suggest: 'note: showing results cached at <time>; another aida process is updating the cache. Re-run shortly for current data.' It contains no SPEC IDs or internal jargon.
+    5. OK ((1) and (5)): restamp_head and refresh_epics_then_restamp write an empty SHA while pending. The test's use of with_inner_cache_snapshot to keep the migration pending is representative, since it matches the foreign-writer-skip reach path. Checking pending again under the lock in the rebuild (schema_migration_needed(&tx)) is correct.
+    6. OK ((d) test quality): the holder does a raw BEGIN IMMEDIATE, which takes RESERVED like a real writer, with no lock-info sidecar, so the full ladder runs. The fast-fail toggle is thread-local, so it is parallel-safe. The tests cover the constructor, list_summaries, spec_id_collisions and list_requirements strictness, and the HEAD-moved decline. Missing: a test for get_requirement_unambiguous under a lock error (see 1).
+  created_at: 2026-09-26T15:41:58.905872111Z
+  modified_at: 2026-09-26T15:41:58.905872111Z
+  session_id: 156a4900-9e60-4f0b-9739-948c3b0efd27
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
   branch: claude/spike-90
