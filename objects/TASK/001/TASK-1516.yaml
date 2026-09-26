@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T14:04:12.230277346Z
-modified_at: 2026-09-26T16:02:51.116498842Z
+modified_at: 2026-09-26T16:03:18.523822373Z
 req_type: Task
 tags:
 - docs:impacted
@@ -30,6 +30,12 @@ comments:
     5. OK - checks: make check-templates passes; scripts/check-portability.sh rc=0 (it scans Rust only, not the hook); the hook itself is bash-3.2/BSD-safe (sed -E removed, grep -E only, empty-array loop fine without set -u). tests/test_precommit_provenance_move.sh passes; cargo test -p aida-cli-lib --lib cli::tests 53/53 and 'help' 58/58 pass; the hook passes on the branch's own staged diff. verify-manual.py is unaffected (no flag or command changes).
   created_at: 2026-09-26T16:02:51.116498842Z
   modified_at: 2026-09-26T16:02:51.116498842Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0de74-e77b-7963-9e3f-3dda98e2161d
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe) on the review (REQUEST CHANGES): (1+3) the pre-commit hook TEMPLATE keeps the OLD rule (block only bare IDs and trace: markers on /// lines). The ''no spec ID in prose'' rule stays in the cli.rs help guard (the CI test) only, NOT the hook that ships to user projects. (2) Add word boundaries (^|[^A-Za-z0-9_]) to the hook''s ID pattern, and keep the hook and cli.rs patterns genuinely in lockstep (or document the difference). Add a hook test: prose mentions ADR-12, FR-1-042, DEBUG-2, SCR-4 in a non-CLI .rs file pass, and a bare trace marker on /// is still blocked. (4) Nits: session end help uses a placeholder example (e.g. task-<n>); reword the lock help without ''early slice'' internal-speak; add DOC to both ID patterns. Then a fresh re-review.'
+  created_at: 2026-09-26T16:03:18.523822373Z
+  modified_at: 2026-09-26T16:03:18.523822373Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de4a-67d1-7062-84ed-39e88e24c72e
