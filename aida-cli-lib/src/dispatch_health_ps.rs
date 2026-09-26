@@ -242,6 +242,64 @@ pub(crate) struct WorktreeGitProbe {
     /// last commit" acceptance line. `None` when the worktree has no commits
     /// yet or `git log` fails.
     pub(crate) last_commit_subject: Option<String>,
+    /// BUG-1656: seconds since the NEWEST dirty (modified / untracked) file
+    /// in the worktree was written. `None` when the tree is clean or no dirty
+    /// path could be stat'ed. A small value means the tree is still changing
+    /// under someone's hands — an Agent-tool subagent editing inside a leased
+    /// worktree leaves exactly this signature while its spec lease's pid
+    /// reads dead.
+    // trace:BUG-1656 | ai:claude
+    pub(crate) dirty_newest_mtime_age_secs: Option<u64>,
+}
+
+/// BUG-1656: how recently the newest dirty file must have been written for
+/// the worktree to count as "still moving" regardless of pid liveness. Ten
+/// minutes: an agent mid-change writes files every few seconds to a couple
+/// of minutes apart; a genuinely dead session's diff stops aging-in within
+/// that window and reverts to the ordinary dead-process matrix.
+// trace:BUG-1656 | ai:claude
+pub(crate) const DEFAULT_DIRTY_MOVEMENT_FRESH_SECS: u64 = 10 * 60;
+
+/// BUG-1656: is the dirty tree still changing? Pure over the probe's newest
+/// dirty mtime age; `None` (clean, or unknown) is never fresh.
+// trace:BUG-1656 | ai:claude
+pub(crate) fn dirty_movement_is_fresh(newest_age_secs: Option<u64>, fresh_secs: u64) -> bool {
+    newest_age_secs.is_some_and(|age| age < fresh_secs)
+}
+
+/// BUG-1656: the paths `git status --porcelain` reports as changed or
+/// untracked, relative to `worktree`. Renames yield the destination path.
+/// Empty when the probe fails.
+// trace:BUG-1656 | ai:claude
+pub(crate) fn dirty_paths(worktree: &Path) -> Vec<std::path::PathBuf> {
+    let Some(out) = git_stdout(
+        worktree,
+        &["status", "--porcelain", "--untracked-files=all"],
+    ) else {
+        return Vec::new();
+    };
+    out.lines()
+        .filter(|l| l.len() > 3)
+        .map(|l| {
+            let rest = &l[3..];
+            let path = rest.rsplit(" -> ").next().unwrap_or(rest);
+            worktree.join(path.trim_matches('"'))
+        })
+        .collect()
+}
+
+/// BUG-1656: age in seconds of the newest file among `paths`, relative to
+/// `now`. Deleted paths (dirty because they are gone) are skipped.
+// trace:BUG-1656 | ai:claude
+pub(crate) fn newest_mtime_age_secs(
+    paths: &[std::path::PathBuf],
+    now: std::time::SystemTime,
+) -> Option<u64> {
+    paths
+        .iter()
+        .filter_map(|p| std::fs::metadata(p).ok()?.modified().ok())
+        .map(|m| now.duration_since(m).map(|d| d.as_secs()).unwrap_or(0))
+        .min()
 }
 
 fn git_stdout(worktree: &Path, args: &[&str]) -> Option<String> {
@@ -273,11 +331,54 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
         .and_then(|s| s.parse::<u32>().ok())
         .unwrap_or(0);
     let last_commit_subject = git_stdout(worktree_path, &["log", "-1", "--format=%s"]);
+    // trace:BUG-1656 | ai:claude
+    let dirty_newest_mtime_age_secs = if dirty {
+        newest_mtime_age_secs(&dirty_paths(worktree_path), std::time::SystemTime::now())
+    } else {
+        None
+    };
     WorktreeGitProbe {
         dirty,
         ahead_of_main,
         last_commit_subject,
+        dirty_newest_mtime_age_secs,
     }
+}
+
+/// BUG-1656: [`dispatch_state`] plus the "is the dirty tree still changing"
+/// signal. A worktree whose newest dirty file was written within the
+/// freshness window is MOVING whatever the pid says: the lease's recorded
+/// process may be dead while an Agent-tool subagent (which runs inside the
+/// parent claude process and never appears in the worktree's cwd probe) is
+/// editing in place. Reading that as Salvageable produced the
+/// `git add -A && git commit -m "wip: salvage"` hint against a tree an agent
+/// was still writing — following it would commit half-done work under the
+/// agent and race its edits. The hand-entered AwaitingAgent short-circuit
+/// stays first (it requires a clean tree, so the two never overlap).
+// trace:BUG-1656 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn dispatch_state_with_movement(
+    pid_alive: Option<bool>,
+    worktree_dirty: bool,
+    branch_ahead_of_main: u32,
+    elapsed_secs: u64,
+    stalled_threshold_secs: u64,
+    manual_enter_secs: Option<u64>,
+    awaiting_agent_grace_secs: u64,
+    dirty_movement_fresh: bool,
+) -> DispatchState {
+    if worktree_dirty && dirty_movement_fresh && pid_alive != Some(true) {
+        return DispatchState::Moving;
+    }
+    dispatch_state(
+        pid_alive,
+        worktree_dirty,
+        branch_ahead_of_main,
+        elapsed_secs,
+        stalled_threshold_secs,
+        manual_enter_secs,
+        awaiting_agent_grace_secs,
+    )
 }
 
 /// The exact next command for a row's dispatch state — "no interpretation

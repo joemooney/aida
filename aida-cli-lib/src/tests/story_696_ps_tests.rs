@@ -139,6 +139,8 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
             dirty: true,
             ahead_of_main: 0,
             last_commit_subject: Some("wip".into()),
+            // trace:BUG-1656 | ai:claude
+            dirty_newest_mtime_age_secs: None,
         },
         |_| None,
         |_| None,
@@ -383,6 +385,8 @@ fn ps_harness_lease_without_pid_is_unknown_not_salvageable() {
             dirty: true,
             ahead_of_main: 0,
             last_commit_subject: Some("wip: half-done".into()),
+            // trace:BUG-1656 | ai:claude
+            dirty_newest_mtime_age_secs: None,
         },
         |_| None,
         |_| None,
@@ -430,6 +434,8 @@ fn ps_non_harness_dead_dirty_lease_still_salvageable() {
             dirty: true,
             ahead_of_main: 0,
             last_commit_subject: None,
+            // trace:BUG-1656 | ai:claude
+            dirty_newest_mtime_age_secs: None,
         },
         |_| None,
         |_| None,
