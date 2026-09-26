@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T03:16:37.130372260Z
-modified_at: 2026-09-25T08:03:05.853160481Z
+modified_at: 2026-09-26T05:27:29.166867872Z
 req_type: Spike
 comments:
 - id: 01a0d698-4069-7262-985f-5b089ff43219
@@ -34,6 +34,7 @@ comments:
   created_at: 2026-09-25T08:03:05.853160481Z
   modified_at: 2026-09-25T08:03:05.853160481Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+execution_mode: drive
 filed_at:
   code_sha: b4984d495336027fed771caed71bc429dc1fd20c
   branch: main
