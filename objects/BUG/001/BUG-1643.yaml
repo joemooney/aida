@@ -1,0 +1,20 @@
+id: 01a0dd1a-dc1e-7db2-b35b-08f13cb76ebd
+spec_id: BUG-1643
+agreed_id: BUG-1643
+title: task_1508_index_answer_reports_source_and_tip is timing-flaky under load (index build exceeds the default budget)
+description: 'It failed once in the batch 89 full-suite preflight under heavy load and passed twice in isolation. The test turns index serving on but uses the default 1500ms index budget. Under load the first build doesn''t finish, so the answer falls back to the git walk and the source assertion fails. Fix: give the test an unlimited, or explicitly generous, budget via AIDA_HISTORY_INDEX_BUDGET_MS or a test seam, and audit the other task_1507/task_1508 tests that assert Index serving under the default budget.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T09:45:20.158116321Z
+modified_at: 2026-09-26T09:45:20.158116321Z
+req_type: Bug
+filed_at:
+  code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
