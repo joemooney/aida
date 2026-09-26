@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T19:47:21.285378119Z
-modified_at: 2026-09-26T05:08:38.604908961Z
+modified_at: 2026-09-26T05:20:28.814094332Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -45,6 +45,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): ''aida worktree add'' deliberately keeps its STORY-742 path contract (~/ai/<repo>-<slug> via explicit --path in practice). No follow-up filed. Auto-complete and pickup now share one resolver, which is what this bug needed.'
   created_at: 2026-09-26T05:08:38.604908961Z
   modified_at: 2026-09-26T05:08:38.604908961Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc28-608e-7841-b46c-0c25369703f0
+  author: joe
+  content: 'Strict review: APPROVE — 7e3b35d1ff. Resolver: resolve_pickup_workspace/pickup_worktree_path (lib.rs:35289,35309) is a byte-for-byte extraction of the session_start and queue work --dry-run derivation (same find_main_worktree_root root, same slugify, same ''auto'' branch style as queue work''s session_start call), so TASK/BUG/STORY paths are unchanged. Fallback order at lib.rs:103727 is retry pin, then live lease, then resolver. Epic ~/aida-<slug>/<id>-work defaults and the dirs::home_dir dependency are gone. Prefixes: for built-in targets the recognised set is unchanged (target prefix already built-in), so queue done ownership is not weakened. spec-0160, specx-016, 2spec-016 and empty prefixes are all rejected by whole-segment matching. configured_spec_prefixes is rooted at driver.project_root, with no cwd or env. Phase 1: a resolver Err or mismatch returns through resolve_phase_failure before driver.implementer runs (auto_complete.rs:3790-3830). Tests: bug_1628 7/7, auto_complete 274, worktree 221, workflow_hints 46, queue 497 all pass, fmt clean, temp repos only. Mutation: restoring the epic-default fallback fails both lib.rs resolver tests. Non-blocking: (1) no test pins live-lease-over-resolver precedence; dropping the lease lookup passes every filter, and that matters now because the resolver skips an existing branch (spec-016 -> spec-016-2). (2) lib.rs:104004 re-runs the resolver after orchestrate validated it and .ok().flatten() swallows an Err, so a TOCTOU failure would launch the child unpinned (BUG-1244 shape); the value used is also not the value validated. (3) The pinned branch is passed as an explicit --branch, so under a creation race TASK-245 auto-reuse applies where ordinary pickup would never reuse (small parity gap). (4) queue_done_ownership (workflow_hints.rs:405) does not use configured prefixes, so SPEC-016 on spec-016-sec-3 passes queue done but is refused in phase 1. (5) known_spec_prefixes (lib.rs:103754) does a full store load, plus GitBackend::new create_dir_all, on every phase-1; the ancestor walk can adopt a parent dir''s .aida config. (6) queue_cmd.rs:11055 changes the parentless-root fallback from <repo>-<slug> to <slug> (cosmetic).'
+  created_at: 2026-09-26T05:20:28.814094332Z
+  modified_at: 2026-09-26T05:20:28.814094332Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 1df2e0445e433eb9bef4af0dc02c93a6712f7c80
