@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:15:56.790261134Z
-modified_at: 2026-09-26T21:28:07.506974358Z
+modified_at: 2026-09-26T21:57:20.246676154Z
 req_type: Bug
 comments:
 - id: 01a0de80-abf1-7470-a857-4046ec387efa
@@ -22,6 +22,12 @@ comments:
   content: 'DRAFT (uncompiled) on claude/bug-1661 @ 7709c0fda4: (a) docs/user-facing-text-conventions.md audit commands use rg -n (both ran, 0/1 hits as before; -E reproduced ''unknown encoding''); (b) hook: new DOC_COMMENT_RE=''^[[:space:]]*///([^/]|$)'' used by both diff passes so //// and longer runs are plain comments; (c) hook cargo-fmt step: skips with a note when cargo is absent, claims ''drift fixed and re-staged'' only when ''cargo fmt --all'' exits 0, otherwise prints ''cargo fmt --all FAILED'' plus the first cargo stderr line to stderr and leaves the commit proceeding (CI stays the fmt gate). make sync-templates/check-templates pass. Tests: tests/test_precommit_provenance_move.sh gained cases 9 (//// allowed, /// beside it still refused), 10 (fake failing cargo shim on PATH: no fix claim, failure reported, commit proceeds) and 11 (fake drifty cargo: fix claim still made); commit() now honours HOOK_PATH and captures stdout too. Ran the shell test: 23/23 pass (no Rust compiled). Uncertain: whether a failing toolchain should block the commit instead of proceeding — I kept the pre-existing non-blocking behaviour. Compile risks: none (shell + markdown only).'
   created_at: 2026-09-26T21:28:07.506974358Z
   modified_at: 2026-09-26T21:28:07.506974358Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfb9-06f6-70d3-9055-0d5f1b531718
+  author: joe
+  content: 'Review: APPROVE. Diff matches the bug description exactly: (a) docs/user-facing-text-conventions.md rg commands changed from ''-nE'' to ''-n'' (the -E/--encoding bug); (b) DOC_COMMENT_RE=''^[[:space:]]*///([^/]|$)'' correctly excludes 4+ slash lines from doc-comment/provenance detection while still catching bare ''///'' and ''/// text''; (c) cargo-fmt step now checks cargo availability, distinguishes ''cargo fmt --all --check'' failing (drift) from ''cargo fmt --all'' itself failing (broken toolchain), and only prints ''drift fixed and re-staged'' when the fix actually succeeded — otherwise reports the real error and tells the agent to fix the toolchain or run fmt by hand. Commit still proceeds either way, so it never forces --no-verify. Ran tests/test_precommit_provenance_move.sh in a scratch worktree (origin/claude/bug-1661): all 22 assertions pass, including the new //// and broken/drifty-cargo cases. Hook still refuses genuine /// provenance debt (tests 2-11 all pass). No blockers.'
+  created_at: 2026-09-26T21:57:20.246676154Z
+  modified_at: 2026-09-26T21:57:20.246676154Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0de80-9345-7c83-a753-389f109a6ee4
