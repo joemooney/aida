@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T04:15:44.659622628Z
-modified_at: 2026-09-26T09:31:10.763485915Z
+modified_at: 2026-09-26T09:34:24.976401278Z
 req_type: Doc
 tags:
 - batch:groom-2026-09-25
@@ -80,6 +80,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): drain-ready. Added an Acceptance section (docs/explanations/feature-lanes.md, planned vs shipped clearly labelled, current-behaviour commands verified). Mode drain.'
   created_at: 2026-09-26T05:29:10.041373630Z
   modified_at: 2026-09-26T05:29:10.041373630Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd10-dcd0-7290-a36a-ea0fae36404a
+  author: joe
+  content: 'Doc written at docs/explanations/feature-lanes.md (commit 43dfc5d78f on claude/doc-5), linked from docs/README.md and docs/SUMMARY.md. Remaining acceptance item NOT done by this session (scope limited to DOC-5): STORY-1481, STORY-1482 and STORY-1483 each still need a note to update docs/explanations/feature-lanes.md when they land.'
+  created_at: 2026-09-26T09:34:24.976401278Z
+  modified_at: 2026-09-26T09:34:24.976401278Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
 filed_at:
