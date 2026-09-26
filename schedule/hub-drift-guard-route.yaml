@@ -1,9 +1,7 @@
 job: hub-drift-guard-route
-last_run: 2026-09-26T21:36:02.096469443Z
+last_run: 2026-09-26T22:08:57.325928775Z
 last_by:
   seat: advisor
   session: 71dca616-6150-461d-b64f-18c8288c6e1c
   vendor: antigravity
 result: done
-due_since: 2026-09-26T22:08:36.974488576Z
-due_reason: on CronJobFailed
