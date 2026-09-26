@@ -1,0 +1,20 @@
+id: 01a0dfa4-74cd-7a52-b61b-6878425b5363
+spec_id: BUG-1678
+agreed_id: BUG-1678
+title: get_requirement_targeted falls back to a full-store parse on a cache miss, so 'aida show --json' can scan the whole store once per relationship target
+description: 'Found by the planner (cached_git_backend.rs ~257-268): a cache miss calls find_by_uuid, parsing every object; show --json calls it per relationship/blocker target. Acceptance: 1. The fallback resolves all missing targets in one pass (or via a uuid->path index) instead of one full scan per target. 2. Test: a stale cache missing N targets triggers at most one full scan.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T21:34:52.109830507Z
+modified_at: 2026-09-26T21:34:52.109830507Z
+req_type: Bug
+filed_at:
+  code_sha: 2e01ffe4ab06c30ac99d44d18438a1b156ef455d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
