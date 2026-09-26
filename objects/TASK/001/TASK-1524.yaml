@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:33.138832370Z
-modified_at: 2026-09-26T21:58:37.869950648Z
+modified_at: 2026-09-26T22:00:51.539494075Z
 req_type: Task
 tags:
 - documentation
@@ -46,12 +46,6 @@ comments:
   content: 'Review: APPROVE (independent reviewer). Diff (OVERVIEW.md, README.md, docs/agents/aida-repository-guide.md) matches VIS-2/ADR-59/TERM-5 accurately: VIS-2''s comparative claim (no whole-system-regeneration promise) is reproduced verbatim in spirit at OVERVIEW L6; ADR-59''s ''TUI is a view onto the control plane, not the product''s face'' replaces the Trojan-horse section and Risk-2 mitigation; TERM-5''s corpus-integrity-layer framing and the four-layer architecture (intent store/control plane/execution/surfaces) are added correctly, including the 1,277/176,968-line and 50.9% figures matching ADR-59/TERM-5. git grep for ''trojan''/''missing index'' across README/OVERVIEW/CLAUDE.md/docs/agents on the branch returns only superseded-history mentions (acceptance criterion 4 met); CLAUDE.md itself never had these strings so it''s correctly left untouched. docs/agents/aida-repository-guide.md is not a generated mirror of aida-core/templates (no matching template file), so make sync-templates/check-templates don''t apply here. README''s new item 6 stays end-user-appropriate: no raw SPEC-IDs leaked into its prose (unlike OVERVIEW/repo-guide, which are developer-facing and correctly do cite VIS-2/ADR-59/TERM-5). No hype language; the comparative hedge is explicit. No blockers.'
   created_at: 2026-09-26T21:55:26.258250824Z
   modified_at: 2026-09-26T21:55:26.258250824Z
-  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
-- id: 01a0dfba-362d-74f1-aff3-49a88a4dc19c
-  author: joe
-  content: 'Review: APPROVE. OVERVIEW.md line 6 now leads with the VIS-2 pitch verbatim (intent capture, survival+collaboration claims, explicit comparative-not-absolute scope, aida why <file:line> proof) replacing ''your project''s missing index''; the old headline is left only as a superseded-history parenthetical. The ''Public face''/Trojan-horse section is replaced with ADR-59''s framing (TUI as view onto the control plane, humble first surface = aida why + memory lane) in OVERVIEW.md, README.md item 6, and docs/agents/aida-repository-guide.md line 9 -- all three checked against VIS-2/ADR-59/TERM-5 content and match closely, including TERM-5''s specific stats (1,277/176,968 changed lines, 0.7% of specs, ~50% control-plane engineering) reproduced accurately. New ''four layers'' section in OVERVIEW.md matches TERM-5''s data-plane/control-plane/execution/surfaces breakdown. Verified in a scratch worktree: git grep -n -i trojan and ''missing index'' over README/OVERVIEW/CLAUDE.md/docs/agents/ return only superseded-history lines (acceptance #4). None of the 3 edited files are generated template mirrors, so sync-templates is moot. CLAUDE.md untouched by this branch (budget criterion trivially satisfied). Spec IDs (VIS-2/ADR-59/TERM-5) appear only in docs/agents/aida-repository-guide.md (a developer-facing doc) and OVERVIEW.md''s contributor-facing ''four layers''/history notes -- README.md''s end-user pitch section stays spec-ID-free, consistent with CLAUDE.md''s rule. No hype: the new copy explicitly disclaims whole-system regeneration. No blockers.'
-  created_at: 2026-09-26T21:58:37.869950648Z
-  modified_at: 2026-09-26T21:58:37.869950648Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df93-e8ae-7e03-91ee-945a1d71f1f8
