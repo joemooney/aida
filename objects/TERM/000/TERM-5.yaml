@@ -20,12 +20,14 @@ description: |-
   The characteristic defect of both is a surface asserting a state that is not true - false-green, false-empty, or stale reading as current. That class is more dangerous than a crash, because every downstream consumer believes it.
 
   RELATED: [[orchestrator]], [[phase]], [[drain]], [[lease]], [[seat]]. Companion guides: aida-core/templates/.aida/discipline/machinery-glossary.md.
+
+  CORPUS-INTEGRITY LAYER (amended 2026-09-26 per SPIKE-86 section 7.6, adopted by OPERATOR DECISION on SPIKE-86). The control plane is AIDA's CORPUS-INTEGRITY LAYER: it exists to keep the store true while unreliable agent workers change the code. That is why it takes about half the engineering (50.9% of attributed changed lines over 30 days) without being the product: the store and its intent are the product (VIS-2), and a store that asserts untrue state cannot support reconstitution. PRIN-4, PRIN-5, PRIN-6 and PRIN-7 are its integrity rules. Dependency direction confirms the layering: store and intent modules import no control-plane module, while the control plane depends heavily on the store.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:37:43.443908816Z
-modified_at: 2026-09-21T16:37:43.443908816Z
+modified_at: 2026-09-26T18:34:34.493222255Z
 req_type: Term
 tags:
 - architecture
