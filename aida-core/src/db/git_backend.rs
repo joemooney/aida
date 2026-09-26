@@ -110,13 +110,11 @@ impl std::fmt::Display for StoreConflictError {
                 .collect();
             what.push(format!("the project's {}", labels.join(", ")));
         }
-        let many = self.specs.len() + self.metadata_fields.len() > 1;
         write!(
             f,
-            "refusing to save: {} changed on disk after this store was loaded, and this \
-             save changes {} too (a concurrent edit). Nothing was written; reload and retry.",
-            what.join(", "),
-            if many { "them" } else { "it" }
+            "refusing to save: this save and a concurrent edit both changed {} after this \
+             store was loaded. Nothing was written; reload and retry.",
+            what.join(", ")
         )
     }
 }
@@ -745,7 +743,7 @@ impl GitBackend {
             migrated_to: None,
             dispenser: self.dispenser.clone(),
             loaded_objects: None,
-            id_counters_reset: false,
+            id_counters_reset: crate::models::CounterResetFlag::default(),
         }
     }
 
@@ -1134,7 +1132,7 @@ impl GitBackend {
             meta_base.as_ref(),
             &mine_meta,
             disk_meta.as_ref(),
-            store.id_counters_reset,
+            store.id_counters_reset.is_set(),
         )?;
 
         if !conflicts.is_empty() || meta_plan.is_err() {
@@ -1154,6 +1152,9 @@ impl GitBackend {
         if let Some(snapshot) = snapshot {
             snapshot.record_metadata(metadata_value(&mine_meta)?);
         }
+        // A reset is one-shot: once merged, the store max-merges again.
+        // trace:BUG-1641 | ai:claude
+        store.id_counters_reset.clear();
         let mut written_specs: Vec<String> = Vec::new();
         for (req, caller_fp) in &to_write {
             let spec_id = req.spec_id.as_deref().unwrap_or_default();
@@ -1416,7 +1417,7 @@ impl GitBackend {
                 Some(&meta_before),
                 &meta_after,
                 disk_meta.as_ref(),
-                store.id_counters_reset,
+                store.id_counters_reset.is_set(),
             )? {
                 Ok(plan) => plan.write,
                 Err(fields) => {
@@ -1523,6 +1524,8 @@ impl GitBackend {
             // trace:BUG-1613 | ai:claude
             snapshot.record_metadata(metadata_value(&meta_after)?);
         }
+        // trace:BUG-1641 | ai:claude — a reset is one-shot.
+        store.id_counters_reset.clear();
         Ok((store, summary))
     }
 }
@@ -4356,6 +4359,55 @@ mod tests {
         assert!(![sid.as_str(), new_sid.as_str(), second_sid.as_str()].contains(&next_sid.as_str()));
     }
 
+    /// Re-assignment starts from the DISK counters when the disk moved
+    /// further than the batch: another writer issued BUG-001..003, the batch
+    /// collided on BUG-001, so its spec becomes BUG-004 (not BUG-002 or
+    /// BUG-003, which would overwrite theirs). A caller-supplied id in the
+    /// same batch is written as given.
+    // trace:BUG-1641 | ai:claude
+    #[test]
+    fn bug1641_bulk_writer_reassigns_past_a_disk_that_moved_further() {
+        let (_dir, root, backend) = bug1613_per_prefix_store();
+        let mut writer = backend.bulk_writer().unwrap();
+        let other = bug1613_other(&root);
+        let theirs: Vec<String> = (1..=3)
+            .map(|i| {
+                other
+                    .add_requirement(bug1613_bug(&format!("theirs {i}")))
+                    .unwrap()
+                    .spec_id
+                    .unwrap()
+            })
+            .collect();
+        assert_eq!(theirs, vec!["BUG-001", "BUG-002", "BUG-003"]);
+
+        let mine = writer.add(bug1613_bug("mine")).unwrap().clone();
+        assert_eq!(mine.spec_id.as_deref(), Some("BUG-001"));
+        let mut supplied = bug1613_bug("supplied");
+        supplied.spec_id = Some("BUG-50".into());
+        writer.add(supplied).unwrap();
+        assert_eq!(writer.finish("test(bulk)").unwrap(), 2);
+
+        let objects = root.join("objects");
+        for (i, sid) in theirs.iter().enumerate() {
+            assert_eq!(
+                object_store::read_object(&objects, sid).unwrap().title,
+                format!("theirs {}", i + 1),
+                "the other writer's {sid} was overwritten"
+            );
+        }
+        assert_eq!(
+            object_store::read_object(&objects, "BUG-004")
+                .unwrap()
+                .title,
+            "mine"
+        );
+        assert_eq!(
+            object_store::read_object(&objects, "BUG-50").unwrap().title,
+            "supplied"
+        );
+    }
+
     /// The merge is pure field logic: untouched fields keep disk, counters
     /// take the max, and a store with no baseline still never lowers one.
     // trace:BUG-1613 | ai:claude
@@ -4419,9 +4471,13 @@ mod tests {
             .unwrap();
         let mut store = backend.load().unwrap();
         store.migrate_to_new_id_format();
-        assert!(store.id_counters_reset);
+        assert!(store.id_counters_reset.is_set());
         let expected = store.prefix_counters.clone();
         backend.save(&store).unwrap();
+        assert!(
+            !store.id_counters_reset.is_set(),
+            "a saved reset is one-shot"
+        );
         let meta = bug1613_disk_meta(&root);
         assert_eq!(meta.prefix_counters, expected);
         assert!(!meta.prefix_counters.contains_key("GONE"));
@@ -4499,9 +4555,13 @@ mod tests {
             })
             .unwrap();
         assert_eq!(bug1613_disk_meta(&root).prefix_counters["BUG"], 90);
-        backend
+        let after_reset = backend
             .update_atomically(|s| s.reset_id_counters())
             .unwrap();
+        assert!(
+            !after_reset.id_counters_reset.is_set(),
+            "a saved reset is one-shot"
+        );
         let meta = bug1613_disk_meta(&root);
         assert!(!meta.prefix_counters.contains_key("BUG"));
         assert_eq!(meta.next_spec_number, 1);
@@ -4521,7 +4581,8 @@ mod tests {
         assert!(!text.contains("setting"), "{text}");
         assert!(text.contains("requirement types"), "{text}");
         assert!(text.contains("feature list"), "{text}");
-        assert!(text.contains("them"), "{text}");
+        assert!(!text.contains(" it "), "{text}");
+        assert!(!text.contains(" them "), "{text}");
     }
 
     /// A save that changed only a spec neither rewrites nor commits

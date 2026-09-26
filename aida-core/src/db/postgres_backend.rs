@@ -1131,7 +1131,7 @@ impl DatabaseBackend for PostgresBackend {
             migrated_to: None,
             dispenser: None,
             loaded_objects: None,
-            id_counters_reset: false,
+            id_counters_reset: crate::models::CounterResetFlag::default(),
         })
     }
 
@@ -1223,7 +1223,7 @@ impl DatabaseBackend for PostgresBackend {
             migrated_to: None,
             dispenser: None,
             loaded_objects: None,
-            id_counters_reset: false,
+            id_counters_reset: crate::models::CounterResetFlag::default(),
         };
 
         // Apply changes

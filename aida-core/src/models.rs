@@ -5159,11 +5159,49 @@ pub struct RequirementsStore {
     /// while this is set, a save instead treats the counters like any other
     /// store-level field: the caller's values are written when only this
     /// caller changed them since its load, and a concurrent counter change is
-    /// a conflict. Runtime-only; never serialized.
+    /// a conflict. A successful git-store save or `update_atomically`
+    /// clears it, so the store goes back to max-merging its counters.
+    /// Runtime-only; never serialized.
     // trace:BUG-1641 | ai:claude
     #[serde(skip)]
     #[ts(skip)]
-    pub id_counters_reset: bool,
+    pub id_counters_reset: CounterResetFlag,
+}
+
+/// The runtime marker behind [`RequirementsStore::id_counters_reset`].
+/// Interior-mutable so a save through `&RequirementsStore` can clear it once
+/// the reset is on disk; a clone copies the current value.
+// trace:BUG-1641 | ai:claude
+#[derive(Default)]
+pub struct CounterResetFlag(std::sync::atomic::AtomicBool);
+
+impl CounterResetFlag {
+    /// Whether the counters were reset on purpose and not yet saved.
+    pub fn is_set(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Mark the counters as reset on purpose.
+    pub fn set(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Clear the marker (the reset has been saved).
+    pub fn clear(&self) {
+        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl Clone for CounterResetFlag {
+    fn clone(&self) -> Self {
+        Self(std::sync::atomic::AtomicBool::new(self.is_set()))
+    }
+}
+
+impl std::fmt::Debug for CounterResetFlag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CounterResetFlag({})", self.is_set())
+    }
 }
 
 /// Load snapshot of a git-canonical store, per object id:
@@ -5354,7 +5392,7 @@ impl RequirementsStore {
             migrated_to: None,
             dispenser: None,
             loaded_objects: None,
-            id_counters_reset: false,
+            id_counters_reset: CounterResetFlag::default(),
         }
     }
 
@@ -5368,7 +5406,7 @@ impl RequirementsStore {
     pub fn reset_id_counters(&mut self) {
         self.next_spec_number = 1;
         self.prefix_counters.clear();
-        self.id_counters_reset = true;
+        self.id_counters_reset.set();
     }
 
     /// Gets the type definition for a requirement type
