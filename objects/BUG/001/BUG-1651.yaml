@@ -3,12 +3,12 @@ spec_id: BUG-1651
 agreed_id: BUG-1651
 title: 'findings promote queue undo is not compare-and-swap: a concurrent queue remove or re-add can be clobbered by the rollback'
 description: 'From the BUG-1647 strict review (non-blocking). (1) aida-cli-lib/src/lib.rs ~706-710 findings_promote_to_work restores a pre-existing entry with queue_add (replace semantics), so a concurrent aida queue remove or done during the window is undone. With no prior entry, the role-scoped remove drops a concurrent same-role re-add. Git queue writes are unlocked (git_backend.rs ~1674, ~1727). Fix: re-read the queue before undoing; act only if the current entry for this spec is still the one this call added (match note, added_at and for_role); otherwise leave it and say so. (2) Reword ~712 ''withdrawn, so nothing was changed'' to ''its queue entry was withdrawn; the finding is unchanged''. (3) Restore a position of i64::MAX exactly, or document the exception. (4) Add a test pinning --json gating of the phase-1 Refused line.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T11:49:13.718307980Z
-modified_at: 2026-09-26T13:49:28.648604761Z
+modified_at: 2026-09-26T14:38:27.063104239Z
 req_type: Bug
 comments:
 - id: 01a0dd8c-883f-7482-8fc0-076576c7d00c
@@ -35,6 +35,20 @@ comments:
   created_at: 2026-09-26T13:49:28.648604761Z
   modified_at: 2026-09-26T13:49:28.648604761Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0de27-36ec-7ff3-9f27-d6cc8f3b5edd
+  author: aida-auto-bump
+  timestamp: 2026-09-26T14:38:27.052676984Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0de27-36f7-7821-a937-153394fa7579
+  timestamp: 2026-09-26T14:38:27.063102873Z
+  agent: implementer
+  commit_sha: b331809ce75b22e67d4bd86b4ab16500f4b41217
+  summary: Completed via merge b331809c
 filed_at:
   code_sha: dc38f8ea4ac7e7e145d4eb78be7357692282f520
   branch: main
@@ -43,3 +57,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T14:38:27.052672903Z
+  completion_sha: b331809ce75b22e67d4bd86b4ab16500f4b41217
