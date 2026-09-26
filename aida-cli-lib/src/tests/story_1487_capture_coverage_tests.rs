@@ -429,3 +429,120 @@ fn story_1487_share_percent_is_none_on_empty_denominator() {
     };
     assert!((half.percent().unwrap() - 50.0).abs() < f64::EPSILON);
 }
+
+/// The per-spec detail carries completion time (recorded stamp, else the
+/// last-modified time) and traced-criterion counts, and stays out of the
+/// printed `--json` figures.
+#[test]
+fn story_1487_spec_detail_carries_completion_and_traced_counts() {
+    use aida_core::models::RequirementStatus;
+    let mut done = spec(
+        "TASK-1",
+        RequirementType::Task,
+        "## Acceptance\n- A1. x\n- A2. y\n",
+        40,
+    );
+    done.status = RequirementStatus::Completed;
+    let modified = Utc::now() - chrono::Duration::days(3);
+    done.modified_at = modified;
+    let open = spec(
+        "TASK-2",
+        RequirementType::Task,
+        "## Acceptance\n- A1. z\n",
+        2,
+    );
+    let no_criteria = spec("BUG-3", RequirementType::Bug, "prose only", 2);
+    let store = store_with(vec![done, open, no_criteria]);
+    let report = coverage_from_parts(
+        &store,
+        Utc::now(),
+        90,
+        &[],
+        &[],
+        &tokens(&["TASK-1.A2"], 1),
+        None,
+    );
+    assert_eq!(report.specs.len(), 2, "{:?}", report.specs);
+    let t1 = report.specs.iter().find(|s| s.spec_id == "TASK-1").unwrap();
+    assert_eq!(t1.criteria, 2);
+    assert_eq!(t1.traced_criteria, 1);
+    assert_eq!(t1.completed_at, Some(modified));
+    let t2 = report.specs.iter().find(|s| s.spec_id == "TASK-2").unwrap();
+    assert_eq!(t2.traced_criteria, 0);
+    assert_eq!(t2.completed_at, None);
+
+    let json = serde_json::to_value(&report).unwrap();
+    assert!(json.get("specs").is_none(), "per-spec detail is cache-only");
+}
+
+/// Every report run writes the cache in an initialised project; a reader
+/// gets it back while it is fresh and nothing once HEAD moves or it ages
+/// out. Outside an initialised project nothing is written.
+#[test]
+fn story_1487_report_writes_cache_that_goes_stale() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    init_repo(root);
+    commit_file(
+        root,
+        "src/lib.rs",
+        "pub fn f() {}\n",
+        "feat: first (TASK-1)",
+    );
+    let store = store_with(vec![spec(
+        "TASK-1",
+        RequirementType::Task,
+        "## Acceptance\n- A1. x\n",
+        1,
+    )]);
+
+    // No `.aida/`: the report runs, nothing is written.
+    handle_criteria_coverage(root, &store, 90, true).unwrap();
+    assert!(!root.join(CACHE_REL_PATH).exists());
+
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    handle_criteria_coverage(root, &store, 90, true).unwrap();
+    assert!(root.join(CACHE_REL_PATH).exists());
+
+    let now = Utc::now();
+    let day = chrono::Duration::days(1);
+    let cache = load_fresh_coverage_cache(root, now, day).expect("fresh cache");
+    assert_eq!(cache.schema_version, CACHE_SCHEMA_VERSION);
+    assert_eq!(cache.specs.len(), 1);
+    assert_eq!(cache.specs[0].spec_id, "TASK-1");
+    assert_eq!(cache.report.specs, cache.specs);
+    assert_eq!(
+        cache.report.windows[0].specs_with_criteria,
+        Share {
+            numerator: 1,
+            denominator: 1
+        }
+    );
+
+    // Aged out.
+    assert!(load_fresh_coverage_cache(root, now + chrono::Duration::days(2), day).is_none());
+    // HEAD moved.
+    commit_file(
+        root,
+        "src/other.rs",
+        "pub fn g() {}\n",
+        "feat: second (TASK-1)",
+    );
+    assert!(load_fresh_coverage_cache(root, now, day).is_none());
+    // Unparseable.
+    std::fs::write(root.join(CACHE_REL_PATH), "not json").unwrap();
+    assert!(load_fresh_coverage_cache(root, now, day).is_none());
+}
+
+/// The draft-inbox lens and the report share one auto-drafted rule.
+#[test]
+fn story_1487_auto_drafted_rule_accepts_vec_and_set_tags() {
+    let v = vec!["auto-drafted".to_string()];
+    assert!(is_auto_drafted(&v, ""));
+    let s: std::collections::HashSet<String> = ["x".to_string()].into_iter().collect();
+    assert!(!is_auto_drafted(&s, "prose"));
+    assert!(is_auto_drafted(
+        &s,
+        "  Auto-drafted by `aida queue work` ..."
+    ));
+}

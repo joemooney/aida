@@ -5685,19 +5685,7 @@ fn run() -> Result<()> {
                 .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
             // `coverage` / `gap` is the project-wide report, never a spec id.
             // trace:STORY-1487 | ai:claude
-            match criteria_coverage::resolve_target(spec) {
-                criteria_coverage::CriteriaTarget::Coverage => {
-                    criteria_coverage::handle_criteria_coverage(
-                        &project_root,
-                        &store,
-                        *window_days,
-                        *json,
-                    )?;
-                }
-                criteria_coverage::CriteriaTarget::Spec(id) => {
-                    criteria::handle_criteria_command(&project_root, &store, &id, *json)?;
-                }
-            }
+            criteria_coverage::dispatch_criteria(&project_root, &store, spec, *window_days, *json)?;
         }
         Command::Reconstitute {
             spec,
@@ -82060,10 +82048,9 @@ fn status_spec_is_exact_draft(raw: &str) -> bool {
 }
 
 fn is_machine_filed_draft(r: &aida_core::RequirementSummary) -> bool {
-    r.tags.iter().any(|tag| tag == "auto-drafted")
-        || r.description
-            .trim_start()
-            .starts_with("Auto-drafted by `aida queue work")
+    // One definition shared with the capture-coverage report.
+    // trace:STORY-1487 | ai:claude
+    criteria_coverage::is_auto_drafted(&r.tags, &r.description)
 }
 
 /// Partition a draft grooming query by provenance. Returns the number hidden

@@ -23,7 +23,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -59,7 +59,7 @@ pub(crate) fn resolve_target(raw: &str) -> CriteriaTarget {
 }
 
 /// One figure: numerator over denominator, never only a percentage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub(crate) struct Share {
     pub(crate) numerator: usize,
     pub(crate) denominator: usize,
@@ -84,7 +84,7 @@ impl Share {
 }
 
 /// The windowed figures. `window_days = None` is all time.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WindowFigures {
     pub(crate) label: String,
     pub(crate) window_days: Option<u64>,
@@ -97,7 +97,7 @@ pub(crate) struct WindowFigures {
 }
 
 /// The whole report; `--json` emits exactly this.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct CoverageReport {
     pub(crate) generated_at: String,
     pub(crate) head: Option<String>,
@@ -112,6 +112,29 @@ pub(crate) struct CoverageReport {
     /// How the token counts were gathered: `git grep` over tracked files, or
     /// a filesystem walk when the project is not a git checkout.
     pub(crate) token_source: String,
+    /// Per-spec detail behind (b)/(c): every authored work spec (all time)
+    /// with parseable criteria. Not part of the printed figures; written to
+    /// the cache so later readers (the intent-capture floor) can slice by
+    /// completion date without re-scanning the tree.
+    #[serde(skip_serializing)]
+    #[serde(default)]
+    pub(crate) specs: Vec<SpecCoverage>,
+}
+
+/// One authored work spec with acceptance criteria, and how many of those
+/// criteria have a traced test.
+// trace:STORY-1487 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct SpecCoverage {
+    pub(crate) spec_id: String,
+    pub(crate) status: String,
+    pub(crate) created_at: DateTime<Utc>,
+    /// Completion time for Completed/Done specs: the recorded completion
+    /// stamp, else the last-modified time (the digest's rule). `None` while
+    /// the spec is still open.
+    pub(crate) completed_at: Option<DateTime<Utc>>,
+    pub(crate) criteria: usize,
+    pub(crate) traced_criteria: usize,
 }
 
 // --- (a) commit trailers -------------------------------------------------------
@@ -183,6 +206,9 @@ pub(crate) fn is_work_type(t: &RequirementType) -> bool {
 /// the figure measures what people (and their agents) authored on purpose.
 // trace:STORY-1487 | ai:claude
 pub(crate) fn is_machine_filed(req: &Requirement) -> bool {
+    if is_auto_drafted(&req.tags, &req.description) {
+        return true;
+    }
     let title = req.title.trim();
     let lower = title.to_ascii_lowercase();
     if lower.starts_with("auto-complete failure") {
@@ -193,9 +219,19 @@ pub(crate) fn is_machine_filed(req: &Requirement) -> bool {
             return true;
         }
     }
-    req.tags.iter().any(|t| t == "auto-drafted")
-        || req
-            .description
+    false
+}
+
+/// Tagged `auto-drafted`, or described as drafted by `aida queue work`: the
+/// one definition of an auto-drafted record (the draft inbox lens uses it
+/// too).
+// trace:STORY-1487 | ai:claude
+pub(crate) fn is_auto_drafted<'a>(
+    tags: impl IntoIterator<Item = &'a String>,
+    description: &str,
+) -> bool {
+    tags.into_iter().any(|t| t == "auto-drafted")
+        || description
             .trim_start()
             .starts_with("Auto-drafted by `aida queue work")
 }
@@ -386,6 +422,42 @@ pub(crate) fn coverage_from_parts(
         }
     };
 
+    let specs: Vec<SpecCoverage> = store
+        .requirements
+        .iter()
+        .filter(|r| is_authored_work_spec(r))
+        .filter_map(|req| {
+            let id = display_id(req)?;
+            let parsed = crate::criteria::parse_acceptance_criteria(id, &req.description);
+            if parsed.is_empty() {
+                return None;
+            }
+            let traced_criteria = parsed
+                .iter()
+                .filter(|c| traced.contains(c.id.to_ascii_uppercase().as_str()))
+                .count();
+            let completed_at = matches!(
+                req.status,
+                aida_core::models::RequirementStatus::Completed
+                    | aida_core::models::RequirementStatus::Done
+            )
+            .then(|| {
+                req.implementation_info
+                    .as_ref()
+                    .and_then(|i| i.completed_at)
+                    .unwrap_or(req.modified_at)
+            });
+            Some(SpecCoverage {
+                spec_id: id.to_string(),
+                status: format!("{:?}", req.status),
+                created_at: req.created_at,
+                completed_at,
+                criteria: parsed.len(),
+                traced_criteria,
+            })
+        })
+        .collect();
+
     let mut by_spec: BTreeMap<String, usize> = BTreeMap::new();
     for tok in &tokens.criterion_tokens {
         let spec = tok.split('.').next().unwrap_or(tok).to_string();
@@ -411,6 +483,7 @@ pub(crate) fn coverage_from_parts(
             .map(|s| s.to_string())
             .collect(),
         token_source: tokens.source.clone(),
+        specs,
     }
 }
 
@@ -446,6 +519,110 @@ pub(crate) fn build_coverage_report(
     )
 }
 
+/// `aida criteria <ARG>`: the project-wide report for `coverage` / `gap`,
+/// one spec's criterion report otherwise. Both CLI dispatch paths call this.
+// trace:STORY-1487 | ai:claude
+pub(crate) fn dispatch_criteria(
+    project_root: &Path,
+    store: &RequirementsStore,
+    raw: &str,
+    window_days: u64,
+    json: bool,
+) -> Result<()> {
+    match resolve_target(raw) {
+        CriteriaTarget::Coverage => {
+            handle_criteria_coverage(project_root, store, window_days, json)
+        }
+        CriteriaTarget::Spec(id) => {
+            crate::criteria::handle_criteria_command(project_root, store, &id, json)
+        }
+    }
+}
+
+// --- cache (read by cheap surfaces such as `aida status`) ---------------------------
+
+/// Where every report run writes its result, relative to the project root.
+pub(crate) const CACHE_REL_PATH: &str = ".aida/cache/capture-coverage.json";
+/// Bump when the cache shape changes; readers ignore other versions.
+pub(crate) const CACHE_SCHEMA_VERSION: u32 = 1;
+
+/// The cache file: the report plus its per-spec detail and a freshness
+/// stamp (the full code HEAD the report was taken at).
+// trace:STORY-1487 | ai:claude
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct CoverageCache {
+    pub(crate) schema_version: u32,
+    pub(crate) head_full: Option<String>,
+    pub(crate) generated_at: DateTime<Utc>,
+    pub(crate) report: CoverageReport,
+    pub(crate) specs: Vec<SpecCoverage>,
+}
+
+fn git_head_full(project_root: &Path) -> Option<String> {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Write the cache under `.aida/cache/`. Only in an initialised project
+/// (`.aida/` exists); failures are ignored — the report never depends on it.
+// trace:STORY-1487 | ai:claude
+pub(crate) fn write_coverage_cache(
+    project_root: &Path,
+    report: &CoverageReport,
+    now: DateTime<Utc>,
+) -> Option<std::path::PathBuf> {
+    if !project_root.join(".aida").is_dir() {
+        return None;
+    }
+    let cache = CoverageCache {
+        schema_version: CACHE_SCHEMA_VERSION,
+        head_full: git_head_full(project_root),
+        generated_at: now,
+        report: report.clone(),
+        specs: report.specs.clone(),
+    };
+    let path = project_root.join(CACHE_REL_PATH);
+    std::fs::create_dir_all(path.parent()?).ok()?;
+    let body = serde_json::to_string_pretty(&cache).ok()?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, body).ok()?;
+    std::fs::rename(&tmp, &path).ok()?;
+    Some(path)
+}
+
+/// Read the cache when it is present, parseable, the current schema, taken
+/// at the current code HEAD, and no older than `max_age`. `None` otherwise,
+/// so a reader stays silent instead of reporting stale figures.
+// trace:STORY-1487 | ai:claude
+// Read by the status-line intent-capture indicator, which lands separately.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn load_fresh_coverage_cache(
+    project_root: &Path,
+    now: DateTime<Utc>,
+    max_age: chrono::Duration,
+) -> Option<CoverageCache> {
+    let raw = std::fs::read_to_string(project_root.join(CACHE_REL_PATH)).ok()?;
+    let mut cache: CoverageCache = serde_json::from_str(&raw).ok()?;
+    if cache.schema_version != CACHE_SCHEMA_VERSION {
+        return None;
+    }
+    if now - cache.generated_at > max_age || cache.generated_at > now {
+        return None;
+    }
+    if cache.head_full != git_head_full(project_root) {
+        return None;
+    }
+    cache.report.specs = cache.specs.clone();
+    Some(cache)
+}
+
 /// `aida criteria coverage` / `aida criteria gap`.
 // trace:STORY-1487 | ai:claude
 pub(crate) fn handle_criteria_coverage(
@@ -454,7 +631,9 @@ pub(crate) fn handle_criteria_coverage(
     window_days: u64,
     json: bool,
 ) -> Result<()> {
-    let report = build_coverage_report(project_root, store, Utc::now(), window_days);
+    let now = Utc::now();
+    let report = build_coverage_report(project_root, store, now, window_days);
+    let _ = write_coverage_cache(project_root, &report, now);
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {

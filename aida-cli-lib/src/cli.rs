@@ -9561,7 +9561,7 @@ pub enum Command {
         /// Lookback window in days for the project-wide report (the all-time
         /// figures are always shown alongside). Ignored for a single spec.
         // trace:STORY-1487 | ai:claude
-        #[clap(long, default_value_t = 90, value_name = "DAYS")]
+        #[clap(long, default_value_t = crate::criteria_coverage::DEFAULT_WINDOW_DAYS, value_name = "DAYS")]
         window_days: u64,
     },
 
