@@ -3,12 +3,12 @@ spec_id: BUG-1649
 agreed_id: BUG-1649
 title: 'aida init writes store_path into config.toml with format!: a Windows --store-path C:\... produces an invalid TOML file'
 description: 'Found during BUG-1646: aida-cli-lib/src/init_cmd.rs (around lines 4197, 4513, 5103) writes store_path = "{}" with format!, dropping raw paths into a TOML basic string. On Windows a backslash path becomes invalid escapes, so .aida/config.toml fails to parse. Fix: serialize with the toml crate (or proper escaping); add a unit test that round-trips a path containing backslashes and quotes on every platform; audit init_cmd.rs and other production writers for the same format!-into-TOML pattern. The portability rule added in BUG-1646 only covers tests; extend it to production code where feasible.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T10:49:57.059093421Z
-modified_at: 2026-09-26T11:16:37.765497755Z
+modified_at: 2026-09-26T12:41:31.147558557Z
 req_type: Bug
 comments:
 - id: 01a0dd56-6b2c-7181-b2be-ea825ad27ebe
@@ -45,6 +45,20 @@ comments:
   created_at: 2026-09-26T11:16:37.765497755Z
   modified_at: 2026-09-26T11:16:37.765497755Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0ddbc-2901-7f92-8a99-ed165fea0a1e
+  author: aida-auto-bump
+  timestamp: 2026-09-26T12:41:31.137078419Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0ddbc-290b-77c3-ba12-051b3e207c0e
+  timestamp: 2026-09-26T12:41:31.147556622Z
+  agent: implementer
+  commit_sha: ff2975a5ce09ff33aeabb74e8bccdc451c1a17c0
+  summary: Completed via merge ff2975a5
 filed_at:
   code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
   branch: main
@@ -53,3 +67,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T12:41:31.137074293Z
+  completion_sha: ff2975a5ce09ff33aeabb74e8bccdc451c1a17c0
