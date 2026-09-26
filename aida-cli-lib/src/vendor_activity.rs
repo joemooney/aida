@@ -205,7 +205,7 @@ fn codex_sessions_root() -> Option<PathBuf> {
             return Some(PathBuf::from(trimmed));
         }
     }
-    dirs::home_dir().map(|home| home.join(".codex").join("sessions"))
+    crate::home_dir().map(|home| home.join(".codex").join("sessions"))
 }
 
 fn codex_rollout_activity(session_id: &str) -> Option<SystemTime> {

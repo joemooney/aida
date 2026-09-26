@@ -320,6 +320,9 @@ mod team;
 mod team_cmd;
 #[cfg(test)]
 mod test_env;
+// trace:BUG-1642 | ai:claude — lib tests run under a temp HOME, never the real ~/.aida.
+#[cfg(test)]
+mod test_home;
 // trace:TASK-964 | ai:claude — TOON agent-output encoder (token-efficient).
 mod toon;
 mod trace_cmd;
@@ -10786,7 +10789,7 @@ fn handle_advisor_dashboard(
 }
 
 fn locate_for_status(reg: &advisor::AdvisorRegistration) -> Option<advisor::LiveAdvisor> {
-    let home = dirs::home_dir()?;
+    let home = crate::home_dir()?;
     let jsonl = home
         .join(".claude")
         .join("projects")
@@ -12462,7 +12465,7 @@ fn scaffold_memory_pack_into(
 fn scaffold_memory_pack(refresh: bool, focus: Option<&str>) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let home =
-        dirs::home_dir().context("cannot resolve home directory for the starter memory pack")?;
+        crate::home_dir().context("cannot resolve home directory for the starter memory pack")?;
     let slug = process_probe::encode_cwd_for_projects(&cwd);
     let mem_dir = home
         .join(".claude")
@@ -12660,7 +12663,7 @@ fn compute_memory_drift_into(mem_dir: &std::path::Path) -> Result<MemoryDriftRep
 fn project_memory_dir() -> Result<std::path::PathBuf> {
     let cwd = std::env::current_dir()?;
     let home =
-        dirs::home_dir().context("cannot resolve home directory for the starter memory pack")?;
+        crate::home_dir().context("cannot resolve home directory for the starter memory pack")?;
     let slug = process_probe::encode_cwd_for_projects(&cwd);
     Ok(home
         .join(".claude")
@@ -21736,9 +21739,15 @@ fn global_roles_dir() -> Option<std::path::PathBuf> {
     // — the same override `glyphs.rs` / `user_alias.rs` honor.
     #[cfg(test)]
     if let Some(home) = std::env::var_os("AIDA_TEST_HOME") {
-        return Some(std::path::PathBuf::from(home).join(".aida/roles"));
+        let home = std::path::PathBuf::from(home);
+        // trace:BUG-1642 | ai:claude — refuse an override naming the real home.
+        crate::test_home::assert_hermetic(&home);
+        return Some(home.join(".aida/roles"));
     }
-    dirs::home_dir().map(|h| h.join(".aida/roles"))
+    // BUG-1642: under cfg(test) this panics instead of returning the real
+    // home, so the role-activity recorder can never append to the operator's
+    // `~/.aida/roles/<role>.toml`.
+    crate::home_dir().map(|h| h.join(".aida/roles"))
 }
 
 fn project_role_file(project_root: &std::path::Path, name: &str) -> std::path::PathBuf {
@@ -26509,7 +26518,7 @@ fn verify_agent_native_session_available(
             }
         }
         "antigravity" => {
-            let Some(home) = dirs::home_dir() else {
+            let Some(home) = crate::home_dir() else {
                 anyhow::bail!(
                     "cannot resume antigravity session {native_session_id}: no home directory"
                 );
@@ -41977,7 +41986,7 @@ fn resolve_forge_binary(
             std::path::PathBuf::from("/opt/homebrew/bin").join(&exe_name),
             std::path::PathBuf::from("/snap/bin").join(&exe_name),
         ];
-        if let Some(home) = dirs::home_dir() {
+        if let Some(home) = crate::home_dir() {
             v.push(home.join(".local").join("bin").join(&exe_name));
             v.push(home.join("bin").join(&exe_name));
         }
@@ -46937,7 +46946,7 @@ mod bug_1523_orphaned_in_progress_mapping_tests;
 mod task_358_escalation_cleanup_tests;
 
 fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate Claude project dir")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate Claude project dir")?;
     let projects = home.join(".claude/projects");
     if !projects.is_dir() {
         println!("(no ~/.claude/projects dir found)");
@@ -48798,10 +48807,31 @@ fn ensure_cache_dir() -> Option<std::path::PathBuf> {
 fn aida_home_dir() -> Option<std::path::PathBuf> {
     if let Ok(p) = std::env::var("AIDA_HOME") {
         if !p.is_empty() {
-            return Some(std::path::PathBuf::from(p));
+            let p = std::path::PathBuf::from(p);
+            // trace:BUG-1642 | ai:claude
+            #[cfg(test)]
+            crate::test_home::assert_hermetic(&p);
+            return Some(p);
         }
     }
-    dirs::home_dir()
+    crate::home_dir()
+}
+
+/// BUG-1642: the one home-directory lookup for this crate. Production is
+/// `dirs::home_dir()`. Under `cfg(test)` it resolves the temp `HOME` the lib
+/// test binary installs before `main` and panics rather than return the
+/// operator's real home, so no lib test can read or write the real `~/.aida`.
+/// Call this instead of the `dirs` crate (a source-scan test enforces it).
+// trace:BUG-1642 | ai:claude
+pub(crate) fn home_dir() -> Option<std::path::PathBuf> {
+    #[cfg(test)]
+    {
+        crate::test_home::home_dir()
+    }
+    #[cfg(not(test))]
+    {
+        dirs::home_dir() // allow-direct-home-dir
+    }
 }
 
 /// Should statusline kick off a fresh background fetch for this project?
@@ -62283,7 +62313,7 @@ fn ensure_epic_worktree(
 ) -> Result<WorktreeOutcome> {
     let main_root = find_main_worktree_root()?;
     let home =
-        dirs::home_dir().context("cannot resolve home directory for the default worktree path")?;
+        crate::home_dir().context("cannot resolve home directory for the default worktree path")?;
     ensure_epic_worktree_core(&main_root, &home, epic, path_override, branch_override)
 }
 
@@ -62558,7 +62588,7 @@ fn ensure_spec_worktree(
 ) -> Result<WorktreeOutcome> {
     let main_root = find_main_worktree_root()?;
     let home =
-        dirs::home_dir().context("cannot resolve home directory for the default worktree path")?;
+        crate::home_dir().context("cannot resolve home directory for the default worktree path")?;
 
     // Existing lease for this spec → re-enter it (freshest wins).
     let existing = list_leases(&main_root)
@@ -62759,7 +62789,7 @@ fn worktree_config_init_submodules(project_root: &std::path::Path) -> bool {
 /// warm on first use (TASK-1010).
 // trace:STORY-714 trace:TASK-1010 | ai:claude
 fn worktree_pool_global_hooks(key: &str) -> Vec<String> {
-    let Some(home) = dirs::home_dir() else {
+    let Some(home) = crate::home_dir() else {
         return Vec::new();
     };
     let Ok(body) = std::fs::read_to_string(home.join(".aida").join("config.toml")) else {
@@ -78903,7 +78933,7 @@ fn gh_pr_is_merged(project_root: &std::path::Path, n: u64) -> Option<bool> {
 /// the cleanup command.
 /// trace:STORY-385 | ai:claude
 fn collect_orphan_project_dirs() -> Vec<status_cleanup::OrphanProjectDirItem> {
-    let Some(home) = dirs::home_dir() else {
+    let Some(home) = crate::home_dir() else {
         return Vec::new();
     };
     let projects = home.join(".claude/projects");
@@ -82547,7 +82577,7 @@ fn detect_install_method() -> Result<InstallMethod> {
     let cargo_home = std::env::var("CARGO_HOME").ok();
     let cargo_bin = cargo_home
         .map(|h| std::path::PathBuf::from(h).join("bin"))
-        .or_else(|| dirs::home_dir().map(|h| h.join(".cargo/bin")));
+        .or_else(|| crate::home_dir().map(|h| h.join(".cargo/bin")));
     if let Some(bin) = cargo_bin {
         if exe.starts_with(&bin) {
             return Ok(InstallMethod::Cargo(exe));
@@ -92483,7 +92513,7 @@ fn non_tty_interactive_implementer_preflight(
 /// TASK-394: machine-wide `--no-human` acknowledgement marker
 /// (`~/.aida/no-human-acknowledged`) — persists across every project on the host.
 fn no_human_machine_marker() -> Option<std::path::PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("no-human-acknowledged"))
+    crate::home_dir().map(|h| h.join(".aida").join("no-human-acknowledged"))
 }
 
 /// TASK-394: project-scoped marker (`.aida/no-human-acknowledged`) — fresh per

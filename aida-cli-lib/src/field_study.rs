@@ -88,7 +88,7 @@ const CODE_EXTS: &[&str] = &[
 
 /// Resolve `~/.aida/field-study.jsonl`. `None` when the home dir is unknown.
 pub fn log_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("field-study.jsonl"))
+    crate::home_dir().map(|h| h.join(".aida").join("field-study.jsonl"))
 }
 
 /// Whether the field study is active. Resolution:
@@ -612,7 +612,7 @@ pub fn summarize(obs: &[RuleObservation]) -> Vec<RuleSummary> {
 /// Resolve `~/.aida/auto-complete.jsonl` — the autonomous-drain run log the
 /// drain-vs-interactive join reads. `None` when the home dir is unknown.
 pub fn auto_complete_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("auto-complete.jsonl"))
+    crate::home_dir().map(|h| h.join(".aida").join("auto-complete.jsonl"))
 }
 
 /// The set of SPEC-IDs that appear as a drained spec in `auto-complete.jsonl`

@@ -100,7 +100,7 @@ impl AutoCompleteEvent {
 /// Resolve `~/.aida/auto-complete.jsonl`. Returns `None` when the home dir
 /// can't be located (treat as "telemetry off" — never error out).
 pub fn log_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("auto-complete.jsonl"))
+    crate::home_dir().map(|h| h.join(".aida").join("auto-complete.jsonl"))
 }
 
 /// Append a single event as JSONL. Errors are intentionally swallowed —

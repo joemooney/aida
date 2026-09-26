@@ -1010,7 +1010,7 @@ fn memory_dir_for(project_root: &Path) -> Option<PathBuf> {
     let slug = global_queue::project_name_for(project_root);
     // Claude Code mirrors the project root: `-home-joe-ai-aida` style. We try
     // both the slug-from-path mirror and the basename — whichever exists.
-    let home = dirs::home_dir()?;
+    let home = crate::home_dir()?;
     let base = home.join(".claude").join("projects");
     let mirror = project_root
         .to_string_lossy()

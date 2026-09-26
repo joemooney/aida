@@ -767,7 +767,7 @@ fn default_antigravity_settings_path() -> Result<std::path::PathBuf> {
             return Ok(std::path::PathBuf::from(trimmed));
         }
     }
-    let home = dirs::home_dir()
+    let home = crate::home_dir()
         .context("HOME not set; cannot locate ~/.gemini/antigravity-cli/settings.json")?;
     Ok(home
         .join(".gemini")

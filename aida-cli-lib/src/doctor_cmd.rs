@@ -857,7 +857,7 @@ fn scan_scaffold_drift(
     }
 
     // (2) Machine-global ~/.codex/prompts — the TASK-1123 incident case.
-    if let Some(dir) = dirs::home_dir().map(|h| h.join(".codex").join("prompts")) {
+    if let Some(dir) = crate::home_dir().map(|h| h.join(".codex").join("prompts")) {
         // BUG-1095: Codex CLI 0.142 does not discover this generated directory
         // as an interactive custom slash-command surface. Flag the overclaimed
         // installation state separately from stale-content drift.

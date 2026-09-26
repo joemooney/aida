@@ -562,10 +562,14 @@ fn merge_registries(
 pub(crate) fn global_home() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("AIDA_HOME") {
         if !p.is_empty() {
-            return Some(PathBuf::from(p));
+            let p = PathBuf::from(p);
+            // trace:BUG-1642 | ai:claude
+            #[cfg(test)]
+            crate::test_home::assert_hermetic(&p);
+            return Some(p);
         }
     }
-    dirs::home_dir()
+    crate::home_dir()
 }
 
 /// Cap on `~/.aida/schedule-tick.log`, the machine-global log the installed

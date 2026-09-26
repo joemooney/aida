@@ -2095,7 +2095,7 @@ pub(crate) fn resolve_wave_vendor(project_root: &Path) -> (String, Option<String
 }
 
 fn no_human_ack_source(project_root: &Path) -> Option<String> {
-    if dirs::home_dir()
+    if crate::home_dir()
         .map(|h| h.join(".aida").join("no-human-acknowledged").exists())
         .unwrap_or(false)
     {

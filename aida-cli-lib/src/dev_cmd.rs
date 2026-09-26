@@ -75,7 +75,7 @@ fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
         // shell that hasn't picked up the AIDA_DEV_REPO export yet (the
         // `aida dev shell-init --install` flow writes it to .bashrc but
         // doesn't reload the current shell). Surface that fix prominently.
-        let in_bashrc = dirs::home_dir()
+        let in_bashrc = crate::home_dir()
             .map(|h| h.join(".bashrc"))
             .filter(|p| p.exists())
             .and_then(|p| std::fs::read_to_string(&p).ok())
@@ -1260,7 +1260,7 @@ fn installed_helpers_are_current(path: &std::path::Path) -> bool {
 // trace:TASK-1171 | ai:claude
 fn print_shell_wrapper_status() {
     let state = classify_wrapper(std::env::var("AIDA_SHELL_WRAPPER").ok().as_deref());
-    let helpers_current = dirs::home_dir()
+    let helpers_current = crate::home_dir()
         .map(|h| h.join(".aida").join("shell-init.sh"))
         .map(|p| installed_helpers_are_current(&p))
         .unwrap_or(false);
@@ -1837,7 +1837,7 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
     }
 
     let shell = std::env::var("SHELL").unwrap_or_default();
-    let home = dirs::home_dir().context("Cannot determine home directory")?;
+    let home = crate::home_dir().context("Cannot determine home directory")?;
     let rc_path = if shell.ends_with("/zsh") || shell.ends_with("zsh") {
         home.join(".zshrc")
     } else {

@@ -127,7 +127,7 @@ pub fn attach_fallback_hint(host: &str, repo_name: &str) -> String {
 /// Path to the machine-global remote-hosts memory file (`~/.aida/remotes.toml`).
 /// Returns None when the home dir can't be resolved.
 pub fn known_hosts_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("remotes.toml"))
+    crate::home_dir().map(|h| h.join(".aida").join("remotes.toml"))
 }
 
 /// Parse the `[[gitlab_host]]` array-of-tables from a `remotes.toml` body.
