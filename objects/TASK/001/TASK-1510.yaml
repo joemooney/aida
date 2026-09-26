@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:49:03.555549390Z
-modified_at: 2026-09-26T17:02:11.249729376Z
+modified_at: 2026-09-26T17:13:54.292466290Z
 req_type: Task
 tags:
 - batch:groom-2026-09-25
@@ -164,6 +164,19 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): ADVISOR SIGNOFF APPROVED with amendments A1-A9; implement AS AMENDED (the advisor''s text wins). Split-outs: TASK-1517 (limits, needs a sketch), TASK-1518 (SIGTERM handler). Strict review required. The PR is left open for Joe (it touches the unattended-launch path).'
   created_at: 2026-09-26T15:58:19.584007404Z
   modified_at: 2026-09-26T15:58:19.584007404Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0deb5-8974-7672-9d1d-8418564156c6
+  author: joe
+  content: |-
+    Review (fresh strict Opus reviewer): REQUEST_CHANGES on 3f5b5ebcf6. One blocker, the rest are nits.
+
+    BLOCKER 1 (A5, double launch). In launch_wave_isolated, any Ambiguous failure, TimedOut included, followed by a show probe that says NotFound goes to go_detached. I confirmed this with a scratch test: host.run=TimedOut plus show=not-found gives Ok(Detached{reason:'systemd-run did not finish within 20s; systemd does not know <unit>, so nothing started'}). A5 says a timeout is never 'nothing started', and NotFound does not prove it either. (a) After a timeout, the StartTransientUnit call may still be queued in the manager when the probe, sent on a separate bus connection, answers not-found. The unit can then start alongside the detached wave: two concurrent waves. (b) With --collect, a unit that started and then failed or exited within seconds is also NotFound, so the batch runs a second time. In both cases the WaveRecord counts once, so the first attempt is not counted toward the A8(d) daily cap. Fix: after Ambiguous, never fall back. On NotFound, Inactive or Unknown, return Ok(WaveSpawn{pid:None, unit:Some(name), isolation:Unit{note:'ambiguous: <why>'}}). launched() then counts it toward the cap, it is never re-launched as an intent, and it settles next tick. The alternative is today's Err/pending path, but recording the unit is the stricter choice. Only SpawnFailed and the no-bus stderr class may fall back. Add a test: timeout_then_not_found_never_falls_back.
+
+    Nits: 2. The invoker is read from the env var directly instead of through the usage.rs resolver. The meaning is the same (trimmed 'systemd'), and A4's cgroup gate is the load-bearing check, so this is acceptable. 3. The 20s+10s budget meets A5 (<=30s, inside 120s). 4. ShiftLaunch.pid=0 is only displayed, never signalled; nothing calls kill with it. render_report still prints 'pid 0', and it should print 'pid unknown' when unit is set. 5. A7 explicitly allows the max-runtime guard refusing on the cron path too. It is stricter than before, so it fails closed. 6. The fixture updates in story_1218 and bug_1621 are mechanical (WaveSpawn plus unit:None) and weaken nothing. 7. The source-grep test (wave_unit_helper_has_single_call_site) does pin a single caller, a single .systemd_run_user call and a single Command::new("systemd-run"). Its scan of other files is non-recursive (top-level src/*.rs only). A repo-wide grep found no other systemd-run users. 8. A started unit whose probe comes back Unknown is recorded pid-less and settles next tick while the wave may still be running. The lock-free guard prevents a concurrent launch, and a spurious zero-progress settle only trips the breaker in the safe direction. Optionally, adopt_launched_intent could also adopt the drain-lock holder pid for a unit-without-pid record.
+
+    Checked OK: A1 (UnsetEnvironment is derived from the same SCRUBBED_ENV const that wave_command env_removes, plus TMUX and AIDA_PANES; GIT_TERMINAL_PROMPT=0 is set); A2 (waves_in_day, last_launched, settle rposition and pending_intent all use launched(); last_wave_is_alive treats no pid as not alive); A3; A4 (cgroup gate via /proc/self/cgroup, env alone is not enough); A6; A7 (exact properties, RuntimeMaxSec=max_runtime+30m, OOMPolicy=stop); A8 cut; A9 docs; B-a/B-b/B-e (the argv allowlist has no timer flags or Restart, and the path only runs show); cfg(test) refusal; the non-Linux, no-bus and cron paths are unchanged from main (the gate goes detached with no attempt). Tests: task_1510 33/33, shift 98, schedule_driver 51, story_1218 56, bug_1621 14, task_1491 51 all pass. Three mutations were all caught and reverted: dropping one SCRUBBED key from the unset list (2 failures), making launched() pid-only (2 failures), removing the cgroup gate (1 failure). The scratch worktree was removed.
+  created_at: 2026-09-26T17:13:54.292466290Z
+  modified_at: 2026-09-26T17:13:54.292466290Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de96-9d83-7a70-864d-bd2651b0e2a0
