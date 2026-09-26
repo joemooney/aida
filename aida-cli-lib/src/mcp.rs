@@ -7371,7 +7371,7 @@ pub fn tool_descriptors() -> Value {
                 "properties": {
                     "spec_id": {
                         "type": "string",
-                        "description": "Optional SPEC-ID filter for a single requirement's event history (mirrors `aida history --id`). Accepts the raw UUID `show_requirement` returns; it is resolved to the canonical SPEC-ID before filtering.",
+                        "description": "Optional SPEC-ID filter for a single requirement's event history (mirrors `aida history events --id`, i.e. `aida history <SPEC-ID> --full`: the full event trail, not the status-progression view). Accepts the raw UUID `show_requirement` returns; it is resolved to the canonical SPEC-ID before filtering.",
                         "example": "TASK-538"
                     },
                     "events": {

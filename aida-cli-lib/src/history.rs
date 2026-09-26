@@ -320,6 +320,35 @@ pub(crate) fn resolve_events_mode(
     explicit_events || shipped || (!single_spec && (status_changes || comments || oneline || json))
 }
 
+/// The default `--max-commits` window when the caller did not pin one.
+/// A bare `--full`/`events` feed, or a bare multi-spec `--json`, walks
+/// 5x `--limit` (at least 50): it decodes every commit, so it scans
+/// shallow. Everything else walks 250: the digest touches each commit
+/// once, and a narrowing filter (`--shipped`, `--status-changes`,
+/// `--comments`, `--oneline`) or a single SPEC-ID needs depth to find
+/// anything. The window follows the mode, never the output format:
+/// adding `--json` to a filtered query does not change it.
+// trace:BUG-1635 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn default_max_commits(
+    limit: usize,
+    explicit_events: bool,
+    single_spec: bool,
+    json: bool,
+    shipped: bool,
+    status_changes: bool,
+    comments: bool,
+    oneline: bool,
+) -> usize {
+    let filtered = shipped || status_changes || comments || oneline;
+    let shallow = explicit_events || (json && !single_spec && !filtered);
+    if shallow {
+        (limit * 5).max(50)
+    } else {
+        250
+    }
+}
+
 /// How one `aida history` answer is rendered. Precedence: `--json`, then
 /// `--oneline`, then TOON for agent/piped callers, else the human view.
 // trace:BUG-1635 | ai:claude
@@ -574,9 +603,10 @@ pub(crate) fn render_events_feed(
     match output {
         HistoryOutput::Oneline => render_oneline(events),
         HistoryOutput::Toon => format!("{}\n", render_events_toon(events)),
-        HistoryOutput::Human | HistoryOutput::Json => {
-            render_events_human(events, opts.id_filter.is_none())
-        }
+        HistoryOutput::Human => render_events_human(events, opts.id_filter.is_none()),
+        // `run` prints JSON through `events_json` before it ever renders
+        // text, so this arm is never reached.
+        HistoryOutput::Json => unreachable!("render_events_feed: JSON is rendered by events_json"),
     }
 }
 

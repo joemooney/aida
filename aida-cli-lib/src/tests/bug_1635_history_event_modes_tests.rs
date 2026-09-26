@@ -10,9 +10,9 @@
 // trace:BUG-1635 | ai:claude
 
 use crate::history::{
-    collect_filtered_events_git, events_json, progression_json, render_events_feed,
-    render_progression_human, render_progression_toon, resolve_events_mode, Event, HistoryOpts,
-    HistoryOutput, HistorySource, Progression,
+    collect_filtered_events_git, default_max_commits, events_json, progression_json,
+    render_events_feed, render_progression_human, render_progression_toon, resolve_events_mode,
+    Event, HistoryOpts, HistoryOutput, HistorySource, Progression,
 };
 use crate::history_cache;
 use std::collections::HashSet;
@@ -400,4 +400,34 @@ fn index_serves_the_same_answer_as_the_git_walk_for_every_new_mode() {
             );
         }
     }
+}
+
+/// The default commit window follows the mode, not the output format:
+/// adding `--json` to a filtered query keeps the 250-commit walk.
+#[test]
+fn json_does_not_change_the_commit_window_of_a_filtered_query() {
+    let limit = 20;
+    // (explicit_events, single_spec, json, shipped, status, comments, oneline)
+    let w = |e, id, j, sh, sc, c, o| default_max_commits(limit, e, id, j, sh, sc, c, o);
+    // --status-changes and --status-changes --json: both 250.
+    assert_eq!(w(false, false, false, false, true, false, false), 250);
+    assert_eq!(w(false, false, true, false, true, false, false), 250);
+    // --shipped and --shipped --json: both 250.
+    assert_eq!(w(false, false, false, true, false, false, false), 250);
+    assert_eq!(w(false, false, true, true, false, false, false), 250);
+    // --comments --json and --oneline --json: 250.
+    assert_eq!(w(false, false, true, false, false, true, false), 250);
+    assert_eq!(w(false, false, true, false, false, false, true), 250);
+    // <SPEC-ID> --json: 250.
+    assert_eq!(w(false, true, true, false, false, false, false), 250);
+    // A bare --json and --full/events: 5x limit, at least 50.
+    assert_eq!(w(false, false, true, false, false, false, false), 100);
+    assert_eq!(w(true, false, false, false, false, false, false), 100);
+    assert_eq!(w(true, false, true, true, false, false, false), 100);
+    assert_eq!(
+        default_max_commits(2, true, false, false, false, false, false, false),
+        50
+    );
+    // The digest: 250.
+    assert_eq!(w(false, false, false, false, false, false, false), 250);
 }

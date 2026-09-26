@@ -12841,9 +12841,10 @@ pub enum Command {
         limit: usize,
 
         /// Walk at most N commits on the orphan branch. Default 5x --limit
-        /// (at least 50) for --full/events and a multi-spec --json; 250 for
-        /// the digest, a single SPEC-ID, and the per-event feed that
-        /// --shipped, --status-changes, --comments or --oneline switch on.
+        /// (at least 50) for --full/events and a bare --json with no
+        /// SPEC-ID; 250 for the digest, a single SPEC-ID, and any query with
+        /// --shipped, --status-changes, --comments or --oneline (adding
+        /// --json to those does not change it).
         // trace:BUG-1635 | ai:claude
         #[clap(long, global = true)]
         max_commits: Option<usize>,

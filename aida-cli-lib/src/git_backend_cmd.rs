@@ -7841,13 +7841,18 @@ pub(crate) fn handle_git_backend_command(
             // Default max_commits scales differently per mode: digest only
             // touches each commit once (cheap, scan deeper), events shells
             // to git per file per commit (expensive, scan shallow).
-            // BUG-1635: the modes a filter implies (`--shipped`,
-            // `--status-changes`, `--comments`, `--oneline`) keep the deeper
-            // 250-commit walk they had before, since a narrowing filter needs
-            // depth to find anything; the single-spec view does too.
-            // trace:BUG-1635 | ai:claude
-            let shallow = explicit_events || (json && requested_id.is_none());
-            let default_max = if shallow { (*limit * 5).max(50) } else { 250 };
+            // BUG-1635: chosen by mode, not output format; see
+            // `history::default_max_commits`. trace:BUG-1635 | ai:claude
+            let default_max = history::default_max_commits(
+                *limit,
+                explicit_events,
+                requested_id.is_some(),
+                json,
+                *shipped,
+                *status_changes,
+                *comments,
+                *oneline,
+            );
             // BUG-1617: did the caller pin the window themselves? Gates the
             // "window ran out" notice — an explicit --max-commits means they
             // already know it's narrow. trace:BUG-1617 | ai:claude
