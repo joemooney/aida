@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T13:02:58.706655428Z
-modified_at: 2026-09-26T13:58:04.495709203Z
+modified_at: 2026-09-26T14:04:09.261970197Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -18,6 +18,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved and queued; trivial.'
   created_at: 2026-09-26T13:03:23.491294769Z
   modified_at: 2026-09-26T13:03:23.491294769Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de07-d0ad-7760-8b04-be6d6fe495b0
+  author: joe
+  content: 'Review (orchestrator, independent of the author; proxy for Joe): APPROVE. 06678c4388 removes BUG-588 and BUG-1474 from the history --id help and uses the generic <ID>; the trace sits on a // line. cli tests are green. Queued for the next batch.'
+  created_at: 2026-09-26T14:04:09.261970197Z
+  modified_at: 2026-09-26T14:04:09.261970197Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: ff2975a5ce09ff33aeabb74e8bccdc451c1a17c0
