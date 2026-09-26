@@ -2317,6 +2317,197 @@ fn task_1507_failed_reset_deletes_an_inconsistent_index() {
     assert_parity(&fx, &opts(), "rebuilt");
 }
 
+// ---------------------------------------------------------------------------
+// BUG-1636: `--shipped` is every transition into Completed
+// ---------------------------------------------------------------------------
+
+/// Ships from several prior statuses, non-ships around them, and a reopen
+/// followed by a re-complete.
+// trace:BUG-1636 | ai:claude
+fn build_ships(fx: &mut Fixture) {
+    let mut merged = Spec::new("BUG-40", "Bug", "Merged straight from InProgress");
+    let mut legacy = Spec::new("FR-41", "Functional", "Shipped through Done");
+    let mut stalled = Spec::new("TASK-42", "Task", "Reaches Done, never ships");
+    let mut reopened = Spec::new("STORY-43", "Story", "Shipped, reopened, shipped again");
+    let mut direct = Spec::new("TASK-44", "Task", "Approved straight to Completed");
+    for s in [&merged, &legacy, &stalled, &reopened, &direct] {
+        fx.put(s);
+    }
+    fx.commit("add specs");
+
+    merged.status = "InProgress".into();
+    fx.put(&merged);
+    fx.commit("claim BUG-40");
+    merged.status = "Completed".into();
+    fx.put(&merged);
+    fx.commit("merge BUG-40");
+
+    legacy.status = "Done".into();
+    fx.put(&legacy);
+    fx.commit("FR-41 done");
+    legacy.status = "Completed".into();
+    fx.put(&legacy);
+    fx.commit("merge FR-41");
+
+    stalled.status = "InProgress".into();
+    fx.put(&stalled);
+    fx.commit("claim TASK-42");
+    stalled.status = "Done".into();
+    fx.put(&stalled);
+    fx.commit("TASK-42 done");
+
+    direct.status = "Approved".into();
+    fx.put(&direct);
+    fx.commit("approve TASK-44");
+    direct.status = "Completed".into();
+    fx.put(&direct);
+    fx.commit("merge TASK-44");
+
+    reopened.status = "InProgress".into();
+    fx.put(&reopened);
+    fx.commit("claim STORY-43");
+    reopened.status = "Completed".into();
+    fx.put(&reopened);
+    fx.commit("merge STORY-43");
+    // A Completed spec edited without a status change: no ship.
+    reopened.description = "follow-up note".into();
+    fx.put(&reopened);
+    fx.commit("edit STORY-43");
+    // The reopen itself leaves Completed: not a ship.
+    reopened.status = "InProgress".into();
+    fx.put(&reopened);
+    fx.commit("reopen STORY-43");
+    reopened.status = "Completed".into();
+    fx.put(&reopened);
+    fx.commit("merge STORY-43 again");
+}
+
+fn status_pairs(events: &[Event]) -> Vec<(String, String, String)> {
+    events
+        .iter()
+        .map(|e| match &e.kind {
+            EventKind::StatusChange { from, to } => (e.spec_id.clone(), from.clone(), to.clone()),
+            other => panic!("--shipped returned a non-status event: {other:?}"),
+        })
+        .collect()
+}
+
+#[test]
+fn bug_1636_shipped_matches_every_transition_into_completed() {
+    // trace:BUG-1636 | ai:claude
+    let mut fx = Fixture::new();
+    build_ships(&mut fx);
+    let mut o = opts();
+    o.shipped_only = true;
+    let (walk, _, _) = collect_filtered_events_git(&fx.store, &o).unwrap();
+    let pair = |id: &str, from: &str| (id.to_string(), from.to_string(), "Completed".to_string());
+    // Newest first.
+    assert_eq!(
+        status_pairs(&walk),
+        vec![
+            pair("STORY-43", "InProgress"),
+            pair("STORY-43", "InProgress"),
+            pair("TASK-44", "Approved"),
+            pair("FR-41", "Done"),
+            pair("BUG-40", "InProgress"),
+        ],
+        "every transition into Completed, and only those"
+    );
+
+    // Non-ships stay out: InProgress→Done, the reopen, and plain edits.
+    let (all, _, _) = collect_filtered_events_git(&fx.store, &opts()).unwrap();
+    let non_ships: Vec<&Event> = all
+        .iter()
+        .filter(|e| !walk.contains(e))
+        .filter(|e| matches!(&e.kind, EventKind::StatusChange { .. }))
+        .collect();
+    assert!(
+        non_ships.iter().any(|e| e.spec_id == "TASK-42"
+            && e.kind
+                == EventKind::StatusChange {
+                    from: "InProgress".into(),
+                    to: "Done".into()
+                }),
+        "InProgress → Done is not a ship"
+    );
+    assert!(
+        non_ships.iter().any(|e| e.spec_id == "STORY-43"
+            && e.kind
+                == EventKind::StatusChange {
+                    from: "Completed".into(),
+                    to: "InProgress".into()
+                }),
+        "a reopen away from Completed is not a ship"
+    );
+}
+
+#[test]
+fn bug_1636_is_ship_event_predicate() {
+    // trace:BUG-1636 | ai:claude
+    use crate::history::is_ship_event;
+    let sc = |from: &str, to: &str| EventKind::StatusChange {
+        from: from.into(),
+        to: to.into(),
+    };
+    for from in [
+        "InProgress",
+        "Done",
+        "Approved",
+        "Draft",
+        "done",
+        "Rejected",
+    ] {
+        assert!(is_ship_event(&sc(from, "Completed")), "{from} → Completed");
+    }
+    assert!(is_ship_event(&sc("in_progress", "completed")));
+    assert!(!is_ship_event(&sc("Completed", "Completed")), "no-op");
+    assert!(!is_ship_event(&sc("Completed", "InProgress")), "reopen");
+    assert!(!is_ship_event(&sc("InProgress", "Done")));
+    assert!(!is_ship_event(&sc("Done", "Released")));
+}
+
+#[test]
+fn bug_1636_shipped_index_matches_the_walk() {
+    // The index narrows `--shipped` in SQL on its stored `is_ship` column;
+    // every window of that answer must equal the walk's.
+    // trace:BUG-1636 | ai:claude
+    let mut fx = Fixture::new();
+    build_ships(&mut fx);
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    let total = commit_times(&fx).len();
+    let mut o = opts();
+    o.shipped_only = true;
+    assert_parity(&fx, &o, "--shipped");
+    let got = serve(&fx, &o).unwrap();
+    assert_eq!(got.events.len(), 5, "the index serves all five ships");
+    for limit in 0..=6 {
+        let mut o = opts();
+        o.shipped_only = true;
+        o.limit = limit;
+        assert_parity(&fx, &o, &format!("--shipped -n {limit}"));
+    }
+    for max_commits in 0..=total + 1 {
+        let mut o = opts();
+        o.shipped_only = true;
+        o.max_commits = max_commits;
+        o.max_commits_explicit = true;
+        assert_parity(&fx, &o, &format!("--shipped --max-commits {max_commits}"));
+    }
+    for id in ["BUG-40", "FR-41", "TASK-42", "STORY-43", "TASK-44"] {
+        let mut o = opts();
+        o.shipped_only = true;
+        o.id_filter = Some(id.into());
+        assert_parity(&fx, &o, &format!("--shipped --id {id}"));
+    }
+    // Caught up incrementally from a partial state, too.
+    fx.drop_index();
+    test_support::partial_build(&fx.store, &fx.db, 3, 2).unwrap();
+    let mut o = opts();
+    o.shipped_only = true;
+    o.since = Some(rfc3339(fx.commit_ts("HEAD~3")));
+    assert_query_only_parity(&fx, &o, "--shipped on a partial index");
+}
+
 mod sweep {
     //! Random DAGs (after the round-4 reviewer's probe), trimmed to a
     //! small fixed-seed set: every served answer must equal the walk.
@@ -2355,7 +2546,10 @@ mod sweep {
         ("TASK-4", "Task"),
         ("EPIC-5", "Epic"),
     ];
-    const STAT: [&str; 4] = ["Draft", "Approved", "Done", "Completed"];
+    // BUG-1636: InProgress too, so the sweep's `--shipped` probe sees
+    // `InProgress → Completed` ships, not only `Done → Completed`.
+    // trace:BUG-1636 | ai:claude
+    const STAT: [&str; 5] = ["Draft", "Approved", "InProgress", "Done", "Completed"];
 
     type State = BTreeMap<&'static str, Spec>;
 

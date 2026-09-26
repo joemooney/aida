@@ -36,9 +36,11 @@ pub struct HistoryOpts {
     pub since: Option<String>,
     pub until: Option<String>,
     pub status_changes_only: bool,
-    /// TASK-507: `--shipped` — only Done→Completed status transitions (the
-    /// "did my ship register?" view), vs `--all`'s recency-blind archive dump.
-    /// Implies events mode. trace:TASK-507 | ai:claude
+    /// TASK-507: `--shipped` — only transitions into Completed (merged to the
+    /// default branch), from any prior status: the "did my ship register?"
+    /// view, vs `--all`'s recency-blind archive dump. Implies events mode.
+    // trace:TASK-507 | ai:claude
+    // trace:BUG-1636 | ai:claude
     pub shipped_only: bool,
     pub comments_only: bool,
     pub oneline: bool,
@@ -76,13 +78,23 @@ pub(crate) struct CommitMeta {
     pub(crate) git_author: String,
 }
 
-/// TASK-507: is this event the Done→Completed ship transition (merge-to-default
-/// branch)? The `--shipped` view keeps only these. trace:TASK-507 | ai:claude
+/// TASK-507: is this event a ship — a status transition into Completed
+/// (merged to the default branch)? The `--shipped` view keeps only these.
+///
+/// BUG-1636: any prior status counts, not just Done. The merge path now
+/// writes `InProgress → Completed` directly, and older ships went through
+/// `Done → Completed`; both are ships. A `Completed → Completed` no-op and a
+/// reopen away from Completed are not. A reopen followed by a re-complete
+/// does count: the second completion is a separate merge of reworked
+/// content, so it is its own ship event. `--shipped` is therefore the same
+/// as `--to completed`.
+// trace:TASK-507 | ai:claude
+// trace:BUG-1636 | ai:claude
 pub(crate) fn is_ship_event(kind: &EventKind) -> bool {
     matches!(
         kind,
         EventKind::StatusChange { from, to }
-            if from.eq_ignore_ascii_case("Done") && to.eq_ignore_ascii_case("Completed")
+            if to.eq_ignore_ascii_case("Completed") && !from.eq_ignore_ascii_case("Completed")
     )
 }
 
@@ -464,13 +476,16 @@ pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
 
     if filtered.is_empty() {
         eprintln!("{}", "(no events match the filter)".dimmed());
+        // BUG-1636: `hidden_archived` counts every archived spec, not the
+        // events this filter hid, so a count here pointed at archiving as
+        // the likely cause of an empty result when it usually is not. Say
+        // neutrally that the view excludes archived specs.
+        // trace:BUG-1636 | ai:claude
         if hidden_archived > 0 {
             eprintln!(
                 "{}",
-                format!(
-                    "({hidden_archived} archived spec(s) hidden — pass --all to include archived events, or --archived for the archive only)"
-                )
-                .dimmed()
+                "(this view excludes archived specs; --all includes them, --archived shows only them)"
+                    .dimmed()
             );
         }
         print_window_exhausted_notice(opts, window_exhausted, filtered.len());
@@ -1149,8 +1164,9 @@ pub(crate) fn event_passes_filters(e: &Event, opts: &HistoryOpts) -> bool {
     if !event_kind_allowed(&e.kind, opts) {
         return false;
     }
-    // TASK-507: `--shipped` keeps only the Done→Completed transition — the
-    // merge-to-default ship event. trace:TASK-507 | ai:claude
+    // TASK-507: `--shipped` keeps only transitions into Completed — the
+    // merge-to-default ship event, whatever the prior status (BUG-1636).
+    // trace:TASK-507 | ai:claude
     if opts.shipped_only && !is_ship_event(&e.kind) {
         return false;
     }
@@ -3619,9 +3635,19 @@ mod tests {
         assert!(matches!(out[0].kind, EventKind::StatusChange { .. }));
     }
 
-    /// TASK-507: `--shipped` keeps only Done→Completed, not other status flips.
+    /// TASK-507: `--shipped` keeps only transitions into Completed, not other
+    /// status flips. BUG-1636: from any prior status, not only Done.
+    // trace:BUG-1636 | ai:claude
     #[test]
-    fn is_ship_event_only_done_to_completed() {
+    fn is_ship_event_only_transitions_into_completed() {
+        assert!(is_ship_event(&EventKind::StatusChange {
+            from: "InProgress".into(),
+            to: "Completed".into(),
+        }));
+        assert!(!is_ship_event(&EventKind::StatusChange {
+            from: "Completed".into(),
+            to: "Completed".into(),
+        }));
         let ship = EventKind::StatusChange {
             from: "Done".into(),
             to: "Completed".into(),
