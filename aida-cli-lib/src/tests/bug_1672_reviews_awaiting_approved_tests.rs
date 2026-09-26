@@ -2,8 +2,8 @@
 //! independent review had already approved them. The awaiting-review /
 //! awaiting-merge split read only the drain's `PR-<n>.json` verdict file; a
 //! keyboard `aida review` records under `<SPEC>.json`, and a fresh-reviewer
-//! subagent or the orchestrator's delta check posts only a comment on the
-//! spec. All three are now consulted through `spec_review_approved`.
+//! subagent posts only a comment on the spec. All three are now consulted
+//! through `spec_review_approved`, and the newest review wins.
 //!
 //! Fixtures: a temporary project root for the verdict files (never the live
 //! `.aida/`), and in-memory `Requirement` / `Comment` values for the comment
@@ -39,10 +39,21 @@ fn spec_with(owner: &str, comments: Vec<Comment>) -> Requirement {
     req
 }
 
-fn write_verdict(root: &std::path::Path, key: &str, body: &str) {
+fn write_verdict(root: &std::path::Path, key: &str, body: &str) -> std::path::PathBuf {
     let dir = root.join(".aida").join("review-verdicts");
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join(format!("{key}.json")), body).unwrap();
+    let path = dir.join(format!("{key}.json"));
+    std::fs::write(&path, body).unwrap();
+    path
+}
+
+/// Pin a verdict file's modification time `minutes_ago` minutes back, so the
+/// file-versus-comment ordering is explicit.
+fn age_file(path: &std::path::Path, minutes_ago: i64) {
+    let at = std::time::SystemTime::now()
+        - std::time::Duration::from_secs(u64::try_from(minutes_ago * 60).unwrap());
+    let f = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+    f.set_modified(at).unwrap();
 }
 
 // ---------------------------------------------------------------- comment parsing
@@ -61,6 +72,14 @@ fn review_comment_words_parse_to_the_canonical_verdicts() {
         Some(VerdictKind::Approved)
     );
     assert_eq!(
+        review_comment_verdict("Review round 4 (fresh strict Opus reviewer): APPROVE WITH NITS on origin/claude/task-1515 @ 3d56853e55."),
+        Some(VerdictKind::Approved)
+    );
+    assert_eq!(
+        review_comment_verdict("VERDICT: APPROVED\nsummary follows"),
+        Some(VerdictKind::Approved)
+    );
+    assert_eq!(
         review_comment_verdict("Review round 3 (fresh strict Opus reviewer): REQUEST_CHANGES on origin/claude/task-1515 @ 3fec216b73."),
         Some(VerdictKind::RequestChanges)
     );
@@ -70,13 +89,12 @@ fn review_comment_words_parse_to_the_canonical_verdicts() {
         "PARTIAL and a spaced REQUEST CHANGES both block"
     );
     assert_eq!(
-        review_comment_verdict("Review: REJECT — the change reverts BUG-1."),
+        review_comment_verdict("Review: REJECT — the change reverts it."),
         Some(VerdictKind::Rejected)
     );
     assert_eq!(
-        review_comment_verdict("Orchestrator delta check (proxy for Joe) of 440287d484..4e922d701c: APPROVED. doctor_cmd.rs only"),
-        Some(VerdictKind::Approved),
-        "the orchestrator's delta check is a review from a non-author seat"
+        review_comment_verdict("VERDICT: REQUEST_CHANGES"),
+        Some(VerdictKind::RequestChanges)
     );
 }
 
@@ -86,6 +104,16 @@ fn qualified_or_non_review_comments_never_approve() {
         review_comment_verdict("PROXY DECISION (orchestrator for Joe): review APPROVE WITH NITS accepted; joins batch 99."),
         None,
         "a proxy decision quoting the review is not itself a review"
+    );
+    assert_eq!(
+        review_comment_verdict("Orchestrator delta check (proxy for Joe) of 440287d484..4e922d701c: APPROVED. doctor_cmd.rs only"),
+        None,
+        "only comments that start as a review or a VERDICT line count"
+    );
+    assert_eq!(
+        review_comment_verdict("Reviewer notes: APPROVE looks likely once CI is green"),
+        None,
+        "a head merely starting with the letters of review is not a review"
     );
     assert_eq!(
         review_comment_verdict("REVIEW FINDINGS TO ADDRESS (round 2):\n- fix the thing"),
@@ -106,66 +134,59 @@ fn qualified_or_non_review_comments_never_approve() {
 }
 
 #[test]
-fn newest_review_comment_decides_and_owner_is_excluded() {
-    // Round 3 REQUEST_CHANGES then round 4 APPROVE → approved.
+fn newest_review_comment_decides() {
+    // Round 3 REQUEST_CHANGES then round 4 APPROVE, listed out of order.
     let trail = vec![
         comment(
-            "bob",
-            "Review round 3 (fresh strict reviewer): REQUEST_CHANGES on @ 3fec216b73.",
-            30,
-        ),
-        comment("joe", "PROXY DECISION: rework before merge.", 20),
-        comment(
-            "bob",
+            "joe",
             "Review round 4 (fresh strict reviewer): APPROVE WITH NITS on @ 3d56853e55.",
             10,
         ),
+        comment(
+            "joe",
+            "Review round 3 (fresh strict reviewer): REQUEST_CHANGES on @ 3fec216b73.",
+            30,
+        ),
+        comment("joe", "PROXY DECISION: rework before merge.", 5),
     ];
     assert_eq!(
-        latest_review_comment_verdict(&trail, None),
-        Some(VerdictKind::Approved)
+        latest_review_comment_verdict(&trail).map(|(k, _)| k),
+        Some(VerdictKind::Approved),
+        "the newest REVIEW comment decides; a later non-review comment does not"
     );
-    // The same trail in reverse time order: the approval came first, then a
-    // request-changes → still blocked.
+    // The approval came first, then a request-changes: still blocked.
     let trail = vec![
-        comment("bob", "Review: APPROVE on abc123.", 30),
-        comment("bob", "Review round 2: REQUEST_CHANGES on def456.", 10),
+        comment("joe", "Review: APPROVE on abc123.", 30),
+        comment("joe", "Review round 2: REQUEST_CHANGES on def456.", 10),
     ];
     assert_eq!(
-        latest_review_comment_verdict(&trail, None),
+        latest_review_comment_verdict(&trail).map(|(k, _)| k),
         Some(VerdictKind::RequestChanges)
     );
-    // The owner's own approval is not an independent review.
-    let trail = vec![comment("alice", "Review: APPROVE, ship it.", 5)];
-    assert_eq!(latest_review_comment_verdict(&trail, Some("alice")), None);
     assert_eq!(
-        latest_review_comment_verdict(&trail, Some("bob")),
-        Some(VerdictKind::Approved)
-    );
-    assert_eq!(
-        latest_review_comment_verdict(&trail, Some("  ")),
-        Some(VerdictKind::Approved),
-        "a blank owner excludes nobody"
+        latest_review_comment_verdict(&[comment("joe", "Implemented; ready.", 1)]),
+        None
     );
 }
 
 // ------------------------------------------------- the three acceptance cases
 
-/// Acceptance 1: latest review is APPROVE from a non-author reviewer, no
-/// verdict file at all → NOT reviews-awaiting (it is awaiting merge).
+/// Acceptance 1: the latest review is an APPROVE and there is no verdict file
+/// at all: NOT reviews-awaiting (it is awaiting merge). The author is the
+/// operator's name, as on the real trails, and still counts.
 #[test]
 fn approved_by_comment_is_not_reviews_awaiting() {
     let tmp = TempDir::new().unwrap();
     let req = spec_with(
-        "alice",
+        "",
         vec![
             comment(
-                "bob",
+                "joe",
                 "Review (fresh Opus reviewer): REQUEST_CHANGES on aaa.",
                 40,
             ),
             comment(
-                "bob",
+                "joe",
                 "Review: APPROVE (strict, independent; bbb). Verified.",
                 10,
             ),
@@ -173,7 +194,7 @@ fn approved_by_comment_is_not_reviews_awaiting() {
     );
     assert!(
         spec_review_approved(tmp.path(), &req, SPEC, PR),
-        "an independent APPROVE comment with no verdict file must read as reviewed"
+        "an APPROVE review comment with no verdict file must read as reviewed"
     );
 }
 
@@ -183,10 +204,10 @@ fn approved_by_comment_is_not_reviews_awaiting() {
 fn request_changes_or_no_review_stays_reviews_awaiting() {
     let tmp = TempDir::new().unwrap();
     let req = spec_with(
-        "alice",
+        "",
         vec![
-            comment("bob", "Review: APPROVE on aaa.", 40),
-            comment("bob", "Review round 2: REQUEST_CHANGES on bbb.", 10),
+            comment("joe", "Review: APPROVE on aaa.", 40),
+            comment("joe", "Review round 2: REQUEST_CHANGES on bbb.", 10),
         ],
     );
     assert!(
@@ -195,7 +216,7 @@ fn request_changes_or_no_review_stays_reviews_awaiting() {
     );
 
     let req = spec_with(
-        "alice",
+        "",
         vec![
             comment(
                 "joe",
@@ -203,7 +224,7 @@ fn request_changes_or_no_review_stays_reviews_awaiting() {
                 40,
             ),
             comment(
-                "alice",
+                "joe",
                 "Implemented on claude/bug-1 @ ccc; ready for review.",
                 10,
             ),
@@ -213,31 +234,22 @@ fn request_changes_or_no_review_stays_reviews_awaiting() {
         !spec_review_approved(tmp.path(), &req, SPEC, PR),
         "no review comment and no verdict file: still awaiting review"
     );
-
-    // The owner's own APPROVE comment is not an independent review either.
-    let req = spec_with(
-        "alice",
-        vec![comment("alice", "Review: APPROVE, ship it.", 5)],
-    );
-    assert!(!spec_review_approved(tmp.path(), &req, SPEC, PR));
 }
 
 /// Acceptance 1 via the verdict files: the spec-keyed record `aida review`
 /// writes, and (regression) the drain's PR-keyed record, both approve; a
 /// blocking or merge-closed spec-keyed record does not.
 #[test]
-fn verdict_files_under_either_key_decide_before_comments() {
+fn verdict_files_under_either_key_approve() {
     let tmp = TempDir::new().unwrap();
-    let req = spec_with("alice", Vec::new());
+    let req = spec_with("", Vec::new());
 
-    // Spec-keyed approval (the `aida review <SPEC>` path) → reviewed.
     write_verdict(tmp.path(), SPEC, r#"{"verdict":"Approved","summary":"ok"}"#);
     assert!(
         spec_review_approved(tmp.path(), &req, SPEC, PR),
         "the spec-keyed verdict file must count as an approval"
     );
 
-    // Spec-keyed request-changes, no other record → still awaiting review.
     write_verdict(
         tmp.path(),
         SPEC,
@@ -245,15 +257,16 @@ fn verdict_files_under_either_key_decide_before_comments() {
     );
     assert!(!spec_review_approved(tmp.path(), &req, SPEC, PR));
 
-    // A spec-keyed approval already closed out by a merge is not a fresh one.
     write_verdict(
         tmp.path(),
         SPEC,
         r#"{"verdict":"Approved","closed_by_merge":"deadbeef","closed_at":"2026-09-26T00:00:00Z"}"#,
     );
-    assert!(!spec_review_approved(tmp.path(), &req, SPEC, PR));
+    assert!(
+        !spec_review_approved(tmp.path(), &req, SPEC, PR),
+        "an approval a merge already closed out is not a fresh one"
+    );
 
-    // PR-keyed approval (the drain's record) still approves on its own.
     let tmp = TempDir::new().unwrap();
     write_verdict(
         tmp.path(),
@@ -264,12 +277,32 @@ fn verdict_files_under_either_key_decide_before_comments() {
         spec_review_approved(tmp.path(), &req, SPEC, PR),
         "the original PR-keyed signal must keep working"
     );
+}
 
-    // A file approval wins over a later request-changes comment: files are
-    // explicit records, prose is the fallback.
-    let req = spec_with(
-        "alice",
-        vec![comment("bob", "Review: REQUEST_CHANGES on zzz.", 1)],
+/// The newest review wins across files and comments: a request-changes
+/// comment posted after a file approval keeps the spec listed; a file
+/// approval written after an older request-changes comment clears it.
+#[test]
+fn newest_review_wins_between_files_and_comments() {
+    let blocking = spec_with(
+        "",
+        vec![comment("joe", "Review: REQUEST_CHANGES on zzz.", 10)],
     );
-    assert!(spec_review_approved(tmp.path(), &req, SPEC, PR));
+
+    for key in [SPEC.to_string(), format!("PR-{PR}")] {
+        let tmp = TempDir::new().unwrap();
+        let path = write_verdict(tmp.path(), &key, r#"{"verdict":"Approved"}"#);
+
+        age_file(&path, 30);
+        assert!(
+            !spec_review_approved(tmp.path(), &blocking, SPEC, PR),
+            "{key}: a request-changes comment newer than the approving file keeps it listed"
+        );
+
+        age_file(&path, 1);
+        assert!(
+            spec_review_approved(tmp.path(), &blocking, SPEC, PR),
+            "{key}: an approving file newer than the request-changes comment clears it"
+        );
+    }
 }
