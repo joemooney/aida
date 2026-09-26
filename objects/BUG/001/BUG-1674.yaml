@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:20:32.787349526Z
-modified_at: 2026-09-26T20:20:53.858360504Z
+modified_at: 2026-09-26T21:32:59.074992092Z
 req_type: Bug
 tags:
 - performance
@@ -48,6 +48,41 @@ relationships:
   target_id: 01a0c626-bb17-7c21-ad8d-a6fd894af766
   created_at: 2026-09-26T20:20:53.858353025Z
   created_by: joe
+comments:
+- id: 01a0dfa2-bb43-7e81-a51e-02244563020d
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; claude/integrate-101 noted): the spec's premise needs one correction, then a narrow fix that lands BEFORE TASK-1526 (slice B) and is absorbed by it.
+
+    PREMISE CHECK (verified on main and integrate-101). `aida show` is NOT strict on either. Its cache touches: the constructor CachedGitBackend::with_inner (git_backend_cmd.rs :1026 -> cached_git_backend.rs :40-51 -> ensure_cache_fresh_for_read :391-409), id resolution get_requirement_unambiguous :168-227 via id_candidates :149-155 (integrate-101 switches show to get_requirement_unambiguous_for_read, same tolerant freshness), degrees :658-663, show_cached_context :210-257 (list_summaries), the upstream notice report_cmd.rs ~:515 (list_summaries), and the JSON relationship/blocker titles via get_requirement -> get_requirement_targeted :257-268 (no freshness check; a cache miss falls to the O(n) find_by_uuid). The unbounded wait is the CONSTRUCTOR: cache stale and the BUG-664 sidecar shortcut (:403-407, foreign_writer_holds_lock_at cache_lock.rs :465-474) does not fire, so ensure_cache_fresh runs the incremental under with_cache_write (cache.rs :697-708) and its ladder DEFAULT_CACHE_RETRY_DELAYS_MS :547 = 100..12800 ms, sum 25.5 s; the first seven steps sum 12.7 s. The telemetry matches exactly: the 13,094 / 13,072 ms shows are seven ladder sleeps; 24,484 ms is the full ladder. On exhaustion the Err branch at :354-360 escalates to a full rebuild (load + a second 25.5 s ladder). Why the shortcut misses: write_lock_info_at :487-521 is first-writer-wins (create_new), so a ladder WAITER can own the sidecar while a different process holds SQLite, and remove_lock_info_at :527-537 deletes it when that waiter exits, leaving the real holder unrecorded. That is a real bug on main (the sidecar is unreliable as a stale-serve trigger) and exactly why STORY-1484 A2 makes lock-info diagnostic-only.
+
+    FILES/SYMBOLS
+    - aida-core/src/db/cached_git_backend.rs: ensure_cache_fresh_for_read :391-409 (add the bounded-mode branch); new pub fn take_stale_serve() -> Option<StaleServe> backed by a thread-local collector (A9: per-invocation collector, not per backend instance); new pub fn set_bounded_read_mode(on) -> bool thread-local beside cache.rs set_fast_fail_cache :574.
+    - aida-core/src/db/cache.rs: reuse set_fast_fail_cache / FAST_FAIL_CACHE_RETRY_DELAYS_MS :557 (150 ms) and is_cache_lock_error :826 (drop its dead_code allow; the STORY-1484 sketch already asks for that).
+    - aida-cli-lib/src/git_backend_cmd.rs: arm the mode for Command::Show next to the notice arming :1014-1017 (do NOT use with_inner_cache_snapshot; show must still refresh when it can); show arm :4104-4160: after printing, drain take_stale_serve() -> human: one stderr line; --json (Show has `json`, cli.rs :3673): always-present top-level cache: {stale, cache_head, store_head, built_at} (A9 shape; `refreshing` is added by B). Wording, no SPEC IDs: "note: graph fields (degrees, epic rollup, batch verdict) come from a cache snapshot built <local time>; the store has moved on. Re-run shortly for current data."
+
+    APPROACH
+    In bounded mode ensure_cache_fresh_for_read becomes: fresh -> Ok; migration_pending -> strict as today (Q2 belongs to B); else arm fast-fail for the duration and run ONE incremental attempt: Ok(true) -> Ok (uncontended shows still heal the cache); lock error (is_cache_lock_error) -> record StaleServe {cache_head, store_head, built_at} and return Ok, no full rebuild, no ladder; incremental declined because a full rebuild is needed (no recorded head, non-ancestor, >500 files) -> record StaleServe and return Ok with no inline inner.load() (a deliberate, show-only, pre-B deviation from Q1: a 13 s inline load under a concurrent refresher would breach the ceiling; B's flock restores Q1 semantics with the loser bounded at 1.5 s); any other Err -> propagate as today. Unarmed callers are byte-for-byte unchanged (existing task_1515_read_path_lock_error_falls_back_to_full_rebuild_then_fails :2797 stays green). Correctness bullet: show's own fields already come from the YAML (get_requirement_by_spec_id); only degrees, epic rollup, batch verdict and the notice read the snapshot, and those are what the label names.
+
+    EDGE CASES / FAIL-SAFE
+    - The stale-snapshot ambiguity check can miss a collision committed after the snapshot; advisor A1 accepted this for show (state it in the code comment).
+    - get_requirement_targeted miss under a stale snapshot (relationship target added after it) falls to find_by_uuid O(n) parses: measure in the fixture; if it breaches, cap it in bounded mode by rendering the target as its uuid rather than scanning.
+    - Cache missing/corrupt keeps the BUG-683/BUG-1097 strict paths. The lock-info sidecar is not consulted for the decision (A2).
+
+    TESTS (new aida-cli-lib/src/tests/bug_1674_show_bounded_tests.rs; copy the Fixture from integrate-101's bug_1670_stale_cache_callers_tests.rs; lib tests already run under test_home.rs's fake HOME; drive the real dispatcher git_backend_cmd::handle_git_backend_command(store_path, &Command::Show{..}) as bug_1602_rel_remove_handler_tests.rs:84 does)
+    - show_returns_under_5s_while_foreign_writer_holds_cache_lock_20s: stale cache via external_edit; a thread opens rusqlite::Connection::open(cache_path) + BEGIN IMMEDIATE (pattern at cached_git_backend.rs :2804-2812) and holds it 20 s; NO sidecar (so the shortcut cannot mask the bug); assert wall-clock < 5 s (and, stricter, < 2 s); stderr note present; --json has cache.stale == true.
+    - show_status_matches_yaml_when_cache_row_disagrees: row says Completed, YAML says Approved, lock held -> printed/JSON status is Approved and the label is present.
+    - show_uncontended_stale_cache_refreshes_and_prints_no_label; show_full_rebuild_needed_under_contention_serves_snapshot_labelled (bogus source_head_sha).
+    - bounded_mode_never_enters_the_retry_ladder (elapsed with the holder present is below the first ladder delay sum).
+
+    OVERLAP / ORDERING (STORY-1484 fit)
+    - Lands after integrate-101 (rebase onto get_requirement_unambiguous_for_read at :4104) and BEFORE TASK-1526. TASK-1526 then (a) adds `show` to the stale-allowed list with a ReadBudget (record this on STORY-1484 per the acceptance; the bounded-strict exception is not needed), (b) folds the thread-local bounded mode into freshen_for_read(ReadBudget), (c) keeps the label wording and the JSON `cache` key shape, (d) restores Q1 for show once the flock exists. TASK-1527 is untouched. Nothing here adds a lock, a request file or a worker, so no conflict with B/C's surface.
+    - Closure: tag closure:pending, rebuild and install, then paste `aida doctor check performance` over a fresh 24 h window (BUG-1606 pattern).
+
+    VERDICT: READY on the recommended path (narrow pre-B fix). The alternative, folding into TASK-1526 by adding show to its list, is valid per the acceptance but leaves the ADR-53 guard tripping until a heft-34 slice lands; if the orchestrator prefers that, the test list above still applies to TASK-1526.
+  created_at: 2026-09-26T21:32:59.074992092Z
+  modified_at: 2026-09-26T21:32:59.074992092Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: b13b2c611e810a2ba044efb50b32070667d4b37a
   branch: main
