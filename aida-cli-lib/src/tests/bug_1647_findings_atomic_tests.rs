@@ -62,7 +62,7 @@ fn bug_1647_dismiss_keeps_an_edit_made_between_read_and_write() {
     let fired = arm_race(concurrently_comment_and_redescribe);
 
     let backend = open_backend(&store_root);
-    crate::findings_dismiss(
+    let outcome = crate::findings_dismiss(
         &backend,
         &store_root,
         SPEC,
@@ -71,6 +71,7 @@ fn bug_1647_dismiss_keeps_an_edit_made_between_read_and_write() {
     )
     .unwrap();
     assert!(fired.get(), "the race seam fired");
+    assert_eq!(outcome, crate::DismissOutcome::Dismissed);
 
     let after = on_disk(&store_root).unwrap();
     assert_eq!(after.status, RequirementStatus::Rejected);
@@ -101,6 +102,82 @@ fn bug_1647_dismiss_of_a_finding_deleted_between_read_and_write_fails_cleanly() 
     assert!(msg.contains("no longer exists"), "{msg}");
     assert!(msg.contains("nothing was changed"), "{msg}");
     assert!(on_disk(&store_root).is_none(), "nothing was recreated");
+}
+
+/// A finding dismissed by someone else between the read and the write is a
+/// no-op: no second audit comment or history entry.
+// trace:BUG-1647 | ai:claude
+#[test]
+fn bug_1647_dismiss_of_an_already_rejected_finding_changes_nothing() {
+    let (_dir, _root, store_root, _) = project_with(RequirementStatus::Draft);
+    let fired = arm_race(|s| concurrently_set(s, RequirementStatus::Rejected));
+    let backend = open_backend(&store_root);
+
+    let outcome = crate::findings_dismiss(
+        &backend,
+        &store_root,
+        SPEC,
+        Some("again"),
+        chrono::Utc::now(),
+    )
+    .unwrap();
+    assert!(fired.get(), "the race seam fired");
+    assert_eq!(outcome, crate::DismissOutcome::AlreadyDismissed);
+    let after = on_disk(&store_root).unwrap();
+    assert_eq!(after.status, RequirementStatus::Rejected);
+    assert!(
+        !comment_texts(&after)
+            .iter()
+            .any(|t| t.starts_with("Dismissed by")),
+        "no dismissal comment was added"
+    );
+    // Only the concurrent writer's transition is in the history.
+    assert_eq!(status_entries(&after), 1);
+    assert_eq!(last_status_author(&after), "joe");
+
+    // A second dismiss of the stored Rejected finding is also a no-op.
+    let before = on_disk(&store_root).unwrap();
+    assert_eq!(
+        crate::findings_dismiss(&backend, &store_root, SPEC, None, chrono::Utc::now()).unwrap(),
+        crate::DismissOutcome::AlreadyDismissed
+    );
+    let again = on_disk(&store_root).unwrap();
+    assert_eq!(again.comments.len(), before.comments.len());
+    assert_eq!(again.history.len(), before.history.len());
+    assert_eq!(again.modified_at, before.modified_at);
+}
+
+/// A finding that reached Completed or Superseded between the read and the
+/// write is refused, and nothing is written.
+// trace:BUG-1647 | ai:claude
+#[test]
+fn bug_1647_dismiss_refuses_a_completed_or_superseded_finding() {
+    for terminal in [RequirementStatus::Completed, RequirementStatus::Superseded] {
+        let (_dir, _root, store_root, _) = project_with(RequirementStatus::Draft);
+        let status = terminal.clone();
+        let fired = arm_race(move |s| concurrently_set(s, status));
+        let backend = open_backend(&store_root);
+
+        let err = crate::findings_dismiss(&backend, &store_root, SPEC, None, chrono::Utc::now())
+            .expect_err("a final status is refused");
+        assert!(fired.get(), "the race seam fired");
+        let msg = err.to_string();
+        assert!(
+            msg.contains(&format!(
+                "is now {terminal}, a final status, so it was not dismissed"
+            )),
+            "{msg}"
+        );
+        let after = on_disk(&store_root).unwrap();
+        assert_eq!(after.status, terminal);
+        assert!(
+            !comment_texts(&after)
+                .iter()
+                .any(|t| t.starts_with("Dismissed")),
+            "no dismissal comment was added"
+        );
+        assert_eq!(status_entries(&after), 1, "only the concurrent transition");
+    }
 }
 
 // ---------------------------------------------------------------------------

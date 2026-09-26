@@ -722,11 +722,26 @@ pub(crate) fn findings_promote_to_work(
     Ok(role)
 }
 
+/// BUG-1647: what `aida findings dismiss` did.
+// trace:BUG-1647 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DismissOutcome {
+    /// The finding moved to Rejected.
+    Dismissed,
+    /// It was already Rejected; nothing was changed.
+    AlreadyDismissed,
+}
+
 /// BUG-1647: `aida findings dismiss`: the dismissal audit comment and the
 /// caller-authored move to Rejected, applied to the copy re-read under the
 /// store lock and written as that one spec (like promote since BUG-1638), so
 /// an edit made after the finding was read is kept. Fails without writing
 /// when the finding was deleted meanwhile.
+///
+/// The copy read under the lock decides, mirroring the promote Approved
+/// write: already Rejected is a no-op ([`DismissOutcome::AlreadyDismissed`],
+/// no second comment or history entry); Completed or Superseded is refused
+/// ("is now X") and nothing is written.
 // trace:TASK-404 trace:BUG-1637 trace:BUG-1647 | ai:claude
 pub(crate) fn findings_dismiss(
     backend: &aida_core::CachedGitBackend,
@@ -734,7 +749,7 @@ pub(crate) fn findings_dismiss(
     id: &str,
     reason: Option<&str>,
     now: chrono::DateTime<chrono::Utc>,
-) -> Result<()> {
+) -> Result<DismissOutcome> {
     let req = backend
         .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
@@ -761,7 +776,12 @@ pub(crate) fn findings_dismiss(
     let comment = findings_audit_comment(content, now);
     // The race-test seam between the read and the write.
     status_write_race_seam(store_path);
+    let mut seen: Option<RequirementStatus> = None;
     let written = backend.update_spec_atomically(&req, |r| {
+        if aida_core::conflict::is_terminal_status(&r.status) {
+            seen = Some(r.status.clone());
+            return;
+        }
         r.comments.push(comment);
         // BUG-1637: caller-authored.
         let from = std::mem::replace(&mut r.status, RequirementStatus::Rejected);
@@ -773,7 +793,13 @@ pub(crate) fn findings_dismiss(
             "{id} no longer exists: it was deleted while dismissing, so nothing was changed."
         );
     }
-    Ok(())
+    match seen {
+        None => Ok(DismissOutcome::Dismissed),
+        Some(RequirementStatus::Rejected) => Ok(DismissOutcome::AlreadyDismissed),
+        Some(status) => anyhow::bail!(
+            "{id} is now {status}, a final status, so it was not dismissed; nothing was changed."
+        ),
+    }
 }
 
 /// BUG-1637: record a legacy `aida edit`'s field changes under `author`: the
@@ -6824,15 +6850,22 @@ fn handle_findings_command(
         }
 
         FindingsCommand::Dismiss { id, reason } => {
-            // BUG-1647: one per-spec atomic write. trace:BUG-1647 | ai:claude
-            findings_dismiss(
+            // BUG-1647: one per-spec atomic write; an already-Rejected
+            // finding is a reported no-op. trace:BUG-1647 | ai:claude
+            match findings_dismiss(
                 backend,
                 store_path,
                 id,
                 reason.as_deref(),
                 chrono::Utc::now(),
-            )?;
-            println!("Dismissed finding {id} — status → Rejected.");
+            )? {
+                DismissOutcome::Dismissed => {
+                    println!("Dismissed finding {id} — status → Rejected.")
+                }
+                DismissOutcome::AlreadyDismissed => {
+                    println!("Finding {id} is already dismissed (Rejected); nothing was changed.")
+                }
+            }
         }
 
         FindingsCommand::Promote {
