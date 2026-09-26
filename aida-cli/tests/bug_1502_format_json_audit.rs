@@ -535,3 +535,79 @@ fn bug_1631_history_json_stdout_is_pure_json_outside_agent_mode() {
         assert!(value["events"].is_array(), "{args:?}: {value}");
     }
 }
+
+// BUG-1635: the real binary renders the same history rows in human, TOON
+// and JSON for `--status-changes`, a single SPEC-ID, and `--comments`, and
+// neither the per-event flags nor a piped SPEC-ID fall back to the digest.
+// trace:BUG-1635 | ai:claude
+#[test]
+fn bug_1635_history_formats_agree_on_event_count() {
+    let (_tmp, repo, home, spec) = fixture();
+    let run_ok = |args: &[&str]| {
+        let out = aida(&repo, &home, args);
+        assert!(
+            out.status.success(),
+            "{args:?}: stdout={}\nstderr={}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+    run_ok(&["edit", &spec, "--status", "in-progress", "--force"]);
+    run_ok(&["comment", "add", &spec, "first note"]);
+
+    // Lines that start with two spaces: human event/progression lines and
+    // TOON table rows.
+    let rows = |text: &str| text.lines().filter(|l| l.starts_with("  ")).count();
+    let toon_count = |text: &str| -> usize {
+        text.lines()
+            .find_map(|l| l.strip_prefix("count: "))
+            .unwrap_or_else(|| panic!("no count line: {text}"))
+            .trim()
+            .parse()
+            .unwrap()
+    };
+
+    let cases: Vec<(&str, Vec<&str>)> = vec![
+        (
+            "--status-changes",
+            vec!["history", "--status-changes", "--all"],
+        ),
+        ("--comments", vec!["history", "--comments", "--all"]),
+        ("<SPEC-ID>", vec!["history", spec.as_str()]),
+        (
+            "<SPEC-ID> --comments",
+            vec!["history", spec.as_str(), "--comments"],
+        ),
+    ];
+    for (label, args) in cases {
+        let with = |fmt: &str| {
+            let mut a = args.clone();
+            a.extend(["--format", fmt]);
+            run_ok(&a)
+        };
+        let human = with("human");
+        let toon = with("toon");
+        let json: serde_json::Value =
+            serde_json::from_str(&with("json")).unwrap_or_else(|e| panic!("[{label}] JSON: {e}"));
+        let n = json["count"].as_u64().unwrap() as usize;
+        assert!(n >= 1, "[{label}] expected events: {json}");
+        assert_eq!(rows(&human), n, "[{label}] human:\n{human}");
+        assert_eq!(rows(&toon), n, "[{label}] toon:\n{toon}");
+        assert_eq!(toon_count(&toon), n, "[{label}] toon:\n{toon}");
+        assert!(
+            !toon.lines().any(|l| l == "view: history"),
+            "[{label}] fell back to the digest:\n{toon}"
+        );
+        for row in json["events"].as_array().unwrap() {
+            for key in ["id", "ts", "author", "kind", "from", "to", "summary"] {
+                assert!(row.get(key).is_some(), "[{label}] missing {key}: {row}");
+            }
+        }
+    }
+
+    // The single-spec progression names the transition in TOON too.
+    let toon = run_ok(&["history", &spec, "--format", "toon"]);
+    assert!(toon.starts_with("view: history-progression"), "{toon}");
+    assert!(toon.contains("status_change"), "{toon}");
+}

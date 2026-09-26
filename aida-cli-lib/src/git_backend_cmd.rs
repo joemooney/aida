@@ -7809,7 +7809,7 @@ pub(crate) fn handle_git_backend_command(
                     *limit,
                 );
             }
-            let events = match cmd {
+            let explicit_events = match cmd {
                 Some(HistoryCommand::Events) => true,
                 None => {
                     if *events {
@@ -7820,14 +7820,34 @@ pub(crate) fn handle_git_backend_command(
                     }
                     // trace:TASK-1480 | ai:claude — `--full` is the
                     // discoverable, non-hidden spelling of the same mode.
-                    *events || *full || json
+                    *events || *full
                 }
             };
+            // BUG-1635: per-event flags (`--status-changes`, `--comments`,
+            // `--oneline`, `--json`) switch a multi-spec query to the events
+            // feed instead of being silently ignored by the digest; with a
+            // SPEC-ID they shape the status-progression view instead.
+            // trace:BUG-1635 | ai:claude
+            let events = history::resolve_events_mode(
+                explicit_events,
+                requested_id.is_some(),
+                *shipped,
+                *status_changes,
+                *comments,
+                *oneline,
+                json,
+            );
             // trace:FR-1-037 | ai:claude
             // Default max_commits scales differently per mode: digest only
             // touches each commit once (cheap, scan deeper), events shells
             // to git per file per commit (expensive, scan shallow).
-            let default_max = if events { (*limit * 5).max(50) } else { 250 };
+            // BUG-1635: the modes a filter implies (`--shipped`,
+            // `--status-changes`, `--comments`, `--oneline`) keep the deeper
+            // 250-commit walk they had before, since a narrowing filter needs
+            // depth to find anything; the single-spec view does too.
+            // trace:BUG-1635 | ai:claude
+            let shallow = explicit_events || (json && requested_id.is_none());
+            let default_max = if shallow { (*limit * 5).max(50) } else { 250 };
             // BUG-1617: did the caller pin the window themselves? Gates the
             // "window ran out" notice — an explicit --max-commits means they
             // already know it's narrow. trace:BUG-1617 | ai:claude
@@ -7947,8 +7967,9 @@ pub(crate) fn handle_git_backend_command(
                 limit: *limit,
                 max_commits: max.max(*limit),
                 max_commits_explicit,
-                // TASK-507: --shipped is an events-mode filter; imply it.
-                events_mode: events || *shipped,
+                // TASK-507: --shipped is an events-mode filter; implied by
+                // `resolve_events_mode` above.
+                events_mode: events,
                 id_filter,
                 type_filter: r#type.clone(),
                 author_filter: author.clone(),

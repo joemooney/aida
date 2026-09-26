@@ -12816,9 +12816,13 @@ pub enum Command {
     /// a SPEC-ID (`aida history <SPEC-ID>`, short for `--id <SPEC-ID>`) to
     /// switch to that one spec's status-progression view instead — its
     /// status transitions in chronological order, each with a timestamp
-    /// and old→new status. Add `--full` (or the `events` subcommand) for
-    /// the complete edit/comment trail, not just status changes.
+    /// and old→new status, in human, TOON and JSON output alike. Add
+    /// `--full` (or the `events` subcommand) for the complete edit/comment
+    /// trail, not just status changes. Per-event flags (`--status-changes`,
+    /// `--comments`, `--oneline`, `--shipped`, `--json`) switch a
+    /// multi-spec query to the events feed.
     // trace:FR-1-037 | ai:claude
+    // trace:BUG-1635 | ai:claude
     // trace:TASK-1480 | ai:claude
     History {
         /// SPEC-ID to focus on — shorthand for `--id <SPEC-ID>`.
@@ -12836,8 +12840,11 @@ pub enum Command {
         #[clap(long, short = 'n', default_value = "20", global = true)]
         limit: usize,
 
-        /// Walk at most N commits on the orphan branch. Default 250 in
-        /// digest mode (cheap to scan) and 5x --limit in events mode.
+        /// Walk at most N commits on the orphan branch. Default 5x --limit
+        /// (at least 50) for --full/events and a multi-spec --json; 250 for
+        /// the digest, a single SPEC-ID, and the per-event feed that
+        /// --shipped, --status-changes, --comments or --oneline switch on.
+        // trace:BUG-1635 | ai:claude
         #[clap(long, global = true)]
         max_commits: Option<usize>,
 
@@ -12900,12 +12907,14 @@ pub enum Command {
         #[clap(long, global = true)]
         until: Option<String>,
 
-        /// Filter to status-transition events. For a single spec (`--id` /
+        /// Filter to status-transition events. Without a SPEC-ID this
+        /// implies events mode (one row per transition, not the per-spec
+        /// digest), as --shipped does. For a single spec (`--id` /
         /// positional SPEC-ID) without `--full`, status transitions are
-        /// already the default view, so this is mostly useful paired with
-        /// `--full`/`events` to narrow the complete trail down to just the
-        /// status changes.
+        /// already the default view; paired with `--full`/`events` it
+        /// narrows the complete trail down to just the status changes.
         // trace:TASK-1480 | ai:claude
+        // trace:BUG-1635 | ai:claude
         #[clap(long, global = true)]
         status_changes: bool,
 
@@ -12931,26 +12940,35 @@ pub enum Command {
         #[clap(long, global = true)]
         shipped: bool,
 
-        /// Filter to comment events. For a single spec (`--id` /
-        /// positional SPEC-ID) without `--full`, this switches the
-        /// status-progression view to a comment timeline instead; paired
-        /// with `--full`/`events` it narrows the complete trail to just
-        /// comments.
+        /// Filter to comment events. Without a SPEC-ID this implies events
+        /// mode, as --shipped does. For a single spec (`--id` / positional
+        /// SPEC-ID) without `--full`, this switches the status-progression
+        /// view to a comment timeline instead; paired with `--full`/`events`
+        /// it narrows the complete trail to just comments.
         // trace:TASK-1480 | ai:claude
+        // trace:BUG-1635 | ai:claude
         #[clap(long, global = true)]
         comments: bool,
 
         /// Terse one-line-per-event format. Applies to the events feed,
         /// the status-progression view, and the comment timeline alike.
+        /// Without a SPEC-ID it implies events mode: the per-spec digest
+        /// has no per-event lines, so the flag is never silently ignored.
         // trace:TASK-1480 | ai:claude
+        // trace:BUG-1635 | ai:claude
         #[clap(long, global = true)]
         oneline: bool,
 
-        /// Emit the event feed as JSON (same shape as the MCP history
-        /// tool): `count`, `events` (each with its `spec_id`),
-        /// `window_exhausted`, `source`, `index_tip`. Implies the full
-        /// event feed. `--format json` is the same.
+        /// Emit JSON (same shape as the MCP history tool): `count`,
+        /// `events`, `window_exhausted`, `source`, `index_tip`. Each event
+        /// row has `id`, `ts`, `author`, `kind`, `from`, `to`, `summary`
+        /// (plus `sha`, `spec_id`, `timestamp`, `req_type`, `detail`).
+        /// Without a SPEC-ID this implies the full event feed; with one
+        /// (and no `--full`) it is the status progression, oldest first,
+        /// adding `view`, `id`, `title`, `current_status`, `order`.
+        /// `--format json` is the same.
         // trace:BUG-1631 | ai:claude
+        // trace:BUG-1635 | ai:claude
         #[clap(long, global = true)]
         json: bool,
 

@@ -264,28 +264,85 @@ pub struct HistoryEventRecord {
     pub kind: String,
     pub summary: String,
     pub detail: JsonValue,
+    /// The spec ID again, under the short per-event row name (`id`) the
+    /// JSON projection documents; same value as `spec_id`.
+    // trace:BUG-1635 | ai:claude
+    pub id: String,
+    /// The event time again, under the short row name `ts`; same value as
+    /// `timestamp`.
+    // trace:BUG-1635 | ai:claude
+    pub ts: String,
+    /// Old value for a field transition (status, priority, title, owner,
+    /// feature, type); `null` for any other kind of event.
+    // trace:BUG-1635 | ai:claude
+    pub from: Option<String>,
+    /// New value for a field transition; `null` for any other kind.
+    // trace:BUG-1635 | ai:claude
+    pub to: Option<String>,
 }
 
-/// TASK-1480 review fix: whether a single-spec `aida history` call (`--id`
-/// or the positional SPEC-ID alias — both resolve into `opts.id_filter`
-/// identically before this point, via `resolve_history_id_filter`, so one
-/// check here covers both invocation forms) should render the new
-/// status-progression narrative rather than fall through to the
-/// pre-existing digest path.
+/// Whether a single-spec `aida history` call (`--id` or the positional
+/// SPEC-ID alias, both resolved into `opts.id_filter` before this point)
+/// renders the status-progression view rather than the full event trail.
+/// `--full`/`events` (an explicit request for the complete trail) and
+/// `--shipped` set `events_mode`, which wins.
 ///
-/// This is a HUMAN-only upgrade. `agent_mode` (the caller passes
-/// `crate::agent_output_mode()`, which is also true for any non-TTY
-/// stdout — scripts, `| cat`, CI, MCP-adjacent non-interactive use) must
-/// keep getting the EXACT pre-TASK-1480 output: `run_digest`'s single-row
-/// TOON table, since that is a documented, scripted machine-output shape.
-/// Silently swapping it for prose under a non-interactive caller is a
-/// breaking change, not a feature — the narrative view is additive for a
-/// human at a terminal only. `--full`/`events` (an explicit request for
-/// the complete trail) always wins regardless of agent/human, since that
-/// path was never digest-shaped to begin with.
+/// BUG-1635: this no longer depends on whether the caller is a human at a
+/// terminal. Agent/piped callers used to fall back to a one-row digest,
+/// so they never saw the transitions a human saw; now every output format
+/// renders the same progression (human prose, TOON rows, JSON rows).
 // trace:TASK-1480 | ai:claude
-fn single_spec_uses_progress_view(opts: &HistoryOpts, agent_mode: bool) -> bool {
-    opts.id_filter.is_some() && !opts.events_mode && !agent_mode
+// trace:BUG-1635 | ai:claude
+pub(crate) fn single_spec_uses_progress_view(opts: &HistoryOpts) -> bool {
+    opts.id_filter.is_some() && !opts.events_mode
+}
+
+/// Which flags switch `aida history` from the per-spec digest to the
+/// per-event feed. Returns the `events_mode` the CLI stores in
+/// [`HistoryOpts`].
+///
+/// `--full`/`events` and `--shipped` always do. Without a SPEC-ID, so do
+/// the flags that only mean something per event: `--status-changes`,
+/// `--comments`, `--oneline` and `--json` (the digest has one row per
+/// spec, so honoring them there is impossible and ignoring them silently
+/// answered a different question). With a SPEC-ID they narrow or restyle
+/// the status-progression view instead, so they leave `events_mode` off.
+// trace:BUG-1635 | ai:claude
+pub(crate) fn resolve_events_mode(
+    explicit_events: bool,
+    single_spec: bool,
+    shipped: bool,
+    status_changes: bool,
+    comments: bool,
+    oneline: bool,
+    json: bool,
+) -> bool {
+    explicit_events || shipped || (!single_spec && (status_changes || comments || oneline || json))
+}
+
+/// How one `aida history` answer is rendered. Precedence: `--json`, then
+/// `--oneline`, then TOON for agent/piped callers, else the human view.
+// trace:BUG-1635 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HistoryOutput {
+    Human,
+    Toon,
+    Json,
+    Oneline,
+}
+
+impl HistoryOutput {
+    pub(crate) fn select(json: bool, oneline: bool, agent_mode: bool) -> Self {
+        if json {
+            HistoryOutput::Json
+        } else if oneline {
+            HistoryOutput::Oneline
+        } else if agent_mode {
+            HistoryOutput::Toon
+        } else {
+            HistoryOutput::Human
+        }
+    }
 }
 
 // trace:TASK-1502 | ai:claude
@@ -451,12 +508,16 @@ pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
         }
     }
 
+    // BUG-1635: one output selection for every view, so the progression
+    // and the events feed render the same rows whether a human or a script
+    // is reading. trace:BUG-1635 | ai:claude
+    let output = HistoryOutput::select(json, opts.oneline, crate::agent_output_mode());
+
     // TASK-1480: a single spec (`--id` / the positional SPEC-ID alias)
-    // without `--full`/`events` gets the dedicated status-progression view
-    // for a HUMAN caller — see `single_spec_uses_progress_view` for why
-    // agent/piped callers are excluded. trace:TASK-1480 | ai:claude
-    if single_spec_uses_progress_view(opts, crate::agent_output_mode()) {
-        return run_single_spec_progress(store_path, opts);
+    // without `--full`/`events` gets the status-progression view, in
+    // every output format (BUG-1635). trace:TASK-1480 | ai:claude
+    if single_spec_uses_progress_view(opts) {
+        return run_single_spec_progress(store_path, opts, output);
     }
 
     if !opts.events_mode {
@@ -468,7 +529,7 @@ pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
 
     // BUG-1631: the JSON projection mirrors the MCP history tool's shape;
     // every record carries its `spec_id`.
-    if json {
+    if output == HistoryOutput::Json {
         let payload = events_json(&filtered, window_exhausted, &source);
         println!("{}", serde_json::to_string_pretty(&payload)?);
         return Ok(());
@@ -493,25 +554,39 @@ pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    if opts.oneline {
-        for e in &filtered {
-            println!("{}", format_oneline(e));
-        }
-    } else if crate::agent_output_mode() {
-        // BUG-1631: agents get a TOON table with an `id` column, not the
-        // human blocks. trace:BUG-1631 | ai:claude
-        println!("{}", render_events_toon(&filtered));
-    } else {
-        print!(
-            "{}",
-            render_events_human(&filtered, opts.id_filter.is_none())
-        );
-    }
+    print!("{}", render_events_feed(&filtered, opts, output));
 
     print_window_exhausted_notice(opts, window_exhausted, filtered.len());
     print_fallback_footer(&source);
 
     Ok(())
+}
+
+/// The events feed as text for every non-JSON output: one line per event
+/// for `--oneline`, a TOON table (BUG-1631) for agent callers, else the
+/// human blocks. Always newline-terminated.
+// trace:BUG-1635 | ai:claude
+pub(crate) fn render_events_feed(
+    events: &[Event],
+    opts: &HistoryOpts,
+    output: HistoryOutput,
+) -> String {
+    match output {
+        HistoryOutput::Oneline => render_oneline(events),
+        HistoryOutput::Toon => format!("{}\n", render_events_toon(events)),
+        HistoryOutput::Human | HistoryOutput::Json => {
+            render_events_human(events, opts.id_filter.is_none())
+        }
+    }
+}
+
+/// One `format_oneline` line per event.
+// trace:BUG-1635 | ai:claude
+fn render_oneline(events: &[Event]) -> String {
+    events
+        .iter()
+        .map(|e| format!("{}\n", format_oneline(e)))
+        .collect()
 }
 
 /// Whether `run` prints the human `Window: …` line on stdout: never for
@@ -646,85 +721,198 @@ fn window_exhausted_notice_text(
 /// so this view can never drift from it — it only narrows *which* event
 /// kinds show and reads oldest-first (a progression reads forward in
 /// time), the opposite of the full trail's git-log-style newest-first.
+///
+/// BUG-1635: every output format renders the same rows — the human view,
+/// a TOON table (one row per transition) and a JSON document.
 // trace:TASK-1480 | ai:claude
-fn run_single_spec_progress(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
+// trace:BUG-1635 | ai:claude
+fn run_single_spec_progress(
+    store_path: &Path,
+    opts: &HistoryOpts,
+    output: HistoryOutput,
+) -> Result<()> {
     let id = opts
         .id_filter
         .as_deref()
         .expect("run_single_spec_progress requires opts.id_filter");
 
-    let (mut filtered, _hidden_archived, _window_exhausted, source) =
+    let (mut filtered, _hidden_archived, window_exhausted, source) =
         collect_filtered_events_sourced(store_path, opts)?;
 
     if filtered.is_empty() {
-        let out = report_empty_single_spec(store_path, opts, id);
-        if out.is_ok() {
-            print_fallback_footer(&source);
-        }
-        return out;
+        // Errors when the id never had any recorded history at all.
+        ensure_spec_has_history(store_path, opts, id)?;
     }
 
     // Oldest-first: see the doc comment above.
     filtered.reverse();
 
-    if opts.oneline {
-        for e in &filtered {
-            println!("{}", format_oneline(e));
-        }
-        print_fallback_footer(&source);
-        return Ok(());
-    }
-
     let (current_status, title) = current_snapshot(store_path, id);
-    let header_title = if title.is_empty() {
+    let view = Progression {
+        id,
+        title,
+        current_status,
+        events: &filtered,
+    };
+    match output {
+        HistoryOutput::Json => {
+            let payload = progression_json(&view, opts, window_exhausted, &source);
+            println!("{}", serde_json::to_string_pretty(&payload)?);
+            return Ok(());
+        }
+        _ if filtered.is_empty() => {
+            if output == HistoryOutput::Toon {
+                print!("{}", render_progression_toon(&view, opts));
+            } else {
+                report_empty_single_spec(id);
+            }
+        }
+        HistoryOutput::Oneline => print!("{}", render_oneline(&filtered)),
+        HistoryOutput::Toon => print!("{}", render_progression_toon(&view, opts)),
+        HistoryOutput::Human => print!("{}", render_progression_human(&view, opts)),
+    }
+    print_fallback_footer(&source);
+    Ok(())
+}
+
+/// One spec's progression, oldest-first, with the header facts every
+/// rendering shows.
+// trace:BUG-1635 | ai:claude
+pub(crate) struct Progression<'a> {
+    pub(crate) id: &'a str,
+    /// Current title; empty when the spec is no longer in the store.
+    pub(crate) title: String,
+    /// Current status; `None` when the spec is no longer in the store.
+    pub(crate) current_status: Option<String>,
+    pub(crate) events: &'a [Event],
+}
+
+/// The progression's heading and its machine `view` name, by which event
+/// kinds the caller asked for.
+// trace:BUG-1635 | ai:claude
+fn progression_label(opts: &HistoryOpts) -> (&'static str, &'static str) {
+    match (opts.status_changes_only, opts.comments_only) {
+        (true, true) => (
+            "Status + comment timeline",
+            "history-status-comment-timeline",
+        ),
+        (_, true) => ("Comment timeline", "history-comment-timeline"),
+        _ => ("Status progression", "history-progression"),
+    }
+}
+
+/// The human progression view: header, one line per event, count footer.
+// trace:TASK-1480 | ai:claude
+// trace:BUG-1635 | ai:claude
+pub(crate) fn render_progression_human(view: &Progression<'_>, opts: &HistoryOpts) -> String {
+    let header_title = if view.title.is_empty() {
         String::new()
     } else {
-        format!(" — {}", title)
+        format!(" — {}", view.title)
     };
-    let header_status = match current_status {
+    let header_status = match &view.current_status {
         Some(s) => format!("  [current: {}]", s.green()),
         None => "  [not currently in the store]".dimmed().to_string(),
     };
-    println!("{}{}{}", id.bold(), header_title, header_status);
-
-    let label = match (opts.status_changes_only, opts.comments_only) {
-        (true, true) => "Status + comment timeline",
-        (_, true) => "Comment timeline",
-        _ => "Status progression",
-    };
-    println!("{} (oldest → newest):\n", label.dimmed());
-
-    for e in &filtered {
-        println!(
-            "  {}  {}  {}",
+    let mut out = format!("{}{}{}\n", view.id.bold(), header_title, header_status);
+    let (label, _) = progression_label(opts);
+    out.push_str(&format!("{} (oldest → newest):\n\n", label.dimmed()));
+    for e in view.events {
+        out.push_str(&format!(
+            "  {}  {}  {}\n",
             e.timestamp.dimmed(),
             format_event_body(e),
             format!("(by {})", e.author).dimmed()
-        );
+        ));
     }
-
-    println!(
-        "\n{} event(s) shown. Pass --full for the complete edit/comment trail{}.",
-        filtered.len(),
+    out.push_str(&format!(
+        "\n{} event(s) shown. Pass --full for the complete edit/comment trail{}.\n",
+        view.events.len(),
         if opts.comments_only {
             ""
         } else {
             ", or --comments for comment history"
         }
-    );
-    print_fallback_footer(&source);
-
-    Ok(())
+    ));
+    out
 }
 
-/// TASK-1480: the friendly "nothing here" half of `run_single_spec_progress`.
-/// Distinguishes a real spec that's simply quiet in THIS view (fine — a
-/// dimmed hint, not an error) from an id that never had any recorded
-/// history at all (an "invalid ID gets a clear error" case). The re-check
-/// lifts every kind/date narrowing but keeps the id's pathspec scope, so
-/// it's still a cheap, bounded git-log walk — not a full-store scan.
+/// The TOON progression view for agent/piped callers: the same header
+/// facts and one row per event as the human view.
+// trace:BUG-1635 | ai:claude
+pub(crate) fn render_progression_toon(view: &Progression<'_>, opts: &HistoryOpts) -> String {
+    let (_, view_name) = progression_label(opts);
+    let rows: Vec<Vec<String>> = view
+        .events
+        .iter()
+        .map(|e| {
+            let r = event_record(e);
+            vec![
+                r.sha.chars().take(8).collect(),
+                r.ts,
+                r.author,
+                r.id,
+                r.kind,
+                r.from.unwrap_or_default(),
+                r.to.unwrap_or_default(),
+                r.summary,
+            ]
+        })
+        .collect();
+    let mut out = format!(
+        "view: {view_name}\n{}\n{}\n{}\norder: oldest-first\ncount: {}\n",
+        crate::toon::scalar("id", view.id),
+        crate::toon::scalar("title", &view.title),
+        crate::toon::scalar("current", view.current_status.as_deref().unwrap_or("")),
+        rows.len()
+    );
+    out.push_str(&crate::toon::table_raw(
+        "events",
+        &[
+            "sha", "when", "author", "id", "kind", "from", "to", "summary",
+        ],
+        &rows,
+    ));
+    out.push('\n');
+    out
+}
+
+/// The JSON progression document: the events-feed shape (per-event rows
+/// with `id`, `ts`, `author`, `kind`, `from`, `to`, `summary`) plus the
+/// header facts and `order: "oldest-first"`.
+// trace:BUG-1635 | ai:claude
+pub(crate) fn progression_json(
+    view: &Progression<'_>,
+    opts: &HistoryOpts,
+    window_exhausted: bool,
+    source: &HistorySource,
+) -> JsonValue {
+    let (_, view_name) = progression_label(opts);
+    let mut doc = events_json(view.events, window_exhausted, source);
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("view".into(), json!(view_name));
+        obj.insert("id".into(), json!(view.id));
+        obj.insert(
+            "title".into(),
+            if view.title.is_empty() {
+                JsonValue::Null
+            } else {
+                json!(view.title)
+            },
+        );
+        obj.insert("current_status".into(), json!(view.current_status));
+        obj.insert("order".into(), json!("oldest-first"));
+    }
+    doc
+}
+
+/// TASK-1480: an id that never had any recorded history at all is an
+/// "invalid ID gets a clear error" case, not a quiet empty view. The
+/// re-check lifts every kind/date narrowing but keeps the id's pathspec
+/// scope, so it's still a cheap, bounded git-log walk — not a full-store
+/// scan.
 // trace:TASK-1480 | ai:claude
-fn report_empty_single_spec(store_path: &Path, opts: &HistoryOpts, id: &str) -> Result<()> {
+fn ensure_spec_has_history(store_path: &Path, opts: &HistoryOpts, id: &str) -> Result<()> {
     let mut probe = opts.clone();
     probe.status_changes_only = false;
     probe.comments_only = false;
@@ -735,7 +923,13 @@ fn report_empty_single_spec(store_path: &Path, opts: &HistoryOpts, id: &str) -> 
     if any.is_empty() {
         return Err(crate::not_found::requirement_not_found_in_loaded_store(id));
     }
+    Ok(())
+}
 
+/// TASK-1480: the human "nothing here" hint for a real spec that is simply
+/// quiet in this view.
+// trace:TASK-1480 | ai:claude
+fn report_empty_single_spec(id: &str) {
     eprintln!(
         "{}",
         format!("(no matching history for {id} in this view)").dimmed()
@@ -744,7 +938,6 @@ fn report_empty_single_spec(store_path: &Path, opts: &HistoryOpts, id: &str) -> 
         "{}",
         "(this spec has other recorded history — try --full for the complete trail)".dimmed()
     );
-    Ok(())
 }
 
 /// Best-effort "what does this spec look like right now" read for the
@@ -2181,6 +2374,7 @@ fn format_oneline(e: &Event) -> String {
 
 pub(crate) fn event_record(e: &Event) -> HistoryEventRecord {
     let (kind, summary, detail) = event_kind_record(&e.kind, &e.spec_id);
+    let (from, to) = kind_from_to(&e.kind);
     HistoryEventRecord {
         sha: e.sha.clone(),
         timestamp: e.timestamp.clone(),
@@ -2190,6 +2384,25 @@ pub(crate) fn event_record(e: &Event) -> HistoryEventRecord {
         kind,
         summary,
         detail,
+        id: e.spec_id.clone(),
+        ts: e.timestamp.clone(),
+        from,
+        to,
+    }
+}
+
+/// The old and new value of a field transition, for the per-event row's
+/// `from`/`to`; `(None, None)` for events that are not a transition.
+// trace:BUG-1635 | ai:claude
+fn kind_from_to(kind: &EventKind) -> (Option<String>, Option<String>) {
+    match kind {
+        EventKind::StatusChange { from, to }
+        | EventKind::PriorityChange { from, to }
+        | EventKind::TitleChange { from, to }
+        | EventKind::OwnerChange { from, to }
+        | EventKind::FeatureChange { from, to }
+        | EventKind::TypeChange { from, to } => (Some(from.clone()), Some(to.clone())),
+        _ => (None, None),
     }
 }
 
@@ -3804,53 +4017,35 @@ mod tests {
         assert!(!event_kind_allowed(&other, &both));
     }
 
-    /// Review fix (post-TASK-1480): a single spec (`--id` or the positional
-    /// SPEC-ID alias) must render the new status-progression narrative for
-    /// a HUMAN caller only. An agent/piped caller (`agent_output_mode()`
-    /// true — non-TTY stdout, scripts, CI, `| cat`) must keep getting the
-    /// exact pre-TASK-1480 output: `run_digest`'s single-row TOON table.
-    ///
-    /// `--id` and the positional alias both resolve into `opts.id_filter`
-    /// identically before this decision is made (proved by
-    /// `history_positional_spec_id_parses` in `cli.rs`, which asserts both
-    /// forms parse to the same underlying value, and by `git_backend_cmd`'s
-    /// `requested_id = id.as_ref().or(spec.as_ref())` merge) — so a single
-    /// `id_filter`-keyed check here covers both invocation forms; there is
-    /// no separate "positional" branch to diverge.
+    /// A single spec (`--id` or the positional SPEC-ID alias) renders the
+    /// status-progression view unless `--full`/`events` asked for the
+    /// complete trail. BUG-1635: the choice no longer depends on whether a
+    /// human or a script is reading; agent/piped callers used to get a
+    /// one-row digest instead of the transitions.
     // trace:TASK-1480 | ai:claude
+    // trace:BUG-1635 | ai:claude
     #[test]
-    fn single_spec_view_selection_is_human_only() {
+    fn single_spec_view_selection_ignores_the_reader() {
         let opts = HistoryOpts {
             id_filter: Some("TASK-1".to_string()),
             events_mode: false,
             ..base_opts()
         };
+        assert!(single_spec_uses_progress_view(&opts));
 
-        // Human (TTY / non-agent): the new progression narrative.
-        assert!(single_spec_uses_progress_view(&opts, false));
-        // Agent/piped: stays on the pre-existing digest TOON path. This is
-        // the review-blocker regression check — before the fix this was
-        // `true`, silently swapping a documented machine-output shape for
-        // prose under every non-interactive caller.
-        assert!(!single_spec_uses_progress_view(&opts, true));
-
-        // `--full` (or the `events` subcommand) always wins, human or
-        // agent — that path was never digest-shaped to begin with.
+        // `--full` (or the `events` subcommand) always wins.
         let full = HistoryOpts {
             events_mode: true,
             ..opts.clone()
         };
-        assert!(!single_spec_uses_progress_view(&full, false));
-        assert!(!single_spec_uses_progress_view(&full, true));
+        assert!(!single_spec_uses_progress_view(&full));
 
-        // No id at all (the general digest / events sweep) never takes the
-        // single-spec branch, regardless of agent/human.
+        // No id at all never takes the single-spec branch.
         let no_id = HistoryOpts {
             id_filter: None,
             ..opts
         };
-        assert!(!single_spec_uses_progress_view(&no_id, false));
-        assert!(!single_spec_uses_progress_view(&no_id, true));
+        assert!(!single_spec_uses_progress_view(&no_id));
     }
 
     /// TASK-1480: build a small history for one spec — several status
@@ -3970,13 +4165,9 @@ mod tests {
     /// TASK-1480: `aida history <SPEC-ID>` on a real spec that simply
     /// hasn't changed status yet must NOT error — it's a friendly empty
     /// view, not an invalid id. Calls `run_single_spec_progress` directly
-    /// (the HUMAN-only view function `run()` routes to — see
-    /// `single_spec_uses_progress_view`) rather than the public `run()`
-    /// dispatcher, since `run()`'s routing now also depends on the
-    /// ambient, impure `agent_output_mode()` (real TTY/env state), which a
-    /// deterministic unit test must not depend on. The routing decision
-    /// itself is covered separately by
-    /// `single_spec_view_selection_is_human_only`.
+    /// with an explicit output rather than the public `run()` dispatcher,
+    /// whose output choice depends on the ambient `agent_output_mode()`
+    /// (real TTY/env state).
     // trace:TASK-1480 | ai:claude
     #[test]
     fn run_single_spec_with_no_status_changes_yet_is_not_an_error() {
@@ -4007,7 +4198,7 @@ mod tests {
             ..base_opts()
         };
         assert!(
-            run_single_spec_progress(root, &opts).is_ok(),
+            run_single_spec_progress(root, &opts, HistoryOutput::Human).is_ok(),
             "a real, quiet spec must not error"
         );
     }
@@ -4047,7 +4238,7 @@ mod tests {
             events_mode: false,
             ..base_opts()
         };
-        let err = run_single_spec_progress(root, &opts).unwrap_err();
+        let err = run_single_spec_progress(root, &opts, HistoryOutput::Human).unwrap_err();
         assert!(
             format!("{err:#}").to_lowercase().contains("not found"),
             "expected a not-found error, got: {err:#}"
