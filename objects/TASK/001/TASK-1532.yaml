@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:29:13.952391653Z
-modified_at: 2026-09-26T21:33:05.849804613Z
+modified_at: 2026-09-26T21:34:26.474465792Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -48,6 +48,12 @@ comments:
     VERDICT: READY.
   created_at: 2026-09-26T21:33:05.849804613Z
   modified_at: 2026-09-26T21:33:05.849804613Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfa4-10aa-7953-a0b2-c593766eae9d
+  author: joe
+  content: 'Scope addition (planner): locking_gate.rs ~539-543 test sets/removes AIDA_AGENT_REGISTRY_TOKEN with a module-local guard and no shared env lock — convert it.'
+  created_at: 2026-09-26T21:34:26.474465792Z
+  modified_at: 2026-09-26T21:34:26.474465792Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: b13b2c611e810a2ba044efb50b32070667d4b37a
