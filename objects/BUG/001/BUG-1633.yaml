@@ -3,12 +3,12 @@ spec_id: BUG-1633
 agreed_id: BUG-1633
 title: 'Pull reconcile follow-ups after BUG-1625: persist scan start after a store failure, --code-only safety, followup false match'
 description: 'From BUG-1625''s strict review. (2) A retry after a store-pull failure falls back to scanning the last 50 commits (lib.rs ~71237), so it can miss bumps when more came in. Persist the scan start, or point the note at ''aida reconcile-status''. (3) Test the failed-add-counts-as-already-filed path through extract_plan_followups, and add an end-to-end pull test for remote-only followups. followup_filed_in_store (lib.rs ~43929) matches any same-titled spec with any followup tag; tighten it to this plan. (4) --code-only reconciles against a possibly stale store: warn, or skip followup extraction in that mode.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T23:05:05.919232561Z
-modified_at: 2026-09-26T04:57:55.957473625Z
+modified_at: 2026-09-26T05:49:41.048166399Z
 req_type: Bug
 comments:
 - id: 01a0dad1-6517-7663-abb8-8321e942bcc6
@@ -47,6 +47,20 @@ comments:
   created_at: 2026-09-26T04:57:55.957473625Z
   modified_at: 2026-09-26T04:57:55.957473625Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0dc43-1d2e-77e3-94c6-726403d86517
+  author: aida-auto-bump
+  timestamp: 2026-09-26T05:49:41.038744180Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0dc43-1d38-7ea1-8c66-d55336a43543
+  timestamp: 2026-09-26T05:49:41.048163743Z
+  agent: implementer
+  commit_sha: 222d885f3df1ced5f5fe2cbf4a1df16facc2486d
+  summary: Completed via merge 222d885f
 filed_at:
   code_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
   branch: main
@@ -55,3 +69,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T05:49:41.038722294Z
+  completion_sha: 222d885f3df1ced5f5fe2cbf4a1df16facc2486d
