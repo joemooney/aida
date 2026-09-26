@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:02:32.910302194Z
-modified_at: 2026-09-26T05:25:44.478296782Z
+modified_at: 2026-09-26T05:25:47.192136855Z
 req_type: Bug
 tags:
 - aida:history
@@ -37,6 +37,10 @@ relationships:
 - rel_type: References
   target_id: 01a0da65-5aa5-7b73-9c93-ea74fa9d41f3
   created_at: 2026-09-26T00:02:52.259517872Z
+  created_by: joe
+- rel_type: BlockedBy
+  target_id: 01a0db0c-7ad9-7180-9c50-2a05aab315ad
+  created_at: 2026-09-26T05:25:47.192126965Z
   created_by: joe
 execution_mode: drain
 filed_at:
