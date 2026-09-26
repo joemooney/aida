@@ -315,6 +315,17 @@ pub(crate) fn handle_scaffold_command(
                 }
             }
 
+            // trace:TASK-1503 | ai:claude
+            if !*dry_run {
+                for warning in aida_core::scaffolding::record_skill_deliveries(&root, &preview) {
+                    eprintln!(
+                        "{} {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        warning
+                    );
+                }
+            }
+
             println!();
             if *dry_run {
                 let total_changes = would_create + would_update;
@@ -759,6 +770,41 @@ mod bug1555_tests {
     }
 }
 
+#[cfg(test)]
+mod task1503_tests {
+    use super::run_scaffold_upgrade;
+    use aida_core::scaffolding::{ScaffoldConfig, Scaffolder};
+
+    fn preview(root: &std::path::Path) -> (Scaffolder, aida_core::ScaffoldPreview) {
+        let mut scaffolder = Scaffolder::new(root.to_path_buf(), ScaffoldConfig::default());
+        let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
+        (scaffolder, preview)
+    }
+
+    /// `aida scaffold upgrade` (even `--force`) never recreates a delivered
+    /// skill the user deleted, and records the deletion as an opt-out.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn scaffold_upgrade_respects_deleted_delivered_skill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (scaffolder, p) = preview(root);
+        scaffolder.apply(&p).unwrap();
+        let codex = root.join(".codex/skills");
+        std::fs::remove_dir_all(codex.join("aida-commit")).unwrap();
+
+        for force in [false, true] {
+            let (_, p) = preview(root);
+            run_scaffold_upgrade(root, &p, false, force, false).unwrap();
+            assert!(!codex.join("aida-commit").exists(), "force={force}");
+        }
+        let m = aida_core::scaffolding::refresh::read_skill_manifest(&codex)
+            .unwrap()
+            .unwrap();
+        assert!(m.opted_out.contains("aida-commit"));
+    }
+}
+
 /// Category-aware scaffold upgrade. For each artifact, decide what to do
 /// based on its `FileCategory` and current drift state, then either
 /// write or leave alone. Output is grouped by category with per-file
@@ -1020,6 +1066,17 @@ fn run_scaffold_upgrade(
             UpgradeAction::None => {
                 stats.unchanged += 1;
             }
+        }
+    }
+
+    // trace:TASK-1503 | ai:claude
+    if !dry_run {
+        for warning in aida_core::scaffolding::record_skill_deliveries(project_root, preview) {
+            eprintln!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                warning
+            );
         }
     }
 

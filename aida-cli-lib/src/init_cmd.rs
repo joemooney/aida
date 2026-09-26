@@ -1505,6 +1505,16 @@ fn complete_init_scaffolding(
         }
     }
 
+    // Record each skill pack's delivered skills so a later init, upgrade or
+    // refresh never resurrects one the user deletes. trace:TASK-1503 | ai:claude
+    for warning in aida_core::scaffolding::record_skill_deliveries(root, &preview) {
+        eprintln!(
+            "{} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            warning
+        );
+    }
+
     // Scaffold the discipline pack (.aida/discipline/) — generic
     // AIDA-using guidance, written for every init mode. trace:STORY-255 | STORY-443
     // trace:STORY-829 | ai:codex

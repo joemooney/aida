@@ -6505,6 +6505,46 @@ hostname = "localhost"
         );
     }
 
+    /// A delivered-then-deleted skill is an opt-out, not missing-skill drift:
+    /// doctor neither flags it nor recommends `aida scaffold upgrade`.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn scaffold_drift_ignores_deleted_delivered_skill() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = aida_core::RequirementsStore::new();
+        let mut scaffolder = aida_core::scaffolding::Scaffolder::new(
+            dir.path().to_path_buf(),
+            ScaffoldConfig::default(),
+        );
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).unwrap();
+        std::fs::remove_dir_all(dir.path().join(".codex/skills/aida-commit")).unwrap();
+        std::fs::remove_dir_all(dir.path().join(".claude/skills/aida-commit")).unwrap();
+
+        let findings = scan_scaffold_drift(dir.path(), &store);
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.id != "scaffold-drift/codex-skills-missing"),
+            "{:?}",
+            findings.iter().map(|f| &f.id).collect::<Vec<_>>()
+        );
+        let status = check_scaffold_status(
+            &store,
+            dir.path(),
+            &ScaffoldConfig::default(),
+            &dir.path().join(".aida/cache.db"),
+        );
+        assert!(
+            status
+                .missing
+                .iter()
+                .all(|p| !p.to_string_lossy().contains("aida-commit")),
+            "{:?}",
+            status.missing
+        );
+    }
+
     #[test]
     fn scaffold_drift_flags_missing_codex_skills_with_exact_fix() {
         let dir = tempfile::tempdir().unwrap();
