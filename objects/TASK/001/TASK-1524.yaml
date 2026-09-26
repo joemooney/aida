@@ -12,12 +12,12 @@ description: |
   4. `git grep -n -i "trojan"` and `git grep -n "missing index"` over README.md, OVERVIEW.md, CLAUDE.md and docs/agents/ return only lines that describe the old framing as superseded history. Dated snapshots under docs/positioning/ and docs/competitive-analysis/ are NOT edited (they stay frozen).
   5. If any edited file is a generated mirror of aida-core/templates/, the template master is edited and `make sync-templates && make check-templates` pass.
   6. CLAUDE.md stays within the budget in aida-core/templates/context-budget.toml.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:33.138832370Z
-modified_at: 2026-09-26T19:09:56.834029504Z
+modified_at: 2026-09-26T21:16:47.662390037Z
 req_type: Task
 tags:
 - documentation
@@ -35,6 +35,14 @@ comments:
   created_at: 2026-09-26T19:09:56.834029504Z
   modified_at: 2026-09-26T19:09:56.834029504Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+history:
+- id: 01a0df93-e8ae-7e03-91ee-945a1d71f1f8
+  author: aida-session-start
+  timestamp: 2026-09-26T21:16:47.662389366Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
