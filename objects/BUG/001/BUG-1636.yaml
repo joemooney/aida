@@ -1,0 +1,35 @@
+id: 01a0db0c-7ad9-7180-9c50-2a05aab315ad
+spec_id: BUG-1636
+agreed_id: BUG-1636
+title: aida history --shipped matches only Done→Completed, but merges now go InProgress→Completed, so it misses nearly every ship
+description: |
+  `aida history --shipped` matches only a literal `Done → Completed` transition (`is_ship_event` in `aida-cli-lib/src/history.rs`). Today's merge path writes `InProgress → Completed` directly, skipping Done, so `--shipped` misses essentially every ship.
+
+  Observed 2026-09-25: `aida history --since 4h --shipped` printed "(no events match the filter)". Over the same window, `aida history events --status-changes --since 4h` shows five ships: TASK-1507, BUG-1625, BUG-1618, BUG-1630 and BUG-1627, all `InProgress → Completed`.
+
+  A second, smaller problem: the empty result carries a "(1533 archived spec(s) hidden — pass --all …)" footer. That points the user at archiving as the likely cause when it is not.
+
+  ## Acceptance
+  - `--shipped` matches any status transition **into** Completed from a non-Completed status (Done, InProgress, Approved, …), not only `Done → Completed`.
+  - Regression test: an `InProgress → Completed` event is included by `--shipped`, and a `Completed → Completed` no-op or a re-open away from Completed is not.
+  - `--help` text and the TASK-507 doc comment describe it as "transitions into Completed (merged to the default branch)".
+  - The archived/deferred-hidden footer on an empty result only suggests `--all` when including archived specs would actually change the result, or it is worded neutrally.
+  - TASK-1512's alias note is corrected: `--shipped` ≡ `--to completed`, not `--from done --to completed`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T00:10:23.321824627Z
+modified_at: 2026-09-26T00:10:23.321824627Z
+req_type: Bug
+tags:
+- aida:history
+- cli
+filed_at:
+  code_sha: 193a7c9769995ddd7b643b626af8fdb576bbf20b
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: claude
+  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
