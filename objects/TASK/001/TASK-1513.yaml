@@ -1,0 +1,20 @@
+id: 01a0dce7-627c-7b41-bbfc-03527943dfc9
+spec_id: TASK-1513
+agreed_id: TASK-1513
+title: Test-home fence follow-ups after BUG-1642 (Windows dirs gap, broader source scan, env-var fence, temp-dir cleanup, edition 2024 prep)
+description: 'Non-blocking items from BUG-1642''s strict review. (3) On Windows, dirs::home_dir and dirs::config_dir ignore HOME/USERPROFILE. Affected: aida-core user_prefs.rs ~40, agents_config.rs ~281, registry.rs ~141, liveness.rs ~398, plus remote_create.rs ~799 and scaffold_cmd.rs ~372. Route them through an overridable resolver. (4) Widen the source-scan test to dirs::config_dir and direct HOME reads (reconstitute.rs ~604, init_cmd.rs ~72). (5) install_nested trusts AIDA_LIB_TEST_REAL_HOMES; also compare against the password-database home. (6) A test binary killed by SIGKILL leaves /tmp/aida-lib-test-home-<pid> behind; sweep stale ones at startup. (7) Edition 2024 will need unsafe extern and #[unsafe(link_section)] in test_home.rs. Also: remove the fixture activity rows (BUG-9107/9112/9113, NFR-56, BUG-12860, STORY-52?) from the operator''s ~/.aida/roles/advisor.toml once BUG-1642 has merged and every worktree build includes it.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T08:49:06.684815058Z
+modified_at: 2026-09-26T08:49:06.684815058Z
+req_type: Task
+filed_at:
+  code_sha: bfd3e867c051f0c0a1696dc6839b1b17c6b7c00b
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
