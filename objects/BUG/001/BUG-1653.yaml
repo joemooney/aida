@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T13:48:58.178656696Z
-modified_at: 2026-09-26T15:16:42.375280769Z
+modified_at: 2026-09-26T15:38:56.914580410Z
 req_type: Bug
 comments:
 - id: 01a0ddfa-2332-79e0-a81d-1ecc15894d89
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-09-26T13:49:12.882131674Z
   modified_at: 2026-09-26T13:49:12.882131674Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de5e-9a12-7bd2-a9fa-710c08ea9d40
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): keep the BUG-1645 manual-restore hint as is. Don''t suggest aida scaffold refresh for lane projects, because refresh also touches the AGENTS.md block and the discipline pack.'
+  created_at: 2026-09-26T15:38:56.914580410Z
+  modified_at: 2026-09-26T15:38:56.914580410Z
+  session_id: 156a4900-9e60-4f0b-9739-948c3b0efd27
 history:
 - id: 01a0de4a-3d07-7e31-a2cf-072b48d6e33c
   author: aida-session-start
