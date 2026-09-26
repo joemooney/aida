@@ -2,6 +2,9 @@
 //
 // trace:STORY-1424 | ai:antigravity
 
+// Every call passes an explicit permissive policy so the STORY-1424 semantics
+// under test are unchanged by the STORY-1476 trusted-config gate.
+// trace:STORY-1476 | ai:claude
 // Imports only the unix-gated executable-criterion tests use.
 // trace:BUG-1556 | ai:claude
 #[cfg(unix)]
@@ -10,7 +13,7 @@ use crate::evaluator::{EvaluatorError, MockEvaluator};
 use crate::graded_review::CriterionStatus;
 use crate::graded_review::{
     execute_graded_review, generate_graded_reviewer_prompt, parse_acceptance_criteria,
-    CriterionKind,
+    AcceptanceCommandPolicy, CriterionKind,
 };
 #[cfg(unix)]
 use crate::review_verdict::VerdictKind;
@@ -65,6 +68,7 @@ fn test_graded_review_pure_executable_pass() {
         "abc1234",
         cwd,
         None,
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -83,8 +87,17 @@ fn test_graded_review_pure_executable_pass() {
 fn test_graded_review_executable_failure_veto() {
     let desc = "## Acceptance\n- [ ] `true`\n- [ ] `false`\n- Prose criterion\n";
     let cwd = Path::new(".");
-    let verdict =
-        execute_graded_review("TASK-101", "Failing Task", desc, "", "abc1234", cwd, None).unwrap();
+    let verdict = execute_graded_review(
+        "TASK-101",
+        "Failing Task",
+        desc,
+        "",
+        "abc1234",
+        cwd,
+        None,
+        &AcceptanceCommandPolicy::permissive(),
+    )
+    .unwrap();
 
     assert_eq!(verdict.verdict_kind, format!("{:?}", VerdictKind::Rejected));
     assert_eq!(verdict.machine_verified_count, 2);
@@ -109,6 +122,7 @@ fn test_graded_review_mixed_jev_fast_pass() {
         "abc1234",
         cwd,
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -141,6 +155,7 @@ fn test_high_probability_low_confidence_escalates() {
         "abc1234",
         Path::new("."),
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
     assert_eq!(verdict.overall_verdict, "escalated");
@@ -166,6 +181,7 @@ fn test_low_probability_low_confidence_remains_phase3_residual() {
         "abc1234",
         Path::new("."),
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -198,6 +214,7 @@ fn test_fast_fail_probability_and_confidence_belong_to_same_criterion() {
         "abc1234",
         Path::new("."),
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
     assert_eq!(verdict.overall_verdict, "request-changes");
@@ -222,6 +239,7 @@ fn test_graded_review_mixed_jev_fast_fail() {
         "abc1234",
         cwd,
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -254,6 +272,7 @@ fn test_graded_review_mixed_escalation_zone() {
         "abc1234",
         cwd,
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -287,6 +306,7 @@ fn test_graded_review_fail_closed_on_evaluator_error() {
         "abc1234",
         cwd,
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -301,8 +321,17 @@ fn test_graded_review_pure_prose_spec() {
     let cwd = Path::new(".");
 
     // Without evaluator, pure prose spec escalates to Phase 3 conversational reviewer
-    let verdict =
-        execute_graded_review("STORY-200", "Prose Story", desc, "", "abc1234", cwd, None).unwrap();
+    let verdict = execute_graded_review(
+        "STORY-200",
+        "Prose Story",
+        desc,
+        "",
+        "abc1234",
+        cwd,
+        None,
+        &AcceptanceCommandPolicy::permissive(),
+    )
+    .unwrap();
 
     assert_eq!(verdict.machine_verified_count, 0);
     assert_eq!(verdict.prose_count, 2);

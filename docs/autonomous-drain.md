@@ -135,6 +135,54 @@ branch-protection required set), GitLab the newest pipeline's jobs (no
 required-check concept, so only the allow-list applies); pure-git has no rows
 and keeps the coarse verdict.
 
+### Spec-authored acceptance commands need a machine-level opt-in (`[review]`)
+
+The reviewer phase's graded review parses a spec's acceptance section and
+treats backticked commands (`cargo test …`, `make …`, `tests/…`) as
+deterministic checks it could run against the PR head. Spec text comes from
+the shared store, so by default those commands are **not executed**: each is
+recorded as *not run*, never counts as machine-verified, and the review
+escalates to the Phase 3 reviewer seat, whose prompt lists them under
+"Needs manual verification" with an instruction not to execute them but to
+judge from the diff and the CI result already observed. A refused command can
+never auto-approve a PR, and its text is never sent to the LLM evaluator.
+
+To let a reviewing machine run them, opt in from that machine's own
+`~/.aida/config.toml` — the only trust source. The repo's `.aida/config.toml`
+(branch-local *and* the trusted default-branch copy), the store, env vars and
+CLI flags are ignored on purpose: an unattended-drain PR could otherwise merge
+the opt-in through the very review it switches on. A repo-level value is
+reported as ignored in the verdict summary.
+
+```toml
+[review]
+run_acceptance_commands = true
+# Exact word sequences. A trailing `*` lets the spec author choose the
+# arguments — including arguments that run other programs. A lone "*" runs
+# anything a spec says (explicit full trust).
+acceptance_command_allow = ["cargo test", "cargo clippy --workspace", "make check-templates *"]
+```
+
+Matching is whole-word (`cargo test` does not match `cargo testx`), a command
+containing `` ; & | $ ` < > ( ) \ ' " `` or a control character is refused
+under any entry except `"*"`, and the string that was checked is the string
+that runs. Anything malformed — wrong types, an empty allowlist, an entry
+containing a refused character — denies everything for that review and says
+so once on stderr. `aida config show` renders the effective value; there is
+no setter verb and no env var can enable it.
+
+**Migration.** Installs that relied on auto-run executable checks will now see
+those reviews escalate to the reviewer seat instead of auto-approving or
+auto-rejecting. Add the `[review]` block above to `~/.aida/config.toml` on each
+reviewer machine to restore it. Two things to know before you do: the policy
+is read from the HOME of the *reviewing process* — night-shift waves launched
+in `systemd-run` transient units or containers with a different or unset
+HOME fail closed; and an allowlist trusts the spec author's *choice* of
+command, not the PR's code — a permitted `cargo test` still executes PR-head
+code (build.rs, Makefile, test bodies), exactly as CI does. Stored
+`.aida/review-verdicts/PR-N-graded.json` records gain `not_run_count` and
+`NotRun` per-criterion results; older records stay readable.
+
 ### Advisory harvest in the drain (`[harvest] gate`)
 
 After the review gates pass and before the merge, the drain runs `aida harvest`

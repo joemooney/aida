@@ -63387,6 +63387,155 @@ fn worktree_pool_hooks_from_config(value: &toml::Value, key: &str) -> Vec<String
 #[path = "tests/task_1010_prewarm_tests.rs"]
 mod task_1010_prewarm_tests;
 
+/// Trust policy for spec-authored acceptance commands, sourced ONLY from the
+/// machine-global `~/.aida/config.toml` `[review]` table — the same sourcing
+/// rule as [`worktree_pool_global_hooks`]. Repo config (branch-local AND the
+/// trusted default-branch copy), the store, env vars and CLI flags are
+/// deliberately not trust sources: an unattended-drain PR could otherwise
+/// merge the opt-in through the very review it switches on. Every failure
+/// (no home, no file, unreadable, malformed, wrong types) resolves to the
+/// denied default and is reported once on stderr.
+// trace:STORY-1476 | ai:claude
+pub(crate) fn acceptance_command_policy_global() -> graded_review::AcceptanceCommandPolicy {
+    match acceptance_command_policy_global_quiet() {
+        Ok(policy) => policy,
+        Err(reason) => {
+            eprintln!(
+                "  {} graded review: spec-authored acceptance commands will not run ({reason}); \
+                 criteria that need them go to the reviewer seat as manual checks",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+            graded_review::AcceptanceCommandPolicy::default()
+        }
+    }
+}
+
+/// [`acceptance_command_policy_global`] without the stderr notice: `Err` names
+/// why the policy is denied. Used by `aida config show` to render the value.
+// trace:STORY-1476 | ai:claude
+pub(crate) fn acceptance_command_policy_global_quiet(
+) -> std::result::Result<graded_review::AcceptanceCommandPolicy, String> {
+    let Some(home) = crate::home_dir() else {
+        return Err("home directory could not be resolved".to_string());
+    };
+    let path = home.join(".aida").join("config.toml");
+    let body = match std::fs::read_to_string(&path) {
+        Ok(body) => body,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err("no [review] opt-in in ~/.aida/config.toml".to_string());
+        }
+        Err(e) => return Err(format!("could not read ~/.aida/config.toml: {e}")),
+    };
+    let value = toml::from_str::<toml::Value>(&body)
+        .map_err(|e| format!("~/.aida/config.toml did not parse: {e}"))?;
+    acceptance_command_policy_from_toml(&value)
+}
+
+/// Pure parse of `[review] run_acceptance_commands` +
+/// `acceptance_command_allow`. Fail-closed: anything other than a well-typed,
+/// enabled, non-empty allowlist of clean entries is `Err` (denied), never a
+/// partially-honoured policy — a bad element does not get skipped.
+// trace:STORY-1476 | ai:claude
+pub(crate) fn acceptance_command_policy_from_toml(
+    value: &toml::Value,
+) -> std::result::Result<graded_review::AcceptanceCommandPolicy, String> {
+    let Some(review) = value.get("review") else {
+        return Err("no [review] table in ~/.aida/config.toml".to_string());
+    };
+    if !review.is_table() {
+        return Err("[review] is not a table".to_string());
+    }
+    let enabled = match review.get("run_acceptance_commands") {
+        None => return Err("[review] run_acceptance_commands is not set".to_string()),
+        Some(v) => v.as_bool().ok_or_else(|| {
+            "[review] run_acceptance_commands must be a boolean (true/false)".to_string()
+        })?,
+    };
+    // Type-check the allowlist even when disabled, so a wrong type anywhere
+    // in the pair is reported rather than silently tolerated.
+    let allow: Vec<String> = match review.get("acceptance_command_allow") {
+        None => Vec::new(),
+        Some(v) => {
+            let arr = v
+                .as_array()
+                .ok_or_else(|| "[review] acceptance_command_allow must be an array".to_string())?;
+            let mut out = Vec::with_capacity(arr.len());
+            for item in arr {
+                let entry = item.as_str().ok_or_else(|| {
+                    "[review] acceptance_command_allow entries must all be strings".to_string()
+                })?;
+                let trimmed = entry.trim();
+                if trimmed.is_empty() {
+                    return Err("[review] acceptance_command_allow has an empty entry".to_string());
+                }
+                if graded_review::contains_refused_chars(trimmed) {
+                    return Err(format!(
+                        "[review] acceptance_command_allow entry `{trimmed}` contains a shell \
+                         metacharacter or control character"
+                    ));
+                }
+                // `*` is either the whole entry (full trust) or the last word
+                // (any trailing arguments); anywhere else it is a typo.
+                let words: Vec<&str> = trimmed.split_whitespace().collect();
+                if words
+                    .iter()
+                    .enumerate()
+                    .any(|(i, w)| *w == "*" && i + 1 != words.len())
+                {
+                    return Err(format!(
+                        "[review] acceptance_command_allow entry `{trimmed}`: `*` may only be the \
+                         last word"
+                    ));
+                }
+                out.push(trimmed.to_string());
+            }
+            out
+        }
+    };
+    if !enabled {
+        return Err("[review] run_acceptance_commands = false".to_string());
+    }
+    if allow.is_empty() {
+        return Err(
+            "[review] run_acceptance_commands = true but acceptance_command_allow is missing or \
+             empty"
+                .to_string(),
+        );
+    }
+    Ok(graded_review::AcceptanceCommandPolicy {
+        enabled: true,
+        allow,
+        repo_optin_ignored: false,
+    })
+}
+
+/// Display-only detection of a repo-level `[review]` opt-in — the branch-local
+/// `.aida/config.toml` or its trusted default-branch copy naming
+/// `run_acceptance_commands` / `acceptance_command_allow`. The result feeds a
+/// one-line notice in the verdict summary and NEVER the policy itself.
+// trace:STORY-1476 | ai:claude
+pub(crate) fn repo_review_optin_present(project_root: &std::path::Path) -> bool {
+    let names_optin = |body: &str| {
+        toml::from_str::<toml::Value>(body)
+            .ok()
+            .and_then(|v| v.get("review").cloned())
+            .is_some_and(|review| {
+                review.get("run_acceptance_commands").is_some()
+                    || review.get("acceptance_command_allow").is_some()
+            })
+    };
+    let local = std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+        .ok()
+        .is_some_and(|body| names_optin(&body));
+    local
+        || crate::trusted_config::read_trusted_config_toml(project_root)
+            .is_some_and(|body| names_optin(&body))
+}
+
+#[cfg(test)]
+#[path = "tests/story_1476_acceptance_trust_tests.rs"]
+mod story_1476_acceptance_trust_tests;
+
 fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
     let project_root = find_project_root()?;
     match cmd {
@@ -104869,6 +105018,11 @@ fn prepare_graded_review(
     {
         return Ok(None);
     }
+    // Trust snapshot, taken once per review before anything is spawned and
+    // never re-read (no check-then-reread gap). Global config only; the repo
+    // read below is display-only. trace:STORY-1476 | ai:claude
+    let mut policy = acceptance_command_policy_global();
+    policy.repo_optin_ignored = repo_review_optin_present(project_root);
 
     // The branch is a forge-reported PR head and the sha a forge-reported
     // commit; keep both from reading as git options. trace:BUG-1622 | ai:claude
@@ -104938,6 +105092,7 @@ fn prepare_graded_review(
         reviewed_sha,
         &checkout,
         evaluator.as_deref(),
+        &policy,
     )
     .map_err(|e| auto_complete::PhaseFailure::new(format!("graded review failed closed: {e:#}")));
     let _ = std::process::Command::new("git")
