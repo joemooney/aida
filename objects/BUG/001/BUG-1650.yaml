@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T11:07:23.472847865Z
-modified_at: 2026-09-26T13:14:15.707007845Z
+modified_at: 2026-09-26T13:24:17.917694225Z
 req_type: Bug
 comments:
 - id: 01a0dd66-3bfd-7c20-9540-d625513f4b1d
@@ -52,6 +52,22 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): the TUI keeps its legacy empty-store_path behaviour (skip and walk up), per the no-resolution-change principle, with a comment noting the deliberate CLI/TUI difference. Rework at 1f4a815bb9: both mutations were caught. The branch is merging origin/main (portability-rules.json conflict), then a round-2 strict review.'
   created_at: 2026-09-26T13:14:15.707007845Z
   modified_at: 2026-09-26T13:14:15.707007845Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dde3-537d-7610-9f82-954dacedef35
+  author: joe
+  content: |-
+    Review round 2 (strict Opus reviewer): APPROVE WITH NITS on head cc42f712c4 (rework 1f4a815bb9 + merge b30df27463).
+    Re-ran the round-1 filters: aida-core --lib 38 pass; aida-cli-lib --lib 215 pass, 1 ignored; aida-tui store_path 2 pass; check-portability rc=0; --check-allowlist-growth origin/main rc=0. Tree left clean; all mutations and probes were reverted.
+    (a) Old-vs-new comparison, now 29 shapes (26 + raw-backslash ..\team-store, D:\repos\new, C:\Users\x). For every shape the old candidate list is a subsequence of the new one, except the three noted in N1, so no store the old reader found is lost. The three real writer shapes, CRLF, BOM-before-[deployment], duplicate keys, nested [remote.x], [[aot]], prefixed keys (store_path_legacy), int values, empty-then-other, and the invalid-TOML fallback are all identical (the first candidate equals the old value). For legacy raw-backslash configs the new first candidate carries a TAB or NEWLINE (which never names a real directory), and the second candidate is byte-identical to the old value. They therefore resolve to the same store. C:\Users (\U) still fails to parse and falls back as before. The remaining differences (first candidate differs) are all hand-edit shapes that no writer emits. inline comment (store_path = ".aida-store" # x), a BOM line holding a top-level key, and the dotted/inline-table forms: in each case the old reader got a non-existent value or none, so it walked up; the new one resolves locally (a fix, not a redirect). The CRLF and escaped-post-1649 Windows cases give the same directory.
+    (b) The round-1 mutation (any-table lookup ahead of [deployment]) is now CAUGHT (bug_1650_precedence fails). Also caught: M2, dropping the legacy candidates when the TOML parses (2 failures), and M3, skipping an empty value in core (1 failure).
+    (c) Proven: with the core resolver cut to the first candidate only (.take(1)), bug_1650_legacy_unescaped_backslash_config_still_resolves fails at the detect assert (store_locate.rs:790). The outer/.outer store would be adopted, so the test really guards the walk-up.
+    (d) The merged portability-rules.json parses: 8 rules, with main's widened toml-path-interpolation kept and toml-value-interpolation added. The allowlist diff against main is comment-only. Probes: a production 'label = \"{x}\"' fires toml-value-interpolation, and 'worktree_path = \"{worktree}\"' in a tests/ file fires toml-path-interpolation. Both reverted.
+    (e) ssh_port_raw is set only when ssh_port is None, by both parse paths. serialize writes the port first. remember_host clears raw when a valid port is supplied. The test covers a valid 2222 giving (Some, None). Raw TOML Display round-trips exactly for inline tables, sub-tables, multi-line strings, floats and datetimes (checked in a scratch test). The line-fallback raw is re-quoted via toml_string, so no injection is possible. A valid port cannot be corrupted.
+    Nits (non-blocking):
+    N1 These shapes resolve differently when BOTH targets exist on disk: a top-level store_path, or one in another table, placed BEFORE [deployment]; and a store_path = line inside a multi-line string before [deployment]. The old reader was first-in-file; the new one prefers [deployment]. This is exactly the proxy-mandated order, and no writer produces two keys, but it is the one place the literal 'no config resolves differently' rule is not met. Accept it as recorded.
+    N2 The candidate-iteration and legacy-backslash behaviour is tested only in aida-core. Neither aida-cli-lib lib.rs detect_store_path nor the aida-tui resolve_store_path has a multi-candidate test, so a .take(1) regression there would go uncaught. Add a one-line raw-backslash case to each.
+  created_at: 2026-09-26T13:24:17.917694225Z
+  modified_at: 2026-09-26T13:24:17.917694225Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
