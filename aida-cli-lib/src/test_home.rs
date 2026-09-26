@@ -63,6 +63,17 @@ const CLEARED_VARS: &[&str] = &[
     "XDG_STATE_HOME",
 ];
 
+/// BUG-1642: every env var with this prefix is cleared before `main` in the
+/// top-level test process. The operator's session identity
+/// (`AIDA_SESSION_ROLE`, `AIDA_SESSION_PROJECT`, `AIDA_SESSION_ID`,
+/// `AIDA_SESSION_SCOPE`, `AIDA_SESSION_PURPOSE`, ...) would otherwise steer
+/// code under test, e.g. `record_role_activity` resolving the operator's main
+/// checkout's `.aida/roles/<role>.toml`. Tests that need a role set it through
+/// `EnvVarsGuard` / `AmbientGuard`. (A re-exec'd child keeps what its spawning
+/// test chose, since the ambient values were already gone in the parent.)
+// trace:BUG-1642 | ai:claude
+const CLEARED_PREFIX: &str = "AIDA_SESSION_";
+
 #[used]
 #[cfg_attr(
     any(
@@ -148,6 +159,13 @@ fn install() -> std::io::Result<()> {
             std::env::set_var(k, p);
         }
         for k in CLEARED_VARS {
+            std::env::remove_var(k);
+        }
+        let session_vars: Vec<std::ffi::OsString> = std::env::vars_os()
+            .map(|(k, _)| k)
+            .filter(|k| k.to_str().is_some_and(|k| k.starts_with(CLEARED_PREFIX)))
+            .collect();
+        for k in session_vars {
             std::env::remove_var(k);
         }
         std::env::set_var(REAL_HOMES_ENV, exported);
@@ -289,6 +307,20 @@ mod tests {
         assert!(home.starts_with(&r.test_home), "{}", home.display());
         #[cfg(unix)]
         assert_eq!(dirs::home_dir().as_deref(), Some(r.test_home.as_path()));
+    }
+
+    /// The operator's ambient session identity never reaches a test: the
+    /// constructor cleared every `AIDA_SESSION_*` var before `main`. Checked
+    /// under the env lock so a sibling test's explicit guard can't interfere.
+    // trace:BUG-1642 | ai:claude
+    #[test]
+    fn ambient_session_vars_are_cleared_before_tests_run() {
+        let _env = crate::test_env::EnvVarsGuard::snapshot(&[]);
+        let leaked: Vec<String> = std::env::vars_os()
+            .filter_map(|(k, _)| k.into_string().ok())
+            .filter(|k| k.starts_with(CLEARED_PREFIX))
+            .collect();
+        assert!(leaked.is_empty(), "inherited session vars: {leaked:?}");
     }
 
     /// The source guard refuses the real home and anything under a real
