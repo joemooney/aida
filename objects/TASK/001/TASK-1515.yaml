@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:41.012539596Z
-modified_at: 2026-09-26T16:49:42.316310758Z
+modified_at: 2026-09-26T16:50:57.849708727Z
 req_type: Task
 tags:
 - cache
@@ -84,6 +84,12 @@ comments:
     6. OK (E): migration atomicity, the empty SHA on restamp while pending (write_while_migration_pending_leaves_head_empty), and the single-transaction incremental with rollback on a stamp failure all still hold. The tests pass, and the delta does not touch cache.rs.
   created_at: 2026-09-26T16:49:42.316310758Z
   modified_at: 2026-09-26T16:49:42.316310758Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0dea0-88b9-77d1-b5fb-5446772ead51
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe) on round-3 REQUEST CHANGES: the stale-serve-on-lock-error requirement (my round-1 item 2) is WITHDRAWN from this spec. It widens the read path to mutating callers (BUG-1664 class) and costs show performance; it belongs in STORY-1484''s single-flight design, which must first enumerate the mutating readers. Round-4 scope: (1) restore main''s lock-error behaviour for the incremental refresh (full-rebuild fallback, then fail) on ALL paths, with no stale snapshot served on a lock error; (2) restore main''s id_candidates / get_requirement_unambiguous resolution semantics, so show has main''s performance (the round-3 full-scan-when-stale is removed with the stale serving); (3) KEEP: single-transaction full/incremental writes, atomic migration, empty stamp while migration is pending, HEAD-moved decline with retry at the current HEAD and rebuild stamped at the current HEAD, shortcut skipped while migration is pending; (4) drop the stale stderr note and MCP rearm if nothing emits it any more; (5) correct the ''older stamp self-heals'' comment (see BUG-1663); (6) add the M1 test only if an error-as-fresh check still exists. Follow-ups: BUG-1663 (ghost row after revert-during-load), BUG-1664 (mutating sweeps on a stale snapshot, high). STORY-1484 inherits stale-serve plus an MCP structured stale flag. Then round-4 fresh strict review.'
+  created_at: 2026-09-26T16:50:57.849708727Z
+  modified_at: 2026-09-26T16:50:57.849708727Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
