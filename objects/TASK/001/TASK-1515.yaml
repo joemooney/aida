@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:41.012539596Z
-modified_at: 2026-09-26T14:42:51.374268628Z
+modified_at: 2026-09-26T14:43:22.426042731Z
 req_type: Task
 tags:
 - cache
@@ -47,6 +47,12 @@ comments:
     6. NIT: the on-disk encoding of 'pending' is only the older version stamp. Document on source_head_sha that raw cache_meta readers (statusline, history BUG-1631) do not see pending and must tolerate old-schema rows. Today they query only id/spec_id, so they are fine.
   created_at: 2026-09-26T14:42:51.374268628Z
   modified_at: 2026-09-26T14:42:51.374268628Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de2b-b8ba-7540-a814-5eecb28419e2
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe) on the strict review (APPROVE WITH NITS): rework BEFORE merge. (1) MUST: restamp_head and refresh_epics_then_restamp write an empty SHA and return while migration_pending(); add a test. (2) MUST, no user-visible regression: when a lock error ends an incremental refresh on a READ path, serve the rolled-back consistent snapshot at the previous HEAD (labelled stale, per SPIKE-90 rule 4) instead of failing the command; write paths keep failing. Add a test. (4) Do: after the pre-lock reads, decline if HEAD moved from ''to''. (3), (5), (6) are optional: do them if small, otherwise note them for STORY-1484. Then an orchestrator delta check (or a round-2 strict review if (2) turns out non-trivial), then batch 98.'
+  created_at: 2026-09-26T14:43:22.426042731Z
+  modified_at: 2026-09-26T14:43:22.426042731Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
