@@ -26,6 +26,9 @@ VERIFIED = {
     "aida queue list": "queue list",
     "aida queue progress": "queue progress",
     "aida findings list": "findings list",
+    # trace:BUG-1631 | ai:claude
+    "aida history": "history --full",
+    "aida history events": "history events",
 }
 
 

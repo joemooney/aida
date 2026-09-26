@@ -441,6 +441,9 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         ("aida queue list", &["queue", "list"]),
         ("aida queue progress", &["queue", "progress"]),
         ("aida findings list", &["findings", "list"]),
+        // trace:BUG-1631 | ai:claude
+        ("aida history", &["history", "--full"]),
+        ("aida history events", &["history", "events"]),
     ];
     for (path, args) in probes {
         let mut via_format = args.to_vec();

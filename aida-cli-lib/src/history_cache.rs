@@ -52,8 +52,10 @@ pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 5;
 /// changes meaning or serialized shape. A bump gives the index a new file
 /// name, so the old one is simply ignored (and pruned by an explicit
 /// rebuild).
+/// v2: `RelationshipsChange` records the changed `edges` (BUG-1631).
 // trace:TASK-1507 | ai:claude
-pub(crate) const HISTORY_DECODER_VERSION: u32 = 1;
+// trace:BUG-1631 | ai:claude
+pub(crate) const HISTORY_DECODER_VERSION: u32 = 2;
 
 /// Default cap on inline indexing work per query, in milliseconds.
 const DEFAULT_INDEX_BUDGET_MS: u64 = 1500;

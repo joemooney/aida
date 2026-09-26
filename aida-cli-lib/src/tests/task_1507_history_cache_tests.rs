@@ -1154,13 +1154,20 @@ fn history_decoder_version_matches_event_kind_shape() {
         EventKind::RelationshipsChange {
             added: 1,
             removed: 0,
+            edges: vec![crate::history::RelEdge {
+                added: true,
+                rel_type: "Parent".into(),
+                target_id: "u".into(),
+                target: None,
+            }],
         },
     ];
     let snapshot = serde_json::to_string(&kinds).unwrap();
-    const V1: &str = r#"[{"Added":{"title":"t","req_type":"r","priority":"p"}},{"Deleted":{"title":"t"}},{"StatusChange":{"from":"a","to":"b"}},{"PriorityChange":{"from":"a","to":"b"}},{"TitleChange":{"from":"a","to":"b"}},"DescriptionEdited",{"OwnerChange":{"from":"a","to":"b"}},{"FeatureChange":{"from":"a","to":"b"}},{"TypeChange":{"from":"a","to":"b"}},{"TagsChange":{"added":["x"],"removed":["y"]}},{"CommentsAdded":{"count":2,"author":"a"}},{"RelationshipsChange":{"added":1,"removed":0}}]"#;
+    // trace:BUG-1631 | ai:claude
+    const V2: &str = r#"[{"Added":{"title":"t","req_type":"r","priority":"p"}},{"Deleted":{"title":"t"}},{"StatusChange":{"from":"a","to":"b"}},{"PriorityChange":{"from":"a","to":"b"}},{"TitleChange":{"from":"a","to":"b"}},"DescriptionEdited",{"OwnerChange":{"from":"a","to":"b"}},{"FeatureChange":{"from":"a","to":"b"}},{"TypeChange":{"from":"a","to":"b"}},{"TagsChange":{"added":["x"],"removed":["y"]}},{"CommentsAdded":{"count":2,"author":"a"}},{"RelationshipsChange":{"added":1,"removed":0,"edges":[{"added":true,"rel_type":"Parent","target_id":"u"}]}}]"#;
     assert_eq!(
         (history_cache::HISTORY_DECODER_VERSION, snapshot.as_str()),
-        (1, V1),
+        (2, V2),
         "EventKind's serialized shape changed: bump HISTORY_DECODER_VERSION \
          and record the new shape here"
     );
