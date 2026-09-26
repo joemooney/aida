@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:07:50.565068549Z
-modified_at: 2026-09-26T05:26:11.701011069Z
+modified_at: 2026-09-26T05:28:19.658523020Z
 req_type: Task
 tags:
 - aida:history
@@ -52,6 +52,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved after independent triage (confirmed or plausible on main 6bc5859).'
   created_at: 2026-09-25T22:32:45.706869909Z
   modified_at: 2026-09-25T22:32:45.706869909Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc2f-8fca-7271-87c4-d32a31e31100
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): drain-ready. Mode drain, blocked-by BUG-1635 to serialize the history.rs cluster. Acceptance was already sharp (90/100 readiness); BUG-1636 corrects the --shipped alias note.'
+  created_at: 2026-09-26T05:28:19.658523020Z
+  modified_at: 2026-09-26T05:28:19.658523020Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
 filed_at:
