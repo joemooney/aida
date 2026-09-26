@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T20:33:59.618260056Z
-modified_at: 2026-09-25T16:46:33.617875990Z
+modified_at: 2026-09-26T15:09:10.754281154Z
 req_type: Bug
 tags:
 - closure:pending
@@ -90,6 +90,12 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit 1992299), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-1606 --description ...` / `aida edit BUG-1606 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-1606 --since 1992299^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-1606 --status completed`. (merge sha: 19922993159c1efd3bba7beb1eedeea1401239b8)'
   created_at: 2026-09-25T16:46:34.827527815Z
   modified_at: 2026-09-25T16:46:34.827527815Z
+- id: 01a0de43-58e2-7f00-ac58-ea51bf15e4f1
+  author: joe
+  content: 'Orchestrator 2026-09-26: the performance guard is still tripping. The aida show 5000 ms ceiling was breached once (8416 ms) in 24h, and the calls on the f9c900b release binary account for 6.8% over the 1000 ms budget. It stays closure-pending until TASK-1515/TASK-1514/STORY-1484 land and a release carries them.'
+  created_at: 2026-09-26T15:09:10.754281154Z
+  modified_at: 2026-09-26T15:09:10.754281154Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 filed_at:
   code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
   branch: main
