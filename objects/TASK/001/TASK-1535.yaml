@@ -1,0 +1,20 @@
+id: 01a0df88-9a37-71a0-866f-2aacedfb1284
+spec_id: TASK-1535
+agreed_id: TASK-1535
+title: 'Guard-route polish: doctor finding for a disabled (invalid) route, safe bind suggestion, quiet ticks for user-disabled routes'
+description: 'Follow-up from the BUG-1655 strict review. Acceptance: 1. aida doctor reports an enabled route disabled for an unknown bound job (next to the unbound-route finding), so a renamed guard doesn''t silently lose its alert. 2. The unbound-route fix text suggests CronJobFailed:<name minus -route> only when that job exists in the registry; otherwise says to bind it to the job it guards. 3. A route the user already disabled (enabled = false) with a bad binding does not log a ''skipped'' line every tick. 4. The exit-124 label distinguishes ''could not be spawned'' from ''timed out'' where the runner knows. 5. Fix the stray '')'' in docs/cli/03-work-autonomy.md. Tests for 1-3.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T21:04:26.679365787Z
+modified_at: 2026-09-26T21:04:26.679365787Z
+req_type: Task
+filed_at:
+  code_sha: 2e01ffe4ab06c30ac99d44d18438a1b156ef455d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
