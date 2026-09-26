@@ -220,6 +220,25 @@ pub fn skill_in_pack(rel: &Path) -> Option<(PathBuf, String)> {
     (pack.file_name()? == "skills").then(|| (pack.to_path_buf(), name.to_string()))
 }
 
+/// If `rel` is a file inside a skill directory (`<pack>/<name>/...`, where
+/// `<pack>`'s last component is `skills`), return `(pack, pack/name)`. A flat
+/// `<pack>/<name>.md` file has no skill directory and yields `None`.
+// trace:BUG-1645 | ai:claude
+pub fn skill_dirs_of(rel: &Path) -> Option<(PathBuf, PathBuf)> {
+    let comps: Vec<_> = rel.components().collect();
+    let idx = comps
+        .iter()
+        .position(|c| c.as_os_str() == "skills")
+        .filter(|i| i + 2 < comps.len())?;
+    let name = comps[idx + 1].as_os_str().to_str()?;
+    if name.is_empty() || name.starts_with('.') {
+        return None;
+    }
+    let pack: PathBuf = comps[..=idx].iter().collect();
+    let skill = pack.join(name);
+    Some((pack, skill))
+}
+
 /// Is `name` installed in `pack_dir`: its `<name>/SKILL.md` exists (as a
 /// file or a symlink), the skill directory itself is a symlink the user owns,
 /// or the pre-BUG-1135 flat file `<name>.md` exists? A bare `<name>/`

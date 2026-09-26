@@ -224,13 +224,29 @@ pub(crate) fn handle_scaffold_command(
                 // the scaffold files are symlinks into aida-core/templates/ and
                 // std::fs::write would corrupt the source master. Skip + warn.
                 // trace:BUG-718 | ai:claude
-                if let Some(target) = aida_core::scaffolding::symlink_target(&full_path) {
-                    println!(
-                        "  {} {} → {} (skipped — symlink; writing would corrupt the target)",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                        artifact.path.display(),
-                        target.display()
-                    );
+                // BUG-1645: nor through a symlinked skill directory (or skill
+                // pack directory) the user owns. trace:BUG-1645 | ai:claude
+                if let Some((link, target)) = aida_core::scaffolding::symlink_blocking_write(
+                    &root,
+                    &artifact.path,
+                    &full_path,
+                ) {
+                    if link == full_path {
+                        println!(
+                            "  {} {} → {} (skipped — symlink; writing would corrupt the target)",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            artifact.path.display(),
+                            target.display()
+                        );
+                    } else {
+                        println!(
+                            "  {} {} (skipped — {} is a symlinked skill directory → {}; not writing through it)",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            artifact.path.display(),
+                            link.strip_prefix(&root).unwrap_or(&link).display(),
+                            target.display()
+                        );
+                    }
                     skipped += 1;
                     continue;
                 }
@@ -864,7 +880,22 @@ fn run_scaffold_upgrade(
         // follows the link and would corrupt the master. Skip + warn instead,
         // for every category/action, in dry-run and for real.
         // trace:BUG-718 | ai:claude
-        if let Some(target) = aida_core::scaffolding::symlink_target(&on_disk_path) {
+        // BUG-1645: the same for a symlinked skill (or skill pack) directory.
+        // trace:BUG-1645 | ai:claude
+        if let Some((link, target)) = aida_core::scaffolding::symlink_blocking_write(
+            project_root,
+            &artifact.path,
+            &on_disk_path,
+        ) {
+            let target = if link == on_disk_path {
+                target
+            } else {
+                PathBuf::from(format!(
+                    "{} (via symlinked skill directory {})",
+                    target.display(),
+                    link.strip_prefix(project_root).unwrap_or(&link).display()
+                ))
+            };
             stats.symlinked.push((artifact.path.clone(), target));
             continue;
         }

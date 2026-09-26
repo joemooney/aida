@@ -79,10 +79,11 @@ fn plan_refresh_deliveries(
             .map_or(0, |m| m.unconfirmed.len());
         if unconfirmed > 0 {
             println!(
-                "  {} {}: {} skill(s) missing since before delivery tracking were not created; run `aida scaffold upgrade` to install them once",
+                "  {} {}: {} skill(s) missing since before delivery tracking were not created. To add them, run `aida scaffold upgrade`; to decline them, move their lines under `# opted-out` in {}",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 plan.pack.display(),
-                unconfirmed
+                unconfirmed,
+                plan.pack.join(aida_core::scaffolding::refresh::DELIVERED_MANIFEST).display()
             );
         }
         if let Err(e) = plan.record(project_root, &BTreeSet::new()) {
@@ -130,17 +131,17 @@ fn record_refresh_deliveries(
     }
 }
 
-/// The delivered skill (if any) that `path` is a file of.
+/// The delivered skill (if any) that `path` is a file of, as `(pack, name)`.
 // trace:TASK-1503 | ai:claude
 fn delivery_for<'a>(
     deliveries: &'a BTreeMap<PathBuf, BTreeSet<String>>,
     path: &Path,
-) -> Option<&'a str> {
+) -> Option<(&'a Path, &'a str)> {
     deliveries.iter().find_map(|(pack, names)| {
         names
             .iter()
             .find(|n| is_file_of_skill(path, pack, n))
-            .map(String::as_str)
+            .map(|n| (pack.as_path(), n.as_str()))
     })
 }
 
@@ -230,8 +231,11 @@ fn refresh_agent_packs_at(
     // A memory-lane or minimal footprint project never grows skills from a
     // refresh, and its manifests are left alone (the same gate `aida init
     // --refresh` applies). trace:TASK-1503 | ai:claude
+    // A memory-lane project from before the footprint was saved is
+    // recognised from its packs, so it is not seeded with ~50 unconfirmed
+    // skills and told to upgrade. trace:BUG-1645 | ai:claude
     let full_footprint = !matches!(
-        crate::init_cmd::read_init_footprint(project_root),
+        crate::init_cmd::effective_init_footprint(project_root),
         Some(crate::cli::InitFootprint::Minimal | crate::cli::InitFootprint::MemoryLane)
     );
     let deliveries = if full_footprint {
@@ -241,18 +245,32 @@ fn refresh_agent_packs_at(
     };
 
     // A delivered skill's SKILL.md is written after its supporting files, so
-    // a skill counts as present only once it is whole.
+    // a skill counts as present only once it is whole. If any supporting file
+    // fails, SKILL.md is not written: the skill stays unrecorded and the next
+    // refresh retries it. trace:BUG-1645 | ai:claude
     let mut deferred = Vec::new();
+    let mut incomplete: BTreeSet<(PathBuf, String)> = BTreeSet::new();
     for artifact in &preview.artifacts {
         let rel = artifact.path.to_string_lossy().replace('\\', "/");
         let Some(idx) = PROJECT_PACKS.iter().position(|(p, _)| rel.starts_with(p)) else {
             continue;
         };
         let dest = project_root.join(&artifact.path);
+        // Never write through a user-owned symlinked skill (or pack)
+        // directory. trace:BUG-1645 | ai:claude
+        if let Some((_, target)) =
+            aida_core::scaffolding::symlink_blocking_write(project_root, &artifact.path, &dest)
+        {
+            packs[idx]
+                .report
+                .record(&artifact.path, RefreshOutcome::SkippedSymlink(target));
+            continue;
+        }
+        let delivery = delivery_for(&deliveries, &artifact.path);
         match refresh_file(&dest, &artifact.content, false) {
             // trace:TASK-1503 | ai:claude
             Ok(RefreshOutcome::Missing) => {
-                if delivery_for(&deliveries, &artifact.path).is_none() {
+                if delivery.is_none() {
                     packs[idx]
                         .report
                         .record(&artifact.path, RefreshOutcome::Missing);
@@ -260,19 +278,42 @@ fn refresh_agent_packs_at(
                     deferred.push((idx, artifact));
                 } else {
                     let outcome = install_outcome(&dest, artifact);
+                    if outcome == RefreshOutcome::Missing {
+                        if let Some((pack, name)) = delivery {
+                            incomplete.insert((pack.to_path_buf(), name.to_string()));
+                        }
+                    }
                     packs[idx].report.record(&artifact.path, outcome);
                 }
             }
             Ok(outcome) => packs[idx].report.record(&artifact.path, outcome),
-            Err(e) => eprintln!(
-                "  {} could not refresh {}: {}",
-                "Warning:".yellow(),
-                artifact.path.display(),
-                e
-            ),
+            Err(e) => {
+                if let Some((pack, name)) = delivery {
+                    incomplete.insert((pack.to_path_buf(), name.to_string()));
+                }
+                eprintln!(
+                    "  {} could not refresh {}: {}",
+                    "Warning:".yellow(),
+                    artifact.path.display(),
+                    e
+                )
+            }
         }
     }
     for (idx, artifact) in deferred {
+        if let Some((pack, name)) = delivery_for(&deliveries, &artifact.path) {
+            if incomplete.contains(&(pack.to_path_buf(), name.to_string())) {
+                eprintln!(
+                    "  {} not installing {}: a supporting file of {name} could not be written; the next refresh retries it",
+                    "Warning:".yellow(),
+                    artifact.path.display()
+                );
+                packs[idx]
+                    .report
+                    .record(&artifact.path, RefreshOutcome::Missing);
+                continue;
+            }
+        }
         let outcome = install_outcome(&project_root.join(&artifact.path), artifact);
         packs[idx].report.record(&artifact.path, outcome);
     }
@@ -1399,5 +1440,193 @@ global = true
 
         std::fs::write(&cfg, "not [ valid toml").unwrap();
         assert!(agents_md_block_enabled(root), "parse error → enabled");
+    }
+
+    // ── BUG-1645: manifest follow-ups ──
+
+    /// L1: the refresh footprint gate on its own. A full install (complete
+    /// manifests), then the footprint set to memory-lane, then a skill new
+    /// since install: refresh creates nothing and leaves the manifests alone.
+    /// Only the footprint gate stops this delivery.
+    // trace:BUG-1645 | ai:claude
+    #[test]
+    fn bug_1645_footprint_gate_blocks_delivery_after_full_install() {
+        for footprint in [
+            crate::cli::InitFootprint::MemoryLane,
+            crate::cli::InitFootprint::Minimal,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            install_all_packs(root);
+            for (pack, _) in SKILL_PACKS {
+                forget_delivery(&root.join(pack), "aida-orchestrate");
+            }
+            let before: Vec<_> = SKILL_PACKS
+                .iter()
+                .map(|(pack, _)| std::fs::read(root.join(pack).join(DELIVERED_MANIFEST)).unwrap())
+                .collect();
+            std::fs::create_dir_all(root.join(".aida")).unwrap();
+            crate::init_cmd::write_init_footprint(root, footprint).unwrap();
+
+            for _ in 0..2 {
+                let packs = refresh_agent_packs_at(root, None, None);
+                assert!(
+                    packs.iter().all(|p| p.report.installed.is_empty()),
+                    "{footprint:?}: refresh delivers nothing"
+                );
+            }
+            for ((pack, _), before) in SKILL_PACKS.iter().zip(before) {
+                let dir = root.join(pack);
+                assert!(!dir.join("aida-orchestrate").exists(), "{pack}");
+                assert_eq!(
+                    std::fs::read(dir.join(DELIVERED_MANIFEST)).unwrap(),
+                    before,
+                    "{pack}: manifest untouched"
+                );
+            }
+        }
+    }
+
+    /// L2: a memory-lane project from before the footprint was saved (no
+    /// `[scaffold] footprint`) is recognised from its packs. Refresh creates
+    /// nothing, does not seed ~50 unconfirmed skills into a complete
+    /// manifest, and so never tells the user to run `aida scaffold upgrade`.
+    // trace:BUG-1645 | ai:claude
+    #[test]
+    fn bug_1645_pre_footprint_memory_lane_is_not_seeded_or_nagged() {
+        // Variants: pre-TASK-1503 (no manifest), and the partial manifest
+        // memory-lane writes today.
+        for keep_manifest in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let store = aida_core::RequirementsStore::default();
+            crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false)
+                .unwrap();
+            assert_eq!(crate::init_cmd::read_init_footprint(root), None);
+            for pack in [".claude/skills", ".codex/skills"] {
+                if !keep_manifest {
+                    std::fs::remove_file(root.join(pack).join(DELIVERED_MANIFEST)).unwrap();
+                }
+            }
+            assert_eq!(
+                crate::init_cmd::effective_init_footprint(root),
+                Some(crate::cli::InitFootprint::MemoryLane)
+            );
+            for _ in 0..2 {
+                let packs = refresh_agent_packs_at(root, None, None);
+                assert!(packs.iter().all(|p| p.report.installed.is_empty()));
+            }
+            for pack in [".claude/skills", ".codex/skills"] {
+                let dir = root.join(pack);
+                assert_eq!(skill_names(&dir), ["aida-capture", "aida-learn"], "{pack}");
+                match read_skill_manifest(&dir).unwrap() {
+                    None => assert!(!keep_manifest, "{pack}"),
+                    Some(m) => {
+                        assert!(!m.complete, "{pack}: not promoted to complete");
+                        assert!(m.unconfirmed.is_empty(), "{pack}: no upgrade nag {m:?}");
+                    }
+                }
+            }
+        }
+
+        // A project a TASK-1503 refresh already seeded (complete manifest,
+        // unconfirmed names) is still recognised, so the nag stops.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = aida_core::RequirementsStore::default();
+        crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+        let dir = root.join(".codex/skills");
+        let mut m = read_skill_manifest(&dir).unwrap().unwrap();
+        m.complete = true;
+        m.unconfirmed.insert("aida-req".to_string());
+        write_skill_manifest(&dir, &m).unwrap();
+        assert!(crate::init_cmd::looks_like_memory_lane(root));
+
+        // A full install is never mistaken for memory-lane, nor is a legacy
+        // full pack, nor a full pack where the user opted out of the rest.
+        let full = tempfile::tempdir().unwrap();
+        install_all_packs(full.path());
+        assert!(!crate::init_cmd::looks_like_memory_lane(full.path()));
+        for (pack, _) in SKILL_PACKS {
+            std::fs::remove_file(full.path().join(pack).join(DELIVERED_MANIFEST)).unwrap();
+        }
+        assert!(!crate::init_cmd::looks_like_memory_lane(full.path()));
+        let empty = tempfile::tempdir().unwrap();
+        assert!(!crate::init_cmd::looks_like_memory_lane(empty.path()));
+    }
+
+    /// L3: when a supporting file of a newly delivered folder skill cannot
+    /// be written, its SKILL.md is not written and the skill is not
+    /// recorded, so the next refresh delivers it whole.
+    // trace:BUG-1645 | ai:claude
+    #[test]
+    fn bug_1645_partial_folder_skill_is_not_recorded_and_is_retried() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        let claude = root.join(".claude/skills");
+        let pr = claude.join("aida-pr");
+        let whole = skill_names(&pr);
+        assert!(whole.contains(&"examples".to_string()), "{whole:?}");
+        forget_delivery(&claude, "aida-pr");
+        // A plain file where `examples/` goes: the supporting write fails.
+        std::fs::create_dir_all(&pr).unwrap();
+        std::fs::write(pr.join("examples"), "blocker").unwrap();
+
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert!(installed_in(&packs, "Claude skills").is_empty());
+        assert!(
+            !pr.join("SKILL.md").exists(),
+            "no SKILL.md for a partial skill"
+        );
+        let m = read_skill_manifest(&claude).unwrap().unwrap();
+        assert!(!m.knows("aida-pr"), "{m:?}");
+        assert!(!m.unconfirmed.contains("aida-pr"), "{m:?}");
+
+        std::fs::remove_file(pr.join("examples")).unwrap();
+        refresh_agent_packs_at(root, None, None);
+        assert_eq!(skill_names(&pr), whole, "the retry delivers it whole");
+        let m = read_skill_manifest(&claude).unwrap().unwrap();
+        assert!(m.delivered.contains("aida-pr"));
+    }
+
+    /// L5: refresh never overlays a file through a user-owned symlinked skill
+    /// directory, even a pristine stale one, and reports it as a symlink skip.
+    // trace:BUG-1645 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1645_refresh_never_writes_through_symlinked_skill_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        let codex = root.join(".codex/skills");
+        let target = root.join("my-skills/aida-req");
+        std::fs::create_dir_all(&target).unwrap();
+        let stale = wrap_with_aida_header(
+            Path::new(".codex/skills/aida-req/SKILL.md"),
+            "---\nname: aida-req\n---\n# old body\n",
+        );
+        std::fs::write(target.join("SKILL.md"), &stale).unwrap();
+        std::fs::remove_dir_all(codex.join("aida-req")).unwrap();
+        std::os::unix::fs::symlink(&target, codex.join("aida-req")).unwrap();
+
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert_eq!(
+            std::fs::read_to_string(target.join("SKILL.md")).unwrap(),
+            stale,
+            "the symlink target is untouched"
+        );
+        let codex_report = &packs
+            .iter()
+            .find(|p| p.label == "Codex skills")
+            .expect("codex pack reported")
+            .report;
+        assert!(
+            codex_report
+                .skipped_symlink
+                .contains(&PathBuf::from(".codex/skills/aida-req/SKILL.md")),
+            "{:?}",
+            codex_report.skipped_symlink
+        );
     }
 }

@@ -260,6 +260,28 @@ pub fn symlink_target(path: &Path) -> Option<PathBuf> {
     }
 }
 
+/// The symlink that a write of the scaffold artifact `rel` (on disk at
+/// `full_path`) would go through, as `(link, link_target)`: the file itself
+/// (BUG-718), or, for a file inside a skill directory, the skill pack
+/// directory or the skill directory. A user-owned symlinked skill directory
+/// counts as an installed skill (TASK-1503) and is never written through,
+/// matching the manifest write that refuses a symlinked pack directory.
+// trace:BUG-1645 | ai:claude
+pub fn symlink_blocking_write(
+    project_root: &Path,
+    rel: &Path,
+    full_path: &Path,
+) -> Option<(PathBuf, PathBuf)> {
+    if let Some(target) = symlink_target(full_path) {
+        return Some((full_path.to_path_buf(), target));
+    }
+    let (pack, skill) = refresh::skill_dirs_of(rel)?;
+    [pack, skill].into_iter().find_map(|dir| {
+        let link = project_root.join(dir);
+        symlink_target(&link).map(|target| (link, target))
+    })
+}
+
 /// Group the skill artifacts in `artifacts` by pack directory and plan each
 /// pack's deliveries (TASK-1503).
 // trace:TASK-1503 | ai:claude
@@ -2751,6 +2773,7 @@ aida show <SPEC-ID>
     ) -> Result<Vec<PathBuf>, ScaffoldError> {
         let mut written_files = Vec::new();
         let mut skipped_files = Vec::new();
+        let mut warned_links = std::collections::BTreeSet::new();
         // Record deliveries on every exit, including an early IO error.
         // trace:TASK-1503 | ai:claude
         let _recorder = SkillDeliveryRecorder::new(&self.project_root, preview, true);
@@ -2758,6 +2781,10 @@ aida show <SPEC-ID>
         // Create directories first
         for dir in &preview.new_dirs {
             let full_path = resolve_artifact_path(&self.project_root, dir);
+            // trace:BUG-1645 | ai:claude
+            if symlink_blocking_write(&self.project_root, dir, &full_path).is_some() {
+                continue;
+            }
             fs::create_dir_all(&full_path).map_err(|e| ScaffoldError::IoError {
                 path: full_path.clone(),
                 message: e.to_string(),
@@ -2768,6 +2795,10 @@ aida show <SPEC-ID>
         for artifact in &preview.artifacts {
             if let Some(parent) = artifact.path.parent() {
                 let full_parent = resolve_artifact_path(&self.project_root, parent);
+                // trace:BUG-1645 | ai:claude
+                if symlink_blocking_write(&self.project_root, parent, &full_parent).is_some() {
+                    continue;
+                }
                 if !full_parent.exists() {
                     fs::create_dir_all(&full_parent).map_err(|e| ScaffoldError::IoError {
                         path: full_parent.clone(),
@@ -2814,7 +2845,19 @@ aida show <SPEC-ID>
             // any project that symlinks a scaffold file into a source-of-truth
             // dir) fs::write would follow the link and corrupt the master.
             // Skip + record instead. trace:BUG-718 | ai:claude
-            if symlink_target(&full_path).is_some() {
+            // BUG-1645: nor through a symlinked skill (or skill pack)
+            // directory the user owns; say so once per directory.
+            // trace:BUG-1645 | ai:claude
+            if let Some((link, target)) =
+                symlink_blocking_write(&self.project_root, &artifact.path, &full_path)
+            {
+                if link != full_path && warned_links.insert(link.clone()) {
+                    eprintln!(
+                        "warning: {} is a symlink to {}; not writing AIDA skill files through it",
+                        link.display(),
+                        target.display()
+                    );
+                }
                 skipped_files.push(artifact.path.clone());
                 continue;
             }
@@ -3906,6 +3949,100 @@ mod tests {
         // It's a ManagedMerge file (per-user override; AIDA owns the trust slot,
         // re-init never clobbers a user's own edits).
         assert_eq!(local.category(), FileCategory::ManagedMerge);
+    }
+
+    /// BUG-1645 L5: `apply` (the init / upgrade write path) never writes
+    /// through a user-owned symlinked skill directory or skill pack
+    /// directory: neither SKILL.md nor a missing supporting file lands in the
+    /// link target.
+    // trace:BUG-1645 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1645_apply_refuses_symlinked_skill_and_pack_dirs() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        let store = RequirementsStore::new();
+        let mut scaffolder = Scaffolder::new(root.to_path_buf(), ScaffoldConfig::default());
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).unwrap();
+
+        // A user-owned skill directory (folder-form aida-pr, whose
+        // `examples/` is missing from the target).
+        let mine = root.join("mine/aida-pr");
+        std::fs::create_dir_all(&mine).unwrap();
+        std::fs::write(mine.join("SKILL.md"), "my own aida-pr\n").unwrap();
+        let claude_pr = root.join(".claude/skills/aida-pr");
+        std::fs::remove_dir_all(&claude_pr).unwrap();
+        std::os::unix::fs::symlink(&mine, &claude_pr).unwrap();
+
+        // A user-owned skill pack directory.
+        let shared = root.join("shared-codex-skills");
+        std::fs::create_dir_all(shared.join("aida-req")).unwrap();
+        std::fs::write(shared.join("aida-req/SKILL.md"), "my own aida-req\n").unwrap();
+        let codex = root.join(".codex/skills");
+        std::fs::remove_dir_all(&codex).unwrap();
+        std::os::unix::fs::symlink(&shared, &codex).unwrap();
+
+        let mut scaffolder = Scaffolder::new(root.to_path_buf(), ScaffoldConfig::default());
+        let preview = scaffolder.preview(&store);
+        let written = scaffolder.apply(&preview).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(mine.join("SKILL.md")).unwrap(),
+            "my own aida-pr\n"
+        );
+        assert!(
+            !mine.join("examples").exists(),
+            "nothing created in the target"
+        );
+        let mut shared_entries: Vec<_> = std::fs::read_dir(&shared)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        shared_entries.sort();
+        assert_eq!(
+            shared_entries,
+            ["aida-req"],
+            "no skill written into the pack"
+        );
+        assert_eq!(
+            std::fs::read_to_string(shared.join("aida-req/SKILL.md")).unwrap(),
+            "my own aida-req\n"
+        );
+        assert!(written
+            .iter()
+            .all(|p| !p.starts_with(".codex/skills") && !p.starts_with(".claude/skills/aida-pr")));
+        // Other skills in the real pack are still written.
+        assert!(root.join(".claude/skills/aida-req/SKILL.md").is_file());
+    }
+
+    // trace:BUG-1645 | ai:claude
+    #[test]
+    fn bug_1645_skill_dirs_of_finds_pack_and_skill_dir() {
+        use std::path::Path;
+        assert_eq!(
+            refresh::skill_dirs_of(Path::new(".claude/skills/aida-pr/examples/x.md")),
+            Some((
+                PathBuf::from(".claude/skills"),
+                PathBuf::from(".claude/skills/aida-pr")
+            ))
+        );
+        assert_eq!(
+            refresh::skill_dirs_of(Path::new(".codex/skills/aida-req/SKILL.md")),
+            Some((
+                PathBuf::from(".codex/skills"),
+                PathBuf::from(".codex/skills/aida-req")
+            ))
+        );
+        assert_eq!(
+            refresh::skill_dirs_of(Path::new(".claude/skills/aida-req.md")),
+            None
+        );
+        assert_eq!(
+            refresh::skill_dirs_of(Path::new(".claude/skills/.aida-delivered/x")),
+            None
+        );
+        assert_eq!(refresh::skill_dirs_of(Path::new("CLAUDE.md")), None);
     }
 
     // trace:BUG-718 — symlink_target only fires for actual symlinks, so a

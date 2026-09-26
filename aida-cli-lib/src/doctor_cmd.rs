@@ -822,9 +822,24 @@ fn scan_scaffold_drift(
     // discover the old ~/.codex/prompts pack as `$aida-*`, so absence of the
     // project-local skill surface leaves a codex-vendor project with no working
     // skill entry point.
+    // A memory-lane project (saved footprint, or recognised from its packs
+    // when it predates the saved footprint) is missing only what memory-lane
+    // installs; a minimal one installs no skills. Never nudge either toward
+    // the full skill set. trace:BUG-1645 | ai:claude
+    let footprint = crate::init_cmd::effective_init_footprint(project_root);
+    let expected_by_footprint = |p: &std::path::Path| match footprint {
+        Some(crate::cli::InitFootprint::Minimal) => false,
+        Some(crate::cli::InitFootprint::MemoryLane) => {
+            aida_core::scaffolding::refresh::skill_in_pack(p).is_some_and(|(_, name)| {
+                crate::init_cmd::MEMORY_LANE_SKILLS.contains(&name.as_str())
+            })
+        }
+        _ => true,
+    };
     let missing_vendor_files: Vec<String> = status
         .missing
         .iter()
+        .filter(|p| expected_by_footprint(p))
         .filter_map(|p| is_vendor_prompt_or_skill(p).then(|| p.to_string_lossy().into_owned()))
         .collect();
     let missing_codex_skill_files: Vec<&String> = missing_vendor_files
@@ -6561,6 +6576,43 @@ hostname = "localhost"
             .find(|f| f.id == "scaffold-drift/codex-skills-missing")
             .expect("legacy pack's missing skills are flagged");
         assert!(finding.action.contains("aida scaffold upgrade"));
+    }
+
+    /// BUG-1645 L2: a memory-lane project, including one from before the
+    /// footprint was saved, is not told to run `aida scaffold upgrade` for
+    /// the full skill set; a missing memory-lane skill is still flagged.
+    // trace:BUG-1645 | ai:claude
+    #[test]
+    fn bug_1645_doctor_does_not_nag_memory_lane_toward_full_upgrade() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let store = aida_core::RequirementsStore::new();
+        crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+        // Pre-TASK-1503 shape: no manifest; no saved footprint (pre-STORY-830).
+        for pack in [".claude/skills", ".codex/skills"] {
+            std::fs::remove_file(
+                root.join(pack)
+                    .join(aida_core::scaffolding::refresh::DELIVERED_MANIFEST),
+            )
+            .unwrap();
+        }
+        let findings = scan_scaffold_drift(root, &store);
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.id != "scaffold-drift/codex-skills-missing"),
+            "{:?}",
+            findings.iter().map(|f| &f.id).collect::<Vec<_>>()
+        );
+
+        // Losing a memory-lane skill is still reported.
+        std::fs::remove_dir_all(root.join(".codex/skills/aida-learn")).unwrap();
+        let findings = scan_scaffold_drift(root, &store);
+        let finding = findings
+            .iter()
+            .find(|f| f.id == "scaffold-drift/codex-skills-missing")
+            .expect("a missing memory-lane skill is flagged");
+        assert!(finding.summary.contains("1 missing"), "{}", finding.summary);
     }
 
     #[test]

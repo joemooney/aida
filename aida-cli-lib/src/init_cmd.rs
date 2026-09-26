@@ -320,6 +320,10 @@ pub(crate) fn init_scaffold_candidate_paths_for_footprint(
             ".claude/skills/aida-learn/SKILL.md",
             ".codex/skills/aida-capture/SKILL.md",
             ".codex/skills/aida-learn/SKILL.md",
+            // The per-pack delivered-skills manifests (TASK-1503) belong in
+            // the scaffold commit too. trace:BUG-1645 | ai:claude
+            ".claude/skills/.aida-delivered",
+            ".codex/skills/.aida-delivered",
         ],
     }
 }
@@ -822,6 +826,73 @@ pub(crate) fn read_init_footprint(
     parse_init_footprint(raw)
 }
 
+/// The two reflex skills the memory-lane footprint installs.
+// trace:BUG-1645 | ai:claude
+pub(crate) const MEMORY_LANE_SKILLS: [&str; 2] = ["aida-capture", "aida-learn"];
+
+/// Does this project look like a memory-lane install made before the
+/// footprint was saved (STORY-830)? True when at least one skill pack holds a
+/// memory-lane skill and no pack holds any other AIDA skill, and no pack's
+/// manifest records a delivered non-memory-lane skill or an opt-out (either
+/// means a full install once tracked it).
+// trace:BUG-1645 | ai:claude
+pub(crate) fn looks_like_memory_lane(project_root: &std::path::Path) -> bool {
+    use aida_core::scaffolding::refresh::{read_skill_manifest, skill_present};
+    let mut lane_skill_seen = false;
+    for pack in [".claude/skills", ".codex/skills", ".antigravity/skills"] {
+        let dir = project_root.join(pack);
+        if !dir.is_dir() {
+            continue;
+        }
+        match read_skill_manifest(&dir) {
+            Ok(None) => {}
+            Ok(Some(m)) => {
+                if !m.opted_out.is_empty()
+                    || m.delivered
+                        .iter()
+                        .any(|n| !MEMORY_LANE_SKILLS.contains(&n.as_str()))
+                {
+                    return false;
+                }
+            }
+            Err(_) => return false,
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return false;
+        };
+        for entry in entries.flatten() {
+            let file_name = entry.file_name();
+            let Some(raw) = file_name.to_str() else {
+                continue;
+            };
+            let name = raw.strip_suffix(".md").unwrap_or(raw);
+            if !name.starts_with("aida-") || !skill_present(&dir, name) {
+                continue;
+            }
+            if MEMORY_LANE_SKILLS.contains(&name) {
+                lane_skill_seen = true;
+            } else {
+                return false;
+            }
+        }
+    }
+    lane_skill_seen
+}
+
+/// The project's footprint: the saved `[scaffold] footprint`, else
+/// memory-lane when the skill packs hold only the memory-lane skills (a
+/// memory-lane project from before the footprint was saved), else `None`.
+/// Automatic refresh and doctor use it so such a project is never nudged
+/// toward the full skill set.
+// trace:BUG-1645 | ai:claude
+pub(crate) fn effective_init_footprint(
+    project_root: &std::path::Path,
+) -> Option<crate::cli::InitFootprint> {
+    read_init_footprint(project_root).or_else(|| {
+        looks_like_memory_lane(project_root).then_some(crate::cli::InitFootprint::MemoryLane)
+    })
+}
+
 // trace:STORY-830 | ai:codex
 pub(crate) fn write_init_footprint(
     project_root: &std::path::Path,
@@ -1028,10 +1099,8 @@ pub(crate) fn write_memory_lane_scaffolding(
         // manifest as a full install, so a deleted aida-capture/aida-learn is
         // never resurrected and a later full `aida init` delivers the rest.
         // trace:TASK-1503 | ai:claude
-        let names: std::collections::BTreeSet<String> = ["aida-capture", "aida-learn"]
-            .iter()
-            .map(|n| n.to_string())
-            .collect();
+        let names: std::collections::BTreeSet<String> =
+            MEMORY_LANE_SKILLS.iter().map(|n| n.to_string()).collect();
         for pack in [".claude/skills", ".codex/skills"] {
             let mut plan = aida_core::scaffolding::refresh::plan_skill_pack(
                 root,
@@ -1467,8 +1536,26 @@ fn complete_init_scaffolding(
     let mut updated_count = 0;
     let mut skipped_count = 0;
 
+    let mut warned_links = std::collections::BTreeSet::new();
     for artifact in &preview.artifacts {
         let full_path = root.join(&artifact.path);
+        // Never write through a symlink: the file itself (BUG-718) or a
+        // user-owned symlinked skill (or skill pack) directory.
+        // trace:BUG-1645 | ai:claude
+        if let Some((link, target)) =
+            aida_core::scaffolding::symlink_blocking_write(root, &artifact.path, &full_path)
+        {
+            if warned_links.insert(link.clone()) {
+                eprintln!(
+                    "{} {} is a symlink to {}; not writing AIDA files through it",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    link.strip_prefix(root).unwrap_or(&link).display(),
+                    target.display()
+                );
+            }
+            skipped_count += 1;
+            continue;
+        }
         let exists = full_path.exists();
 
         if exists && !force {
@@ -2969,6 +3056,8 @@ mod task_631_init_self_commit_tests {
                 ".claude/skills/aida-learn/SKILL.md",
                 ".codex/skills/aida-capture/SKILL.md",
                 ".codex/skills/aida-learn/SKILL.md",
+                ".claude/skills/.aida-delivered",
+                ".codex/skills/.aida-delivered",
             ]
         );
 
@@ -5235,7 +5324,7 @@ fn sibling_init_marker_exists(project_root: &std::path::Path) -> bool {
 
 #[cfg(test)]
 mod task_1503_memory_lane_manifest_tests {
-    use super::write_memory_lane_scaffolding;
+    use super::{init_scaffold_commit_paths, write_memory_lane_scaffolding};
     use aida_core::scaffolding::refresh::read_skill_manifest;
 
     fn full_install(root: &std::path::Path) {
@@ -5245,6 +5334,25 @@ mod task_1503_memory_lane_manifest_tests {
         );
         let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
         scaffolder.apply(&preview).unwrap();
+    }
+
+    /// BUG-1645 L4: memory-lane init's scaffold commit includes the per-pack
+    /// delivered-skills manifests, so they are not left uncommitted.
+    // trace:BUG-1645 | ai:claude
+    #[test]
+    fn bug_1645_memory_lane_commit_paths_include_manifests() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = aida_core::RequirementsStore::default();
+        write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+        let paths = init_scaffold_commit_paths(root, crate::cli::InitFootprint::MemoryLane);
+        for manifest in [
+            ".claude/skills/.aida-delivered",
+            ".codex/skills/.aida-delivered",
+        ] {
+            assert!(root.join(manifest).is_file(), "{manifest} written");
+            assert!(paths.iter().any(|p| p == manifest), "{manifest}: {paths:?}");
+        }
     }
 
     /// Memory-lane records its skills in each pack's manifest, a re-run never
