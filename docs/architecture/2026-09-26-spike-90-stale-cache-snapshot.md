@@ -6,8 +6,6 @@
 - Binary measured: `aida 0.15.0 (f9c900b)`, bundled SQLite 3.45 (rusqlite 0.31 `bundled`); probe scripts used Python `sqlite3` 3.45.1
 - Constraints honoured: no production code; `busy_timeout=0` plus the AIDA retry ladder (STORY-543 rejection) left in place; any background work must be a durable single-flight worker, never an untracked in-process task (Joe, 2026-09-25)
 
-Path note: the spike's acceptance section names `docs/architecture/2026-MM-DD-spike-90-stale-cache-snapshot.md`. The orchestrator's dispatch named this path under `docs/research/`, so the report lives here. If the advisor prefers the architecture path, move it with `git mv` before merge.
-
 ## Verdict: NO-GO
 
 **NO-GO on a separate immutable snapshot file.** The measurements show that the live cache already serves a consistent last-committed snapshot to readers in WAL mode (STORY-580). A plain read against a fresh cache takes 0.04 s even while another connection holds the write lock. Slow reads do not come from readers being unable to *read*. They come from readers trying to *refresh* the cache, which turns them into writers that queue on the ~25.6 s write ladder, sometimes twice. A second copy of the database would not remove that behaviour. It would add seconds of snapshot creation per refresh, a third freshness state, and new failure modes (in-place modification under `immutable=1`, rename semantics on Windows, schema skew between the snapshot and the binary).
