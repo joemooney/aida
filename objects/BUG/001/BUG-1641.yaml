@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T07:02:15.516176238Z
-modified_at: 2026-09-26T15:22:08.349179455Z
+modified_at: 2026-09-26T15:38:16.708263889Z
 req_type: Bug
 comments:
 - id: 01a0dc85-ca4c-71b3-ae74-5749fd82bd0b
@@ -28,6 +28,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe) on the strict review (APPROVE WITH NITS): the implementer closes (1) the missing re-assignment test, (2) clearing the reset flag after a save, and (3) the plural-pronoun wording. Items 5 and 6 are informational. Then an orchestrator delta check and the next batch.'
   created_at: 2026-09-26T15:22:08.349179455Z
   modified_at: 2026-09-26T15:22:08.349179455Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0de5d-fd04-79a0-b923-84aaee78e327
+  author: joe
+  content: 'Orchestrator delta check (proxy for Joe) of 5200cb3502..9844e78738: APPROVED for integration. (1) The new test bug1641_bulk_writer_reassigns_past_a_disk_that_moved_further matches the reviewer''s scenario (the other writer''s BUG-001..003 are untouched, the batch spec gets BUG-004, caller-supplied BUG-50 is kept). The implementer reports that the ignore-disk mutation kills it. (2) The reset flag is now CounterResetFlag(AtomicBool) so a save through &store can clear it. Clone COPIES the value (it is not shared), so a clone cannot clear another store''s flag. It stays serde/ts-skipped. In save() it is cleared right after the metadata write, i.e. once the reset is on disk and the snapshot records it; a later spec-write failure leaves the reset persisted, so clearing there is correct. update_atomically clears it on success. Both paths assert one-shot. (3) The conflict wording no longer uses a pronoun, and the test asserts that. Targeted tests reported green (aida-core 247+15, cli-lib 67, fmt, portability, clippy correctness). Ready for the next batch; branch claude/bug-1641 @ 9844e78738.'
+  created_at: 2026-09-26T15:38:16.708263889Z
+  modified_at: 2026-09-26T15:38:16.708263889Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de32-4bea-7412-acf5-1b27b02177d0
