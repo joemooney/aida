@@ -200,3 +200,9 @@ prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("provenanc
 prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("spec-id leak")
 prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("trace:")
 prose-classification	aida-cli-lib/src/rule_violation.rs:if m.contains("rustfmt")
+# toml-path-interpolation (BUG-1646): a path formatted raw into a TOML basic
+# string is an invalid escape on Windows (`C:\Users\...`). Encode it with
+# `toml::Value::String(..)` or serialize with serde. 3 test sites baselined.
+toml-path-interpolation	aida-cli-lib/src/tests/bug_1629_phase1_recovery_tests.rs:worktree_path = \"{worktree}\"\n\
+toml-path-interpolation	aida-cli-lib/src/tests/story_1218_shift_tick_tests.rs:"scope = \"drain\"\nnode_id = \"1\"\nclone_path = \"{clone}\"\nhost = \"{}\"\npid = 77\nagent = \"queue work\"\nstarted_at = \"{t}\"\nheartbeat_at = \"{t}\"\nttl_secs = 1800\nprocess_backed = true\n",
+toml-path-interpolation	aida-cli-lib/src/tests/story_827_init_readme_registry_tests.rs:path = \"{}\"

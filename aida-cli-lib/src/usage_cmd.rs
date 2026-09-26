@@ -691,7 +691,13 @@ mod usage_timeline_tests {
         );
         std::fs::write(aida_dir.join("usage.jsonl"), fixture).unwrap();
 
-        let _env = crate::test_env::EnvVarsGuard::set(&[("HOME", home.path().to_str().unwrap())]);
+        // `AIDA_HOME` too: on Windows `dirs::home_dir()` ignores `HOME`, so the
+        // fixture home is only reachable through the `AIDA_HOME` override.
+        // trace:BUG-1646 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("HOME", home.path().to_str().unwrap()),
+            ("AIDA_HOME", home.path().to_str().unwrap()),
+        ]);
         let events = usage::read_events();
         assert_eq!(events.len(), 2, "must read the fixture, not the real home");
 
