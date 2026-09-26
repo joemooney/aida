@@ -3336,20 +3336,45 @@ Use this skill when:
     /// template frontmatter intact so Codex loads the scaffolded skills.
     /// trace:BUG-375 | ai:codex
     fn generate_codex_skill(&self, skill_name: &str) -> String {
-        use crate::templates::EMBEDDED_TEMPLATES;
-
-        // A vendor-neutral body under `skills-portable/` wins over the Claude
-        // master: those skills drive Claude-only harness tools in their Claude
-        // form, so the Codex / Antigravity packs ship the portable variant.
-        // trace:STORY-1475 | ai:claude
-        let portable = format!("skills-portable/{}.md", skill_name);
-        let key = format!("skills/{}.md", skill_name);
-        EMBEDDED_TEMPLATES
-            .get(portable.as_str())
-            .or_else(|| EMBEDDED_TEMPLATES.get(key.as_str()))
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("# {}\n\n(template not found)", skill_name))
+        codex_skill_raw(skill_name)
     }
+}
+
+/// Raw (pre-header) body of a Codex / Antigravity pack skill.
+fn codex_skill_raw(skill_name: &str) -> String {
+    use crate::templates::EMBEDDED_TEMPLATES;
+
+    // A vendor-neutral body under `skills-portable/` wins over the Claude
+    // master: those skills drive Claude-only harness tools in their Claude
+    // form, so the Codex / Antigravity packs ship the portable variant.
+    // trace:STORY-1475 | ai:claude
+    let portable = format!("skills-portable/{}.md", skill_name);
+    let key = format!("skills/{}.md", skill_name);
+    EMBEDDED_TEMPLATES
+        .get(portable.as_str())
+        .or_else(|| EMBEDDED_TEMPLATES.get(key.as_str()))
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("# {}\n\n(template not found)", skill_name))
+}
+
+/// The exact bytes the full scaffold writes for skill `name` in skill pack
+/// `pack` (`.claude/skills`, `.codex/skills` or `.antigravity/skills`): the
+/// pack's template body wrapped with the AIDA-Generated header at
+/// `<pack>/<name>/SKILL.md`. Partial installers (the memory-lane footprint)
+/// write this so `scaffold status`, doctor and refresh recognise the file as
+/// pristine AIDA output instead of drift.
+// trace:BUG-1653 | ai:claude
+pub fn rendered_pack_skill(pack: &str, name: &str) -> String {
+    let raw = if pack.trim_end_matches('/') == ".claude/skills" {
+        crate::templates::EMBEDDED_TEMPLATES
+            .get(format!("skills/{name}.md").as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| format!("# {name}\n\n(template not found)"))
+    } else {
+        codex_skill_raw(name)
+    };
+    let path = Path::new(pack).join(name).join("SKILL.md");
+    wrap_with_aida_header(&path, &raw)
 }
 
 /// README scaffolded into `.claude/skills/local/` so a new project sees the

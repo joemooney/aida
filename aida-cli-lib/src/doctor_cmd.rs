@@ -6643,6 +6643,58 @@ hostname = "localhost"
         assert_eq!(finding.action, MEMORY_LANE_SKILL_ACTION);
     }
 
+    /// BUG-1653: a fresh memory-lane project (footprint saved or not) has no
+    /// scaffold drift: its skills carry the AIDA header the full scaffold
+    /// writes, so scaffold status sees them as matching.
+    // trace:BUG-1653 | ai:claude
+    #[test]
+    fn bug_1653_doctor_fresh_memory_lane_reports_no_drift() {
+        for persist_footprint in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let root = dir.path();
+            let store = aida_core::RequirementsStore::new();
+            if persist_footprint {
+                std::fs::create_dir_all(root.join(".aida")).unwrap();
+                crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::MemoryLane)
+                    .unwrap();
+            }
+            crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false)
+                .unwrap();
+            let status = check_scaffold_status(
+                &store,
+                root,
+                &ScaffoldConfig::default(),
+                &root.join(".aida/cache.db"),
+            );
+            let drifted: Vec<_> = status
+                .modified
+                .iter()
+                .map(|(p, _)| p.to_string_lossy().into_owned())
+                .filter(|p| p.contains("/skills/"))
+                .collect();
+            assert!(
+                drifted.is_empty(),
+                "persist={persist_footprint}: {drifted:?}"
+            );
+            for pack in [".claude/skills", ".codex/skills"] {
+                for name in crate::init_cmd::MEMORY_LANE_SKILLS {
+                    let rel = std::path::PathBuf::from(format!("{pack}/{name}/SKILL.md"));
+                    assert!(status.matching.contains(&rel), "{}", rel.display());
+                }
+            }
+            let findings = scan_scaffold_drift(root, &store);
+            assert!(
+                findings.iter().all(|f| f.id != "scaffold-drift/project"
+                    && f.id != "scaffold-drift/codex-skills-missing"),
+                "persist={persist_footprint}: {:?}",
+                findings
+                    .iter()
+                    .map(|f| (&f.id, &f.summary))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
     /// BUG-1645 review: files behind a user-owned symlinked skill directory
     /// are never written by apply/upgrade/refresh, so doctor does not report
     /// them as drift (the finding would never clear).

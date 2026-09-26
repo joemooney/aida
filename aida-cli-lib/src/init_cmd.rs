@@ -1082,12 +1082,11 @@ fn memory_lane_agents_md(store: &RequirementsStore, storage_label: &str) -> Stri
 }
 
 // trace:STORY-1093 | ai:codex
-fn memory_lane_skill_template(name: &str) -> String {
-    let key = format!("skills/{name}.md");
-    aida_core::templates::EMBEDDED_TEMPLATES
-        .get(key.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("# {name}\n\n(template not found)\n"))
+// The header-wrapped bytes the full scaffold writes for this pack, so doctor
+// sees a fresh memory-lane skill as matching and refresh can update it.
+// trace:BUG-1653 | ai:claude
+fn memory_lane_skill_template(pack: &str, name: &str) -> String {
+    aida_core::scaffolding::rendered_pack_skill(pack, name)
 }
 
 // trace:STORY-1093 | ai:codex
@@ -1178,7 +1177,7 @@ pub(crate) fn write_memory_lane_scaffolding(
                 match write_memory_lane_artifact(
                     root,
                     &rel,
-                    &memory_lane_skill_template(name),
+                    &memory_lane_skill_template(pack, name),
                     force,
                 ) {
                     Ok(true) => written += 1,
@@ -5628,5 +5627,46 @@ mod bug_1645_agents_md_link_tests {
             root,
             &root.join("AGENTS.md")
         ));
+    }
+}
+
+#[cfg(test)]
+mod bug_1653_memory_lane_header_tests {
+    use super::{write_memory_lane_scaffolding, MEMORY_LANE_SKILLS};
+
+    /// Memory-lane writes each skill byte-for-byte as the full scaffold would
+    /// (AIDA-Generated header included), in both packs.
+    // trace:BUG-1653 | ai:claude
+    #[test]
+    fn bug_1653_memory_lane_skills_match_full_scaffold_bytes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = aida_core::RequirementsStore::default();
+        write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+
+        let empty = tempfile::tempdir().unwrap();
+        let preview = aida_core::scaffolding::Scaffolder::new(
+            empty.path().to_path_buf(),
+            aida_core::scaffolding::ScaffoldConfig::default(),
+        )
+        .preview(&store);
+        for pack in [".claude/skills", ".codex/skills"] {
+            for name in MEMORY_LANE_SKILLS {
+                let rel = std::path::PathBuf::from(format!("{pack}/{name}/SKILL.md"));
+                let expected = &preview
+                    .artifacts
+                    .iter()
+                    .find(|a| a.path == rel)
+                    .unwrap_or_else(|| panic!("full scaffold renders {}", rel.display()))
+                    .content;
+                let on_disk = std::fs::read_to_string(root.join(&rel)).unwrap();
+                assert!(
+                    on_disk.contains("<!-- AIDA Generated: v"),
+                    "{}",
+                    rel.display()
+                );
+                assert_eq!(&on_disk, expected, "{}", rel.display());
+            }
+        }
     }
 }

@@ -1010,6 +1010,79 @@ global = true
         }
     }
 
+    /// BUG-1653: refresh updates an outdated-but-unedited memory-lane skill
+    /// (it recognises the AIDA header memory-lane now writes), keeps a
+    /// user-edited one, and still installs nothing new.
+    // trace:BUG-1653 | ai:claude
+    #[test]
+    fn bug_1653_refresh_updates_outdated_memory_lane_skill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = aida_core::RequirementsStore::default();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::MemoryLane).unwrap();
+        crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+
+        let in_skill_pack =
+            |p: &&PathBuf| p.starts_with(".claude/skills") || p.starts_with(".codex/skills");
+        let touched = |packs: &[PackRefresh]| -> (Vec<PathBuf>, Vec<PathBuf>) {
+            let pick = |f: fn(&RefreshReport) -> &Vec<PathBuf>| {
+                packs
+                    .iter()
+                    .flat_map(|p| f(&p.report).iter())
+                    .filter(in_skill_pack)
+                    .cloned()
+                    .collect::<Vec<_>>()
+            };
+            (pick(|r| &r.refreshed), pick(|r| &r.kept_unmarked))
+        };
+
+        // Nothing to do for the skills of a fresh memory-lane project.
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert_eq!(touched(&packs), (vec![], vec![]));
+        assert!(packs.iter().all(|p| p.report.installed.is_empty()));
+
+        // Age codex aida-capture: an older, unedited AIDA copy. Hand-edit
+        // claude aida-learn.
+        let capture = root.join(".codex/skills/aida-capture/SKILL.md");
+        let current = std::fs::read_to_string(&capture).unwrap();
+        let stale = wrap_with_aida_header(
+            Path::new(".codex/skills/aida-capture/SKILL.md"),
+            "---\nname: aida-capture\n---\n# Old\n\nstale body\n",
+        );
+        std::fs::write(&capture, &stale).unwrap();
+        let learn = root.join(".claude/skills/aida-learn/SKILL.md");
+        let edited = std::fs::read_to_string(&learn).unwrap() + "\nMy own note.\n";
+        std::fs::write(&learn, &edited).unwrap();
+
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert_eq!(
+            touched(&packs),
+            (
+                vec![PathBuf::from(".codex/skills/aida-capture/SKILL.md")],
+                vec![]
+            )
+        );
+        let kept_edited: Vec<_> = packs
+            .iter()
+            .flat_map(|p| p.report.kept_edited.iter().cloned())
+            .collect();
+        assert_eq!(
+            kept_edited,
+            [PathBuf::from(".claude/skills/aida-learn/SKILL.md")]
+        );
+        assert_eq!(std::fs::read_to_string(&capture).unwrap(), current);
+        assert_eq!(std::fs::read_to_string(&learn).unwrap(), edited);
+        assert!(packs.iter().all(|p| p.report.installed.is_empty()));
+        for pack in [".claude/skills", ".codex/skills"] {
+            assert_eq!(
+                skill_names(&root.join(pack)),
+                ["aida-capture", "aida-learn"],
+                "{pack}"
+            );
+        }
+    }
+
     /// A pre-manifest full pack where the user deleted aida-req, then a
     /// memory-lane re-run, then refresh: aida-req is not resurrected.
     // trace:TASK-1503 | ai:claude
