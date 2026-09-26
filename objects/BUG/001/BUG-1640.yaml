@@ -3,12 +3,12 @@ spec_id: BUG-1640
 agreed_id: BUG-1640
 title: '~/.aida guard flakes: live sessions update roles/*.toml last_active_at during shell tests'
 description: 'Found while implementing BUG-1613. The BUG-1634 home guard (tests/lib/isolated_home.sh) watches the real ~/.aida/roles/ in default mode. Live AIDA sessions routinely rewrite roles/<role>.toml (last_active_at, activity entries) while a test runs, so the guard reports a leak the test didn''t cause and fails test_distributed.sh intermittently. Fix: compare roles/*.toml by a content hash that excludes volatile fields (last_active_at and activity), or watch only for files that are created or deleted plus non-volatile content. Keep catching real leaks: a test writing a new roles file, or changing a role''s name, purpose or system_prompt, must still fail. Acceptance: a run concurrent with an ''aida'' command that touches the role passes; a planted real leak still fails.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T06:48:17.077993220Z
-modified_at: 2026-09-26T06:48:17.077993220Z
+modified_at: 2026-09-26T06:48:25.890011589Z
 req_type: Bug
 filed_at:
   code_sha: 63ba7573152fb98eb674bb8570e649997f64dd10
