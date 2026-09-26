@@ -216,7 +216,7 @@ fn bug_1657_dirty_worktree_is_never_reaped() {
     );
     std::fs::write(wt.join("scratch.txt"), "uncommitted\n").unwrap();
 
-    let dirty = !worktree_dirty_entries(&wt).is_empty();
+    let dirty = worktree_status_dirty(&wt);
     assert!(dirty, "fixture worktree should read as dirty");
     let facts = gather_merge_facts(
         &root,
@@ -604,7 +604,7 @@ fn bug_1657_removed_worktree_dir_reaps_only_landed_work() {
     std::fs::remove_dir_all(&wt).unwrap();
     assert!(session_head_on_branch(&wt, "spec-a"));
     assert!(session_head_on_branch(Path::new(""), "spec-a"));
-    let dirty = !worktree_dirty_entries(&wt).is_empty();
+    let dirty = worktree_status_dirty(&wt);
     assert!(!dirty);
 
     let facts = gather_merge_facts(
@@ -739,4 +739,41 @@ fn bug_1657_branch_moved_since_scan_is_kept() {
     assert!(branch_still_at(&root, "spec-b", tip_b.as_deref()));
     assert!(delete_branch_at(&root, "spec-b", tip_b.as_deref()));
     assert!(resolve_local_branch_tip(&root, "spec-b").is_none());
+}
+
+/// A worktree whose `git status` fails (here: a corrupt `.git` file) is
+/// unknown, not clean — the session is kept, even with its spec landed.
+#[test]
+fn bug_1657_unreadable_worktree_status_is_kept() {
+    let (tmp, root) = batched_repo();
+    let wt = tmp.path().join("wt-spec-a");
+    git(
+        &root,
+        &["worktree", "add", "-q", wt.to_str().unwrap(), "spec-a"],
+    );
+    assert!(!worktree_status_dirty(&wt), "fresh worktree reads clean");
+    std::fs::write(wt.join(".git"), "not a gitdir pointer\n").unwrap();
+
+    assert!(worktree_status_unreadable(&wt));
+    assert!(
+        worktree_dirty_entries(&wt).is_empty(),
+        "the old probe read this as clean"
+    );
+    let dirty = worktree_status_dirty(&wt);
+    assert!(dirty);
+    let facts = gather_merge_facts(
+        &root,
+        Some("main"),
+        "spec-a",
+        "BUG-9001",
+        dirty,
+        true,
+        |_| panic!("no forge lookup for an unreadable worktree"),
+    );
+    match reap_verdict(facts, true) {
+        ReapVerdict::Skip(reason) => assert!(reason.contains("uncommitted"), "{reason}"),
+        v => panic!("an unreadable worktree must never be reaped, got {v:?}"),
+    }
+    // A directory that no longer exists is not "unreadable".
+    assert!(!worktree_status_unreadable(&tmp.path().join("gone")));
 }

@@ -457,6 +457,31 @@ pub(crate) fn worktree_head_on_branch(worktree: &std::path::Path, branch: &str) 
         })
 }
 
+/// Does `git status` fail on a worktree directory that exists? A missing
+/// directory is not unreadable (there is nothing left to lose in it).
+// trace:BUG-1657 | ai:claude
+pub(crate) fn worktree_status_unreadable(worktree: &std::path::Path) -> bool {
+    if worktree.as_os_str().is_empty() || !worktree.exists() {
+        return false;
+    }
+    !std::process::Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["status", "--porcelain"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+/// The scan's dirty fact, failing closed: uncommitted entries, OR a status
+/// that cannot be read on a directory that exists (unknown counts as dirty,
+/// because the reap removes the worktree with force).
+// trace:BUG-1657 | ai:claude
+pub(crate) fn worktree_status_dirty(worktree: &std::path::Path) -> bool {
+    worktree_status_unreadable(worktree) || !worktree_dirty_entries(worktree).is_empty()
+}
+
 /// The scan's `head_on_branch` fact: no worktree, a worktree directory that
 /// was removed by hand (no checkout left to be off-branch — the merge and
 /// content proofs still gate removal), or a worktree checked out on `branch`.
@@ -705,7 +730,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
         );
 
         // Merge facts.
-        let dirty = has_worktree && !worktree_dirty_entries(&lease.worktree_path).is_empty();
+        let dirty = has_worktree && worktree_status_dirty(&lease.worktree_path);
         let (worktree, branch_tip) = gather_merge_facts_pinned(
             project_root,
             default_ref.as_deref(),
@@ -799,6 +824,12 @@ fn reap_one(
     }
 
     if has_worktree && lease.worktree_path.exists() {
+        // An unreadable status is not "clean": the teardown below forces
+        // removal, so keep a tree whose contents cannot be checked.
+        // trace:BUG-1657 | ai:claude
+        if worktree_status_unreadable(&lease.worktree_path) {
+            return "skipped — worktree status could not be read".to_string();
+        }
         // Never destroy work that appeared between scan and reap.
         if !worktree_dirty_entries(&lease.worktree_path).is_empty() {
             let salvage =
