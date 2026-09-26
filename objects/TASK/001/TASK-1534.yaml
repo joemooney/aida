@@ -8,13 +8,50 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:57:18.908583588Z
-modified_at: 2026-09-26T20:57:23.095064052Z
+modified_at: 2026-09-26T21:28:36.777111768Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0de43-fda7-7f43-84b8-7d40cdd3ebac
   created_at: 2026-09-26T20:57:23.095050769Z
   created_by: joe
+comments:
+- id: 01a0df9e-baa9-7852-b2bf-e168ff93e4c6
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; origin/claude/bug-1657 c7b7538680 noted): make `aida worktree gc` (doctor category merged-agent-worktrees) build its facts with session_reap's shared prober instead of hand-rolled probes that pin spec_trailer_on_main: false.
+
+    FILES/SYMBOLS
+    - origin/main aida-cli-lib/src/doctor_cmd.rs: run_merged_agent_worktree_gc :269 (thin wrapper -> doctor_multi_agent); scan_merged_agent_worktrees (on the bug-1657 branch ~:3990-4130; per-worktree probes: worktree_dirty_entries, two `rev-list --count` calls, detect_merged_pr_for_branch_via_forge, branch_content_fully_landed, then AgentWorktreeFacts { .., spec_trailer_on_main: false }); classify_agent_worktree (branch :3610; Removable when spec_trailer_on_main -> "its spec landed on origin/main through an integration merge"); spec_id_from_work_branch :3049 (wraps crate::work_spec_id_from_branch); branch_content_fully_landed ~:3676; branch-only branch_paths_match_default (doctor_cmd.rs on the branch :3846) + parse_raw_diff_paths.
+    - bug-1657 branch aida-cli-lib/src/session_reap.rs: spec_trailer_landed_on(project_root, default_ref, branch, spec) -> bool :377; worktree_head_on_branch :437; gather_merge_facts(project_root, default_ref: Option<&str>, branch, spec, dirty, worth_probing, pr_merged: impl FnOnce(&str) -> bool) -> AgentWorktreeFacts :472. It already does: fail-closed rev-list (u32::MAX), trailer probe, forge lookup only when the trailer missed, content proof = branch_content_fully_landed || branch_paths_match_default. The per-path blob/mode identity the strict reviewer demanded IS in c7b7538680 (tree-to-tree `diff --raw -z --no-renames --no-textconv`, union of paths from `log --raw -m`, no merge-tree at all).
+    - Tests: aida-cli-lib/src/tests/bug_1657_batched_reap_tests.rs helpers git, commit_file, batched_repo() (tempdir repo with main + spec branch), land_batch(root, files, spec, pr), reap_verdict.
+
+    APPROACH
+    1. In scan_merged_agent_worktrees replace the dirty -> ancestor -> pr_merged -> content block with:
+       let dirty = ..; let spec = spec_id_from_work_branch(branch); let facts = crate::session_reap::gather_merge_facts(project_root, Some(&default_ref), branch, spec.as_deref().unwrap_or(""), dirty, !dirty, |b| matches!(detect_merged_pr_for_branch_via_forge(project_root, b), PrLookup::Found(_)));
+       Findings text and the heal gate stay as they are. gather_merge_facts is already pub(crate); its doc gains "also feeds doctor merged-agent-worktrees".
+    2. Because gather_merge_facts fails closed on a rev-list error (unique_unmerged_commits = u32::MAX, ancestor_of_main = false), doctor inherits BUG-1657's fail-closed rule for free (see BUG NOTE).
+    3. worth_probing = !dirty with spec "" when the branch name has no spec id: spec_trailer_landed_on returns false for an empty spec, so only the trailer leg is skipped and today's forge lookup for non-spec branches is preserved. Do NOT add the worktree_head_on_branch check: worktree gc lists worktrees by their branch, so the lease-off-branch case does not apply.
+    4. Removable reason text stays the branch's wording; the summary already says "mergeable-and-gone (reason)". Add `// trace:TASK-1534 | ai:<tool>`.
+
+    EDGE CASES / FAIL-SAFE
+    - Batch landed then a later unshipped commit on the branch: the content proof fails on the touched path -> Keep with the existing "N commit(s) not on origin/main" reason. Revert-after-batch and .gitattributes merge=ours: covered by the branch's tests, same helper. git < 2.38: irrelevant (no merge-tree). Dirty worktree: never Removable, forge not consulted (unchanged). Default ref unresolvable: doctor returns no findings (unchanged; gather_merge_facts with None also fails closed).
+
+    TESTS (new aida-cli-lib/src/tests/task_1534_worktree_gc_trailer_tests.rs; reuse batched_repo/land_batch/commit_file by making them pub(crate) in bug_1657_batched_reap_tests.rs or moving them to tests/support/batched_repo.rs; fake HOME via the test_home fence; no forge: pr_merged = |_| false)
+    - worktree_gc_reports_batch_landed_branch_as_reclaimable: repo with .claude/worktrees/agent-x on task-9-foo (so is_agent_managed_worktree is true), branch commit touches f.txt, land_batch squashes it on main with a body line "... (TASK-9)"; scan_merged_agent_worktrees -> one finding whose summary contains "integration merge" and whose action contains "remove worktree".
+    - worktree_gc_keeps_branch_with_unshipped_commit: same, then commit_file on the branch after the batch -> Keep with "not on".
+    - worktree_gc_rev_list_failure_keeps_worktree: point default_ref at a bogus ref (delete the ref in the fixture) -> no Removable finding.
+    - The pure classify_agent_worktree test already exists on the branch; do not duplicate.
+
+    OVERLAP / ORDERING
+    - Blocked on BUG-1657 merging (in rework at c7b7538680; the per-path demand is implemented but not yet re-reviewed). Implement after it lands and rebase on its final symbol names: gather_merge_facts, spec_trailer_landed_on, branch_paths_match_default may be renamed or moved in rework (if the content proof moves to a shared module, call that). No overlap with integrate-101 (its doctor_cmd.rs hunks are scaffold/perf only).
+
+    BUG NOTE (main, not filed): scan_merged_agent_worktrees sets unique_unmerged_commits = git(rev-list --count).unwrap_or(0) while ancestor_of_main = ..unwrap_or(false). A failed rev-list (bad ref, corrupt worktree) yields ancestor=false, unique=0; if the forge then reports a merged PR, classify_agent_worktree returns Removable with no content proof (the content probe only runs when unique > 0), so `aida worktree gc --yes --force` could delete a branch whose unshipped commits git could not count. BUG-1657 fixed the same fail-open in session_reap only; reusing gather_merge_facts here fixes doctor too.
+
+    VERDICT: READY (after BUG-1657 merges).
+  created_at: 2026-09-26T21:28:36.777111768Z
+  modified_at: 2026-09-26T21:28:36.777111768Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: b13b2c611e810a2ba044efb50b32070667d4b37a
   branch: main
