@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:16:11.890546672Z
-modified_at: 2026-09-26T05:40:34.892502393Z
+modified_at: 2026-09-26T06:21:37.330754513Z
 req_type: Bug
 tags:
 - aida:history
@@ -51,6 +51,30 @@ comments:
     Tests: bug_1631 4/4, history 127, task_1507 56, sweep (--ignored) ok, task_1508 8, mcp 166, bug_1502_format_json_audit 6, all pass. Mutation check: dropping the spec ID from the header fails bug_1631_multi_spec_feed_… as it should. Tests use tempdirs only.
   created_at: 2026-09-26T05:40:34.892502393Z
   modified_at: 2026-09-26T05:40:34.892502393Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc60-5ab2-7aa0-a342-ab9873f298f5
+  author: joe
+  content: |-
+    Strict re-review: REQUEST CHANGES — reviewed 30706a4ebb (the full branch against origin/main). Both earlier blockers are fixed and verified on a throwaway clone of the store. Three small criteria still fail.
+
+    VERIFIED:
+    (1) Mapping-form edges. rel_type_key (history.rs ~1935) goes through RelationshipType's own deserializer. Plain, !Custom, {custom:} and {Custom:} all give the same key. Ran the branch binary on a clone:
+    - history TASK-291 --full: no event at ce01121e; only the real +implemented-by STORY-264 add.
+    - Multi-spec feed over 2026-09-20..24 (2000 events), index and walk: identical, 253 relationship events, 0 removals at ce01121e, 0 unknown, 0 '+N more'.
+    - Custom edges added after the migration are named (implemented-by 36, implements 37).
+    - The decoder bump to 3 renames the index file (history-v5-3.db), so the v2 file is ignored.
+    (2) --json is pure JSON. It parses under script(1) at a real pty. With AIDA_AGENT_OUTPUT=0 it also parses for: --id, --full, events --id, --format human --json, --author, --oneline, --shipped, --status-changes, --comments, --all, --include-meta, --type. --kind bails with empty stdout.
+    (3) cache.db. The new lookup opens cache.db O_RDONLY (checked with strace). cache.db's sha1 and mtime are unchanged after a run. With no cache it falls back to the object scan. (cache.db creation comes from the existing CLI bootstrap, not from this change.)
+    (4) records_json gives MCP the same keys and values as before. The only visible change: relationship summaries now name edges, and 'detail' gains 'edges'. Nothing in the repo parses the old summary text.
+
+    MUST FIX:
+    A. The sweep fixture never produces custom edges. Edges are added one at a time from 0, and specs get deleted, so index i%3==1 (the custom one) is never reached with the fixed seeds. I counted events in a throwaway copy: rel_events=51, custom=0. So the rel_mapping_form flip is a no-op and the parity sweep never covers the tagged or mapping forms. (task_1507_history_cache_tests.rs:97, 2439, 2444.) When I seeded new specs with s.relationships = rng.below(4), the sweep still passes: rel_events=69, custom=48, 0 mismatches. Put that in the fixture and keep a count assertion.
+    B. A stale cache is not handled. edge_targets_from_cache (history.rs:855-861) only falls back when the cache is missing. It never compares cache_meta.source_head_sha with the store HEAD. The comment 'the mapping never changes once assigned' (history.rs:819) is false: spec_id changes on duplicate repair (aida-core models.rs:6065), renumbering (models.rs:6518/6702) and agreed-id promotion (lib.rs:19823). Risk is low for the CLI: its bootstrap refreshes the cache first (I checked this with a rename on the clone) and fails hard if it cannot. It is real for the long-lived MCP server, where a stale row would show the old or wrong spec ID. Fix: check source_head_sha against HEAD and scan when they differ, and correct the comment.
+    C. Counts can still under-report (history.rs:1879-1891). yaml_edge_set is a set, and max(set diff, length delta) misses a duplicate removed together with an equal-sized add. A temp test going from [X,X] to [X,Y] produced RelationshipsChange{added:1, removed:0}: the removed duplicate is lost. Use a multiset diff (BTreeMap counts), or drop the claim 'never undercount'. Minor; duplicate edges are rare.
+
+    TESTS (worktree target, CARGO_BUILD_JOBS=3): bug_1631 9/9, history 132, task_1507 56, mcp 166, sweep (--ignored) ok, aida-cli bug_1502_format_json_audit 7/7. Everything ran in tempdirs or a clone with its own HOME and AIDA_STORE. Neither ~/.aida nor the live store was touched.
+  created_at: 2026-09-26T06:21:37.330754513Z
+  modified_at: 2026-09-26T06:21:37.330754513Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 5b98d7cfb3485889468fe1fa78a09924b04f49af
