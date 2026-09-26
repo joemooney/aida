@@ -1,5 +1,8 @@
 job: watchdog-route
-due_since: 2026-09-24T20:05:31.054256742Z
-due_reason: on CronJobFailed
-due_failure:
-  trip_id: hub-drift-guard@2026-09-24T20:00:01.719656572Z
+last_run: 2026-09-26T15:09:05.294241744Z
+last_by:
+  seat: advisor
+  session: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+  vendor: antigravity
+result: done
+note: 'No action: there is no watchdog trip. This route fired on the hub-drift trip evidence; misrouting filed.'
