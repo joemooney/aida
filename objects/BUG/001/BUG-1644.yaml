@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:45:55.970714904Z
-modified_at: 2026-09-26T12:11:38.359204287Z
+modified_at: 2026-09-26T12:12:01.908003570Z
 req_type: Bug
 tags:
 - cache
@@ -86,6 +86,12 @@ comments:
     N3 [carried from round 1, follow-up] Lock records have no host or pid-namespace identity (round-1 #4, TASK-1484 scope). Not a blocker for this bug.
   created_at: 2026-09-26T12:11:38.359204287Z
   modified_at: 2026-09-26T12:11:38.359204287Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dda1-29f4-7af3-b362-e7c13c69449b
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): round-2 APPROVE WITH NITS accepted. Nits 1 (a with_cache_write shared-sidecar test, since mutation M2 survived) and 2 are being closed before integration; the orchestrator will delta-check them. Nit 3 is already on STORY-1484.'
+  created_at: 2026-09-26T12:12:01.908003570Z
+  modified_at: 2026-09-26T12:12:01.908003570Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
