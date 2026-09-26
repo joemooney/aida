@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:34.548951365Z
-modified_at: 2026-09-26T18:37:30.719610970Z
+modified_at: 2026-09-26T21:32:56.653933827Z
 req_type: Bug
 comments:
 - id: 01a0dea0-6f6e-78a3-ae49-563b56513f63
@@ -17,6 +17,38 @@ comments:
   created_at: 2026-09-26T16:50:51.374651055Z
   modified_at: 2026-09-26T16:50:51.374651055Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0dfa2-b1cd-7522-802f-33b585ee7a0c
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; claude/integrate-101 noted): stamp the rebuild with the HEAD the rows actually came from, by reconciling every file TOUCHED (not net-changed) while the load ran.
+
+    FILES/SYMBOLS
+    - aida-core/src/db/cached_git_backend.rs: ensure_cache_fresh :314-378 (pre-load HEAD captured at :373, full_rebuild(&head) at :377); full_rebuild :414-421 (inner.load() :415-418, then rebuild_from_store(&store, head) :419: the stamp is the PRE-load HEAD); same shape in rebuild_after_cache_schema_drift :426-435 and rebuild_cache :696-701. Incremental diff base: ensure_cache_fresh :332-341 + try_incremental_update :501-587 (changed_object_files(recorded, head) at :504 is a NET `git diff`, which is why an ABA change is invisible). integrate-101 does not touch these lines (its cached_git_backend.rs delta is the BUG-1670 strict siblings only).
+    - aida-core/src/git_ops.rs: changed_object_files :1126-1160; add touched_object_files(repo, from, to) beside it (`git log --format= --name-only --no-renames --end-of-options from..to -- objects`, deduped paths).
+    - aida-core/src/db/cache.rs: rebuild_projection :1201-1323 unchanged (the stamp at :1298 stays inside the txn, TASK-1515).
+
+    APPROACH (spec option 1: post-load re-check + bounded reconcile; NOT per-row blob ids, which need a schema bump 15->16, a forced rebuild for every user and an O(n) ls-tree compare on every incremental). One helper load_store_at_head(&self) -> Result<(RequirementsStore, String)> replaces the load in all three rebuild callers:
+    1. h0 = current_head_sha(); store = inner.load(); h1 = current_head_sha(). If h1 == h0 return (store, h0) (common case, zero extra cost).
+    2. Else for up to 3 rounds: touched = touched_object_files(h_k, h_k+1); for each path re-read from the worktree via object_store::read_object_from_path (exists -> replace/insert in store.requirements by spec_id; missing -> remove); h_k+2 = current_head_sha(); if unchanged return (store, h_k+1).
+    3. On exhaustion (HEAD moved every round): return the last reconciled base h_k with one `eprintln!("warning: store kept moving during cache rebuild; stamped <h_k>")`. Never stamp a HEAD newer than the rows. The touched-union (not the net diff) is what closes the ABA inside the load window; after a consistent stamp, later ABAs are harmless because the rows equal the stamped tree.
+    Empty HEAD (non-git fixture) short-circuits as today.
+
+    EDGE CASES / FAIL-SAFE
+    - A touched path whose stem is unparseable -> treat as full-rebuild-needed again (re-load once, then give up with the warning). `git log` failure -> fall back to today's behaviour (stamp h0) with a warning, never Err. Deletions: touched + missing on disk -> row removed (a file deleted then restored appears in the union and is re-read: the spec's ghost case). Migration-pending rebuilds go through the same helper; the drop still happens inside rebuild_projection's txn. Residual: only a commit storm faster than 3 reconcile rounds leaves a milliseconds-wide window; document it in the helper comment and replace the "Tracked separately as a follow-up bug" text at :363-371 with the BUG-1663 reference (TASK-1515 nit 1).
+
+    TESTS (aida-core cached_git_backend tests; reuse task_1515_backend :2363, task_1515_external_retitle :2382, task_1515_read :2402, row_snapshot :1782; add a cfg(test) thread-local hook bug_1663_before_rebuild_load() called in the helper between capturing h0 and inner.load(), same shape as task_1515_after_incremental_reads :2612-2662; tempdir store, no HOME use)
+    - bug_1663_change_during_rebuild_load_then_revert_converges: hook retitles FR-1-001 to "ghost" (commit C1) after h0 is captured; force the full path via cache.set_source_head_sha("") then ensure_cache_fresh(); assert stamp == C1 and row == "ghost"; revert the title (C2); ensure_cache_fresh(); assert row == original. Without the fix the row stays "ghost" (diff h0..C2 is empty).
+    - bug_1663_delete_during_rebuild_load_then_restore_reappears: hook deletes FR-1-002 via the external backend; after the rebuild the row is absent and the stamp is post-delete; restore the object (external update_requirement re-creates the file) and the next incremental brings the row back.
+    - bug_1663_head_moving_every_round_terminates_with_consistent_stamp: hook moves HEAD on every call (like task_1515_head_moving_every_attempt_full_rebuilds_at_current_head :2701); assert termination and that row_snapshot after one more quiet ensure_cache_fresh() equals a fresh rebuild_cache().
+    - bug_1663_rebuild_cache_and_schema_drift_use_post_load_head (both explicit callers go through the helper).
+
+    OVERLAP / ORDERING
+    - Land BEFORE TASK-1526 (slice B): B's worker "stamps the HEAD it actually loaded" should call this helper, and B's nits 2/3/4 live in ensure_cache_fresh / rebuild_from_store / try_incremental_update, disjoint from the new helper except the comment at :363-371. BUG-1673 is disjoint (object_store.rs loader); either order. No conflict with integrate-101.
+
+    VERDICT: READY. Strict review (cache writes).
+  created_at: 2026-09-26T21:32:56.653933827Z
+  modified_at: 2026-09-26T21:32:56.653933827Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0dea0-66d6-7c71-a99a-d4b483ae8687
   author: joe
