@@ -17784,10 +17784,13 @@ fn suggested_focus_for(target: &aida_core::Requirement) -> Option<String> {
 /// focus's transitive subtree, apply the configured `[focus] out_of_scope`
 /// policy. `force` ALWAYS overrides. Membership reuses the cache's
 /// `descendant_ids` closure (TASK-955) — the same subtree the focus read-scope
-/// uses — rather than re-walking the hierarchy. Best-effort: an unresolvable
-/// focus spec or a cache error skips the guard rather than blocking real work
-/// (a `Block` policy still returns `Err` on a genuine out-of-scope start).
+/// uses — rather than re-walking the hierarchy. An unresolvable focus spec
+/// skips the guard rather than blocking real work. The subtree is read with a
+/// strict cache refresh, and a cache or refresh error fails the start (fail
+/// closed) instead of judging scope on a stale graph; a `Block` policy also
+/// returns `Err` on a genuine out-of-scope start.
 // trace:STORY-717 | ai:claude
+// trace:BUG-1670 | ai:claude
 fn focus_scope_guard(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
