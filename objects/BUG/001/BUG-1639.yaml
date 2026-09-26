@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T04:47:41.715373320Z
-modified_at: 2026-09-26T04:47:41.715373320Z
+modified_at: 2026-09-26T04:59:41.162430675Z
 req_type: Bug
 tags:
 - antigravity
@@ -28,6 +28,24 @@ tags:
 - parity
 - scaffolding
 - skills
+comments:
+- id: 01a0dc11-02d6-71c0-8f55-7532101e1b0e
+  author: joe
+  content: 'Product clarification: in the AIDA source repo, the temporary recovery path may symlink the 23 current Codex scaffold skills plus aida-handoff into .codex/skills/<name>/SKILL.md, selecting skills-portable/<name>.md where it exists and the master skill otherwise. At present only aida-orchestrate has a skills-portable file; aida-handoff correctly falls back to its master. The durable developer-repo fix should extend make sync-templates to manage .codex/skills/ and .antigravity/skills/ from the same canonical derived inventory and vendor-selection logic, without broad scaffold apply rewriting project docs. Verify Codex follows the symlinked SKILL.md form before relying on the links.'
+  created_at: 2026-09-26T04:54:57.494936455Z
+  modified_at: 2026-09-26T04:54:57.494936455Z
+- id: 01a0dc15-56ea-7830-9d37-e2167d0b3468
+  author: joe
+  content: |-
+    Scope expansion (2026-09-25, operator + Antigravity review):
+
+    1. DISCOVERY PATH IS UNSETTLED — verify before fixing. The scaffolder writes Codex skills to .codex/skills/ and Antigravity skills to .antigravity/skills/. But AIDA's own docs/agents/porting-claude-code-to-codex.md (§A.1) says Codex skills live at .agents/skills/<name>/SKILL.md, and Antigravity reports it discovers workspace skills from .agents/skills/ (walking cwd → repo root), not .antigravity/skills/. BUG-1117 asserted .codex/skills/ is the discoverable Codex surface. These cannot all be right. Acceptance: an empirical check per vendor (current Codex CLI, Antigravity CLI) that records which directories each discovers, whether it follows a symlinked SKILL.md, and the vendor version tested. Record the outcome in docs/agents/seat-parity.md and fix whichever of the scaffolder / porting doc / BUG-1117 note is wrong.
+    2. If both vendors read .agents/skills/, scaffold ONE shared pack there (portable body wins over the Claude master) instead of two per-vendor dirs. Keep the old dirs working only as long as a supported vendor version still reads them.
+    3. Dev repo: extend make sync-templates (and make check-templates) to link the non-Claude pack as symlinks into aida-core/templates, the same way .claude/skills is linked, so this repo dogfoods Codex/Antigravity skills without running scaffold apply (which would also rewrite README.md/CLAUDE.md/AGENTS.md here).
+    4. .agents/ is currently untracked in this repo and holds a third-party skill (typesafe-ai, MIT). Decide whether that directory is tracked, and whether third-party skills belong in it or in a gitignored local area.
+  created_at: 2026-09-26T04:59:41.162430675Z
+  modified_at: 2026-09-26T04:59:41.162430675Z
+  session_id: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
 filed_at:
   code_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
   branch: main
