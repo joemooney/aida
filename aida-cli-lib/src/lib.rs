@@ -23551,9 +23551,10 @@ fn collect_doctor_findings(
     // the age threshold is a safe heal; a LIVE owner past its expected duration
     // is diagnostic evidence only (never healed). trace:TASK-1484 | ai:claude
     // BUG-1644: the sidecar is resolved from the SHARED (symlink-resolved)
-    // cache location; a stray per-worktree sidecar left beside a symlinked
-    // cache by an older binary is checked too, and reported even when its
-    // owner is alive. trace:BUG-1644 | ai:claude
+    // cache location; an unshared sidecar an older binary left beside the
+    // symlinked cache path is checked too, and reported even when its owner
+    // is alive (its arm precedes the generic overrun arm so a live, overdue
+    // stray keeps its explanation). trace:BUG-1644 | ai:claude
     let stray_lock_info = aida_core::stray_cache_lock_info_path(&cache_path);
     let lock_info_paths = std::iter::once(aida_core::cache_lock_info_path(&cache_path))
         .chain(stray_lock_info.clone());
@@ -23592,6 +23593,25 @@ fn collect_doctor_findings(
                     safe_heal: true,
                 });
             }
+            _ if is_stray && obs.owner.presumed_alive() => {
+                push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!(
+                        "unshared lock-info beside a symlinked cache, from live pid {} ({}); current binaries read the sidecar at the resolved cache location, so this record is ignored{}",
+                        obs.info.pid,
+                        command,
+                        obs.overrun_note()
+                            .map(|note| format!("; {note}"))
+                            .unwrap_or_default()
+                    ),
+                    action: format!(
+                        "upgrade the aida binary that pid {} runs; the file is removed once its owner exits",
+                        obs.info.pid
+                    ),
+                    safe_heal: false,
+                });
+            }
             _ if obs.live_overrun().is_some() => {
                 push(DoctorFinding {
                     category: "stale-locks".to_string(),
@@ -23605,21 +23625,6 @@ fn collect_doctor_findings(
                     ),
                     action: format!(
                         "check pid {}; the lock clears when it finishes (not removed while the owner is alive)",
-                        obs.info.pid
-                    ),
-                    safe_heal: false,
-                });
-            }
-            _ if is_stray && obs.owner.presumed_alive() => {
-                push(DoctorFinding {
-                    category: "stale-locks".to_string(),
-                    id: lock_info_path.display().to_string(),
-                    summary: format!(
-                        "per-worktree cache lock-info from pid {} ({}) sits beside a shared (symlinked) cache; current binaries never read it",
-                        obs.info.pid, command
-                    ),
-                    action: format!(
-                        "upgrade the aida binary that pid {} runs; the file is removed once its owner exits",
                         obs.info.pid
                     ),
                     safe_heal: false,
@@ -36606,52 +36611,9 @@ fn session_start(
     // etc. live in main's tree), so a whole-dir symlink would skip when
     // git checks out those tracked files. Instead, ensure .aida/ exists
     // and symlink only the gitignored runtime subdirs into it.
-    // trace:BUG-52 | ai:claude
+    // trace:BUG-52 trace:BUG-1644 | ai:claude
     #[cfg(unix)]
-    {
-        let store_src = project_root.join(".aida-store");
-        let store_dst = worktree_path.join(".aida-store");
-        if store_src.exists() && !store_dst.exists() {
-            std::os::unix::fs::symlink(&store_src, &store_dst).with_context(|| {
-                format!(
-                    "symlink {} -> {} failed",
-                    store_dst.display(),
-                    store_src.display()
-                )
-            })?;
-        }
-
-        let parent_aida = project_root.join(".aida");
-        let worktree_aida = worktree_path.join(".aida");
-        if parent_aida.exists() {
-            std::fs::create_dir_all(&worktree_aida)?;
-            for runtime in &[
-                "sessions",
-                "agents",
-                "roles",
-                "cache.db",
-                "cache.db-shm",
-                "cache.db-wal",
-                "pgdata",
-            ] {
-                let src = parent_aida.join(runtime);
-                let dst = worktree_aida.join(runtime);
-                if src.exists() && !dst.exists() {
-                    std::os::unix::fs::symlink(&src, &dst).with_context(|| {
-                        format!("symlink {} -> {} failed", dst.display(), src.display())
-                    })?;
-                }
-            }
-            // BUG-1644: `cache.db.lock-info` is deliberately NOT linked. Its
-            // path derives from the shared (symlink-resolved) cache location
-            // (`aida_core::cache_lock_info_path`), so a reader here and a
-            // writer in the main checkout already meet at one sidecar, and a
-            // not-yet-created parent cache needs no dangling link. A reused
-            // worktree may still hold an older binary's per-worktree sidecar;
-            // retire it when its owner is dead. trace:BUG-1644 | ai:claude
-            retire_stray_worktree_lock_info(&worktree_aida);
-        }
-    }
+    link_worktree_runtime_state(&project_root, &worktree_path)?;
 
     // STORY-248: when an explicit `--base` was passed (queue work
     // --stack / --base, or session start --base), capture the
@@ -41399,25 +41361,7 @@ fn session_end(
         if store_link.is_symlink() {
             let _ = std::fs::remove_file(&store_link);
         }
-        let aida_dir = target.worktree_path.join(".aida");
-        // BUG-1644: retire an older binary's per-worktree lock-info sidecar
-        // (dead owner only) while `cache.db` is still a symlink, i.e. while
-        // it is still distinguishable from the shared sidecar.
-        // trace:BUG-1644 | ai:claude
-        retire_stray_worktree_lock_info(&aida_dir);
-        for runtime in &[
-            "sessions",
-            "roles",
-            "cache.db",
-            "cache.db-shm",
-            "cache.db-wal",
-            "pgdata",
-        ] {
-            let p = aida_dir.join(runtime);
-            if p.is_symlink() {
-                let _ = std::fs::remove_file(&p);
-            }
-        }
+        unlink_worktree_aida_runtime(&target.worktree_path.join(".aida"));
     }
 
     // BUG-67: refuse to nuke a worktree that has real uncommitted work.
@@ -50457,6 +50401,86 @@ fn queue_at_filing_refusal(
         Some(QueueAtFilingRefusal::Downgraded)
     } else {
         Some(QueueAtFilingRefusal::NotApproved)
+    }
+}
+
+/// Link the parent checkout's runtime AIDA state into a new worktree
+/// (BUG-52). `.aida-store/` is gitignored so a whole-directory symlink works.
+/// `.aida/` is partially tracked, so only its gitignored runtime entries are
+/// linked. `cache.db.lock-info` is deliberately NOT linked (BUG-1644).
+// trace:BUG-52 trace:BUG-1644 | ai:claude
+#[cfg(unix)]
+fn link_worktree_runtime_state(
+    project_root: &std::path::Path,
+    worktree_path: &std::path::Path,
+) -> Result<()> {
+    let store_src = project_root.join(".aida-store");
+    let store_dst = worktree_path.join(".aida-store");
+    if store_src.exists() && !store_dst.exists() {
+        std::os::unix::fs::symlink(&store_src, &store_dst).with_context(|| {
+            format!(
+                "symlink {} -> {} failed",
+                store_dst.display(),
+                store_src.display()
+            )
+        })?;
+    }
+
+    let parent_aida = project_root.join(".aida");
+    let worktree_aida = worktree_path.join(".aida");
+    if parent_aida.exists() {
+        std::fs::create_dir_all(&worktree_aida)?;
+        for runtime in &[
+            "sessions",
+            "agents",
+            "roles",
+            "cache.db",
+            "cache.db-shm",
+            "cache.db-wal",
+            "pgdata",
+        ] {
+            let src = parent_aida.join(runtime);
+            let dst = worktree_aida.join(runtime);
+            if src.exists() && !dst.exists() {
+                std::os::unix::fs::symlink(&src, &dst).with_context(|| {
+                    format!("symlink {} -> {} failed", dst.display(), src.display())
+                })?;
+            }
+        }
+        // BUG-1644: `cache.db.lock-info` is deliberately NOT linked. Its
+        // path derives from the shared (symlink-resolved) cache location
+        // (`aida_core::cache_lock_info_path`), so a reader here and a
+        // writer in the main checkout already meet at one sidecar, and a
+        // not-yet-created parent cache needs no dangling link. A reused
+        // worktree may still hold an older binary's per-worktree sidecar;
+        // retire it when its owner is dead. trace:BUG-1644 | ai:claude
+        retire_stray_worktree_lock_info(&worktree_aida);
+    }
+    Ok(())
+}
+
+/// Strip the runtime symlinks `link_worktree_runtime_state` created inside a
+/// worktree's `.aida/` (BUG-52), so `git worktree remove` doesn't count them
+/// as untracked files. `.aida/` itself holds tracked content and stays.
+// trace:BUG-52 trace:BUG-1644 | ai:claude
+fn unlink_worktree_aida_runtime(aida_dir: &std::path::Path) {
+    // BUG-1644: retire an older binary's per-worktree lock-info sidecar
+    // (dead owner only) while `cache.db` is still a symlink, i.e. while
+    // it is still distinguishable from the shared sidecar.
+    // trace:BUG-1644 | ai:claude
+    retire_stray_worktree_lock_info(aida_dir);
+    for runtime in &[
+        "sessions",
+        "roles",
+        "cache.db",
+        "cache.db-shm",
+        "cache.db-wal",
+        "pgdata",
+    ] {
+        let p = aida_dir.join(runtime);
+        if p.is_symlink() {
+            let _ = std::fs::remove_file(&p);
+        }
     }
 }
 

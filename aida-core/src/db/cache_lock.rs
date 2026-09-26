@@ -454,8 +454,16 @@ pub fn observe_lock_info_file(path: &Path) -> Result<Option<CacheLockObservation
 /// own record and a dead owner's record (crashed writer, or a reused PID)
 /// return false, so a stale sidecar never wedges readers.
 // trace:BUG-664 trace:TASK-1484 | ai:claude
+#[cfg(test)]
 pub fn foreign_writer_holds_lock(cache_path: &Path) -> bool {
-    match read_cache_lock_info(cache_path) {
+    foreign_writer_holds_lock_at(&cache_lock_info_path(cache_path))
+}
+
+/// [`foreign_writer_holds_lock`] addressed by an already-resolved sidecar path
+/// (a `Cache` resolves it once at open).
+// trace:BUG-1644 | ai:claude
+pub fn foreign_writer_holds_lock_at(lock_info_path: &Path) -> bool {
+    match read_lock_info_file(lock_info_path) {
         Ok(Some(info)) => matches!(
             classify_lock_owner(&info),
             LockOwnerState::Alive | LockOwnerState::Unknown
@@ -469,10 +477,21 @@ pub fn foreign_writer_holds_lock(cache_path: &Path) -> bool {
 /// the SQLite retry ladder arbitrates and a dead owner's record is cleared
 /// after a successful write).
 // trace:TASK-1484 | ai:claude
+#[cfg(test)]
 pub(crate) fn write_cache_lock_info(cache_path: &Path, phase: &str) -> Result<bool> {
+    write_lock_info_at(&cache_lock_info_path(cache_path), cache_path, phase)
+}
+
+/// [`write_cache_lock_info`] at an already-resolved sidecar path.
+// trace:BUG-1644 | ai:claude
+pub(crate) fn write_lock_info_at(
+    lock_info_path: &Path,
+    cache_path: &Path,
+    phase: &str,
+) -> Result<bool> {
     use std::io::Write;
 
-    let path = cache_lock_info_path(cache_path);
+    let path = lock_info_path.to_path_buf();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
             format!(
@@ -498,9 +517,15 @@ pub(crate) fn write_cache_lock_info(cache_path: &Path, phase: &str) -> Result<bo
 }
 
 /// Remove the sidecar if THIS process wrote it (orderly release).
+#[cfg(test)]
 pub(crate) fn remove_cache_lock_info(cache_path: &Path) {
-    let path = cache_lock_info_path(cache_path);
-    let Ok(body) = std::fs::read_to_string(&path) else {
+    remove_lock_info_at(&cache_lock_info_path(cache_path));
+}
+
+/// [`remove_cache_lock_info`] at an already-resolved sidecar path.
+// trace:BUG-1644 | ai:claude
+pub(crate) fn remove_lock_info_at(path: &Path) {
+    let Ok(body) = std::fs::read_to_string(path) else {
         return;
     };
     let Ok(info) = serde_json::from_str::<CacheLockInfo>(&body) else {
@@ -514,9 +539,9 @@ pub(crate) fn remove_cache_lock_info(cache_path: &Path) {
 /// Refresh this process's heartbeat and phase in its own sidecar. Best effort;
 /// written to a temp file and renamed so readers never see a torn record.
 // trace:TASK-1484 | ai:claude
-pub(crate) fn touch_own_lock_info(cache_path: &Path, phase: &str) {
-    let path = cache_lock_info_path(cache_path);
-    let Ok(Some(mut info)) = read_lock_info_file(&path) else {
+// trace:BUG-1644 | ai:claude (addressed by the resolved sidecar path)
+pub(crate) fn touch_own_lock_info_at(path: &Path, phase: &str) {
+    let Ok(Some(mut info)) = read_lock_info_file(path) else {
         return;
     };
     if classify_lock_owner(&info) != LockOwnerState::Current {
@@ -528,7 +553,7 @@ pub(crate) fn touch_own_lock_info(cache_path: &Path, phase: &str) {
         return;
     };
     let tmp = path.with_extension(format!("lock-info.tmp-{}", std::process::id()));
-    if std::fs::write(&tmp, body).is_err() || std::fs::rename(&tmp, &path).is_err() {
+    if std::fs::write(&tmp, body).is_err() || std::fs::rename(&tmp, path).is_err() {
         let _ = std::fs::remove_file(&tmp);
     }
 }
@@ -606,8 +631,8 @@ fn reclaim_dead_lock_info_with(
 
 /// After a successful write (this process held the SQLite write lock, so no
 /// recorded owner can be mid-write), drop a dead owner's leftover record.
-pub(crate) fn clear_dead_owner_lock_info(cache_path: &Path) {
-    let _ = reclaim_dead_lock_info(&cache_lock_info_path(cache_path));
+pub(crate) fn clear_dead_owner_lock_info_at(lock_info_path: &Path) {
+    let _ = reclaim_dead_lock_info(lock_info_path);
 }
 
 /// Build the terminal "database is locked" error, distinguishing live
@@ -954,11 +979,16 @@ mod tests {
     // checkout's cache (BUG-52). The lock-info sidecar must resolve to ONE
     // shared file so a reader in the worktree sees the main writer.
     // trace:BUG-1644 | ai:claude
+    //
+    // The layout is built under the CANONICAL temp root: on macOS the temp dir
+    // lives under `/var`, a symlink to `/private/var`, and the helpers under
+    // test return symlink-resolved paths.
     #[cfg(unix)]
-    fn bug_1644_layout(create_main_cache: bool) -> (tempfile::TempDir, PathBuf, PathBuf) {
+    fn bug_1644_layout(create_main_cache: bool) -> (tempfile::TempDir, PathBuf, PathBuf, PathBuf) {
         let root = tempdir().unwrap();
-        let main_aida = root.path().join("main").join(".aida");
-        let wt_aida = root.path().join("wt-sibling").join(".aida");
+        let base = std::fs::canonicalize(root.path()).unwrap();
+        let main_aida = base.join("main").join(".aida");
+        let wt_aida = base.join("wt-sibling").join(".aida");
         std::fs::create_dir_all(&main_aida).unwrap();
         std::fs::create_dir_all(&wt_aida).unwrap();
         let main_cache = main_aida.join("cache.db");
@@ -967,13 +997,13 @@ mod tests {
         }
         let wt_cache = wt_aida.join("cache.db");
         std::os::unix::fs::symlink(&main_cache, &wt_cache).unwrap();
-        (root, main_cache, wt_cache)
+        (root, base, main_cache, wt_cache)
     }
 
     #[cfg(unix)]
     #[test]
     fn bug_1644_worktree_reader_sees_main_writer_lock_info() {
-        let (_root, main_cache, wt_cache) = bug_1644_layout(true);
+        let (_root, _base, main_cache, wt_cache) = bug_1644_layout(true);
 
         // The writer runs in the main checkout and records its sidecar there.
         let writer_sidecar = cache_lock_info_path(&main_cache);
@@ -1001,7 +1031,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn bug_1644_worktree_writer_records_sidecar_at_shared_location() {
-        let (_root, main_cache, wt_cache) = bug_1644_layout(true);
+        let (_root, _base, main_cache, wt_cache) = bug_1644_layout(true);
         assert!(write_cache_lock_info(&wt_cache, "test").unwrap());
         assert!(read_cache_lock_info(&main_cache).unwrap().is_some());
         assert!(!wt_cache.with_file_name("cache.db.lock-info").exists());
@@ -1015,7 +1045,7 @@ mod tests {
         // The main checkout's cache has not been created yet: the worktree's
         // link dangles. The sidecar must still land where the database WILL
         // be, not beside the link.
-        let (_root, main_cache, wt_cache) = bug_1644_layout(false);
+        let (_root, _base, main_cache, wt_cache) = bug_1644_layout(false);
         assert!(!main_cache.exists());
         let expected = std::fs::canonicalize(main_cache.parent().unwrap())
             .unwrap()
@@ -1030,8 +1060,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn bug_1644_relative_and_chained_symlinks_resolve() {
-        let (root, main_cache, _wt_cache) = bug_1644_layout(false);
-        let other_aida = root.path().join("wt-other").join(".aida");
+        let (_root, base, main_cache, _wt_cache) = bug_1644_layout(false);
+        let other_aida = base.join("wt-other").join(".aida");
         std::fs::create_dir_all(&other_aida).unwrap();
         let rel = other_aida.join("cache.db");
         std::os::unix::fs::symlink("../../main/.aida/cache.db", &rel).unwrap();
@@ -1071,21 +1101,19 @@ mod tests {
     #[test]
     fn bug_1644_symlink_loop_terminates() {
         let dir = tempdir().unwrap();
-        let a = dir.path().join("a.db");
-        let b = dir.path().join("b.db");
+        let base = std::fs::canonicalize(dir.path()).unwrap();
+        let a = base.join("a.db");
+        let b = base.join("b.db");
         std::os::unix::fs::symlink(&b, &a).unwrap();
         std::os::unix::fs::symlink(&a, &b).unwrap();
         let resolved = shared_cache_path(&a);
-        assert_eq!(
-            resolved.parent(),
-            Some(std::fs::canonicalize(dir.path()).unwrap().as_path())
-        );
+        assert_eq!(resolved.parent(), Some(base.as_path()));
     }
 
     #[cfg(unix)]
     #[test]
     fn bug_1644_stray_per_worktree_sidecar_is_detected_and_dead_one_reclaimed() {
-        let (_root, _main_cache, wt_cache) = bug_1644_layout(true);
+        let (_root, _base, _main_cache, wt_cache) = bug_1644_layout(true);
         let stray = wt_cache.with_file_name("cache.db.lock-info");
         std::fs::write(&stray, serde_json::to_string(&fixture(DEAD, None)).unwrap()).unwrap();
         assert_eq!(stray_cache_lock_info_path(&wt_cache), Some(stray.clone()));

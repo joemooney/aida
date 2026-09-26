@@ -15,11 +15,11 @@ use std::time::Duration;
 use uuid::Uuid;
 
 pub use super::cache_lock::{
-    cache_lock_info_path, foreign_writer_holds_lock, read_cache_lock_info, CacheLockInfo,
+    cache_lock_info_path, foreign_writer_holds_lock_at, read_cache_lock_info, CacheLockInfo,
 };
 use super::cache_lock::{
-    clear_dead_owner_lock_info, enrich_cache_lock_error, observe_cache_lock,
-    remove_cache_lock_info, touch_own_lock_info, write_cache_lock_info,
+    clear_dead_owner_lock_info_at, enrich_cache_lock_error, observe_lock_info_file,
+    remove_lock_info_at, touch_own_lock_info_at, write_lock_info_at,
 };
 use crate::models::{Relationship, RelationshipType, Requirement, RequirementsStore};
 use std::collections::{HashMap, HashSet};
@@ -684,16 +684,22 @@ fn remove_corrupt_cache_files(path: &Path) {
 /// removed with a compare-and-delete. A live or undeterminable owner's sidecar
 /// is never touched.
 // trace:TASK-1484 | ai:claude
-fn with_cache_write<T, F>(cache_path: &Path, action: &str, f: F) -> Result<T>
+//
+// BUG-1644: `lock_info_path` is the sidecar resolved ONCE (at `Cache::open`)
+// from the shared cache location, and every step (claim, heartbeat, contention
+// observation, dead-owner cleanup, release) uses that one path, so a symlink
+// changing mid-write cannot leak this process's record at a second location.
+// trace:BUG-1644 | ai:claude
+fn with_cache_write<T, F>(cache_path: &Path, lock_info_path: &Path, action: &str, f: F) -> Result<T>
 where
     F: FnMut() -> Result<T>,
 {
-    let claimed = write_cache_lock_info(cache_path, action)?;
-    let result = with_cache_retry_observed(cache_path, action, claimed, f);
+    let claimed = write_lock_info_at(lock_info_path, cache_path, action)?;
+    let result = with_cache_retry_observed(lock_info_path, action, claimed, f);
     if result.is_ok() {
-        clear_dead_owner_lock_info(cache_path);
+        clear_dead_owner_lock_info_at(lock_info_path);
     }
-    remove_cache_lock_info(cache_path);
+    remove_lock_info_at(lock_info_path);
     result
 }
 
@@ -701,7 +707,7 @@ fn with_cache_retry<T, F>(cache_path: &Path, action: &str, f: F) -> Result<T>
 where
     F: FnMut() -> Result<T>,
 {
-    with_cache_retry_observed(cache_path, action, false, f)
+    with_cache_retry_observed(&cache_lock_info_path(cache_path), action, false, f)
 }
 
 /// The bounded retry ladder. When the retries are exhausted, the recorded
@@ -713,7 +719,7 @@ where
 /// phase are refreshed on each wait.
 // trace:TASK-1484 | ai:claude
 fn with_cache_retry_observed<T, F>(
-    cache_path: &Path,
+    lock_info_path: &Path,
     action: &str,
     owns_sidecar: bool,
     mut f: F,
@@ -728,8 +734,8 @@ where
             Ok(value) => return Ok(value),
             Err(err) if is_sqlite_lock_error(&err) && attempts < delays.len() => {
                 if owns_sidecar {
-                    touch_own_lock_info(
-                        cache_path,
+                    touch_own_lock_info_at(
+                        lock_info_path,
                         &format!("waiting for sqlite lock: {action} (retry {})", attempts + 1),
                     );
                 }
@@ -737,7 +743,7 @@ where
                 attempts += 1;
             }
             Err(err) if is_sqlite_lock_error(&err) => {
-                let observation = observe_cache_lock(cache_path).ok().flatten();
+                let observation = observe_lock_info_file(lock_info_path).ok().flatten();
                 return Err(enrich_cache_lock_error(action, observation.as_ref(), err));
             }
             Err(err) => return Err(err),
@@ -854,6 +860,9 @@ impl Cache {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create cache parent dir: {:?}", parent))?;
         }
+        // BUG-1644: resolve the shared lock-info sidecar once for this handle.
+        // trace:BUG-1644 | ai:claude
+        let lock_info_path = cache_lock_info_path(&path);
         let conn = open_connection_with_retry(&path)?;
         // Check the recorded schema version BEFORE applying the schema —
         // if the table doesn't exist yet, the meta read silently returns
@@ -929,26 +938,31 @@ impl Cache {
             // Drop the cache tables — the next stale-check will rebuild
             // from git. `cache_meta` survives so the source HEAD SHA
             // tracking continues to work after the rebuild stamps it.
-            with_cache_write(&path, "drop cache tables for schema migration", || {
-                conn.execute_batch(
-                    // BUG-764: hierarchy_edges must drop too — `CREATE TABLE IF
-                    // NOT EXISTS` can't add the author_id column to a v12 table.
-                    "DROP TABLE IF EXISTS requirements_cache;
+            with_cache_write(
+                &path,
+                &lock_info_path,
+                "drop cache tables for schema migration",
+                || {
+                    conn.execute_batch(
+                        // BUG-764: hierarchy_edges must drop too — `CREATE TABLE IF
+                        // NOT EXISTS` can't add the author_id column to a v12 table.
+                        "DROP TABLE IF EXISTS requirements_cache;
                      DROP TABLE IF EXISTS requirements_fts;
                      DROP TABLE IF EXISTS hierarchy_edges;",
-                )
-                .context("Failed to drop cache tables for schema migration")
-            })?;
+                    )
+                    .context("Failed to drop cache tables for schema migration")
+                },
+            )?;
         }
         if needs_schema_apply {
-            with_cache_write(&path, "apply cache schema", || {
+            with_cache_write(&path, &lock_info_path, "apply cache schema", || {
                 conn.execute_batch(SCHEMA_SQL)
                     .context("Failed to apply cache schema")
             })?;
         }
         let cache = Cache {
             conn: Mutex::new(conn),
-            lock_info_path: cache_lock_info_path(&path),
+            lock_info_path,
             path,
         };
         // Only stamp the schema version when it needs to change — an
@@ -1002,14 +1016,19 @@ impl Cache {
 
     fn set_meta(&self, key: &str, value: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        with_cache_write(&self.path, "set cache metadata", || {
-            conn.execute(
-                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "set cache metadata",
+            || {
+                conn.execute(
+                    "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                params![key, value],
-            )?;
-            Ok(())
-        })?;
+                    params![key, value],
+                )?;
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 
@@ -1051,7 +1070,7 @@ impl Cache {
     /// Wipe all cached rows. Schema and meta survive. Use before a rebuild.
     pub fn truncate(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        with_cache_write(&self.path, "truncate cache", || {
+        with_cache_write(&self.path, &self.lock_info_path, "truncate cache", || {
             // BUG-757: re-apply the idempotent (`IF NOT EXISTS`) schema before
             // the DELETEs so truncate stays a valid recovery verb even when a
             // torn migration left a table missing — the DELETE would otherwise
@@ -1124,7 +1143,7 @@ impl Cache {
         }
         let count = {
             let conn = self.conn.lock().unwrap();
-            with_cache_write(&self.path, "rebuild cache", || {
+            with_cache_write(&self.path, &self.lock_info_path, "rebuild cache", || {
                 let tx = conn.unchecked_transaction()?;
                 // BUG-757: apply the idempotent (`IF NOT EXISTS`) schema before
                 // the DELETEs so `aida cache rebuild` is always a valid
@@ -1192,17 +1211,22 @@ impl Cache {
     ) -> Result<usize> {
         {
             let conn = self.conn.lock().unwrap();
-            with_cache_write(&self.path, "reset cache schema after drift", || {
-                conn.execute_batch(
-                    "DROP TABLE IF EXISTS requirements_cache;
+            with_cache_write(
+                &self.path,
+                &self.lock_info_path,
+                "reset cache schema after drift",
+                || {
+                    conn.execute_batch(
+                        "DROP TABLE IF EXISTS requirements_cache;
                      DROP TABLE IF EXISTS requirements_fts;
                      DROP TABLE IF EXISTS hierarchy_edges;",
-                )
-                .context("Failed to reset cache schema after drift")?;
-                conn.execute_batch(SCHEMA_SQL)
-                    .context("Failed to reapply cache schema after drift")?;
-                Ok(())
-            })?;
+                    )
+                    .context("Failed to reset cache schema after drift")?;
+                    conn.execute_batch(SCHEMA_SQL)
+                        .context("Failed to reapply cache schema after drift")?;
+                    Ok(())
+                },
+            )?;
         }
         self.rebuild_from_store(store, source_head_sha)
     }
@@ -1227,52 +1251,57 @@ impl Cache {
     /// the same contract as the inbound-degree axis. trace:TASK-902 | ai:claude
     pub fn upsert_requirement(&self, req: &Requirement) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        with_cache_write(&self.path, "upsert cached requirement", || {
-            // Preserve the inbound axis recorded by the last full rebuild.
-            let prior_in: u32 = conn
-                .query_row(
-                    "SELECT in_degree FROM requirements_cache WHERE id = ?1",
-                    params![req.id.to_string()],
-                    |row| row.get::<_, i64>(0),
-                )
-                .ok()
-                .map(|v| v.max(0) as u32)
-                .unwrap_or(0);
-            let (out_degree, out_heft) = own_outbound(&req.relationships);
-            // Heft over inbound edges isn't recoverable from a single row's
-            // state, so approximate the inbound contribution as 1-per-edge
-            // (the modal weight) plus the exact outbound heft. The next rebuild
-            // replaces this with the exact type-weighted value.
-            let degrees = Degrees {
-                in_degree: prior_in,
-                out_degree,
-                heft: out_heft + prior_in,
-            };
-            // TASK-902: recompute THIS row's blocked flag from its BlockedBy
-            // targets' cached statuses. Mirrors pickability::blocked_by_incomplete:
-            // any BlockedBy target that isn't Completed (or is unresolvable in the
-            // cache) leaves the row blocked. trace:TASK-902 | ai:claude
-            let blocked = blocked_from_cache(&conn, req);
-            delete_one_uncommitted(&conn, &req.id)?;
-            // TASK-955: refresh THIS spec's own outbound hierarchy edges. Like
-            // the inbound-degree axis, an edge recorded on the OTHER endpoint
-            // (a child carrying `Parent -> this`) is only re-derived on a full
-            // rebuild — same rebuildable-projection contract. delete_one_uncommitted
-            // already cleared this row's outbound edges above. Written BEFORE the
-            // epic override is derived so the rollup walks this row's CURRENT
-            // edges, not the pre-write set. trace:TASK-955 trace:BUG-764
-            insert_edges(&conn, req)?;
-            // BUG-626: if the upserted row is an EPIC, its status is the derived
-            // rollup of its children — resolved through the materialized
-            // hierarchy edges (BUG-764), so child-authored edges count too. A
-            // non-epic projects its stored status (None). Propagating a child's
-            // status flip UP to its parent epic is handled by the backend
-            // wrapper; here we only freshen the epic's own row when the epic
-            // itself is the thing being written. trace:BUG-626 | ai:claude
-            let epic_override = epic_status_override_from_cache(&conn, req);
-            insert_one(&conn, req, degrees, blocked, epic_override.as_deref())?;
-            Ok(())
-        })?;
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "upsert cached requirement",
+            || {
+                // Preserve the inbound axis recorded by the last full rebuild.
+                let prior_in: u32 = conn
+                    .query_row(
+                        "SELECT in_degree FROM requirements_cache WHERE id = ?1",
+                        params![req.id.to_string()],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .ok()
+                    .map(|v| v.max(0) as u32)
+                    .unwrap_or(0);
+                let (out_degree, out_heft) = own_outbound(&req.relationships);
+                // Heft over inbound edges isn't recoverable from a single row's
+                // state, so approximate the inbound contribution as 1-per-edge
+                // (the modal weight) plus the exact outbound heft. The next rebuild
+                // replaces this with the exact type-weighted value.
+                let degrees = Degrees {
+                    in_degree: prior_in,
+                    out_degree,
+                    heft: out_heft + prior_in,
+                };
+                // TASK-902: recompute THIS row's blocked flag from its BlockedBy
+                // targets' cached statuses. Mirrors pickability::blocked_by_incomplete:
+                // any BlockedBy target that isn't Completed (or is unresolvable in the
+                // cache) leaves the row blocked. trace:TASK-902 | ai:claude
+                let blocked = blocked_from_cache(&conn, req);
+                delete_one_uncommitted(&conn, &req.id)?;
+                // TASK-955: refresh THIS spec's own outbound hierarchy edges. Like
+                // the inbound-degree axis, an edge recorded on the OTHER endpoint
+                // (a child carrying `Parent -> this`) is only re-derived on a full
+                // rebuild — same rebuildable-projection contract. delete_one_uncommitted
+                // already cleared this row's outbound edges above. Written BEFORE the
+                // epic override is derived so the rollup walks this row's CURRENT
+                // edges, not the pre-write set. trace:TASK-955 trace:BUG-764
+                insert_edges(&conn, req)?;
+                // BUG-626: if the upserted row is an EPIC, its status is the derived
+                // rollup of its children — resolved through the materialized
+                // hierarchy edges (BUG-764), so child-authored edges count too. A
+                // non-epic projects its stored status (None). Propagating a child's
+                // status flip UP to its parent epic is handled by the backend
+                // wrapper; here we only freshen the epic's own row when the epic
+                // itself is the thing being written. trace:BUG-626 | ai:claude
+                let epic_override = epic_status_override_from_cache(&conn, req);
+                insert_one(&conn, req, degrees, blocked, epic_override.as_deref())?;
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 
@@ -1319,13 +1348,18 @@ impl Cache {
             };
             format!("{derived:?}")
         };
-        with_cache_write(&self.path, "recompute epic status", || {
-            conn.execute(
-                "UPDATE requirements_cache SET status = ?1 WHERE id = ?2",
-                params![status_str, epic_id.to_string()],
-            )?;
-            Ok(())
-        })?;
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "recompute epic status",
+            || {
+                conn.execute(
+                    "UPDATE requirements_cache SET status = ?1 WHERE id = ?2",
+                    params![status_str, epic_id.to_string()],
+                )?;
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 
@@ -1363,17 +1397,22 @@ impl Cache {
     /// Single-row delete called after a write-through git delete succeeds.
     pub fn delete_requirement(&self, id: &Uuid) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        with_cache_write(&self.path, "delete cached requirement", || {
-            delete_one_uncommitted(&conn, id)?;
-            // BUG-764: the row is GONE, so every hierarchy edge touching it is
-            // dead whichever endpoint authored it — purge beyond the
-            // author-scoped delete above.
-            conn.execute(
-                "DELETE FROM hierarchy_edges WHERE parent_id = ?1 OR child_id = ?1",
-                params![id.to_string()],
-            )?;
-            Ok(())
-        })
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "delete cached requirement",
+            || {
+                delete_one_uncommitted(&conn, id)?;
+                // BUG-764: the row is GONE, so every hierarchy edge touching it is
+                // dead whichever endpoint authored it — purge beyond the
+                // author-scoped delete above.
+                conn.execute(
+                    "DELETE FROM hierarchy_edges WHERE parent_id = ?1 OR child_id = ?1",
+                    params![id.to_string()],
+                )?;
+                Ok(())
+            },
+        )
     }
 
     // ----------------------------------------------------------------- query
@@ -2430,6 +2469,10 @@ fn yaml_path_for(req: &Requirement) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::super::cache_lock::{
+        foreign_writer_holds_lock, observe_cache_lock, remove_cache_lock_info,
+        write_cache_lock_info,
+    };
     use super::*;
     use crate::models::{
         ImplementationInfo, RequirementPriority, RequirementStatus, RequirementType,

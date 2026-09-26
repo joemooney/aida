@@ -347,7 +347,7 @@ impl CachedGitBackend {
         }
         // Stale, but if another live process is already rebuilding, don't pile
         // onto the write lock — read the prior consistent snapshot.
-        if super::cache::foreign_writer_holds_lock(self.cache.path()) {
+        if super::cache::foreign_writer_holds_lock_at(self.cache.lock_info_path()) {
             return Ok(());
         }
         self.ensure_cache_fresh()
