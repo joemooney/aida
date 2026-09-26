@@ -3,21 +3,23 @@ spec_id: BUG-1668
 agreed_id: BUG-1668
 title: Graded review Rung-2 auto-approves specs whose only executable criteria are trivial (true/echo/test)
 description: |
-  Found in the advisor review of STORY-1476 (Q2). graded_review::execute_graded_review auto-approves at Rung 2 when every parsed criterion is an Executable command that exits 0 and there is no prose (the `prose_count == 0 && machine_verified_count > 0` branch). A spec whose only executable criteria are trivial commands (true, :, echo ..., printf, test -n ..., [ ... ], cat <file>, exit 0, ls) therefore approves any PR without verifying anything. This is independent of the STORY-1476 trust gate: it applies even when the operator has trusted the command set.
+  Found in the advisor review of STORY-1476 (Q2). graded_review::execute_graded_review auto-approves at Rung 2 when every parsed criterion is an Executable command that exits 0 and there is no prose (the prose_count == 0 && machine_verified_count > 0 branch). A spec whose only executable criteria are trivial commands (true, :, echo ..., printf, test -n ..., [ ... ], cat <file>, exit 0, ls) therefore approves any PR without verifying anything. This is independent of the STORY-1476 trust gate: it applies even when the operator has trusted the command set.
 
   Acceptance:
   1. A command is "trivial" when its first word is one of: true, :, echo, printf, test, [, cat, ls, exit, sleep, pwd (list defined once as a const in graded_review.rs, with a doc comment naming the rationale).
   2. Trivial executable criteria still run (when permitted) and are recorded, but do not count toward Rung-2 auto-approve: if every Passed executable criterion is trivial and there is no settled non-trivial evidence, the verdict is escalated (escalated_to_seat = true), never "approved".
   3. A trivial command that FAILS still vetoes (rejected), unchanged.
   4. The evaluator fast-pass path cannot turn an all-trivial set into "approved" either (same guard as the STORY-1476 NotRun guard).
-  5. Tests in aida-cli-lib/src/tests/: spec with only "`true`" escalates; spec with "`true`" plus "`cargo --version`" -style non-trivial passing command auto-approves as today; spec with only "`echo ok`" and a MockEvaluator returning p=1.0 does not approve; "`false`" still rejects.
+  5. Tests in aida-cli-lib/src/tests/: a spec whose only criterion is the backticked command true escalates; spec with true plus "cargo --version" -style non-trivial passing command auto-approves as today; spec with only "echo ok" and a MockEvaluator returning p=1.0 does not approve; "false" still rejects.
   6. The verdict summary names the reason in one line ("only trivial executable checks; escalated").
+
+  Note: this description deliberately contains no backtick-quoted commands, so graded review of this bug itself does not parse them as executable criteria.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:42:42.799238808Z
-modified_at: 2026-09-26T18:42:42.799238808Z
+modified_at: 2026-09-26T18:43:00.343487277Z
 req_type: Bug
 filed_at:
   code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
