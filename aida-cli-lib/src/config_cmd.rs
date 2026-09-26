@@ -161,6 +161,9 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
                 }
             }
 
+            // The migration resets the ID counters through the explicit reset
+            // path, so the save writes the lowered counters instead of keeping
+            // the higher ones on disk. trace:BUG-1641 | ai:claude
             store.migrate_to_new_id_format();
             storage.save(&store)?;
             println!(

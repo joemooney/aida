@@ -1276,6 +1276,7 @@ impl DatabaseBackend for SqliteBackend {
             migrated_to: None, // SQLite is never a migrated-from source
             dispenser: None,
             loaded_objects: None,
+            id_counters_reset: false,
         })
     }
 

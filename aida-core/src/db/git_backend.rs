@@ -72,19 +72,43 @@ pub struct StoreConflictError {
     pub metadata_fields: Vec<String>,
 }
 
+/// The user-facing name of a `metadata.yaml` field, for conflict messages.
+/// `metadata_fields` keeps the raw field names for callers that match on them.
+// trace:BUG-1641 | ai:claude
+fn metadata_field_label(field: &str) -> &str {
+    match field {
+        "name" => "project name",
+        "title" => "project title",
+        "description" => "project description",
+        "users" => "user list",
+        "teams" => "team list",
+        "id_config" => "ID format settings",
+        "features" => "feature list",
+        "next_feature_number" => "feature numbering",
+        "next_spec_number" => "ID numbering",
+        "prefix_counters" => "per-prefix ID numbering",
+        "meta_counters" => "internal ID numbering",
+        "relationship_definitions" => "relationship types",
+        "reaction_definitions" => "reaction types",
+        "type_definitions" => "requirement types",
+        "allowed_prefixes" => "allowed ID prefixes",
+        "restrict_prefixes" => "ID prefix restriction",
+        "ai_prompts" => "AI prompt settings",
+        "baselines" => "baselines",
+        other => other,
+    }
+}
+
 impl std::fmt::Display for StoreConflictError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut what: Vec<String> = self.specs.clone();
         if !self.metadata_fields.is_empty() {
-            what.push(format!(
-                "the store's {} setting{}",
-                self.metadata_fields.join(", "),
-                if self.metadata_fields.len() == 1 {
-                    ""
-                } else {
-                    "s"
-                }
-            ));
+            let labels: Vec<&str> = self
+                .metadata_fields
+                .iter()
+                .map(|field| metadata_field_label(field))
+                .collect();
+            what.push(format!("the project's {}", labels.join(", ")));
         }
         let many = self.specs.len() + self.metadata_fields.len() > 1;
         write!(
@@ -186,8 +210,12 @@ impl Default for StoreMetadata {
 
 /// Store-level fields that are monotonic ID counters. They are merged as the
 /// maximum of the disk and caller values (per key for the per-prefix maps), so
-/// a save never lowers a counter and re-issues an ID.
-// trace:BUG-1613 | ai:claude
+/// a save never lowers a counter and re-issues an ID. That also means a caller
+/// cannot lower a counter, or remove a per-prefix key, through an ordinary
+/// save: the higher disk value is kept. The one supported way to do that is
+/// [`RequirementsStore::reset_id_counters`], which marks the store so the
+/// merge treats the counters like any other field (see [`merge_metadata`]).
+// trace:BUG-1613 trace:BUG-1641 | ai:claude
 const METADATA_COUNTER_FIELDS: [&str; 4] = [
     "next_feature_number",
     "next_spec_number",
@@ -241,6 +269,23 @@ fn max_counter(
     }
 }
 
+/// Raise every ID counter in `target` to at least its value in `other` (per
+/// key for the per-prefix maps). Never lowers one.
+// trace:BUG-1641 | ai:claude
+fn raise_counters_to(target: &mut StoreMetadata, other: &StoreMetadata) {
+    target.next_feature_number = target.next_feature_number.max(other.next_feature_number);
+    target.next_spec_number = target.next_spec_number.max(other.next_spec_number);
+    for (map, theirs) in [
+        (&mut target.prefix_counters, &other.prefix_counters),
+        (&mut target.meta_counters, &other.meta_counters),
+    ] {
+        for (key, value) in theirs {
+            let slot = map.entry(key.clone()).or_insert(*value);
+            *slot = (*slot).max(*value);
+        }
+    }
+}
+
 /// Three-way merge of the store-level fields, the metadata analogue of the
 /// per-spec compare-and-swap in [`GitBackend::save_reporting`] (BUG-1612),
 /// at the granularity of one top-level `metadata.yaml` field:
@@ -249,16 +294,23 @@ fn max_counter(
 /// - a field only this writer changed takes the writer's value;
 /// - a field both changed, to different values, is a conflict (returned as the
 ///   field names; nothing may be written);
-/// - ID counters are never a conflict: they take the max of disk and writer.
+/// - ID counters are never a conflict: they take the max of disk and writer,
+///   unless `reset_counters` is set (the caller reset them on purpose through
+///   [`RequirementsStore::reset_id_counters`]). Then the counters follow the
+///   three rules above like any other field, so a reset lands (lowered values
+///   and removed per-prefix keys included) when only this writer changed them,
+///   and a concurrent counter change is a conflict instead of being lowered.
 ///
 /// `base = None` (a store not loaded from this backend) means every field is
-/// the writer's, as before, but counters are still never lowered. `disk =
-/// None` (no `metadata.yaml` yet) writes the writer's copy.
-// trace:BUG-1613 | ai:claude
+/// the writer's, as before, but counters are still never lowered unless
+/// `reset_counters` is set. `disk = None` (no `metadata.yaml` yet) writes the
+/// writer's copy.
+// trace:BUG-1613 trace:BUG-1641 | ai:claude
 fn merge_metadata(
     base: Option<&serde_yaml::Value>,
     mine: &StoreMetadata,
     disk: Option<&StoreMetadata>,
+    reset_counters: bool,
 ) -> Result<std::result::Result<MetadataMerge, Vec<String>>> {
     use serde_yaml::Value;
     let Some(disk) = disk else {
@@ -280,7 +332,7 @@ fn merge_metadata(
     for (key, mine_field) in mine_m {
         let name = key.as_str().unwrap_or_default();
         let disk_field = disk_m.get(key);
-        if METADATA_COUNTER_FIELDS.contains(&name) {
+        if !reset_counters && METADATA_COUNTER_FIELDS.contains(&name) {
             merged.insert(key.clone(), max_counter(disk_field, Some(mine_field)));
             continue;
         }
@@ -693,6 +745,7 @@ impl GitBackend {
             migrated_to: None,
             dispenser: self.dispenser.clone(),
             loaded_objects: None,
+            id_counters_reset: false,
         }
     }
 
@@ -1077,7 +1130,12 @@ impl GitBackend {
         let mine_meta = Self::extract_metadata(store);
         let meta_base = snapshot.and_then(|s| s.metadata_baseline());
         let disk_meta = self.read_metadata_if_present()?;
-        let meta_plan = merge_metadata(meta_base.as_ref(), &mine_meta, disk_meta.as_ref())?;
+        let meta_plan = merge_metadata(
+            meta_base.as_ref(),
+            &mine_meta,
+            disk_meta.as_ref(),
+            store.id_counters_reset,
+        )?;
 
         if !conflicts.is_empty() || meta_plan.is_err() {
             conflicts.sort();
@@ -1282,7 +1340,7 @@ impl GitBackend {
         let _lock = self.lock_store()?;
 
         let mut store = self.load()?;
-        let meta_before = serde_yaml::to_string(&Self::extract_metadata(&store))?;
+        let meta_before = metadata_value(&Self::extract_metadata(&store))?;
         let mut before: HashMap<String, (uuid::Uuid, String)> = HashMap::new();
         for req in &store.requirements {
             if let Some(sid) = req.spec_id.as_deref() {
@@ -1292,7 +1350,8 @@ impl GitBackend {
 
         update_fn(&mut store);
 
-        let meta_changed = serde_yaml::to_string(&Self::extract_metadata(&store))? != meta_before;
+        let meta_after = Self::extract_metadata(&store);
+        let meta_changed = metadata_value(&meta_after)? != meta_before;
         let mut changed: Vec<&Requirement> = Vec::new();
         let mut created: Vec<&Requirement> = Vec::new();
         let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
@@ -1346,14 +1405,39 @@ impl GitBackend {
                 );
             }
         }
+        // Store-level fields go through the same merge as a whole-store save,
+        // so the counter rules are identical on both paths: a counter is never
+        // lowered unless the update reset it through `reset_id_counters`, and a
+        // field changed on disk by a writer that bypassed the lock is a conflict.
+        // trace:BUG-1641 | ai:claude
+        let meta_write = if meta_changed {
+            let disk_meta = self.read_metadata_if_present()?;
+            match merge_metadata(
+                Some(&meta_before),
+                &meta_after,
+                disk_meta.as_ref(),
+                store.id_counters_reset,
+            )? {
+                Ok(plan) => plan.write,
+                Err(fields) => {
+                    return Err(StoreConflictError {
+                        specs: Vec::new(),
+                        metadata_fields: fields,
+                    }
+                    .into())
+                }
+            }
+        } else {
+            None
+        };
 
         let mut summary = AtomicWriteSummary {
-            metadata_changed: meta_changed,
+            metadata_changed: meta_write.is_some(),
             ..Default::default()
         };
         let mut paths: Vec<String> = Vec::new();
-        if meta_changed {
-            self.save_metadata(&Self::extract_metadata(&store))?;
+        if let Some(meta) = &meta_write {
+            self.save_metadata(meta)?;
             paths.push("metadata.yaml".to_string());
         }
         for req in &changed {
@@ -1437,7 +1521,7 @@ impl GitBackend {
                 snapshot.remove(sid);
             }
             // trace:BUG-1613 | ai:claude
-            snapshot.record_metadata(metadata_value(&Self::extract_metadata(&store))?);
+            snapshot.record_metadata(metadata_value(&meta_after)?);
         }
         Ok((store, summary))
     }
@@ -1953,6 +2037,77 @@ impl<'a> BulkWriter<'a> {
         Ok(self.staged.last().unwrap())
     }
 
+    /// Re-assign every id this writer assigned that now exists on disk (a
+    /// concurrent writer issued it from the same counter). New ids come from
+    /// this batch's counters raised to at least the current disk counters, and
+    /// skip any id already on disk or already in the batch. Runs under the
+    /// store lock, before anything is written.
+    // trace:BUG-1641 | ai:claude
+    fn reassign_collided_ids(&mut self, disk_meta: Option<&StoreMetadata>) -> Result<()> {
+        let objects_root = &self.backend.objects_root;
+        let mut collided: Vec<usize> = Vec::new();
+        for (i, req) in self.staged.iter().enumerate() {
+            let Some(sid) = req.spec_id.as_deref() else {
+                continue;
+            };
+            if self.assigned.contains(sid) && object_store::object_exists(objects_root, sid)? {
+                collided.push(i);
+            }
+        }
+        if collided.is_empty() {
+            return Ok(());
+        }
+        let mut counters = self.metadata.clone();
+        if let Some(disk) = disk_meta {
+            raise_counters_to(&mut counters, disk);
+        }
+        let mut tmp = self.backend.assemble_store(counters, Vec::new());
+        let mut taken: std::collections::HashSet<String> = self
+            .staged
+            .iter()
+            .filter_map(|r| r.spec_id.clone())
+            .collect();
+        for i in collided {
+            let old = self.staged[i].spec_id.take().unwrap_or_default();
+            self.assigned.remove(&old);
+            let type_prefix = tmp.get_type_prefix(&self.staged[i].req_type);
+            // Each attempt advances the counter, so this ends; the bound only
+            // guards a dispenser that keeps handing out the same number.
+            let mut new_sid = None;
+            for _ in 0..10_000 {
+                let mut probe = self.staged[i].clone();
+                probe.spec_id = None;
+                tmp.add_requirement_with_id(probe, None, type_prefix.as_deref());
+                let sid = tmp
+                    .requirements
+                    .pop()
+                    .and_then(|r| r.spec_id)
+                    .unwrap_or_default();
+                if !sid.is_empty()
+                    && !taken.contains(&sid)
+                    && !object_store::object_exists(objects_root, &sid)?
+                {
+                    new_sid = Some(sid);
+                    break;
+                }
+            }
+            let Some(sid) = new_sid else {
+                anyhow::bail!(
+                    "could not assign a free id to replace {old}, which another writer used \
+                     meanwhile; nothing was written"
+                );
+            };
+            taken.insert(sid.clone());
+            self.assigned.insert(sid.clone());
+            self.staged[i].spec_id = Some(sid);
+        }
+        self.metadata.next_feature_number = tmp.next_feature_number;
+        self.metadata.next_spec_number = tmp.next_spec_number;
+        self.metadata.prefix_counters = tmp.prefix_counters;
+        self.metadata.meta_counters = tmp.meta_counters;
+        Ok(())
+    }
+
     /// Number of requirements buffered in this batch.
     pub fn len(&self) -> usize {
         self.staged.len()
@@ -1967,7 +2122,13 @@ impl<'a> BulkWriter<'a> {
     /// Returns the number of requirements written. The commit message is
     /// "{prefix}: import N requirements" — pass a context-specific prefix
     /// like "chore" or "feat(jira)".
-    pub fn finish(self, commit_subject: &str) -> Result<usize> {
+    ///
+    /// An id this writer assigned that a concurrent writer used meanwhile (the
+    /// same counter, read before the other writer bumped it) is re-assigned
+    /// under the store lock from the current counters, so the batch lands in
+    /// full without overwriting the other object. Caller-supplied ids are
+    /// written as given.
+    pub fn finish(mut self, commit_subject: &str) -> Result<usize> {
         crate::git_ops::ensure_store_write_safe(&self.backend.root)?;
         // trace:BUG-1612 | ai:claude — serialize with every other store writer.
         let _lock = self.backend.lock_store()?;
@@ -1976,26 +2137,24 @@ impl<'a> BulkWriter<'a> {
         // counter bumps over it (max, never lowered) instead of writing the
         // snapshot taken at `bulk_writer()`, which reverted concurrent changes.
         // An id this writer assigned that now exists on disk was issued
-        // concurrently from the same counter: refuse rather than overwrite it.
-        // Both checks run before anything is written.
-        // trace:BUG-1613 | ai:claude
+        // concurrently from the same counter: it is re-assigned (BUG-1641)
+        // rather than overwriting the other object or refusing the batch.
+        // Everything here runs before anything is written.
+        // trace:BUG-1613 trace:BUG-1641 | ai:claude
         let disk_meta = self.backend.read_metadata_if_present()?;
-        let meta_plan = merge_metadata(Some(&self.base), &self.metadata, disk_meta.as_ref())?;
-        let mut collided: Vec<String> = Vec::new();
-        for sid in &self.assigned {
-            if object_store::object_exists(&self.backend.objects_root, sid)? {
-                collided.push(sid.clone());
+        self.reassign_collided_ids(disk_meta.as_ref())?;
+        let meta_plan =
+            merge_metadata(Some(&self.base), &self.metadata, disk_meta.as_ref(), false)?;
+        let meta_plan = match meta_plan {
+            Ok(plan) => plan,
+            Err(fields) => {
+                return Err(StoreConflictError {
+                    specs: Vec::new(),
+                    metadata_fields: fields,
+                }
+                .into())
             }
-        }
-        if !collided.is_empty() || meta_plan.is_err() {
-            collided.sort();
-            return Err(StoreConflictError {
-                specs: collided,
-                metadata_fields: meta_plan.err().unwrap_or_default(),
-            }
-            .into());
-        }
-        let meta_plan = meta_plan.unwrap_or(MetadataMerge { write: None });
+        };
 
         // Persist all object YAMLs first (skipping unchanged just in case the
         // caller is re-running an idempotent import).
@@ -4143,11 +4302,11 @@ mod tests {
     }
 
     /// A BulkWriter id that a concurrent writer issued from the same counter
-    /// meanwhile is a conflict: finish writes nothing and the other object and
-    /// counter survive.
-    // trace:BUG-1613 | ai:claude
+    /// meanwhile is re-assigned under the lock: the whole batch lands, the
+    /// other object is untouched, and the counter moves past both.
+    // trace:BUG-1613 trace:BUG-1641 | ai:claude
     #[test]
-    fn bug1613_bulk_writer_reissued_id_is_a_conflict() {
+    fn bug1641_bulk_writer_reassigns_a_reissued_id() {
         let (_dir, root, backend) = bug1613_per_prefix_store();
         let mut writer = backend.bulk_writer().unwrap();
         let theirs = bug1613_other(&root)
@@ -4155,18 +4314,46 @@ mod tests {
             .unwrap();
         let sid = theirs.spec_id.clone().unwrap();
         let counter = bug1613_disk_meta(&root).prefix_counters["BUG"];
-        let mine = writer.add(bug1613_bug("bulk")).unwrap().clone();
+        let mine = writer.add(bug1613_bug("bulk 1")).unwrap().clone();
         assert_eq!(mine.spec_id.as_deref(), Some(sid.as_str()));
-        let err = writer.finish("test(bulk)").unwrap_err();
-        let conflict = err.downcast_ref::<StoreConflictError>().unwrap();
-        assert_eq!(conflict.specs, vec![sid.clone()]);
+        let second = writer.add(bug1613_bug("bulk 2")).unwrap().clone();
+        assert_eq!(writer.finish("test(bulk)").unwrap(), 2);
+
+        let objects = root.join("objects");
         assert_eq!(
-            object_store::read_object(&root.join("objects"), &sid)
-                .unwrap()
-                .title,
+            object_store::read_object(&objects, &sid).unwrap().title,
             "theirs"
         );
-        assert_eq!(bug1613_disk_meta(&root).prefix_counters["BUG"], counter);
+        // The non-colliding id keeps what add() returned.
+        let second_sid = second.spec_id.clone().unwrap();
+        assert_eq!(
+            object_store::read_object(&objects, &second_sid)
+                .unwrap()
+                .title,
+            "bulk 2"
+        );
+        let loaded = backend.load().unwrap();
+        let bulk1: Vec<_> = loaded
+            .requirements
+            .iter()
+            .filter(|r| r.title == "bulk 1")
+            .collect();
+        assert_eq!(bulk1.len(), 1);
+        let new_sid = bulk1[0].spec_id.clone().unwrap();
+        assert_ne!(new_sid, sid);
+        assert_ne!(new_sid, second_sid);
+        assert!(new_sid.starts_with("BUG-"));
+        let meta = bug1613_disk_meta(&root);
+        assert!(
+            meta.prefix_counters["BUG"] > counter,
+            "the counter moves past the re-assigned id"
+        );
+        // The next id handed out does not collide with anything written.
+        let next = bug1613_other(&root)
+            .add_requirement(bug1613_bug("after"))
+            .unwrap();
+        let next_sid = next.spec_id.unwrap();
+        assert!(![sid.as_str(), new_sid.as_str(), second_sid.as_str()].contains(&next_sid.as_str()));
     }
 
     /// The merge is pure field logic: untouched fields keep disk, counters
@@ -4187,7 +4374,7 @@ mod tests {
         mine.prefix_counters.insert("TASK".into(), 2);
         mine.name = "mine".into();
 
-        let merged = merge_metadata(Some(&base_v), &mine, Some(&disk))
+        let merged = merge_metadata(Some(&base_v), &mine, Some(&disk), false)
             .unwrap()
             .unwrap()
             .write
@@ -4199,19 +4386,190 @@ mod tests {
         assert_eq!(merged.description, "disk");
 
         // Nothing changed by the writer: nothing to write.
-        let noop = merge_metadata(Some(&base_v), &base, Some(&disk))
+        let noop = merge_metadata(Some(&base_v), &base, Some(&disk), false)
             .unwrap()
             .unwrap();
         assert!(noop.write.is_none());
 
         // No baseline (a store not loaded from the backend): the writer's
         // fields win, as before, but the counter is not lowered.
-        let legacy = merge_metadata(None, &mine, Some(&disk))
+        let legacy = merge_metadata(None, &mine, Some(&disk), false)
             .unwrap()
             .unwrap()
             .write
             .unwrap();
         assert_eq!(legacy.description, "");
         assert_eq!(legacy.prefix_counters["BUG"], 9);
+    }
+
+    // ---- BUG-1641: explicit counter reset, wording, spec-only save ----
+
+    /// An ID-format migration resets the counters and the save writes them,
+    /// lowered values and removed per-prefix keys included, instead of keeping
+    /// the higher counters already on disk.
+    // trace:BUG-1641 | ai:claude
+    #[test]
+    fn bug1641_migrate_counter_reset_lands() {
+        let (_dir, root, backend) = bug1613_per_prefix_store();
+        backend
+            .update_atomically(|s| {
+                s.prefix_counters.insert("BUG".into(), 90);
+                s.prefix_counters.insert("GONE".into(), 40);
+            })
+            .unwrap();
+        let mut store = backend.load().unwrap();
+        store.migrate_to_new_id_format();
+        assert!(store.id_counters_reset);
+        let expected = store.prefix_counters.clone();
+        backend.save(&store).unwrap();
+        let meta = bug1613_disk_meta(&root);
+        assert_eq!(meta.prefix_counters, expected);
+        assert!(!meta.prefix_counters.contains_key("GONE"));
+        assert!(!meta.prefix_counters.contains_key("BUG"));
+        assert_eq!(meta.next_spec_number, 1);
+
+        // Saving the same store again does not re-assert the reset over a
+        // counter another writer bumped since.
+        bug1613_other(&root)
+            .add_requirement(bug1613_bug("after reset"))
+            .unwrap();
+        let bumped = bug1613_disk_meta(&root).prefix_counters["BUG"];
+        store.title = "again".into();
+        backend.save(&store).unwrap();
+        let meta = bug1613_disk_meta(&root);
+        assert_eq!(meta.prefix_counters["BUG"], bumped);
+        assert_eq!(meta.title, "again");
+    }
+
+    /// Without the explicit reset, an ordinary save cannot lower a counter or
+    /// drop a per-prefix key: the higher disk value is kept.
+    // trace:BUG-1641 | ai:claude
+    #[test]
+    fn bug1641_plain_save_never_lowers_a_counter() {
+        let (_dir, root, backend) = bug1613_per_prefix_store();
+        backend
+            .update_atomically(|s| {
+                s.prefix_counters.insert("BUG".into(), 90);
+            })
+            .unwrap();
+        let mut store = backend.load().unwrap();
+        store.prefix_counters.clear();
+        store.next_spec_number = 1;
+        backend.save(&store).unwrap();
+        assert_eq!(bug1613_disk_meta(&root).prefix_counters["BUG"], 90);
+    }
+
+    /// A reset raced by a concurrent counter bump is a conflict, not a silent
+    /// lowering of the other writer's counter; nothing is written.
+    // trace:BUG-1641 | ai:claude
+    #[test]
+    fn bug1641_reset_over_concurrent_bump_is_a_conflict() {
+        let (_dir, root, backend) = bug1613_per_prefix_store();
+        backend
+            .update_atomically(|s| {
+                s.prefix_counters.insert("BUG".into(), 90);
+            })
+            .unwrap();
+        let mut store = backend.load().unwrap();
+        bug1613_other(&root)
+            .add_requirement(bug1613_bug("theirs"))
+            .unwrap();
+        let before = bug1613_disk_meta(&root).prefix_counters.clone();
+        store.reset_id_counters();
+        let err = backend.save(&store).unwrap_err();
+        let conflict = err.downcast_ref::<StoreConflictError>().unwrap();
+        assert_eq!(conflict.metadata_fields, vec!["prefix_counters"]);
+        assert_eq!(bug1613_disk_meta(&root).prefix_counters, before);
+    }
+
+    /// update_atomically follows the same counter rules as save(): a plain
+    /// lowering is ignored, an explicit reset lands.
+    // trace:BUG-1641 | ai:claude
+    #[test]
+    fn bug1641_update_atomically_counter_rules_match_save() {
+        let (_dir, root, backend) = bug1613_per_prefix_store();
+        backend
+            .update_atomically(|s| {
+                s.prefix_counters.insert("BUG".into(), 90);
+            })
+            .unwrap();
+        backend
+            .update_atomically(|s| {
+                s.prefix_counters.insert("BUG".into(), 3);
+            })
+            .unwrap();
+        assert_eq!(bug1613_disk_meta(&root).prefix_counters["BUG"], 90);
+        backend
+            .update_atomically(|s| s.reset_id_counters())
+            .unwrap();
+        let meta = bug1613_disk_meta(&root);
+        assert!(!meta.prefix_counters.contains_key("BUG"));
+        assert_eq!(meta.next_spec_number, 1);
+    }
+
+    /// The conflict message names store-level fields in user-facing words,
+    /// never the internal field names.
+    // trace:BUG-1641 | ai:claude
+    #[test]
+    fn bug1641_conflict_message_uses_friendly_names() {
+        let err = StoreConflictError {
+            specs: Vec::new(),
+            metadata_fields: vec!["type_definitions".into(), "features".into()],
+        };
+        let text = err.to_string();
+        assert!(!text.contains("type_definitions"), "{text}");
+        assert!(!text.contains("setting"), "{text}");
+        assert!(text.contains("requirement types"), "{text}");
+        assert!(text.contains("feature list"), "{text}");
+        assert!(text.contains("them"), "{text}");
+    }
+
+    /// A save that changed only a spec neither rewrites nor commits
+    /// metadata.yaml.
+    // trace:BUG-1641 | ai:claude
+    #[test]
+    fn bug1641_spec_only_save_leaves_metadata_alone() {
+        let (_dir, root, backend, _) = bug1612_git_store(2);
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "baseline"]);
+        let meta_path = root.join("metadata.yaml");
+        let bytes_before = std::fs::read(&meta_path).unwrap();
+        let mtime_before = std::fs::metadata(&meta_path).unwrap().modified().unwrap();
+        let head_before = git(&["rev-parse", "HEAD"]).stdout;
+
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let mut store = backend.load().unwrap();
+        for r in store.requirements.iter_mut() {
+            if r.spec_id.as_deref() == Some("TASK-1") {
+                r.title = "spec only".into();
+            }
+        }
+        backend.save(&store).unwrap();
+
+        assert_ne!(
+            git(&["rev-parse", "HEAD"]).stdout,
+            head_before,
+            "the spec change was committed"
+        );
+        let files = bug1612_head_files(&root);
+        assert!(files.iter().any(|f| f.contains("TASK-1")), "{files:?}");
+        assert!(!files.iter().any(|f| f == "metadata.yaml"), "{files:?}");
+        assert_eq!(std::fs::read(&meta_path).unwrap(), bytes_before);
+        assert_eq!(
+            std::fs::metadata(&meta_path).unwrap().modified().unwrap(),
+            mtime_before,
+            "metadata.yaml was rewritten"
+        );
+        assert!(git(&["status", "--porcelain", "metadata.yaml"])
+            .stdout
+            .is_empty());
     }
 }

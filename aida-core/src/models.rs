@@ -5151,6 +5151,19 @@ pub struct RequirementsStore {
     #[serde(skip)]
     #[ts(skip)]
     pub loaded_objects: Option<LoadSnapshot>,
+
+    /// Set by [`RequirementsStore::reset_id_counters`]: this store lowered or
+    /// removed ID counters on purpose (an ID-format migration renumbers every
+    /// spec from 1). A git-store save normally merges counters as the maximum
+    /// of disk and caller, so a lowered counter would silently be raised back;
+    /// while this is set, a save instead treats the counters like any other
+    /// store-level field: the caller's values are written when only this
+    /// caller changed them since its load, and a concurrent counter change is
+    /// a conflict. Runtime-only; never serialized.
+    // trace:BUG-1641 | ai:claude
+    #[serde(skip)]
+    #[ts(skip)]
+    pub id_counters_reset: bool,
 }
 
 /// Load snapshot of a git-canonical store, per object id:
@@ -5341,7 +5354,21 @@ impl RequirementsStore {
             migrated_to: None,
             dispenser: None,
             loaded_objects: None,
+            id_counters_reset: false,
         }
+    }
+
+    /// Reset the spec ID counters to their initial state (the global counter
+    /// to 1, every per-prefix counter removed) and mark the reset as
+    /// intentional, so a later save writes the lowered counters instead of
+    /// keeping the higher ones already on disk. Only for renumbering every
+    /// spec (an ID-format migration); new IDs may then reuse numbers that old
+    /// references still mention.
+    // trace:BUG-1641 | ai:claude
+    pub fn reset_id_counters(&mut self) {
+        self.next_spec_number = 1;
+        self.prefix_counters.clear();
+        self.id_counters_reset = true;
     }
 
     /// Gets the type definition for a requirement type
@@ -6490,9 +6517,9 @@ impl RequirementsStore {
     /// This will regenerate all IDs based on the current configuration
     /// Requirements with prefix_override will use their override prefix
     pub fn migrate_to_new_id_format(&mut self) {
-        // Reset counters
-        self.next_spec_number = 1;
-        self.prefix_counters.clear();
+        // Reset counters (an explicit reset a save honours).
+        // trace:BUG-1641 | ai:claude
+        self.reset_id_counters();
 
         // Clear all spec_ids first
         for req in &mut self.requirements {
@@ -6677,9 +6704,9 @@ impl RequirementsStore {
         self.id_config.numbering = new_numbering;
         self.id_config.digits = new_digits;
 
-        // Reset counters for fresh numbering
-        self.next_spec_number = 1;
-        self.prefix_counters.clear();
+        // Reset counters for fresh numbering (an explicit reset a save
+        // honours). trace:BUG-1641 | ai:claude
+        self.reset_id_counters();
 
         // Collect requirement data for migration (to avoid borrow issues)
         let req_data: ReqIdData = self
