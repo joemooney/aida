@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:56:37.565291972Z
-modified_at: 2026-09-26T09:57:50.429189967Z
+modified_at: 2026-09-26T10:53:47.234794585Z
 req_type: Bug
 comments:
 - id: 01a0dd25-e240-7871-b98a-f4abd07d3cf3
@@ -21,6 +21,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved and queued at high priority. The nightly has been red for 3 nights, and item 2 may be a real Windows lease-writing bug.'
   created_at: 2026-09-26T09:57:22.624284967Z
   modified_at: 2026-09-26T09:57:22.624284967Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd59-8762-7192-8184-4d12e3a31869
+  author: joe
+  content: 'Review (fresh Opus reviewer): APPROVE WITH NITS on origin/claude/bug-1646 @986c52965a. Verified on Linux: cargo test --lib bug_1607 (3/3), queue_rework (52/52, incl. the new round-trip test), usage (59/59) all pass; check-portability.sh and --check-allowlist-growth origin/main both exit 0; the new rule''s regex does fire on the origin/main fixture line (queue_rework_tests.rs:1815). Change (3) is safe: aida_home_dir() (lib.rs:48798) returns dirs::home_dir() when AIDA_HOME is unset or empty, so the resolved path is the same for Linux and macOS users. AIDA_HOME has the same home-dir semantics as the ~25 other callers (all join .aida). No production code sets AIDA_HOME (only tests and tests/lib/isolated_home.sh). docs/environment-variables.md:197 already said AIDA_HOME relocates usage.jsonl, so this change brings the code in line with the docs. The two log_path callers (usage_cmd.rs:947, metrics_cmd.rs:433) are display-only. Production claim writer confirmed to use toml::to_string (mcp.rs ~3496). The unix gating is justified: both gated tests spawn a #!/bin/sh mock, and codex_only_project stays ungated because :203 uses it. Findings: (1) LOW scripts/portability-rules.json:8: the rule only matches escaped quotes, so raw-string fixtures slip past it. Live instance: statusline_tests.rs:5791 (r#"...worktree_path = \"{}\"..."# with canonicalize().display()) gives invalid TOML on Windows, and the test still passes there without testing anything because it asserts is_none(), which a parse failure also returns. Fix: make the backslash before the quote optional in the regex, fix 5791 with toml::Value::String, and baseline or opt out task_358_escalation_cleanup_tests.rs:190 (it already escapes). This could be folded into BUG-1648. (2) LOW, out of scope, needs a follow-up bug: the rule is test-scoped, but production writes store_path the same way at init_cmd.rs:4197, 4513, 5103 and aida-core/src/workspace.rs:236. At 5103, store_rel comes from the user''s --store-path argument, so a Windows ..\\store would produce an invalid config.toml. Fix: encode with toml::Value::String and add a production-scoped variant of the rule. (3) NIT: the sibling telemetry logs still use dirs::home_dir(): rule_violation.rs:356, auto_complete_telemetry.rs:103, field_study.rs:91. With AIDA_HOME set, metrics_cmd.rs:428-433 now prints log locations from two different homes. Route them through crate::aida_home_dir() in a follow-up. (4) NIT: gating drops Windows coverage of the review_spec_resolve_vendor codex-only assertion (bug_1607_reviewer_vendor_tests.rs:176), which is pure and has no other caller-level test. Optionally split the resolve half into an ungated test. The inner #[cfg(unix)] at :37 is now redundant. Worktree left clean.'
+  created_at: 2026-09-26T10:53:47.234794585Z
+  modified_at: 2026-09-26T10:53:47.234794585Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
