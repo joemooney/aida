@@ -52,3 +52,10 @@
   note: proxy groom 2026-09-25
   added_at: 2026-09-26T05:31:07.696568356Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a0d6bf-52da-79f1-9f43-1d4fe82a8f51
+  position: 20000
+  added_by: joe
+  note: proxy groom 2026-09-25
+  added_at: 2026-09-26T05:31:13.133927047Z
+  for_role: implementer
