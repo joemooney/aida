@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:41.012539596Z
-modified_at: 2026-09-26T13:57:56.790938391Z
+modified_at: 2026-09-26T14:42:51.374268628Z
 req_type: Task
 tags:
 - cache
@@ -32,6 +32,21 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe), per the SPIKE-90 advisor review: approved; second in order; heft about 2. Merge per-row updates into one transaction, and move the migration drop out of Cache::open into the rebuild transaction. Unless STORY-1484 takes it, add the rule that a lock error must not trigger a full rebuild.'
   created_at: 2026-09-26T09:53:28.939416173Z
   modified_at: 2026-09-26T09:53:28.939416173Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de2b-3f6e-7b02-9061-4364089c4c41
+  author: joe
+  content: |-
+    Review (fresh strict Opus reviewer): APPROVE WITH NITS on origin/claude/task-1515 @ 9dcdb6e0f9. All four acceptance criteria are met. Tests: aida-core --lib cache 134 ok; cache_lock 21 ok; bug_1644 9 ok; task_1515 6/6 ok on 5 runs (11-24s, no flakes); aida-cli-lib --lib cache 82 ok; doctor_ 161 ok. Mutations, both reverted and the tree left clean: (M1) source_head_sha ignoring migration_pending was caught by migration_drop_commits_with_the_rebuild_for_a_held_reader; (M2) committing incremental rows before the SHA stamp was caught by incremental_rows_roll_back_when_the_stamp_fails and concurrent_reader_sees_whole_incremental_refreshes.
+    Hunt results: (a) IMMEDIATE only takes RESERVED, so WAL readers are unaffected, and it removes the mid-transaction BUSY/BUSY_SNAPSHOT upgrade failure that DEFERRED had. The ladder is unchanged. (b) Pending state: the READ paths are safe. Wrapped backend reads that hit a drifted old table raise no such column/table, and with_cache_schema_retry heals them via a force_drop rebuild. Unwrapped paths either degrade (spec_id_for_uuid falls back to a scan; ancestor_epic_ids returns false, which marks the cache stale) or already tolerate errors (the notice path uses unwrap_or_default or bails). A rebuild that keeps failing leaves old rows and source_head_sha None. That is the same retry-every-command behaviour as before, but with old rows instead of empty tables, so it is strictly better. Pending is re-derived from the on-disk version stamp on every open, so it never gets stuck. (c) An older binary cannot see a lower stamp as older, so there is no eager drop there. Two new processes both rebuild, which is redundant but matches the old behaviour. (d) The YAML is read before the lock and stamped with the 'to' captured before the reads, so moving the store after the reads is harmless. The HEAD-capture-to-read race predates this change. (e) Display and {:#} are byte-identical, and all string matchers still match ('database is locked' in auto_complete BUG-455 and SQLITE_LOCKED). (f) See finding 2.
+    FINDINGS:
+    1. MEDIUM (should fix before merge; one line): cached_git_backend.rs:675-693 restamp_head. While migration_pending is set, source_head_sha() returns None, and restamp_head treats None as 'freshly rebuilt' (line 687) and writes the post-write HEAD to disk. This is reachable when with_inner skipped the refresh because a foreign writer held the lock (ensure_cache_fresh_for_read, line 372) and the process then writes. The on-disk SHA then claims freshness for rows that never ingested external commits (the TASK-712 hazard). New-binary processes still re-detect pending from the version stamp. Raw source_head_sha readers see it as fresh and trust it: statusline_cmd.rs:84 and history.rs:1113 (BUG-1631), plus older binaries. Fix: in restamp_head (and refresh_epics_then_restamp), if self.cache.migration_pending() then set_source_head_sha("") and return. Add a test that sets the stamp older, opens with pending, writes, and asserts the on-disk SHA is empty.
+    2. LOW (behaviour change; follow-up): cached_git_backend.rs:341. An incremental lock error now fails the command after one ladder (~25.6s). Previously the full-rebuild fallback gave it a second ~25.6s ladder. The read path (with_inner -> ensure_cache_fresh_for_read) therefore fails a read that could have been served: the rolled-back transaction leaves a consistent snapshot at the previous HEAD. Suggest ensure_cache_fresh_for_read catch is_cache_lock_error and serve the stale snapshot with a label (SPIKE-90 section 4.1 rule 4; STORY-1484 or a follow-up). Write paths should keep the strict error.
+    3. LOW: cached_git_backend.rs:551 refresh_parent_epic_status_in reads epic YAML (read_object) INSIDE the IMMEDIATE transaction, once per ancestor epic per upserted row (up to 500 rows). On a cold disk this lengthens how long the write lock is held and can exhaust other writers' 25.6s ladders. The 'YAML read before the lock' claim is only partly true. Suggest pre-resolving the stored statuses of candidate ancestor epics (via the pre-lock cache) before apply_incremental, and reading inside the transaction only on a miss.
+    4. NIT: try_incremental_update. After the pre-lock YAML reads, re-check current_head_sha() == to and decline (return Ok(false)) or restart if HEAD moved. This closes the pre-existing HEAD-capture-to-read race that labels HEAD-C rows as HEAD-B. It self-heals on the next refresh today.
+    5. NIT: cache.rs:1249. drop_first uses the in-memory flag. A second process whose migration was already completed by another process drops and rebuilds again. That is harmless but redundant. Optionally re-check schema_migration_needed(&tx) under the lock and clear the flag.
+    6. NIT: the on-disk encoding of 'pending' is only the older version stamp. Document on source_head_sha that raw cache_meta readers (statusline, history BUG-1631) do not see pending and must tolerate old-schema rows. Today they query only id/spec_id, so they are fine.
+  created_at: 2026-09-26T14:42:51.374268628Z
+  modified_at: 2026-09-26T14:42:51.374268628Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
