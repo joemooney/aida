@@ -1002,7 +1002,7 @@ fn write_memory_lane_artifact(
 }
 
 // trace:STORY-1093 | ai:codex
-fn write_memory_lane_scaffolding(
+pub(crate) fn write_memory_lane_scaffolding(
     root: &std::path::Path,
     store: &RequirementsStore,
     storage_label: &str,
@@ -1024,29 +1024,62 @@ fn write_memory_lane_scaffolding(
     // trace:BUG-1135 | ai:claude — dir-form so Antigravity (which only
     // recognizes `.claude/skills/<name>/SKILL.md`) can see these too.
     if !no_skills {
-        for (rel, content) in [
-            (
-                ".claude/skills/aida-capture/SKILL.md",
-                memory_lane_skill_template("aida-capture"),
-            ),
-            (
-                ".claude/skills/aida-learn/SKILL.md",
-                memory_lane_skill_template("aida-learn"),
-            ),
-            (
-                ".codex/skills/aida-capture/SKILL.md",
-                memory_lane_skill_template("aida-capture"),
-            ),
-            (
-                ".codex/skills/aida-learn/SKILL.md",
-                memory_lane_skill_template("aida-learn"),
-            ),
-        ] {
-            if write_memory_lane_artifact(root, rel, &content, force)? {
-                written += 1;
-            } else {
-                skipped += 1;
+        // The memory-lane footprint keeps the same per-pack delivered-skills
+        // manifest as a full install, so a deleted aida-capture/aida-learn is
+        // never resurrected and a later full `aida init` delivers the rest.
+        // trace:TASK-1503 | ai:claude
+        let names: std::collections::BTreeSet<String> = ["aida-capture", "aida-learn"]
+            .iter()
+            .map(|n| n.to_string())
+            .collect();
+        for pack in [".claude/skills", ".codex/skills"] {
+            let mut plan = aida_core::scaffolding::refresh::plan_skill_pack(
+                root,
+                std::path::Path::new(pack),
+                names.clone(),
+                aida_core::scaffolding::refresh::ManifestMode::Install,
+            );
+            // Two skills are not the full pack: never complete a manifest
+            // from them, or refresh would treat every other skill as new.
+            plan.partial = true;
+            if let Some(warning) = &plan.warning {
+                eprintln!(
+                    "{} {}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    warning
+                );
             }
+            let mut result = Ok(());
+            for name in &names {
+                if plan.withheld.contains(name) {
+                    skipped += 1;
+                    continue;
+                }
+                let rel = format!("{pack}/{name}/SKILL.md");
+                match write_memory_lane_artifact(
+                    root,
+                    &rel,
+                    &memory_lane_skill_template(name),
+                    force,
+                ) {
+                    Ok(true) => written += 1,
+                    Ok(false) => skipped += 1,
+                    Err(e) => {
+                        result = Err(e);
+                        break;
+                    }
+                }
+            }
+            // Record whatever was written, even after a failed write.
+            if root.join(pack).is_dir() {
+                if let Err(e) = plan.record(root, &std::collections::BTreeSet::new()) {
+                    eprintln!(
+                        "{} could not record delivered skills in {pack} ({e})",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                }
+            }
+            result?;
         }
     }
 
@@ -1427,6 +1460,8 @@ fn complete_init_scaffolding(
     let config_for_output = config.clone();
     let mut scaffolder = Scaffolder::with_database(root.to_path_buf(), config, db_path.clone());
     let preview = scaffolder.preview(store);
+    // Records on every exit, including an early IO error. trace:TASK-1503 | ai:claude
+    let skill_recorder = aida_core::scaffolding::SkillDeliveryRecorder::new(root, &preview, true);
 
     let mut _created_count = 0;
     let mut updated_count = 0;
@@ -1504,6 +1539,10 @@ fn complete_init_scaffolding(
             _created_count += 1;
         }
     }
+
+    // Record each skill pack's delivered skills so a later init, upgrade or
+    // refresh never resurrects one the user deletes. trace:TASK-1503 | ai:claude
+    drop(skill_recorder);
 
     // Scaffold the discipline pack (.aida/discipline/) — generic
     // AIDA-using guidance, written for every init mode. trace:STORY-255 | STORY-443
@@ -5208,4 +5247,64 @@ pub(crate) fn handle_init_distributed_sibling(
 
 fn sibling_init_marker_exists(project_root: &std::path::Path) -> bool {
     project_root.join(".aida/config.toml").is_file()
+}
+
+#[cfg(test)]
+mod task_1503_memory_lane_manifest_tests {
+    use super::write_memory_lane_scaffolding;
+    use aida_core::scaffolding::refresh::read_skill_manifest;
+
+    fn full_install(root: &std::path::Path) {
+        let mut scaffolder = aida_core::scaffolding::Scaffolder::new(
+            root.to_path_buf(),
+            aida_core::scaffolding::ScaffoldConfig::default(),
+        );
+        let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
+        scaffolder.apply(&preview).unwrap();
+    }
+
+    /// Memory-lane records its skills in each pack's manifest, a re-run never
+    /// resurrects a deleted one, and a later full `aida init` delivers the
+    /// full skill set (not ~55 permanent opt-outs).
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn memory_lane_records_manifest_and_full_init_delivers_the_rest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = aida_core::RequirementsStore::default();
+        write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+        for pack in [".claude/skills", ".codex/skills"] {
+            let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
+            assert!(!m.complete, "{pack}: two skills never complete a manifest");
+            assert!(m.delivered.contains("aida-capture") && m.delivered.contains("aida-learn"));
+        }
+
+        std::fs::remove_dir_all(root.join(".claude/skills/aida-capture")).unwrap();
+        write_memory_lane_scaffolding(root, &store, "test", false, true).unwrap();
+        assert!(
+            !root.join(".claude/skills/aida-capture").exists(),
+            "memory-lane re-run (even --force) keeps the deletion"
+        );
+
+        full_install(root);
+        for pack in [".claude/skills", ".codex/skills"] {
+            let dir = root.join(pack);
+            for name in ["aida-req", "aida-commit", "aida-orchestrate", "aida-learn"] {
+                assert!(dir.join(name).join("SKILL.md").is_file(), "{pack}/{name}");
+            }
+            let m = read_skill_manifest(&dir).unwrap().unwrap();
+            assert!(m.complete, "{pack}: the full install completes it");
+            assert!(m.unconfirmed.is_empty(), "{pack}: {m:?}");
+        }
+        assert!(!root.join(".claude/skills/aida-capture").exists());
+        assert!(root.join(".codex/skills/aida-capture/SKILL.md").is_file());
+        let m = read_skill_manifest(&root.join(".claude/skills"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            m.opted_out.iter().collect::<Vec<_>>(),
+            ["aida-capture"],
+            "only the real deletion is an opt-out"
+        );
+    }
 }
