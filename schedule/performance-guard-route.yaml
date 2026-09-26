@@ -1,9 +1,7 @@
 job: performance-guard-route
-last_run: 2026-09-26T23:27:45.344189399Z
+last_run: 2026-09-26T23:51:05.753014001Z
 last_by:
   seat: advisor
   session: 71dca616-6150-461d-b64f-18c8288c6e1c
   vendor: antigravity
 result: done
-due_since: 2026-09-26T23:50:59.257475777Z
-due_reason: on CronJobFailed
