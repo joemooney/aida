@@ -468,7 +468,7 @@ fn file_mtime_short(path: &std::path::Path) -> String {
 
 fn sibling_install_candidates() -> Vec<std::path::PathBuf> {
     let mut paths = Vec::new();
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = crate::home_dir() {
         paths.push(home.join(".local/bin/aida"));
         paths.push(home.join(".cargo/bin/aida"));
     }
@@ -487,7 +487,7 @@ fn classify_install_path(path: &std::path::Path) -> InstallMethod {
     let cargo_home = std::env::var("CARGO_HOME").ok();
     let cargo_bin = cargo_home
         .map(|h| std::path::PathBuf::from(h).join("bin"))
-        .or_else(|| dirs::home_dir().map(|h| h.join(".cargo/bin")));
+        .or_else(|| crate::home_dir().map(|h| h.join(".cargo/bin")));
     if let Some(bin) = cargo_bin {
         if path.starts_with(&bin) {
             return InstallMethod::Cargo(path.to_path_buf());

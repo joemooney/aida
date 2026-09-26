@@ -97,7 +97,7 @@ impl DriverHost for RealDriverHost {
         }
         user_unit_dir_from(
             std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
-            dirs::home_dir(),
+            crate::home_dir(),
         )
         .context("could not resolve the home directory for the systemd user unit directory")
     }

@@ -4442,7 +4442,7 @@ fn maybe_scaffold_codex_prompts_on_init(project_root: &std::path::Path) {
     if aida_core::agents_config::resolve_default_vendor(project_root).as_deref() != Some("codex") {
         return;
     }
-    let Some(dest) = dirs::home_dir().map(|h| h.join(".codex").join("prompts")) else {
+    let Some(dest) = crate::home_dir().map(|h| h.join(".codex").join("prompts")) else {
         return;
     };
     match aida_core::scaffolding::codex_prompts::scaffold_codex_prompts(&dest, false) {

@@ -471,7 +471,7 @@ pub(crate) fn handle_scaffold_command(
             }
             let dest_dir = match dest {
                 Some(d) => d.clone(),
-                None => dirs::home_dir()
+                None => crate::home_dir()
                     .ok_or_else(|| anyhow::anyhow!("cannot resolve home directory"))?
                     .join(".codex")
                     .join("prompts"),

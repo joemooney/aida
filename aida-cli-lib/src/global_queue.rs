@@ -50,7 +50,7 @@ pub struct GlobalQueueEntry {
 /// Path to the global queue file for the given role. Creates `~/.aida/queue/`
 /// if it doesn't exist.
 pub fn queue_path(role: &str) -> Result<PathBuf> {
-    let home = dirs::home_dir().context("Cannot determine home directory for global queue")?;
+    let home = crate::home_dir().context("Cannot determine home directory for global queue")?;
     let dir = home.join(".aida").join("queue");
     std::fs::create_dir_all(&dir).with_context(|| {
         format!(
