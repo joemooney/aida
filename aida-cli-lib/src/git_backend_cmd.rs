@@ -5869,6 +5869,12 @@ pub(crate) fn handle_git_backend_command(
                     );
                     pending_leave = Some((spec_label, lease_root, ctx, target, outcome));
                     left_needs_attention = true;
+                } else {
+                    // BUG-1637: every other status edit is recorded under the
+                    // caller through the one shared history helper (leaving
+                    // NeedsAttention is recorded by `return_to_flight` above).
+                    // trace:BUG-1637 | ai:claude
+                    crate::record_caller_status_transition(&mut req, &prior_status_for_reopen);
                 }
                 changed = true;
                 new_status_for_manifest = Some(canonical.to_string());

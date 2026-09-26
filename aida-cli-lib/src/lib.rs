@@ -507,6 +507,52 @@ pub(crate) fn get_default_author() -> String {
     }
 }
 
+/// BUG-1637: record a caller-authored (human-class) status transition
+/// `from -> req.status` under the caller's identity ([`get_default_author`])
+/// through the one shared helper, `aida_core::conflict::record_status_transition`.
+/// Every human status writer (`aida edit --status`, MCP `update_requirement`,
+/// queue done/rework/advance, findings, questions, punt) calls this, so a human
+/// change after an automated one leaves mixed history and the BUG-1625 merge
+/// guard lets the human win.
+// trace:BUG-1637 | ai:claude
+pub(crate) fn record_caller_status_transition(req: &mut Requirement, from: &RequirementStatus) {
+    aida_core::conflict::record_status_transition(req, &get_default_author(), from);
+}
+
+/// BUG-1637: the `aida findings promote --auto-complete` persist step: record
+/// the into-Completed transition under the caller and stamp `modified_at`.
+// trace:BUG-1637 | ai:claude
+pub(crate) fn record_promote_completion(
+    req: &mut Requirement,
+    prior: &RequirementStatus,
+    now: chrono::DateTime<chrono::Utc>,
+) {
+    record_caller_status_transition(req, prior);
+    req.modified_at = now;
+}
+
+/// BUG-1637: record a legacy `aida edit`'s field changes under `author`: the
+/// non-status fields as one history entry, the status change through
+/// `aida_core::conflict::record_status_transition` (the one status-history
+/// helper).
+// trace:BUG-1637 | ai:claude
+fn record_edit_changes(req: &mut Requirement, author: &str, changes: &[aida_core::FieldChange]) {
+    let others: Vec<aida_core::FieldChange> = changes
+        .iter()
+        .filter(|c| c.field_name != "status")
+        .cloned()
+        .collect();
+    req.record_change(author.to_string(), others);
+    if let Some(change) = changes.iter().find(|c| c.field_name == "status") {
+        match parse_status(&change.old_value) {
+            Ok(from) => aida_core::conflict::record_status_transition(req, author, &from),
+            // Unreachable for the edit paths (they build the change from the
+            // enum), but never drop a status change from the history.
+            Err(_) => req.record_change(author.to_string(), vec![change.clone()]),
+        }
+    }
+}
+
 /// BUG-99: restore SIGPIPE's default behavior so `aida ... | head -N` exits
 /// cleanly (status 141) instead of triggering Rust's "failed printing to
 /// stdout: Broken pipe" panic. Rust deliberately ignores SIGPIPE by default
@@ -6559,7 +6605,9 @@ fn handle_findings_command(
                 session_id: resolve_current_session_id(), // trace:TASK-330
                 relayed_from: None,
             });
-            req.status = RequirementStatus::Rejected;
+            // BUG-1637: caller-authored. trace:BUG-1637 | ai:claude
+            let from = std::mem::replace(&mut req.status, RequirementStatus::Rejected);
+            record_caller_status_transition(&mut req, &from);
             req.modified_at = now;
             backend.update_requirement(&req)?;
             println!("Dismissed finding {id} — status → Rejected.");
@@ -6696,8 +6744,10 @@ fn handle_findings_command(
                         &display_id,
                         sha,
                         "promote",
-                        |req, _| {
-                            req.modified_at = now;
+                        |req, prior| {
+                            // BUG-1637: caller-authored, through the one
+                            // shared history helper. trace:BUG-1637 | ai:claude
+                            record_promote_completion(req, prior, now);
                             backend.update_requirement(req)?;
                             Ok(())
                         },
@@ -6751,7 +6801,9 @@ fn handle_findings_command(
                     relayed_from: None,
                 });
             }
-            req.status = RequirementStatus::Approved;
+            // BUG-1637: caller-authored. trace:BUG-1637 | ai:claude
+            let from = std::mem::replace(&mut req.status, RequirementStatus::Approved);
+            record_caller_status_transition(&mut req, &from);
             req.modified_at = now;
             backend.update_requirement(&req)?;
             println!("Promoted finding {id} — status → Approved, queued for {role}.");
@@ -7825,6 +7877,11 @@ fn finalize_answer(
         .and_then(|dr| dr.choices.get(idx).cloned())
         .ok_or_else(|| anyhow::anyhow!("{display_id}: answered choice {idx} is out of range"))?;
 
+    // BUG-1637: the status before the answer; every status change the answer
+    // makes (the resolution token and the Draft promotion below) is recorded
+    // under the answering caller before the write. trace:BUG-1637 | ai:claude
+    let status_before_answer = req.status.clone();
+
     // Apply the resolution token (mutates tags / status / comments in place).
     let applied = apply_resolution_token(
         &mut req,
@@ -7860,6 +7917,8 @@ fn finalize_answer(
         req.status = RequirementStatus::Approved;
         promoted_to_approved = true;
     }
+    // trace:BUG-1637 | ai:claude
+    record_caller_status_transition(&mut req, &status_before_answer);
 
     req.modified_at = chrono::Utc::now();
     backend.update_requirement(&req)?;
@@ -8995,15 +9054,14 @@ fn ensure_spec_done_after_pr(
         let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
         let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
         // trace:TASK-1468 | ai:claude
-        let Some(mut req) = backend.get_requirement_unambiguous(spec)? else {
+        let Some(req) = backend.get_requirement_unambiguous(spec)? else {
             return Ok(false);
         };
-        if !matches!(req.status, aida_core::RequirementStatus::InProgress) {
-            return Ok(false);
-        }
-        req.status = aida_core::RequirementStatus::Done;
-        backend.update_requirement(&req)?;
-        Ok(true)
+        // BUG-1637: the status check runs on the copy read under the store
+        // lock; a refused flip writes nothing. trace:BUG-1637 | ai:claude
+        let mut flipped = false;
+        backend.update_spec_atomically(&req, |r| flipped = pr_open_done_flip(r))?;
+        Ok(flipped)
     })();
     match flipped {
         Ok(true) => {
@@ -10772,7 +10830,10 @@ fn handle_punt_command(
         .filter(|r| !r.is_empty());
     let now = chrono::Utc::now();
 
-    req.status = RequirementStatus::NeedsAttention;
+    // BUG-1637: the CLI punt is caller-authored, recorded under the caller.
+    // trace:BUG-1637 | ai:claude
+    let from = std::mem::replace(&mut req.status, RequirementStatus::NeedsAttention);
+    record_caller_status_transition(&mut req, &from);
     req.attention_reason = Some(AttentionReason {
         category,
         detail: reason.to_string(),
@@ -11031,14 +11092,9 @@ fn handle_done_command(
         "",
         "done",
         |req, prior| {
-            req.record_change(
-                current_user_id(None),
-                vec![aida_core::Requirement::field_change(
-                    "status",
-                    prior.to_string(),
-                    "Completed".to_string(),
-                )],
-            );
+            // BUG-1637: caller-authored (same identity as before), through the
+            // one shared history helper. trace:BUG-1637 | ai:claude
+            aida_core::conflict::record_status_transition(req, &current_user_id(None), prior);
             backend.update_requirement(req)?;
             Ok(())
         },
@@ -19194,8 +19250,10 @@ fn edit_requirement_cli(
         return Ok(());
     }
 
-    // Record changes with CLI as author
-    req.record_change("CLI".to_string(), changes.clone());
+    // BUG-1637: record under the caller's identity (was the literal "CLI"),
+    // and the status change through the one shared history helper.
+    // trace:BUG-1637 | ai:claude
+    record_edit_changes(req, &get_default_author(), &changes);
 
     // Save changes
     storage.save(&store)?;
@@ -19361,8 +19419,9 @@ fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> Result<()> {
         .prompt()
         .unwrap_or_else(|_| String::from("Unknown"));
 
-    // Record changes
-    req.record_change(author, changes);
+    // Record changes. BUG-1637: the status change goes through the one
+    // shared history helper. trace:BUG-1637 | ai:claude
+    record_edit_changes(req, &author, &changes);
 
     // Save changes
     storage.save(&store)?;
@@ -24503,11 +24562,14 @@ fn scan_completed_without_commit_with_options(
                  (and no tracked trace comment) — git cannot corroborate the completion"
             ),
             action: format!(
-                "land a commit carrying `({spec_id})` then `aida pull`, or re-open for triage \
-                 (`aida doctor --heal --category completed-without-commit --yes --force`)"
+                "land a commit carrying `({spec_id})` then `aida pull`, or, once you have \
+                 checked the work did not land, reopen it yourself \
+                 (`aida edit {spec_id} --status done --force`)"
             ),
-            // Re-opening a Completed spec is a real status mutation, never a
-            // "safe" auto-fix — gated behind --yes --force like branch deletion.
+            // BUG-1637: the doctor never reopens a terminal status itself (its
+            // heal only reports); the reopen is a person's recorded edit. The
+            // category stays force-gated so the heal never runs unattended.
+            // trace:BUG-1637 | ai:claude
             safe_heal: false,
         });
     }
@@ -31457,16 +31519,16 @@ fn bump_spec_in_progress_at_lease_take(project_root: &std::path::Path, scope: &s
         let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_root);
         let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path)?;
         // trace:TASK-1468 | ai:claude
-        let Some(mut req) = backend.get_requirement_unambiguous(&spec_id)? else {
+        let Some(req) = backend.get_requirement_unambiguous(&spec_id)? else {
             return Ok(false);
         };
-        if !matches!(req.status, RequirementStatus::Approved) {
-            return Ok(false);
-        }
-        req.status = RequirementStatus::InProgress;
-        req.modified_at = chrono::Utc::now();
-        backend.update_requirement(&req)?;
-        Ok(true)
+        // BUG-1637: the status check runs on the copy read under the store
+        // lock; a refused bump writes nothing. trace:BUG-1637 | ai:claude
+        let mut bumped = false;
+        backend.update_spec_atomically(&req, |r| {
+            bumped = approved_to_in_progress_bump(r, aida_core::conflict::LEASE_TAKE_AUTHOR);
+        })?;
+        Ok(bumped)
     })();
     match result {
         Ok(bumped) => bumped,
@@ -36638,11 +36700,10 @@ fn session_start(
             let mut bumped = false;
             // trace:TASK-1468 | ai:claude
             if let Some(req) = store.get_requirement_unambiguous_mut(owns)? {
-                if matches!(req.status, RequirementStatus::Approved) {
-                    req.status = RequirementStatus::InProgress;
-                    req.modified_at = chrono::Utc::now();
-                    bumped = true;
-                }
+                // BUG-1637: automated, recorded under its own author.
+                // trace:BUG-1637 | ai:claude
+                bumped =
+                    approved_to_in_progress_bump(req, aida_core::conflict::SESSION_START_AUTHOR);
             }
             if bumped {
                 storage.save(&store)?;
@@ -46489,6 +46550,112 @@ fn shelve_status_flip(req: &mut aida_core::Requirement) -> bool {
     req.status != from
 }
 
+/// BUG-1637: the PR-open Done assertion's status write. Automated, and only
+/// ever In Progress -> Done, so it never leaves a terminal status. Recorded
+/// under [`aida_core::conflict::PR_OPEN_AUTHOR`]. Returns whether it moved.
+// trace:BUG-1637 | ai:claude
+pub(crate) fn pr_open_done_flip(req: &mut Requirement) -> bool {
+    if !matches!(req.status, RequirementStatus::InProgress) {
+        return false;
+    }
+    aida_core::conflict::set_status_recorded(
+        req,
+        RequirementStatus::Done,
+        aida_core::conflict::PR_OPEN_AUTHOR,
+    );
+    true
+}
+
+/// BUG-1637: the Approved -> In Progress coherence bump shared by the
+/// SubagentStart lease-take hook ([`aida_core::conflict::LEASE_TAKE_AUTHOR`])
+/// and `aida session start` ([`aida_core::conflict::SESSION_START_AUTHOR`]).
+/// Automated; any other source status (terminal included) is left alone.
+/// Returns whether it moved.
+// trace:BUG-1637 | ai:claude
+pub(crate) fn approved_to_in_progress_bump(req: &mut Requirement, author: &str) -> bool {
+    if !matches!(req.status, RequirementStatus::Approved) {
+        return false;
+    }
+    aida_core::conflict::set_status_recorded(req, RequirementStatus::InProgress, author);
+    req.modified_at = chrono::Utc::now();
+    true
+}
+
+/// BUG-1637: the zen autopilot's Draft -> Approved write. It applies only to
+/// a Draft (the status the approve-gate judged and the autopilot audit records
+/// as the prior state), so it never leaves a terminal status. Recorded under
+/// [`aida_core::conflict::ZEN_APPROVE_AUTHOR`]. Returns whether it moved.
+// trace:BUG-1637 | ai:claude
+pub(crate) fn zen_approve_flip(req: &mut Requirement) -> bool {
+    if !matches!(req.status, RequirementStatus::Draft) {
+        return false;
+    }
+    aida_core::conflict::set_status_recorded(
+        req,
+        RequirementStatus::Approved,
+        aida_core::conflict::ZEN_APPROVE_AUTHOR,
+    );
+    req.modified_at = chrono::Utc::now();
+    true
+}
+
+/// BUG-1637: the orchestrator's phase-1 pre-spawn bump (BUG-369). Re-checks
+/// the source status on the copy read inside the atomic write, so a spec a
+/// concurrent writer moved to Rejected or Completed is not bumped, and records
+/// the move under [`aida_core::conflict::ORCHESTRATOR_PHASE1_AUTHOR`].
+/// Returns whether it moved.
+// trace:BUG-369 trace:BUG-1637 | ai:claude
+pub(crate) fn phase1_status_bump(
+    r: &mut Requirement,
+    target: &RequirementStatus,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    if auto_complete_phase1_target_status(&r.status).as_ref() != Some(target) {
+        return false;
+    }
+    aida_core::conflict::set_status_recorded(
+        r,
+        target.clone(),
+        aida_core::conflict::ORCHESTRATOR_PHASE1_AUTHOR,
+    );
+    r.modified_at = now;
+    true
+}
+
+/// BUG-1637: TASK-133's restore of the pre-bump status after a phase-1
+/// failure. Automated: it never leaves a terminal status (a spec that reached
+/// one meanwhile is no longer the spec phase 1 bumped) and records the move
+/// under [`aida_core::conflict::ORCHESTRATOR_PHASE1_AUTHOR`]. Returns whether
+/// it applied.
+// trace:TASK-133 trace:BUG-1637 | ai:claude
+pub(crate) fn phase1_status_restore(req: &mut Requirement, prior: &RequirementStatus) -> bool {
+    if aida_core::conflict::is_terminal_status(&req.status) {
+        return false;
+    }
+    aida_core::conflict::set_status_recorded(
+        req,
+        prior.clone(),
+        aida_core::conflict::ORCHESTRATOR_PHASE1_AUTHOR,
+    );
+    true
+}
+
+/// BUG-1637: the whole TASK-133 restore write, run inside the atomic write:
+/// restore the pre-bump status and clear the spurious shelve FailureReason, or
+/// change nothing when [`phase1_status_restore`] refuses. Returns whether it
+/// applied.
+// trace:TASK-133 trace:BUG-1637 | ai:claude
+pub(crate) fn apply_phase1_restore(r: &mut Requirement, prior: &RequirementStatus) -> bool {
+    if !phase1_status_restore(r, prior) {
+        return false;
+    }
+    // The shelve that ran on the failure path stamped a FailureReason; with no
+    // lease and no work behind it that finding is spurious — clear it.
+    r.failure_reason = None;
+    r.modified_at = chrono::Utc::now();
+    true
+}
+
 /// TASK-133: undo the orchestrator parent's pre-spawn phase-1 status bump.
 ///
 /// `prepare_auto_complete_phase1_status` flips a spec Approved/Planned/Draft →
@@ -46606,15 +46773,15 @@ fn restore_phase1_status_on_lease_failure(
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
 
     // trace:TASK-1468 | ai:claude
-    let Some(mut req) = backend.get_requirement_unambiguous(spec)? else {
+    let Some(req) = backend.get_requirement_unambiguous(spec)? else {
         return Ok(());
     };
-    req.status = prior.clone();
-    // The shelve that ran on the failure path stamped a FailureReason; with no
-    // lease and no work behind it that finding is spurious — clear it.
-    req.failure_reason = None;
-    req.modified_at = chrono::Utc::now();
-    backend.update_requirement(&req)?;
+    // BUG-1637: the restore and its terminal-status refusal run on the copy
+    // read under the store lock; a refused restore writes nothing.
+    // trace:BUG-1637 | ai:claude
+    backend.update_spec_atomically(&req, |r| {
+        apply_phase1_restore(r, prior);
+    })?;
     Ok(())
 }
 
@@ -70593,13 +70760,11 @@ fn apply_draft_landed_flip(
 ) {
     let prior_status = r.status.clone();
     r.set_status_from_str("Done");
-    r.record_change(
-        "aida-auto-bump".to_string(),
-        vec![aida_core::Requirement::field_change(
-            "status",
-            format!("{:?}", prior_status),
-            format!("{:?}", r.status),
-        )],
+    // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
+    aida_core::conflict::record_status_transition(
+        r,
+        aida_core::conflict::AUTO_BUMP_AUTHOR,
+        &prior_status,
     );
     r.modified_at = now;
     let short = if sha.len() >= 7 { &sha[..7] } else { sha };
@@ -70841,13 +71006,11 @@ fn reject_resolved_auto_complete_failure_bug(
     }
     let prior = req.status.clone();
     req.set_status_from_str("Rejected");
-    req.record_change(
-        "aida-auto-bump".to_string(),
-        vec![aida_core::Requirement::field_change(
-            "status",
-            format!("{:?}", prior),
-            format!("{:?}", req.status),
-        )],
+    // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
+    aida_core::conflict::record_status_transition(
+        req,
+        aida_core::conflict::AUTO_BUMP_AUTHOR,
+        &prior,
     );
     req.modified_at = now;
     req.add_comment(aida_core::Comment::new(
@@ -71378,13 +71541,11 @@ fn apply_auto_bump_flip(
     // way the manual `aida edit --status` path does.
     // trace:STORY-1418 | ai:claude
     let prior_status = completion::mark_completed(r);
-    r.record_change(
-        "aida-auto-bump".to_string(),
-        vec![aida_core::Requirement::field_change(
-            "status",
-            format!("{:?}", prior_status),
-            format!("{:?}", r.status),
-        )],
+    // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
+    aida_core::conflict::record_status_transition(
+        r,
+        aida_core::conflict::AUTO_BUMP_AUTHOR,
+        &prior_status,
     );
     r.modified_at = now;
     // BUG-405: a Completed spec must not carry a stale FailureReason.
@@ -71617,13 +71778,11 @@ fn apply_closure_hold(
     if !matches!(r.status, RequirementStatus::Done) {
         let prior = r.status.clone();
         r.set_status_from_str("Done");
-        r.record_change(
-            "aida-auto-bump".to_string(),
-            vec![aida_core::Requirement::field_change(
-                "status",
-                format!("{:?}", prior),
-                format!("{:?}", r.status),
-            )],
+        // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
+        aida_core::conflict::record_status_transition(
+            r,
+            aida_core::conflict::AUTO_BUMP_AUTHOR,
+            &prior,
         );
         changed = true;
     }
@@ -71729,14 +71888,8 @@ fn apply_stale_review_flip(
     // trace:STORY-1418 | ai:claude
     let prior = completion::mark_completed(r);
     // BUG-477: record the flip-to-Completed in the per-spec history too.
-    r.record_change(
-        "aida-auto-bump".to_string(),
-        vec![aida_core::Requirement::field_change(
-            "status",
-            format!("{:?}", prior),
-            format!("{:?}", r.status),
-        )],
-    );
+    // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
+    aida_core::conflict::record_status_transition(r, aida_core::conflict::AUTO_BUMP_AUTHOR, &prior);
     r.modified_at = now;
     // BUG-405 contract: a Completed spec must not keep a stale FailureReason.
     r.failure_reason = None;
@@ -71939,14 +72092,8 @@ fn apply_stranded_review_pr_resolution(
             ));
         }
     }
-    r.record_change(
-        "aida-auto-bump".to_string(),
-        vec![aida_core::Requirement::field_change(
-            "status",
-            format!("{:?}", prior),
-            format!("{:?}", r.status),
-        )],
-    );
+    // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
+    aida_core::conflict::record_status_transition(r, aida_core::conflict::AUTO_BUMP_AUTHOR, &prior);
     r.modified_at = now;
     true
 }
@@ -73367,13 +73514,11 @@ fn handle_db_reconcile_status(
                 // status field_change shape. trace:BUG-477
                 // trace:STORY-1418 | ai:claude
                 let prior_status = completion::mark_completed(r);
-                r.record_change(
-                    "aida-reconcile".to_string(),
-                    vec![aida_core::Requirement::field_change(
-                        "status",
-                        format!("{:?}", prior_status),
-                        format!("{:?}", r.status),
-                    )],
+                // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
+                aida_core::conflict::record_status_transition(
+                    r,
+                    aida_core::conflict::RECONCILE_AUTHOR,
+                    &prior_status,
                 );
                 r.modified_at = now;
                 // BUG-405 contract (review finding): a Completed spec must not
@@ -73423,13 +73568,11 @@ fn handle_db_reconcile_status(
                 // BUG-477: record the reconcile stale-review flip-to-Completed
                 // in the per-spec history too, mirroring the manual edit
                 // path's status field_change shape. trace:BUG-477
-                r.record_change(
-                    "aida-reconcile".to_string(),
-                    vec![aida_core::Requirement::field_change(
-                        "status",
-                        format!("{:?}", prior),
-                        format!("{:?}", r.status),
-                    )],
+                // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
+                aida_core::conflict::record_status_transition(
+                    r,
+                    aida_core::conflict::RECONCILE_AUTHOR,
+                    &prior,
                 );
                 r.modified_at = now;
                 // BUG-405 contract (review finding): a Completed spec must not
@@ -73967,6 +74110,12 @@ mod queue_rework_tests;
 #[cfg(test)]
 #[path = "tests/bug_1632_status_writer_tests.rs"]
 mod bug_1632_status_writer_tests;
+
+// BUG-1637: every status writer records its transition through the one shared
+// helper with the right author class. trace:BUG-1637 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1637_status_writer_tests.rs"]
+mod bug_1637_status_writer_tests;
 
 #[cfg(test)]
 #[path = "tests/eval_subcommand_hint_tests.rs"]
@@ -98466,10 +98615,23 @@ fn zen_auto_approve(
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
     let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
-    let mut owned = req.clone();
-    owned.status = RequirementStatus::Approved;
-    owned.modified_at = chrono::Utc::now();
-    backend.update_requirement(&owned)?;
+    // BUG-1637: the flip (and its authority and Draft checks) runs on the copy
+    // read under the store lock; a refused flip writes nothing and fails, so
+    // no autopilot execution is recorded for it. trace:BUG-1637 | ai:claude
+    let mut approved = false;
+    let mut seen = req.status.clone();
+    backend.update_spec_atomically(req, |r| {
+        seen = r.status.clone();
+        approved =
+            zen_auto_approve_authorized(&r.status, has_advisor_authority) && zen_approve_flip(r);
+    })?;
+    if !approved {
+        anyhow::bail!(
+            "{} is now {}, not Draft: it changed while auto-approving, so nothing was changed.",
+            req.display_id(),
+            seen
+        );
+    }
     Ok(())
 }
 
@@ -98677,11 +98839,19 @@ fn prepare_auto_complete_phase1_status(
     };
     let now = chrono::Utc::now();
     // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+    // BUG-1637: re-check the source status inside the write (a concurrent
+    // Rejected/Completed must not become In Progress), record the bump under
+    // the orchestrator's phase-1 author, and take the restore target from the
+    // status read under the lock, not the pre-lock read.
+    // trace:BUG-1637 | ai:claude
+    let mut prior: Option<RequirementStatus> = None;
     storage.update_spec_atomically(req, |r| {
-        r.status = target.clone();
-        r.modified_at = now;
+        let before = r.status.clone();
+        if phase1_status_bump(r, &target, now) {
+            prior = Some(before);
+        }
     })?;
-    Ok(Some((display_id, current)))
+    Ok(prior.map(|p| (display_id, p)))
 }
 
 fn resolve_lifecycle_skip(storage: &Storage, spec: &str) -> Result<auto_complete::LifecycleSkip> {

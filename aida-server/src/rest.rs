@@ -1751,7 +1751,9 @@ async fn update_requirement(
         req.description = description;
     }
     if let Some(status) = body.status {
-        req.status = parse_status(&status);
+        // BUG-1637: through the one shared status-history helper.
+        // trace:BUG-1637 | ai:claude
+        aida_core::conflict::set_status_recorded(req, parse_status(&status), REST_STATUS_AUTHOR);
     }
     if let Some(priority) = body.priority {
         req.priority = parse_priority(&priority);
@@ -2164,7 +2166,9 @@ async fn update_requirement_legacy(
         req.description = description;
     }
     if let Some(status) = body.status {
-        req.status = parse_status(&status);
+        // BUG-1637: through the one shared status-history helper.
+        // trace:BUG-1637 | ai:claude
+        aida_core::conflict::set_status_recorded(req, parse_status(&status), REST_STATUS_AUTHOR);
     }
     if let Some(priority) = body.priority {
         req.priority = parse_priority(&priority);
@@ -2381,6 +2385,12 @@ fn find_requirement_index(store: &aida_core::RequirementsStore, id: &str) -> Opt
         .position(|r| r.spec_id.as_ref().map(|s| s == id).unwrap_or(false))
 }
 
+/// BUG-1637: history author for a status change made through the REST API,
+/// which carries no caller identity. It is not an automated author, so the
+/// BUG-1625 merge guard treats the change as intentional.
+// trace:BUG-1637 | ai:claude
+const REST_STATUS_AUTHOR: &str = "aida-rest";
+
 fn parse_status(s: &str) -> aida_core::RequirementStatus {
     match s.to_lowercase().as_str() {
         "draft" => aida_core::RequirementStatus::Draft,
@@ -2489,7 +2499,13 @@ async fn update_requirement_v2_legacy(
     })?;
 
     if let Some(status) = &body.status {
-        store.requirements[idx].status = parse_status(status);
+        // BUG-1637: through the one shared status-history helper.
+        // trace:BUG-1637 | ai:claude
+        aida_core::conflict::set_status_recorded(
+            &mut store.requirements[idx],
+            parse_status(status),
+            REST_STATUS_AUTHOR,
+        );
     }
     if let Some(priority) = &body.priority {
         store.requirements[idx].priority = parse_priority(priority);

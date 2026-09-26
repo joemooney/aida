@@ -4709,9 +4709,9 @@ fn heal_doctor_finding(
         "merged-agent-worktrees" if opts.force && opts.yes => {
             heal_doctor_merged_agent_worktree(project_root, finding)
         }
-        // TASK-673: re-open an uncorroborated Completed spec to Done so it
-        // surfaces in the queue's "awaiting commit" lane for triage rather than
-        // silently asserting work git never saw. Force-gated (see heal_doctor_findings).
+        // TASK-673 / BUG-1637: the heal reports and refuses; it never reopens
+        // the Completed spec (see heal_doctor_completed_without_commit).
+        // Still force-gated (see heal_doctor_findings).
         "completed-without-commit" if opts.force && opts.yes => {
             heal_doctor_completed_without_commit(project_root, finding)
         }
@@ -4990,7 +4990,14 @@ fn heal_doctor_spec_status(
             if !current_scope_lease {
                 continue;
             }
-            req.status = RequirementStatus::InProgress;
+            // BUG-1637: an automated repair, recorded under the doctor's
+            // author so the BUG-1625 merge guard can see it.
+            // trace:BUG-1637 | ai:claude
+            aida_core::conflict::set_status_recorded(
+                req,
+                RequirementStatus::InProgress,
+                aida_core::conflict::DOCTOR_AUTHOR,
+            );
             req.modified_at = chrono::Utc::now();
             action = Some("bumped Approved spec to In Progress".to_string());
         } else if matches!(req.status, RequirementStatus::InProgress)
@@ -4999,7 +5006,12 @@ fn heal_doctor_spec_status(
             if current_scope_lease {
                 continue;
             }
-            req.status = RequirementStatus::Approved;
+            // trace:BUG-1637 | ai:claude
+            aida_core::conflict::set_status_recorded(
+                req,
+                RequirementStatus::Approved,
+                aida_core::conflict::DOCTOR_AUTHOR,
+            );
             req.modified_at = chrono::Utc::now();
             action = Some(format!(
                 "reverted {} from In Progress to Approved (no active lease found)",
@@ -5020,54 +5032,55 @@ fn heal_doctor_spec_status(
     })
 }
 
-/// TASK-673: re-open a Completed-without-corroboration spec to Done. Done is the
-/// "finished on a branch, awaiting merge" state, so the spec lands in the
-/// queue's "awaiting commit" lane where the missing corroboration is visible and
-/// actionable — far better than a Completed row git can't back up. Re-checks the
-/// status is still Completed (a concurrent `aida pull` may have legitimately
-/// corroborated it since the scan). The finding id matches either spec_id or
-// agreed_id. trace:TASK-673 | ai:claude
+/// TASK-673 / BUG-1637: the completed-without-commit "heal" REFUSES to move
+/// the spec and reports instead.
+///
+/// It used to re-open the Completed spec to Done. That is an automated write
+/// leaving a terminal status on the strength of a heuristic: "git cannot find a
+/// corroborating commit" is also what a stale or shallow clone, a squash merge
+/// that dropped the trailer, or work landed in another repository look like.
+/// Exactly that stale-clone shape is the BUG-1625 incident, and the merge guard
+/// exists to stop an automated source from regressing a terminal status. So
+/// the doctor never reopens a terminal status. A person who has checked the
+/// spec reopens it with `aida edit <ID> --status done --force`, which records
+/// the change under their own name.
+// trace:TASK-673 trace:BUG-1637 | ai:claude
 fn heal_doctor_completed_without_commit(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
     let storage = Storage::new(project_root.join(".aida-store"));
-    let mut store = storage.load()?;
-    let mut action = None;
-    for req in &mut store.requirements {
-        let matches_id = req.spec_id.as_deref() == Some(finding.id.as_str())
-            || req.agreed_id.as_deref() == Some(finding.id.as_str());
-        if !matches_id {
-            continue;
-        }
-        if matches!(req.status, RequirementStatus::Completed) {
-            let prior = req.status.clone();
-            req.status = RequirementStatus::Done;
-            req.modified_at = chrono::Utc::now();
-            // TASK-1477: this heal re-opens a Completed spec — clear the
-            // stale completed_at so the eventual re-completion (once a
-            // corroborating commit lands) stamps a fresh date instead of
-            // keeping this one forever.
-            // trace:TASK-1477 | ai:claude
-            crate::completion::clear_completed_at_on_reopen(req, &prior);
-            action = Some(format!(
-                "re-opened {} from Completed to Done (no corroborating commit) for triage",
+    let store = storage.load()?;
+    let still_completed = store.requirements.iter().any(|req| {
+        (req.spec_id.as_deref() == Some(finding.id.as_str())
+            || req.agreed_id.as_deref() == Some(finding.id.as_str()))
+            && matches!(req.status, RequirementStatus::Completed)
+    });
+    let (action, detail) = if still_completed {
+        (
+            format!(
+                "left {} Completed: doctor never reopens a terminal status",
                 finding.id
-            ));
-        }
-        break;
-    }
-    if action.is_some() {
-        storage.save(&store)?;
-    }
-    let changed = action.is_some();
+            ),
+            Some(format!(
+                "git found no commit for {id}, but a stale clone or a squash merge looks the \
+                 same. Check it; if the work really did not land, reopen it yourself with \
+                 `aida edit {id} --status done --force`.",
+                id = finding.id
+            )),
+        )
+    } else {
+        (
+            "spec is no longer Completed — nothing to report".to_string(),
+            None,
+        )
+    };
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
-        action: action
-            .unwrap_or_else(|| "spec is no longer Completed — nothing to re-open".to_string()),
-        status: if changed { "healed" } else { "skipped" }.to_string(),
-        detail: None,
+        action,
+        status: "skipped".to_string(),
+        detail,
     })
 }
 
@@ -7154,12 +7167,23 @@ hostname = "localhost"
         assert_eq!(scan.hidden_older, 0);
     }
 
+    /// BUG-1637: the completed-without-commit heal never reopens the
+    /// Completed spec. It reports, leaves the status, `completed_at` and the
+    /// history untouched, and points at the recorded human reopen.
+    // trace:TASK-673 trace:TASK-1477 trace:BUG-1637 | ai:claude
     #[test]
-    fn integrity_heal_reopens_completed_to_done() {
+    fn integrity_heal_refuses_to_reopen_completed() {
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
+        let mut req = completed_spec("TASK-700");
+        let stamp = chrono::Utc::now() - chrono::Duration::days(10);
+        req.implementation_info = Some(aida_core::ImplementationInfo {
+            completed_at: Some(stamp),
+            completion_sha: Some("deadbeef".to_string()),
+            ..Default::default()
+        });
         let mut store = aida_core::models::RequirementsStore::new();
-        store.requirements = vec![completed_spec("TASK-700")];
+        store.requirements = vec![req];
         storage.save(&store).unwrap();
 
         let finding = DoctorFinding {
@@ -7170,60 +7194,86 @@ hostname = "localhost"
             safe_heal: false,
         };
         let result = heal_doctor_completed_without_commit(root, &finding).unwrap();
-        assert_eq!(result.status, "healed");
-        let reloaded = storage.load().unwrap();
-        assert_eq!(reloaded.requirements[0].status, RequirementStatus::Done);
+        assert_eq!(result.status, "skipped");
+        assert!(
+            result.action.contains("never reopens a terminal status"),
+            "{result:?}"
+        );
+        assert!(
+            result
+                .detail
+                .as_deref()
+                .unwrap_or("")
+                .contains("aida edit TASK-700 --status done --force"),
+            "the report names the recorded human reopen: {result:?}"
+        );
 
-        // Idempotent: a second heal is a no-op (spec already left Completed).
-        let again = heal_doctor_completed_without_commit(root, &finding).unwrap();
-        assert_eq!(again.status, "skipped");
+        let reloaded = storage.load().unwrap();
+        let r = &reloaded.requirements[0];
+        assert_eq!(r.status, RequirementStatus::Completed);
+        assert!(r.history.is_empty(), "nothing was written");
+        assert_eq!(
+            r.implementation_info.as_ref().unwrap().completed_at,
+            Some(stamp)
+        );
     }
 
-    /// TASK-1477 (review finding): this heal is an un-complete path — it must
-    /// clear the stale `implementation_info.completed_at` the same way
-    /// `aida edit --status` / `aida queue rework` do, so a later re-completion
-    /// (once a corroborating commit lands) stamps a fresh date instead of
-    /// keeping this one forever and misordering `aida list --sort completed`.
-    /// `completion_sha` is left untouched (BUG-410's reopen guard needs it).
-    // trace:TASK-1477 | ai:claude
+    /// BUG-1637: the doctor's status-drift heal records its move under the
+    /// doctor's automated author, so a terminal status the other clone reached
+    /// meanwhile survives the merge (both orientations). It only moves
+    /// Approved/In Progress, so it never leaves a terminal status itself.
+    // trace:BUG-1637 | ai:claude
     #[test]
-    fn integrity_heal_reopens_completed_to_done_and_clears_completed_at() {
+    fn doctor_status_heal_records_automated_author_and_keeps_terminal_on_merge() {
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        let mut req = completed_spec("TASK-701");
-        let stale_stamp = chrono::Utc::now() - chrono::Duration::days(10);
-        req.implementation_info = Some(aida_core::ImplementationInfo {
-            completed_at: Some(stale_stamp),
-            completion_sha: Some("deadbeef".to_string()),
-            ..Default::default()
-        });
+        let mut base = completed_spec("TASK-1637");
+        base.status = RequirementStatus::InProgress;
+        base.modified_at = chrono::Utc::now() - chrono::Duration::hours(1);
         let mut store = aida_core::models::RequirementsStore::new();
-        store.requirements = vec![req];
+        store.requirements = vec![base.clone()];
         storage.save(&store).unwrap();
 
         let finding = DoctorFinding {
-            category: "completed-without-commit".to_string(),
-            id: "TASK-701".to_string(),
-            summary: "Completed spec TASK-701 has no commit ...".to_string(),
-            action: "re-open".to_string(),
-            safe_heal: false,
+            category: "spec-status-drift".to_string(),
+            id: "TASK-1637".to_string(),
+            summary: "In Progress with no active lease".to_string(),
+            action: "revert to Approved (no active lease)".to_string(),
+            safe_heal: true,
         };
-        let result = heal_doctor_completed_without_commit(root, &finding).unwrap();
-        assert_eq!(result.status, "healed");
+        let result = heal_doctor_spec_status(root, &finding).unwrap();
+        assert_eq!(result.status, "healed", "{result:?}");
+        let healed = storage.load().unwrap().requirements[0].clone();
+        assert_eq!(healed.status, RequirementStatus::Approved);
+        let entry = healed.history.last().expect("a status history entry");
+        assert_eq!(entry.author, aida_core::conflict::DOCTOR_AUTHOR);
+        assert!(aida_core::conflict::is_automated_status_author(
+            &entry.author
+        ));
 
-        let reloaded = storage.load().unwrap();
-        let info = reloaded.requirements[0]
-            .implementation_info
-            .as_ref()
-            .expect("implementation_info survives the heal");
-        assert!(
-            info.completed_at.is_none(),
-            "the stale completed_at must be cleared on reopen"
+        let mut completed = base.clone();
+        aida_core::conflict::set_status_recorded(
+            &mut completed,
+            RequirementStatus::Completed,
+            "joe",
         );
+        completed.modified_at = base.modified_at + chrono::Duration::minutes(1);
+        for (ours, theirs) in [(&healed, &completed), (&completed, &healed)] {
+            assert_eq!(
+                aida_core::conflict::merge_spec_three_way(&base, ours, theirs).status,
+                RequirementStatus::Completed
+            );
+        }
+
+        // A terminal spec is never touched by this heal.
+        let mut store = storage.load().unwrap();
+        store.requirements[0].status = RequirementStatus::Rejected;
+        storage.save(&store).unwrap();
+        let again = heal_doctor_spec_status(root, &finding).unwrap();
+        assert_eq!(again.status, "skipped");
         assert_eq!(
-            info.completion_sha.as_deref(),
-            Some("deadbeef"),
-            "completion_sha is left alone — BUG-410's reopen guard depends on it"
+            storage.load().unwrap().requirements[0].status,
+            RequirementStatus::Rejected
         );
     }
 
@@ -7314,8 +7364,9 @@ hostname = "localhost"
         store.requirements = vec![completed_spec("TASK-666")];
         storage.save(&store).unwrap();
 
-        // `completed-without-commit` is a destructive (safe_heal=false) category:
-        // its heal re-opens a Completed spec back to Done.
+        // `completed-without-commit` is a destructive (safe_heal=false) category
+        // (its heal used to re-open a Completed spec; since BUG-1637 it only
+        // reports, but the category stays gated).
         let finding = DoctorFinding {
             category: "completed-without-commit".to_string(),
             id: "TASK-666".to_string(),

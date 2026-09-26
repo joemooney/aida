@@ -2115,7 +2115,10 @@ impl<'a> McpServer<'a> {
                     return Err(msg);
                 }
                 changes.push(format!("status: {} → {}", req.status, new_status));
-                req.status = new_status;
+                // BUG-1637: a caller-authored status write, recorded under the
+                // caller. trace:BUG-1637 | ai:claude
+                let from = std::mem::replace(&mut req.status, new_status);
+                crate::record_caller_status_transition(req, &from);
             }
         }
 
@@ -3398,7 +3401,10 @@ impl<'a> McpServer<'a> {
         } else {
             "dismissed"
         };
-        req.status = new_status;
+        // BUG-1637: a caller-authored triage, recorded under the caller.
+        // trace:BUG-1637 | ai:claude
+        let from = std::mem::replace(&mut req.status, new_status);
+        crate::record_caller_status_transition(req, &from);
         if let Some(r) = reason {
             req.add_comment(Comment::new(
                 "mcp".to_string(),
@@ -4187,7 +4193,10 @@ impl<'a> McpServer<'a> {
         // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
         self.storage
             .update_spec_atomically(req, |r| {
+                // trace:BUG-1637 | ai:claude
+                let from = r.status.clone();
                 r.set_status_from_str("Done");
+                crate::record_caller_status_transition(r, &from);
                 r.modified_at = now;
                 let info = r
                     .implementation_info
@@ -4448,6 +4457,8 @@ impl<'a> McpServer<'a> {
                                 return;
                             }
                             r.set_status_from_str(&format!("{:?}", new_status));
+                            // BUG-1637: caller-authored. trace:BUG-1637 | ai:claude
+                            crate::record_caller_status_transition(r, &current_status);
                             r.modified_at = now;
                             // TASK-1477: the `queue_rework` MCP tool can also
                             // reopen a Completed spec — clear the stale

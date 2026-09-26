@@ -390,16 +390,11 @@ pub(crate) fn advance_dispatch(
                 );
                 return Ok(());
             }
-            let old = req.status.to_string();
+            // BUG-1637: through the one shared history helper, under the
+            // caller (same identity this path used before). trace:BUG-1637 | ai:claude
+            let old = req.status.clone();
             req.set_status_from_str("Approved");
-            req.record_change(
-                current_user_id(None),
-                vec![aida_core::Requirement::field_change(
-                    "status",
-                    old,
-                    "Approved".to_string(),
-                )],
-            );
+            aida_core::conflict::record_status_transition(&mut req, &current_user_id(None), &old);
             req.modified_at = chrono::Utc::now();
             backend.update_requirement(&req)?;
             println!(
@@ -450,15 +445,14 @@ pub(crate) fn advance_dispatch(
                     );
                     return Ok(());
                 }
-                let old = req.status.to_string();
+                // BUG-1637: through the one shared history helper, under the
+                // caller (same identity this path used before). trace:BUG-1637 | ai:claude
+                let old = req.status.clone();
                 req.set_status_from_str("Rejected");
-                req.record_change(
-                    current_user_id(None),
-                    vec![aida_core::Requirement::field_change(
-                        "status",
-                        old,
-                        "Rejected".to_string(),
-                    )],
+                aida_core::conflict::record_status_transition(
+                    &mut req,
+                    &current_user_id(None),
+                    &old,
                 );
                 req.modified_at = chrono::Utc::now();
                 backend.update_requirement(&req)?;
@@ -536,13 +530,12 @@ pub(crate) fn advance_dispatch(
                 "",
                 "queue-done",
                 |req, prior| {
-                    req.record_change(
-                        current_user_id(None),
-                        vec![aida_core::Requirement::field_change(
-                            "status",
-                            prior.to_string(),
-                            "Completed".to_string(),
-                        )],
+                    // BUG-1637: through the one shared history helper, under
+                    // the caller. trace:BUG-1637 | ai:claude
+                    aida_core::conflict::record_status_transition(
+                        req,
+                        &current_user_id(None),
+                        prior,
                     );
                     req.modified_at = chrono::Utc::now();
                     backend.update_requirement(req)?;
@@ -5277,7 +5270,11 @@ pub(crate) fn handle_queue_command(
             let source_tool = std::env::var("AIDA_AI_TOOL").ok().filter(|s| !s.is_empty());
             // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
             storage.update_spec_atomically(req, |r| {
+                // BUG-1637: caller-authored, recorded under the caller.
+                // trace:BUG-1637 | ai:claude
+                let from = r.status.clone();
                 r.set_status_from_str("Done");
+                crate::record_caller_status_transition(r, &from);
                 r.modified_at = now;
                 // Don't clobber prior `summary` / `risk_notes` /
                 // `test_coverage_notes` if the user / `/aida-pr`
@@ -7698,11 +7695,23 @@ pub(crate) fn needs_attention_parks(store: &aida_core::RequirementsStore) -> Vec
 /// [`aida_core::conflict::LOOP_GUARD_AUTHOR`], which the BUG-1625 merge guard
 /// recognizes.
 // trace:BUG-1213 trace:BUG-1632 | ai:claude
-pub(crate) fn loop_guard_park(r: &mut Requirement) {
-    let from = r.status.clone();
-    r.status = RequirementStatus::NeedsAttention;
-    aida_core::conflict::record_status_transition(r, aida_core::conflict::LOOP_GUARD_AUTHOR, &from);
+///
+/// BUG-1637: like the shelve and the MCP punt, it refuses to leave a terminal
+/// status, and the check runs on the copy read inside the atomic write, so a
+/// spec completed between the status read and the park stays Completed.
+/// Returns whether it parked the spec.
+// trace:BUG-1637 | ai:claude
+pub(crate) fn loop_guard_park(r: &mut Requirement) -> bool {
+    if aida_core::conflict::is_terminal_status(&r.status) {
+        return false;
+    }
+    aida_core::conflict::set_status_recorded(
+        r,
+        RequirementStatus::NeedsAttention,
+        aida_core::conflict::LOOP_GUARD_AUTHOR,
+    );
     r.modified_at = chrono::Utc::now();
+    true
 }
 
 /// One line saying why a spec is parked: the shelve's failure, the punt, or
@@ -8103,6 +8112,10 @@ pub(crate) fn handle_queue_rework(
                         return;
                     }
                     r.set_status_from_str(&format!("{:?}", new_status));
+                    // BUG-1637: the rework that does not start from
+                    // NeedsAttention is a caller-authored status write.
+                    // trace:BUG-1637 | ai:claude
+                    crate::record_caller_status_transition(r, &current_status);
                     r.modified_at = now;
                     // TASK-1477: `queue rework` can reopen a Completed spec
                     // (Completed -> InProgress is `rework_smart_target`'s
@@ -8184,7 +8197,18 @@ pub(crate) fn handle_queue_rework(
                 // person ran `queue rework`, so it records the transition under
                 // an automated author the BUG-1625 merge guard recognizes.
                 // trace:BUG-1632 | ai:claude
-                storage.update_spec_atomically(req, loop_guard_park)?;
+                // BUG-1637: a spec that reached a terminal status meanwhile is
+                // left alone, and there is no loop left to escalate.
+                // trace:BUG-1637 | ai:claude
+                let mut parked = false;
+                storage.update_spec_atomically(req, |r| parked = loop_guard_park(r))?;
+                if !parked {
+                    println!(
+                        "  {} {display_id} reached a final status meanwhile; left it as it is",
+                        "·".dimmed()
+                    );
+                    return Ok(());
+                }
                 let note = format!(
                     "Identical reviewer findings recurred twice for {display_id}; do not \
                      requeue a third implementer round until an advisor chooses a different \
