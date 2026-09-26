@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:09:46.732993537Z
-modified_at: 2026-09-26T22:55:43.733612006Z
+modified_at: 2026-09-26T22:56:24.803309188Z
 req_type: Bug
 comments:
 - id: 01a0de44-9000-72a3-a708-076238101753
@@ -22,6 +22,12 @@ comments:
   content: 'DRAFT (uncompiled) on claude/bug-1656 @ 1f5336e8b1: (1) dispatch_health_ps: WorktreeGitProbe.dirty_newest_mtime_age_secs (probe_worktree stats the git-status --porcelain paths, renames/untracked included), DEFAULT_DIRTY_MOVEMENT_FRESH_SECS = 10 min, dirty_movement_is_fresh, dispatch_state_with_movement (dirty + fresh + pid not Some(true) -> Moving, hint None; otherwise delegates to the unchanged dispatch_state so the TASK-1090 matrix tests are untouched); lib.rs build_running_work uses it and, in the orphan pass, re-probes only non-live spec leases: ps_orphan_verdict_with_movement drops a lease whose tree is still changing (not orphaned, so no abandoned row). (3) PsOrphan.possibly_subagent = stale_lease && live harness-worktree lease in repo; aida ps human/JSON say "possibly worked by a subagent"; OrphanedInProgressItem.possibly_subagent (serde default) rendered in aida awaiting text + JSON; orphaned_in_progress_items maps it (TOON table columns left unchanged). (2) adoption: session_harness_worktree_register now calls adopt_spec_lease_for_subagent(project_root, cwd, harness pid): the spec-scoped lease whose worktree_path == the subagent cwd gets active_pid/active_pid_start_time + adopted_by_subagent_at via generic TOML key insert (unknown keys preserved; skipped when an already-live active_pid is recorded; pure rule subagent_adopts_lease). Decisions: freshness window 10 min (not configurable yet); adoption keyed on the SubagentStart hook path only (no new verb); no docs change. Tests: bug_1656_subagent_liveness_tests.rs (registered after bug_1523 in lib.rs): dead_pid_with_fresh_dirty_movement_is_moving_not_salvageable, dead_pid_with_stale_dirty_movement_stays_salvageable, freshness_threshold, newest_mtime_age_skips_missing_paths, probe_reports_newest_dirty_mtime_age (real git), dead_lease_with_fresh_dirty_movement_gives_no_salvage_and_no_abandoned_row (the acceptance test, through build_running_work + orphaned_in_progress_items), dead_lease_with_old_dirty_diff_is_still_salvageable_and_abandoned, stale_lease_next_to_live_harness_lease_says_possibly_subagent (render + JSON), stale_lease_without_live_harness_lease_is_plain_abandoned, subagent_adopts_only_the_spec_lease_of_its_own_worktree, adoption_stamps_harness_pid_and_keeps_unknown_keys. Compile risks: story_696_ps_tests WorktreeGitProbe literals were patched (3), any other literal elsewhere breaks; PsRow field names (spec, dispatch) and PsDispatch.state/hint access from the child test module; AwaitingReport::render/to_json signatures; the new dispatch_state_with_movement has 8 args (clippy too_many_arguments allowed).'
   created_at: 2026-09-26T21:49:10.570668470Z
   modified_at: 2026-09-26T21:49:10.570668470Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfef-1ce3-7f42-a861-d96059725868
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): (1) fixed 10-min recent-change window accepted for now; (2) loose ''possibly worked by a subagent'' wording and (3) adopted lease staying live for the parent''s lifetime -> folded into BUG-1681 (fan-out attribution must match the spec''s worktree/branch; an adopted lease should end when the subagent ends); (4) add possibly_subagent to the awaiting TOON columns in BUG-1681 too.'
+  created_at: 2026-09-26T22:56:24.803309188Z
+  modified_at: 2026-09-26T22:56:24.803309188Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0de44-67f6-7c70-907e-9af7fb4e3e10
