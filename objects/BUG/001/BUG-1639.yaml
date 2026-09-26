@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T04:47:41.715373320Z
-modified_at: 2026-09-26T05:04:42.946415669Z
+modified_at: 2026-09-26T05:06:02.894805808Z
 req_type: Bug
 tags:
 - antigravity
@@ -57,6 +57,18 @@ comments:
     - Sequencing: run the one-skill aida-handoff test first. Do NOT link the full pack until the matrix results are recorded here.
   created_at: 2026-09-26T05:04:42.946415669Z
   modified_at: 2026-09-26T05:04:42.946415669Z
+  session_id: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
+- id: 01a0dc1b-2a0e-7181-a380-3d2c8484b3fe
+  author: joe
+  content: |-
+    Test-matrix progress (2026-09-25 22:05):
+    - Setup: .agents/skills/aida-handoff/SKILL.md is a relative symlink to aida-core/templates/skills/aida-handoff.md and resolves (frontmatter verified).
+    - Versions on this machine: Antigravity CLI (agy) 1.2.11, Codex CLI 0.157.0.
+    - Antigravity × .agents/skills: agy reports that it indexes .agents/skills/*/SKILL.md at session start, and only on restart. It has NOT yet been observed listing aida-handoff in a fresh session, so the symlink cell is still open.
+    - Codex × .agents/skills: indirect evidence only. agy found a skills host-root reference to .agents in the Codex 0.157.0 binary (host_roots.rs), which agrees with OpenAI's migration guidance. The fresh-session check (/skills lists it, $aida-handoff invokes it) is still pending.
+    - Not yet run: the regular-file (cp) variants, and the .codex/skills / .antigravity/skills compatibility cases.
+  created_at: 2026-09-26T05:06:02.894805808Z
+  modified_at: 2026-09-26T05:06:02.894805808Z
   session_id: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
 filed_at:
   code_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
