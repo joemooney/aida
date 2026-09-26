@@ -1,0 +1,35 @@
+id: 01a0dd1b-6802-74b0-84d5-73017ff0210b
+spec_id: BUG-1644
+agreed_id: BUG-1644
+title: The cache lock-info sidecar is resolved per worktree, so readers in a worktree never see a live writer in the shared cache and stall ~52 s, then fail
+description: |
+  From SPIKE-90 (docs/research/spike-90-stale-cache-snapshot.md, case W).
+
+  Sibling worktrees symlink `.aida/cache.db` (+ -shm/-wal) to the main checkout (aida-cli-lib/src/lib.rs, BUG-52 block), but `cache.db.lock-info` is not symlinked and `cache_lock_info_path()` derives the sidecar from the UNRESOLVED cache path. A writer in main records `main/.aida/cache.db.lock-info`; a reader in a worktree checks `wt/.aida/cache.db.lock-info`, sees nothing, so the BUG-664 guard (`foreign_writer_holds_lock`) never fires across worktrees.
+
+  Measured on a copy: stale cache + live writer holding BEGIN IMMEDIATE + live sidecar in main `.aida/`. From main: `aida list` 0.04 s. From a symlinked worktree: 52.9 s then exit 1 (incremental exhausts the ladder, then full rebuild exhausts it again). The same mismatch affects `observe_cache_lock` error enrichment and `doctor heal stale-locks`.
+
+  ## Acceptance
+  - The lock-info sidecar path is derived from the canonicalized (symlink-resolved) cache path, so all worktrees sharing one cache.db read and write one sidecar.
+  - A test with a symlinked cache path and a live foreign sidecar at the canonical location: the read returns the last committed snapshot in < 1 s without entering the write ladder.
+  - `aida doctor heal stale-locks` and the lock-error enrichment look at the canonical sidecar; a stray per-worktree sidecar left by older binaries is reported/cleaned.
+  - busy_timeout=0 and the retry ladder are unchanged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T09:45:55.970714904Z
+modified_at: 2026-09-26T09:45:55.970714904Z
+req_type: Bug
+tags:
+- cache
+- from:SPIKE-90
+- locking
+filed_at:
+  code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
+  branch: claude/spike-90
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
