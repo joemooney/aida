@@ -880,15 +880,19 @@ pub(crate) fn handle_config_permissions_command(cmd: &ConfigPermissionsCommand) 
         ConfigPermissionsCommand::Set { tier, user, local } => {
             let project_root = main_worktree_root_from(&find_project_root()?);
             let scope = PermissionPostureScope::from_flags(*user, *local)?;
-            let result = apply_permission_posture(&project_root, *tier, scope)?;
-            if *tier == ConfigPermissionTier::Bypass {
-                println!(
-                    "{}",
-                    "WARNING: bypass writes a nuclear full-access default; use only as an explicit operator opt-in."
-                        .red()
-                        .bold()
-                );
-            }
+            // trace:BUG-1667 | ai:claude
+            let stdin = std::io::stdin();
+            let Some(result) = set_permission_posture_gated(
+                &project_root,
+                *tier,
+                scope,
+                bypass_confirm_terminal(),
+                &mut stdin.lock(),
+                &mut std::io::stdout(),
+            )?
+            else {
+                return Ok(());
+            };
             println!(
                 "{} permission posture set to {:?} ({})",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
@@ -904,6 +908,82 @@ pub(crate) fn handle_config_permissions_command(cmd: &ConfigPermissionsCommand) 
         }
     }
     Ok(())
+}
+
+/// Whether a person is plausibly at an interactive terminal: BOTH stdin and
+/// stdout must be terminals. Goes through the test seam so a test can pin the
+/// answer instead of inheriting the shell `cargo test` runs in.
+// trace:BUG-1667 | ai:claude
+pub(crate) fn bypass_confirm_terminal() -> bool {
+    crate::authority_stdin_is_terminal() && crate::authority_stdout_is_terminal()
+}
+
+/// The plain explanation printed when the bypass posture is refused for lack
+/// of a person at a terminal.
+// trace:BUG-1667 | ai:claude
+pub(crate) const BYPASS_NEEDS_TERMINAL: &str =
+    "the bypass posture needs a person at an interactive terminal to confirm it. \
+Bypass lets every later agent launch skip permission prompts and gives Codex full access \
+(sandbox off, no approvals), so it cannot be set from a script, a pipe, or an agent. \
+Nothing was written. To set it, run `aida config permissions set bypass` yourself in a terminal.";
+
+/// Ask the person at the terminal to confirm the bypass posture. Anything but
+/// an explicit `y`/`yes` is a No, including an empty line, end of input, and a
+/// read error.
+// trace:BUG-1667 | ai:claude
+fn confirm_bypass_at_terminal(
+    scope: PermissionPostureScope,
+    input: &mut dyn std::io::BufRead,
+    out: &mut dyn std::io::Write,
+) -> bool {
+    let _ = writeln!(
+        out,
+        "{}",
+        "WARNING: bypass lets every later agent launch skip permission prompts and writes a \
+         full-access Codex default (sandbox off, no approvals)."
+            .red()
+            .bold()
+    );
+    let _ = write!(
+        out,
+        "Set the bypass posture for {} config? [y/N]: ",
+        scope.label()
+    );
+    let _ = out.flush();
+    let mut answer = String::new();
+    match input.read_line(&mut answer) {
+        Ok(0) | Err(_) => false,
+        Ok(_) => matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes"),
+    }
+}
+
+/// `config permissions set <tier>` with the human gate on the bypass tier.
+/// Native and contained only reduce access and are written straight away.
+/// Bypass is written only when `at_terminal` holds AND the person answers yes;
+/// without a terminal it is an error (non-zero exit) and nothing is written;
+/// a No at the terminal writes nothing and returns `Ok(None)`. The gate is
+/// unconditional: it does not depend on any launch-time confirmation setting,
+/// because this write also lands full access in the Codex config, which no
+/// launch-time check sees.
+// trace:BUG-1667 | ai:claude
+pub(crate) fn set_permission_posture_gated(
+    project_root: &std::path::Path,
+    tier: ConfigPermissionTier,
+    scope: PermissionPostureScope,
+    at_terminal: bool,
+    input: &mut dyn std::io::BufRead,
+    out: &mut dyn std::io::Write,
+) -> Result<Option<PermissionPostureWriteResult>> {
+    if tier == ConfigPermissionTier::Bypass {
+        if !at_terminal {
+            anyhow::bail!("refusing to set the bypass posture: {BYPASS_NEEDS_TERMINAL}");
+        }
+        if !confirm_bypass_at_terminal(scope, input, out) {
+            let _ = writeln!(out, "\nBypass posture not set; nothing was written.");
+            return Ok(None);
+        }
+    }
+    apply_permission_posture(project_root, tier, scope).map(Some)
 }
 
 // trace:STORY-1128 | ai:codex
@@ -3021,7 +3101,16 @@ fn cli_edit_permission_posture(
     let tier = match requested {
         "contained" => ConfigPermissionTier::Contained,
         "native" => ConfigPermissionTier::Native,
-        "bypass" => ConfigPermissionTier::Bypass,
+        // The menu runs in raw mode and cannot take a typed [y/N], so it never
+        // writes bypass itself: it hands the person to the gated command.
+        // trace:BUG-1667 | ai:claude
+        "bypass" => {
+            return EditOutcome::Blocked(
+                "bypass needs a typed confirmation: quit the menu and run \
+                 `aida config permissions set bypass` in a terminal"
+                    .to_string(),
+            )
+        }
         other => return EditOutcome::Blocked(format!("{other:?} is not an allowed tier")),
     };
     let scope = if item.scope.starts_with("~/.") {
@@ -4328,6 +4417,329 @@ mod story_671_edit_kind_tests {
             aida_tui::EditOutcome::Blocked(reason) => panic!("{reason}"),
         }
         assert!(!local_aida_mcp_registered(dir.path()));
+    }
+}
+
+/// The human gate on `config permissions set bypass`: no terminal means no
+/// write, a terminal needs an explicit yes, native/contained are ungated, the
+/// menu never writes bypass, and no MCP tool reaches the posture writer.
+// trace:BUG-1667 | ai:claude
+#[cfg(test)]
+mod bug_1667_bypass_gate_tests {
+    use super::*;
+    use std::io::{BufReader, Cursor, Read};
+
+    const SEEDED_AGENTS: &str = "[agents]\nclaude = true\n";
+    const SEEDED_CODEX: &str = "model = \"gpt-5\"\n";
+
+    /// Seed both posture files under `base` so a refusal can be proven to leave
+    /// them byte-for-byte unchanged (and to create no backup).
+    fn seed(base: &std::path::Path) {
+        std::fs::create_dir_all(base.join(".aida")).unwrap();
+        std::fs::create_dir_all(base.join(".codex")).unwrap();
+        std::fs::write(base.join(".aida/agents.toml"), SEEDED_AGENTS).unwrap();
+        std::fs::write(base.join(".codex/config.toml"), SEEDED_CODEX).unwrap();
+    }
+
+    fn assert_untouched(base: &std::path::Path) {
+        assert_eq!(
+            std::fs::read_to_string(base.join(".aida/agents.toml")).unwrap(),
+            SEEDED_AGENTS
+        );
+        assert_eq!(
+            std::fs::read_to_string(base.join(".codex/config.toml")).unwrap(),
+            SEEDED_CODEX
+        );
+        assert!(!base.join(".aida/agents.toml.bak").exists());
+        assert!(!base.join(".codex/config.toml.bak").exists());
+    }
+
+    fn assert_bypass_written(base: &std::path::Path) {
+        let agents = std::fs::read_to_string(base.join(".aida/agents.toml")).unwrap();
+        let codex = std::fs::read_to_string(base.join(".codex/config.toml")).unwrap();
+        assert!(agents.contains("bypass = true"), "{agents}");
+        assert!(codex.contains("danger-full-access"), "{codex}");
+    }
+
+    fn gated(
+        root: &std::path::Path,
+        tier: ConfigPermissionTier,
+        scope: PermissionPostureScope,
+        at_terminal: bool,
+        answer: &str,
+    ) -> (Result<Option<PermissionPostureWriteResult>>, String) {
+        let mut input = Cursor::new(answer.as_bytes().to_vec());
+        let mut out = Vec::new();
+        let r = set_permission_posture_gated(root, tier, scope, at_terminal, &mut input, &mut out);
+        (r, String::from_utf8_lossy(&out).into_owned())
+    }
+
+    /// Pin the terminal seam (thread-local) for the real handler path.
+    struct Seam(Option<crate::test_ambient::Ambient>);
+    impl Seam {
+        fn pin(root: &std::path::Path, stdin: bool, stdout: bool) -> Self {
+            Seam(crate::test_ambient::replace(Some(
+                crate::test_ambient::Ambient {
+                    project_root: root.to_path_buf(),
+                    stdin_is_terminal: stdin,
+                    stdout_is_terminal: stdout,
+                },
+            )))
+        }
+    }
+    impl Drop for Seam {
+        fn drop(&mut self) {
+            crate::test_ambient::replace(self.0.take());
+        }
+    }
+
+    fn set_cmd(tier: ConfigPermissionTier, user: bool) -> ConfigPermissionsCommand {
+        ConfigPermissionsCommand::Set {
+            tier,
+            user,
+            local: !user,
+        }
+    }
+
+    /// The terminal check needs BOTH stdin and stdout to be terminals.
+    #[test]
+    fn bug_1667_terminal_check_requires_stdin_and_stdout() {
+        let dir = tempfile::tempdir().unwrap();
+        for (stdin, stdout, want) in [
+            (true, true, true),
+            (true, false, false),
+            (false, true, false),
+            (false, false, false),
+        ] {
+            let _seam = Seam::pin(dir.path(), stdin, stdout);
+            assert_eq!(
+                bypass_confirm_terminal(),
+                want,
+                "stdin={stdin} stdout={stdout}"
+            );
+        }
+    }
+
+    /// Without a terminal, `set bypass` (project-local) is an error, never reads
+    /// the (would-be yes) input, and writes neither the AIDA nor the Codex file.
+    #[test]
+    fn bug_1667_config_permissions_set_bypass_refused_without_tty() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path());
+        let (r, _out) = gated(
+            dir.path(),
+            ConfigPermissionTier::Bypass,
+            PermissionPostureScope::Local,
+            false,
+            "y\n",
+        );
+        let err = r.expect_err("bypass must be refused without a terminal");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("interactive terminal"), "{msg}");
+        assert!(msg.contains("Nothing was written"), "{msg}");
+        assert!(!msg.contains("BUG-"), "no internal ids in user text: {msg}");
+        assert_untouched(dir.path());
+    }
+
+    /// Same refusal for `--user`: the fake home's `~/.aida/agents.toml` and
+    /// `~/.codex/config.toml` stay exactly as they were.
+    #[test]
+    fn bug_1667_config_permissions_set_bypass_user_refused_without_tty() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        seed(home.path());
+        let _home = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (r, _out) = gated(
+            dir.path(),
+            ConfigPermissionTier::Bypass,
+            PermissionPostureScope::User,
+            false,
+            "y\n",
+        );
+        assert!(r.is_err());
+        assert_untouched(home.path());
+        assert!(!dir.path().join(".aida").exists());
+        assert!(!dir.path().join(".codex").exists());
+    }
+
+    /// The real command handler consults the seam: with either stream not a
+    /// terminal it exits with an error and writes nothing, for both scopes.
+    #[test]
+    fn bug_1667_handler_refuses_bypass_when_either_stream_is_not_a_terminal() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        seed(dir.path());
+        seed(home.path());
+        let _home = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        for (stdin, stdout) in [(false, false), (true, false), (false, true)] {
+            let _seam = Seam::pin(dir.path(), stdin, stdout);
+            for user in [false, true] {
+                let r =
+                    handle_config_permissions_command(&set_cmd(ConfigPermissionTier::Bypass, user));
+                assert!(r.is_err(), "stdin={stdin} stdout={stdout} user={user}");
+            }
+        }
+        assert_untouched(dir.path());
+        assert_untouched(home.path());
+    }
+
+    /// At a terminal, anything but an explicit yes writes nothing: `n`, an
+    /// empty line, end of input, and a read error are all No.
+    #[test]
+    fn bug_1667_bypass_at_terminal_no_or_eof_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path());
+        for answer in ["n\n", "N\n", "no\n", "\n", "", "maybe\n"] {
+            let (r, out) = gated(
+                dir.path(),
+                ConfigPermissionTier::Bypass,
+                PermissionPostureScope::Local,
+                true,
+                answer,
+            );
+            assert!(r.unwrap().is_none(), "answer {answer:?} must not write");
+            assert!(out.contains("[y/N]"), "{out}");
+            assert!(out.contains("nothing was written"), "{out}");
+        }
+
+        struct Broken;
+        impl Read for Broken {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("closed"))
+            }
+        }
+        let mut input = BufReader::new(Broken);
+        let mut out = Vec::new();
+        let r = set_permission_posture_gated(
+            dir.path(),
+            ConfigPermissionTier::Bypass,
+            PermissionPostureScope::Local,
+            true,
+            &mut input,
+            &mut out,
+        );
+        assert!(r.unwrap().is_none(), "a read error is a No");
+        assert_untouched(dir.path());
+    }
+
+    /// At a terminal, an explicit yes writes bypass, for both scopes.
+    #[test]
+    fn bug_1667_bypass_at_terminal_yes_writes_both_scopes() {
+        let dir = tempfile::tempdir().unwrap();
+        let (r, _) = gated(
+            dir.path(),
+            ConfigPermissionTier::Bypass,
+            PermissionPostureScope::Local,
+            true,
+            "y\n",
+        );
+        assert!(r.unwrap().is_some());
+        assert_bypass_written(dir.path());
+
+        let home = tempfile::tempdir().unwrap();
+        let _home = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (r, _) = gated(
+            dir.path(),
+            ConfigPermissionTier::Bypass,
+            PermissionPostureScope::User,
+            true,
+            "YES\n",
+        );
+        assert!(r.unwrap().is_some());
+        assert_bypass_written(home.path());
+    }
+
+    /// Native and contained only reduce access: no terminal needed, no prompt,
+    /// stdin never read, through the gated writer and the real handler.
+    #[test]
+    fn bug_1667_config_permissions_set_native_allowed_without_tty() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _home = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        for scope in [PermissionPostureScope::Local, PermissionPostureScope::User] {
+            for tier in [
+                ConfigPermissionTier::Contained,
+                ConfigPermissionTier::Native,
+            ] {
+                let (r, out) = gated(dir.path(), tier, scope, false, "");
+                assert!(r.unwrap().is_some(), "{tier:?} {scope:?}");
+                assert!(out.is_empty(), "no prompt for {tier:?}: {out}");
+            }
+        }
+        let _seam = Seam::pin(dir.path(), false, false);
+        for user in [false, true] {
+            handle_config_permissions_command(&set_cmd(ConfigPermissionTier::Contained, user))
+                .unwrap();
+            handle_config_permissions_command(&set_cmd(ConfigPermissionTier::Native, user))
+                .unwrap();
+        }
+        for base in [dir.path(), home.path()] {
+            let codex = std::fs::read_to_string(base.join(".codex/config.toml")).unwrap();
+            assert!(!codex.contains("danger-full-access"), "{codex}");
+        }
+    }
+
+    /// The config menu's permission rows cannot write bypass (it cannot take a
+    /// typed confirmation); they point at the gated command instead.
+    #[cfg(feature = "tui")]
+    #[test]
+    fn bug_1667_config_menu_bypass_is_blocked_and_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        seed(dir.path());
+        seed(home.path());
+        let _home = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        for agent in ["claude", "codex", "antigravity"] {
+            for scope in ["default", "~/.aida/agents.toml", ".aida/agents.toml"] {
+                let item = aida_tui::ConfigMenuItem {
+                    section: "permissions".to_string(),
+                    name: agent.to_string(),
+                    value: "native".to_string(),
+                    default: "native".to_string(),
+                    scope: scope.to_string(),
+                    explanation: String::new(),
+                    edit: config_knob_edit_kind("permissions", agent),
+                    read_only_reason: None,
+                };
+                // Through the menu's top-level edit callback, as the TUI calls it.
+                match cli_edit_config_knob(dir.path(), &item, Some("bypass")) {
+                    aida_tui::EditOutcome::Blocked(reason) => {
+                        assert!(
+                            reason.contains("aida config permissions set bypass"),
+                            "{reason}"
+                        );
+                    }
+                    aida_tui::EditOutcome::Updated { .. } => {
+                        panic!("menu wrote bypass for {agent} ({scope})")
+                    }
+                }
+            }
+        }
+        // The raw `[agents] bypass` knob stays read-only in the editor too.
+        assert!(config_knob_meta("agents", "bypass").is_none());
+        assert_untouched(dir.path());
+        assert_untouched(home.path());
+    }
+
+    /// Audit guard: no MCP tool reaches the permission-posture writer. The MCP
+    /// server does not shell out to `aida config`, so a source reference is the
+    /// only route; fail if one appears.
+    #[test]
+    fn bug_1667_mcp_cannot_reach_the_posture_writer() {
+        for (name, src) in [
+            ("mcp.rs", include_str!("mcp.rs")),
+            ("mcp_translate.rs", include_str!("mcp_translate.rs")),
+        ] {
+            for needle in [
+                "apply_permission_posture",
+                "set_permission_posture_gated",
+                "handle_config_permissions_command",
+                "cli_edit_permission_posture",
+                "ConfigPermissionTier",
+            ] {
+                assert!(!src.contains(needle), "{name} references {needle}");
+            }
+        }
     }
 }
 
