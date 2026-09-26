@@ -27,7 +27,7 @@ Branch deletion is not part of normal safe healing. It requires both `--yes` and
 
 ### Destructive heals require sign-off in autonomous contexts
 
-`--heal` classifies every fix as **safe** (reversible) or **destructive** (hard to reverse — branch/worktree deletion, re-opening a completed spec, removing a stray ancestor instruction file). Safe fixes always proceed; the safe classification is the bouncer.
+`--heal` classifies every fix as **safe** (reversible) or **destructive** (hard to reverse — branch/worktree deletion, removing a stray ancestor instruction file). Safe fixes always proceed; the safe classification is the bouncer. Doctor never re-opens a completed spec: the `completed-without-commit` heal only reports, and points at `aida edit <ID> --status done --force` for a person who has checked the work did not land. <!-- trace:BUG-1637 | ai:claude -->
 
 Destructive fixes are **fail-closed in unattended contexts**. When `--heal --force --yes` runs where no one can make the check-before-delete judgment — a non-interactive shell (piped/CI, no TTY) **or** inside a live `--auto-complete` orchestrator drain — the destructive category is **gated**: it is *not* applied. The heal report records a `skipped` entry that names what was withheld and prints the exact command to apply it under human sign-off:
 

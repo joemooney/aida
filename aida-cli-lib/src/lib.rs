@@ -519,6 +519,18 @@ pub(crate) fn record_caller_status_transition(req: &mut Requirement, from: &Requ
     aida_core::conflict::record_status_transition(req, &get_default_author(), from);
 }
 
+/// BUG-1637: the `aida findings promote --auto-complete` persist step: record
+/// the into-Completed transition under the caller and stamp `modified_at`.
+// trace:BUG-1637 | ai:claude
+pub(crate) fn record_promote_completion(
+    req: &mut Requirement,
+    prior: &RequirementStatus,
+    now: chrono::DateTime<chrono::Utc>,
+) {
+    record_caller_status_transition(req, prior);
+    req.modified_at = now;
+}
+
 /// BUG-1637: record a legacy `aida edit`'s field changes under `author`: the
 /// non-status fields as one history entry, the status change through
 /// `aida_core::conflict::record_status_transition` (the one status-history
@@ -6732,8 +6744,10 @@ fn handle_findings_command(
                         &display_id,
                         sha,
                         "promote",
-                        |req, _| {
-                            req.modified_at = now;
+                        |req, prior| {
+                            // BUG-1637: caller-authored, through the one
+                            // shared history helper. trace:BUG-1637 | ai:claude
+                            record_promote_completion(req, prior, now);
                             backend.update_requirement(req)?;
                             Ok(())
                         },
@@ -9040,15 +9054,14 @@ fn ensure_spec_done_after_pr(
         let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
         let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
         // trace:TASK-1468 | ai:claude
-        let Some(mut req) = backend.get_requirement_unambiguous(spec)? else {
+        let Some(req) = backend.get_requirement_unambiguous(spec)? else {
             return Ok(false);
         };
-        if !matches!(req.status, aida_core::RequirementStatus::InProgress) {
-            return Ok(false);
-        }
-        pr_open_done_flip(&mut req);
-        backend.update_requirement(&req)?;
-        Ok(true)
+        // BUG-1637: the status check runs on the copy read under the store
+        // lock; a refused flip writes nothing. trace:BUG-1637 | ai:claude
+        let mut flipped = false;
+        backend.update_spec_atomically(&req, |r| flipped = pr_open_done_flip(r))?;
+        Ok(flipped)
     })();
     match flipped {
         Ok(true) => {
@@ -31506,14 +31519,16 @@ fn bump_spec_in_progress_at_lease_take(project_root: &std::path::Path, scope: &s
         let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_root);
         let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path)?;
         // trace:TASK-1468 | ai:claude
-        let Some(mut req) = backend.get_requirement_unambiguous(&spec_id)? else {
+        let Some(req) = backend.get_requirement_unambiguous(&spec_id)? else {
             return Ok(false);
         };
-        if !approved_to_in_progress_bump(&mut req, aida_core::conflict::LEASE_TAKE_AUTHOR) {
-            return Ok(false);
-        }
-        backend.update_requirement(&req)?;
-        Ok(true)
+        // BUG-1637: the status check runs on the copy read under the store
+        // lock; a refused bump writes nothing. trace:BUG-1637 | ai:claude
+        let mut bumped = false;
+        backend.update_spec_atomically(&req, |r| {
+            bumped = approved_to_in_progress_bump(r, aida_core::conflict::LEASE_TAKE_AUTHOR);
+        })?;
+        Ok(bumped)
     })();
     match result {
         Ok(bumped) => bumped,
@@ -46566,13 +46581,13 @@ pub(crate) fn approved_to_in_progress_bump(req: &mut Requirement, author: &str) 
     true
 }
 
-/// BUG-1637: the zen autopilot's Draft -> Approved write. Its caller has
-/// already checked approval authority (which admits only Draft); the flip
-/// itself also refuses a terminal source. Recorded under
+/// BUG-1637: the zen autopilot's Draft -> Approved write. It applies only to
+/// a Draft (the status the approve-gate judged and the autopilot audit records
+/// as the prior state), so it never leaves a terminal status. Recorded under
 /// [`aida_core::conflict::ZEN_APPROVE_AUTHOR`]. Returns whether it moved.
 // trace:BUG-1637 | ai:claude
 pub(crate) fn zen_approve_flip(req: &mut Requirement) -> bool {
-    if aida_core::conflict::is_terminal_status(&req.status) {
+    if !matches!(req.status, RequirementStatus::Draft) {
         return false;
     }
     aida_core::conflict::set_status_recorded(
@@ -46622,6 +46637,22 @@ pub(crate) fn phase1_status_restore(req: &mut Requirement, prior: &RequirementSt
         prior.clone(),
         aida_core::conflict::ORCHESTRATOR_PHASE1_AUTHOR,
     );
+    true
+}
+
+/// BUG-1637: the whole TASK-133 restore write, run inside the atomic write:
+/// restore the pre-bump status and clear the spurious shelve FailureReason, or
+/// change nothing when [`phase1_status_restore`] refuses. Returns whether it
+/// applied.
+// trace:TASK-133 trace:BUG-1637 | ai:claude
+pub(crate) fn apply_phase1_restore(r: &mut Requirement, prior: &RequirementStatus) -> bool {
+    if !phase1_status_restore(r, prior) {
+        return false;
+    }
+    // The shelve that ran on the failure path stamped a FailureReason; with no
+    // lease and no work behind it that finding is spurious — clear it.
+    r.failure_reason = None;
+    r.modified_at = chrono::Utc::now();
     true
 }
 
@@ -46742,17 +46773,15 @@ fn restore_phase1_status_on_lease_failure(
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
 
     // trace:TASK-1468 | ai:claude
-    let Some(mut req) = backend.get_requirement_unambiguous(spec)? else {
+    let Some(req) = backend.get_requirement_unambiguous(spec)? else {
         return Ok(());
     };
-    if !phase1_status_restore(&mut req, prior) {
-        return Ok(());
-    }
-    // The shelve that ran on the failure path stamped a FailureReason; with no
-    // lease and no work behind it that finding is spurious — clear it.
-    req.failure_reason = None;
-    req.modified_at = chrono::Utc::now();
-    backend.update_requirement(&req)?;
+    // BUG-1637: the restore and its terminal-status refusal run on the copy
+    // read under the store lock; a refused restore writes nothing.
+    // trace:BUG-1637 | ai:claude
+    backend.update_spec_atomically(&req, |r| {
+        apply_phase1_restore(r, prior);
+    })?;
     Ok(())
 }
 
@@ -98586,9 +98615,23 @@ fn zen_auto_approve(
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
     let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
-    let mut owned = req.clone();
-    zen_approve_flip(&mut owned);
-    backend.update_requirement(&owned)?;
+    // BUG-1637: the flip (and its authority and Draft checks) runs on the copy
+    // read under the store lock; a refused flip writes nothing and fails, so
+    // no autopilot execution is recorded for it. trace:BUG-1637 | ai:claude
+    let mut approved = false;
+    let mut seen = req.status.clone();
+    backend.update_spec_atomically(req, |r| {
+        seen = r.status.clone();
+        approved =
+            zen_auto_approve_authorized(&r.status, has_advisor_authority) && zen_approve_flip(r);
+    })?;
+    if !approved {
+        anyhow::bail!(
+            "{} is now {}, not Draft: it changed while auto-approving, so nothing was changed.",
+            req.display_id(),
+            seen
+        );
+    }
     Ok(())
 }
 
@@ -98797,16 +98840,18 @@ fn prepare_auto_complete_phase1_status(
     let now = chrono::Utc::now();
     // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
     // BUG-1637: re-check the source status inside the write (a concurrent
-    // Rejected/Completed must not become In Progress) and record the bump
-    // under the orchestrator's phase-1 author. trace:BUG-1637 | ai:claude
-    let mut bumped = false;
+    // Rejected/Completed must not become In Progress), record the bump under
+    // the orchestrator's phase-1 author, and take the restore target from the
+    // status read under the lock, not the pre-lock read.
+    // trace:BUG-1637 | ai:claude
+    let mut prior: Option<RequirementStatus> = None;
     storage.update_spec_atomically(req, |r| {
-        bumped = phase1_status_bump(r, &target, now);
+        let before = r.status.clone();
+        if phase1_status_bump(r, &target, now) {
+            prior = Some(before);
+        }
     })?;
-    if !bumped {
-        return Ok(None);
-    }
-    Ok(Some((display_id, current)))
+    Ok(prior.map(|p| (display_id, p)))
 }
 
 fn resolve_lifecycle_skip(storage: &Storage, spec: &str) -> Result<auto_complete::LifecycleSkip> {

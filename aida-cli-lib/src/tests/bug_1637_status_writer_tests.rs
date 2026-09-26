@@ -8,6 +8,7 @@
 //! in memory or use a temporary store.
 //! trace:BUG-1637 | ai:claude
 use aida_core::conflict::{self, merge_spec_three_way};
+use aida_core::db::DatabaseBackend;
 use aida_core::{Requirement, RequirementStatus};
 
 /// A spec at `status`, last modified an hour ago, so every writer below makes
@@ -300,4 +301,187 @@ fn legacy_edit_records_status_through_the_helper() {
         (status.old_value.as_str(), status.new_value.as_str()),
         ("InProgress", "Done")
     );
+}
+
+// ---------------------------------------------------------------------------
+// Strict-review round 2: the re-checks run on the copy read under the store
+// lock, so a spec that became terminal between the caller's read and the write
+// is not overwritten, and a refused flip writes nothing.
+// trace:BUG-1637 | ai:claude
+// ---------------------------------------------------------------------------
+
+/// A git-canonical store at `<tmp>/.aida-store` holding one spec at `status`.
+/// Returns (tempdir, store root, the spec as read now).
+fn git_store_with(
+    status: RequirementStatus,
+) -> (tempfile::TempDir, std::path::PathBuf, Requirement) {
+    let dir = tempfile::tempdir().unwrap();
+    let store_root = dir.path().join(".aida-store");
+    std::fs::create_dir_all(&store_root).unwrap();
+    aida_core::git_ops::init(&store_root).unwrap();
+    aida_core::git_ops::configure_user(&store_root, "fixture", "fixture@localhost").unwrap();
+    let backend = open_backend(&store_root);
+    let mut r = Requirement::new("Spec".into(), "desc".into());
+    r.spec_id = Some("TASK-9637".into());
+    let mut added = backend.add_requirement(r).unwrap();
+    if added.status != status {
+        added.status = status;
+        backend.update_requirement(&added).unwrap();
+    }
+    let read = backend
+        .get_requirement_by_spec_id("TASK-9637")
+        .unwrap()
+        .unwrap();
+    (dir, store_root, read)
+}
+
+fn open_backend(store_root: &std::path::Path) -> aida_core::CachedGitBackend {
+    let cache = aida_core::CachedGitBackend::default_cache_path(store_root);
+    aida_core::CachedGitBackend::open(store_root, &cache).unwrap()
+}
+
+fn on_disk(store_root: &std::path::Path) -> Requirement {
+    open_backend(store_root)
+        .get_requirement_by_spec_id("TASK-9637")
+        .unwrap()
+        .unwrap()
+}
+
+/// Another writer moves the stored spec to `status` after the caller read it.
+fn concurrently_set(store_root: &std::path::Path, status: RequirementStatus) {
+    let backend = open_backend(store_root);
+    let mut r = on_disk(store_root);
+    conflict::set_status_recorded(&mut r, status, "joe");
+    backend.update_requirement(&r).unwrap();
+}
+
+/// Blocker 1: the zen auto-approve read the spec as Draft, then a person
+/// rejected it. The approve must fail and leave Rejected on disk. Before the
+/// fix it wrote the stale Draft copy back as Approved.
+// trace:BUG-1637 | ai:claude
+#[test]
+fn zen_auto_approve_does_not_overwrite_a_spec_that_became_terminal() {
+    let (_dir, store_root, stale_draft) = git_store_with(RequirementStatus::Draft);
+    assert_eq!(stale_draft.status, RequirementStatus::Draft);
+    concurrently_set(&store_root, RequirementStatus::Rejected);
+    let history_before = on_disk(&store_root).history.len();
+
+    let err = crate::zen_auto_approve(&store_root, &stale_draft, true)
+        .expect_err("a refused flip must fail");
+    assert!(err.to_string().contains("nothing was changed"), "{err}");
+    let after = on_disk(&store_root);
+    assert_eq!(after.status, RequirementStatus::Rejected);
+    assert_eq!(after.history.len(), history_before, "nothing was written");
+}
+
+// trace:BUG-1637 | ai:claude
+#[test]
+fn zen_auto_approve_still_approves_a_draft_under_its_author() {
+    let (_dir, store_root, draft) = git_store_with(RequirementStatus::Draft);
+    crate::zen_auto_approve(&store_root, &draft, true).unwrap();
+    let after = on_disk(&store_root);
+    assert_eq!(after.status, RequirementStatus::Approved);
+    assert_eq!(last_status_author(&after), conflict::ZEN_APPROVE_AUTHOR);
+}
+
+/// Blocker 1: the phase-1 restore's write, run against a stale copy (read as
+/// NeedsAttention) while the stored spec is Completed, writes nothing.
+// trace:BUG-1637 | ai:claude
+#[test]
+fn phase1_restore_does_not_overwrite_a_spec_that_became_terminal() {
+    let (_dir, store_root, stale) = git_store_with(RequirementStatus::NeedsAttention);
+    concurrently_set(&store_root, RequirementStatus::Completed);
+    let before = on_disk(&store_root);
+
+    let mut applied = true;
+    open_backend(&store_root)
+        .update_spec_atomically(&stale, |r| {
+            applied = crate::apply_phase1_restore(r, &RequirementStatus::Approved);
+        })
+        .unwrap();
+    assert!(!applied);
+    let after = on_disk(&store_root);
+    assert_eq!(after.status, RequirementStatus::Completed);
+    assert_eq!(after.history.len(), before.history.len());
+}
+
+/// The positive side of the restore write through the same atomic path
+/// `restore_phase1_status_on_lease_failure` uses (its store lookup refuses temp
+/// dirs, so the write is driven directly): a NeedsAttention spec is restored
+/// under the phase-1 author with its spurious FailureReason cleared, so the
+/// refusal above is not vacuous.
+// trace:BUG-1637 | ai:claude
+#[test]
+fn phase1_restore_applies_to_an_open_spec_under_its_author() {
+    let (_dir, store_root, read) = git_store_with(RequirementStatus::NeedsAttention);
+    let mut applied = false;
+    open_backend(&store_root)
+        .update_spec_atomically(&read, |r| {
+            applied = crate::apply_phase1_restore(r, &RequirementStatus::Approved);
+        })
+        .unwrap();
+    assert!(applied);
+    let after = on_disk(&store_root);
+    assert_eq!(after.status, RequirementStatus::Approved);
+    assert_eq!(
+        last_status_author(&after),
+        conflict::ORCHESTRATOR_PHASE1_AUTHOR
+    );
+    assert!(after.failure_reason.is_none());
+}
+
+/// Non-blocking 3: the PR-open Done flip and the lease-take bump, run against
+/// a stale copy while the stored spec is terminal, write nothing.
+// trace:BUG-1637 | ai:claude
+#[test]
+fn pr_open_and_lease_take_do_not_overwrite_a_spec_that_became_terminal() {
+    let (_dir, store_root, stale) = git_store_with(RequirementStatus::InProgress);
+    concurrently_set(&store_root, RequirementStatus::Completed);
+    let mut flipped = true;
+    open_backend(&store_root)
+        .update_spec_atomically(&stale, |r| flipped = crate::pr_open_done_flip(r))
+        .unwrap();
+    assert!(!flipped);
+    assert_eq!(on_disk(&store_root).status, RequirementStatus::Completed);
+
+    let (_dir, store_root, stale) = git_store_with(RequirementStatus::Approved);
+    concurrently_set(&store_root, RequirementStatus::Rejected);
+    let mut bumped = true;
+    open_backend(&store_root)
+        .update_spec_atomically(&stale, |r| {
+            bumped = crate::approved_to_in_progress_bump(r, conflict::LEASE_TAKE_AUTHOR)
+        })
+        .unwrap();
+    assert!(!bumped);
+    assert_eq!(on_disk(&store_root).status, RequirementStatus::Rejected);
+}
+
+/// Blocker 2: `aida findings promote --auto-complete` records the move into
+/// Completed under the caller.
+// trace:BUG-1637 | ai:claude
+#[test]
+fn findings_promote_auto_complete_records_history_under_the_caller() {
+    let mut r = spec_at(RequirementStatus::Draft);
+    let now = chrono::Utc::now();
+    let into = crate::completion::transition_to_completed(
+        &mut r,
+        None,
+        "BUG-9998",
+        "abc1234",
+        "promote",
+        |req, prior| {
+            crate::record_promote_completion(req, prior, now);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert!(into);
+    assert_eq!(r.status, RequirementStatus::Completed);
+    assert_eq!(last_status_author(&r), crate::get_default_author());
+    let change = &r.history.last().unwrap().changes[0];
+    assert_eq!(
+        (change.old_value.as_str(), change.new_value.as_str()),
+        ("Draft", "Completed")
+    );
+    assert_eq!(r.modified_at, now);
 }
