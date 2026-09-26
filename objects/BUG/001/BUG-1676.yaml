@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:24:49.370047070Z
-modified_at: 2026-09-26T21:36:18.271946444Z
+modified_at: 2026-09-26T21:41:26.425741498Z
 req_type: Bug
 comments:
 - id: 01a0dfa5-c55f-7ba1-898b-0990271d77cf
@@ -16,6 +16,12 @@ comments:
   content: 'Evidence 14:35: aida-store on gitlab was 122 commits behind local (origin 1 behind) — store mirroring to gitlab is not happening between reconciles. Reconciled by fast-forward push (no force).'
   created_at: 2026-09-26T21:36:18.271946444Z
   modified_at: 2026-09-26T21:36:18.271946444Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfaa-7919-7b01-90b3-b39d8ddd6832
+  author: joe
+  content: 'DRAFT (uncompiled) on claude/bug-1676 @ 2e01ffe4ab: cause (acceptance 1) — not a silent error but two structural gaps: (a) the pre-push hook only mirrors refs THIS machine pushes to origin, and main advances by forge-side squash merges that are only ever pulled, so main is never mirrored; the ~11-12 ms mirror-push runs in ~/.aida/usage.jsonl are the hook firing for pushes to the ''all''/''gitlab'' remotes, which returned silently (5168 ms = a real fan-out); (b) aida-store is pushed to origin by ~20 targeted-write sites (edit/comment/queue/coordination/ledgers) that never fan out — only db sync --push and aida push do. Fix: remote_create::mirror_sync_hubs pushes origin''s default-branch and aida-store tips (ls-remote sha, fetch, push sha:refs/heads/<b>, never force) to every [store.sync] mirror, returning a per-hub/per-branch report; new ''aida remote mirror-sync [--json]'' prints it and exits non-zero on any failed push; aida pull runs mirror_sync_after_pull best-effort after both legs succeed (drain phase 5, pr ship, operator catch-up); doctor remote-drift actions now point at mirror-sync. Acceptance 2: run_mirror_push prints why it skipped (non-origin target, store-only/deletion refs, no mirrors, listed-but-missing remote), lists what it mirrored (branch@sha), and bails non-zero when a mirror push fails (hook shim keeps || true). Tests (remote_create.rs tests mod, local bare repos, no network): mirror_sync_pushes_main_and_store_to_the_mirror_after_a_forge_side_merge (two bare hubs, main advanced via a second clone = forge-side merge, store advanced likewise; both reach the mirror; second run up-to-date), mirror_sync_reports_failures_and_skips_and_exits_non_zero, mirror_sync_names_why_it_did_nothing, run_mirror_push_names_every_skip_reason; the existing dead-mirror fan-out test now expects Err. Docs: docs/multi-hub-sync.md section 2b + hook note; json-audit row. Uncertain: whether the global --format json rejection keys off a list that needs ''remote mirror-sync'' registered (I found no such list); whether aida pull''s extra ls-remote/fetch cost (~3 network calls per mirror) is acceptable offline — unreachable origin is reported as a skip, not a failure. Compile risks: let-else over &Option in mirror_sync_hubs, the filter closure that pushes into report.skipped while report is borrowed, serde_json::json! use in remote_create.rs, and rustfmt on the long string literals (the hook''s cargo fmt ran at commit).'
+  created_at: 2026-09-26T21:41:26.425741498Z
+  modified_at: 2026-09-26T21:41:26.425741498Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df93-b184-7670-89d5-d7caa1ab82b4
