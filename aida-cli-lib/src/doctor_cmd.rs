@@ -3592,6 +3592,14 @@ pub(crate) struct AgentWorktreeFacts {
     /// it false whenever the git probes needed to prove it are inconclusive.
     // trace:BUG-1287 | ai:claude
     pub(crate) content_fully_landed: bool,
+    /// True when the default branch carries a landed commit whose subject or
+    /// body-line trailer names this branch's (finished) spec — the shape a
+    /// batched integration PR leaves behind: the spec's own branch is never
+    /// merged or PR'd directly, so neither `ancestor_of_main` nor `pr_merged`
+    /// can fire. Like `pr_merged` it is only a merge SIGNAL: a positive
+    /// `unique_unmerged_commits` still needs `content_fully_landed` to clear.
+    // trace:BUG-1657 | ai:claude
+    pub(crate) spec_trailer_on_main: bool,
 }
 
 /// Pure squash-aware classification of one agent-managed worktree. No git/forge
@@ -3613,6 +3621,9 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
         Some("branch is an ancestor of origin/main (merged)")
     } else if facts.pr_merged {
         Some("its PR is merged (squash-merged)")
+    } else if facts.spec_trailer_on_main {
+        // trace:BUG-1657 | ai:claude
+        Some("its spec landed on origin/main through an integration merge")
     } else {
         None
     };
@@ -3832,6 +3843,60 @@ pub(crate) fn branch_content_fully_landed(
     default_side_ids.iter().any(|id| id == &branch_patch_id)
 }
 
+/// Content-level proof that merging `branch` into `default_ref` would change
+/// nothing: a three-way `git merge-tree --write-tree` of the two yields exactly
+/// `default_ref`'s own tree. This is the batched-integration complement to
+/// [`branch_content_fully_landed`]: when an integration branch folds several
+/// specs' work into ONE squash commit, neither per-commit nor whole-branch
+/// patch-ids match anything on the default side, yet every change the branch
+/// makes is already there.
+///
+/// Conservative on any doubt: a conflict (e.g. later default-side edits to the
+/// same lines), a failed or unsupported git call, or any tree difference
+/// returns `false` (stay KEPT). A change that landed and was later reverted on
+/// the default branch also stays KEPT — the merge would reintroduce it.
+/// Read-only: `merge-tree --write-tree` writes only unreferenced objects.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn branch_merge_is_noop(
+    project_root: &std::path::Path,
+    default_ref: &str,
+    branch: &str,
+) -> bool {
+    let run = |args: &[&str]| -> Option<String> {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    };
+    let Some(default_tree) = run(&[
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        git_arg_guard::END_OF_OPTIONS,
+        &format!("{default_ref}^{{tree}}"),
+    ]) else {
+        return false;
+    };
+    // Exit status 1 means conflicts; `run` maps every non-zero exit to None.
+    let Some(merged) = run(&[
+        "merge-tree",
+        "--write-tree",
+        "--no-messages",
+        git_arg_guard::END_OF_OPTIONS,
+        default_ref,
+        branch,
+    ]) else {
+        return false;
+    };
+    let merged_tree = merged.lines().next().unwrap_or("").trim();
+    !default_tree.is_empty() && merged_tree == default_tree
+}
+
 /// BUG-1288: batched sibling of the per-commit `patch_id` closure in
 /// [`branch_content_fully_landed`] — feeds a whole `git log -p` stream (one
 /// commit hash line followed by that commit's diff, repeated) through a
@@ -3981,6 +4046,7 @@ fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFind
             pr_merged,
             unique_unmerged_commits,
             content_fully_landed,
+            spec_trailer_on_main: false,
         };
 
         match classify_agent_worktree(&facts) {
@@ -5696,6 +5762,7 @@ mod story_462_doctor_tests {
             pr_merged: false,
             unique_unmerged_commits: 0,
             content_fully_landed: false,
+            spec_trailer_on_main: false,
         }
     }
 

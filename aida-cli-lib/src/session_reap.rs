@@ -40,7 +40,8 @@ use anyhow::Result;
 use colored::Colorize;
 
 use crate::doctor_cmd::{
-    branch_content_fully_landed, classify_agent_worktree, AgentWorktreeFacts, AgentWorktreeVerdict,
+    branch_content_fully_landed, branch_merge_is_noop, classify_agent_worktree, AgentWorktreeFacts,
+    AgentWorktreeVerdict,
 };
 use crate::*;
 
@@ -344,6 +345,162 @@ fn requirement_summaries(project_root: &std::path::Path) -> Vec<aida_core::Requi
         .unwrap_or_default()
 }
 
+/// Does `default_ref` carry a landed commit that names `spec` as delivered,
+/// since `branch` forked from it? This is the batched-integration merge signal:
+/// an integration PR squash-merges several specs' work into one commit whose
+/// body lists one line per spec ending in `(SPEC-ID)`, so the spec's own
+/// branch is never an ancestor of the default branch and never has a PR of its
+/// own. Recognition reuses the merge-time completion parsers (subject trailer
+/// plus body-line trailers) rather than a second grammar, and skips plan
+/// commits, whose trailer names what a plan is FOR, not what shipped.
+///
+/// The search is bounded to commits after the branch's merge-base — a landing
+/// commit for this branch's work cannot predate the fork. Any git failure
+/// returns `false` (no signal). This is a merge SIGNAL only; content safety is
+/// proven separately before anything is removed.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn spec_trailer_landed_on(
+    project_root: &std::path::Path,
+    default_ref: &str,
+    branch: &str,
+    spec: &str,
+) -> bool {
+    let spec = spec.trim();
+    if spec.is_empty() || branch.trim().is_empty() {
+        return false;
+    }
+    let run = |args: &[&str]| -> Option<String> {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+    let Some(merge_base) = run(&[
+        "merge-base",
+        crate::git_arg_guard::END_OF_OPTIONS,
+        default_ref,
+        branch,
+    ]) else {
+        return false;
+    };
+    let merge_base = merge_base.trim();
+    if merge_base.is_empty() {
+        return false;
+    }
+    // `--grep` is a cheap literal pre-filter (it also matches longer ids that
+    // share the prefix); the parsers below make the exact decision.
+    let Some(log) = run(&[
+        "log",
+        "--format=%B%x00",
+        "--fixed-strings",
+        "--regexp-ignore-case",
+        &format!("--grep={spec}"),
+        &format!("{merge_base}..{default_ref}"),
+    ]) else {
+        return false;
+    };
+    log.split('\0')
+        .map(str::trim)
+        .filter(|message| !message.is_empty())
+        .filter(|message| !is_plan_commit_subject(message.lines().next().unwrap_or("")))
+        .any(|message| {
+            extract_spec_ids_from_commit(message)
+                .into_iter()
+                .chain(extract_referenced_spec_ids_from_commit(message))
+                .any(|id| id.eq_ignore_ascii_case(spec))
+        })
+}
+
+/// Gather the merge facts for one session branch — the probes the shared
+/// worktree classifier needs. `worth_probing` is "the spec is finished and the
+/// process exited"; the dearer probes (trailer scan, forge lookup, content
+/// comparison) only run when they could turn a skip into a reap. `pr_merged`
+/// is the forge lookup, injected so fixture tests need no network.
+///
+/// The merge signals, in order: the branch is an ancestor of the default
+/// branch; a landed commit names the spec in a trailer (batched integration);
+/// the forge reports a merged PR for the branch. A signal with commits the
+/// default branch lacks by ancestry still needs content proof — patch-id
+/// equivalence, or a merge into the default branch that would change nothing.
+// trace:TASK-1177 | ai:claude
+// trace:BUG-1657 | ai:claude
+pub(crate) fn gather_merge_facts(
+    project_root: &std::path::Path,
+    default_ref: Option<&str>,
+    branch: &str,
+    spec: &str,
+    dirty: bool,
+    worth_probing: bool,
+    pr_merged: impl FnOnce(&str) -> bool,
+) -> AgentWorktreeFacts {
+    let branch = branch.trim();
+    // A lease with no worktree and no branch has nothing on disk that could
+    // carry unmerged work, so it counts as merged.
+    let (ancestor_of_main, unique_unmerged_commits) = match (branch.is_empty(), default_ref) {
+        (true, _) => (true, 0),
+        (false, Some(default_ref)) => {
+            let n = std::process::Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args(["rev-list", "--count", &format!("{default_ref}..{branch}")])
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .and_then(|o| {
+                    String::from_utf8_lossy(&o.stdout)
+                        .trim()
+                        .parse::<u32>()
+                        .ok()
+                });
+            (n == Some(0), n.unwrap_or(0))
+        }
+        // Without a resolvable default ref merged-ness cannot be proven.
+        (false, None) => (false, 0),
+    };
+    let worth_probing = worth_probing && !ancestor_of_main && !dirty;
+    // BUG-1657: a spec landed through a batched integration PR has no merge
+    // of its own branch and no PR of its own; the landing commit on the
+    // default branch names it in a trailer instead. Local and cheap, so it
+    // runs before (and can spare) the forge lookup.
+    let spec_trailer_on_main = match (worth_probing, default_ref) {
+        (true, Some(default_ref)) => {
+            spec_trailer_landed_on(project_root, default_ref, branch, spec)
+        }
+        _ => false,
+    };
+    // Only pay for the forge lookup when the cheap probes were inconclusive
+    // (the squash-merge case) AND everything else already points at a reap.
+    let pr_merged = worth_probing && !spec_trailer_on_main && pr_merged(branch);
+    // BUG-1287: a squash-merged branch's own commits keep a different SHA
+    // from the squash commit forever, so `unique_unmerged_commits` stays
+    // positive whether or not anything is unshipped. Only pay for the content
+    // probe when it could change the verdict. BUG-1657: a batched squash folds
+    // other specs' work into the same commit, so patch-ids never match; the
+    // merge-is-a-no-op probe proves the branch adds nothing the default
+    // branch lacks.
+    let merge_signal = pr_merged || spec_trailer_on_main;
+    let content_fully_landed = match (merge_signal && unique_unmerged_commits > 0, default_ref) {
+        (true, Some(default_ref)) => {
+            branch_content_fully_landed(project_root, default_ref, branch)
+                || branch_merge_is_noop(project_root, default_ref, branch)
+        }
+        _ => false,
+    };
+    AgentWorktreeFacts {
+        dirty,
+        ancestor_of_main,
+        pr_merged,
+        unique_unmerged_commits,
+        content_fully_landed,
+        spec_trailer_on_main,
+    }
+}
+
 /// Gather the facts for every session lease and classify each. Read-only: git
 /// ancestry probes, a forge merged-PR lookup for the squash case, a store read,
 /// and the process-liveness probe. Nothing is mutated here.
@@ -366,22 +523,6 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
     let project_canon = project_root
         .canonicalize()
         .unwrap_or_else(|_| project_root.to_path_buf());
-
-    let git_count = |args: &[&str]| -> Option<u32> {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(args)
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .and_then(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .trim()
-                    .parse::<u32>()
-                    .ok()
-            })
-    };
 
     for lease in &leases {
         let has_worktree = !lease.worktree_path.as_os_str().is_empty();
@@ -433,53 +574,28 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
             worktree_has_live_process,
         );
 
-        // Merge facts. A lease with no worktree and no branch has nothing on
-        // disk that could carry unmerged work, so it counts as merged.
+        // Merge facts.
         let dirty = has_worktree && !worktree_dirty_entries(&lease.worktree_path).is_empty();
-        let branch = lease.branch.trim();
-        let (ancestor_of_main, unique_unmerged_commits) = match (branch.is_empty(), &default_ref) {
-            (true, _) => (true, 0),
-            (false, Some(default_ref)) => {
-                let n = git_count(&["rev-list", "--count", &format!("{default_ref}..{branch}")]);
-                (n == Some(0), n.unwrap_or(0))
-            }
-            // Without a resolvable default ref merged-ness cannot be proven.
-            (false, None) => (false, 0),
-        };
-        // Only pay for the forge lookup when the cheap ancestry probe was
-        // inconclusive (the squash-merge case) AND everything else already
-        // points at a reap — a skip does not need the network call.
-        let pr_merged = if !ancestor_of_main && !dirty && spec_finished && process_exited {
-            matches!(
-                detect_merged_pr_for_branch_via_forge(project_root, branch),
-                PrLookup::Found(_)
-            )
-        } else {
-            false
-        };
-        // BUG-1287: a squash-merged branch's own commits keep a different SHA
-        // from the squash commit on main forever, so `unique_unmerged_commits`
-        // (plain ancestry) stays positive whether or not anything is actually
-        // unshipped. Only pay for the extra content probe when it could change
-        // the verdict — a confirmed-merged PR with a positive ancestry count.
-        let content_fully_landed = match (pr_merged && unique_unmerged_commits > 0, &default_ref) {
-            (true, Some(default_ref)) => {
-                branch_content_fully_landed(project_root, default_ref, branch)
-            }
-            _ => false,
-        };
+        let worktree = gather_merge_facts(
+            project_root,
+            default_ref.as_deref(),
+            &lease.branch,
+            &lease.scope,
+            dirty,
+            spec_finished && process_exited,
+            |branch| {
+                matches!(
+                    detect_merged_pr_for_branch_via_forge(project_root, branch),
+                    PrLookup::Found(_)
+                )
+            },
+        );
 
         let facts = ReapFacts {
             spec_finished,
             process_exited,
             locked: has_worktree && worktree_is_locked(project_root, &lease.worktree_path),
-            worktree: AgentWorktreeFacts {
-                dirty,
-                ancestor_of_main,
-                pr_merged,
-                unique_unmerged_commits,
-                content_fully_landed,
-            },
+            worktree,
         };
 
         let verdict = classify_session_reap(&facts);
@@ -1050,3 +1166,9 @@ mod fr_284_session_notify_tests;
 #[cfg(test)]
 #[path = "tests/task_1179_chain_suggest_tests.rs"]
 mod task_1179_chain_suggest_tests;
+
+// Batched-integration merge signal, against fixture git repos.
+// trace:BUG-1657 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1657_batched_reap_tests.rs"]
+mod bug_1657_batched_reap_tests;
