@@ -19,7 +19,7 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use crate::events::{self, EventKind};
 use crate::shift::{
     build_config, redrive_pass, run_redrive_pass_with, state_path, Breaker, LockView, Probes,
-    ShiftConfig, ShiftExec, ShiftState, TickCtx, WaveRecord,
+    ShiftConfig, ShiftExec, ShiftState, TickCtx, WaveIsolation, WaveRecord, WaveSpawn,
 };
 use crate::supervisor::{QueueTarget, RequeueOutcome, SuperviseDecision};
 
@@ -123,10 +123,15 @@ impl ShiftExec for Rec {
         self.calls.push("tag".into());
         Ok(())
     }
-    fn spawn_wave(&mut self, argv: &[String], _: &Path) -> anyhow::Result<(u32, Option<String>)> {
+    fn spawn_wave(&mut self, argv: &[String], _: &Path) -> anyhow::Result<WaveSpawn> {
         self.calls.push("spawn".into());
         self.spawns.push(argv.to_vec());
-        Ok((1, None))
+        Ok(WaveSpawn {
+            pid: Some(1),
+            pid_start: None,
+            unit: None,
+            isolation: WaveIsolation::Detached { reason: None },
+        })
     }
     fn save_state(&mut self, _: &ShiftState) -> anyhow::Result<()> {
         self.calls.push("save".into());
@@ -299,6 +304,7 @@ fn watch_redrive_held_while_a_drain_or_wave_is_live() {
             pid: Some(7),
             pid_start: None,
             log: None,
+            unit: None,
             outcome: None,
         }],
         ..Default::default()
@@ -353,6 +359,7 @@ fn watch_unsettled_wave_hold_describes_state_without_advising_enable() {
             pid: Some(7),
             pid_start: None,
             log: None,
+            unit: None,
             outcome: None,
         }],
         ..Default::default()
@@ -772,6 +779,7 @@ fn watch_redrive_real_floors_merge_hold_breaker_drain_lock_and_shift_lock() {
         pid: Some(pid),
         pid_start,
         log: None,
+        unit: None,
         outcome: None,
     };
     let live = ShiftState {
