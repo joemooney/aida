@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:49:03.555549390Z
-modified_at: 2026-09-26T17:14:18.845219034Z
+modified_at: 2026-09-26T17:25:10.249535565Z
 req_type: Task
 tags:
 - batch:groom-2026-09-25
@@ -183,6 +183,25 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe) on the strict review (REQUEST CHANGES): (1) MUST, as the reviewer recommends (fail-safe): after ANY ambiguous systemd-run outcome (timeout or an unrecognised error), NEVER fall back to detached. Record WaveSpawn{pid:None, unit:Some(name)} plus a note, so launched() counts it toward the daily cap, it is never relaunched as a pending intent, and the next tick settles it. Fall back ONLY when systemd-run could not be spawned at all or on the recognised no-user-manager/no-bus errors. Add tests timeout_then_not_found_never_falls_back and unrecognised_error_then_not_found_never_falls_back. (4) DO: render ''pid unknown'' when the wave has a unit and pid 0. (7) DO if small: make the source-grep scan recursive over src/. (8) Optional; skip or follow-up. Then a delta check, or a fresh strict re-review if (1) is non-trivial. The PR stays open for Joe.'
   created_at: 2026-09-26T17:14:18.845219034Z
   modified_at: 2026-09-26T17:14:18.845219034Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0debf-d9e9-77d0-9abc-876a8ffaced2
+  author: joe
+  content: |-
+    Review round 2 (fresh strict Opus reviewer): APPROVE WITH NITS on 57bdd80747.
+
+    BLOCKER FIXED. In launch_wave_isolated, only classify_systemd_run -> NotStarted goes detached. That happens on a SpawnFailed, or on a non-zero exit whose stderr contains a recognised no-bus string. A TimedOut, an empty stderr or any other stderr is Ambiguous. After Ambiguous, EVERY probe result (Active, NotFound, Inactive, Unknown) returns Ok(WaveSpawn{pid: MainPID or None, unit: Some(name), isolation: Unit{note:'ambiguous start ...'}}), and nothing goes detached. The test ambiguous_failure_is_counted_launched_and_never_relaunched checks the tick_core result: wave.launched(), waves_in_day==1, pending_intent()==None, !last_wave_is_alive (so it settles next tick), and the report says 'pid unknown'. The new tests are timeout_then_not_found_never_falls_back, unrecognised_error_then_not_found_never_falls_back (3 errors x 3 probes) and recognised_no_bus_error_still_falls_back. Mutation: I restored go_detached for Ambiguous+NotFound, 3 tests failed, and I reverted it.
+
+    No-bus recognition: the strings are 'Failed to connect to bus', 'Failed to connect to user scope bus', 'Failed to get D-Bus connection', 'No medium found' and '$DBUS_SESSION_BUS_ADDRESS'. They only count together with a non-zero exit. The 'already exists' class is checked first. All of these come from systemd-run's connect phase, before it sends StartTransientUnit, so a partial start cannot produce them. A6 rejects '$' in the repo, log, exe and argv, so a message that echoes user input cannot fake the DBUS string. Nit: the match is a substring anywhere in stderr, and the bare errno text 'No medium found' is the loosest pattern. It is safe in practice (sd-bus uses ENOMEDIUM only when there is no bus address), but it could be anchored to the 'Failed to connect'/'Failed to get D-Bus connection' prefixes. Optional.
+
+    Name collision (Exists): SAFE, keep it. systemd-run makes exactly one call, so 'already exists' means the unit existed BEFORE this call and this attempt started nothing. Not counting it as launched is therefore correct. A running unit, including 'activating', maps to Active and is adopted, so a same-name unit that is still starting is never raced. Inactive, failed or deactivating units are not running a wave. The next tick uses a new name (a new second and tick pid), and the drain-lock guard covers any overlap while a unit is still deactivating. In any case the name (repo hash + second + tick pid under shift.lock) makes this path nearly unreachable.
+
+    Round-1 nits: (4) render_report prints 'pid unknown' when pid==0 and a unit is set. Done. (7) The source scan is now recursive over src/ and skips only directories named 'tests'. The only such directory is src/tests, and every #[path="tests/..."] include in the crate sits behind cfg(test) (checked with a script), so the skip is not too broad. The test also asserts that more than 10 files were scanned. A repo-wide grep finds systemd-run only in shift.rs, schedule_driver.rs and the 1510 tests. (8) Still open by choice: a unit with no pid settles on the next tick while it may still be running, and the lock-free guard mitigates that. Cosmetic: the RunFailure::NotStarted arm in the ambiguous match is unreachable, because NotStarted already returned earlier.
+
+    No regressions. The round-2 delta touches only the failure match in launch_wave_isolated, render_report and the tests. A1 (UnsetEnvironment from SCRUBBED_ENV plus TMUX/AIDA_PANES, GIT_TERMINAL_PROMPT=0), A2 (launched() in waves_in_day, last_launched, the settle rposition and pending_intent), the A4 cgroup gate, the argv allowlist (no timer or Restart flags) and the cfg(test) refusal are unchanged.
+
+    Tests (CARGO_BUILD_JOBS=3, scratch worktree, now removed): task_1510 35/35, shift 100, schedule_driver 51, story_1218 56, bug_1621 14, task_1491 51, all passing.
+  created_at: 2026-09-26T17:25:10.249535565Z
+  modified_at: 2026-09-26T17:25:10.249535565Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de96-9d83-7a70-864d-bd2651b0e2a0
