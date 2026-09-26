@@ -143,6 +143,7 @@ pub(crate) fn divergence_to_candidates(
                     }
                 ),
                 rationale: format!(
+                    // toml-ok: a log rationale, not a TOML writer.
                     "reconstitution probe verdict = {:?} for {}{}",
                     m.verdict,
                     m.real_test,

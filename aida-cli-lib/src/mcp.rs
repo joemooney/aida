@@ -2543,12 +2543,43 @@ impl<'a> McpServer<'a> {
         let type_filter = str_arg("type");
         let author_filter = str_arg("author");
         let shipped_only = bool_arg("shipped");
+        // TASK-1512: CLI parity for `--to`/`--from`/`--opened`, with the same
+        // status spellings, the same refusal for an unknown status, and the
+        // same refusal to combine `shipped` (= `to: completed`) with `to` or
+        // `opened`. trace:TASK-1512 | ai:claude
+        let to_status = str_arg("to")
+            .map(|raw| history::resolve_status_filter("to", &raw))
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let from_status = str_arg("from")
+            .map(|raw| history::resolve_status_filter("from", &raw))
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let opened_only = bool_arg("opened");
+        // Both refusals start with `invalid ` so `McpErrorCode::classify`
+        // reports them as `invalid_arg`, not `internal`.
+        if shipped_only && (to_status.is_some() || opened_only) {
+            return Err(
+                "invalid combination: `shipped` is the same as `to: completed`; it cannot be combined with `to` or `opened`"
+                    .to_string(),
+            );
+        }
+        history::validate_transition_pair(
+            from_status.as_deref(),
+            to_status.as_deref(),
+            "from",
+            "to",
+        )
+        .map_err(|e| e.to_string())?;
         // `--shipped` implies events mode, mirroring the CLI. The MCP default has
         // always been events mode (the structured ledger), so `events` defaults
         // true here and a caller passing `events: false` only matters for the
         // digest-vs-events distinction the CLI surfaces.
-        let events_mode =
-            args.get("events").and_then(|v| v.as_bool()).unwrap_or(true) || shipped_only;
+        let events_mode = args.get("events").and_then(|v| v.as_bool()).unwrap_or(true)
+            || shipped_only
+            || opened_only
+            || to_status.is_some()
+            || from_status.is_some();
         let status_changes_only = bool_arg("status_changes");
         let comments_only = bool_arg("comments");
         let oneline = bool_arg("oneline");
@@ -2578,6 +2609,9 @@ impl<'a> McpServer<'a> {
             until,
             status_changes_only,
             shipped_only,
+            to_status,
+            from_status,
+            opened_only,
             comments_only,
             oneline,
             // MCP consumers expect the full event ledger, not the CLI's
@@ -7365,7 +7399,7 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "history",
-            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history events` for MCP consumers. Returns pretty-printed JSON with structured event records. Mirrors the CLI's filter surface (type/author/since/until/limit/shipped/status-changes/comments). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all` — no `all` toggle is needed.",
+            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history events` for MCP consumers. Returns pretty-printed JSON with structured event records. Mirrors the CLI's filter surface (type/author/since/until/limit/shipped/to/from/opened/status-changes/comments). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all` — no `all` toggle is needed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -7411,6 +7445,22 @@ pub fn tool_descriptors() -> Value {
                     "shipped": {
                         "type": "boolean",
                         "description": "Only transitions into Completed (merged to the default branch), from any prior status, newest first — the 'did my ship register?' view (mirrors `aida history --shipped`). Implies events mode; composes with since/until/limit.",
+                        "default": false,
+                        "example": true
+                    },
+                    "to": {
+                        "type": "string",
+                        "description": "Only status transitions into this status (mirrors `aida history --to`). Accepts the spellings `aida edit --status` does (`approved`, `in-progress`, `needs-attention`, any case) plus `accepted` for approved; an unknown status is an error listing the valid set. With `from`, both ends must match; `from` and `to` naming the same status is refused. With `status_changes` it narrows the transitions; with `comments` or `opened` the result is the union. Cannot be combined with `shipped` (which is `to: completed`).",
+                        "example": "approved"
+                    },
+                    "from": {
+                        "type": "string",
+                        "description": "Only status transitions out of this status (mirrors `aida history --from`). Alone it matches any transition leaving that status; same spellings and combination rules as `to`.",
+                        "example": "in-progress"
+                    },
+                    "opened": {
+                        "type": "boolean",
+                        "description": "Only spec-creation events: the specs filed in the window, whatever status they were filed at (mirrors `aida history --opened` and its alias `--created`). Combined with `to`/`from`, `status_changes` or `comments`, the result is the union of both kinds of event. Cannot be combined with `shipped`.",
                         "default": false,
                         "example": true
                     },
@@ -8788,6 +8838,114 @@ mod tests {
             parsed.get("count").and_then(Value::as_u64).unwrap_or(0) >= 1,
             "expected at least the one status-change event, got: {parsed}"
         );
+    }
+
+    /// TASK-1512: the `history` tool takes `to`/`from`/`opened` with the
+    /// CLI's semantics: the same status spellings, the same refusal for an
+    /// unknown status or `shipped` combined with `to`/`opened`, and the
+    /// union of creations and transitions.
+    // trace:TASK-1512 | ai:claude
+    #[test]
+    fn task_1512_mcp_history_transition_and_opened_filters() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let git = |args: &[&str]| {
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(&store_root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+        git(&["config", "commit.gpgsign", "false"]);
+        let bug1 = store_root.join("objects/BUG/000/BUG-1.yaml");
+        let bug2 = store_root.join("objects/BUG/000/BUG-2.yaml");
+        std::fs::create_dir_all(bug1.parent().unwrap()).unwrap();
+        std::fs::write(&bug1, "spec_id: BUG-1\ntitle: t\nstatus: Draft\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "file 1"]);
+        std::fs::write(&bug1, "spec_id: BUG-1\ntitle: t\nstatus: InProgress\n").unwrap();
+        std::fs::write(&bug2, "spec_id: BUG-2\ntitle: u\nstatus: Approved\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "start 1, file 2 approved"]);
+        std::fs::write(&bug1, "spec_id: BUG-1\ntitle: t\nstatus: Approved\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "bounce 1"]);
+
+        let storage = Storage::new(&store_root);
+        let server = McpServer::new(&storage, dir.path().to_path_buf());
+        let kinds = |args: Value| -> Vec<(String, String)> {
+            let v: Value = serde_json::from_str(&server.tool_history(&args).unwrap()).unwrap();
+            v["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|e| {
+                    (
+                        e["id"].as_str().unwrap().to_string(),
+                        e["kind"].as_str().unwrap().to_string(),
+                    )
+                })
+                .collect()
+        };
+        let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
+
+        assert_eq!(
+            kinds(json!({"from": "in_progress", "to": "accepted"})),
+            vec![pair("BUG-1", "status_change")]
+        );
+        assert_eq!(
+            kinds(json!({"opened": true})),
+            vec![pair("BUG-2", "added"), pair("BUG-1", "added")]
+        );
+        assert_eq!(
+            kinds(json!({"opened": true, "to": "approved"})),
+            vec![
+                pair("BUG-1", "status_change"),
+                pair("BUG-2", "added"),
+                pair("BUG-1", "added")
+            ]
+        );
+        let err = server.tool_history(&json!({"to": "nope"})).unwrap_err();
+        assert!(err.contains("expected one of"), "{err}");
+        let err = server
+            .tool_history(&json!({"shipped": true, "opened": true}))
+            .unwrap_err();
+        assert!(err.contains("shipped"), "{err}");
+        let err = server
+            .tool_history(&json!({"from": "approved", "to": "accepted"}))
+            .unwrap_err();
+        assert!(err.contains("both `Approved`"), "{err}");
+
+        // Every refusal reaches the client as `invalid_arg`, not `internal`.
+        for args in [
+            json!({"shipped": true, "opened": true}),
+            json!({"shipped": true, "to": "approved"}),
+            json!({"from": "in-progress", "to": "in_progress"}),
+            json!({"to": "nope"}),
+        ] {
+            let resp = server.handle_tools_call(
+                &json!(1),
+                &json!({"name": "history", "arguments": args.clone()}),
+            );
+            let result = resp.result.expect("tools/call returns a result");
+            assert_eq!(result["isError"], json!(true), "{args}");
+            assert_eq!(
+                result["structuredError"]["code"],
+                json!("invalid_arg"),
+                "{args}: {result}"
+            );
+        }
     }
 
     /// TASK-1505 slice 2: the `history` tool reports where its answer came

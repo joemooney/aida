@@ -91,6 +91,9 @@ fn base() -> HistoryOpts {
         until: None,
         status_changes_only: false,
         shipped_only: false,
+        to_status: None,
+        from_status: None,
+        opened_only: false,
         comments_only: false,
         oneline: false,
         archived_specs: HashSet::new(),
@@ -129,6 +132,18 @@ fn single(id: &str, comments: bool) -> HistoryOpts {
         // The CLI folds "neither kind flag" into status changes.
         status_changes_only: !comments,
         comments_only: comments,
+        ..base()
+    }
+}
+
+/// The opts the CLI builds for `--to`/`--from`/`--opened` (TASK-1512).
+// trace:TASK-1512 | ai:claude
+fn selector(to: Option<&str>, from: Option<&str>, opened: bool) -> HistoryOpts {
+    HistoryOpts {
+        events_mode: resolve_events_mode(false, false, true, false, false, false, false),
+        to_status: to.map(str::to_string),
+        from_status: from.map(str::to_string),
+        opened_only: opened,
         ..base()
     }
 }
@@ -354,9 +369,34 @@ fn index_serves_the_same_answer_as_the_git_walk_for_every_new_mode() {
         ("<ID>", single("TASK-1", false)),
         ("<ID> --comments", single("TASK-1", true)),
         ("<ID> (other spec)", single("TASK-2", false)),
+        // TASK-1512: the transition and creation selectors.
+        // trace:TASK-1512 | ai:claude
+        ("--to approved", selector(Some("Approved"), None, false)),
+        ("--from approved", selector(None, Some("Approved"), false)),
+        (
+            "--from approved --to in-progress",
+            selector(Some("InProgress"), Some("Approved"), false),
+        ),
+        ("--opened", selector(None, None, true)),
+        (
+            "--opened --to approved",
+            selector(Some("Approved"), None, true),
+        ),
+        (
+            "--comments --to in-progress",
+            HistoryOpts {
+                comments_only: true,
+                ..selector(Some("InProgress"), None, false)
+            },
+        ),
     ];
     for (label, o) in &cases {
         let (walked, hidden, exhausted) = collect_filtered_events_git(&store, o).unwrap();
+        // A selector that matches nothing would pass vacuously.
+        // trace:TASK-1512 | ai:claude
+        if o.to_status.is_some() || o.from_status.is_some() || o.opened_only {
+            assert!(!walked.is_empty(), "[{label}] fixture has no match");
+        }
         let served = history_cache::serve_at(&store, &db, o, Duration::from_secs(120))
             .unwrap()
             .unwrap_or_else(|| panic!("[{label}] index did not serve"));

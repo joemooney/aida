@@ -220,7 +220,7 @@ fn bug_1647_promote_withdraws_the_queue_entry_when_the_finding_became_final() {
     assert!(fired.get(), "the race seam fired");
     let msg = err.to_string();
     assert!(msg.contains("is now Rejected"), "{msg}");
-    assert!(msg.contains("nothing was changed"), "{msg}");
+    assert!(msg.contains("the finding is unchanged"), "{msg}");
     assert_eq!(
         on_disk(&store_root).unwrap().status,
         RequirementStatus::Rejected
@@ -242,7 +242,7 @@ fn bug_1647_promote_withdraws_the_queue_entry_when_the_finding_was_deleted() {
     assert!(fired.get(), "the race seam fired");
     let msg = err.to_string();
     assert!(msg.contains("no longer exists"), "{msg}");
-    assert!(msg.contains("nothing was changed"), "{msg}");
+    assert!(msg.contains("the finding is unchanged"), "{msg}");
     assert!(
         queued_ids(&store_root).is_empty(),
         "the entry was withdrawn"
@@ -275,7 +275,10 @@ fn bug_1647_promote_restores_an_earlier_queue_entry_when_the_write_fails() {
 
     let err = promote_to_work(&store_root, &stale).expect_err("a final status is refused");
     assert!(fired.get(), "the race seam fired");
-    assert!(err.to_string().contains("nothing was changed"), "{err}");
+    assert!(
+        err.to_string().contains("the finding is unchanged"),
+        "{err}"
+    );
     let entries = storage.queue_list(&user, true).unwrap();
     assert_eq!(entries.len(), 1, "{entries:?}");
     assert_eq!(entries[0].for_role.as_deref(), Some("reviewer"));
@@ -299,7 +302,7 @@ fn bug_1647_promote_reports_a_queue_entry_it_could_not_withdraw() {
     assert!(fired.get(), "the race seam fired");
     let msg = err.to_string();
     assert!(msg.contains("is now Rejected"), "{msg}");
-    assert!(!msg.contains("nothing was changed"), "{msg}");
+    assert!(!msg.contains("the finding is unchanged"), "{msg}");
     assert!(msg.contains("could not be withdrawn"), "{msg}");
     assert!(
         msg.contains(&format!("aida queue remove {SPEC} --for implementer")),
