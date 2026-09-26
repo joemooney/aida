@@ -4101,19 +4101,23 @@ pub(crate) fn handle_git_backend_command(
             // BUG-1535: an ambiguous id is refused (non-zero exit, every
             // candidate listed) — never answered with one of them — and that
             // refusal passes through unwrapped. trace:BUG-1535 | ai:claude
-            let lookup = backend.get_requirement_unambiguous(id).map_err(|e| {
-                if e.downcast_ref::<aida_core::id_collisions::AmbiguousIdError>()
-                    .is_some()
-                {
-                    return e;
-                }
-                anyhow::anyhow!(
-                    "Parse failed: {}\n  Detail: {:#}\n{}",
-                    id,
-                    e,
-                    aida_core::object_store::parse_failure_hint(None),
-                )
-            });
+            // Read-only: the tolerant resolver keeps `show` off the cache
+            // write lock. trace:BUG-1670 | ai:claude
+            let lookup = backend
+                .get_requirement_unambiguous_for_read(id)
+                .map_err(|e| {
+                    if e.downcast_ref::<aida_core::id_collisions::AmbiguousIdError>()
+                        .is_some()
+                    {
+                        return e;
+                    }
+                    anyhow::anyhow!(
+                        "Parse failed: {}\n  Detail: {:#}\n{}",
+                        id,
+                        e,
+                        aida_core::object_store::parse_failure_hint(None),
+                    )
+                });
             if *tree {
                 match lookup? {
                     Some(root) => {
@@ -6842,7 +6846,7 @@ pub(crate) fn handle_git_backend_command(
             // trace:TASK-1-020 | ai:claude
             // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
             let req = backend
-                .get_requirement_unambiguous(id)?
+                .get_requirement_unambiguous_for_read(id)? // read-only; trace:BUG-1670 | ai:claude
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
             record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
             println!("{}: {}", "Requirement".cyan(), req.title);

@@ -263,12 +263,10 @@ fn unacked_briefs_for_running_agent_surface_in_the_report() {
     .unwrap();
 
     // Pin agent detection to `claude` so the classifier narrows to the
-    // dir our fixture wrote to, regardless of the test host's env.
-    let prior = std::env::var("AIDA_AGENT_TYPE").ok();
-    // SAFETY: env mutation is bounded by this test; restored on exit.
-    unsafe {
-        std::env::set_var("AIDA_AGENT_TYPE", "claude");
-    }
+    // dir our fixture wrote to, regardless of the test host's env. The guard
+    // holds the shared env lock until the end of the test and restores the
+    // prior value on drop. trace:BUG-1666 | ai:claude
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_AGENT_TYPE", "claude");
 
     let ctx = empty_user_ctx(Some("implementer"));
     let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
@@ -280,14 +278,6 @@ fn unacked_briefs_for_running_agent_surface_in_the_report() {
     );
     assert_eq!(report.pending_briefs[0].spec_id, "STORY-100");
     assert_eq!(report.pending_briefs[0].agent, "claude");
-
-    // SAFETY: same single-threaded reasoning — restore the env.
-    unsafe {
-        match prior {
-            Some(v) => std::env::set_var("AIDA_AGENT_TYPE", v),
-            None => std::env::remove_var("AIDA_AGENT_TYPE"),
-        }
-    }
 }
 
 // Reviewer-role queue items only surface when the active role IS

@@ -5,23 +5,23 @@
 use super::eval_subcommand_hint;
 
 // Single test (not split) so the two branches mutate AIDA_SHELL_WRAPPER
-// sequentially — env vars are process-global and tests run in parallel.
+// sequentially — env vars are process-global and tests run in parallel. The
+// guard holds the shared env lock for the whole test and restores the prior
+// value on drop. trace:BUG-1666 | ai:claude
 #[test]
 fn bare_when_wrapper_set_eval_form_when_unset() {
-    let prev = std::env::var_os("AIDA_SHELL_WRAPPER");
-
     // Wrapper present → bare form (no eval wrapping).
-    std::env::set_var("AIDA_SHELL_WRAPPER", "role,session,dev");
+    let mut env = crate::test_env::EnvVarGuard::set("AIDA_SHELL_WRAPPER", "role,session,dev");
     assert_eq!(
         eval_subcommand_hint("role enter advisor"),
         "aida role enter advisor"
     );
     // Even an empty value counts as present (var set by the wrapper).
-    std::env::set_var("AIDA_SHELL_WRAPPER", "");
+    env.reset("");
     assert_eq!(eval_subcommand_hint("dev activate"), "aida dev activate");
 
     // Wrapper absent → eval "$(...)" form (raw binary on PATH).
-    std::env::remove_var("AIDA_SHELL_WRAPPER");
+    env.reset_unset();
     assert_eq!(
         eval_subcommand_hint("role enter advisor"),
         "eval \"$(aida role enter advisor)\""
@@ -30,10 +30,4 @@ fn bare_when_wrapper_set_eval_form_when_unset() {
         eval_subcommand_hint("session end"),
         "eval \"$(aida session end)\""
     );
-
-    // Restore whatever the test environment had.
-    match prev {
-        Some(v) => std::env::set_var("AIDA_SHELL_WRAPPER", v),
-        None => std::env::remove_var("AIDA_SHELL_WRAPPER"),
-    }
 }

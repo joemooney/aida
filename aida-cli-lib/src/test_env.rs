@@ -210,6 +210,18 @@ impl Drop for EnvVarGuard {
     }
 }
 
+/// Pin the queue identity (`current_user_id` reads `AIDA_USER`) for a
+/// queue-asserting test, holding the process-wide env lock for the guard's
+/// lifetime. Without it, a parallel test that sets `AIDA_USER` under its own
+/// guard can flip the identity between a fixture's queue writes, the code
+/// under test, and the final `queue_list`, so the test reads (or writes) a
+/// different user's queue file. Hold the guard for the whole test; do not
+/// take another env guard under it.
+// trace:BUG-1658 trace:BUG-1666 | ai:claude
+pub(crate) fn pin_queue_user() -> EnvVarGuard {
+    EnvVarGuard::set("AIDA_USER", "queue-fixture-user")
+}
+
 /// BUG-1618: the fixed identity `AmbientGuard::hermetic` pins `AIDA_USER` to,
 /// chosen to be absent from any real roster.
 // trace:BUG-1618 | ai:claude

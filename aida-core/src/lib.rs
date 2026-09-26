@@ -158,6 +158,15 @@ pub mod worktree_pool_adopt;
 pub mod worktree_pool_destroy;
 pub mod yaml_helpers;
 
+/// The ONE process-wide lock for aida-core tests that mutate the process
+/// environment. `std::env::set_var` is not thread-safe across keys (a
+/// `setenv` can realloc `environ` while another thread reads an unrelated
+/// key, or while a spawned `git` child copies it), so every env-mutating test
+/// in this crate must serialise on the same mutex, not a module-local one.
+// trace:BUG-1666 | ai:claude
+#[cfg(test)]
+pub(crate) static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 // Re-export commonly used types
 pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, DraftSpecResponse, EvaluationResponse, EvaluationResult,
