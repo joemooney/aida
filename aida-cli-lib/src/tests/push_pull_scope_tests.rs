@@ -150,35 +150,28 @@ fn uncommitted_change_count_dirty_vs_clean() {
 }
 
 /// TASK-863: AIDA_PUSH_QUIET suppression honors truthy/falsey values.
-/// Serialized via a global env var, so guarded against parallel test
-/// interference by setting+clearing within the single test.
+/// The guard holds the shared env lock for the whole test and restores the
+/// ambient value on drop, so parallel env-touching tests can't interleave.
+// trace:BUG-1666 | ai:claude
 #[test]
 fn push_notice_env_suppression() {
-    // Save + restore the ambient value so we don't clobber a real env.
-    let saved = std::env::var("AIDA_PUSH_QUIET").ok();
-
-    std::env::remove_var("AIDA_PUSH_QUIET");
+    let mut env = crate::test_env::EnvVarGuard::unset("AIDA_PUSH_QUIET");
     assert!(!super::push_notice_suppressed_by_env());
 
-    std::env::set_var("AIDA_PUSH_QUIET", "1");
+    env.reset("1");
     assert!(super::push_notice_suppressed_by_env());
 
-    std::env::set_var("AIDA_PUSH_QUIET", "true");
+    env.reset("true");
     assert!(super::push_notice_suppressed_by_env());
 
-    std::env::set_var("AIDA_PUSH_QUIET", "0");
+    env.reset("0");
     assert!(!super::push_notice_suppressed_by_env());
 
-    std::env::set_var("AIDA_PUSH_QUIET", "false");
+    env.reset("false");
     assert!(!super::push_notice_suppressed_by_env());
 
-    std::env::set_var("AIDA_PUSH_QUIET", "");
+    env.reset("");
     assert!(!super::push_notice_suppressed_by_env());
-
-    match saved {
-        Some(v) => std::env::set_var("AIDA_PUSH_QUIET", v),
-        None => std::env::remove_var("AIDA_PUSH_QUIET"),
-    }
 }
 
 /// Same four combinations for `aida pull`.

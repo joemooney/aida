@@ -291,7 +291,13 @@ pub(crate) struct ReapReport {
 /// has no distributed store (the legacy centralized layout is out of scope) —
 /// with no completion signal available, nothing is finished and nothing reaps.
 // trace:TASK-1177 | ai:claude
-fn finished_scopes(project_root: &std::path::Path, scopes: &[String]) -> HashSet<String> {
+// Reads each scope from its stored YAML object (`get_requirement_by_spec_id`),
+// never from the cache rows, so a reopened spec is never counted finished even
+// when the cache is stale. trace:BUG-1670 | ai:claude
+pub(crate) fn finished_scopes(
+    project_root: &std::path::Path,
+    scopes: &[String],
+) -> HashSet<String> {
     let mut out = HashSet::new();
     let Some(store_path) = detect_distributed_store_from(project_root) else {
         return out;

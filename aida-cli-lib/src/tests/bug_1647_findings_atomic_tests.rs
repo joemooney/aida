@@ -22,8 +22,9 @@ use aida_core::{Requirement, RequirementStatus};
 
 use crate::bug_1638_race_seam_tests::{
     arm_race, comment_texts, concurrently_comment_and_redescribe, concurrently_set,
-    last_status_author, on_disk, open_backend, pin_queue_user, project_with, SPEC,
+    last_status_author, on_disk, open_backend, project_with, SPEC,
 };
+use crate::test_env::pin_queue_user;
 
 fn queued_ids(store_root: &Path) -> Vec<uuid::Uuid> {
     aida_core::Storage::new(store_root)

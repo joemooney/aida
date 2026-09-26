@@ -92,29 +92,24 @@ fn read_focus_policy_reads_each_mode() {
 // trace:STORY-441 | ai:claude
 #[test]
 fn auto_archive_enabled_env_flag_respects_opt_out() {
-    let saved = std::env::var("AIDA_AUTO_ARCHIVE").ok();
-
+    // The guard holds the shared env lock for the whole test and restores
+    // the ambient value on drop. trace:BUG-1666 | ai:claude
     // Unset → on (default).
-    std::env::remove_var("AIDA_AUTO_ARCHIVE");
+    let mut env = crate::test_env::EnvVarGuard::unset("AIDA_AUTO_ARCHIVE");
     assert!(auto_archive_enabled());
 
     for off in &["false", "0", "no", "off", "FALSE", "Off"] {
-        std::env::set_var("AIDA_AUTO_ARCHIVE", off);
+        env.reset(off);
         assert!(
             !auto_archive_enabled(),
             "AIDA_AUTO_ARCHIVE={off:?} should disable"
         );
     }
     for on in &["true", "1", "", "yes", "anything-else"] {
-        std::env::set_var("AIDA_AUTO_ARCHIVE", on);
+        env.reset(on);
         assert!(
             auto_archive_enabled(),
             "AIDA_AUTO_ARCHIVE={on:?} should stay on"
         );
-    }
-
-    match saved {
-        Some(v) => std::env::set_var("AIDA_AUTO_ARCHIVE", v),
-        None => std::env::remove_var("AIDA_AUTO_ARCHIVE"),
     }
 }

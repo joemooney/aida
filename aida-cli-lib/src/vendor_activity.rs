@@ -289,7 +289,10 @@ mod tests {
             format!("{{\"session_id\":\"{session}\",\"event\":\"step\"}}\n"),
         )
         .unwrap();
-        std::env::set_var(
+        // Hold the shared env lock for the whole set -> read -> restore
+        // window; the guard restores the prior value even if an assert fails.
+        // trace:BUG-1666 | ai:claude
+        let _env = crate::test_env::EnvVarGuard::set(
             "AIDA_CODEX_SESSIONS_DIR",
             tmp.path().join("codex").join("sessions"),
         );
@@ -299,7 +302,6 @@ mod tests {
 
         assert_eq!(snap.source, Some("codex_rollout"));
         assert!(snap.last_activity.is_some());
-        std::env::remove_var("AIDA_CODEX_SESSIONS_DIR");
     }
 
     #[test]

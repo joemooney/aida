@@ -98,7 +98,7 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap
+          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -362,7 +362,10 @@ jobs:
 
       - name: Removed mode-flag spelling guard
         if: steps.changes.outputs.full_ci == 'true'
-        run: bash scripts/check-removed-flags.sh
+        # trace:BUG-1665 | ai:claude
+        run: |
+          bash scripts/check-removed-flags.sh
+          bash tests/test_check_removed_flags.sh
 
       # TASK-1205: portability ratchet for Linux-only assumptions in test code.
       # Existing sites live in scripts/portability-allowlist.txt. The growth
