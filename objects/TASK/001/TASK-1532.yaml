@@ -1,0 +1,20 @@
+id: 01a0df68-5d60-7291-80bc-d17b53b2282e
+spec_id: TASK-1532
+agreed_id: TASK-1532
+title: 'Finish the env-guard migration: convert the remaining locked raw set_var/remove_var in tests and add a lint'
+description: 'Follow-up from BUG-1666. Acceptance: 1. Every test-code set_var/remove_var in aida-cli-lib and aida-core goes through the guard helpers (aida-core: TEST_ENV_LOCK-based guard). 2. A source-scan test fails on any raw set_var/remove_var in test code outside the helpers. 3. Tests that read env through the code under test (e.g. story_465 awaiting-report tests) take a guard that clears the relevant variables.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T20:29:13.952391653Z
+modified_at: 2026-09-26T20:29:13.952391653Z
+req_type: Task
+filed_at:
+  code_sha: b13b2c611e810a2ba044efb50b32070667d4b37a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
