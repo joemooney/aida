@@ -25,6 +25,11 @@ pub struct CachedGitBackend {
     cache: Cache,
 }
 
+/// Whether the stale-read note has been printed since it was last armed.
+/// See [`CachedGitBackend::rearm_stale_read_note`].
+// trace:TASK-1515 | ai:claude
+static STALE_READ_NOTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 impl CachedGitBackend {
     /// Open an existing git store at `git_root` with a SQLite cache at
     /// `cache_path`. If the cache is missing or stale (HEAD-SHA mismatch),
@@ -160,8 +165,9 @@ impl CachedGitBackend {
     /// `anyhow::Error`) listing each candidate's unambiguous handle; exactly
     /// one candidate resolves as `get_requirement_by_spec_id` would.
     ///
-    /// If the cache cannot answer, the check falls back to the authoritative
-    /// full scan rather than skipping it: an unchecked write is the bug.
+    /// If the cache cannot answer, or can only answer from a stale snapshot,
+    /// the check falls back to the authoritative full scan rather than
+    /// skipping it: an unchecked write is the bug.
     ///
     /// [`AmbiguousIdError`]: crate::id_collisions::AmbiguousIdError
     // trace:BUG-1535 | ai:claude
@@ -169,9 +175,20 @@ impl CachedGitBackend {
         if let Ok(uuid) = Uuid::parse_str(id.trim()) {
             return self.get_requirement(&uuid);
         }
-        let candidates = match self.id_candidates(id) {
-            Ok(c) => c,
-            Err(_) => {
+        // `id_candidates` uses the read-path freshness check, which may serve
+        // a stale snapshot (another writer holds the cache lock). A write must
+        // never resolve an id from a stale snapshot: a duplicate or agreed-id
+        // collision that an external commit introduced would be missed. So a
+        // stale answer is treated like no answer, and the authoritative full
+        // scan decides.
+        // trace:TASK-1515 | ai:claude
+        let fresh_candidates = self
+            .id_candidates(id)
+            .ok()
+            .filter(|_| matches!(self.cache_snapshot_is_stale(), Ok(false)));
+        let candidates = match fresh_candidates {
+            Some(c) => c,
+            None => {
                 let store = self.inner.load()?;
                 let rows: Vec<crate::id_collisions::IdRow> = store
                     .requirements
@@ -324,49 +341,77 @@ impl CachedGitBackend {
     /// Write paths pass `false` and keep the strict lock error.
     // trace:TASK-1515 | ai:claude
     fn ensure_cache_fresh_inner(&self, serve_stale_on_lock: bool) -> Result<()> {
+        // TASK-1515: an incremental refresh declines when HEAD moves while it
+        // reads the changed objects (it cannot stamp one HEAD on rows that may
+        // come from a later one). On a busy store that is common, so retry the
+        // cheap incremental from the newly captured HEAD a bounded number of
+        // times before paying for a full rebuild.
+        // trace:TASK-1515 | ai:claude
+        const INCREMENTAL_ATTEMPTS: usize = 3;
+        let mut head = self.current_head_sha();
+        for _ in 0..INCREMENTAL_ATTEMPTS {
+            if !self.cache.is_stale(&head)? {
+                return Ok(());
+            }
+            // Non-git fixture (empty HEAD): nothing to diff — full rebuild is
+            // the only correct path (and is cheap, there are no commits).
+            if head.is_empty() {
+                break;
+            }
+            let Some(recorded) = self.cache.source_head_sha()? else {
+                break;
+            };
+            if recorded.is_empty()
+                || !crate::git_ops::is_ancestor(self.inner.path(), &recorded, &head)
+                    .unwrap_or(false)
+            {
+                break;
+            }
+            match self.try_incremental_update(&recorded, &head) {
+                Ok(true) => return Ok(()),
+                // Ok(false): incremental declined. If HEAD moved during the
+                // reads, retry from the new HEAD; otherwise (diff too large /
+                // a row the diff named couldn't be read) fall through to a
+                // full rebuild, which is always correct.
+                Ok(false) => {
+                    let now = self.current_head_sha();
+                    if now == head {
+                        break;
+                    }
+                    head = now;
+                }
+                // TASK-1515 (SPIKE-90 advisor rule): a LOCK error means
+                // another writer holds the cache and the retry ladder is
+                // already exhausted. The single refresh transaction rolled
+                // back, so the cache is intact at its previous HEAD.
+                // Escalating to a full rebuild would only wait on the same
+                // lock for longer while doing far more work, so surface the
+                // (owner-enriched) lock error instead. A READ path instead
+                // serves that rolled-back snapshot, labelled stale.
+                // trace:TASK-1515 | ai:claude
+                Err(e) if is_cache_lock_error(&e) => {
+                    if serve_stale_on_lock {
+                        self.note_stale_read();
+                        return Ok(());
+                    }
+                    return Err(e);
+                }
+                Err(e) => {
+                    eprintln!("warning: incremental cache update failed ({e}); full rebuild");
+                    break;
+                }
+            }
+        }
+        // TASK-1515: re-capture HEAD immediately before the rebuild loads the
+        // worktree, so the stamp is never older than a HEAD captured before
+        // the incremental attempts. The load reads at or after this HEAD; if
+        // HEAD moves during the load, the stamp is older than some rows, which
+        // is the self-healing direction (the next refresh re-reads every file
+        // changed since the stamp), never newer rows claimed fresh.
+        // trace:TASK-1515 | ai:claude
         let head = self.current_head_sha();
         if !self.cache.is_stale(&head)? {
             return Ok(());
-        }
-        // Non-git fixture (empty HEAD): nothing to diff — full rebuild is the
-        // only correct path (and is cheap, there are no commits).
-        if !head.is_empty() {
-            if let Some(recorded) = self.cache.source_head_sha()? {
-                if !recorded.is_empty()
-                    && crate::git_ops::is_ancestor(self.inner.path(), &recorded, &head)
-                        .unwrap_or(false)
-                {
-                    match self.try_incremental_update(&recorded, &head) {
-                        Ok(true) => return Ok(()),
-                        // Ok(false): incremental declined (diff too large / a row
-                        // the diff named couldn't be read) — fall through to a
-                        // full rebuild, which is always correct.
-                        Ok(false) => {}
-                        // TASK-1515 (SPIKE-90 advisor rule): a LOCK error means
-                        // another writer holds the cache and the retry ladder
-                        // is already exhausted. The single refresh transaction
-                        // rolled back, so the cache is intact at its previous
-                        // HEAD. Escalating to a full rebuild would only wait on
-                        // the same lock for longer while doing far more work,
-                        // so surface the (owner-enriched) lock error instead.
-                        // A READ path instead serves that rolled-back
-                        // snapshot, labelled stale.
-                        // trace:TASK-1515 | ai:claude
-                        Err(e) if is_cache_lock_error(&e) => {
-                            if serve_stale_on_lock {
-                                self.note_stale_read();
-                                return Ok(());
-                            }
-                            return Err(e);
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "warning: incremental cache update failed ({e}); full rebuild"
-                            );
-                        }
-                    }
-                }
-            }
         }
         self.full_rebuild(&head)
     }
@@ -389,37 +434,62 @@ impl CachedGitBackend {
         }
         // Stale, but if another live process is already rebuilding, don't pile
         // onto the write lock — read the prior consistent snapshot.
-        if super::cache::foreign_writer_holds_lock_at(self.cache.lock_info_path()) {
+        //
+        // TASK-1515: not while a schema migration is pending. The committed
+        // snapshot is then in the OLD schema, so it is not a snapshot this
+        // binary can serve; take the strict path (which full-rebuilds).
+        // trace:TASK-1515 | ai:claude
+        if !self.cache.migration_pending()
+            && super::cache::foreign_writer_holds_lock_at(self.cache.lock_info_path())
+        {
+            self.note_stale_read();
             return Ok(());
         }
         self.ensure_cache_fresh_inner(true)
     }
 
-    /// The stale-read label: one stderr line per process, never on stdout,
-    /// exit code unchanged. The cache itself stays stamped at its previous
+    /// Re-arm the stale-read note so the next stale read prints it again.
+    /// A one-shot CLI command prints the note at most once per process; a
+    /// long-lived process (the MCP server) calls this at the start of each
+    /// request, so every request that is answered from a stale snapshot is
+    /// labelled, not only the first one.
+    // trace:TASK-1515 | ai:claude
+    pub fn rearm_stale_read_note() {
+        STALE_READ_NOTED.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// The stale-read label: one line on STDERR (never stdout, so `--json`,
+    /// TOON and MCP JSON-RPC payloads are untouched), exit code unchanged,
+    /// at most once until [`Self::rearm_stale_read_note`] (once per process
+    /// for a CLI command). The cache itself stays stamped at its previous
     /// HEAD, so `cache_snapshot_is_stale` keeps reporting it as stale.
     // trace:TASK-1515 | ai:claude
     fn note_stale_read(&self) {
-        use std::sync::atomic::{AtomicBool, Ordering};
-        static NOTED: AtomicBool = AtomicBool::new(false);
-        if NOTED.swap(true, Ordering::SeqCst) {
+        if STALE_READ_NOTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
             return;
         }
-        let when = self
+        eprintln!("{}", self.stale_read_note());
+    }
+
+    /// The text of the stale-read note. It names only what is known: the
+    /// store commit the served snapshot was built from, and that the cache
+    /// is busy (another process holds its write lock).
+    // trace:TASK-1515 | ai:claude
+    fn stale_read_note(&self) -> String {
+        let sha = self
             .cache
-            .built_at()
+            .source_head_sha()
             .ok()
             .flatten()
-            .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
-            .map(|t| {
-                t.with_timezone(&chrono::Local)
-                    .format("%Y-%m-%d %H:%M:%S")
-                    .to_string()
-            })
-            .unwrap_or_else(|| "an earlier refresh".to_string());
-        eprintln!(
-            "note: showing cached results from {when} (store has moved on; refresh in progress). Re-run in a few seconds for current data."
-        );
+            .filter(|s| !s.is_empty());
+        match sha {
+            Some(sha) => format!(
+                "note: showing cached data from store commit {}; the cache is busy. Re-run shortly for current data.",
+                &sha[..sha.len().min(10)]
+            ),
+            None => "note: showing cached data; the cache is busy. Re-run shortly for current data."
+                .to_string(),
+        }
     }
 
     /// Full authoritative rebuild: load the whole store and re-project every
@@ -560,9 +630,12 @@ impl CachedGitBackend {
         }
         // TASK-1515: the reads above came from the live worktree. If HEAD
         // moved while they ran, some rows may be from a later HEAD than `to`
-        // and stamping `to` would mislabel them. Decline; the full rebuild
-        // reads and stamps one consistent HEAD.
+        // and stamping `to` would mislabel them. Decline; the caller retries
+        // the incremental from the new HEAD (bounded), then full-rebuilds at
+        // a freshly captured HEAD.
         // trace:TASK-1515 | ai:claude
+        #[cfg(test)]
+        tests::task_1515_after_incremental_reads();
         if self.current_head_sha() != to {
             return Ok(false);
         }
@@ -2726,6 +2799,277 @@ mod tests {
             task_1515_read(&raw),
             (Some(from), vec!["gen0".into(), "gen0".into()]),
             "a declined refresh leaves the cache untouched"
+        );
+    }
+
+    thread_local! {
+        /// Test hook run inside `try_incremental_update` after the pre-lock
+        /// object reads and before the HEAD re-check (thread-local, so
+        /// parallel tests never see each other's hook).
+        // trace:TASK-1515 | ai:claude
+        static TASK_1515_AFTER_READS: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
+            std::cell::RefCell::new(None);
+    }
+
+    /// Called from `try_incremental_update` under `cfg(test)`.
+    // trace:TASK-1515 | ai:claude
+    pub(super) fn task_1515_after_incremental_reads() {
+        let hook = TASK_1515_AFTER_READS.with(|h| h.borrow_mut().take());
+        if let Some(mut f) = hook {
+            f();
+            TASK_1515_AFTER_READS.with(|h| {
+                let mut slot = h.borrow_mut();
+                if slot.is_none() {
+                    *slot = Some(f);
+                }
+            });
+        }
+    }
+
+    /// Install a hook that makes an external store commit (retitling
+    /// FR-1-001 and FR-1-002 to `hookN`) on each of the first `moves`
+    /// incremental attempts. Returns the attempt counter.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_move_head_during_reads(
+        store_root: &Path,
+        moves: usize,
+    ) -> std::rc::Rc<std::cell::Cell<usize>> {
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0usize));
+        let counter = calls.clone();
+        let root = store_root.to_path_buf();
+        TASK_1515_AFTER_READS.with(|h| {
+            *h.borrow_mut() = Some(Box::new(move || {
+                let n = counter.get() + 1;
+                counter.set(n);
+                if n <= moves {
+                    task_1515_external_retitle(&root, &format!("hook{n}"));
+                }
+            }));
+        });
+        calls
+    }
+
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_clear_hook() {
+        TASK_1515_AFTER_READS.with(|h| *h.borrow_mut() = None);
+    }
+
+    // TASK-1515 round-2 finding 2: when HEAD moves during the incremental
+    // reads, the refresh retries the incremental from the new HEAD instead of
+    // full-rebuilding, and the stamp is the HEAD the rows came from.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_head_move_during_reads_retries_incremental_from_new_head() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let built_at = backend.cache().built_at().unwrap();
+        task_1515_external_retitle(&store_root, "gen1");
+        let calls = task_1515_move_head_during_reads(&store_root, 1);
+
+        let result = backend.ensure_cache_fresh();
+        task_1515_clear_hook();
+        result.unwrap();
+
+        assert_eq!(calls.get(), 2, "one declined attempt, one retry");
+        let head = crate::git_ops::head_sha(&store_root).unwrap();
+        let raw = rusqlite::Connection::open(&cache_path).unwrap();
+        assert_eq!(
+            task_1515_read(&raw),
+            (Some(head), vec!["hook1".into(), "hook1".into()]),
+            "the stamp is the HEAD the rows were read at"
+        );
+        assert_eq!(
+            backend.cache().built_at().unwrap(),
+            built_at,
+            "the retry stayed incremental"
+        );
+    }
+
+    // TASK-1515 round-2 finding 2: when HEAD keeps moving through every
+    // bounded incremental attempt, the full rebuild stamps a HEAD captured
+    // right before its load (the current one), not the HEAD captured before
+    // the attempts, which would label newer rows with an older SHA.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_head_moving_every_attempt_full_rebuilds_at_current_head() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let first = task_1515_external_retitle(&store_root, "gen1");
+        let calls = task_1515_move_head_during_reads(&store_root, usize::MAX);
+
+        let result = backend.ensure_cache_fresh();
+        task_1515_clear_hook();
+        result.unwrap();
+
+        let n = calls.get();
+        assert!(n >= 2, "the incremental was retried: {n}");
+        let head = crate::git_ops::head_sha(&store_root).unwrap();
+        assert_ne!(head, first);
+        let raw = rusqlite::Connection::open(&cache_path).unwrap();
+        let last = format!("hook{n}");
+        assert_eq!(
+            task_1515_read(&raw),
+            (Some(head), vec![last.clone(), last]),
+            "the rebuild stamps the HEAD its rows were loaded at"
+        );
+    }
+
+    /// External writer: add `spec_id` claiming `agreed_id` in one store
+    /// commit, behind the cache's back.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_external_agreed_id_claim(store_root: &Path, spec_id: &str, agreed_id: &str) {
+        let mut claimant = sample_req(spec_id, "claimant");
+        claimant.agreed_id = Some(agreed_id.into());
+        let before = crate::git_ops::head_sha(store_root).unwrap();
+        GitBackend::new(store_root)
+            .unwrap()
+            .add_requirement(claimant)
+            .unwrap();
+        assert_ne!(before, crate::git_ops::head_sha(store_root).unwrap());
+    }
+
+    fn task_1515_assert_ambiguous(result: Result<Option<Requirement>>) {
+        let err = result.expect_err("an ambiguous id must refuse the write");
+        assert!(
+            err.downcast_ref::<crate::id_collisions::AmbiguousIdError>()
+                .is_some(),
+            "{err:#}"
+        );
+    }
+
+    // TASK-1515 round-2 finding 1: write-path id resolution must never be
+    // answered from a stale snapshot. A lock error makes the read path serve
+    // the stale snapshot (which misses an agreed-id collision an external
+    // commit introduced); the resolver must fall back to the full scan.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_unambiguous_resolution_ignores_stale_snapshot_on_lock_error() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        task_1515_external_agreed_id_claim(&store_root, "FR-2-050", "FR-1-003");
+
+        let holder = rusqlite::Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let prev = super::super::cache::set_fast_fail_cache(true);
+        let stale_candidates = backend.id_candidates("FR-1-003");
+        let resolved = backend.get_requirement_unambiguous("FR-1-003");
+        super::super::cache::set_fast_fail_cache(prev);
+        holder.execute_batch("ROLLBACK").unwrap();
+
+        assert_eq!(
+            stale_candidates.unwrap().len(),
+            1,
+            "fixture: the stale snapshot does not see the collision"
+        );
+        task_1515_assert_ambiguous(resolved);
+    }
+
+    // TASK-1515 round-2 finding 1, the other stale serve: a live foreign
+    // writer's lock sidecar makes the read path skip the refresh. The write
+    // resolver must still see the collision.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_unambiguous_resolution_ignores_stale_snapshot_behind_foreign_writer() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        task_1515_external_agreed_id_claim(&store_root, "FR-2-050", "FR-1-003");
+        task_1515_write_foreign_sidecar(&cache_path);
+
+        assert_eq!(
+            backend.id_candidates("FR-1-003").unwrap().len(),
+            1,
+            "fixture: the read path served the stale snapshot"
+        );
+        task_1515_assert_ambiguous(backend.get_requirement_unambiguous("FR-1-003"));
+        // A plain, unambiguous id still resolves through the full scan.
+        let r = backend.get_requirement_unambiguous("FR-1-001").unwrap();
+        assert_eq!(r.unwrap().spec_id.as_deref(), Some("FR-1-001"));
+    }
+
+    /// A live (pid 1) foreign writer's lock sidecar beside `cache_path`,
+    /// without holding the SQLite lock.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_write_foreign_sidecar(cache_path: &Path) {
+        let info = super::super::cache::CacheLockInfo {
+            pid: 1,
+            command: "foreign-writer".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            user: "test".to_string(),
+            ..Default::default()
+        };
+        std::fs::write(
+            cache_path.with_file_name("cache.db.lock-info"),
+            serde_json::to_string(&info).unwrap(),
+        )
+        .unwrap();
+    }
+
+    // TASK-1515 round-2 finding 3: the foreign-writer shortcut must not serve
+    // an OLD-schema snapshot while a migration is pending; the read takes
+    // the strict path and rebuilds.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_foreign_writer_shortcut_skipped_while_migration_pending() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        drop(backend);
+        task_1515_external_retitle(&store_root, "gen1");
+        task_1515_mark_schema_older(&cache_path);
+        task_1515_write_foreign_sidecar(&cache_path);
+
+        let reader = CachedGitBackend::with_inner_cache_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        assert!(reader.cache().migration_pending());
+        let rows = reader.list_summaries(&ListFilter::default()).unwrap();
+        assert!(!reader.cache().migration_pending(), "the read rebuilt");
+        let title = rows
+            .iter()
+            .find(|r| r.spec_id.as_deref() == Some("FR-1-001"))
+            .map(|r| r.title.clone());
+        assert_eq!(title.as_deref(), Some("gen1"));
+        assert!(!reader.cache_snapshot_is_stale().unwrap());
+    }
+
+    /// Rewrite the on-disk schema version one lower, so the next open sees a
+    /// pending migration.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_mark_schema_older(cache_path: &Path) {
+        let raw = rusqlite::Connection::open(cache_path).unwrap();
+        let current: String = raw
+            .query_row(
+                "SELECT value FROM cache_meta WHERE key = 'schema_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let older = (current.parse::<i64>().unwrap() - 1).to_string();
+        raw.execute(
+            "UPDATE cache_meta SET value = ?1 WHERE key = 'schema_version'",
+            rusqlite::params![older],
+        )
+        .unwrap();
+    }
+
+    // TASK-1515 round-2 finding 4: the stale note names the snapshot's store
+    // commit and says only what is known (the cache is busy), not that a
+    // refresh is running.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_stale_note_names_the_snapshot_commit() {
+        let dir = tempdir().unwrap();
+        let (backend, _store_root, _cache_path) = task_1515_backend(dir.path());
+        let sha = backend.cache().source_head_sha().unwrap().unwrap();
+        let note = backend.stale_read_note();
+        assert!(note.starts_with("note: "), "{note}");
+        assert!(note.contains(&sha[..10]), "{note}");
+        assert!(note.contains("the cache is busy"), "{note}");
+        assert!(!note.contains("in progress"), "{note}");
+        assert!(
+            !note.contains("TASK-") && !note.contains("SPIKE-"),
+            "{note}"
         );
     }
 }
