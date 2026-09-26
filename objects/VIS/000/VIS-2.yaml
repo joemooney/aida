@@ -1,0 +1,38 @@
+id: 01a0defd-af81-7282-a696-59f70cf334c2
+spec_id: VIS-2
+agreed_id: VIS-2
+title: AIDA captures the intent behind your system so agents work from it today and the project is far better placed to be rebuilt than from commits and a README alone
+description: |
+  AIDA captures the intent behind your system (requirements, decisions, rejected alternatives, and the links from code back to them) so your coding agents work from it today, and your project is far better placed to be rebuilt tomorrow than it would be from commit messages and a README alone.
+
+  SOURCE: SPIKE-86 report section 5 (docs/positioning/2026-09-24-spike-86-positioning-from-engineering.md), adopted by OPERATOR DECISION on SPIKE-86 (Joe, 2026-09-26: "adopt the section 7 texts as proposed").
+
+  AUDIENCE: newcomers and users; the README and OVERVIEW headline. The 60-second proof is `aida why <file:line>`.
+
+  SCOPE OF THE CLAIM: comparative, not absolute. AIDA does not promise whole-system regeneration; it promises that a project that used AIDA is materially better positioned to be rebuilt than the same project without it. The claim is validated on a project that used AIDA from its first commit (aida-monitor), not on AIDA's own corpus.
+
+  TWO VALUE CLAIMS: survival (the corpus outlives the code) and collaboration (the corpus improves agent work in flight, especially through what code cannot show: rejected alternatives, contradictions, deferred intent).
+
+  ARCHITECTURE DESCRIPTION (for contributors, not the pitch): a git-canonical intent store (the data plane); a control plane that keeps that store true while unreliable agent workers change the code (the corpus-integrity layer, TERM-5); an execution layer of isolated worktrees and sessions; peripheral surfaces (CLI, MCP, TUI, web).
+
+  SUPERSEDES: VIS-1 ("your project's missing index"), and ADR-4 / EPIC-39 (governance subsumed into the control plane; "concede the substrate race, interop with Beads" refuted by the build record).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:32:42.625163508Z
+modified_at: 2026-09-26T18:32:42.625163508Z
+req_type: Vision
+tags:
+- from-spike:SPIKE-86
+- north-star
+- positioning
+- vision
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
