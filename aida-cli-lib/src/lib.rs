@@ -65047,6 +65047,7 @@ fn proc_is_stopped(_pid: u32) -> bool {
 /// flag-only / orphaned case. Surfaced by `aida ps` alongside the live table so
 /// a crashed or never-started session can't hide behind a status flag.
 // trace:STORY-696 | ai:claude
+#[derive(Debug)]
 struct PsOrphan {
     spec: String,
     title: String,
@@ -66492,7 +66493,7 @@ fn build_running_work(
         // the few non-live spec leases, never for every row.
         // trace:BUG-1656 | ai:claude
         let dirty_movement_fresh = lease
-            .filter(|l| !matches!(lease_state, Some(LeaseState::Live)))
+            .filter(|_| !matches!(lease_state, Some(LeaseState::Live)))
             .filter(|l| !l.review_verb && !l.claim_verb)
             .map(|l| dispatch_probe(&l.worktree_path))
             .is_some_and(|p| {
