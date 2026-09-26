@@ -406,6 +406,7 @@ impl RequirementsService for AidaService {
         };
 
         let mut changes = Vec::new();
+        let mut status_from: Option<aida_core::RequirementStatus> = None;
 
         // Apply updates
         if let Some(title) = req.title {
@@ -434,12 +435,9 @@ impl RequirementsService for AidaService {
             if status_enum != proto::RequirementStatus::Unspecified {
                 let new_status = proto_to_status(status_enum);
                 if requirement.status != new_status {
-                    changes.push(Requirement::field_change(
-                        "status",
-                        requirement.status.to_string(),
-                        new_status.to_string(),
-                    ));
-                    requirement.status = new_status;
+                    // BUG-1637: recorded below through the one shared
+                    // status-history helper. trace:BUG-1637 | ai:claude
+                    status_from = Some(std::mem::replace(&mut requirement.status, new_status));
                 }
             }
         }
@@ -546,7 +544,11 @@ impl RequirementsService for AidaService {
 
         // Record changes in history
         if !changes.is_empty() {
-            requirement.record_change(author, changes);
+            requirement.record_change(author.clone(), changes);
+        }
+        // trace:BUG-1637 | ai:claude
+        if let Some(from) = status_from {
+            aida_core::conflict::record_status_transition(requirement, &author, &from);
         }
 
         requirement.modified_at = chrono::Utc::now();
@@ -1340,6 +1342,7 @@ impl RequirementsService for AidaServiceMultiProject {
         };
 
         let mut changes = Vec::new();
+        let mut status_from: Option<aida_core::RequirementStatus> = None;
 
         if let Some(title) = req.title {
             if requirement.title != title {
@@ -1367,12 +1370,9 @@ impl RequirementsService for AidaServiceMultiProject {
             if status_enum != proto::RequirementStatus::Unspecified {
                 let new_status = proto_to_status(status_enum);
                 if requirement.status != new_status {
-                    changes.push(Requirement::field_change(
-                        "status",
-                        requirement.status.to_string(),
-                        new_status.to_string(),
-                    ));
-                    requirement.status = new_status;
+                    // BUG-1637: recorded below through the one shared
+                    // status-history helper. trace:BUG-1637 | ai:claude
+                    status_from = Some(std::mem::replace(&mut requirement.status, new_status));
                 }
             }
         }
@@ -1476,7 +1476,11 @@ impl RequirementsService for AidaServiceMultiProject {
         }
 
         if !changes.is_empty() {
-            requirement.record_change(author, changes);
+            requirement.record_change(author.clone(), changes);
+        }
+        // trace:BUG-1637 | ai:claude
+        if let Some(from) = status_from {
+            aida_core::conflict::record_status_transition(requirement, &author, &from);
         }
 
         requirement.modified_at = chrono::Utc::now();
