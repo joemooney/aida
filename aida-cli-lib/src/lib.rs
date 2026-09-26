@@ -14342,8 +14342,11 @@ fn try_emit_nonblocking_findings_on_completion(
     // `findings_needing_a_successor` decide which of THIS verdict's findings
     // are genuinely new. A re-run over an already-completed spec (the
     // auto-bump scan can re-observe old history) then files nothing.
+    // Strict: a snapshot served while another process writes the cache can
+    // miss a successor filed since, and this set is what prevents a duplicate.
+    // trace:BUG-1670 | ai:claude
     let already_filed: std::collections::HashSet<String> = backend
-        .list_summaries(&aida_core::ListFilter {
+        .list_summaries_strict(&aida_core::ListFilter {
             tags: vec![carried_from_tag.clone()],
             archive: aida_core::ArchiveFilter::Both,
             ..Default::default()
@@ -14927,7 +14930,8 @@ fn resolve_history_id_filter<B: aida_core::db::DatabaseBackend>(
     // `get_requirement_unambiguous` already turns a multi-match into an
     // `anyhow::Error` (AmbiguousIdError's own Display), so `?` here IS the
     // "ambiguous id gets a clear error" behavior. trace:TASK-1480 | ai:claude
-    match backend.get_requirement_unambiguous(trimmed)? {
+    // Read-only: tolerant resolver. trace:BUG-1670 | ai:claude
+    match backend.get_requirement_unambiguous_for_read(trimmed)? {
         Some(req) => Ok(req.spec_id.clone().unwrap_or_else(|| trimmed.to_string())),
         None => Ok(trimmed.to_string()),
     }
@@ -17780,10 +17784,13 @@ fn suggested_focus_for(target: &aida_core::Requirement) -> Option<String> {
 /// focus's transitive subtree, apply the configured `[focus] out_of_scope`
 /// policy. `force` ALWAYS overrides. Membership reuses the cache's
 /// `descendant_ids` closure (TASK-955) — the same subtree the focus read-scope
-/// uses — rather than re-walking the hierarchy. Best-effort: an unresolvable
-/// focus spec or a cache error skips the guard rather than blocking real work
-/// (a `Block` policy still returns `Err` on a genuine out-of-scope start).
+/// uses — rather than re-walking the hierarchy. An unresolvable focus spec
+/// skips the guard rather than blocking real work. The subtree is read with a
+/// strict cache refresh, and a cache or refresh error fails the start (fail
+/// closed) instead of judging scope on a stale graph; a `Block` policy also
+/// returns `Err` on a genuine out-of-scope start.
 // trace:STORY-717 | ai:claude
+// trace:BUG-1670 | ai:claude
 fn focus_scope_guard(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
@@ -17805,7 +17812,11 @@ fn focus_scope_guard(
         return Ok(());
     };
     // REUSE the TASK-955 subtree closure (includes the root) for membership.
-    let subtree = backend.descendant_ids(&focus_req.id)?;
+    // Strict: this gates a write, so a child added or re-parented by another
+    // writer since the last cache refresh must be classified on the current
+    // graph, not on a snapshot served while the cache is being written.
+    // trace:BUG-1670 | ai:claude
+    let subtree = backend.descendant_ids_strict(&focus_req.id)?;
     let in_scope = focus::is_in_focus_scope(&target.id, &subtree);
     match focus::decide_focus_action(policy, in_scope, force) {
         focus::FocusGuardAction::Proceed => Ok(()),
@@ -92937,69 +92948,94 @@ fn handle_worker_command(cmd: &WorkerCommand) -> Result<()> {
             let project_root = find_main_worktree_root()
                 .or_else(|_| std::env::current_dir())
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
-            let path = worker::worker_cmd_path(&project_root);
-            let body = std::fs::read_to_string(&path).unwrap_or_default();
-            if worker::parse_directives_from_str(&body).is_empty() {
-                println!("No pending directives.");
-                return Ok(());
-            }
-            let store_path = detect_distributed_store_from(&project_root).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "no requirement store found — cannot resolve directive target specs"
-                )
-            })?;
-            let backend = advance_backend(&store_path)?;
-            // Both view axes wide open: an archived (or deferred) target must
-            // still resolve so its directive is classified correctly.
-            let summaries = backend.list_summaries(&aida_core::ListFilter {
-                archive: aida_core::ArchiveFilter::Both,
-                defer: aida_core::DeferFilter::Both,
-                ..Default::default()
-            })?;
-            // Dead = the spec still exists AND is archived or terminal
-            // (Completed / Rejected) — same predicate as the queue's GC. A
-            // directive targeting an unknown spec is LEFT alone (fail-safe:
-            // no store row means no evidence the work shipped).
-            let mut dead_ids = std::collections::HashSet::new();
-            for s in &summaries {
-                if s.archived || is_terminal_status_str(&s.status) {
-                    for id in [s.spec_id.as_deref(), s.agreed_id.as_deref()]
-                        .into_iter()
-                        .flatten()
-                    {
-                        dead_ids.insert(id.to_ascii_uppercase());
-                    }
-                }
-            }
-            let is_dead = |spec: &str| dead_ids.contains(&spec.to_ascii_uppercase());
-            let outcome = worker::gc_directives_body(&body, &is_dead);
-            if outcome.pruned.is_empty() {
-                println!("No stale directives to prune.");
-                return Ok(());
-            }
-            println!(
-                "{} stale directive{} (target spec archived / Completed / Rejected):",
-                outcome.pruned.len(),
-                if outcome.pruned.len() == 1 { "" } else { "s" }
-            );
-            for d in &outcome.pruned {
-                println!("  - {}", d.raw);
-            }
-            if *dry_run {
-                println!("Dry run — file unchanged.");
-                return Ok(());
-            }
-            std::fs::write(&path, &outcome.kept_body)?;
-            let remaining = worker::parse_directives_from_str(&outcome.kept_body).len();
-            println!(
-                "Pruned {} directive{}; {} remain{}.",
-                outcome.pruned.len(),
-                if outcome.pruned.len() == 1 { "" } else { "s" },
-                remaining,
-                if remaining == 1 { "s" } else { "" }
-            );
-            Ok(())
+            run_worker_gc(&project_root, *dry_run)
         }
+    }
+}
+
+/// `aida worker gc`: prune `drain <SPEC-ID>` directives whose target spec is
+/// archived or terminal (Completed / Rejected) from `.aida/worker.cmd`.
+// trace:BUG-723 trace:BUG-1670 | ai:claude
+fn run_worker_gc(project_root: &std::path::Path, dry_run: bool) -> Result<()> {
+    let path = worker::worker_cmd_path(project_root);
+    let body = std::fs::read_to_string(&path).unwrap_or_default();
+    if worker::parse_directives_from_str(&body).is_empty() {
+        println!("No pending directives.");
+        return Ok(());
+    }
+    let store_path = detect_distributed_store_from(project_root).ok_or_else(|| {
+        anyhow::anyhow!("no requirement store found — cannot resolve directive target specs")
+    })?;
+    let backend = advance_backend(&store_path)?;
+    // Both view axes wide open: an archived (or deferred) target must
+    // still resolve so its directive is classified correctly. Strict: the
+    // tolerant read serves an old snapshot while another process writes the
+    // cache, and this pass deletes directives. trace:BUG-1670 | ai:claude
+    let summaries = backend.list_summaries_strict(&aida_core::ListFilter {
+        archive: aida_core::ArchiveFilter::Both,
+        defer: aida_core::DeferFilter::Both,
+        ..Default::default()
+    })?;
+    // Dead = the spec still exists AND is archived or terminal
+    // (Completed / Rejected) — same predicate as the queue's GC. A
+    // directive targeting an unknown spec is LEFT alone (fail-safe:
+    // no store row means no evidence the work shipped).
+    let mut dead_ids = std::collections::HashSet::new();
+    for s in &summaries {
+        if s.archived || is_terminal_status_str(&s.status) {
+            for id in [s.spec_id.as_deref(), s.agreed_id.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                dead_ids.insert(id.to_ascii_uppercase());
+            }
+        }
+    }
+    // Every prune candidate is re-read from its stored object before its
+    // directive is dropped; a read error or a missing object keeps it.
+    // trace:BUG-1670 | ai:claude
+    let is_dead = |spec: &str| {
+        dead_ids.contains(&spec.to_ascii_uppercase()) && worker_gc_target_still_dead(&backend, spec)
+    };
+    let outcome = worker::gc_directives_body(&body, &is_dead);
+    if outcome.pruned.is_empty() {
+        println!("No stale directives to prune.");
+        return Ok(());
+    }
+    println!(
+        "{} stale directive{} (target spec archived / Completed / Rejected):",
+        outcome.pruned.len(),
+        if outcome.pruned.len() == 1 { "" } else { "s" }
+    );
+    for d in &outcome.pruned {
+        println!("  - {}", d.raw);
+    }
+    if dry_run {
+        println!("Dry run — file unchanged.");
+        return Ok(());
+    }
+    std::fs::write(&path, &outcome.kept_body)?;
+    let remaining = worker::parse_directives_from_str(&outcome.kept_body).len();
+    println!(
+        "Pruned {} directive{}; {} remain{}.",
+        outcome.pruned.len(),
+        if outcome.pruned.len() == 1 { "" } else { "s" },
+        remaining,
+        if remaining == 1 { "s" } else { "" }
+    );
+    Ok(())
+}
+
+/// Whether the stored object for a worker directive's target is still
+/// archived or terminal. `get_requirement_by_spec_id` reads the spec's YAML,
+/// not the cache row, so a spec reopened since any cache snapshot reads as
+/// live. An unreadable or missing object is not proof the work shipped.
+// trace:BUG-1670 | ai:claude
+fn worker_gc_target_still_dead(backend: &aida_core::CachedGitBackend, spec: &str) -> bool {
+    use aida_core::db::DatabaseBackend;
+    match backend.get_requirement_by_spec_id(spec) {
+        Ok(Some(req)) => req.archived || is_terminal_status_str(&format!("{:?}", req.status)),
+        _ => false,
     }
 }
 
@@ -110077,3 +110113,9 @@ mod bug_1627_session_env_hardening_tests;
 #[cfg(test)]
 #[path = "tests/bug_1650_store_resolver_tests.rs"]
 mod bug_1650_store_resolver_tests;
+
+// Mutating callers re-validate against the current store, not a stale cache.
+// trace:BUG-1670 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1670_stale_cache_callers_tests.rs"]
+mod bug_1670_stale_cache_callers_tests;
