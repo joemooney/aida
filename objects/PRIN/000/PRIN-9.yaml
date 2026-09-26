@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:33:06.548818823Z
-modified_at: 2026-09-26T18:36:29.689970637Z
+modified_at: 2026-09-26T19:09:21.212065522Z
 req_type: Principle
 tags:
 - from-spike:SPIKE-86
@@ -31,6 +31,13 @@ relationships:
   target_id: 01a0defd-af81-7282-a696-59f70cf334c2
   created_at: 2026-09-26T18:36:29.689963733Z
   created_by: joe
+comments:
+- id: 01a0df1f-3bbc-7060-84f9-f92c8c0f91a9
+  author: joe
+  content: 'OPERATOR DECISION (Joe, 2026-09-26 12:08, accepting the orchestrator''s recommendation): stays advisory.'
+  created_at: 2026-09-26T19:09:21.212065522Z
+  modified_at: 2026-09-26T19:09:21.212065522Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
   branch: main
