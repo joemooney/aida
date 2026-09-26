@@ -13,7 +13,7 @@ mkdir -p "$TMP/scripts" "$TMP/docs" "$TMP/aida-core/templates/skills"
 cp "$ROOT/scripts/check-removed-flags.sh" "$TMP/scripts/"
 
 run_check() {
-  (cd "$TMP" && bash scripts/check-removed-flags.sh) >"$TMP/out" 2>&1
+  (cd "$TMP" && bash scripts/check-removed-flags.sh </dev/null) >"$TMP/out" 2>&1
 }
 
 # (a) Removed flags quoted in root CHANGELOG history lines pass.
@@ -32,6 +32,13 @@ fi
 printf 'Run aida graph --tree EPIC-1\n' >"$TMP/docs/guide.md"
 if run_check; then
   echo "FAIL: removed flag in a live doc was not caught" >&2
+  exit 1
+fi
+grep -F "docs/guide.md" "$TMP/out" >/dev/null
+
+# (b2) Piped stdin must not replace the tree scan.
+if (cd "$TMP" && printf 'unrelated text\n' | bash scripts/check-removed-flags.sh) >"$TMP/out" 2>&1; then
+  echo "FAIL: piped stdin hid a removed flag in a live doc" >&2
   exit 1
 fi
 grep -F "docs/guide.md" "$TMP/out" >/dev/null

@@ -41,13 +41,15 @@ literal_patterns=(
 
 failed=0
 for pattern in "${literal_patterns[@]}"; do
-  if "${common_rg[@]}" --fixed-strings "$pattern"; then
+  # An explicit search path keeps rg from reading a piped stdin instead of
+  # the tree. trace:BUG-1665 | ai:claude
+  if "${common_rg[@]}" --fixed-strings -e "$pattern" -- .; then
     failed=1
   fi
 done
 
 graph_regex='(\baida|\$AIDA_BIN|"\$AIDA_BIN") graph( +("[^"]+"|<[^>]+>|\$[A-Za-z_][A-Za-z0-9_]*|[A-Za-z0-9_{}./:-]+))? +--(blocked-by|blocks|tree|impact)\b|\bgraph +--(blocked-by|blocks|tree|impact)\b'
-if "${common_rg[@]}" "$graph_regex"; then
+if "${common_rg[@]}" -e "$graph_regex" -- .; then
   failed=1
 fi
 
