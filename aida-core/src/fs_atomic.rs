@@ -27,14 +27,18 @@
 //! `concurrent_writers_never_tear_the_file` test on `windows-latest`.
 //!
 //! Use [`read_atomic`] for reads of paths that may be racing a
-//! [`write_atomic`]: it wraps `std::fs::read_to_string` in a bounded retry
-//! over those two transient errors and is a no-op on Linux / macOS where
-//! they don't occur. Production code paths the autonomous drain hits — the
-//! dispenser counter, agreed-counters, the node registry, object-store
-//! YAML, session manifests, the workspace manifest — all read through
-//! `read_atomic`. trace:TASK-346 | ai:claude
-//!
-//! trace:TASK-331 | ai:claude
+//! [`write_atomic`]: on Windows it wraps `std::fs::read_to_string` in a
+//! bounded retry over those two transient errors. On Linux / macOS they are
+//! never transient — `NotFound` means the file is really absent and
+//! `PermissionDenied` is a real permission problem — so the retry is
+//! compiled out there and every error returns immediately. Production code
+//! paths the autonomous drain hits — the dispenser counter,
+//! agreed-counters, the node registry, object-store YAML, session
+//! manifests, the workspace manifest — all read through `read_atomic`.
+
+// trace:TASK-346 | ai:claude
+// trace:TASK-331 | ai:claude
+// trace:BUG-1660 | ai:claude
 
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -76,8 +80,7 @@ static STAGING_SEQ: AtomicU64 = AtomicU64::new(0);
 ///
 /// Drop-in replacement for [`std::fs::write`] on concurrent-writer paths —
 /// same `(path, content)` shape, same `io::Result`.
-///
-/// trace:TASK-331 | ai:claude
+// trace:TASK-331 | ai:claude
 pub fn write_atomic(path: &Path, content: impl AsRef<[u8]>) -> std::io::Result<()> {
     let seq = STAGING_SEQ.fetch_add(1, Ordering::Relaxed);
     let tmp = path.with_extension(format!("tmp.{}.{}", std::process::id(), seq));
@@ -100,26 +103,54 @@ pub fn write_atomic(path: &Path, content: impl AsRef<[u8]>) -> std::io::Result<(
 /// output. The retry catches the two `CreateFile` failure modes Windows
 /// surfaces during the brief `MoveFileExW` / `ReplaceFileW` window
 /// (`PermissionDenied` = `ERROR_ACCESS_DENIED`, `NotFound` =
-/// `ERROR_FILE_NOT_FOUND`); every other error returns immediately. On
-/// Linux / macOS those errors don't occur on a contended-but-existing path,
-/// so this is a no-op there.
+/// `ERROR_FILE_NOT_FOUND`); every other error returns immediately.
 ///
-/// A genuinely missing file still surfaces as `NotFound` — the retry is
-/// bounded by a wall-clock deadline (about 200 ms, plus at most one sleep's
-/// overshoot) and a secondary attempt cap, so an exhausted retry returns
-/// the last error and callers' existing missing-file handling works
+/// On Linux / macOS `rename(2)` is atomic for the open too, so those errors
+/// are never transient there: `read_atomic` returns every error, including
+/// `NotFound` for a missing file, on the first attempt with no waiting.
+///
+/// On Windows a genuinely missing file still surfaces as `NotFound` — the
+/// retry is bounded by a wall-clock deadline (about 200 ms, plus at most one
+/// sleep's overshoot) and a secondary attempt cap, so an exhausted retry
+/// returns the last error and callers' existing missing-file handling works
 /// unchanged.
-///
-/// trace:TASK-346 | ai:claude
+// trace:TASK-346 | ai:claude
+// trace:BUG-1660 | ai:claude
 pub fn read_atomic(path: &Path) -> std::io::Result<String> {
-    read_atomic_with(path, Instant::now, std::thread::sleep)
+    read_atomic_with(
+        path,
+        RETRY_TRANSIENT_OPENS,
+        Instant::now,
+        std::thread::sleep,
+    )
 }
 
-/// [`read_atomic`] with an injectable clock and sleep, so the wall-clock
-/// budget can be tested deterministically against overshooting sleeps.
+/// Whether this platform can surface transient `NotFound` /
+/// `PermissionDenied` opens while a concurrent atomic rename is in flight.
+/// Only Windows file replacement has that window.
+// trace:BUG-1660 | ai:claude
+const RETRY_TRANSIENT_OPENS: bool = cfg!(windows);
+
+/// Retry policy for [`read_atomic`]: an error is worth retrying only when
+/// the platform has the transient-open window and the error is one of the
+/// two kinds that window produces.
+// trace:BUG-1660 | ai:claude
+fn is_transient_open_error(kind: std::io::ErrorKind, retry_transient_opens: bool) -> bool {
+    retry_transient_opens
+        && matches!(
+            kind,
+            std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
+        )
+}
+
+/// [`read_atomic`] with an injectable retry policy, clock and sleep, so the
+/// Windows wall-clock budget can be tested deterministically on every
+/// platform against overshooting sleeps.
 // trace:BUG-1654 | ai:claude
+// trace:BUG-1660 | ai:claude
 fn read_atomic_with(
     path: &Path,
+    retry_transient_opens: bool,
     mut now: impl FnMut() -> Instant,
     mut sleep: impl FnMut(Duration),
 ) -> std::io::Result<String> {
@@ -128,12 +159,7 @@ fn read_atomic_with(
     loop {
         match std::fs::read_to_string(path) {
             Ok(s) => return Ok(s),
-            Err(e)
-                if matches!(
-                    e.kind(),
-                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
-                ) =>
-            {
+            Err(e) if is_transient_open_error(e.kind(), retry_transient_opens) => {
                 attempts += 1;
                 let remaining = deadline.saturating_duration_since(now());
                 if remaining.is_zero() || attempts >= READ_ATOMIC_MAX_ATTEMPTS {
@@ -149,8 +175,8 @@ fn read_atomic_with(
 #[cfg(test)]
 mod tests {
     use super::{
-        read_atomic, read_atomic_with, write_atomic, READ_ATOMIC_BACKOFF, READ_ATOMIC_BUDGET,
-        READ_ATOMIC_MAX_ATTEMPTS,
+        is_transient_open_error, read_atomic, read_atomic_with, write_atomic, READ_ATOMIC_BACKOFF,
+        READ_ATOMIC_BUDGET, READ_ATOMIC_MAX_ATTEMPTS, RETRY_TRANSIENT_OPENS,
     };
     use std::cell::Cell;
     use std::collections::HashSet;
@@ -198,11 +224,10 @@ mod tests {
         assert_eq!(read_atomic(&path).unwrap(), "key = \"value\"");
     }
 
-    // A genuinely missing file still surfaces NotFound after the retry
-    // budget exhausts — the helper bounds its waiting, then returns the
-    // last error so callers' existing missing-file handling works.
-    // ~200 ms wall-clock is the cap; the test gives generous slack. The
-    // deterministic overshoot case is `bug_1654_*` below.
+    // A genuinely missing file surfaces NotFound on every platform. On
+    // Windows that happens after the ~200 ms retry budget exhausts; the
+    // deterministic budget cases are `bug_1654_*` below. The generous 2 s
+    // bound keeps this portable.
     #[test]
     fn read_atomic_returns_notfound_when_missing() {
         let dir = tempfile::tempdir().unwrap();
@@ -221,6 +246,68 @@ mod tests {
         );
     }
 
+    // BUG-1660: on Linux / macOS a missing file is never transient, so
+    // read_atomic returns NotFound on the first attempt without waiting out
+    // the retry budget. The real-clock bound is 50 ms — a quarter of the
+    // 200 ms budget the old retry spent — leaving slack for a loaded runner;
+    // the zero-sleep test below is the deterministic proof.
+    // trace:BUG-1660 | ai:claude
+    #[cfg(not(windows))]
+    #[test]
+    fn bug_1660_missing_file_returns_immediately_on_unix() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("does-not-exist");
+        let start = std::time::Instant::now();
+        let err = read_atomic(&path).expect_err("missing file must error");
+        let elapsed = start.elapsed();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+        assert!(
+            elapsed < std::time::Duration::from_millis(50),
+            "missing-file read should not wait out the retry budget, took {elapsed:?}"
+        );
+    }
+
+    // BUG-1660: the platform policy drives read_atomic. Off Windows no error
+    // kind is retried, so the production path never sleeps; on Windows the
+    // two transient-open kinds are retried and nothing else is.
+    // trace:BUG-1660 | ai:claude
+    #[test]
+    fn bug_1660_retry_policy_per_platform() {
+        use std::io::ErrorKind;
+        assert_eq!(RETRY_TRANSIENT_OPENS, cfg!(windows));
+        for kind in [ErrorKind::NotFound, ErrorKind::PermissionDenied] {
+            assert!(is_transient_open_error(kind, true), "{kind:?}");
+            assert!(!is_transient_open_error(kind, false), "{kind:?}");
+            assert_eq!(
+                is_transient_open_error(kind, RETRY_TRANSIENT_OPENS),
+                cfg!(windows)
+            );
+        }
+        for kind in [
+            ErrorKind::InvalidData,
+            ErrorKind::Other,
+            ErrorKind::IsADirectory,
+        ] {
+            assert!(!is_transient_open_error(kind, true), "{kind:?}");
+            assert!(!is_transient_open_error(kind, false), "{kind:?}");
+        }
+    }
+
+    // BUG-1660: with the retry disabled (the Unix policy) a missing file
+    // errors on the first attempt — the injected sleep is never called and
+    // the clock is only read for the deadline.
+    // trace:BUG-1660 | ai:claude
+    #[test]
+    fn bug_1660_no_retry_policy_never_sleeps() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("does-not-exist");
+        let err = read_atomic_with(&path, false, std::time::Instant::now, |d| {
+            panic!("no-retry policy must not sleep, asked for {d:?}")
+        })
+        .expect_err("missing file must error");
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+    }
+
     // BUG-1654: the budget is wall-clock, not an attempt count. A fake clock
     // whose every "1 ms" sleep actually advances 50 ms (a badly loaded
     // runner) must stop at the deadline — a handful of attempts — instead of
@@ -237,6 +324,7 @@ mod tests {
         let sleeps = Cell::new(0u32);
         let err = read_atomic_with(
             &path,
+            true,
             || start + virtual_elapsed.get(),
             |requested| {
                 assert!(
@@ -274,6 +362,7 @@ mod tests {
         let sleeps = Cell::new(0u32);
         let err = read_atomic_with(
             &path,
+            true,
             || start + elapsed.get(),
             |d| {
                 sleeps.set(sleeps.get() + 1);
@@ -289,6 +378,7 @@ mod tests {
         let frozen_sleeps = Cell::new(0u32);
         let err = read_atomic_with(
             &path,
+            true,
             || start,
             |_| frozen_sleeps.set(frozen_sleeps.get() + 1),
         )
@@ -308,6 +398,7 @@ mod tests {
         let elapsed = Cell::new(std::time::Duration::ZERO);
         let got = read_atomic_with(
             &path,
+            true,
             || start + elapsed.get(),
             |d| {
                 elapsed.set(elapsed.get() + d);

@@ -183,3 +183,12 @@ __pycache__/
 # together. Untracked-and-unignored is the one state that is neither.
 # trace:BUG-1511 | ai:claude
 /.codex/hooks/
+
+# The portable skill pack Codex and Antigravity read. In THIS repo it holds
+# generated regular-file copies of the skill masters under
+# `aida-core/templates/` (Codex skips a symlinked SKILL.md, so the `.claude/`
+# symlink layout cannot be reused), plus any third-party skills the operator
+# installs locally. Regenerated, never tracked here. Downstream projects track
+# their `.agents/skills/aida-*` pack; the scaffolder never ignores it there.
+# trace:BUG-1639 | ai:claude
+/.agents/

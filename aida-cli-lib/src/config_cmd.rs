@@ -3209,15 +3209,59 @@ fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str)
     );
     let store = aida_core::RequirementsStore::default();
     let preview = scaffolder.preview(&store);
-    // Record skill deliveries on every exit. trace:TASK-1503 | ai:claude
-    let _skill_recorder =
-        aida_core::scaffolding::SkillDeliveryRecorder::new(project_root, &preview, true);
+    // Codex and Antigravity share the portable `.agents/skills` pack; a
+    // legacy per-vendor pack appears in the preview only when it already
+    // exists. A pack's delivered-skills manifest is recorded only when this
+    // run actually wrote a skill into it, so a manifest never lands in a
+    // pack that received nothing (e.g. one holding only other tools'
+    // skills). Recorded on every exit, including an early IO error.
+    // trace:TASK-1503 | ai:claude
+    // trace:BUG-1639 | ai:claude
+    let mut written_packs = std::collections::BTreeSet::new();
+    let result =
+        write_enabled_agent_profile_files(project_root, profile, &preview, &mut written_packs);
+    for plan in &preview.skill_packs {
+        if !written_packs.contains(&plan.pack) {
+            continue;
+        }
+        if let Some(warning) = &plan.warning {
+            eprintln!("warning: {warning}");
+            continue;
+        }
+        if let Err(e) = plan.record(project_root, &std::collections::BTreeSet::new()) {
+            eprintln!(
+                "warning: could not record delivered skills in {} ({e})",
+                plan.pack.display()
+            );
+        }
+    }
+    result
+}
+
+/// Write the files of one newly enabled agent profile that do not exist
+/// yet, noting each skill pack that received a skill.
+// trace:BUG-1639 | ai:claude
+#[cfg(feature = "tui")]
+fn write_enabled_agent_profile_files(
+    project_root: &std::path::Path,
+    profile: &str,
+    preview: &aida_core::ScaffoldPreview,
+    written_packs: &mut std::collections::BTreeSet<std::path::PathBuf>,
+) -> Result<()> {
     for artifact in &preview.artifacts {
         let rel = artifact.path.to_string_lossy().replace('\\', "/");
         let wanted = match profile {
             "claude" => rel == "CLAUDE.md" || rel == ".mcp.json" || rel.starts_with(".claude/"),
-            "codex" => rel == "AGENTS.md" || rel.starts_with(".codex/"),
-            "antigravity" => rel == "AGENTS.md" || rel.starts_with(".antigravity/"),
+            "codex" => {
+                rel == "AGENTS.md"
+                    || rel.starts_with(".codex/")
+                    || rel.starts_with(".agents/skills/")
+            }
+            "antigravity" => {
+                rel == "AGENTS.md"
+                    || rel.starts_with(".antigravity/")
+                    || rel.starts_with(".agents/skills/")
+            }
             _ => false,
         };
         if !wanted {
@@ -3238,6 +3282,9 @@ fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str)
             std::fs::create_dir_all(parent)?;
         }
         std::fs::write(dest, &artifact.content)?;
+        if let Some((pack, _)) = aida_core::scaffolding::refresh::skill_in_pack(&artifact.path) {
+            written_packs.insert(pack);
+        }
     }
     Ok(())
 }
@@ -4281,5 +4328,105 @@ mod story_671_edit_kind_tests {
             aida_tui::EditOutcome::Blocked(reason) => panic!("{reason}"),
         }
         assert!(!local_aida_mcp_registered(dir.path()));
+    }
+}
+
+// Enabling Codex or Antigravity from the config menu installs the portable
+// `.agents/skills` pack, and never leaves a delivered-skills manifest in a
+// pack that received no skill. trace:BUG-1639 | ai:claude
+#[cfg(all(test, feature = "tui"))]
+mod bug_1639_config_profile_tests {
+    use super::*;
+    use aida_core::scaffolding::refresh::{read_skill_manifest, DELIVERED_MANIFEST};
+
+    fn aida_skill_dirs(pack: &std::path::Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(pack)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.path().join("SKILL.md").is_file())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|n| n.starts_with("aida-"))
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn enabling_codex_or_antigravity_writes_agents_skills() {
+        for profile in ["codex", "antigravity"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            scaffold_enabled_agent_profile(root, profile).unwrap();
+            let pack = root.join(".agents/skills");
+            let skill_md = pack.join("aida-handoff/SKILL.md");
+            let meta = std::fs::symlink_metadata(&skill_md).unwrap();
+            assert!(meta.file_type().is_file(), "{profile}");
+            let expected = aida_core::scaffolding::inventory::portable_skill_inventory(
+                &ScaffoldConfig::default(),
+            );
+            assert_eq!(aida_skill_dirs(&pack).len(), expected.len(), "{profile}");
+            let m = read_skill_manifest(&pack).unwrap().unwrap();
+            assert!(
+                m.complete && m.delivered.contains("aida-handoff"),
+                "{profile}"
+            );
+            assert!(!root.join(".codex/skills").exists(), "{profile}");
+            assert!(!root.join(".antigravity/skills").exists(), "{profile}");
+        }
+    }
+
+    /// An explicit enable adopts a `.agents/skills` that holds only other
+    /// tools' skills (the explicit-install rule): AIDA's skills are delivered
+    /// with their manifest, and the third-party skill is untouched.
+    #[test]
+    fn enabling_codex_adopts_third_party_only_agents_dir_without_touching_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let pack = root.join(".agents/skills");
+        std::fs::create_dir_all(pack.join("typesafe-ai")).unwrap();
+        std::fs::write(pack.join("typesafe-ai/SKILL.md"), "third party\n").unwrap();
+
+        scaffold_enabled_agent_profile(root, "codex").unwrap();
+        assert!(pack.join("aida-handoff/SKILL.md").is_file());
+        let m = read_skill_manifest(&pack).unwrap().unwrap();
+        assert!(!m.delivered.is_empty());
+        for name in &m.delivered {
+            assert!(pack.join(name).join("SKILL.md").is_file(), "{name}");
+        }
+        assert_eq!(
+            std::fs::read_to_string(pack.join("typesafe-ai/SKILL.md")).unwrap(),
+            "third party\n"
+        );
+    }
+
+    /// A pack this run could not write into (a symlinked `.agents/skills`)
+    /// gets no manifest, and the directory it points at is left as it was.
+    #[cfg(unix)]
+    #[test]
+    fn enabling_codex_never_leaves_a_manifest_without_skills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let shared = root.join("shared-skills");
+        std::fs::create_dir_all(shared.join("typesafe-ai")).unwrap();
+        std::fs::write(shared.join("typesafe-ai/SKILL.md"), "third party\n").unwrap();
+        std::fs::create_dir_all(root.join(".agents")).unwrap();
+        std::os::unix::fs::symlink(&shared, root.join(".agents/skills")).unwrap();
+
+        scaffold_enabled_agent_profile(root, "codex").unwrap();
+        assert!(!shared.join(DELIVERED_MANIFEST).exists());
+        assert!(aida_skill_dirs(&shared).is_empty());
+
+        // Re-enabling over a complete install writes nothing new and leaves
+        // the recorded manifest as it was.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        scaffold_enabled_agent_profile(root, "codex").unwrap();
+        let pack = root.join(".agents/skills");
+        let before = std::fs::read(pack.join(DELIVERED_MANIFEST)).unwrap();
+        scaffold_enabled_agent_profile(root, "codex").unwrap();
+        assert_eq!(
+            std::fs::read(pack.join(DELIVERED_MANIFEST)).unwrap(),
+            before
+        );
     }
 }

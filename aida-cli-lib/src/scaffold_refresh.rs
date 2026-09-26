@@ -7,8 +7,9 @@
 //! that is a symlink are all left exactly as they are.
 //!
 //! This is the same contract the starter memory pack has had since STORY-255,
-//! generalized so a template fix reaches Claude skills/commands, Codex skills,
-//! and Antigravity skills through one mechanism instead of one per vendor.
+//! generalized so a template fix reaches Claude skills/commands and the
+//! Codex/Antigravity skill packs through one mechanism instead of one per
+//! vendor.
 // trace:TASK-1170 | ai:claude
 // trace:BUG-1118 | ai:codex
 
@@ -17,8 +18,8 @@ use std::path::{Path, PathBuf};
 use std::collections::{BTreeMap, BTreeSet};
 
 use aida_core::scaffolding::refresh::{
-    is_file_of_skill, plan_skill_pack, refresh_file, skill_in_pack, ManifestMode, RefreshOutcome,
-    RefreshReport,
+    is_file_of_skill, plan_skill_pack, refresh_file, refresh_may_plan_pack, skill_in_pack,
+    ManifestMode, RefreshOutcome, RefreshReport,
 };
 use colored::Colorize;
 
@@ -33,11 +34,13 @@ pub(crate) struct PackRefresh {
 /// labels stay stable. Everything else the scaffolder renders (CLAUDE.md,
 /// AGENTS.md, settings.json, hooks, docs) is out of scope: those are Seed /
 /// ManagedMerge files with their own merge rules.
+// trace:BUG-1639 | ai:claude
 const PROJECT_PACKS: &[(&str, &str)] = &[
     (".claude/skills/", "Claude skills"),
     (".claude/commands/", "Claude commands"),
-    (".codex/skills/", "Codex skills"),
-    (".antigravity/skills/", "Antigravity skills"),
+    (".agents/skills/", "Codex/Antigravity skills"),
+    (".codex/skills/", "Codex skills (legacy)"),
+    (".antigravity/skills/", "Antigravity skills (legacy)"),
 ];
 
 /// Decide, per installed skill pack, which newly shipped skills this refresh
@@ -52,15 +55,18 @@ const PROJECT_PACKS: &[(&str, &str)] = &[
 /// stays deleted. A pack without a complete manifest (installed before it
 /// existed) is seeded from the directories on disk and receives nothing this
 /// pass. An unreadable manifest fails closed with a warning. A pack directory
-/// that does not exist is never created.
+/// that does not exist is never created, and the shared `.agents/skills`
+/// directory is planned only once it is AIDA's (see
+/// [`refresh_may_plan_pack`]).
 // trace:TASK-1503 | ai:claude
+// trace:BUG-1639 | ai:claude
 fn plan_refresh_deliveries(
     project_root: &Path,
     preview: &aida_core::scaffolding::ScaffoldPreview,
 ) -> BTreeMap<PathBuf, BTreeSet<String>> {
     let mut deliveries = BTreeMap::new();
     for install_plan in &preview.skill_packs {
-        if !project_root.join(&install_plan.pack).is_dir() {
+        if !refresh_may_plan_pack(project_root, &install_plan.pack) {
             continue;
         }
         let plan = plan_skill_pack(
@@ -178,8 +184,13 @@ fn is_unwrapped_lane_skill(dest: &Path, rel: &Path) -> bool {
         return false;
     };
     let pack = pack.to_string_lossy().replace('\\', "/");
-    if !matches!(pack.as_str(), ".claude/skills" | ".codex/skills")
-        || !crate::init_cmd::MEMORY_LANE_SKILLS.contains(&name.as_str())
+    // `.agents/skills` is where memory-lane writes now; a legacy
+    // `.codex/skills` holds lane skills from older installs.
+    // trace:BUG-1639 | ai:claude
+    if !matches!(
+        pack.as_str(),
+        ".claude/skills" | ".agents/skills" | ".codex/skills"
+    ) || !crate::init_cmd::MEMORY_LANE_SKILLS.contains(&name.as_str())
         || aida_core::scaffolding::symlink_target(dest).is_some()
     {
         return false;
@@ -198,7 +209,7 @@ fn install_new_skill(dest: &Path, content: &str) -> std::io::Result<()> {
 
 /// Refresh every installed agent pack under `project_root`. Only files that already exist are
 /// touched — installing a pack the project opted out of stays `aida init`'s
-/// job, so a Claude-only project never grows a `.codex/` tree from a refresh.
+/// job, so a Claude-only project never grows a `.agents/` tree from a refresh.
 /// The one exception: an installed skill pack receives each skill AIDA has
 /// started shipping since the pack was installed, once, tracked by the pack's
 /// [`aida_core::scaffolding::refresh::DELIVERED_MANIFEST`]; a delivered skill
@@ -777,14 +788,24 @@ global = true
         read_skill_manifest, write_skill_manifest, DELIVERED_MANIFEST,
     };
 
-    const SKILL_PACKS: [(&str, &str); 3] = [
+    // The portable `.agents/skills` pack plus both legacy per-vendor packs,
+    // which AIDA keeps level only because they already exist (see
+    // `install_all_packs`). trace:BUG-1639 | ai:claude
+    const SKILL_PACKS: [(&str, &str); 4] = [
         (".claude/skills", "Claude skills"),
-        (".codex/skills", "Codex skills"),
-        (".antigravity/skills", "Antigravity skills"),
+        (".agents/skills", "Codex/Antigravity skills"),
+        (".codex/skills", "Codex skills (legacy)"),
+        (".antigravity/skills", "Antigravity skills (legacy)"),
     ];
 
-    /// `aida init` / `scaffold apply` into an empty project.
+    /// `aida init` / `scaffold apply` into a project that already has the
+    /// legacy `.codex/skills` and `.antigravity/skills` directories (an
+    /// existing install), so every pack kind is exercised.
     fn install_all_packs(root: &Path) {
+        // trace:BUG-1639 | ai:claude
+        for legacy in [".codex/skills", ".antigravity/skills"] {
+            std::fs::create_dir_all(root.join(legacy)).unwrap();
+        }
         let mut scaffolder = aida_core::scaffolding::Scaffolder::new(
             root.to_path_buf(),
             aida_core::scaffolding::ScaffoldConfig::default(),
@@ -1019,7 +1040,7 @@ global = true
             }
             crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false)
                 .unwrap();
-            for pack in [".claude/skills", ".codex/skills"] {
+            for pack in [".claude/skills", ".agents/skills"] {
                 let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
                 assert!(!m.complete, "{pack}: a partial plan never completes");
             }
@@ -1030,7 +1051,7 @@ global = true
                     "persist={persist_footprint}"
                 );
             }
-            for pack in [".claude/skills", ".codex/skills"] {
+            for pack in [".claude/skills", ".agents/skills"] {
                 assert_eq!(
                     skill_names(&root.join(pack)),
                     ["aida-capture", "aida-learn"],
@@ -1054,7 +1075,7 @@ global = true
         crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
 
         let in_skill_pack =
-            |p: &&PathBuf| p.starts_with(".claude/skills") || p.starts_with(".codex/skills");
+            |p: &&PathBuf| p.starts_with(".claude/skills") || p.starts_with(".agents/skills");
         let touched = |packs: &[PackRefresh]| -> (Vec<PathBuf>, Vec<PathBuf>) {
             let pick = |f: fn(&RefreshReport) -> &Vec<PathBuf>| {
                 packs
@@ -1074,10 +1095,10 @@ global = true
 
         // Age codex aida-capture: an older, unedited AIDA copy. Hand-edit
         // claude aida-learn.
-        let capture = root.join(".codex/skills/aida-capture/SKILL.md");
+        let capture = root.join(".agents/skills/aida-capture/SKILL.md");
         let current = std::fs::read_to_string(&capture).unwrap();
         let stale = wrap_with_aida_header(
-            Path::new(".codex/skills/aida-capture/SKILL.md"),
+            Path::new(".agents/skills/aida-capture/SKILL.md"),
             "---\nname: aida-capture\n---\n# Old\n\nstale body\n",
         );
         std::fs::write(&capture, &stale).unwrap();
@@ -1089,7 +1110,7 @@ global = true
         assert_eq!(
             touched(&packs),
             (
-                vec![PathBuf::from(".codex/skills/aida-capture/SKILL.md")],
+                vec![PathBuf::from(".agents/skills/aida-capture/SKILL.md")],
                 vec![]
             )
         );
@@ -1104,7 +1125,7 @@ global = true
         assert_eq!(std::fs::read_to_string(&capture).unwrap(), current);
         assert_eq!(std::fs::read_to_string(&learn).unwrap(), edited);
         assert!(packs.iter().all(|p| p.report.installed.is_empty()));
-        for pack in [".claude/skills", ".codex/skills"] {
+        for pack in [".claude/skills", ".agents/skills"] {
             assert_eq!(
                 skill_names(&root.join(pack)),
                 ["aida-capture", "aida-learn"],
@@ -1124,6 +1145,10 @@ global = true
         let root = tmp.path();
         let store = aida_core::RequirementsStore::default();
         std::fs::create_dir_all(root.join(".aida")).unwrap();
+        // An older install with a legacy `.codex/skills` pack, which
+        // memory-lane keeps level beside `.agents/skills`.
+        // trace:BUG-1639 | ai:claude
+        std::fs::create_dir_all(root.join(".codex/skills")).unwrap();
         crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::MemoryLane).unwrap();
         crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
 
@@ -1150,7 +1175,11 @@ global = true
             let mut v: Vec<PathBuf> = packs
                 .iter()
                 .flat_map(|p| f(&p.report).iter())
-                .filter(|p| p.starts_with(".claude/skills") || p.starts_with(".codex/skills"))
+                .filter(|p| {
+                    p.starts_with(".claude/skills")
+                        || p.starts_with(".agents/skills")
+                        || p.starts_with(".codex/skills")
+                })
                 .cloned()
                 .collect();
             v.sort();
@@ -1251,7 +1280,7 @@ global = true
         // A plain file where the skill directory would go: the write fails.
         std::fs::write(codex.join("aida-orchestrate"), "blocker").unwrap();
         let packs = refresh_agent_packs_at(root, None, None);
-        assert!(installed_in(&packs, "Codex skills").is_empty());
+        assert!(installed_in(&packs, "Codex skills (legacy)").is_empty());
         let m = read_skill_manifest(&codex).unwrap().unwrap();
         assert!(!m.knows("aida-orchestrate"), "{m:?}");
         assert!(!m.unconfirmed.contains("aida-orchestrate"), "{m:?}");
@@ -1308,8 +1337,8 @@ global = true
         let packs = refresh_agent_packs_at(root, None, None);
         assert!(!codex.join("aida-orchestrate").exists());
         assert!(!agy.join("aida-orchestrate").exists());
-        assert!(installed_in(&packs, "Codex skills").is_empty());
-        assert!(installed_in(&packs, "Antigravity skills").is_empty());
+        assert!(installed_in(&packs, "Codex skills (legacy)").is_empty());
+        assert!(installed_in(&packs, "Antigravity skills (legacy)").is_empty());
         assert_eq!(std::fs::read(&manifest).unwrap(), vec![0xff, 0xfe, 0x00]);
     }
 
@@ -1335,7 +1364,7 @@ global = true
             return; // running as root: permissions are not enforced
         }
         assert!(!codex.join("aida-orchestrate").exists());
-        assert!(installed_in(&packs, "Codex skills").is_empty());
+        assert!(installed_in(&packs, "Codex skills (legacy)").is_empty());
     }
 
     /// A symlinked skill directory the user owns is never written through,
@@ -1354,7 +1383,7 @@ global = true
         std::os::unix::fs::symlink(&target, codex.join("aida-orchestrate")).unwrap();
 
         let packs = refresh_agent_packs_at(root, None, None);
-        assert!(installed_in(&packs, "Codex skills").is_empty());
+        assert!(installed_in(&packs, "Codex skills (legacy)").is_empty());
         assert_eq!(std::fs::read_dir(&target).unwrap().count(), 0);
         let m = read_skill_manifest(&codex).unwrap().unwrap();
         assert!(m.delivered.contains("aida-orchestrate"));
@@ -1695,7 +1724,7 @@ global = true
             crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false)
                 .unwrap();
             assert_eq!(crate::init_cmd::read_init_footprint(root), None);
-            for pack in [".claude/skills", ".codex/skills"] {
+            for pack in [".claude/skills", ".agents/skills"] {
                 if !keep_manifest {
                     std::fs::remove_file(root.join(pack).join(DELIVERED_MANIFEST)).unwrap();
                 }
@@ -1708,7 +1737,7 @@ global = true
                 let packs = refresh_agent_packs_at(root, None, None);
                 assert!(packs.iter().all(|p| p.report.installed.is_empty()));
             }
-            for pack in [".claude/skills", ".codex/skills"] {
+            for pack in [".claude/skills", ".agents/skills"] {
                 let dir = root.join(pack);
                 assert_eq!(skill_names(&dir), ["aida-capture", "aida-learn"], "{pack}");
                 match read_skill_manifest(&dir).unwrap() {
@@ -1727,7 +1756,7 @@ global = true
         let root = tmp.path();
         let store = aida_core::RequirementsStore::default();
         crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
-        let dir = root.join(".codex/skills");
+        let dir = root.join(".agents/skills");
         let mut m = read_skill_manifest(&dir).unwrap().unwrap();
         m.complete = true;
         m.unconfirmed.insert("aida-req".to_string());
@@ -1740,11 +1769,11 @@ global = true
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
-        for pack in [".claude/skills", ".codex/skills"] {
+        for pack in [".claude/skills", ".agents/skills"] {
             std::fs::remove_dir_all(root.join(pack).join("aida-learn")).unwrap();
         }
         crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
-        for pack in [".claude/skills", ".codex/skills"] {
+        for pack in [".claude/skills", ".agents/skills"] {
             let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
             assert!(m.opted_out.contains("aida-learn"), "{pack}: {m:?}");
         }
@@ -1753,7 +1782,7 @@ global = true
             let packs = refresh_agent_packs_at(root, None, None);
             assert!(packs.iter().all(|p| p.report.installed.is_empty()));
         }
-        for pack in [".claude/skills", ".codex/skills"] {
+        for pack in [".claude/skills", ".agents/skills"] {
             let dir = root.join(pack);
             assert_eq!(skill_names(&dir), ["aida-capture"], "{pack}");
             let m = read_skill_manifest(&dir).unwrap().unwrap();
@@ -1832,11 +1861,11 @@ global = true
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         install_all_packs(root);
-        let codex = root.join(".codex/skills");
+        let codex = root.join(".agents/skills");
         let target = root.join("my-skills/aida-req");
         std::fs::create_dir_all(&target).unwrap();
         let stale = wrap_with_aida_header(
-            Path::new(".codex/skills/aida-req/SKILL.md"),
+            Path::new(".agents/skills/aida-req/SKILL.md"),
             "---\nname: aida-req\n---\n# old body\n",
         );
         std::fs::write(target.join("SKILL.md"), &stale).unwrap();
@@ -1851,15 +1880,177 @@ global = true
         );
         let codex_report = &packs
             .iter()
-            .find(|p| p.label == "Codex skills")
+            .find(|p| p.label == "Codex/Antigravity skills")
             .expect("codex pack reported")
             .report;
         assert!(
             codex_report
                 .skipped_symlink
-                .contains(&PathBuf::from(".codex/skills/aida-req/SKILL.md")),
+                .contains(&PathBuf::from(".agents/skills/aida-req/SKILL.md")),
             "{:?}",
             codex_report.skipped_symlink
         );
+    }
+
+    /// Every file under `pack` that is not AIDA's (`aida-*` entries and the
+    /// delivered-skills manifest), with its bytes; symlinks are recorded by
+    /// their target.
+    fn non_aida_snapshot(pack: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+        fn walk(dir: &Path, base: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
+            for entry in std::fs::read_dir(dir).unwrap().flatten() {
+                let path = entry.path();
+                let rel = path.strip_prefix(base).unwrap().to_path_buf();
+                let ft = entry.file_type().unwrap();
+                if ft.is_symlink() {
+                    let target = std::fs::read_link(&path).unwrap();
+                    out.insert(rel, target.to_string_lossy().as_bytes().to_vec());
+                } else if ft.is_dir() {
+                    out.insert(rel, Vec::new());
+                    walk(&path, base, out);
+                } else {
+                    out.insert(rel, std::fs::read(&path).unwrap());
+                }
+            }
+        }
+        let mut out = BTreeMap::new();
+        for entry in std::fs::read_dir(pack).unwrap().flatten() {
+            let name = entry.file_name().into_string().unwrap();
+            if name.starts_with("aida-") || name == DELIVERED_MANIFEST {
+                continue;
+            }
+            let path = entry.path();
+            if entry.file_type().unwrap().is_dir() {
+                out.insert(PathBuf::from(&name), Vec::new());
+                walk(&path, pack, &mut out);
+            } else {
+                out.insert(PathBuf::from(&name), std::fs::read(&path).unwrap());
+            }
+        }
+        out
+    }
+
+    /// `.agents/skills` is shared with other tools. Apply, refresh, upgrade
+    /// (forced, with prune) and the obsolete-file prune leave every non-AIDA
+    /// entry there byte-identical, while AIDA's own skills land beside them.
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn apply_refresh_prune_leave_non_aida_skill_dir_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let pack = root.join(".agents/skills");
+        std::fs::create_dir_all(pack.join("typesafe-ai/references")).unwrap();
+        std::fs::write(
+            pack.join("typesafe-ai/SKILL.md"),
+            "---\nname: typesafe-ai\n---\n# Third-party skill\n",
+        )
+        .unwrap();
+        std::fs::write(pack.join("typesafe-ai/references/notes.md"), "notes\n").unwrap();
+        std::fs::create_dir_all(pack.join("local")).unwrap();
+        std::fs::write(pack.join("local/SKILL.md"), "my local skill\n").unwrap();
+        std::fs::write(pack.join("README.md"), "operator notes\n").unwrap();
+        let before = non_aida_snapshot(&pack);
+        assert_eq!(before.len(), 7, "{before:?}");
+
+        install_all_packs(root);
+        assert!(pack.join("aida-handoff/SKILL.md").is_file());
+        assert_eq!(non_aida_snapshot(&pack), before, "after apply");
+
+        forget_delivery(&pack, "aida-handoff");
+        refresh_agent_packs_at(root, None, None);
+        assert!(pack.join("aida-handoff/SKILL.md").is_file(), "delivered");
+        assert_eq!(non_aida_snapshot(&pack), before, "after refresh");
+
+        let mut scaffolder = aida_core::scaffolding::Scaffolder::new(
+            root.to_path_buf(),
+            aida_core::scaffolding::ScaffoldConfig::default(),
+        );
+        let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
+        crate::scaffold_cmd::run_scaffold_upgrade(root, &preview, false, true, true).unwrap();
+        crate::report_and_prune_obe_scaffold(root, true, false, "aida scaffold apply --prune");
+        assert_eq!(
+            non_aida_snapshot(&pack),
+            before,
+            "after upgrade --force --prune"
+        );
+    }
+
+    /// A `.agents/skills` directory holding only other tools' skills is not
+    /// AIDA's pack: refresh writes nothing into it, not even a manifest.
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn refresh_leaves_third_party_only_agents_dir_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let pack = root.join(".agents/skills");
+        std::fs::create_dir_all(pack.join("typesafe-ai")).unwrap();
+        std::fs::write(pack.join("typesafe-ai/SKILL.md"), "third party\n").unwrap();
+        for _ in 0..2 {
+            let packs = refresh_agent_packs_at(root, None, None);
+            assert!(installed_in(&packs, "Codex/Antigravity skills").is_empty());
+        }
+        let names: Vec<_> = std::fs::read_dir(&pack)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        assert_eq!(names, ["typesafe-ai"]);
+    }
+
+    /// A Claude-only project never grows a `.agents` tree from a refresh.
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn claude_only_project_refresh_never_creates_agents_pack() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[agents]\nenabled = [\"claude\"]\n",
+        )
+        .unwrap();
+        let mut config = aida_core::scaffolding::ScaffoldConfig::default();
+        crate::init_cmd::read_enabled_agent_selection(root)
+            .unwrap()
+            .apply_to_scaffold_config(&mut config, false);
+        let mut scaffolder = aida_core::scaffolding::Scaffolder::new(root.to_path_buf(), config);
+        let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
+        scaffolder.apply(&preview).unwrap();
+        assert!(root.join(".claude/skills/aida-req/SKILL.md").is_file());
+        assert!(!root.join(".agents").exists());
+        refresh_agent_packs_at(root, None, None);
+        assert!(!root.join(".agents").exists());
+    }
+
+    /// An existing install whose Codex pack predates `.agents/skills` (a real
+    /// `.codex/skills` with a complete manifest, no `.agents/skills`) gets the
+    /// skills the derived inventory added, such as aida-handoff, from
+    /// `aida scaffold refresh`; no `.agents/skills` is created by refresh.
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn refresh_delivers_new_inventory_skill_to_existing_manifested_codex_pack() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        std::fs::remove_dir_all(root.join(".agents")).unwrap();
+        let codex = root.join(".codex/skills");
+        for name in ["aida-handoff", "aida-grill", "aida-human-audit"] {
+            forget_delivery(&codex, name);
+        }
+
+        let packs = refresh_agent_packs_at(root, None, None);
+        let installed = installed_in(&packs, "Codex skills (legacy)");
+        for name in ["aida-handoff", "aida-grill", "aida-human-audit"] {
+            let rel = PathBuf::from(".codex/skills").join(name).join("SKILL.md");
+            assert!(root.join(&rel).is_file(), "{name}");
+            assert!(installed.contains(&rel), "{name}: {installed:?}");
+        }
+        let m = read_skill_manifest(&codex).unwrap().unwrap();
+        assert!(m.complete && m.delivered.contains("aida-handoff"));
+        assert!(
+            !root.join(".agents").exists(),
+            "refresh never creates a pack"
+        );
+        // Claude-only skills never reach a non-Claude pack.
+        assert!(!codex.join("aida-burndown").exists());
+        assert!(!codex.join("aida-solo").exists());
     }
 }
