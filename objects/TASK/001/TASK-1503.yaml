@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:29:48.596407578Z
-modified_at: 2026-09-26T08:59:47.999457073Z
+modified_at: 2026-09-26T09:09:34.784425556Z
 req_type: Task
 tags:
 - antigravity
@@ -85,6 +85,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe), revised after strict review: a legacy (pre-manifest) pack stays fail-closed only for automatic REFRESH. An explicit ''aida init'' or ''aida scaffold upgrade'' on a legacy pack delivers the missing skills ONCE, then writes the manifest from what exists. That was the pre-manifest behaviour, and the explicit command is operator intent. Doctor keeps suggesting ''scaffold upgrade'' for legacy packs. After that first explicit run, deletions are honoured as opt-outs.'
   created_at: 2026-09-26T08:59:47.999457073Z
   modified_at: 2026-09-26T08:59:47.999457073Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dcfa-1fc0-7f83-9dc0-6dfd9c5a9dd5
+  author: joe
+  content: 'Rework at 66838ec3ad addresses the strict review. (1) A withheld skill now holds back every file under <pack>/<name>/, and skill_present requires SKILL.md, the flat <name>.md, or a user-owned symlinked directory. Test deleted_folder_skill_with_supporting_files_stays_deleted: after aida-pr is deleted, two applies and a refresh bring nothing back. (2) Memory-lane plans, respects and records the manifest for .claude/.codex skills. Test memory_lane_records_manifest_and_full_init_delivers_the_rest. (3) Revised policy implemented. For a pre-manifest pack, refresh seeds the missing names into a new ''# unconfirmed'' manifest section and never creates them. An explicit init or upgrade (Install mode) delivers missing and unconfirmed names once, except names a STORY-1475 manifest recorded; after that, deletions are opt-outs. Doctor flags legacy packs again (test scaffold_drift_still_flags_legacy_pack_missing_skills), and refresh prints an ''aida scaffold upgrade'' hint when unconfirmed names exist. (4) A SkillDeliveryRecorder drop guard records deliveries on every exit from apply_with_options, init, scaffold apply and upgrade, including early IO errors. (5) resolve_artifact_path''s doc comment and trace:BUG-1094 are restored. (6) Chose to skip rather than gitignore: a pack whose SKILL.md files are symlinks into aida-core/templates (the same detection as BUG-917) is untracked and never gets a manifest, because make sync-templates manages it, not delivery. A gitignore entry would still let refresh record meaningless opt-outs there. Refresh creates nothing in it, and install keeps its pre-manifest behaviour.'
+  created_at: 2026-09-26T09:09:34.784425556Z
+  modified_at: 2026-09-26T09:09:34.784425556Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
