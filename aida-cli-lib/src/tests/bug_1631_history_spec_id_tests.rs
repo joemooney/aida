@@ -389,12 +389,14 @@ fn bug_1631_custom_plus_standard_edges_are_all_counted_and_named() {
 }
 
 #[test]
-fn bug_1631_unreadable_or_duplicate_edges_never_undercount() {
+fn bug_1631_unreadable_or_duplicate_edges_are_counted_exactly() {
     // An edge with no readable rel_type still counts (labelled unknown),
-    // and a duplicated entry the set diff cannot see still moves the count.
+    // and each copy of a duplicated edge counts.
     let odd =
         "relationships:\n- rel_type: [1, 2]\n  target_id: 44444444-4444-4444-8444-444444444444\n";
-    let dup = format!("{PLAIN_CUSTOM}- rel_type: implemented-by\n  target_id: 22222222-2222-4222-8222-222222222222\n");
+    let dup = format!(
+        "{PLAIN_CUSTOM}- rel_type: implemented-by\n  target_id: 22222222-2222-4222-8222-222222222222\n"
+    );
     let tmp = tempfile::tempdir().unwrap();
     let store = edge_history_store(tmp.path(), &["", odd, &dup]);
     let evs = events(&store, None);
@@ -409,12 +411,149 @@ fn bug_1631_unreadable_or_duplicate_edges_never_undercount() {
         _ => unreachable!(),
     }
     match &rels[1].kind {
-        crate::history::EventKind::RelationshipsChange { added, removed, .. } => {
-            // 1 edge → 2 entries: +1 at least (the duplicate), -1 (the odd one).
-            assert!(*added >= 1 && *removed == 1, "{:?}", rels[1].kind);
+        crate::history::EventKind::RelationshipsChange {
+            added,
+            removed,
+            edges,
+        } => {
+            // [odd] → [X, X]: both copies of X added, the odd one removed.
+            assert_eq!((*added, *removed, edges.len()), (2, 1, 3));
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn bug_1631_duplicate_edge_replaced_is_a_removal_and_an_add() {
+    // [X, X] → [X, Y]: one copy of X removed, Y added.
+    let x = "- rel_type: References\n  target_id: 22222222-2222-4222-8222-222222222222\n";
+    let y = "- rel_type: References\n  target_id: 33333333-3333-4333-8333-333333333333\n";
+    let xx = format!("relationships:\n{x}{x}");
+    let xy = format!("relationships:\n{x}{y}");
+    let tmp = tempfile::tempdir().unwrap();
+    let store = edge_history_store(tmp.path(), &[&xx, &xy]);
+    let evs = events(&store, None);
+    let rels = rel_events(&evs);
+    // Newest first: the [X,X] → [X,Y] change, then the initial add.
+    match &rels[0].kind {
+        crate::history::EventKind::RelationshipsChange {
+            added,
+            removed,
+            edges,
+        } => {
+            assert_eq!((*added, *removed), (1, 1), "{edges:?}");
+            assert!(edges
+                .iter()
+                .any(|e| !e.added && e.target_id.starts_with("2222")));
+            assert!(edges
+                .iter()
+                .any(|e| e.added && e.target_id.starts_with("3333")));
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+// A project layout whose store sits beside `.aida/cache.db`, so
+// `default_cache_path` resolves to a cache inside this temp dir. The cache
+// holds only the two tables the edge lookup reads.
+fn plant_cache(store: &Path, head: &str, rows: &[(&str, &str)]) {
+    let path = aida_core::CachedGitBackend::default_cache_path(store);
+    assert!(
+        path.starts_with(store.parent().unwrap()),
+        "cache must resolve inside the fixture: {}",
+        path.display()
+    );
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE cache_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+         CREATE TABLE requirements_cache (id TEXT PRIMARY KEY, spec_id TEXT);",
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO cache_meta (key, value) VALUES ('source_head_sha', ?1)",
+        [head],
+    )
+    .unwrap();
+    for (uuid, spec_id) in rows {
+        conn.execute(
+            "INSERT INTO requirements_cache (id, spec_id) VALUES (?1, ?2)",
+            [uuid, spec_id],
+        )
+        .unwrap();
+    }
+}
+
+fn head_of(store: &Path) -> String {
+    aida_core::git_ops::head_sha(store)
+        .unwrap()
+        .trim()
+        .to_string()
+}
+
+// STORY-1 → TASK-2, then TASK-2 is renumbered to TASK-9 (same UUID).
+fn renamed_target_store(tmp: &Path) -> (std::path::PathBuf, String) {
+    let proj = tmp.join("proj");
+    let store = proj.join("store");
+    std::fs::create_dir_all(proj.join(".aida")).unwrap();
+    std::fs::create_dir_all(&store).unwrap();
+    git(&store, &["init", "-q", "-b", "aida-store"]);
+    git(&store, &["config", "user.email", "t@example.com"]);
+    git(&store, &["config", "user.name", "t"]);
+    git(&store, &["config", "commit.gpgsign", "false"]);
+    write_spec(&store, "STORY", "STORY-1", STORY_UUID, "Draft", "");
+    write_spec(&store, "TASK", "TASK-2", TASK_UUID, "Draft", "");
+    git(&store, &["add", "-A"]);
+    git(&store, &["commit", "-q", "-m", "add"]);
+    let rels = format!("relationships:\n- rel_type: Parent\n  target_id: {TASK_UUID}\n");
+    write_spec(&store, "STORY", "STORY-1", STORY_UUID, "Draft", &rels);
+    git(&store, &["add", "-A"]);
+    git(&store, &["commit", "-q", "-m", "link"]);
+    let old_head = head_of(&store);
+    std::fs::remove_file(store.join("objects/TASK/000/TASK-2.yaml")).unwrap();
+    write_spec(&store, "TASK", "TASK-9", TASK_UUID, "Draft", "");
+    git(&store, &["add", "-A"]);
+    git(&store, &["commit", "-q", "-m", "renumber TASK-2 to TASK-9"]);
+    (store, old_head)
+}
+
+fn edge_target(events: &[Event]) -> Option<String> {
+    events.iter().find_map(|e| match &e.kind {
+        crate::history::EventKind::RelationshipsChange { edges, .. } => {
+            edges.first().and_then(|x| x.target.clone())
+        }
+        _ => None,
+    })
+}
+
+#[test]
+fn bug_1631_stale_cache_is_not_trusted_for_edge_targets() {
+    // The cache still maps the UUID to TASK-2 and was built at an older
+    // HEAD (a long-lived MCP server's view): the store's renumbered ID wins.
+    let tmp = tempfile::tempdir().unwrap();
+    let (store, old_head) = renamed_target_store(tmp.path());
+    plant_cache(
+        &store,
+        &old_head,
+        &[(TASK_UUID, "TASK-2"), (STORY_UUID, "STORY-1")],
+    );
+    let evs = events(&store, None);
+    assert_eq!(edge_target(&evs).as_deref(), Some("TASK-9"));
+    let human = strip_ansi(&render_events_human(&evs, true));
+    assert!(human.contains("STORY-1 \u{2192} child TASK-9"), "{human}");
+    assert!(!human.contains("child TASK-2"), "{human}");
+}
+
+#[test]
+fn bug_1631_fresh_cache_answers_edge_targets() {
+    // A cache stamped at the store's HEAD is used: its row wins over the
+    // object scan (the planted value proves which source answered).
+    let tmp = tempfile::tempdir().unwrap();
+    let (store, _old) = renamed_target_store(tmp.path());
+    let head = head_of(&store);
+    plant_cache(&store, &head, &[(TASK_UUID, "TASK-FROM-CACHE")]);
+    let evs = events(&store, None);
+    assert_eq!(edge_target(&evs).as_deref(), Some("TASK-FROM-CACHE"));
 }
 
 #[test]

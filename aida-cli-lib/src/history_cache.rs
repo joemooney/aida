@@ -55,9 +55,10 @@ pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 5;
 /// v2: `RelationshipsChange` records the changed `edges` (BUG-1631).
 /// v3: every stored `rel_type` form decodes to one key, so a format
 /// rewrite is not an edge change; v2 files could hold false removals.
+/// v4: edges diff as a multiset, so a changed duplicate is counted.
 // trace:TASK-1507 | ai:claude
 // trace:BUG-1631 | ai:claude
-pub(crate) const HISTORY_DECODER_VERSION: u32 = 3;
+pub(crate) const HISTORY_DECODER_VERSION: u32 = 4;
 
 /// Default cap on inline indexing work per query, in milliseconds.
 const DEFAULT_INDEX_BUDGET_MS: u64 = 1500;

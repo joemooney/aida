@@ -815,9 +815,12 @@ fn collect_filtered_events_sourced(
 
 /// Fill in each relationship edge's `target` spec ID. Runs after
 /// filtering, and only when an edge needs it. The requirements cache's
-/// uuid→spec_id rows answer first (one indexed lookup per target; the
-/// mapping never changes once assigned). Only when there is no readable
-/// cache are the object files scanned. A target the source cannot name (a
+/// uuid→spec_id rows answer first (one indexed lookup per target), but
+/// only while the cache reflects the store's current HEAD: a spec's ID
+/// can change for the same UUID (duplicate repair, renumbering, agreed-id
+/// promotion), and a long-lived caller such as the MCP server can hold a
+/// cache that has not caught up. With no readable cache, or a stale one,
+/// the object files are scanned instead. A target the source cannot name (a
 /// since-deleted spec) keeps `target: None` and renders as its short UUID.
 // trace:BUG-1631 | ai:claude
 pub(crate) fn resolve_edge_targets(store_path: &Path, events: &mut [Event]) {
@@ -850,7 +853,8 @@ pub(crate) fn resolve_edge_targets(store_path: &Path, events: &mut [Event]) {
 }
 
 /// uuid→spec_id from the project's requirements cache, opened read-only.
-/// `None` when there is no cache or it cannot be read.
+/// `None` when there is no cache, it cannot be read, or its recorded
+/// `source_head_sha` is not the store's current HEAD (stale).
 // trace:BUG-1631 | ai:claude
 fn edge_targets_from_cache(
     store_path: &Path,
@@ -866,6 +870,17 @@ fn edge_targets_from_cache(
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
     .ok()?;
+    let recorded: String = conn
+        .query_row(
+            "SELECT value FROM cache_meta WHERE key = 'source_head_sha'",
+            [],
+            |row| row.get(0),
+        )
+        .ok()?;
+    let head = aida_core::git_ops::head_sha(store_path).ok()?;
+    if recorded.trim().is_empty() || recorded.trim() != head.trim() {
+        return None;
+    }
     let mut stmt = conn
         .prepare("SELECT spec_id FROM requirements_cache WHERE id = ?1")
         .ok()?;
@@ -1852,43 +1867,45 @@ fn diff_modified(
         }));
     }
 
-    // BUG-1631: set diff on (rel_type, target) so the event names the
-    // edges that changed, not just how many.
-    let rb = yaml_array_len(before, "relationships");
-    let ra = yaml_array_len(after, "relationships");
-    let edges_before = yaml_edge_set(before);
-    let edges_after = yaml_edge_set(after);
+    // BUG-1631: a multiset diff on (rel_type, target) so the event names
+    // the edges that changed, not just how many. Every entry counts, a
+    // duplicate once per copy and an unreadable one as `unknown`, so
+    // [X, X] → [X, Y] is +Y and -X, and the totals always match the
+    // entries that really changed.
+    let edges_before = yaml_edge_counts(before);
+    let edges_after = yaml_edge_counts(after);
     let mut edges: Vec<RelEdge> = Vec::new();
-    for (rel_type, target_id) in edges_after.difference(&edges_before) {
-        edges.push(RelEdge {
-            added: true,
-            rel_type: rel_type.clone(),
-            target_id: target_id.clone(),
-            target: None,
-        });
+    for ((rel_type, target_id), n_after) in &edges_after {
+        let n_before = edges_before
+            .get(&(rel_type.clone(), target_id.clone()))
+            .copied()
+            .unwrap_or(0);
+        for _ in n_before..*n_after {
+            edges.push(RelEdge {
+                added: true,
+                rel_type: rel_type.clone(),
+                target_id: target_id.clone(),
+                target: None,
+            });
+        }
     }
-    for (rel_type, target_id) in edges_before.difference(&edges_after) {
-        edges.push(RelEdge {
-            added: false,
-            rel_type: rel_type.clone(),
-            target_id: target_id.clone(),
-            target: None,
-        });
+    for ((rel_type, target_id), n_before) in &edges_before {
+        let n_after = edges_after
+            .get(&(rel_type.clone(), target_id.clone()))
+            .copied()
+            .unwrap_or(0);
+        for _ in n_after..*n_before {
+            edges.push(RelEdge {
+                added: false,
+                rel_type: rel_type.clone(),
+                target_id: target_id.clone(),
+                target: None,
+            });
+        }
     }
-    if ra != rb || !edges.is_empty() {
-        // Never undercount: an edge the set diff cannot see (a duplicate
-        // entry) still moves the array length, so take the larger of the
-        // two. Rendering says how many changed edges went unnamed.
-        let added = edges
-            .iter()
-            .filter(|e| e.added)
-            .count()
-            .max(ra.saturating_sub(rb));
-        let removed = edges
-            .iter()
-            .filter(|e| !e.added)
-            .count()
-            .max(rb.saturating_sub(ra));
+    if !edges.is_empty() {
+        let added = edges.iter().filter(|e| e.added).count();
+        let removed = edges.len() - added;
         out.push(mk(EventKind::RelationshipsChange {
             added,
             removed,
@@ -1897,28 +1914,30 @@ fn diff_modified(
     }
 }
 
-/// The `(rel_type, target_id)` pairs in a spec's `relationships` array.
-/// A custom type is stored as a YAML-tagged scalar (`!Custom name`) or a
-/// plain string; both yield the name.
+/// How many times each `(rel_type, target_id)` pair appears in a spec's
+/// `relationships` array. Every entry counts: an unreadable `rel_type` keys
+/// as `unknown`, a missing `target_id` as `?`.
 // trace:BUG-1631 | ai:claude
-fn yaml_edge_set(v: &Value) -> BTreeSet<(String, String)> {
+fn yaml_edge_counts(v: &Value) -> std::collections::BTreeMap<(String, String), usize> {
+    let mut counts = std::collections::BTreeMap::new();
     let Some(seq) = v.get("relationships").and_then(Value::as_sequence) else {
-        return BTreeSet::new();
+        return counts;
     };
-    seq.iter()
-        .map(|rel| {
-            let rel_type = rel
-                .get("rel_type")
-                .map(rel_type_key)
-                .unwrap_or_else(|| UNKNOWN_REL.to_string());
-            let target = rel
-                .get("target_id")
-                .and_then(Value::as_str)
-                .unwrap_or("?")
-                .to_string();
-            (rel_type, target)
-        })
-        .collect()
+    for key in seq.iter().map(|rel| {
+        let rel_type = rel
+            .get("rel_type")
+            .map(rel_type_key)
+            .unwrap_or_else(|| UNKNOWN_REL.to_string());
+        let target = rel
+            .get("target_id")
+            .and_then(Value::as_str)
+            .unwrap_or("?")
+            .to_string();
+        (rel_type, target)
+    }) {
+        *counts.entry(key).or_insert(0) += 1;
+    }
+    counts
 }
 
 /// Label for an edge whose `rel_type` cannot be read at all.

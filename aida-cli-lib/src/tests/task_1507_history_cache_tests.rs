@@ -94,10 +94,12 @@ impl Spec {
         // (plain, tagged custom, mapping custom) so index/walk parity
         // covers relationship edges. trace:BUG-1631 | ai:claude
         for i in 0..self.relationships {
+            // The first edge is the custom one, so every spec's first
+            // edge add or last edge removal exercises the custom forms.
             let rel_type = match i % 3 {
-                0 => "Parent".to_string(),
-                1 if self.rel_mapping_form => "\n      custom: depends-on".to_string(),
-                1 => "!Custom depends-on".to_string(),
+                0 if self.rel_mapping_form => "\n      custom: depends-on".to_string(),
+                0 => "!Custom depends-on".to_string(),
+                1 => "Parent".to_string(),
                 _ => "References".to_string(),
             };
             y.push_str(&format!(
@@ -1181,10 +1183,10 @@ fn history_decoder_version_matches_event_kind_shape() {
     ];
     let snapshot = serde_json::to_string(&kinds).unwrap();
     // trace:BUG-1631 | ai:claude
-    const V3: &str = r#"[{"Added":{"title":"t","req_type":"r","priority":"p"}},{"Deleted":{"title":"t"}},{"StatusChange":{"from":"a","to":"b"}},{"PriorityChange":{"from":"a","to":"b"}},{"TitleChange":{"from":"a","to":"b"}},"DescriptionEdited",{"OwnerChange":{"from":"a","to":"b"}},{"FeatureChange":{"from":"a","to":"b"}},{"TypeChange":{"from":"a","to":"b"}},{"TagsChange":{"added":["x"],"removed":["y"]}},{"CommentsAdded":{"count":2,"author":"a"}},{"RelationshipsChange":{"added":1,"removed":0,"edges":[{"added":true,"rel_type":"Parent","target_id":"u"}]}}]"#;
+    const V4: &str = r#"[{"Added":{"title":"t","req_type":"r","priority":"p"}},{"Deleted":{"title":"t"}},{"StatusChange":{"from":"a","to":"b"}},{"PriorityChange":{"from":"a","to":"b"}},{"TitleChange":{"from":"a","to":"b"}},"DescriptionEdited",{"OwnerChange":{"from":"a","to":"b"}},{"FeatureChange":{"from":"a","to":"b"}},{"TypeChange":{"from":"a","to":"b"}},{"TagsChange":{"added":["x"],"removed":["y"]}},{"CommentsAdded":{"count":2,"author":"a"}},{"RelationshipsChange":{"added":1,"removed":0,"edges":[{"added":true,"rel_type":"Parent","target_id":"u"}]}}]"#;
     assert_eq!(
         (history_cache::HISTORY_DECODER_VERSION, snapshot.as_str()),
-        (3, V3),
+        (4, V4),
         "EventKind's serialized shape changed: bump HISTORY_DECODER_VERSION \
          and record the new shape here"
     );
@@ -2438,10 +2440,14 @@ mod sweep {
                 None => {
                     let mut s = Spec::new(id, ty, &format!("{id} title"));
                     s.status = (*rng.pick(&STAT)).into();
+                    // BUG-1631: start with 0-3 edges so the custom slot
+                    // (every third edge) is reached. trace:BUG-1631 | ai:claude
+                    s.relationships = rng.below(4);
+                    s.rel_mapping_form = rng.pct(50);
                     st.insert(id, s);
                 }
-                // trace:BUG-1631 | ai:claude — 9 and 10 exercise edges.
-                Some(s) => match rng.below(12) {
+                // trace:BUG-1631 | ai:claude — 9 to 12 exercise edges.
+                Some(s) => match rng.below(14) {
                     0 => {
                         st.remove(id);
                     }
@@ -2451,14 +2457,14 @@ mod sweep {
                         .push(("alice".into(), format!("c{}", rng.below(1000)))),
                     7 => s.tags.push(format!("t{}", rng.below(100))),
                     8 => s.owner = format!("o{}", rng.below(5)),
-                    9 => {
+                    9..=11 => {
                         if s.relationships > 0 && rng.pct(40) {
                             s.relationships -= 1;
                         } else {
                             s.relationships += 1;
                         }
                     }
-                    10 => s.rel_mapping_form = !s.rel_mapping_form,
+                    12 => s.rel_mapping_form = !s.rel_mapping_form,
                     _ => s.description = format!("d{}", rng.below(1000)),
                 },
             }
@@ -2649,13 +2655,47 @@ mod sweep {
         }
     }
 
-    fn run_seed(seed: u64, skew: bool, bad: &mut Vec<String>) {
+    /// Relationship events that add or remove a custom edge, by the form
+    /// the custom edge was stored in: (tagged `!Custom`, mapping).
+    // trace:BUG-1631 | ai:claude
+    fn custom_edge_forms(fx: &Fixture, events: &[Event]) -> (usize, usize) {
+        let (mut tagged, mut mapping) = (0, 0);
+        for e in events {
+            let EventKind::RelationshipsChange { edges, .. } = &e.kind else {
+                continue;
+            };
+            let Some(edge) = edges.iter().find(|x| x.rel_type == "depends-on") else {
+                continue;
+            };
+            // The stored form: from the commit for an add, from its first
+            // parent for a removal.
+            let path = aida_core::object_store::relative_object_path(&e.spec_id).unwrap();
+            let rev = if edge.added {
+                e.sha.clone()
+            } else {
+                format!("{}^", e.sha)
+            };
+            let yaml = fx.git(&["show", &format!("{rev}:{path}")]);
+            if yaml.contains("!Custom depends-on") {
+                tagged += 1;
+            } else if yaml.contains("custom: depends-on") {
+                mapping += 1;
+            }
+        }
+        (tagged, mapping)
+    }
+
+    fn run_seed(seed: u64, skew: bool, bad: &mut Vec<String>, forms: &mut (usize, usize)) {
         let dag = random_dag(seed, 8 + (seed % 12) as usize, skew);
         let fx = &dag.fx;
         let mut rng = Rng(seed ^ 0x9E3779B97F4A7C15);
         let head = dag.main_hist.last().unwrap().clone();
         let probes = probes_for(&mut rng, fx);
         let walks = walk_all(fx, &probes);
+        // probes[0] is the unfiltered "all" probe.
+        let (t, m) = custom_edge_forms(fx, &walks[0].0);
+        forms.0 += t;
+        forms.1 += m;
         let total = commit_times(fx).len();
 
         fx.drop_index();
@@ -2695,24 +2735,38 @@ mod sweep {
         fx.drop_index();
     }
 
-    /// Slow (about 40 s of git processes): run with `--ignored`. CI runs it
+    /// Slow (about 100 s of git processes): run with `--ignored`. CI runs it
     /// nightly in cross-platform.yml.
     #[test]
     #[ignore = "slow random sweep; run with --ignored (nightly CI)"]
     fn task_1507_random_dag_sweep_fixed_seeds() {
         let mut bad = Vec::new();
+        let mut forms = (0usize, 0usize);
         // Kept small: each graph costs a few seconds of git processes.
         for seed in 0..10 {
-            run_seed(seed, false, &mut bad);
+            run_seed(seed, false, &mut bad, &mut forms);
         }
         for seed in 20_000..20_002 {
-            run_seed(seed, true, &mut bad);
+            run_seed(seed, true, &mut bad, &mut forms);
         }
+        // BUG-1631: parity must cover custom edges in both stored forms.
+        // trace:BUG-1631 | ai:claude
+        eprintln!(
+            "sweep custom-edge events: tagged={}, mapping={}",
+            forms.0, forms.1
+        );
         assert!(
             bad.is_empty(),
             "{} mismatches: {:#?}",
             bad.len(),
             &bad[..bad.len().min(20)]
+        );
+        // The seeds are fixed, so these counts are deterministic.
+        assert!(
+            forms.0 >= 3 && forms.1 >= 3,
+            "sweep must change custom edges in both forms, got tagged={} mapping={}",
+            forms.0,
+            forms.1
         );
     }
 
