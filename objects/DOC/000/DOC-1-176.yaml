@@ -1,5 +1,6 @@
 id: 01a0dbed-1c13-7862-9c54-4c47103d8ac2
 spec_id: DOC-1-176
+agreed_id: DOC-5
 title: 'Human explanation: feature lanes — working on the side without touching main'
 description: |
   The question that started this: "I want to work on some feature on the side, and I'd like a role or seat targeted at that feature, so I know I'm not interfering with the main branch."
