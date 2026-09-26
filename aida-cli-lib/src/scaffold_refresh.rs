@@ -1542,6 +1542,47 @@ global = true
         write_skill_manifest(&dir, &m).unwrap();
         assert!(crate::init_cmd::looks_like_memory_lane(root));
 
+        // Review rework: opting out of a memory-lane skill is still
+        // memory-lane. Delete aida-learn from both packs and re-run
+        // memory-lane (records the opt-out); refresh adds and nags nothing.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+        for pack in [".claude/skills", ".codex/skills"] {
+            std::fs::remove_dir_all(root.join(pack).join("aida-learn")).unwrap();
+        }
+        crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+        for pack in [".claude/skills", ".codex/skills"] {
+            let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
+            assert!(m.opted_out.contains("aida-learn"), "{pack}: {m:?}");
+        }
+        assert!(crate::init_cmd::looks_like_memory_lane(root));
+        for _ in 0..2 {
+            let packs = refresh_agent_packs_at(root, None, None);
+            assert!(packs.iter().all(|p| p.report.installed.is_empty()));
+        }
+        for pack in [".claude/skills", ".codex/skills"] {
+            let dir = root.join(pack);
+            assert_eq!(skill_names(&dir), ["aida-capture"], "{pack}");
+            let m = read_skill_manifest(&dir).unwrap().unwrap();
+            assert!(!m.complete, "{pack}: not promoted {m:?}");
+            assert!(m.unconfirmed.is_empty(), "{pack}: no upgrade nag {m:?}");
+        }
+
+        // A full-install marker rules memory-lane out (a pruned or
+        // interrupted full install), even when the packs hold only the
+        // memory-lane skills.
+        for marker in [".claude/AIDA.md", ".claude/commands/aida-status.md"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false)
+                .unwrap();
+            assert!(crate::init_cmd::looks_like_memory_lane(root));
+            std::fs::create_dir_all(root.join(marker).parent().unwrap()).unwrap();
+            std::fs::write(root.join(marker), "x").unwrap();
+            assert!(!crate::init_cmd::looks_like_memory_lane(root), "{marker}");
+        }
+
         // A full install is never mistaken for memory-lane, nor is a legacy
         // full pack, nor a full pack where the user opted out of the rest.
         let full = tempfile::tempdir().unwrap();

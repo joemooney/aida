@@ -233,18 +233,20 @@ pub(crate) fn handle_scaffold_command(
                 ) {
                     if link == full_path {
                         println!(
-                            "  {} {} → {} (skipped — symlink; writing would corrupt the target)",
+                            "  {} {} → {} (skipped — symlink; writing would corrupt the target; {})",
                             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                             artifact.path.display(),
-                            target.display()
+                            target.display(),
+                            aida_core::scaffolding::SYMLINK_SKIP_REMEDY
                         );
                     } else {
                         println!(
-                            "  {} {} (skipped — {} is a symlinked skill directory → {}; not writing through it)",
+                            "  {} {} (skipped — {} is a symlinked directory → {}; not writing through it; {})",
                             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                             artifact.path.display(),
                             link.strip_prefix(&root).unwrap_or(&link).display(),
-                            target.display()
+                            target.display(),
+                            aida_core::scaffolding::SYMLINK_SKIP_REMEDY
                         );
                     }
                     skipped += 1;
@@ -891,7 +893,7 @@ fn run_scaffold_upgrade(
                 target
             } else {
                 PathBuf::from(format!(
-                    "{} (via symlinked skill directory {})",
+                    "{} (via symlinked directory {})",
                     target.display(),
                     link.strip_prefix(project_root).unwrap_or(&link).display()
                 ))
@@ -1163,9 +1165,10 @@ fn run_scaffold_upgrade(
         if !stats.symlinked.is_empty() {
             // BUG-718: these were skipped to protect a source-of-truth master.
             println!(
-                "  {} {} skipped — symlink into another tree; writing would corrupt the target (NOT written):",
+                "  {} {} skipped — symlink into another tree; writing would corrupt the target (NOT written; {}):",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                stats.symlinked.len()
+                stats.symlinked.len(),
+                aida_core::scaffolding::SYMLINK_SKIP_REMEDY
             );
             for (path, target) in &stats.symlinked {
                 println!(

@@ -832,12 +832,25 @@ pub(crate) const MEMORY_LANE_SKILLS: [&str; 2] = ["aida-capture", "aida-learn"];
 
 /// Does this project look like a memory-lane install made before the
 /// footprint was saved (STORY-830)? True when at least one skill pack holds a
-/// memory-lane skill and no pack holds any other AIDA skill, and no pack's
-/// manifest records a delivered non-memory-lane skill or an opt-out (either
-/// means a full install once tracked it).
+/// memory-lane skill, no pack holds any other AIDA skill, no pack's manifest
+/// records a non-memory-lane skill (delivered or opted out), and there is no
+/// full-install marker (`.claude/AIDA.md`, `.claude/commands/aida-*`).
 // trace:BUG-1645 | ai:claude
 pub(crate) fn looks_like_memory_lane(project_root: &std::path::Path) -> bool {
     use aida_core::scaffolding::refresh::{read_skill_manifest, skill_present};
+    // Only a full install writes `.claude/AIDA.md` or `.claude/commands/aida-*`:
+    // a pruned or interrupted full install is not memory-lane.
+    if project_root.join(".claude/AIDA.md").exists() {
+        return false;
+    }
+    if let Ok(entries) = std::fs::read_dir(project_root.join(".claude/commands")) {
+        if entries
+            .flatten()
+            .any(|e| e.file_name().to_string_lossy().starts_with("aida-"))
+        {
+            return false;
+        }
+    }
     let mut lane_skill_seen = false;
     for pack in [".claude/skills", ".codex/skills", ".antigravity/skills"] {
         let dir = project_root.join(pack);
@@ -847,10 +860,13 @@ pub(crate) fn looks_like_memory_lane(project_root: &std::path::Path) -> bool {
         match read_skill_manifest(&dir) {
             Ok(None) => {}
             Ok(Some(m)) => {
-                if !m.opted_out.is_empty()
-                    || m.delivered
-                        .iter()
-                        .any(|n| !MEMORY_LANE_SKILLS.contains(&n.as_str()))
+                // Only a non-memory-lane name (delivered or opted out) shows
+                // a full install once tracked this pack; opting out of
+                // aida-capture/aida-learn is a memory-lane choice.
+                if m.delivered
+                    .iter()
+                    .chain(&m.opted_out)
+                    .any(|n| !MEMORY_LANE_SKILLS.contains(&n.as_str()))
                 {
                     return false;
                 }
@@ -1063,6 +1079,20 @@ fn write_memory_lane_artifact(
 ) -> Result<bool> {
     let path = root.join(rel);
     if path.exists() && !force {
+        return Ok(false);
+    }
+    // Never write through a symlinked file or skill directory, even under
+    // --force. trace:BUG-1645 | ai:claude
+    if let Some((link, target)) =
+        aida_core::scaffolding::symlink_blocking_write(root, std::path::Path::new(rel), &path)
+    {
+        eprintln!(
+            "{} {} is a symlink to {}; not writing {rel} through it ({})",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            link.strip_prefix(root).unwrap_or(&link).display(),
+            target.display(),
+            aida_core::scaffolding::SYMLINK_SKIP_REMEDY
+        );
         return Ok(false);
     }
     if let Some(parent) = path.parent() {
@@ -1539,24 +1569,28 @@ fn complete_init_scaffolding(
     let mut warned_links = std::collections::BTreeSet::new();
     for artifact in &preview.artifacts {
         let full_path = root.join(&artifact.path);
+        let exists = full_path.exists();
         // Never write through a symlink: the file itself (BUG-718) or a
-        // user-owned symlinked skill (or skill pack) directory.
+        // user-owned symlinked skill (or skill pack) directory. Stay silent
+        // when nothing would have been written anyway (an existing file
+        // without --force), so a re-run in a symlinked checkout, or an
+        // AGENTS.md -> CLAUDE.md link, prints nothing.
         // trace:BUG-1645 | ai:claude
         if let Some((link, target)) =
             aida_core::scaffolding::symlink_blocking_write(root, &artifact.path, &full_path)
         {
-            if warned_links.insert(link.clone()) {
+            if (!exists || force) && warned_links.insert(link.clone()) {
                 eprintln!(
-                    "{} {} is a symlink to {}; not writing AIDA files through it",
+                    "{} {} is a symlink to {}; not writing AIDA files through it ({})",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     link.strip_prefix(root).unwrap_or(&link).display(),
-                    target.display()
+                    target.display(),
+                    aida_core::scaffolding::SYMLINK_SKIP_REMEDY
                 );
             }
             skipped_count += 1;
             continue;
         }
-        let exists = full_path.exists();
 
         if exists && !force {
             if artifact.path == std::path::Path::new(".git/hooks/pre-commit") {
@@ -5353,6 +5387,43 @@ mod task_1503_memory_lane_manifest_tests {
             assert!(root.join(manifest).is_file(), "{manifest} written");
             assert!(paths.iter().any(|p| p == manifest), "{manifest}: {paths:?}");
         }
+    }
+
+    /// BUG-1645 review: memory-lane never writes through a symlinked skill
+    /// pack or a symlinked SKILL.md, even under --force.
+    // trace:BUG-1645 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1645_memory_lane_refuses_symlinks_even_with_force() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = aida_core::RequirementsStore::default();
+        // A symlinked .codex/skills pack with nothing in it.
+        let shared = root.join("shared-codex");
+        std::fs::create_dir_all(&shared).unwrap();
+        std::fs::create_dir_all(root.join(".codex")).unwrap();
+        std::os::unix::fs::symlink(&shared, root.join(".codex/skills")).unwrap();
+        // A per-file symlinked .claude SKILL.md.
+        let mine = root.join("my-capture.md");
+        std::fs::write(&mine, "mine\n").unwrap();
+        std::fs::create_dir_all(root.join(".claude/skills/aida-capture")).unwrap();
+        std::os::unix::fs::symlink(&mine, root.join(".claude/skills/aida-capture/SKILL.md"))
+            .unwrap();
+
+        for force in [false, true] {
+            write_memory_lane_scaffolding(root, &store, "test", false, force).unwrap();
+            assert_eq!(
+                std::fs::read_dir(&shared).unwrap().count(),
+                0,
+                "force={force}"
+            );
+            assert_eq!(
+                std::fs::read_to_string(&mine).unwrap(),
+                "mine\n",
+                "force={force}"
+            );
+        }
+        assert!(root.join(".claude/skills/aida-learn/SKILL.md").is_file());
     }
 
     /// Memory-lane records its skills in each pack's manifest, a re-run never

@@ -260,26 +260,39 @@ pub fn symlink_target(path: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Remedy clause appended to every "skipped a symlink" warning.
+// trace:BUG-1645 | ai:claude
+pub const SYMLINK_SKIP_REMEDY: &str =
+    "to let AIDA manage it, replace the link with a real file or directory";
+
 /// The symlink that a write of the scaffold artifact `rel` (on disk at
 /// `full_path`) would go through, as `(link, link_target)`: the file itself
-/// (BUG-718), or, for a file inside a skill directory, the skill pack
-/// directory or the skill directory. A user-owned symlinked skill directory
-/// counts as an installed skill (TASK-1503) and is never written through,
-/// matching the manifest write that refuses a symlinked pack directory.
+/// (BUG-718), or, for a file inside a skill directory, any directory between
+/// the project root and the file (`.claude`, the skill pack, the skill
+/// directory, a folder-skill subdirectory such as `examples/`), outermost
+/// first. A user-owned symlinked skill directory counts as an installed skill
+/// (TASK-1503) and is never written through, matching the manifest write that
+/// refuses a symlinked pack directory.
+///
+/// Known gap: for files outside a skill pack (CLAUDE.md, hooks, docs) only
+/// the file itself is checked, not its parent directories.
 // trace:BUG-1645 | ai:claude
 pub fn symlink_blocking_write(
     project_root: &Path,
     rel: &Path,
     full_path: &Path,
 ) -> Option<(PathBuf, PathBuf)> {
-    if let Some(target) = symlink_target(full_path) {
-        return Some((full_path.to_path_buf(), target));
+    if refresh::skill_dirs_of(rel).is_some() {
+        let mut dir = project_root.to_path_buf();
+        let parent = rel.parent()?;
+        for comp in parent.components() {
+            dir.push(comp);
+            if let Some(target) = symlink_target(&dir) {
+                return Some((dir, target));
+            }
+        }
     }
-    let (pack, skill) = refresh::skill_dirs_of(rel)?;
-    [pack, skill].into_iter().find_map(|dir| {
-        let link = project_root.join(dir);
-        symlink_target(&link).map(|target| (link, target))
-    })
+    symlink_target(full_path).map(|target| (full_path.to_path_buf(), target))
 }
 
 /// Group the skill artifacts in `artifacts` by pack directory and plan each
@@ -2853,7 +2866,7 @@ aida show <SPEC-ID>
             {
                 if link != full_path && warned_links.insert(link.clone()) {
                     eprintln!(
-                        "warning: {} is a symlink to {}; not writing AIDA skill files through it",
+                        "warning: {} is a symlink to {}; not writing AIDA skill files through it ({SYMLINK_SKIP_REMEDY})",
                         link.display(),
                         target.display()
                     );
@@ -4043,6 +4056,36 @@ mod tests {
             None
         );
         assert_eq!(refresh::skill_dirs_of(Path::new("CLAUDE.md")), None);
+    }
+
+    /// BUG-1645 review: every directory between the project root and a skill
+    /// file is checked, so a symlinked `.claude` or a symlinked folder-skill
+    /// subdirectory blocks the write too.
+    // trace:BUG-1645 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1645_symlink_blocking_write_checks_every_skill_ancestor() {
+        use std::path::Path;
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        let elsewhere = root.join("elsewhere");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+
+        // Symlinked folder-skill subdirectory.
+        std::fs::create_dir_all(root.join(".codex/skills/aida-pr")).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, root.join(".codex/skills/aida-pr/examples"))
+            .unwrap();
+        let rel = Path::new(".codex/skills/aida-pr/examples/x.md");
+        let hit = symlink_blocking_write(root, rel, &root.join(rel)).expect("blocked");
+        assert_eq!(hit.0, root.join(".codex/skills/aida-pr/examples"));
+        let rel = Path::new(".codex/skills/aida-pr/SKILL.md");
+        assert!(symlink_blocking_write(root, rel, &root.join(rel)).is_none());
+
+        // Symlinked vendor parent.
+        std::os::unix::fs::symlink(&elsewhere, root.join(".claude")).unwrap();
+        let rel = Path::new(".claude/skills/aida-req/SKILL.md");
+        let hit = symlink_blocking_write(root, rel, &root.join(rel)).expect("blocked");
+        assert_eq!(hit.0, root.join(".claude"));
     }
 
     // trace:BUG-718 — symlink_target only fires for actual symlinks, so a

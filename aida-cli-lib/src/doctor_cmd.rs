@@ -796,6 +796,13 @@ fn codex_ignores_prompt_dir_finding(dir: &std::path::Path) -> Option<DoctorFindi
 /// case that contributed to the TASK-1123 reviewer-bypass incident). Detection
 /// only — each finding names the re-scaffold command, no auto-heal.
 // trace:TASK-1124 | ai:claude
+/// The fix for memory-lane skill drift. `aida scaffold upgrade` ignores the
+/// footprint and installs the full skill set, and `aida init` on an
+/// initialized project changes nothing, so the lane-safe fix is to restore the
+/// skill from the embedded templates by hand.
+// trace:BUG-1645 | ai:claude
+const MEMORY_LANE_SKILL_ACTION: &str = "Memory-lane project: do not run `aida scaffold upgrade` (it installs the full skill set). Restore the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.codex/skills/aida-capture/SKILL.md`).";
+
 fn scan_scaffold_drift(
     project_root: &std::path::Path,
     store: &aida_core::RequirementsStore,
@@ -827,6 +834,7 @@ fn scan_scaffold_drift(
     // installs; a minimal one installs no skills. Never nudge either toward
     // the full skill set. trace:BUG-1645 | ai:claude
     let footprint = crate::init_cmd::effective_init_footprint(project_root);
+    let lane = footprint == Some(crate::cli::InitFootprint::MemoryLane);
     let expected_by_footprint = |p: &std::path::Path| match footprint {
         Some(crate::cli::InitFootprint::Minimal) => false,
         Some(crate::cli::InitFootprint::MemoryLane) => {
@@ -854,7 +862,11 @@ fn scan_scaffold_drift(
                 ".codex/skills is missing AIDA skill files ({} missing); Codex uses this project-local surface for `$aida-*`",
                 missing_codex_skill_files.len()
             ),
-            action: "Run `aida scaffold upgrade` to create `.codex/skills/aida-*/SKILL.md`; then reopen Codex or run `/skills` and use `$aida-capture`.".to_string(),
+            action: if lane {
+                MEMORY_LANE_SKILL_ACTION.to_string()
+            } else {
+                "Run `aida scaffold upgrade` to create `.codex/skills/aida-*/SKILL.md`; then reopen Codex or run `/skills` and use `$aida-capture`.".to_string()
+            },
             safe_heal: false,
         });
     }
@@ -866,7 +878,11 @@ fn scan_scaffold_drift(
                 "{} deployed vendor prompt/skill file(s) drifted from the source templates (stale scaffolding)",
                 drifted.len()
             ),
-            action: "aida scaffold upgrade   (or `aida scaffold diff` to inspect)".to_string(),
+            action: if lane {
+                MEMORY_LANE_SKILL_ACTION.to_string()
+            } else {
+                "aida scaffold upgrade   (or `aida scaffold diff` to inspect)".to_string()
+            },
             safe_heal: false,
         });
     }
@@ -6613,6 +6629,63 @@ hostname = "localhost"
             .find(|f| f.id == "scaffold-drift/codex-skills-missing")
             .expect("a missing memory-lane skill is flagged");
         assert!(finding.summary.contains("1 missing"), "{}", finding.summary);
+        // The fix must not invite the full skill set.
+        assert!(
+            finding
+                .action
+                .starts_with("Memory-lane project: do not run `aida scaffold upgrade`"),
+            "{}",
+            finding.action
+        );
+        assert!(finding.action.contains("aida scaffold extract"));
+        assert_eq!(finding.action, MEMORY_LANE_SKILL_ACTION);
+    }
+
+    /// BUG-1645 review: files behind a user-owned symlinked skill directory
+    /// are never written by apply/upgrade/refresh, so doctor does not report
+    /// them as drift (the finding would never clear).
+    // trace:BUG-1645 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1645_doctor_treats_symlinked_skill_dir_as_user_owned() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let store = aida_core::RequirementsStore::new();
+        let mut scaffolder =
+            aida_core::scaffolding::Scaffolder::new(root.to_path_buf(), ScaffoldConfig::default());
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).unwrap();
+        // A user-owned aida-pr: different SKILL.md, no examples/.
+        let mine = root.join("mine/aida-pr");
+        std::fs::create_dir_all(&mine).unwrap();
+        std::fs::write(mine.join("SKILL.md"), "my own\n").unwrap();
+        let pr = root.join(".claude/skills/aida-pr");
+        std::fs::remove_dir_all(&pr).unwrap();
+        std::os::unix::fs::symlink(&mine, &pr).unwrap();
+        let status = check_scaffold_status(
+            &store,
+            root,
+            &ScaffoldConfig::default(),
+            &root.join(".aida/cache.db"),
+        );
+        let flagged: Vec<_> = status
+            .modified
+            .iter()
+            .map(|(p, _)| p)
+            .chain(status.missing.iter())
+            .filter(|p| p.to_string_lossy().contains("aida-pr"))
+            .collect();
+        assert!(flagged.is_empty(), "{flagged:?}");
+        let findings = scan_scaffold_drift(root, &store);
+        assert!(
+            findings.iter().all(|f| f.id != "scaffold-drift/project"
+                && f.id != "scaffold-drift/codex-skills-missing"),
+            "{:?}",
+            findings
+                .iter()
+                .map(|f| (&f.id, &f.summary))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
