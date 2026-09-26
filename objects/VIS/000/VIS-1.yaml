@@ -3,12 +3,12 @@ spec_id: VIS-1
 agreed_id: VIS-1
 title: AIDA is your project's missing index — of intent, not just code
 description: ''
-status: Approved
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:10:07.033280927Z
-modified_at: 2026-06-30T04:23:36.052126365Z
+modified_at: 2026-09-26T18:33:29.620412833Z
 req_type: Vision
 comments:
 - id: 019e0f5e-489b-7f43-a104-c67304b927e6
@@ -21,3 +21,11 @@ comments:
   content: 'Tagline refined per CR-1-116 (operator chose option A, 2026-06-09): kept ''missing index'' but qualified it ''of intent, not just code'' to deflect the Lane-D Kill-shot-3 collision with zero-discipline auto-code-graph tools (CodeGraph, Augment) that own the bare word ''index''. AIDA''s index is the INTENT index (why-the-code-exists, spec↔code, maintained), not the auto-derived code index. Applied across README + OVERVIEW + this vision.'
   created_at: 2026-06-10T03:34:10.335352984Z
   modified_at: 2026-06-10T03:34:10.335352984Z
+history:
+- id: 01a0defe-6714-7fe1-82fc-073dcc90ed3d
+  author: joe
+  timestamp: 2026-09-26T18:33:29.620410692Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded
