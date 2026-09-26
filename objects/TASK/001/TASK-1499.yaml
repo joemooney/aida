@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-26T21:33:11.988045462Z
+modified_at: 2026-09-26T21:34:10.956341243Z
 req_type: Task
 tags:
 - agent-launch
@@ -97,6 +97,12 @@ comments:
     VERDICT: NEEDS DECISION: does the .mcp.json absolute path written by `aida mcp register` and the config TUI MCP toggle (config_cmd.rs:3096, mcp_cmd.rs:78) count under acceptance 5 ("no generated project file contains a machine-specific absolute AIDA checkout path")? Recommended default: out of scope for TASK-1499 (it is an explicit per-machine registration, and MCP servers do not inherit AIDA's PATH prepend, so a bare "aida" there can run the wrong build); note it in the PR and file a small follow-up if Joe wants it portable. Everything else above is ready to implement.
   created_at: 2026-09-26T21:33:11.988045462Z
   modified_at: 2026-09-26T21:33:11.988045462Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfa3-d40c-72e2-9d3d-49e49c099306
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): take the planner''s recommended default — the absolute checkout path written into .mcp.json by ''aida mcp register'' / the config toggle is out of scope for acceptance 5; note it in the PR; follow-up only if wanted.'
+  created_at: 2026-09-26T21:34:10.956341243Z
+  modified_at: 2026-09-26T21:34:10.956341243Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
