@@ -135,6 +135,11 @@ impl Fixture {
         fx.git(&["config", "user.email", "fixture@example.com"]);
         fx.git(&["config", "user.name", "Fixture"]);
         fx.git(&["config", "commit.gpgsign", "false"]);
+        // Windows runners ship `core.autocrlf=true` in the system config: a
+        // merge checkout then writes CRLF, and the resolving `add -A` stores
+        // those bytes, so the merge's combined diff gains every side-branch
+        // file. Pin LF in the repo itself. trace:BUG-1648 | ai:claude
+        fx.git(&["config", "core.autocrlf", "false"]);
         fx
     }
 
@@ -374,6 +379,8 @@ fn build_merged(fx: &mut Fixture) -> Vec<String> {
         .args(["merge", "--no-ff", "--no-edit", "side"])
         .env("GIT_AUTHOR_DATE", format!("@{} +0000", fx.clock))
         .env("GIT_COMMITTER_DATE", format!("@{} +0000", fx.clock))
+        // Same isolation as `git_in`. trace:BUG-1648 | ai:claude
+        .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("HOME", &fx.store)
         .output()
         .unwrap();

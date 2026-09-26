@@ -5680,14 +5680,18 @@ fn apply_session_env_to_process_sets_env() {
     let applied = apply_session_env_to_process(&body);
     assert!(applied.is_empty(), "{applied:?}");
     assert!(std::env::var_os(VAR).is_none());
+    // A tempdir target: `/w/target` is not absolute on Windows (no drive)
+    // and would be dropped there. trace:BUG-1648 | ai:claude
+    let tree = tempfile::tempdir().unwrap();
+    let target = tree.path().join("target").display().to_string();
     let pairs = trusted_session_env(
-        "export CARGO_TARGET_DIR='/w/target'\nexport AIDA_AGENT_TYPE='claude'\n",
+        &format!("export CARGO_TARGET_DIR='{target}'\nexport AIDA_AGENT_TYPE='claude'\n"),
         std::path::Path::new("rel/aida"),
     );
     assert_eq!(
         pairs,
         vec![
-            ("CARGO_TARGET_DIR".to_string(), "/w/target".to_string()),
+            ("CARGO_TARGET_DIR".to_string(), target.clone()),
             ("AIDA_AGENT_TYPE".to_string(), "claude".to_string()),
         ]
     );
@@ -5781,19 +5785,22 @@ fn parent_project_root_for_session_none_for_legacy_lease() {
     let leases = worktree.join(".aida").join("sessions");
     std::fs::create_dir_all(&leases).unwrap();
 
-    // Old-format lease: no parent_project_root field.
+    // Old-format lease: no parent_project_root field. The path is
+    // TOML-encoded: a raw Windows path (`C:\Users\...`) in a basic string
+    // is an invalid escape, the lease would not parse, and the `is_none()`
+    // below would pass for the wrong reason. trace:BUG-1648 | ai:claude
     let toml_text = format!(
         r#"
 id = "legacylease01"
 scope = "EPIC-20"
 slug = "epic-20"
 owner = "u"
-worktree_path = "{}"
+worktree_path = {}
 branch = "br"
 started_at = "2026-05-04T00:00:00Z"
 hostname = "h"
 "#,
-        worktree.canonicalize().unwrap().display()
+        toml::Value::String(worktree.canonicalize().unwrap().display().to_string())
     );
     std::fs::write(leases.join("legacylease01.toml"), toml_text).unwrap();
 

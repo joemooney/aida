@@ -44379,13 +44379,8 @@ fn discover_plan_context(
         let Ok(content) = std::fs::read_to_string(plan_file) else {
             continue;
         };
-        rels.push(
-            plan_file
-                .strip_prefix(project_root)
-                .unwrap_or(plan_file)
-                .display()
-                .to_string(),
-        );
+        // `/`-separated on every OS, like the followup marker. trace:BUG-1648 | ai:claude
+        rels.push(plan_rel_path(plan_file, project_root));
         for c in parse_plan_critical_files(&content) {
             if !critical_files.contains(&c) {
                 critical_files.push(c);
@@ -44853,6 +44848,22 @@ fn capture_test_plan(
     Ok(())
 }
 
+/// A plan's project-relative path in the form the store records it: `/`
+/// separated on every OS. The followup marker, the plan-path dedup set and
+/// the `followup-src:` tag compare these strings, so a Windows clone that
+/// wrote `docs/plans\x.md` would neither match what a Unix clone filed nor
+/// the `docs/plans/x.md` shape everything else uses.
+// trace:BUG-1648 | ai:claude
+fn plan_rel_path(path: &std::path::Path, project_root: &std::path::Path) -> String {
+    let Ok(rel) = path.strip_prefix(project_root) else {
+        return path.display().to_string();
+    };
+    rel.components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// Extract the Followups section of any plan owned by `spec_id` and file
 /// the accepted bullets as child TASKs. Idempotent via [`FOLLOWUPS_MARKER`].
 ///
@@ -44904,12 +44915,7 @@ fn extract_plan_followups(
         .collect();
     let owned_rel_paths: Vec<String> = plan_files
         .iter()
-        .map(|p| {
-            p.strip_prefix(project_root)
-                .unwrap_or(p)
-                .display()
-                .to_string()
-        })
+        .map(|p| plan_rel_path(p, project_root))
         .collect();
     let pending: std::collections::HashSet<String> =
         plans_pending_extraction(&owned_rel_paths, &already_extracted)
@@ -44922,14 +44928,7 @@ fn extract_plan_followups(
     }
     let plan_files: Vec<std::path::PathBuf> = plan_files
         .into_iter()
-        .filter(|p| {
-            let rel = p
-                .strip_prefix(project_root)
-                .unwrap_or(p)
-                .display()
-                .to_string();
-            pending.contains(&rel)
-        })
+        .filter(|p| pending.contains(&plan_rel_path(p, project_root)))
         .collect();
 
     // BUG-655: content-level dedup set — the `(parent_spec, title)` of every
@@ -45019,11 +45018,7 @@ fn extract_plan_followups(
         if parsed.is_empty() {
             continue;
         }
-        let rel = path
-            .strip_prefix(project_root)
-            .unwrap_or(path)
-            .display()
-            .to_string();
+        let rel = plan_rel_path(path, project_root);
         sources.push(rel.clone());
         for f in parsed {
             if !followups.iter().any(|(b, _)| b == &f) {

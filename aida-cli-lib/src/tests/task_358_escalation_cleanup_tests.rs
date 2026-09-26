@@ -187,19 +187,17 @@ id = "legacy01"
 scope = "TASK-358"
 slug = "task-358"
 owner = "u"
-worktree_path = "{}"
+worktree_path = {}
 branch = "task-358"
 started_at = "2026-05-19T00:00:00Z"
 hostname = "h"
 "#,
         // Windows canonical paths contain backslashes, which are escape
-        // characters in TOML basic strings. Escape them so this legacy
+        // characters in TOML basic strings. Encode the value so this legacy
         // fixture tests optional-field compatibility, not TOML syntax.
         // trace:BUG-346 | ai:codex
-        wt.canonicalize()
-            .unwrap()
-            .to_string_lossy()
-            .replace('\\', "\\\\")
+        // trace:BUG-1648 | ai:claude — the TOML encoder, not a hand escape.
+        toml::Value::String(wt.canonicalize().unwrap().to_string_lossy().into_owned())
     );
     let sessions = leases_dir(&root);
     std::fs::create_dir_all(&sessions).unwrap();
