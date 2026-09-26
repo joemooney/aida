@@ -8,12 +8,12 @@ description: |-
   2. queue_rework_tests::requeue_gate_reads_mcp_claims_like_pickup (:1823): the lease mcp-claim.*.toml fails to parse because worktree_path is written into a TOML basic string with raw backslashes ('invalid unicode 8-digit hex code' at C:\Users\...). First find out whether the production writer or only the test fixture builds lease TOML by string formatting. If production does it, that is a real Windows bug: serialize with toml/serde.
   3. usage_cmd::usage_timeline_tests::timeline_reads_fixture_usage_log_not_real_home (usage_cmd.rs:647): 0 rows instead of 2. On Windows the fixture home redirect isn't honoured (HOME vs USERPROFILE / crate::home_dir()).
   Acceptance: all four pass on windows-latest (confirm with a workflow_dispatch of Cross-platform (nightly) on the branch); the portability ratchet gains a rule for the class if feasible.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:56:37.565291972Z
-modified_at: 2026-09-26T10:54:18.419757227Z
+modified_at: 2026-09-26T11:46:32.954455322Z
 req_type: Bug
 comments:
 - id: 01a0dd25-e240-7871-b98a-f4abd07d3cf3
@@ -34,6 +34,20 @@ comments:
   created_at: 2026-09-26T10:54:18.419757227Z
   modified_at: 2026-09-26T10:54:18.419757227Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0dd89-d56f-7ed2-8a12-124eec7c2258
+  author: aida-auto-bump
+  timestamp: 2026-09-26T11:46:32.943854331Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0dd89-d57a-73e3-879c-4c4171e2e953
+  timestamp: 2026-09-26T11:46:32.954453249Z
+  agent: implementer
+  commit_sha: dc38f8ea4ac7e7e145d4eb78be7357692282f520
+  summary: Completed via merge dc38f8ea
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
   branch: main
@@ -42,3 +56,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T11:46:32.943829811Z
+  completion_sha: dc38f8ea4ac7e7e145d4eb78be7357692282f520
