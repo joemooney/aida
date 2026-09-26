@@ -1,0 +1,20 @@
+id: 01a0de70-21f1-7b40-9f6b-8bc8dcbe7b2a
+spec_id: TASK-1518
+agreed_id: TASK-1518
+title: 'queue work drain: SIGTERM handler that releases the drain lock and marks leases so a stopped wave leaves no stale state'
+description: 'Split from TASK-1510 (advisor Q5). When a drain wave is stopped (systemd RuntimeMaxSec or OOMPolicy=stop, or a manual stop), queue work has no SIGTERM handler, so it leaves the drain lock and leases for the next tick to reap. Add a handler that on SIGTERM stops dispatching, releases the drain lock, marks in-flight leases as interrupted (not abandoned), and exits non-zero within a bounded time. Acceptance: (1) a test sends SIGTERM to a fake drain and asserts the lock is released and the leases are marked; (2) a second SIGTERM or the timeout forces exit; (3) no behaviour change without a signal. Unix only; Windows is a no-op with a comment.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T15:58:05.809657428Z
+modified_at: 2026-09-26T15:58:05.809657428Z
+req_type: Task
+filed_at:
+  code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: b331809ce7
+  vendor: antigravity
+  session: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
