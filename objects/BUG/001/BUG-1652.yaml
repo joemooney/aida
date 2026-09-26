@@ -3,12 +3,12 @@ spec_id: BUG-1652
 agreed_id: BUG-1652
 title: aida history --id help text names internal spec IDs (BUG-588, BUG-1474)
 description: 'From the TASK-1512 review: the clap help for history --id (aida-cli-lib/src/cli.rs) still mentions BUG-588 and uses BUG-1474 as an example. User-facing CLI prose must not carry internal SPEC IDs. Reword it with a generic example (e.g. <ID>) and grep the other history args for the same problem.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T13:02:58.706655428Z
-modified_at: 2026-09-26T14:04:09.261970197Z
+modified_at: 2026-09-26T15:06:42.806113391Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -25,6 +25,14 @@ comments:
   created_at: 2026-09-26T14:04:09.261970197Z
   modified_at: 2026-09-26T14:04:09.261970197Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0de41-16f6-7573-bac0-95057b873e2a
+  author: joe
+  timestamp: 2026-09-26T15:06:42.806104619Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: ff2975a5ce09ff33aeabb74e8bccdc451c1a17c0
   branch: main
