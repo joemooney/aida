@@ -92,6 +92,7 @@ fn reap_verdict(worktree: AgentWorktreeFacts, spec_finished: bool) -> ReapVerdic
         spec_finished,
         process_exited: true,
         locked: false,
+        head_on_branch: true,
         worktree,
     })
 }
@@ -295,17 +296,17 @@ fn bug_1657_trailer_match_is_exact_and_ignores_plan_commits() {
 }
 
 #[test]
-fn bug_1657_merge_noop_probe_keeps_reverted_work() {
+fn bug_1657_per_path_probe_keeps_reverted_work() {
     let (_tmp, root) = batched_repo();
-    assert!(crate::doctor_cmd::branch_merge_is_noop(
+    assert!(crate::doctor_cmd::branch_paths_match_default(
         &root, "main", "spec-a"
     ));
     // The batch landed, then the spec's change was reverted on main: merging
-    // the branch would reintroduce it, so it is not provably shipped.
+    // main no longer holds the branch's a.txt, so it is not provably shipped.
     std::fs::remove_file(root.join("a.txt")).unwrap();
     git(&root, &["add", "-A"]);
     git(&root, &["commit", "-q", "-m", "revert a"]);
-    assert!(!crate::doctor_cmd::branch_merge_is_noop(
+    assert!(!crate::doctor_cmd::branch_paths_match_default(
         &root, "main", "spec-a"
     ));
     let facts = gather_merge_facts(
@@ -318,4 +319,138 @@ fn bug_1657_merge_noop_probe_keeps_reverted_work() {
         |_| false,
     );
     assert!(matches!(reap_verdict(facts, true), ReapVerdict::Skip(_)));
+}
+
+/// Regression: a `.gitattributes` merge driver must not launder an unshipped
+/// edit. With `lock.txt merge=ours`, a three-way merge of the branch into main
+/// "succeeds" and equals main's tree even though the branch's lock.txt edit
+/// never shipped. The per-path proof compares blobs directly and keeps it.
+#[test]
+fn bug_1657_merge_ours_driver_does_not_hide_unshipped_edit() {
+    let (_tmp, root) = batched_repo();
+    git(&root, &["config", "merge.ours.driver", "true"]);
+    commit_file(&root, ".gitattributes", "lock.txt merge=ours\n", "attrs");
+    commit_file(&root, "lock.txt", "v1\n", "add lock");
+
+    git(&root, &["checkout", "-q", "-b", "spec-g", "main"]);
+    commit_file(&root, "g.txt", "g\n", "fix(g): change (BUG-9007)");
+    commit_file(
+        &root,
+        "lock.txt",
+        "v2 never shipped\n",
+        "fix(g): lock edit (BUG-9007)",
+    );
+
+    // The batch ships g.txt but NOT the branch's lock.txt edit; main edits
+    // lock.txt its own way, so the merge driver is what resolves it.
+    git(&root, &["checkout", "-q", "main"]);
+    std::fs::write(root.join("g.txt"), "g\n").unwrap();
+    std::fs::write(root.join("lock.txt"), "v1 main\n").unwrap();
+    git(&root, &["add", "g.txt", "lock.txt"]);
+    git(
+        &root,
+        &[
+            "commit",
+            "-q",
+            "-m",
+            "[AI:claude] chore(integrate): batch 8 - BUG-9007 BUG-9008 (#44)",
+            "-m",
+            "Fix the g thing (BUG-9007)\nOther work (BUG-9008)",
+        ],
+    );
+
+    // The trap being guarded against: merge-tree reports main's own tree.
+    let merged = git(&root, &["merge-tree", "--write-tree", "main", "spec-g"]);
+    let main_tree = git(&root, &["rev-parse", "main^{tree}"]);
+    assert_eq!(merged.lines().next().unwrap_or(""), main_tree);
+
+    assert!(!crate::doctor_cmd::branch_paths_match_default(
+        &root, "main", "spec-g"
+    ));
+    let facts = gather_merge_facts(
+        &root,
+        Some("main"),
+        "spec-g",
+        "BUG-9007",
+        false,
+        true,
+        |_| false,
+    );
+    assert!(facts.spec_trailer_on_main, "{facts:?}");
+    assert!(!facts.content_fully_landed, "{facts:?}");
+    assert!(matches!(reap_verdict(facts, true), ReapVerdict::Skip(_)));
+}
+
+/// A failing ancestry count is unknown, not zero: no merge signal is probed
+/// and the session is kept.
+#[test]
+fn bug_1657_failed_ancestry_count_fails_closed() {
+    let (_tmp, root) = batched_repo();
+    // The landed spec id is real, but the branch cannot be resolved.
+    let facts = gather_merge_facts(
+        &root,
+        Some("main"),
+        "no-such-branch",
+        "BUG-9001",
+        false,
+        true,
+        |_| panic!("no forge lookup when the ancestry count is unknown"),
+    );
+    assert!(!facts.ancestor_of_main, "{facts:?}");
+    assert!(!facts.spec_trailer_on_main && !facts.pr_merged, "{facts:?}");
+    assert!(facts.unique_unmerged_commits > 0, "{facts:?}");
+    assert!(matches!(reap_verdict(facts, true), ReapVerdict::Skip(_)));
+}
+
+/// A worktree whose HEAD is detached, or switched to another branch, is kept
+/// even when the lease branch itself is provably landed.
+#[test]
+fn bug_1657_worktree_off_its_session_branch_is_kept() {
+    let (tmp, root) = batched_repo();
+    let wt = tmp.path().join("wt-spec-a");
+    git(
+        &root,
+        &["worktree", "add", "-q", wt.to_str().unwrap(), "spec-a"],
+    );
+    assert!(worktree_head_on_branch(&wt, "spec-a"));
+    assert!(!worktree_head_on_branch(&wt, ""));
+
+    let landed = || {
+        gather_merge_facts(
+            &root,
+            Some("main"),
+            "spec-a",
+            "BUG-9001",
+            false,
+            true,
+            |_| false,
+        )
+    };
+    let verdict = |head_on_branch: bool| {
+        classify_session_reap(&ReapFacts {
+            spec_finished: true,
+            process_exited: true,
+            locked: false,
+            head_on_branch,
+            worktree: landed(),
+        })
+    };
+    assert!(matches!(
+        verdict(worktree_head_on_branch(&wt, "spec-a")),
+        ReapVerdict::Reap(_)
+    ));
+
+    git(&wt, &["checkout", "-q", "--detach"]);
+    assert!(!worktree_head_on_branch(&wt, "spec-a"));
+    match verdict(worktree_head_on_branch(&wt, "spec-a")) {
+        ReapVerdict::Skip(reason) => assert!(reason.contains("session branch"), "{reason}"),
+        v => panic!("a detached worktree must be kept, got {v:?}"),
+    }
+
+    git(&wt, &["checkout", "-q", "-b", "side-work"]);
+    assert!(!worktree_head_on_branch(&wt, "spec-a"));
+    assert!(matches!(
+        verdict(worktree_head_on_branch(&wt, "spec-a")),
+        ReapVerdict::Skip(_)
+    ));
 }

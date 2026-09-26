@@ -23,6 +23,7 @@ fn finished_but_live_facts() -> ReapFacts {
         // The single bit that distinguishes NOTIFY from REAP.
         process_exited: false,
         locked: false,
+        head_on_branch: true,
         worktree: AgentWorktreeFacts {
             dirty: false,
             ancestor_of_main: true,

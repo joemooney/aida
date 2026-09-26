@@ -17,6 +17,7 @@ fn reapable_facts() -> ReapFacts {
         spec_finished: true,
         process_exited: true,
         locked: false,
+        head_on_branch: true,
         worktree: AgentWorktreeFacts {
             dirty: false,
             ancestor_of_main: true,

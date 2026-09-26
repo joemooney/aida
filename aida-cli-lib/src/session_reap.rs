@@ -40,8 +40,8 @@ use anyhow::Result;
 use colored::Colorize;
 
 use crate::doctor_cmd::{
-    branch_content_fully_landed, branch_merge_is_noop, classify_agent_worktree, AgentWorktreeFacts,
-    AgentWorktreeVerdict,
+    branch_content_fully_landed, branch_paths_match_default, classify_agent_worktree,
+    AgentWorktreeFacts, AgentWorktreeVerdict,
 };
 use crate::*;
 
@@ -83,6 +83,12 @@ pub(crate) struct ReapFacts {
     /// True when `git worktree list --porcelain` reports a `locked` line for the
     /// worktree — operator-protected, never removed.
     pub locked: bool,
+    /// True when the session has no worktree, or its worktree's HEAD is
+    /// checked out on the lease's branch. A detached HEAD or a different
+    /// branch means the merge facts (probed on the lease branch) say nothing
+    /// about the commits the worktree actually holds — keep it.
+    // trace:BUG-1657 | ai:claude
+    pub head_on_branch: bool,
     /// The worktree-GC safety facts, fed to the very same classifier
     /// `aida worktree gc` uses for its dirty / merged / unique-commit gates.
     pub worktree: AgentWorktreeFacts,
@@ -105,6 +111,7 @@ pub(crate) struct ReapFacts {
 pub(crate) fn session_should_notify(facts: &ReapFacts) -> bool {
     !facts.worktree.dirty
         && !facts.locked
+        && facts.head_on_branch
         && facts.spec_finished
         // The load-bearing distinction from a reap: the process is STILL ALIVE.
         && !facts.process_exited
@@ -129,6 +136,14 @@ pub(crate) fn classify_session_reap(facts: &ReapFacts) -> ReapVerdict {
     }
     if facts.locked {
         return ReapVerdict::Skip("worktree is locked — operator-protected".to_string());
+    }
+    // trace:BUG-1657 | ai:claude
+    if !facts.head_on_branch {
+        return ReapVerdict::Skip(
+            "worktree is not checked out on its session branch (detached or switched) — \
+             operator decision"
+                .to_string(),
+        );
     }
     // HARD BOUNDARY: a live session owns its worktree as its cwd. Leave it
     // running and leave its tree in place — AIDA never force-closes an agent.
@@ -416,6 +431,27 @@ pub(crate) fn spec_trailer_landed_on(
         })
 }
 
+/// Is `worktree`'s HEAD a symbolic ref to `refs/heads/<branch>`? A detached
+/// HEAD, another branch, an empty lease branch, or any git failure → `false`.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn worktree_head_on_branch(worktree: &std::path::Path, branch: &str) -> bool {
+    let branch = branch.trim();
+    if branch.is_empty() {
+        return false;
+    }
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["symbolic-ref", "--quiet", "HEAD"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .is_some_and(|o| {
+            String::from_utf8_lossy(&o.stdout).trim() == format!("refs/heads/{branch}")
+        })
+}
+
 /// Gather the merge facts for one session branch — the probes the shared
 /// worktree classifier needs. `worth_probing` is "the spec is finished and the
 /// process exited"; the dearer probes (trailer scan, forge lookup, content
@@ -426,7 +462,11 @@ pub(crate) fn spec_trailer_landed_on(
 /// branch; a landed commit names the spec in a trailer (batched integration);
 /// the forge reports a merged PR for the branch. A signal with commits the
 /// default branch lacks by ancestry still needs content proof — patch-id
-/// equivalence, or a merge into the default branch that would change nothing.
+/// equivalence, or every path the branch touched already identical on the
+/// default branch.
+///
+/// A failed ancestry count is UNKNOWN, not zero: no merge signal is probed and
+/// the session is kept.
 // trace:TASK-1177 | ai:claude
 // trace:BUG-1657 | ai:claude
 pub(crate) fn gather_merge_facts(
@@ -441,6 +481,7 @@ pub(crate) fn gather_merge_facts(
     let branch = branch.trim();
     // A lease with no worktree and no branch has nothing on disk that could
     // carry unmerged work, so it counts as merged.
+    let mut count_known = true;
     let (ancestor_of_main, unique_unmerged_commits) = match (branch.is_empty(), default_ref) {
         (true, _) => (true, 0),
         (false, Some(default_ref)) => {
@@ -457,12 +498,15 @@ pub(crate) fn gather_merge_facts(
                         .parse::<u32>()
                         .ok()
                 });
-            (n == Some(0), n.unwrap_or(0))
+            // Fail closed: an unreadable count must never read as "nothing
+            // unique". trace:BUG-1657 | ai:claude
+            count_known = n.is_some();
+            (n == Some(0), n.unwrap_or(u32::MAX))
         }
         // Without a resolvable default ref merged-ness cannot be proven.
         (false, None) => (false, 0),
     };
-    let worth_probing = worth_probing && !ancestor_of_main && !dirty;
+    let worth_probing = worth_probing && count_known && !ancestor_of_main && !dirty;
     // BUG-1657: a spec landed through a batched integration PR has no merge
     // of its own branch and no PR of its own; the landing commit on the
     // default branch names it in a trailer instead. Local and cheap, so it
@@ -481,13 +525,12 @@ pub(crate) fn gather_merge_facts(
     // positive whether or not anything is unshipped. Only pay for the content
     // probe when it could change the verdict. BUG-1657: a batched squash folds
     // other specs' work into the same commit, so patch-ids never match; the
-    // merge-is-a-no-op probe proves the branch adds nothing the default
-    // branch lacks.
+    // per-path probe proves every file the branch touched is already there.
     let merge_signal = pr_merged || spec_trailer_on_main;
     let content_fully_landed = match (merge_signal && unique_unmerged_commits > 0, default_ref) {
         (true, Some(default_ref)) => {
             branch_content_fully_landed(project_root, default_ref, branch)
-                || branch_merge_is_noop(project_root, default_ref, branch)
+                || branch_paths_match_default(project_root, default_ref, branch)
         }
         _ => false,
     };
@@ -595,6 +638,8 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
             spec_finished,
             process_exited,
             locked: has_worktree && worktree_is_locked(project_root, &lease.worktree_path),
+            head_on_branch: !has_worktree
+                || worktree_head_on_branch(&lease.worktree_path, &lease.branch),
             worktree,
         };
 

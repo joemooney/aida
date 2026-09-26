@@ -3843,26 +3843,31 @@ pub(crate) fn branch_content_fully_landed(
     default_side_ids.iter().any(|id| id == &branch_patch_id)
 }
 
-/// Content-level proof that merging `branch` into `default_ref` would change
-/// nothing: a three-way `git merge-tree --write-tree` of the two yields exactly
-/// `default_ref`'s own tree. This is the batched-integration complement to
-/// [`branch_content_fully_landed`]: when an integration branch folds several
-/// specs' work into ONE squash commit, neither per-commit nor whole-branch
-/// patch-ids match anything on the default side, yet every change the branch
+/// Per-path proof that everything `branch` changed since its merge-base with
+/// `default_ref` is already on `default_ref`, byte for byte: for every path the
+/// branch touched, the default branch holds the same blob id and mode, or the
+/// branch deleted the path and the default branch lacks it too. This is the
+/// batched-integration complement to [`branch_content_fully_landed`]: when an
+/// integration branch folds several specs' work into ONE squash commit, no
+/// patch-id matches anything on the default side, yet every change the branch
 /// makes is already there.
 ///
-/// Conservative on any doubt: a conflict (e.g. later default-side edits to the
-/// same lines), a failed or unsupported git call, or any tree difference
-/// returns `false` (stay KEPT). A change that landed and was later reverted on
-/// the default branch also stays KEPT — the merge would reintroduce it.
-/// Read-only: `merge-tree --write-tree` writes only unreferenced objects.
+/// Deliberately NOT a three-way merge: `git merge-tree` honours
+/// `.gitattributes` merge drivers, so a `merge=ours` path would merge
+/// "cleanly" while dropping an edit that never shipped. Tree-to-tree raw diffs
+/// compare object ids and modes only — no attributes, drivers or textconv.
+///
+/// Conservative on any doubt: a failed git call, an unparsable diff, or any
+/// touched path whose content differs returns `false` (stay KEPT). A change
+/// that landed and was later reverted or edited again on the default branch
+/// also stays KEPT. Read-only.
 // trace:BUG-1657 | ai:claude
-pub(crate) fn branch_merge_is_noop(
+pub(crate) fn branch_paths_match_default(
     project_root: &std::path::Path,
     default_ref: &str,
     branch: &str,
 ) -> bool {
-    let run = |args: &[&str]| -> Option<String> {
+    let run = |args: &[&str]| -> Option<Vec<u8>> {
         std::process::Command::new("git")
             .arg("-C")
             .arg(project_root)
@@ -3871,30 +3876,65 @@ pub(crate) fn branch_merge_is_noop(
             .output()
             .ok()
             .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .map(|o| o.stdout)
     };
-    let Some(default_tree) = run(&[
-        "rev-parse",
-        "--verify",
-        "--quiet",
-        git_arg_guard::END_OF_OPTIONS,
-        &format!("{default_ref}^{{tree}}"),
-    ]) else {
-        return false;
-    };
-    // Exit status 1 means conflicts; `run` maps every non-zero exit to None.
-    let Some(merged) = run(&[
-        "merge-tree",
-        "--write-tree",
-        "--no-messages",
+    let Some(merge_base) = run(&[
+        "merge-base",
         git_arg_guard::END_OF_OPTIONS,
         default_ref,
         branch,
     ]) else {
         return false;
     };
-    let merged_tree = merged.lines().next().unwrap_or("").trim();
-    !default_tree.is_empty() && merged_tree == default_tree
+    let merge_base = String::from_utf8_lossy(&merge_base).trim().to_string();
+    if merge_base.is_empty() {
+        return false;
+    }
+    let changed_paths = |from: &str, to: &str| -> Option<std::collections::HashSet<Vec<u8>>> {
+        let raw = run(&[
+            "diff",
+            "--raw",
+            "-z",
+            "--no-renames",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--ignore-submodules=none",
+            git_arg_guard::END_OF_OPTIONS,
+            from,
+            to,
+            "--",
+        ])?;
+        parse_raw_diff_paths(&raw)
+    };
+    // Paths the branch's own work touched, and paths where the default
+    // branch's tree differs from the branch tip. Nothing the branch changed
+    // may appear in the second set.
+    let Some(touched) = changed_paths(&merge_base, branch) else {
+        return false;
+    };
+    if touched.is_empty() {
+        return false;
+    }
+    let Some(differs) = changed_paths(default_ref, branch) else {
+        return false;
+    };
+    touched.is_disjoint(&differs)
+}
+
+/// Parse `git diff --raw -z --no-renames` output into its set of paths. Each
+/// record is a `:`-prefixed metadata field followed by one NUL-terminated
+/// path. Returns `None` on any record that does not fit that shape.
+// trace:BUG-1657 | ai:claude
+fn parse_raw_diff_paths(raw: &[u8]) -> Option<std::collections::HashSet<Vec<u8>>> {
+    let mut paths = std::collections::HashSet::new();
+    let mut fields = raw.split(|b| *b == 0).filter(|f| !f.is_empty());
+    while let Some(meta) = fields.next() {
+        if meta.first() != Some(&b':') {
+            return None;
+        }
+        paths.insert(fields.next()?.to_vec());
+    }
+    Some(paths)
 }
 
 /// BUG-1288: batched sibling of the per-commit `patch_id` closure in
