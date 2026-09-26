@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T13:48:58.178656696Z
-modified_at: 2026-09-26T16:27:47.181040533Z
+modified_at: 2026-09-26T16:36:03.125608976Z
 req_type: Bug
 comments:
 - id: 01a0ddfa-2332-79e0-a81d-1ecc15894d89
@@ -35,6 +35,19 @@ comments:
   created_at: 2026-09-26T15:39:39.076505214Z
   modified_at: 2026-09-26T15:39:39.076505214Z
   session_id: 156a4900-9e60-4f0b-9739-948c3b0efd27
+- id: 01a0de92-e1b5-7301-aea5-48bb89a4e152
+  author: joe
+  content: |-
+    Review (fresh strict Opus reviewer) of 440287d484: REQUEST_CHANGES.
+    1 BLOCKER (probe 1): the new MEMORY_LANE_DRIFT_ACTION tells lane projects to run 'aida scaffold refresh', but refresh does far more than the lane skills. I ran refresh_agent_packs_at (the core of 'aida scaffold refresh') in a tempdir on a memory-lane project, with and without a saved footprint, after aging one skill to the header-less form. Diffing the tree showed: (a) 26 discipline-pack files ADDED under .aida/discipline/ (about 200KB) plus the .gitignore allow-list step; (b) the lane AGENTS.md block '# AIDA Memory Lane' REPLACED by the full '# AIDA Conventions' block, which points at .claude/AIDA.md, the .claude/settings.json statusline and discipline docs that a lane project does not have. The CLI path also seeds type protocols and may offer the permission-posture fix. This contradicts the 08:38 PROXY DECISION, which said not to suggest refresh for lane projects for exactly this reason. Fix: keep the manual restore/refresh wording for lane drift (the main-branch MEMORY_LANE_SKILL_ACTION, or a variant naming the extract+copy steps), or gate the AGENTS.md block and discipline-pack steps of refresh on full_footprint. Gating is a larger change and needs the owning spec's sign-off. Also fix the test bug_1653_doctor_memory_lane_drift_points_at_refresh: it only checks that the scaffold-drift finding clears and never checks the side effects.
+    2 OK (probe 2): the migration is not gated by footprint. In any project it rewrites a header-less .claude/.codex aida-capture/aida-learn only when the header-less copy equals the pack raw body or the Claude master, modulo CRLF and trailing EOF whitespace. That content is AIDA's own, so nothing is lost, and skipping .aida-bak is defensible. A Claude master sitting in the codex pack gets replaced by the pack body. Nit: it uses a plain fs::write, where refresh_file follows the same pattern, so that is consistent.
+    3 OK (probe 3): generated_text_matches trims trailing whitespace only at the end of the file, not per line. A file that differs only in trailing blank lines or spaces at EOF counts as pristine, and losing that is trivial. Acceptable.
+    4 OK (probe 4): symlink_blocking_write runs before is_unwrapped_lane_skill, so a symlinked skill dir or file is skipped and recorded, and the extra symlink_target check is redundant but harmless. Backslashes in the pack are normalized before the match. rendered_pack_skill's Path join only affects the extension check in wrap_with_aida_header. CRLF is normalized and has a test. I did this by reading the code; I did not run it on Windows.
+    5 OK (probe 5): I mutated is_unwrapped_pack_skill to always return false. bug_1653_refresh_wraps_unwrapped_pristine_lane_skills and bug_1653_doctor_memory_lane_drift_points_at_refresh both FAIL, then I reverted. Tests (fake HOME, CARGO_BUILD_JOBS=3): aida-cli-lib --lib bug_1653 5/5, bug_1645 11/11, task_1503 3/3, doctor_ 165/165, refresh 41/41; aida-core --lib scaffold 155/155.
+    The rest is good to land once finding 1 is fixed: lane init writes header-wrapped bytes identical to the full scaffold, and the header-less migration is correct. Scratch worktree removed.
+  created_at: 2026-09-26T16:36:03.125608976Z
+  modified_at: 2026-09-26T16:36:03.125608976Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de4a-3d07-7e31-a2cf-072b48d6e33c
   author: aida-session-start
