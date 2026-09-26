@@ -1,0 +1,45 @@
+id: 01a0df60-6993-7053-835f-ad2754cff462
+spec_id: BUG-1674
+agreed_id: BUG-1674
+title: 'aida show still exceeds the 5000 ms ceiling (24.5 s) on BUG-1606''s fixed binary: the strict stale-cache refresh waits unbounded behind a concurrent writer'
+description: |
+  Routed by performance-guard (CronJobFailed 2026-09-26 ~14:46 UTC; re-checked 20:20 UTC, still tripping). The ceiling limb (ADR-53) trips on binaries that already contain BUG-1606's fix (519af1777c, merged in batch 56; ancestor of 7c6faed690 and b331809ce7). The proportion limb is fine (7.6% of 487 in-lineage calls over 1000 ms; tolerance 10%).
+
+  EVIDENCE (~/.aida/usage.jsonl, cmd=show, last 24h, in-lineage):
+  - 2026-09-26T18:48:01Z  24484 ms  binary 7c6faed690  advisor
+  - 2026-09-26T18:43:24Z  13094 ms  binary 7c6faed690  advisor
+  - 2026-09-26T15:17:20Z  13072 ms  binary b331809ce7  advisor
+  - also 8416, 7950, 6535, 6360, 5283 ms earlier in the window. Median show = 143 ms, so the distribution is still bimodal.
+
+  CORRELATION (commands logged within ~40 s of each slow show, same host):
+  - 24484 ms show: edit 27826 ms ended 1 s earlier, list 29101 ms and add 10741 ms finished 2-9 s later; statusline 5351 ms. Every command that touches the store/cache stalled together, and a show 13 s later took 110 ms.
+  - 13094 ms show: questions ask 22681 ms, edit 11283 ms, add 10117 ms, comment add 7616 ms in the preceding 30 s; the next three shows took 75-205 ms.
+  - 13072 ms show: two worktree add calls at 11653 ms and 10848 ms in the preceding 35 s.
+  Every slow show lines up with a concurrent writer (edit/add/comment/worktree add). This is the pattern where a stale cache gets refreshed inline behind a writer, which SPIKE-90 measured (7-52 s). BUG-1606's fix makes show fail closed on a stale snapshot (strict refresh), so show waits for the writer with no bound. STORY-1484 / TASK-1526 add the bounded wait plus stale-label reader protocol, but `show` is NOT in STORY-1484's stale-allowed command list. As scoped, that work does not bound this tail.
+
+  This is a real regression against ADR-53's ceiling, not a budget problem. The 5000 ms ceiling is still the right interaction bound, and the slow calls come from lock waits, not from work that show has to do.
+
+  ## Acceptance
+  - `aida show <ID>` returns in under 5000 ms wall-clock while another process holds the cache write lock or is refreshing a stale cache. Test: a fixture store with a deliberately stale cache and a live foreign writer holding the lock/refresh for at least 20 s; show must return in under 5 s. It must either serve the spec from authoritative YAML (a single-object read does not need the cache) or serve a stale-labelled read per STORY-1484's reader protocol. It must never wait unbounded.
+  - Whichever path is chosen keeps BUG-1606's correctness guarantee: show never displays a status or relationship that contradicts the authoritative YAML without a stale label. There must be a test for this.
+  - If the chosen fix routes through STORY-1484's protocol, add `show` to STORY-1484's stale-allowed list or state the explicit bounded-strict exception there. Record that change on STORY-1484.
+  - Re-measure: `aida doctor check performance` is quiet on BOTH limbs against a fresh in-lineage 24 h window of this repo's real dogfood traffic, at normal concurrency (not a synthetic quiet run). Paste the output as a comment here.
+
+  Related: BUG-1606 (previous fix, done), BUG-1594, ADR-53, STORY-1484, TASK-1526, TASK-1514, SPIKE-90.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T20:20:32.787349526Z
+modified_at: 2026-09-26T20:20:32.787349526Z
+req_type: Bug
+tags:
+- performance
+filed_at:
+  code_sha: b13b2c611e810a2ba044efb50b32070667d4b37a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
