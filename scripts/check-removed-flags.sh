@@ -3,6 +3,9 @@ set -euo pipefail
 
 # trace:STORY-1028 | ai:codex
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# A missing rg must fail the check, not read as "no matches".
+# trace:BUG-1665 | ai:claude
+command -v rg >/dev/null 2>&1 || { echo "check-removed-flags: ripgrep (rg) is required but not installed" >&2; exit 2; }
 cd "$root"
 
 common_rg=(
@@ -11,6 +14,12 @@ common_rg=(
   --glob '!bench/agent-surface/results/**'
   --glob '!docs/casts/**'
   --glob '!scripts/check-removed-flags.sh'
+  # Release history quotes flag spellings that were live when each entry
+  # shipped; it is a dated record, not current usage. Anchored to the root
+  # file so any other doc, template, help text or code is still scanned.
+  # trace:BUG-1665 | ai:claude
+  --glob '!/CHANGELOG.md'
+  --glob '!tests/test_check_removed_flags.sh'
 )
 
 literal_patterns=(
@@ -35,13 +44,15 @@ literal_patterns=(
 
 failed=0
 for pattern in "${literal_patterns[@]}"; do
-  if "${common_rg[@]}" --fixed-strings "$pattern"; then
+  # An explicit search path keeps rg from reading a piped stdin instead of
+  # the tree. trace:BUG-1665 | ai:claude
+  if "${common_rg[@]}" --fixed-strings -e "$pattern" -- .; then
     failed=1
   fi
 done
 
 graph_regex='(\baida|\$AIDA_BIN|"\$AIDA_BIN") graph( +("[^"]+"|<[^>]+>|\$[A-Za-z_][A-Za-z0-9_]*|[A-Za-z0-9_{}./:-]+))? +--(blocked-by|blocks|tree|impact)\b|\bgraph +--(blocked-by|blocks|tree|impact)\b'
-if "${common_rg[@]}" "$graph_regex"; then
+if "${common_rg[@]}" -e "$graph_regex" -- .; then
   failed=1
 fi
 

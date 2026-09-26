@@ -154,11 +154,30 @@ impl CachedGitBackend {
         })
     }
 
+    /// [`Self::id_candidates`] for a caller that acts on the answer: the cache
+    /// is always brought to the store's HEAD first, even while another process
+    /// holds the cache write lock, so a spec committed by another writer since
+    /// the last refresh is among the candidates.
+    // trace:BUG-1670 | ai:claude
+    pub fn id_candidates_strict(&self, id: &str) -> Result<Vec<crate::id_collisions::IdCandidate>> {
+        self.with_cache_schema_retry("resolve id candidates", || {
+            self.ensure_cache_fresh()?;
+            let rows = self.cache.id_rows_for(id)?;
+            Ok(crate::id_collisions::candidates_for_id(rows.iter(), id))
+        })
+    }
+
     /// Resolve `id` for a WRITE — or any caller that must not act on a guess.
     /// A UUID resolves directly. A spec/agreed id naming more than one
     /// requirement returns an [`AmbiguousIdError`] (downcastable from the
     /// `anyhow::Error`) listing each candidate's unambiguous handle; exactly
     /// one candidate resolves as `get_requirement_by_spec_id` would.
+    ///
+    /// The candidate scan always refreshes a stale cache first (never serves
+    /// the last snapshot because another process is writing the cache): a
+    /// snapshot that misses a colliding spec another writer committed would
+    /// report one candidate and let the write pick it silently. Read-only
+    /// callers use [`Self::get_requirement_unambiguous_for_read`].
     ///
     /// If the cache cannot answer, the check falls back to the authoritative
     /// full scan rather than skipping it: an unchecked write is the bug.
@@ -166,10 +185,30 @@ impl CachedGitBackend {
     /// [`AmbiguousIdError`]: crate::id_collisions::AmbiguousIdError
     // trace:BUG-1535 | ai:claude
     pub fn get_requirement_unambiguous(&self, id: &str) -> Result<Option<Requirement>> {
+        // trace:BUG-1670 | ai:claude
+        self.resolve_unambiguous(id, true)
+    }
+
+    /// [`Self::get_requirement_unambiguous`] for a READ-ONLY caller (`aida
+    /// show` and friends): the candidate scan may serve the last committed
+    /// snapshot while another process holds the cache write lock, so the read
+    /// stays as cheap as the lookup it guards. Never use it before a write.
+    // trace:BUG-1670 | ai:claude
+    pub fn get_requirement_unambiguous_for_read(&self, id: &str) -> Result<Option<Requirement>> {
+        self.resolve_unambiguous(id, false)
+    }
+
+    // trace:BUG-1535 trace:BUG-1670 | ai:claude
+    fn resolve_unambiguous(&self, id: &str, strict: bool) -> Result<Option<Requirement>> {
         if let Ok(uuid) = Uuid::parse_str(id.trim()) {
             return self.get_requirement(&uuid);
         }
-        let candidates = match self.id_candidates(id) {
+        let scanned = if strict {
+            self.id_candidates_strict(id)
+        } else {
+            self.id_candidates(id)
+        };
+        let candidates = match scanned {
             Ok(c) => c,
             Err(_) => {
                 let store = self.inner.load()?;
@@ -626,6 +665,19 @@ impl CachedGitBackend {
         })
     }
 
+    /// [`Self::list_summaries`] for a caller that deletes, prunes, files or
+    /// gates on the rows: a stale cache is always brought to the store's HEAD
+    /// first. The tolerant read serves the last committed snapshot whenever
+    /// another process holds the cache write lock, and that snapshot can be
+    /// arbitrarily old while other processes keep writing.
+    // trace:BUG-1670 | ai:claude
+    pub fn list_summaries_strict(&self, filter: &ListFilter) -> Result<Vec<RequirementSummary>> {
+        self.with_cache_schema_retry("list cached summaries", || {
+            self.ensure_cache_fresh()?;
+            self.cache.list_summaries(filter)
+        })
+    }
+
     /// TASK-1065: count non-archived specs with a still-pending DecisionRequest,
     /// read from the `has_pending_decision` cache column. Cache-backed so the
     /// `aida status --full` decision-inbox count no longer needs a full
@@ -671,6 +723,17 @@ impl CachedGitBackend {
     pub fn descendant_ids(&self, root: &Uuid) -> Result<std::collections::HashSet<Uuid>> {
         self.with_cache_schema_retry("read cached descendants", || {
             self.ensure_cache_fresh_for_read()?;
+            self.cache.descendant_ids(root)
+        })
+    }
+
+    /// [`Self::descendant_ids`] for a write-path gate: a stale cache is always
+    /// brought to the store's HEAD first, so a child added (or re-parented) by
+    /// another writer since the last refresh is classified correctly.
+    // trace:BUG-1670 | ai:claude
+    pub fn descendant_ids_strict(&self, root: &Uuid) -> Result<std::collections::HashSet<Uuid>> {
+        self.with_cache_schema_retry("read cached descendants", || {
+            self.ensure_cache_fresh()?;
             self.cache.descendant_ids(root)
         })
     }
@@ -1019,6 +1082,11 @@ impl DatabaseBackend for CachedGitBackend {
     // (no full-store load). trace:TASK-1468 | ai:claude
     fn get_requirement_unambiguous(&self, id: &str) -> Result<Option<Requirement>> {
         CachedGitBackend::get_requirement_unambiguous(self, id)
+    }
+
+    // trace:BUG-1670 | ai:claude
+    fn get_requirement_unambiguous_for_read(&self, id: &str) -> Result<Option<Requirement>> {
+        CachedGitBackend::get_requirement_unambiguous_for_read(self, id)
     }
 
     fn list_requirements(&self, include_archived: bool) -> Result<Vec<Requirement>> {

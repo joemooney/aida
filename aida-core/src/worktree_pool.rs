@@ -1034,15 +1034,23 @@ mod git_integration_tests {
     fn acquire_populates_submodules_by_default() {
         let (repo, _sub) = init_repo_with_submodule();
         let root = repo.path();
+        // `acquire` shells out to git, so the protocol allowance has to be in
+        // the process env; hold the crate-wide env lock across the whole
+        // set -> acquire -> restore window. trace:BUG-1666 | ai:claude
+        let lock = crate::TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
         let old = std::env::var_os("GIT_ALLOW_PROTOCOL");
         std::env::set_var("GIT_ALLOW_PROTOCOL", "file");
 
-        let path = acquire(root, &opts()).unwrap();
+        let path = acquire(root, &opts());
 
         match old {
             Some(v) => std::env::set_var("GIT_ALLOW_PROTOCOL", v),
             None => std::env::remove_var("GIT_ALLOW_PROTOCOL"),
         }
+        drop(lock);
+        let path = path.unwrap();
         assert!(
             path.join("external/dep/README.md").is_file(),
             "pooled worktree should initialize submodules before handoff"

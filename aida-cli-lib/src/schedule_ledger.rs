@@ -87,6 +87,13 @@ pub(crate) struct RoutedFailure {
     pub trip_id: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub performance: Vec<PerformanceAudit>,
+    /// The job whose failure fired the route.
+    // trace:BUG-1655 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job: Option<String>,
+    /// That job's `exit N: <stderr tail>` line (a timeout reads `exit 124:`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// Who reported a run: the seat that acted, the session id if known, and the

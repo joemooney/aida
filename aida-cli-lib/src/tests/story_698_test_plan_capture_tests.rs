@@ -100,6 +100,9 @@ fn tty_interactive_first_time_prompts() {
 
 #[test]
 fn env_disabled_predicate_matches_falsey_values() {
+    // Shared env lock for the whole test; prior value restored on drop.
+    // trace:BUG-1666 | ai:claude
+    let mut env = crate::test_env::EnvVarGuard::unset("AIDA_AUTO_TEST_PLAN_CAPTURE");
     for (val, want) in [
         ("0", true),
         ("false", true),
@@ -109,12 +112,11 @@ fn env_disabled_predicate_matches_falsey_values() {
         ("true", false),
         ("", false),
     ] {
-        std::env::set_var("AIDA_AUTO_TEST_PLAN_CAPTURE", val);
+        env.reset(val);
         assert_eq!(
             capture_test_plan_disabled(),
             want,
             "AIDA_AUTO_TEST_PLAN_CAPTURE={val:?}"
         );
     }
-    std::env::remove_var("AIDA_AUTO_TEST_PLAN_CAPTURE");
 }

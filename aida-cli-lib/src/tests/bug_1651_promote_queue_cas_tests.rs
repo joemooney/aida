@@ -14,8 +14,9 @@ use std::path::Path;
 use aida_core::{QueueEntry, RequirementStatus};
 
 use crate::bug_1638_race_seam_tests::{
-    arm_race, concurrently_set, open_backend, pin_queue_user, project_with, SPEC,
+    arm_race, concurrently_set, open_backend, project_with, SPEC,
 };
+use crate::test_env::pin_queue_user;
 
 fn promote_to_work(store_root: &Path, stale: &aida_core::Requirement) -> anyhow::Result<String> {
     crate::findings_promote_to_work(

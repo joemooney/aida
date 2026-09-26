@@ -201,6 +201,21 @@ fn all_review_history_helpers_reject_noncanonical_marker_placement() {
     assert_eq!(review_round_from_comments(&comments), 1);
 }
 
+/// Clear the env tiers the queue-work prompt and plan resolvers read
+/// (`AIDA_SESSION_ROLE`, the agent-gate pair, `AIDA_REVIEW_ROUND`) and hold
+/// the shared env lock for the guard's lifetime. A test that only READS these
+/// through the code under test still races the tests in this file that set
+/// them, so it must hold this for its whole body; restored on drop.
+// trace:BUG-1666 | ai:claude
+fn quiet_queue_env() -> crate::test_env::EnvVarsGuard {
+    crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", None),
+        ("AIDA_AGENT_GATE_NAME", None),
+        ("AIDA_AGENT_GATE_ROLE", None),
+        ("AIDA_REVIEW_ROUND", None),
+    ])
+}
+
 fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
     let mut r = Requirement::new(spec_id.to_string(), String::new());
     r.spec_id = Some(spec_id.into());
@@ -578,7 +593,9 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
 // trace:BUG-862 | ai:claude
 #[test]
 fn effective_auto_complete_role_maps_dispatch_seats_to_implementer() {
-    let _guard = crate::test_env::env_lock();
+    // The guard holds the shared env lock for the whole test and restores the
+    // ambient role on drop (also on a failed assert). trace:BUG-1666 | ai:claude
+    let mut env = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
     for (seat, expect) in [
         ("advisor", "implementer"),
         ("human", "implementer"),
@@ -586,20 +603,20 @@ fn effective_auto_complete_role_maps_dispatch_seats_to_implementer() {
         ("reviewer", "reviewer"),
         ("implementer", "implementer"),
     ] {
-        std::env::set_var("AIDA_SESSION_ROLE", seat);
+        env.reset(seat);
         assert_eq!(
             effective_auto_complete_role(None),
             expect,
             "session role {seat}"
         );
     }
-    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
+    env.reset("advisor");
     assert_eq!(
         effective_auto_complete_role(Some("reviewer")),
         "reviewer",
         "explicit override beats the dispatch-seat mapping"
     );
-    std::env::remove_var("AIDA_SESSION_ROLE");
+    env.reset_unset();
     assert_eq!(effective_auto_complete_role(None), "implementer");
 }
 
@@ -1049,6 +1066,7 @@ fn orchestrated_reviewer_can_pick_current_implementer_routed_spec() {
 /// Reviewer role + PR scope → `/aida-review --pr N`.
 #[test]
 fn prompt_reviewer_pr_passes_number() {
+    let _env = quiet_queue_env();
     let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
     assert_eq!(
@@ -1059,24 +1077,17 @@ fn prompt_reviewer_pr_passes_number() {
 
 #[test]
 fn prompt_agent_gate_reuses_review_verdict_skill_for_custom_role() {
-    let _guard = crate::test_env::env_lock();
-    let old_name = std::env::var("AIDA_AGENT_GATE_NAME").ok();
-    let old_role = std::env::var("AIDA_AGENT_GATE_ROLE").ok();
-    std::env::set_var("AIDA_AGENT_GATE_NAME", "security-review");
-    std::env::set_var("AIDA_AGENT_GATE_ROLE", "security-reviewer");
+    // trace:BUG-1666 | ai:claude
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_AGENT_GATE_NAME", Some("security-review")),
+        ("AIDA_AGENT_GATE_ROLE", Some("security-reviewer")),
+        ("AIDA_REVIEW_ROUND", None),
+    ]);
     let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
 
     let prompt = derive_queue_work_prompt(&plan, "security-reviewer", false, false, None);
 
-    match old_name {
-        Some(v) => std::env::set_var("AIDA_AGENT_GATE_NAME", v),
-        None => std::env::remove_var("AIDA_AGENT_GATE_NAME"),
-    }
-    match old_role {
-        Some(v) => std::env::set_var("AIDA_AGENT_GATE_ROLE", v),
-        None => std::env::remove_var("AIDA_AGENT_GATE_ROLE"),
-    }
     assert!(prompt.starts_with("/aida-review --pr 11"), "{prompt}");
     assert!(prompt.contains("Agent gate: security-review"), "{prompt}");
     assert!(prompt.contains("Gate role: security-reviewer"), "{prompt}");
@@ -1085,6 +1096,7 @@ fn prompt_agent_gate_reuses_review_verdict_skill_for_custom_role() {
 /// Reviewer role + non-PR scope → bare `/aida-review`.
 #[test]
 fn prompt_reviewer_non_pr_is_bare() {
+    let _env = quiet_queue_env();
     let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
     assert_eq!(
@@ -1096,6 +1108,7 @@ fn prompt_reviewer_non_pr_is_bare() {
 /// Implementer + item mode → `/aida-pickup <ID>` (focus directive).
 #[test]
 fn prompt_implementer_item_passes_focus() {
+    let _env = quiet_queue_env();
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1115,6 +1128,7 @@ fn prompt_implementer_item_passes_focus() {
 /// receive the research/report contract instead of treating it as code work.
 #[test]
 fn prompt_spike_item_names_research_lane_and_report_contract() {
+    let _env = quiet_queue_env();
     let e = resolved("SPIKE-82", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1137,8 +1151,8 @@ fn prompt_spike_item_names_research_lane_and_report_contract() {
 // trace:STORY-1226 | ai:claude
 #[test]
 fn pickup_prompt_leads_with_due_jobs_for_role() {
-    let _guard = crate::test_env::env_lock();
-    std::env::remove_var("AIDA_AGENT_GATE_NAME");
+    // trace:BUG-1666 | ai:claude
+    let mut env = crate::test_env::EnvVarGuard::unset("AIDA_AGENT_GATE_NAME");
     let e = resolved("TASK-1226", entry(Uuid::now_v7(), Some("advisor"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1180,9 +1194,8 @@ fn pickup_prompt_leads_with_due_jobs_for_role() {
     // Nothing due → unchanged.
     assert_eq!(prepend_due_jobs(base.clone(), ""), base);
     // An agent gate never gets the block.
-    std::env::set_var("AIDA_AGENT_GATE_NAME", "security");
+    env.reset("security");
     assert_eq!(prepend_due_jobs(base.clone(), &block), base);
-    std::env::remove_var("AIDA_AGENT_GATE_NAME");
 }
 
 /// BUG-814: a rework pickup with a blocking review verdict must lead with the
@@ -1191,6 +1204,7 @@ fn pickup_prompt_leads_with_due_jobs_for_role() {
 // trace:BUG-814 | ai:codex
 #[test]
 fn prompt_implementer_item_leads_with_review_findings() {
+    let _env = quiet_queue_env();
     let e = resolved("BUG-814", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1272,6 +1286,7 @@ fn rework_findings_lookup_ignores_lone_unrelated_blocking_verdict() {
 // point so the skill skips its own confirm). trace:TASK-86 | ai:claude
 #[test]
 fn prompt_implementer_cluster_is_auto_first() {
+    let _env = quiet_queue_env();
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
     assert_eq!(
@@ -1286,6 +1301,7 @@ fn prompt_implementer_cluster_is_auto_first() {
 // trace:TASK-86 | ai:claude
 #[test]
 fn prompt_implementer_head_is_auto_first() {
+    let _env = quiet_queue_env();
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = plan_with(QueueWorkMode::Head, "EPIC-20", vec![e]);
     assert_eq!(
@@ -1298,6 +1314,7 @@ fn prompt_implementer_head_is_auto_first() {
 /// item focus, so the session writes a plan instead of implementing.
 #[test]
 fn prompt_plan_only_runs_aida_plan() {
+    let _env = quiet_queue_env();
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1317,6 +1334,7 @@ fn prompt_plan_only_runs_aida_plan() {
 /// structured decision dialog) with the spec focus, not /aida-pickup.
 #[test]
 fn prompt_guided_runs_guided_implement() {
+    let _env = quiet_queue_env();
     let e = resolved("STORY-7", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -2575,6 +2593,7 @@ fn prepare_auto_complete_phase1_status_flips_approved_before_spawn() {
 
 #[test]
 fn auto_complete_head_names_sibling_role_queue_and_honors_role_override() {
+    let _env = quiet_queue_env();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let backend = aida_core::GitBackend::new(&root).unwrap();
@@ -2628,10 +2647,9 @@ fn auto_complete_head_names_sibling_role_queue_and_honors_role_override() {
 #[test]
 fn resolve_queue_work_plan_auto_queues_when_not_strict() {
     // BUG-1195: this test mutates AIDA_SESSION_ROLE — serialize with the other
-    // env-mutating tests instead of racing them.
-    let _guard = crate::test_env::env_lock();
-    let prior_role = std::env::var("AIDA_SESSION_ROLE").ok();
-    std::env::remove_var("AIDA_SESSION_ROLE");
+    // env-mutating tests instead of racing them. The guard also restores the
+    // ambient role on drop, even on a failed assert. trace:BUG-1666 | ai:claude
+    let _env = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let backend = aida_core::GitBackend::new(&root).unwrap();
@@ -2702,9 +2720,6 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
     let entries = storage.queue_list("test-user", false).unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].for_role.as_deref(), Some("implementer"));
-    if let Some(role) = prior_role {
-        std::env::set_var("AIDA_SESSION_ROLE", role);
-    }
 }
 
 fn queue_review_story(storage: &Storage, root: &std::path::Path) {
@@ -2765,6 +2780,7 @@ fn queued_review_story_for_pr_detects_queued_story() {
 // PR→backing-spec into an implementer pickup. trace:STORY-501 | ai:claude
 #[test]
 fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
+    let _env = quiet_queue_env();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let storage = Storage::new(&root);
@@ -2796,13 +2812,12 @@ fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
 /// reviewer route regardless of that env role, so the story is found.
 #[test]
 fn resolve_queue_work_plan_pr_n_finds_reviewer_routed_story_across_users_and_env_role() {
-    let _guard = crate::test_env::env_lock();
+    // trace:BUG-1666 | ai:claude
+    let mut env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let storage = Storage::new(&root);
     queue_review_story(&storage, &root);
-    let prev = std::env::var_os("AIDA_SESSION_ROLE");
-    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
     let plan = resolve_queue_work_plan(
         &storage,
         "role:implementer",
@@ -2824,10 +2839,8 @@ fn resolve_queue_work_plan_pr_n_finds_reviewer_routed_story_across_users_and_env
         false,
         None,
     );
-    match prev {
-        Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
-        None => std::env::remove_var("AIDA_SESSION_ROLE"),
-    }
+    // The rest of the test runs with no session role, still under the lock.
+    env.reset_unset();
     let plan = plan.expect("PR-N resolves through the reviewer route for another user");
     assert!(plan.review_target.is_some());
     assert_eq!(plan.anchor_display, "STORY-901");
@@ -3542,6 +3555,7 @@ fn bug_1608_dependent_of_shelved_spec_is_skipped_in_same_drain() {
 // trace:BUG-1608 | ai:claude
 #[test]
 fn bug_1608_dependent_of_done_but_not_completed_prereq_is_not_picked() {
+    let _env = quiet_queue_env();
     let (_dir, storage) = bug_1608_fixture(RequirementStatus::Done, false);
     let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
     assert!(pick.is_none(), "NFR-56 must not be picked: {pick:?}");
