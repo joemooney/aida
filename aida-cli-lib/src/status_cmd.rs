@@ -1484,7 +1484,7 @@ pub(crate) fn print_scaffolding_freshness(
     store: &aida_core::models::RequirementsStore,
     db_path: &std::path::Path,
 ) {
-    use aida_core::scaffolding::{ScaffoldConfig, Scaffolder};
+    use aida_core::scaffolding::Scaffolder;
 
     // BUG-43: drive the scaffolder with the *actual* store and the
     // *actual* db_path, matching how init/scaffold-apply construct the
@@ -1492,7 +1492,9 @@ pub(crate) fn print_scaffolding_freshness(
     // db_path-derived data (`database_filename()`) into its content, so
     // any mismatch on either input falsely reports drift on a fresh
     // init. trace:BUG-43 | ai:claude
-    let config = ScaffoldConfig::default();
+    // The Codex/Antigravity packs follow the saved agent selection.
+    // trace:BUG-1639 | ai:claude
+    let config = crate::init_cmd::scaffold_config_for_project(project_root);
     let mut scaffolder =
         Scaffolder::with_database(project_root.to_path_buf(), config, db_path.to_path_buf());
     let preview = scaffolder.preview(store);

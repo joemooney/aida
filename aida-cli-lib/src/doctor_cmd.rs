@@ -779,7 +779,7 @@ fn codex_ignores_prompt_dir_finding_for_version(
             "~/.codex/prompts contains AIDA prompt files, but installed Codex {}.{}.{} does not discover them as `/aida-*` slash commands",
             version.0, version.1, version.2
         ),
-        action: "Prune the dead prompt pack (`rm -rf ~/.codex/prompts` or delete its `aida-*.md` and `*.aida-bak` files); use scaffolded `.codex/skills/` via `/skills` or `$aida-*`, or run the matching `aida ...` CLI verb directly".to_string(),
+        action: "Prune the dead prompt pack (`rm -rf ~/.codex/prompts` or delete its `aida-*.md` and `*.aida-bak` files); use the project's `.agents/skills/` via `/skills` or `$aida-*`, or run the matching `aida ...` CLI verb directly".to_string(),
         safe_heal: false,
     })
 }
@@ -801,7 +801,7 @@ fn codex_ignores_prompt_dir_finding(dir: &std::path::Path) -> Option<DoctorFindi
 /// initialized project changes nothing, so the lane-safe fix is to restore the
 /// skill from the embedded templates by hand.
 // trace:BUG-1645 | ai:claude
-const MEMORY_LANE_SKILL_ACTION: &str = "Memory-lane project: do not run `aida scaffold upgrade` (it installs the full skill set). Restore or refresh the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.codex/skills/aida-capture/SKILL.md`).";
+const MEMORY_LANE_SKILL_ACTION: &str = "Memory-lane project: do not run `aida scaffold upgrade` (it installs the full skill set). Restore or refresh the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.agents/skills/aida-capture/SKILL.md`).";
 
 fn scan_scaffold_drift(
     project_root: &std::path::Path,
@@ -810,14 +810,20 @@ fn scan_scaffold_drift(
     let mut findings = Vec::new();
 
     // (1) Project-local vendor prompts/skills (Template-category, AIDA-owned).
-    let config = ScaffoldConfig::default();
+    // The Codex/Antigravity packs are expected only when one of them is in
+    // the saved agent selection, so a Claude-only project is never told
+    // Codex skills are missing. trace:BUG-1639 | ai:claude
+    let config = crate::init_cmd::scaffold_config_for_project(project_root);
+    let portable_selected = config.generate_codex_skills || config.generate_antigravity_skills;
     let db_path = project_root.join(".aida/cache.db");
     let status = check_scaffold_status(store, project_root, &config, &db_path);
     let is_vendor_prompt_or_skill = |p: &std::path::Path| {
         let s = p.to_string_lossy();
         s.starts_with(".claude/commands/")
             || s.starts_with(".claude/skills/")
+            || s.starts_with(".agents/skills/")
             || s.starts_with(".codex/skills/")
+            || s.starts_with(".antigravity/skills/")
     };
     let drifted: Vec<String> = status
         .modified
@@ -825,10 +831,11 @@ fn scan_scaffold_drift(
         .filter_map(|(p, _)| is_vendor_prompt_or_skill(p).then(|| p.to_string_lossy().into_owned()))
         .collect();
     // trace:BUG-1117 | ai:codex
-    // Missing `.codex/skills/*` is scaffold drift too: Codex >=0.142 does not
+    // Missing `.agents/skills/*` is scaffold drift too: Codex >=0.142 does not
     // discover the old ~/.codex/prompts pack as `$aida-*`, so absence of the
     // project-local skill surface leaves a codex-vendor project with no working
-    // skill entry point.
+    // skill entry point. Codex 0.157 and Antigravity 1.2.11 both read
+    // `.agents/skills`, the pack new installs get. trace:BUG-1639 | ai:claude
     // A memory-lane project (saved footprint, or recognised from its packs
     // when it predates the saved footprint) is missing only what memory-lane
     // installs; a minimal one installs no skills. Never nudge either toward
@@ -850,22 +857,22 @@ fn scan_scaffold_drift(
         .filter(|p| expected_by_footprint(p))
         .filter_map(|p| is_vendor_prompt_or_skill(p).then(|| p.to_string_lossy().into_owned()))
         .collect();
-    let missing_codex_skill_files: Vec<&String> = missing_vendor_files
+    let missing_portable_skill_files: Vec<&String> = missing_vendor_files
         .iter()
-        .filter(|p| p.starts_with(".codex/skills/"))
+        .filter(|p| portable_selected && p.starts_with(".agents/skills/"))
         .collect();
-    if !missing_codex_skill_files.is_empty() {
+    if !missing_portable_skill_files.is_empty() {
         findings.push(DoctorFinding {
             category: "scaffold-drift".to_string(),
             id: "scaffold-drift/codex-skills-missing".to_string(),
             summary: format!(
-                ".codex/skills is missing AIDA skill files ({} missing); Codex uses this project-local surface for `$aida-*`",
-                missing_codex_skill_files.len()
+                ".agents/skills is missing AIDA skill files ({} missing); Codex and Antigravity use this project-local surface for `$aida-*`",
+                missing_portable_skill_files.len()
             ),
             action: if lane {
                 MEMORY_LANE_SKILL_ACTION.to_string()
             } else {
-                "Run `aida scaffold upgrade` to create `.codex/skills/aida-*/SKILL.md`; then reopen Codex or run `/skills` and use `$aida-capture`.".to_string()
+                "Run `aida scaffold upgrade` to create `.agents/skills/aida-*/SKILL.md`; then reopen Codex or run `/skills` and use `$aida-capture`.".to_string()
             },
             safe_heal: false,
         });
@@ -6551,7 +6558,7 @@ hostname = "localhost"
         );
         let preview = scaffolder.preview(&store);
         scaffolder.apply(&preview).unwrap();
-        std::fs::remove_dir_all(dir.path().join(".codex/skills/aida-commit")).unwrap();
+        std::fs::remove_dir_all(dir.path().join(".agents/skills/aida-commit")).unwrap();
         std::fs::remove_dir_all(dir.path().join(".claude/skills/aida-commit")).unwrap();
 
         let findings = scan_scaffold_drift(dir.path(), &store);
@@ -6607,7 +6614,7 @@ hostname = "localhost"
         let store = aida_core::RequirementsStore::new();
         crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
         // Pre-TASK-1503 shape: no manifest; no saved footprint (pre-STORY-830).
-        for pack in [".claude/skills", ".codex/skills"] {
+        for pack in [".claude/skills", ".agents/skills"] {
             std::fs::remove_file(
                 root.join(pack)
                     .join(aida_core::scaffolding::refresh::DELIVERED_MANIFEST),
@@ -6624,7 +6631,7 @@ hostname = "localhost"
         );
 
         // Losing a memory-lane skill is still reported.
-        std::fs::remove_dir_all(root.join(".codex/skills/aida-learn")).unwrap();
+        std::fs::remove_dir_all(root.join(".agents/skills/aida-learn")).unwrap();
         let findings = scan_scaffold_drift(root, &store);
         let finding = findings
             .iter()
@@ -6699,13 +6706,52 @@ hostname = "localhost"
         let finding = findings
             .iter()
             .find(|f| f.id == "scaffold-drift/codex-skills-missing")
-            .expect("missing .codex/skills should be flagged as scaffold drift");
+            .expect("missing .agents/skills should be flagged as scaffold drift");
 
-        assert!(finding.summary.contains(".codex/skills"));
+        // trace:BUG-1639 | ai:claude
+        assert!(finding.summary.contains(".agents/skills"));
         assert!(finding.summary.contains("$aida-*"));
         assert!(finding.action.contains("aida scaffold upgrade"));
-        assert!(finding.action.contains(".codex/skills/aida-*/SKILL.md"));
+        assert!(finding.action.contains(".agents/skills/aida-*/SKILL.md"));
         assert!(finding.action.contains("$aida-capture"));
+    }
+
+    /// A project whose saved agent selection names neither Codex nor
+    /// Antigravity is never told the portable skill pack is missing, and its
+    /// expected scaffold does not include that pack at all.
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn scaffold_drift_skips_portable_pack_for_claude_only_selection() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = aida_core::RequirementsStore::new();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[agents]\nenabled = [\"claude\"]\n",
+        )
+        .unwrap();
+
+        let findings = scan_scaffold_drift(dir.path(), &store);
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.id != "scaffold-drift/codex-skills-missing"),
+            "{:?}",
+            findings.iter().map(|f| &f.id).collect::<Vec<_>>()
+        );
+        let config = crate::init_cmd::scaffold_config_for_project(dir.path());
+        assert!(!config.generate_codex_skills && !config.generate_antigravity_skills);
+
+        // Selecting Codex brings the pack (and the finding) back.
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[agents]\nenabled = [\"claude\", \"codex\"]\n",
+        )
+        .unwrap();
+        let findings = scan_scaffold_drift(dir.path(), &store);
+        assert!(findings
+            .iter()
+            .any(|f| f.id == "scaffold-drift/codex-skills-missing"));
     }
 
     #[test]

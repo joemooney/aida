@@ -6,7 +6,8 @@
 //! - AGENTS.md project instructions
 //! - .claude/commands/ directory with project-specific slash commands
 //! - .claude/skills/ directory with requirements-driven development skills
-//! - .codex/skills/ directory with requirements-driven development skills
+//! - .agents/skills/ directory with the portable skill pack Codex and
+//!   Antigravity read (derived from the Claude skill set; see [`inventory`])
 //! - .git/hooks/ directory with traceability validation hooks
 //! - Code traceability configuration
 
@@ -16,6 +17,7 @@ pub mod codex_hooks;
 mod codex_md;
 pub mod codex_prompts;
 mod hooks;
+pub mod inventory;
 mod managed_merge;
 pub mod mcp_translate;
 pub mod refresh;
@@ -799,16 +801,19 @@ pub struct ScaffoldConfig {
     pub generate_commands: bool,
     /// Generate .claude/skills/ directory with skills
     pub generate_skills: bool,
-    /// Generate .codex/skills/ directory with Codex-compatible skills
+    /// Codex is selected: write the portable `.agents/skills/` pack, and keep
+    /// an existing legacy `.codex/skills/` pack level with it.
+    // trace:BUG-1639 | ai:claude
     pub generate_codex_skills: bool,
     /// Generate .codex/config.toml registering AIDA's MCP server with Codex
     /// CLI. This is opt-in for CLI-capable agents; the token-efficient
     /// CLI/TOON lane is the default.
     // trace:TASK-0424 STORY-1129 | ai:claude,codex
     pub generate_codex_config: bool,
-    /// Generate .antigravity/skills/ directory with Antigravity-compatible
-    /// skills. Mirrors the `.codex/skills/` pattern so a second supported
-    /// agent inherits the same onboarding parity. trace:TASK-457 | ai:claude
+    /// Antigravity is selected: write the portable `.agents/skills/` pack,
+    /// and keep an existing legacy `.antigravity/skills/` pack level with it.
+    // trace:TASK-457 | ai:claude
+    // trace:BUG-1639 | ai:claude
     pub generate_antigravity_skills: bool,
     /// Generate .mcp.json for Claude Code MCP server discovery. Opt-in for
     /// CLI-capable agents via `aida init --with-mcp`.
@@ -863,8 +868,8 @@ pub struct ScaffoldConfig {
     /// Include aida-backlog-groom skill for curating Approved work onto the
     /// queue with risk + conflict heuristics. trace:STORY-444
     pub include_aida_backlog_groom_skill: bool,
-    /// Include the vendor-neutral aida-orchestrate skill in the Codex and
-    /// Antigravity packs. The Claude pack keeps its own subagent-tool version.
+    /// Include the vendor-neutral aida-orchestrate skill in the portable
+    /// packs. The Claude pack keeps its own subagent-tool version.
     // trace:STORY-1475 | ai:claude
     pub include_aida_orchestrate_skill: bool,
     /// Generate git hooks for traceability validation
@@ -1060,7 +1065,9 @@ impl FileCategory {
         }
         // Everything else under templates/ control surfaces is Template.
         // That's `.claude/AIDA.md`, all `.claude/skills/*`, `.claude/commands/*`,
-        // `.claude/hooks/*`, `.codex/skills/**`, and the git commit-msg hook.
+        // `.claude/hooks/*`, `.agents/skills/aida-*/**` (and a legacy
+        // `.codex/skills/**` or `.antigravity/skills/**`), and the git
+        // commit-msg hook.
         FileCategory::Template
     }
 
@@ -2025,13 +2032,16 @@ aida show <SPEC-ID>
                         _ => continue,
                     };
                     // trace:TASK-1441 | ai:codex
-                    if matches!(skill.name, "aida-advise" | "aida-assess" | "aida-intent") {
-                        continue;
-                    }
-                    if (skill.name == "aida-memory-query"
-                        && !self.config.include_aida_memory_query_skill)
-                        || (skill.name == "aida-memory-capture"
-                            && !self.config.include_aida_memory_capture_skill)
+                    // The not-a-skill list and every per-skill include flag
+                    // come from the shared inventory, so a skill whose
+                    // handwritten block above was switched off is not
+                    // re-added here. trace:BUG-1639 | ai:claude
+                    if inventory::is_not_a_skill(skill.name)
+                        || !inventory::skill_enabled(
+                            &self.config,
+                            skill.name,
+                            inventory::PackKind::Claude,
+                        )
                     {
                         continue;
                     }
@@ -2072,162 +2082,48 @@ aida show <SPEC-ID>
             }
         }
 
-        // .codex/skills/ directory
-        if self.config.generate_codex_skills {
-            new_dirs.insert(PathBuf::from(".codex/skills"));
-
-            let codex_skill_defs = [
-                ("aida-req", self.config.include_aida_req_skill),
-                ("aida-plan", self.config.include_aida_plan_skill),
-                ("aida-implement", self.config.include_aida_implement_skill),
-                ("aida-capture", self.config.include_aida_capture_skill),
-                ("aida-learn", self.config.include_aida_learn_skill),
-                (
-                    "aida-memory-query",
-                    self.config.include_aida_memory_query_skill,
-                ),
-                (
-                    "aida-memory-capture",
-                    self.config.include_aida_memory_capture_skill,
-                ),
-                ("aida-docs", self.config.include_aida_docs_skill),
-                (
-                    "aida-docs-review",
-                    self.config.include_aida_docs_review_skill,
-                ),
-                ("aida-release", self.config.include_aida_release_skill),
-                ("aida-evaluate", self.config.include_aida_evaluate_skill),
-                ("aida-commit", self.config.include_aida_commit_skill),
-                ("aida-sync", self.config.include_aida_sync_skill),
-                ("aida-test", self.config.include_aida_test_skill),
-                ("aida-review", self.config.include_aida_review_skill),
-                ("aida-onboard", self.config.include_aida_onboard_skill),
-                ("aida-sprint", self.config.include_aida_sprint_skill),
-                ("aida-search", self.config.include_aida_search_skill),
-                ("aida-standup", self.config.include_aida_standup_skill),
-                (
-                    "aida-import-plan",
-                    self.config.include_aida_import_plan_skill,
-                ),
-                // trace:STORY-252
-                ("aida-digest", self.config.include_aida_digest_skill),
-                // trace:STORY-444
-                (
-                    "aida-backlog-groom",
-                    self.config.include_aida_backlog_groom_skill,
-                ),
-                // trace:STORY-1475 | ai:claude
-                (
-                    "aida-orchestrate",
-                    self.config.include_aida_orchestrate_skill,
-                ),
-            ];
-
-            for (name, enabled) in codex_skill_defs {
-                if !enabled {
-                    continue;
-                }
-                let path = PathBuf::from(format!(".codex/skills/{}/SKILL.md", name));
-                let artifact = self.create_artifact(
-                    path.clone(),
-                    self.generate_codex_skill(name),
-                    format!("Codex-compatible skill {}", name),
-                    false,
-                );
-
-                match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
-                        modified_files.push(artifact.path.clone())
+        // Portable skill packs for Codex and Antigravity. ONE derived
+        // inventory (the Claude skill set minus a commented Claude-only list,
+        // with every include flag honoured) feeds every pack, so a new skill
+        // can no longer miss a vendor. New installs get only `.agents/skills`,
+        // which Codex 0.157 and Antigravity 1.2.11 both discover; SKILL.md is
+        // always a regular file because Codex skips a symlinked one. A legacy
+        // `.codex/skills` / `.antigravity/skills` pack is kept level with the
+        // same list, but only when it already exists as a real directory.
+        // Only `aida-*` names are ever planned in these shared directories.
+        // trace:BUG-1639 | ai:claude
+        let portable_packs = self.portable_skill_packs();
+        if !portable_packs.is_empty() {
+            let skills = inventory::portable_skill_inventory(&self.config);
+            for (pack, label) in portable_packs {
+                new_dirs.insert(PathBuf::from(pack));
+                for skill in skills.values() {
+                    for file in &skill.files {
+                        let path = PathBuf::from(pack).join(&skill.name).join(&file.rel_path);
+                        let desc = if file.rel_path == "SKILL.md" {
+                            format!("{label} skill {}", skill.name)
+                        } else {
+                            format!("{label} skill helper {}/{}", skill.name, file.rel_path)
+                        };
+                        let artifact = self.create_artifact(
+                            path.clone(),
+                            self.generate_portable_skill(file),
+                            desc,
+                            false,
+                        );
+                        match &artifact.file_status {
+                            FileStatus::New => new_files.push(path),
+                            FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                                modified_files.push(artifact.path.clone())
+                            }
+                            FileStatus::OlderVersion { .. } => {
+                                upgradeable_files.push(artifact.path.clone())
+                            }
+                            FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                        }
+                        artifacts.push(artifact);
                     }
-                    FileStatus::OlderVersion { .. } => {
-                        upgradeable_files.push(artifact.path.clone())
-                    }
-                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
-
-                artifacts.push(artifact);
-            }
-        }
-
-        // .antigravity/skills/ directory — mirrors the .codex/skills/ block
-        // so a second supported agent (Antigravity CLI) inherits the same
-        // onboarding parity. The skill bodies are agent-agnostic markdown,
-        // so they share generate_codex_skill content. See
-        // docs/agents/antigravity-mcp-setup.md for the MCP-server reference.
-        // trace:TASK-457 | ai:claude
-        if self.config.generate_antigravity_skills {
-            new_dirs.insert(PathBuf::from(".antigravity/skills"));
-
-            let antigravity_skill_defs = [
-                ("aida-req", self.config.include_aida_req_skill),
-                ("aida-plan", self.config.include_aida_plan_skill),
-                ("aida-implement", self.config.include_aida_implement_skill),
-                ("aida-capture", self.config.include_aida_capture_skill),
-                ("aida-learn", self.config.include_aida_learn_skill),
-                (
-                    "aida-memory-query",
-                    self.config.include_aida_memory_query_skill,
-                ),
-                (
-                    "aida-memory-capture",
-                    self.config.include_aida_memory_capture_skill,
-                ),
-                ("aida-docs", self.config.include_aida_docs_skill),
-                (
-                    "aida-docs-review",
-                    self.config.include_aida_docs_review_skill,
-                ),
-                ("aida-release", self.config.include_aida_release_skill),
-                ("aida-evaluate", self.config.include_aida_evaluate_skill),
-                ("aida-commit", self.config.include_aida_commit_skill),
-                ("aida-sync", self.config.include_aida_sync_skill),
-                ("aida-test", self.config.include_aida_test_skill),
-                ("aida-review", self.config.include_aida_review_skill),
-                ("aida-onboard", self.config.include_aida_onboard_skill),
-                ("aida-sprint", self.config.include_aida_sprint_skill),
-                ("aida-search", self.config.include_aida_search_skill),
-                ("aida-standup", self.config.include_aida_standup_skill),
-                (
-                    "aida-import-plan",
-                    self.config.include_aida_import_plan_skill,
-                ),
-                ("aida-digest", self.config.include_aida_digest_skill),
-                (
-                    "aida-backlog-groom",
-                    self.config.include_aida_backlog_groom_skill,
-                ),
-                // trace:STORY-1475 | ai:claude
-                (
-                    "aida-orchestrate",
-                    self.config.include_aida_orchestrate_skill,
-                ),
-            ];
-
-            for (name, enabled) in antigravity_skill_defs {
-                if !enabled {
-                    continue;
-                }
-                let path = PathBuf::from(format!(".antigravity/skills/{}/SKILL.md", name));
-                let artifact = self.create_artifact(
-                    path.clone(),
-                    self.generate_codex_skill(name),
-                    format!("Antigravity-compatible skill {}", name),
-                    false,
-                );
-
-                match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
-                        modified_files.push(artifact.path.clone())
-                    }
-                    FileStatus::OlderVersion { .. } => {
-                        upgradeable_files.push(artifact.path.clone())
-                    }
-                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
-                }
-
-                artifacts.push(artifact);
             }
         }
 
@@ -3331,24 +3227,45 @@ Use this skill when:
             .unwrap_or_else(|| "# AIDA Backlog Groom Skill\n\n(template not found)".to_string())
     }
 
-    /// Generate Codex skill content from an embedded Claude skill template.
-    /// Codex requires YAML frontmatter in SKILL.md; keep the embedded
-    /// template frontmatter intact so Codex loads the scaffolded skills.
-    /// trace:BUG-375 | ai:codex
-    fn generate_codex_skill(&self, skill_name: &str) -> String {
-        use crate::templates::EMBEDDED_TEMPLATES;
+    /// The portable skill packs this config writes, as `(pack, label)`:
+    /// `.agents/skills` when Codex or Antigravity is selected, plus each
+    /// legacy per-vendor pack that already exists as a real (non-symlink)
+    /// directory for a selected vendor. A legacy pack is never created.
+    // trace:BUG-1639 | ai:claude
+    fn portable_skill_packs(&self) -> Vec<(&'static str, &'static str)> {
+        let mut packs = Vec::new();
+        if self.config.generate_codex_skills || self.config.generate_antigravity_skills {
+            packs.push((inventory::PORTABLE_PACK, "Portable"));
+        }
+        let real_dir = |rel: &str| {
+            let path = self.project_root.join(rel);
+            let parent_real = Path::new(rel)
+                .parent()
+                .is_none_or(|p| symlink_target(&self.project_root.join(p)).is_none());
+            parent_real && fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_dir())
+        };
+        if self.config.generate_codex_skills && real_dir(inventory::LEGACY_CODEX_PACK) {
+            packs.push((inventory::LEGACY_CODEX_PACK, "Codex-compatible"));
+        }
+        if self.config.generate_antigravity_skills && real_dir(inventory::LEGACY_ANTIGRAVITY_PACK) {
+            packs.push((inventory::LEGACY_ANTIGRAVITY_PACK, "Antigravity-compatible"));
+        }
+        packs
+    }
 
-        // A vendor-neutral body under `skills-portable/` wins over the Claude
-        // master: those skills drive Claude-only harness tools in their Claude
-        // form, so the Codex / Antigravity packs ship the portable variant.
-        // trace:STORY-1475 | ai:claude
-        let portable = format!("skills-portable/{}.md", skill_name);
-        let key = format!("skills/{}.md", skill_name);
+    /// The body of one portable skill file. Codex requires YAML frontmatter
+    /// in SKILL.md; the embedded template's frontmatter is kept intact (the
+    /// AIDA header lands after it). A vendor-neutral body under
+    /// `skills-portable/` has already been chosen by the inventory.
+    // trace:BUG-375 | ai:codex
+    // trace:STORY-1475 | ai:claude
+    // trace:BUG-1639 | ai:claude
+    fn generate_portable_skill(&self, file: &inventory::PortableSkillFile) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
         EMBEDDED_TEMPLATES
-            .get(portable.as_str())
-            .or_else(|| EMBEDDED_TEMPLATES.get(key.as_str()))
+            .get(file.source_key.as_str())
             .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("# {}\n\n(template not found)", skill_name))
+            .unwrap_or_else(|| format!("# {}\n\n(template not found)", file.source_key))
     }
 }
 
@@ -3503,6 +3420,7 @@ mod tests {
         ));
         assert!(!generated_text_matches_exact("one\ntwo\n\n", "one\ntwo\n"));
     }
+    use std::collections::BTreeSet;
     use tempfile::TempDir;
 
     #[test]
@@ -3988,13 +3906,13 @@ mod tests {
         std::fs::remove_dir_all(&claude_pr).unwrap();
         std::os::unix::fs::symlink(&mine, &claude_pr).unwrap();
 
-        // A user-owned skill pack directory.
-        let shared = root.join("shared-codex-skills");
+        // A user-owned skill pack directory. trace:BUG-1639 | ai:claude
+        let shared = root.join("shared-agent-skills");
         std::fs::create_dir_all(shared.join("aida-req")).unwrap();
         std::fs::write(shared.join("aida-req/SKILL.md"), "my own aida-req\n").unwrap();
-        let codex = root.join(".codex/skills");
-        std::fs::remove_dir_all(&codex).unwrap();
-        std::os::unix::fs::symlink(&shared, &codex).unwrap();
+        let agents = root.join(".agents/skills");
+        std::fs::remove_dir_all(&agents).unwrap();
+        std::os::unix::fs::symlink(&shared, &agents).unwrap();
 
         let mut scaffolder = Scaffolder::new(root.to_path_buf(), ScaffoldConfig::default());
         let preview = scaffolder.preview(&store);
@@ -4024,7 +3942,7 @@ mod tests {
         );
         assert!(written
             .iter()
-            .all(|p| !p.starts_with(".codex/skills") && !p.starts_with(".claude/skills/aida-pr")));
+            .all(|p| !p.starts_with(".agents/skills") && !p.starts_with(".claude/skills/aida-pr")));
         // Other skills in the real pack are still written.
         assert!(root.join(".claude/skills/aida-req/SKILL.md").is_file());
     }
@@ -4276,11 +4194,15 @@ mod tests {
         // Check that .claude directories were created
         assert!(temp_dir.path().join(".claude/commands").exists());
         assert!(temp_dir.path().join(".claude/skills").exists());
-        assert!(temp_dir.path().join(".codex/skills").exists());
+        // BUG-1639: one portable pack for Codex and Antigravity; the legacy
+        // per-vendor packs are never created. trace:BUG-1639 | ai:claude
+        assert!(temp_dir.path().join(".agents/skills").exists());
+        assert!(!temp_dir.path().join(".codex/skills").exists());
+        assert!(!temp_dir.path().join(".antigravity/skills").exists());
         // BUG-375: Codex skips scaffolded skills without YAML frontmatter.
         // The AIDA header must be inserted after the frontmatter, not before
         // it, so Codex sees `---` at byte 0 of SKILL.md.
-        for entry in std::fs::read_dir(temp_dir.path().join(".codex/skills")).unwrap() {
+        for entry in std::fs::read_dir(temp_dir.path().join(".agents/skills")).unwrap() {
             let entry = entry.unwrap();
             // The pack-local delivered-skills manifest is not a skill.
             // trace:STORY-1475 | ai:claude
@@ -4297,23 +4219,6 @@ mod tests {
             assert!(
                 content.contains("\n---\n<!-- AIDA Generated:"),
                 "{} should keep the AIDA header after YAML frontmatter",
-                skill_path.display()
-            );
-        }
-        // TASK-457: .antigravity/skills/ is scaffolded alongside .codex/skills/.
-        assert!(temp_dir.path().join(".antigravity/skills").exists());
-        for entry in std::fs::read_dir(temp_dir.path().join(".antigravity/skills")).unwrap() {
-            let entry = entry.unwrap();
-            // The pack-local delivered-skills manifest is not a skill.
-            // trace:STORY-1475 | ai:claude
-            if !entry.path().is_dir() {
-                continue;
-            }
-            let skill_path = entry.path().join("SKILL.md");
-            let content = std::fs::read_to_string(&skill_path).unwrap();
-            assert!(
-                content.starts_with("---\nname:"),
-                "{} should start with agent-readable YAML frontmatter",
                 skill_path.display()
             );
         }
@@ -4396,14 +4301,15 @@ mod tests {
         assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));
         assert!(paths.contains(&PathBuf::from(".aida/reserved-paths.toml")));
         assert!(paths.contains(&PathBuf::from(".aida/agents.toml")));
-        // TASK-457: .antigravity/skills/ mirrors .codex/skills/.
-        assert!(paths.contains(&PathBuf::from(".antigravity/skills/aida-req/SKILL.md")));
+        // BUG-1639: Codex and Antigravity share the portable pack.
+        assert!(paths.contains(&PathBuf::from(".agents/skills/aida-req/SKILL.md")));
+        assert!(!paths.iter().any(|p| p.starts_with(".antigravity")));
     }
 
     /// TASK-457: when `generate_antigravity_skills` is off (the `--no-skills`
     /// path turns it off alongside `.codex/skills/`), no `.antigravity/`
     /// artifacts are scaffolded.
-    /// trace:TASK-457 | ai:claude
+    // trace:TASK-457 | ai:claude
     #[test]
     fn antigravity_skills_skipped_when_disabled() {
         let temp_dir = TempDir::new().unwrap();
@@ -4468,7 +4374,7 @@ mod tests {
                 .clone()
         };
 
-        for pack in [".codex/skills", ".antigravity/skills"] {
+        for pack in [".agents/skills"] {
             let body = content_of(&format!("{pack}/aida-orchestrate/SKILL.md"));
             assert!(
                 body.contains(portable),
@@ -4508,11 +4414,186 @@ mod tests {
         let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
         let preview = scaffolder.preview(&create_test_store());
         let paths: Vec<PathBuf> = preview.artifacts.iter().map(|a| a.path.clone()).collect();
+        // Retargeted to the portable pack; the flag still gates it (and an
+        // existing legacy pack) while the Claude pack keeps its version.
+        // trace:BUG-1639 | ai:claude
+        assert!(paths.contains(&PathBuf::from(".agents/skills/aida-req/SKILL.md")));
+        assert!(!paths.contains(&PathBuf::from(".agents/skills/aida-orchestrate/SKILL.md")));
+        assert!(paths.contains(&PathBuf::from(".claude/skills/aida-orchestrate/SKILL.md")));
+
+        std::fs::create_dir_all(temp_dir.path().join(".codex/skills")).unwrap();
+        std::fs::create_dir_all(temp_dir.path().join(".antigravity/skills")).unwrap();
+        let preview = scaffolder.preview(&create_test_store());
+        let paths: Vec<PathBuf> = preview.artifacts.iter().map(|a| a.path.clone()).collect();
+        assert!(paths.contains(&PathBuf::from(".codex/skills/aida-req/SKILL.md")));
         assert!(!paths.contains(&PathBuf::from(".codex/skills/aida-orchestrate/SKILL.md")));
         assert!(!paths.contains(&PathBuf::from(
             ".antigravity/skills/aida-orchestrate/SKILL.md"
         )));
-        assert!(paths.contains(&PathBuf::from(".claude/skills/aida-orchestrate/SKILL.md")));
+    }
+
+    fn preview_paths(root: &Path, config: ScaffoldConfig) -> Vec<PathBuf> {
+        let mut scaffolder = Scaffolder::new(root.to_path_buf(), config);
+        scaffolder
+            .preview(&create_test_store())
+            .artifacts
+            .into_iter()
+            .map(|a| a.path)
+            .collect()
+    }
+
+    fn vendor_config(codex: bool, antigravity: bool) -> ScaffoldConfig {
+        ScaffoldConfig {
+            generate_codex_skills: codex,
+            generate_antigravity_skills: antigravity,
+            ..Default::default()
+        }
+    }
+
+    /// Selecting Codex or Antigravity writes the one shared `.agents/skills`
+    /// pack with the whole derived inventory (aida-handoff included), and
+    /// never a legacy per-vendor pack.
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn codex_or_antigravity_selection_writes_agents_skills_only() {
+        for (codex, antigravity) in [(true, false), (false, true), (true, true)] {
+            let temp_dir = TempDir::new().unwrap();
+            let paths = preview_paths(temp_dir.path(), vendor_config(codex, antigravity));
+            let agents: BTreeSet<String> = paths
+                .iter()
+                .filter_map(|p| refresh::skill_in_pack(p))
+                .filter(|(pack, _)| pack == Path::new(".agents/skills"))
+                .map(|(_, name)| name)
+                .collect();
+            let expected: BTreeSet<String> =
+                inventory::portable_skill_inventory(&ScaffoldConfig::default())
+                    .into_keys()
+                    .collect();
+            assert_eq!(agents, expected, "codex={codex} agy={antigravity}");
+            assert!(agents.contains("aida-handoff"));
+            assert!(agents.iter().all(|n| n.starts_with("aida-")));
+            assert!(
+                !paths
+                    .iter()
+                    .any(|p| p.starts_with(".codex/skills") || p.starts_with(".antigravity")),
+                "codex={codex} agy={antigravity}"
+            );
+        }
+    }
+
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn no_vendor_selected_writes_no_agents_pack() {
+        let temp_dir = TempDir::new().unwrap();
+        // Even an existing legacy pack is not written for an unselected vendor.
+        std::fs::create_dir_all(temp_dir.path().join(".codex/skills")).unwrap();
+        let paths = preview_paths(temp_dir.path(), vendor_config(false, false));
+        assert!(!paths
+            .iter()
+            .any(|p| p.starts_with(".agents") || p.starts_with(".codex/skills")));
+    }
+
+    /// Codex silently skips a symlinked SKILL.md, so every file AIDA writes
+    /// into `.agents/skills` is a regular file carrying the AIDA header
+    /// (after the YAML frontmatter).
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn agents_pack_skill_md_is_regular_file_with_header() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        let mut scaffolder = Scaffolder::new(root.to_path_buf(), vendor_config(true, false));
+        let preview = scaffolder.preview(&create_test_store());
+        scaffolder.apply(&preview).unwrap();
+        let pack = root.join(".agents/skills");
+        let mut seen = 0;
+        for entry in std::fs::read_dir(&pack).unwrap().flatten() {
+            let ft = entry.file_type().unwrap();
+            if entry.file_name() == refresh::DELIVERED_MANIFEST {
+                assert!(ft.is_file());
+                continue;
+            }
+            assert!(ft.is_dir(), "{:?}", entry.path());
+            let skill_md = entry.path().join("SKILL.md");
+            let meta = std::fs::symlink_metadata(&skill_md).unwrap();
+            assert!(meta.file_type().is_file(), "{}", skill_md.display());
+            let body = std::fs::read_to_string(&skill_md).unwrap();
+            assert!(body.starts_with("---\n"), "{}", skill_md.display());
+            assert!(
+                body.contains("<!-- AIDA Generated:"),
+                "{}",
+                skill_md.display()
+            );
+            seen += 1;
+        }
+        assert_eq!(
+            seen,
+            inventory::portable_skill_inventory(&ScaffoldConfig::default()).len()
+        );
+        assert!(pack.join("aida-handoff/SKILL.md").is_file());
+        let m = refresh::read_skill_manifest(&pack).unwrap().unwrap();
+        assert!(m.complete && m.delivered.contains("aida-handoff"));
+    }
+
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn folder_form_skill_ships_helpers_to_agents_pack() {
+        let temp_dir = TempDir::new().unwrap();
+        let paths = preview_paths(temp_dir.path(), vendor_config(false, true));
+        assert!(paths.contains(&PathBuf::from(".agents/skills/aida-pr/SKILL.md")));
+        assert!(paths.contains(&PathBuf::from(
+            ".agents/skills/aida-pr/examples/pr-description-template.md"
+        )));
+    }
+
+    /// An existing legacy pack that is a real directory is kept level with
+    /// the same derived list (so an existing install gains aida-handoff);
+    /// a missing or symlinked legacy pack is never written.
+    // trace:BUG-1639 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn legacy_pack_is_maintained_only_when_it_is_a_real_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        std::fs::create_dir_all(root.join(".codex/skills")).unwrap();
+        let shared = root.join("elsewhere");
+        std::fs::create_dir_all(&shared).unwrap();
+        std::fs::create_dir_all(root.join(".antigravity")).unwrap();
+        std::os::unix::fs::symlink(&shared, root.join(".antigravity/skills")).unwrap();
+        let paths = preview_paths(root, vendor_config(true, true));
+        let names_in = |pack: &str| -> BTreeSet<String> {
+            paths
+                .iter()
+                .filter_map(|p| refresh::skill_in_pack(p))
+                .filter(|(p, _)| p == Path::new(pack))
+                .map(|(_, n)| n)
+                .collect()
+        };
+        assert_eq!(names_in(".codex/skills"), names_in(".agents/skills"));
+        assert!(names_in(".codex/skills").contains("aida-handoff"));
+        assert!(names_in(".antigravity/skills").is_empty());
+    }
+
+    /// The Claude catch-all loop honours a per-skill include flag instead of
+    /// re-adding the skill its handwritten block skipped.
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn claude_catch_all_honours_include_flags() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig {
+            include_aida_req_skill: false,
+            include_aida_digest_skill: false,
+            ..Default::default()
+        };
+        let paths = preview_paths(temp_dir.path(), config);
+        for gone in [
+            ".claude/skills/aida-req/SKILL.md",
+            ".claude/skills/aida-digest/SKILL.md",
+            ".agents/skills/aida-req/SKILL.md",
+            ".agents/skills/aida-digest/SKILL.md",
+        ] {
+            assert!(!paths.contains(&PathBuf::from(gone)), "{gone}");
+        }
+        assert!(paths.contains(&PathBuf::from(".claude/skills/aida-plan/SKILL.md")));
     }
 
     /// The portable body names no Claude-only harness tool, and keeps every

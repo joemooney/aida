@@ -1,0 +1,40 @@
+# Portable skill inventory: which skill masters under `skills/` ship to the
+# non-Claude packs (`.agents/skills/`, read by Codex and Antigravity, and any
+# existing legacy `.codex/skills/` or `.antigravity/skills/` pack).
+#
+# The portable pack is DERIVED: every skill master ships unless it is listed
+# below. A new skill therefore reaches Codex and Antigravity by default. A
+# unit test fails when a master is neither shipped nor listed here, and when a
+# listed name has no master or no reason.
+#
+# A skill whose Claude form uses Claude-only harness tools can still ship if a
+# vendor-neutral body exists at `skills-portable/<name>.md`; that body wins
+# over the master in the portable packs.
+#
+# Keep one `name` / `reason` pair per entry so shell tooling can read this
+# file with grep.
+
+# Claude-only skills: they depend on Claude Code harness tools that have no
+# Codex or Antigravity equivalent, and have no `skills-portable/` body yet.
+[[claude_only]]
+name = "aida-burndown"
+reason = "drives Agent(isolation: worktree) implementer fan-out and lists Agent in allowed-tools"
+
+[[claude_only]]
+name = "aida-solo"
+reason = "drives Agent(isolation: worktree) implementer fan-out as the solo driver loop"
+
+# Templates under `skills/` that are never scaffolded as skills into any
+# project, Claude's pack included, to keep them out of the per-call skill
+# catalogue.
+[[not_a_skill]]
+name = "aida-advise"
+reason = "kept out of scaffolded skill catalogues to save per-call context"
+
+[[not_a_skill]]
+name = "aida-assess"
+reason = "kept out of scaffolded skill catalogues to save per-call context"
+
+[[not_a_skill]]
+name = "aida-intent"
+reason = "kept out of scaffolded skill catalogues to save per-call context"

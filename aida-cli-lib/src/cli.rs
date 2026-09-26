@@ -703,8 +703,8 @@ pub enum ScaffoldCommand {
     /// Write legacy Codex prompt bodies to ~/.codex/prompts.
     ///
     /// Current Codex CLI releases do not discover these files as `/aida-*`
-    /// slash commands. For interactive Codex sessions, use scaffolded
-    /// `.codex/skills/` via `/skills` or `$aida-*`, or run the matching
+    /// slash commands. For interactive Codex sessions, use the project's
+    /// `.agents/skills/` via `/skills` or `$aida-*`, or run the matching
     /// `aida ...` CLI verb directly. On Codex >=0.142 this command prints that
     /// warning and skips writing the dead prompt surface.
     // trace:BUG-1095 | ai:codex
@@ -762,7 +762,7 @@ pub enum ScaffoldCommand {
     ///
     /// Per category (see `docs/plans/2026-05-04-scaffold-categorization.md`):
     ///   - **template** (`.claude/skills/*`, `.claude/commands/*`,
-    ///     `.claude/hooks/*`, `.claude/AIDA.md`, `.codex/skills/**`,
+    ///     `.claude/hooks/*`, `.claude/AIDA.md`, `.agents/skills/aida-*/**`,
     ///     `.git/hooks/commit-msg`) — AIDA-owned; drifted files are
     ///     overwritten with the embedded template.
     ///   - **seed** (CLAUDE.md, AGENTS.md) — user-owned post-init;
@@ -12272,7 +12272,7 @@ pub enum Command {
             .multiple(false)
     ))]
     Init {
-        /// Skip generating agent skills and commands (.claude/*, .codex/skills/*, and .antigravity/skills/*)
+        /// Skip generating agent skills and commands (.claude/* and .agents/skills/aida-*)
         // trace:TASK-457 | ai:claude
         #[clap(long)]
         no_skills: bool,

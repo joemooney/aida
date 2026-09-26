@@ -318,11 +318,15 @@ pub(crate) fn init_scaffold_candidate_paths_for_footprint(
             // `.claude/skills/<name>/SKILL.md`, not a flat `<name>.md`.
             ".claude/skills/aida-capture/SKILL.md",
             ".claude/skills/aida-learn/SKILL.md",
+            // trace:BUG-1639 | ai:claude
+            ".agents/skills/aida-capture/SKILL.md",
+            ".agents/skills/aida-learn/SKILL.md",
             ".codex/skills/aida-capture/SKILL.md",
             ".codex/skills/aida-learn/SKILL.md",
             // The per-pack delivered-skills manifests (TASK-1503) belong in
             // the scaffold commit too. trace:BUG-1645 | ai:claude
             ".claude/skills/.aida-delivered",
+            ".agents/skills/.aida-delivered",
             ".codex/skills/.aida-delivered",
         ],
     }
@@ -336,10 +340,37 @@ fn init_scaffold_commit_paths(
     root: &std::path::Path,
     footprint: crate::cli::InitFootprint,
 ) -> Vec<String> {
-    init_scaffold_candidate_paths_for_footprint(footprint)
+    let mut paths: Vec<String> = init_scaffold_candidate_paths_for_footprint(footprint)
         .iter()
         .filter(|p| root.join(p).exists())
         .map(|p| p.to_string())
+        .collect();
+    if footprint == crate::cli::InitFootprint::Full {
+        paths.extend(portable_pack_commit_paths(root));
+    }
+    paths
+}
+
+/// AIDA's own entries in the shared `.agents/skills/` directory: each
+/// `aida-*` skill directory and the delivered-skills manifest. Never the
+/// whole directory, which may hold other tools' skills the operator has not
+/// chosen to commit.
+// trace:BUG-1639 | ai:claude
+fn portable_pack_commit_paths(root: &std::path::Path) -> Vec<String> {
+    use aida_core::scaffolding::inventory::{AIDA_SKILL_PREFIX, PORTABLE_PACK};
+    use aida_core::scaffolding::refresh::DELIVERED_MANIFEST;
+    let Ok(entries) = std::fs::read_dir(root.join(PORTABLE_PACK)) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| n.starts_with(AIDA_SKILL_PREFIX) || n == DELIVERED_MANIFEST)
+        .collect();
+    names.sort();
+    names
+        .into_iter()
+        .map(|n| format!("{PORTABLE_PACK}/{n}"))
         .collect()
 }
 
@@ -782,8 +813,9 @@ fn resolve_init_agent_selection_for_root(
 
     let mut detected = detected_agent_selection();
     // trace:BUG-1117 | ai:codex
-    // A codex-vendor project must get the discoverable `.codex/skills/`
+    // A codex-vendor project must get the discoverable `.agents/skills/`
     // surface even when binary auto-detection would otherwise omit Codex.
+    // trace:BUG-1639 | ai:claude
     if aida_core::agents_config::resolve_default_vendor(project_root).as_deref() == Some("codex") {
         detected.codex = true;
     }
@@ -872,7 +904,13 @@ pub(crate) fn looks_like_memory_lane(project_root: &std::path::Path) -> bool {
         }
     }
     let mut lane_skill_seen = false;
-    for pack in [".claude/skills", ".codex/skills", ".antigravity/skills"] {
+    // trace:BUG-1639 | ai:claude
+    for pack in [
+        ".claude/skills",
+        ".agents/skills",
+        ".codex/skills",
+        ".antigravity/skills",
+    ] {
         let dir = project_root.join(pack);
         if !dir.is_dir() {
             continue;
@@ -1122,6 +1160,22 @@ fn write_memory_lane_artifact(
     Ok(true)
 }
 
+/// The skill packs the memory-lane footprint writes its two skills into:
+/// `.claude/skills`, the portable `.agents/skills`, and a legacy
+/// `.codex/skills` only when it already exists as a real directory.
+// trace:BUG-1639 | ai:claude
+fn memory_lane_skill_packs(root: &std::path::Path) -> Vec<&'static str> {
+    use aida_core::scaffolding::inventory::{LEGACY_CODEX_PACK, PORTABLE_PACK};
+    let mut packs = vec![".claude/skills", PORTABLE_PACK];
+    let legacy_is_real_dir = aida_core::scaffolding::symlink_target(&root.join(".codex")).is_none()
+        && std::fs::symlink_metadata(root.join(LEGACY_CODEX_PACK))
+            .is_ok_and(|m| m.file_type().is_dir());
+    if legacy_is_real_dir {
+        packs.push(LEGACY_CODEX_PACK);
+    }
+    packs
+}
+
 // trace:STORY-1093 | ai:codex
 pub(crate) fn write_memory_lane_scaffolding(
     root: &std::path::Path,
@@ -1151,7 +1205,10 @@ pub(crate) fn write_memory_lane_scaffolding(
         // trace:TASK-1503 | ai:claude
         let names: std::collections::BTreeSet<String> =
             MEMORY_LANE_SKILLS.iter().map(|n| n.to_string()).collect();
-        for pack in [".claude/skills", ".codex/skills"] {
+        // `.agents/skills` is the pack Codex and Antigravity read; a legacy
+        // `.codex/skills` pack is kept level only when it already exists.
+        // trace:BUG-1639 | ai:claude
+        for pack in memory_lane_skill_packs(root) {
             let mut plan = aida_core::scaffolding::refresh::plan_skill_pack(
                 root,
                 std::path::Path::new(pack),
@@ -1267,6 +1324,23 @@ pub(crate) fn read_enabled_agent_selection(
     project_root: &std::path::Path,
 ) -> Option<AgentSelection> {
     read_enabled_agent_selection_with_source(project_root).map(|s| s.selection)
+}
+
+/// The scaffold config for commands that act on an existing project
+/// (`scaffold apply|upgrade|status|diff|preview` and `aida doctor`): the
+/// defaults, except that the Codex / Antigravity skill packs follow the saved
+/// agent selection when one exists. Without this a Claude-only project would
+/// get AIDA skills written into the shared `.agents/skills/` directory and
+/// be told Codex skills are missing. Only these two switches follow the
+/// selection here.
+// trace:BUG-1639 | ai:claude
+pub(crate) fn scaffold_config_for_project(project_root: &std::path::Path) -> ScaffoldConfig {
+    let mut config = ScaffoldConfig::default();
+    if let Some(selection) = read_enabled_agent_selection(project_root) {
+        config.generate_codex_skills = selection.codex;
+        config.generate_antigravity_skills = selection.antigravity;
+    }
+    config
 }
 
 pub(crate) fn write_enabled_agent_selection(
@@ -1546,7 +1620,7 @@ fn complete_init_scaffolding(
         config.generate_commands = false;
         config.generate_codex_skills = false;
         // --no-skills skips every agent-skill dir consistently, including
-        // the new .antigravity/skills/. trace:TASK-457 | ai:claude
+        // the portable .agents/skills/. trace:TASK-457 | ai:claude
         config.generate_antigravity_skills = false;
         config.include_aida_req_skill = false;
         config.include_aida_plan_skill = false;
@@ -1839,19 +1913,14 @@ fn complete_init_scaffolding(
                 " ".repeat(21)
             );
         }
-        if config_for_output.generate_codex_skills {
-            println!(
-                "    {}{}Workflow skills (Codex-compatible)",
-                ".codex/skills/".white().bold(),
-                " ".repeat(24)
-            );
-        }
         // trace:TASK-457 | ai:claude
-        if config_for_output.generate_antigravity_skills {
+        // One portable pack serves both vendors. trace:BUG-1639 | ai:claude
+        if config_for_output.generate_codex_skills || config_for_output.generate_antigravity_skills
+        {
             println!(
-                "    {}{}Workflow skills (Antigravity-compatible)",
-                ".antigravity/skills/".white().bold(),
-                " ".repeat(18)
+                "    {}{}Workflow skills (Codex and Antigravity)",
+                ".agents/skills/".white().bold(),
+                " ".repeat(23)
             );
         }
         if !no_hooks && config_for_output.generate_claude_code_hooks {
@@ -3118,9 +3187,12 @@ mod task_631_init_self_commit_tests {
                 "AGENTS.md",
                 ".claude/skills/aida-capture/SKILL.md",
                 ".claude/skills/aida-learn/SKILL.md",
+                ".agents/skills/aida-capture/SKILL.md",
+                ".agents/skills/aida-learn/SKILL.md",
                 ".codex/skills/aida-capture/SKILL.md",
                 ".codex/skills/aida-learn/SKILL.md",
                 ".claude/skills/.aida-delivered",
+                ".agents/skills/.aida-delivered",
                 ".codex/skills/.aida-delivered",
             ]
         );
@@ -3154,8 +3226,9 @@ mod task_631_init_self_commit_tests {
             "AGENTS.md",
             ".claude/skills/aida-capture/SKILL.md",
             ".claude/skills/aida-learn/SKILL.md",
-            ".codex/skills/aida-capture/SKILL.md",
-            ".codex/skills/aida-learn/SKILL.md",
+            // trace:BUG-1639 | ai:claude
+            ".agents/skills/aida-capture/SKILL.md",
+            ".agents/skills/aida-learn/SKILL.md",
         ] {
             assert!(
                 root.join(rel).exists(),
@@ -3182,6 +3255,10 @@ mod task_631_init_self_commit_tests {
             ".codex/skills/aida-queue/SKILL.md",
             ".codex/skills/aida-drain-queue/SKILL.md",
             ".codex/skills/aida-implement/SKILL.md",
+            // A legacy per-vendor pack is never created.
+            ".codex/skills",
+            ".agents/skills/aida-queue/SKILL.md",
+            ".agents/skills/aida-implement/SKILL.md",
             ".antigravity",
         ] {
             assert!(
@@ -3233,6 +3310,8 @@ mod task_631_init_self_commit_tests {
             ".claude/skills/aida-learn/SKILL.md",
             ".codex/skills/aida-capture/SKILL.md",
             ".codex/skills/aida-learn/SKILL.md",
+            ".agents/skills/aida-capture/SKILL.md",
+            ".agents/skills/aida-learn/SKILL.md",
         ] {
             assert!(
                 !root.join(rel).exists(),
@@ -3362,7 +3441,7 @@ mod task_631_init_self_commit_tests {
         let selection = resolve_init_agent_selection_for_root(dir.path(), None).unwrap();
         assert!(
             selection.codex,
-            "codex-vendor init must select the .codex/skills scaffold"
+            "codex-vendor init must select the Codex skill pack"
         );
 
         let mut config = ScaffoldConfig::default();
@@ -3395,7 +3474,7 @@ mod task_631_init_self_commit_tests {
         .unwrap();
 
         assert!(
-            root.join(".codex/skills/aida-capture/SKILL.md").is_file(),
+            root.join(".agents/skills/aida-capture/SKILL.md").is_file(), // trace:BUG-1639 | ai:claude
             "codex init must scaffold the discoverable $aida-capture skill"
         );
         assert!(
@@ -4543,7 +4622,7 @@ pub(crate) fn handle_init_distributed_worktree(
 
     // STORY-763/BUG-1095: on a codex-first machine (the uniform `[agents] vendor`
     // knob resolves to codex), also write the legacy Codex prompt-body set.
-    // Current Codex interactive sessions use `.codex/skills/` via `/skills`
+    // Current Codex interactive sessions use `.agents/skills/` via `/skills`
     // or `$aida-*`; the prompt-body pack remains useful for direct launches
     // and refresh/drift checks. Idempotent and conservative (skip-existing),
     // best-effort — a failure here must not fail init. trace:BUG-1095 | ai:codex
@@ -5412,7 +5491,7 @@ mod task_1503_memory_lane_manifest_tests {
         let paths = init_scaffold_commit_paths(root, crate::cli::InitFootprint::MemoryLane);
         for manifest in [
             ".claude/skills/.aida-delivered",
-            ".codex/skills/.aida-delivered",
+            ".agents/skills/.aida-delivered", // trace:BUG-1639 | ai:claude
         ] {
             assert!(root.join(manifest).is_file(), "{manifest} written");
             assert!(paths.iter().any(|p| p == manifest), "{manifest}: {paths:?}");
@@ -5433,6 +5512,9 @@ mod task_1503_memory_lane_manifest_tests {
         std::fs::create_dir_all(&shared).unwrap();
         std::fs::create_dir_all(root.join(".codex")).unwrap();
         std::os::unix::fs::symlink(&shared, root.join(".codex/skills")).unwrap();
+        // A symlinked shared .agents/skills pack. trace:BUG-1639 | ai:claude
+        std::fs::create_dir_all(root.join(".agents")).unwrap();
+        std::os::unix::fs::symlink(&shared, root.join(".agents/skills")).unwrap();
         // A per-file symlinked .claude SKILL.md.
         let mine = root.join("my-capture.md");
         std::fs::write(&mine, "mine\n").unwrap();
@@ -5466,7 +5548,7 @@ mod task_1503_memory_lane_manifest_tests {
         let root = tmp.path();
         let store = aida_core::RequirementsStore::default();
         write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
-        for pack in [".claude/skills", ".codex/skills"] {
+        for pack in [".claude/skills", ".agents/skills"] {
             let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
             assert!(!m.complete, "{pack}: two skills never complete a manifest");
             assert!(m.delivered.contains("aida-capture") && m.delivered.contains("aida-learn"));
@@ -5480,7 +5562,7 @@ mod task_1503_memory_lane_manifest_tests {
         );
 
         full_install(root);
-        for pack in [".claude/skills", ".codex/skills"] {
+        for pack in [".claude/skills", ".agents/skills"] {
             let dir = root.join(pack);
             for name in ["aida-req", "aida-commit", "aida-orchestrate", "aida-learn"] {
                 assert!(dir.join(name).join("SKILL.md").is_file(), "{pack}/{name}");
@@ -5490,7 +5572,7 @@ mod task_1503_memory_lane_manifest_tests {
             assert!(m.unconfirmed.is_empty(), "{pack}: {m:?}");
         }
         assert!(!root.join(".claude/skills/aida-capture").exists());
-        assert!(root.join(".codex/skills/aida-capture/SKILL.md").is_file());
+        assert!(root.join(".agents/skills/aida-capture/SKILL.md").is_file());
         let m = read_skill_manifest(&root.join(".claude/skills"))
             .unwrap()
             .unwrap();
