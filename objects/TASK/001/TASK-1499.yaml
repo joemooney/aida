@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-26T18:31:40.727570785Z
+modified_at: 2026-09-26T21:33:11.988045462Z
 req_type: Task
 tags:
 - agent-launch
@@ -64,6 +64,39 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): implementing Joe''s answered decision ''Portability only'' (2026-09-26). The description is narrowed to binary resolution, build-profile detection and diagnostics, with testable acceptance. The permission half is filed as STORY-1486 (draft, authority change, question recorded). Queued for the implementer after BUG-1662 (scaffold files; BUG-1639 -> BUG-1662 -> TASK-1499 serialize chain).'
   created_at: 2026-09-26T18:31:12.180379785Z
   modified_at: 2026-09-26T18:31:12.180379785Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfa2-edb4-7e33-bb71-94ca19347406
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; origin/claude/bug-1662 ordering noted): one resolver module, an input-side override, a pinned build-profile rule, and the launch diagnostics. Portability only; no permission changes.
+
+    FILES/SYMBOLS
+    - aida-cli-lib/src/lib.rs: aida_exe_path :101444-101449 (OnceLock), resolve_aida_exe_from(current) :101452-101468 (current_exe, strips " (deleted)", else bare "aida"), resolve_aida_exe :101470, export_coordinating_bin_env :101484-101500 (sets AIDA_BIN + prepends PATH; AIDA_BIN is write-only today, nothing reads it as an input). render_agent_launch_noexec :30475-30580 (`command:` line :30521), verbose banner :30663, noexec dispatch :27886-27893, agent_launch_env_inputs :30713. Session env: trusted_session_env AIDA_BIN arm :41049, session_env_eval_lines :64335.
+    - aida-cli-lib/src/dev_cmd.rs (reuse, do not fork): resolve_aida_repo :45, pick_dev_binary_dir :221-281, alternate_build_is_newer :283-296, DevProfile :301, auto_select_dev_profile :352, dev_build_candidates :399, resolve_aida_on_path :1189 (PATH lookup; make pub(crate)).
+    - Templates already portable: settings.json :140-147 (./target/{debug,release}/aida, relative), hooks/aida-pre-commit.sh __aida_resolve_gate_bin :96-112 (repo-root relative, freshest-wins), scaffolder .mcp.json mod.rs :2131-2140 (bare "aida"). No scaffold artifact embeds an absolute checkout path today, so acceptance 5 is a guard test.
+    - Leak outside scaffold: config_cmd.rs add_local_aida_mcp_registration :3083-3103 and mcp_cmd.rs register_mcp_agent :75-79 write resolve_aida_exe() (absolute, e.g. <checkout>/target/release/aida) into .mcp.json (see VERDICT).
+
+    APPROACH
+    1. New module aida-cli-lib/src/aida_bin.rs: enum AidaBinSource { OverrideEnv, OverrideConfig, RunningExe, Path, PathUnverified }; enum BuildProfile { Debug, Release }; struct ResolvedAida { path, source, profile: Option<BuildProfile>, checkout_root: Option<PathBuf>, newer_alternate: Option<(BuildProfile, PathBuf)> }; fn resolve_aida_executable(inputs: &ResolveInputs) -> Result<ResolvedAida> with ResolveInputs { override_path: Option<PathBuf>, profile_request: Option<BuildProfile>, current_exe: Option<PathBuf>, path_env: Option<OsString> } (pure; the seam the tests drive). Precedence: override > current_exe (existing resolve_aida_exe_from logic) > PATH (resolve_aida_on_path) > bare "aida" with PathUnverified. aida_exe_path :101444 becomes resolve_aida_executable(ResolveInputs::from_process())?.path; on error print it once and fall back to today's value so a bad override cannot brick every command, while the LAUNCH path re-runs the resolver and FAILS on that error.
+    2. Override sources: AIDA_BIN env (already the BUG-766 child contract; honouring it on input closes the loop) and a per-user key `[agents] aida_bin = "<path>"` in ~/.aida/agents.toml (read with the read_agents_bool_from_file-style helper at lib.rs:28521; never .aida/config.toml, which is committed and would violate acceptance 5). The override may name a file or a checkout directory.
+    3. Executable check: is_file and (unix) mode & 0o111 != 0; windows: extension in PATHEXT or .exe. Failure -> anyhow!("aida executable {path} (from {source}) is not executable; set AIDA_BIN to a built binary or run cargo build --release"). An override is never silently skipped (acceptance 2).
+    4. Profile rule (acceptance 4), pinned verbatim in the module doc: (a) a file path whose last three segments are target/<debug|release>/aida[.exe] reports that profile and checkout_root; newer_alternate is set when the other profile exists and is newer (alternate_build_is_newer). (b) a directory override resolves <dir>/target/{release,debug}/aida: an explicit profile_request (AIDA_BUILD_PROFILE=debug|release, or [agents] aida_build_profile) wins and errors if that build is absent; otherwise release, unless debug is newer by mtime (freshest-wins: the same rule as the pre-commit hook :103-107 and DevProfile auto); only one present -> that one. (c) never pick a binary the rule did not name; the diagnostics always say why.
+    5. Diagnostics (acceptance 3): in render_agent_launch_noexec after `command:` :30521 add `aida_executable: <path> (source: running-exe|override-env|override-config|path, profile: release|debug|n/a, checkout: <root>|n/a)` and, when set, `aida_build_stale: debug is newer than release (<age>); run cargo build --release or set AIDA_BUILD_PROFILE`. Same lines in the --verbose block :30663. --no-exec returns before --verbose matters (:27886), so the line lives in the noexec renderer unconditionally.
+    6. Acceptance 6 fence: do not touch templates/settings.json permissions.allow, templates/agents.toml, load_agents_bypass/contained :28504-28540, the codex --sandbox/--ask-for-approval resolution, or any seat/Git-policy code (STORY-1486's territory).
+
+    EDGE CASES / FAIL-SAFE
+    - /proc/self/exe "(deleted)" after a rebuild: unchanged strip + existence check. Override pointing at a missing file: error, no fallthrough. Override dir with no builds: error naming both candidate paths. PATH miss: PathUnverified with bare "aida"; the noexec line says "(not found on PATH; child will fail to exec)". AIDA_BIN inherited from an older coordinating build is by design (BUG-766).
+
+    TESTS (aida-cli-lib/src/tests/task_1499_aida_bin_tests.rs; env via test_env::EnvVarsGuard under env_lock, never raw set_var (TASK-1532 lint); HOME fenced)
+    - fixture fake_checkout(tmp, profiles: &[(BuildProfile, SystemTime)]) writes target/<p>/aida as an executable shell script (#!/bin/sh, chmod 755) and sets mtime with File::set_modified (pattern: task_358_escalation_cleanup_tests.rs:139).
+    - resolve_prefers_env_override_over_running_exe; resolve_uses_running_exe_when_no_override; resolve_falls_back_to_path_lookup (current_exe=None, PATH=tmp/bin); resolve_rejects_non_executable_override_with_clear_error (chmod 644; assert the message); resolve_two_checkout_layouts (two tempdirs, override each; checkout_root differs, profile release); profile_detected_from_target_segment; dir_override_prefers_release_unless_debug_newer; explicit_profile_request_overrides_stale_rule_and_errors_when_missing; noexec_preview_shows_aida_executable_and_profile (harness at agent_launcher_tests.rs:342); scaffold_output_contains_no_absolute_checkout_path (full ScaffoldConfig preview; assert no artifact content contains the tempdir root, current_exe's ancestors, or "/home/").
+
+    OVERLAP / ORDERING
+    - Blocked-by BUG-1662 (scaffold chain); code overlap is only the scaffold guard test. Land after it. STORY-1486 owns permissions; nothing here. BUG NOTE (main, not filed): AIDA_BIN is exported by export_coordinating_bin_env :101499 but never read by resolve_aida_exe_from :101452, so a child aida of a different build resolves itself via its own current_exe; BUG-766's intent only holds through the PATH prepend. Step 2 closes this.
+
+    VERDICT: NEEDS DECISION: does the .mcp.json absolute path written by `aida mcp register` and the config TUI MCP toggle (config_cmd.rs:3096, mcp_cmd.rs:78) count under acceptance 5 ("no generated project file contains a machine-specific absolute AIDA checkout path")? Recommended default: out of scope for TASK-1499 (it is an explicit per-machine registration, and MCP servers do not inherit AIDA's PATH prepend, so a bare "aida" there can run the wrong build); note it in the PR and file a small follow-up if Joe wants it portable. Everything else above is ready to implement.
+  created_at: 2026-09-26T21:33:11.988045462Z
+  modified_at: 2026-09-26T21:33:11.988045462Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
