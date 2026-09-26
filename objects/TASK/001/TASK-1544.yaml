@@ -1,0 +1,20 @@
+id: 01a0e007-d837-7321-ba14-174ff4d50d18
+spec_id: TASK-1544
+agreed_id: TASK-1544
+title: Light entry path for the performance and remote-drift doctor checks (like disk-headroom)
+description: 'Follow-up from BUG-1675: ''aida doctor check performance'' and ''check remote-drift'' do not need the store for their own findings but go through the full store load, so under load they can time out (exit 124) and trip their guard routes. Acceptance: 1. Both single-category checks skip the store load and full findings pass, keeping report shape and --fail-on-findings behaviour identical. 2. Tests with injected inputs; one real-probe wiring test each. 3. Measured runtime on this repo recorded on the spec.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T23:23:25.623165354Z
+modified_at: 2026-09-26T23:23:25.623165354Z
+req_type: Task
+filed_at:
+  code_sha: 9791e5eaac5cb4b0083aeaa32744c5900e396fc1
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
