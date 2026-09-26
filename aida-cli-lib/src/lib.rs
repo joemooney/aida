@@ -16053,13 +16053,8 @@ fn add_pending_brief(
     // convention used everywhere else. `Path::display()` emits `\` on Windows,
     // which broke task_492_brief_tests on the cross-platform runner.
     // trace:BUG-466 | ai:claude
-    let rel = brief_path
-        .strip_prefix(project_root)
-        .unwrap_or(brief_path)
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/");
+    // trace:BUG-1648 | ai:claude — shared with the plan-path writer.
+    let rel = plan_rel_path(brief_path, project_root);
     let mut entries = read_pending_briefs(&pending_path);
     if !entries.iter().any(|e| e == &rel) {
         entries.push(rel);
@@ -44069,9 +44064,17 @@ fn parse_extracted_plans_from_marker(comment: &str) -> Vec<String> {
     };
     paths
         .split(',')
-        .map(|p| p.trim().to_string())
+        .map(|p| normalize_recorded_plan_path(p.trim()))
         .filter(|p| !p.is_empty())
         .collect()
+}
+
+/// A plan path read back from a followup marker or a `followup-src:` tag, in
+/// the `/` form [`plan_rel_path`] now writes. Versions before BUG-1648 wrote
+/// `docs/plans\x.md` on Windows; normalizing on read keeps those dedup-able.
+// trace:BUG-1648 | ai:claude
+fn normalize_recorded_plan_path(recorded: &str) -> String {
+    recorded.replace('\\', "/")
 }
 
 /// BUG-656: the cross-store stable signature. Given the relative plan paths a
@@ -44118,7 +44121,6 @@ fn followup_filed_in_store(
     bullet: &str,
     source_plan: &str,
 ) -> bool {
-    let plan_tag = format!("{FOLLOWUP_SRC_TAG_PREFIX}{source_plan}");
     use aida_core::models::RelationshipType;
     let want = bullet.trim().to_ascii_lowercase();
     let child_ids: std::collections::HashSet<uuid::Uuid> = store
@@ -44133,7 +44135,13 @@ fn followup_filed_in_store(
         .unwrap_or_default();
     store.requirements.iter().any(|r| {
         r.title.trim().to_ascii_lowercase() == want
-            && (child_ids.contains(&r.id) || r.tags.iter().any(|t| *t == plan_tag))
+            && (child_ids.contains(&r.id)
+                || r.tags.iter().any(|t| {
+                    // Tags written before BUG-1648 may carry `\`.
+                    // trace:BUG-1648 | ai:claude
+                    t.strip_prefix(FOLLOWUP_SRC_TAG_PREFIX)
+                        .is_some_and(|p| normalize_recorded_plan_path(p) == source_plan)
+                }))
     })
 }
 
@@ -44904,7 +44912,8 @@ fn capture_test_plan(
 /// separated on every OS. The followup marker, the plan-path dedup set and
 /// the `followup-src:` tag compare these strings, so a Windows clone that
 /// wrote `docs/plans\x.md` would neither match what a Unix clone filed nor
-/// the `docs/plans/x.md` shape everything else uses.
+/// the `docs/plans/x.md` shape everything else uses. The agent-brief
+/// `.pending` sentinel (BUG-466) stores its keys the same way.
 // trace:BUG-1648 | ai:claude
 fn plan_rel_path(path: &std::path::Path, project_root: &std::path::Path) -> String {
     let Ok(rel) = path.strip_prefix(project_root) else {
@@ -45053,7 +45062,15 @@ fn extract_plan_followups(
             r.tags
                 .iter()
                 .filter_map(|t| t.strip_prefix(FOLLOWUP_SRC_TAG_PREFIX))
-                .map(move |plan| (plan.to_string(), title.clone(), id.clone(), terminal))
+                // trace:BUG-1648 | ai:claude
+                .map(move |plan| {
+                    (
+                        normalize_recorded_plan_path(plan),
+                        title.clone(),
+                        id.clone(),
+                        terminal,
+                    )
+                })
         })
         .collect();
 

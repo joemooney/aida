@@ -5804,6 +5804,12 @@ hostname = "h"
     );
     std::fs::write(leases.join("legacylease01.toml"), toml_text).unwrap();
 
+    // The lease must load and cover cwd, so the `None` below is the missing
+    // parent field, not a parse failure. trace:BUG-1648 | ai:claude
+    assert!(
+        active_lease_for_cwd(&worktree, &worktree.canonicalize().unwrap()).is_some(),
+        "legacy lease must parse and cover cwd"
+    );
     assert!(parent_project_root_for_session(&worktree).is_none());
 }
 
