@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T14:04:12.230277346Z
-modified_at: 2026-09-26T15:16:53.329290247Z
+modified_at: 2026-09-26T16:02:51.116498842Z
 req_type: Task
 tags:
 - docs:impacted
@@ -19,6 +19,18 @@ comments:
   created_at: 2026-09-26T14:04:30.449532186Z
   modified_at: 2026-09-26T14:04:30.449532186Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de74-7c6c-7b21-859f-27ae3388e97d
+  author: joe
+  content: |-
+    Review (fresh Opus reviewer): REQUEST_CHANGES @ b5a1618067.
+    1. BLOCKER - pre-commit hook template false-positives in user projects. aida-core/templates/hooks/aida-pre-commit.sh section 5 now rejects ANY SPEC_ID_RE hit on an added /// line in EVERY staged *.rs file of any scaffolded project (not just clap files). Reproduced with the real template in a throwaway repo via real git commit: '/// See ADR-12 for the rationale', '/// Implements FR-1-042', '/// Tracks CR-17 change request fields' all BLOCKED (origin/main hook passes all of them). Ordinary rustdoc citing a user's own ADR/FR/CR/BUG ids now fails commits. Non-Rust files, //! lines, and /// inside string literals are correctly not flagged.
+    2. BLOCKER - hook regex has no word boundary, unlike the cli.rs mirror (\b...). '/// Log at DEBUG-2 verbosity' and '/// Handles the SCR-4 screen' are BLOCKED (BUG-2, CR-4 substrings). The 'lockstep' claim is false. This was latent before; the new any-mention rule makes it bite.
+    3. Scope mismatch in this repo too: the CI guard scans only cli.rs, but the hook scans all *.rs. There are ~7,149 existing /// lines with SPEC-IDs outside cli.rs (lib.rs 2298, auto_complete.rs 512, session.rs 248...), mostly test rustdoc in house style. Any in-place edit or reflow of one of them, or a new '/// TASK-n: regression...' test doc, is now refused, which pushes agents toward --no-verify (the failure mode BUG-624 warned about). Suggested fix: keep the hook at the BUG-629 criterion (bare/trace: only), or scope the prose rule to clap-bearing files (cli.rs, or files that derive Parser/Subcommand/Args) and to the AIDA repo only (e.g. behind a config/env opt-in), and add \b-equivalent boundaries ((^|[^A-Za-z0-9_])). Extend tests/test_precommit_provenance_move.sh (or add a test) for ADR-12/FR-1-042/DEBUG-2 prose in a non-clap .rs file.
+    4. OK - cli.rs rewordings: all ~16 listed sites reworded; no meaning lost beyond dropped concrete examples. A recursive --help walk (406 help pages, freshly built binary) shows zero SPEC-ID tokens. Nits: session end 'a branch name (its lowercased, dash-joined form...)' is ambiguous; an example with a placeholder such as task-<n> would read better. The Lock 'an early slice of a broader locking model' is vague internal framing. DOC is not in either regex (DOC-3 was reworded by hand).
+    5. OK - checks: make check-templates passes; scripts/check-portability.sh rc=0 (it scans Rust only, not the hook); the hook itself is bash-3.2/BSD-safe (sed -E removed, grep -E only, empty-array loop fine without set -u). tests/test_precommit_provenance_move.sh passes; cargo test -p aida-cli-lib --lib cli::tests 53/53 and 'help' 58/58 pass; the hook passes on the branch's own staged diff. verify-manual.py is unaffected (no flag or command changes).
+  created_at: 2026-09-26T16:02:51.116498842Z
+  modified_at: 2026-09-26T16:02:51.116498842Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de4a-67d1-7062-84ed-39e88e24c72e
   author: aida-session-start
