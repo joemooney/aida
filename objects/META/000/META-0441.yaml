@@ -1,0 +1,23 @@
+id: 01a0dd03-c1cd-7a21-8a51-df91b2906e74
+spec_id: META-0441
+title: spike protocol
+description: |-
+  Purpose: answer a bounded question with evidence.
+  Deliverable: write the evidence-grounded report at the docs/spikes/*.md path named by the spec.
+  Before done: the report answers the question, records evidence and uncertainty, and names the recommended next step.
+  Reviewer: an advisor reads the report before anything builds on it.
+  Human boundary: decisions, taste calls, and credentials stay with the operator.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T09:20:06.093866858Z
+modified_at: 2026-09-26T09:20:06.093866858Z
+req_type: Meta
+tags:
+- protocol:spike
+filed_at:
+  code_sha: 66838ec3ad507fbcd6a042ef635be46f08080533
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 66838ec3ad

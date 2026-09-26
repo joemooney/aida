@@ -1,0 +1,23 @@
+id: 01a0dd03-c1ce-7352-bb24-234d64f4643a
+spec_id: META-0443
+title: story protocol
+description: |-
+  Purpose: deliver the accepted user-visible capability.
+  Deliverable: implementation and verification for every acceptance criterion.
+  Before done: acceptance is traceable to code or tests and relevant checks pass.
+  Reviewer: checks behavior, scope, compatibility, and documentation.
+  Human boundary: unresolved product or architecture forks return to the operator/advisor.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T09:20:06.094146274Z
+modified_at: 2026-09-26T09:20:06.094146274Z
+req_type: Meta
+tags:
+- protocol:story
+filed_at:
+  code_sha: 66838ec3ad507fbcd6a042ef635be46f08080533
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 66838ec3ad
