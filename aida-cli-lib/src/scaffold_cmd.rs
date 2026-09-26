@@ -39,7 +39,8 @@ pub(crate) fn handle_scaffold_command(
                 ));
             }
 
-            let config = ScaffoldConfig::default();
+            // trace:BUG-1639 | ai:claude
+            let config = crate::init_cmd::scaffold_config_for_project(&root);
             let status = check_scaffold_status(&store, &root, &config, db_path);
 
             // Generate HTML report if requested
@@ -143,7 +144,8 @@ pub(crate) fn handle_scaffold_command(
                 .clone()
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
-            let config = ScaffoldConfig::default();
+            // trace:BUG-1639 | ai:claude
+            let config = crate::init_cmd::scaffold_config_for_project(&root);
             let mut scaffolder =
                 Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
             let preview = scaffolder.preview(&store);
@@ -191,7 +193,8 @@ pub(crate) fn handle_scaffold_command(
                 .clone()
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
-            let config = ScaffoldConfig::default();
+            // trace:BUG-1639 | ai:claude
+            let config = crate::init_cmd::scaffold_config_for_project(&root);
             let mut scaffolder =
                 Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
 
@@ -479,7 +482,7 @@ pub(crate) fn handle_scaffold_command(
                         version.2,
                     );
                     println!(
-                        "  use scaffolded `.codex/skills/` via `/skills` or `$aida-*`, or run the matching `aida ...` CLI verb directly"
+                        "  use the project's `.agents/skills/` via `/skills` or `$aida-*`, or run the matching `aida ...` CLI verb directly"
                     );
                     println!(
                         "  prune any old install with `rm -rf ~/.codex/prompts` or delete its `aida-*.md` and `*.aida-bak` files"
@@ -502,7 +505,7 @@ pub(crate) fn handle_scaffold_command(
                 dest_dir.display()
             );
             println!(
-                "  note: current Codex interactive sessions use `.codex/skills/` via `/skills` or `$aida-*`; `~/.codex/prompts` is not advertised as `/aida-*` slash commands"
+                "  note: current Codex interactive sessions use the project's `.agents/skills/` via `/skills` or `$aida-*`; `~/.codex/prompts` is not advertised as `/aida-*` slash commands"
             );
             println!(
                 "  written: {}   skipped (already present): {}",
@@ -563,9 +566,10 @@ pub(crate) fn handle_scaffold_command(
                 anyhow::bail!("Project root does not exist: {}", root.display());
             }
 
+            // trace:BUG-1639 | ai:claude
             let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
                 root.clone(),
-                ScaffoldConfig::default(),
+                crate::init_cmd::scaffold_config_for_project(&root),
                 db_path.to_path_buf(),
             );
             let preview = scaffolder.preview(&store);
@@ -587,7 +591,8 @@ pub(crate) fn handle_scaffold_command(
                 anyhow::bail!("Project root does not exist: {}", root.display());
             }
 
-            let config = ScaffoldConfig::default();
+            // trace:BUG-1639 | ai:claude
+            let config = crate::init_cmd::scaffold_config_for_project(&root);
             // Use with_database so our preview matches what `scaffold status`
             // produces — without the db_path the scaffolder renders CLAUDE.md
             // / AGENTS.md against legacy defaults, which then "drifts" against
@@ -804,7 +809,7 @@ mod task1503_tests {
         let root = tmp.path();
         let (scaffolder, p) = preview(root);
         scaffolder.apply(&p).unwrap();
-        let codex = root.join(".codex/skills");
+        let codex = root.join(".agents/skills"); // trace:BUG-1639 | ai:claude
         std::fs::remove_dir_all(codex.join("aida-commit")).unwrap();
 
         for force in [false, true] {
@@ -839,7 +844,7 @@ mod task1503_tests {
 /// just with cleaner output).
 ///
 // trace:FR-1-028 | ai:claude
-fn run_scaffold_upgrade(
+pub(crate) fn run_scaffold_upgrade(
     project_root: &std::path::Path,
     preview: &aida_core::ScaffoldPreview,
     dry_run: bool,

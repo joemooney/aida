@@ -1,7 +1,7 @@
 //! Edit-preserving scaffold refresh — the generalization of the starter
 //! memory pack's `--refresh` contract to every agent pack AIDA ships
-//! (`.claude/skills/`, `.claude/commands/`, `.codex/skills/`,
-//! `.antigravity/skills/`, `~/.codex/prompts/`).
+//! (`.claude/skills/`, `.claude/commands/`, `.agents/skills/`, the legacy
+//! `.codex/skills/` and `.antigravity/skills/`, `~/.codex/prompts/`).
 //!
 //! The contract, identical to the memory pack's:
 //!
@@ -256,6 +256,39 @@ pub fn skill_present(pack_dir: &Path, name: &str) -> bool {
             .is_ok()
 }
 
+/// May an automatic refresh plan deliveries into the installed pack at `pack`
+/// (relative to `project_root`)? A pack directory that does not exist is
+/// never created. The shared `.agents/skills` directory also holds other
+/// tools' skills, so it counts as AIDA's only when it is a real directory
+/// (neither it nor `.agents` a symlink) that already holds AIDA's manifest or
+/// an `aida-*` skill; a directory of third-party skills gets nothing, not
+/// even a manifest.
+// trace:BUG-1639 | ai:claude
+pub fn refresh_may_plan_pack(project_root: &Path, pack: &Path) -> bool {
+    let dir = project_root.join(pack);
+    if pack != Path::new(super::inventory::PORTABLE_PACK) {
+        return dir.is_dir();
+    }
+    let real_dir = |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_dir());
+    let Some(parent) = pack.parent() else {
+        return false;
+    };
+    if !real_dir(&project_root.join(parent)) || !real_dir(&dir) {
+        return false;
+    }
+    if dir.join(DELIVERED_MANIFEST).symlink_metadata().is_ok() {
+        return true;
+    }
+    std::fs::read_dir(&dir).is_ok_and(|entries| {
+        entries.flatten().any(|e| {
+            e.file_name()
+                .to_str()
+                .is_some_and(|n| n.starts_with(super::inventory::AIDA_SKILL_PREFIX))
+                && e.path().is_dir()
+        })
+    })
+}
+
 /// Is `path` a file of skill `name` in `pack`: the skill's `SKILL.md` or any
 /// supporting file under `<pack>/<name>/`?
 // trace:TASK-1503 | ai:claude
@@ -268,16 +301,21 @@ pub fn is_file_of_skill(path: &Path, pack: &Path, name: &str) -> bool {
 /// `make sync-templates`, not by delivery. Such a pack is never tracked (no
 /// manifest is written into the checkout). Same detection as BUG-917's
 /// `check_scaffold_status` exemption.
+///
+/// The source repo's `.agents/skills` holds regular-file copies (Codex skips
+/// a symlinked SKILL.md), so it cannot be recognised by its links: in a
+/// checkout that has `aida-core/templates/`, that pack is always a mirror.
 // trace:TASK-1503 | ai:claude
-fn is_template_mirror_pack(
-    project_root: &Path,
-    pack_dir: &Path,
-    shipped: &BTreeSet<String>,
-) -> bool {
+// trace:BUG-1639 | ai:claude
+fn is_template_mirror_pack(project_root: &Path, pack: &Path, shipped: &BTreeSet<String>) -> bool {
     let Ok(templates) = std::fs::canonicalize(project_root.join("aida-core").join("templates"))
     else {
         return false;
     };
+    if pack == Path::new(super::inventory::PORTABLE_PACK) {
+        return true;
+    }
+    let pack_dir = project_root.join(pack);
     shipped.iter().any(|name| {
         let skill = pack_dir.join(name).join("SKILL.md");
         symlink_target(&skill).is_some()
@@ -428,7 +466,7 @@ pub fn plan_skill_pack(
             )),
         );
     }
-    if is_template_mirror_pack(project_root, &pack_dir, &shipped) {
+    if is_template_mirror_pack(project_root, pack, &shipped) {
         let withheld = match mode {
             ManifestMode::Refresh => missing.clone(),
             ManifestMode::Install => BTreeSet::new(),
@@ -810,6 +848,83 @@ mod tests {
         install_skill(&sibling, "aida-req");
         assert_eq!(read_skill_manifest(&sibling).unwrap(), None);
         assert!(pack_dir.join(DELIVERED_MANIFEST).is_file());
+    }
+
+    /// `.agents/skills` is shared with other tools: refresh plans it only when
+    /// it is a real directory that already holds AIDA's manifest or an
+    /// `aida-*` skill. Other packs keep the plain "exists" rule.
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn non_aida_only_agents_dir_is_not_an_aida_pack() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let pack = Path::new(".agents/skills");
+        assert!(!refresh_may_plan_pack(root, pack), "absent");
+        let dir = root.join(pack);
+        install_skill(&dir, "typesafe-ai");
+        std::fs::create_dir_all(dir.join("local")).unwrap();
+        std::fs::write(dir.join("aida-notes.txt"), "a file, not a skill dir").unwrap();
+        assert!(!refresh_may_plan_pack(root, pack), "third-party only");
+
+        install_skill(&dir, "aida-req");
+        assert!(refresh_may_plan_pack(root, pack), "holds an aida-* skill");
+        std::fs::remove_dir_all(dir.join("aida-req")).unwrap();
+        write_skill_manifest(&dir, &SkillManifest::default()).unwrap();
+        assert!(refresh_may_plan_pack(root, pack), "holds AIDA's manifest");
+
+        // Other packs: existence is enough, as before.
+        assert!(!refresh_may_plan_pack(root, Path::new(".codex/skills")));
+        std::fs::create_dir_all(root.join(".codex/skills")).unwrap();
+        assert!(refresh_may_plan_pack(root, Path::new(".codex/skills")));
+    }
+
+    // trace:BUG-1639 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_agents_dir_is_not_an_aida_pack() {
+        for link_at in [".agents", ".agents/skills"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let elsewhere = root.join("elsewhere");
+            install_skill(&elsewhere.join("skills"), "aida-req");
+            write_skill_manifest(&elsewhere.join("skills"), &SkillManifest::default()).unwrap();
+            let target = if link_at == ".agents" {
+                elsewhere.clone()
+            } else {
+                std::fs::create_dir_all(root.join(".agents")).unwrap();
+                elsewhere.join("skills")
+            };
+            std::os::unix::fs::symlink(&target, root.join(link_at)).unwrap();
+            assert!(
+                !refresh_may_plan_pack(root, Path::new(".agents/skills")),
+                "{link_at}"
+            );
+        }
+    }
+
+    /// In the AIDA source repo `.agents/skills` is a template mirror
+    /// (regular-file copies kept by `make sync-templates`): it is never
+    /// tracked, so no manifest lands in the checkout, and refresh creates
+    /// nothing there.
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn source_repo_agents_pack_is_an_untracked_mirror() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("aida-core/templates")).unwrap();
+        let pack = Path::new(".agents/skills");
+        install_skill(&root.join(pack), "aida-req");
+        let shipped = names(&["aida-req", "aida-handoff"]);
+        let plan = plan_skill_pack(root, pack, shipped.clone(), ManifestMode::Refresh);
+        assert!(plan.base.is_none());
+        assert!(plan.deliverable(root).is_empty());
+        assert!(!plan.record(root, &BTreeSet::new()).unwrap());
+        assert!(!root.join(pack).join(DELIVERED_MANIFEST).exists());
+        // A downstream project (no aida-core/templates) is tracked as usual.
+        let other = tempfile::tempdir().unwrap();
+        install_skill(&other.path().join(pack), "aida-req");
+        let plan = plan_skill_pack(other.path(), pack, shipped, ManifestMode::Refresh);
+        assert!(plan.base.is_some());
     }
 
     /// Legacy pack (no manifest, some AIDA skills on disk): automatic refresh
