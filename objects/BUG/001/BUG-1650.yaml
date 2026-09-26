@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T11:07:23.472847865Z
-modified_at: 2026-09-26T13:24:17.917694225Z
+modified_at: 2026-09-26T13:24:45.108131627Z
 req_type: Bug
 comments:
 - id: 01a0dd66-3bfd-7c20-9540-d625513f4b1d
@@ -68,6 +68,12 @@ comments:
     N2 The candidate-iteration and legacy-backslash behaviour is tested only in aida-core. Neither aida-cli-lib lib.rs detect_store_path nor the aida-tui resolve_store_path has a multi-candidate test, so a .take(1) regression there would go uncaught. Add a one-line raw-backslash case to each.
   created_at: 2026-09-26T13:24:17.917694225Z
   modified_at: 2026-09-26T13:24:17.917694225Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dde3-bdb4-7f70-9ba7-48a2fec9a94d
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): round-2 APPROVE WITH NITS accepted. Nit 1 (a second store_path before [deployment] now loses to [deployment]) is ACCEPTED as the recorded precedence; no writer produces two keys. Nit 2 (CLI/TUI multi-candidate tests) is being added before integration, with an orchestrator delta check.'
+  created_at: 2026-09-26T13:24:45.108131627Z
+  modified_at: 2026-09-26T13:24:45.108131627Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
