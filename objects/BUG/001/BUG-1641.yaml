@@ -3,12 +3,12 @@ spec_id: BUG-1641
 agreed_id: BUG-1641
 title: 'Metadata merge follow-ups after BUG-1613: config migrate counter reset, friendly conflict wording, BulkWriter reassign, no-write test'
 description: From BUG-1613's strict review. (1) 'aida config migrate' resets counters and then save() keeps the higher on-disk counters (the per-prefix max), so the reset is silently ignored and new IDs skip numbers. Either route the migration through an explicit, documented counter-reset path or document that behaviour. Removing a prefix_counters key through save() is also dropped. update_atomically still writes metadata wholesale; make it consistent. (2) The conflict message shows internal field names ('type_definitions setting'); use user-facing wording. (3) BulkWriter::finish refuses the whole import when one assigned ID collides; re-assign the colliding IDs under the lock instead. (4) Add a test that a spec-only save neither writes nor commits metadata.yaml.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T07:02:15.516176238Z
-modified_at: 2026-09-26T15:38:16.708263889Z
+modified_at: 2026-09-26T16:51:43.598093626Z
 req_type: Bug
 comments:
 - id: 01a0dc85-ca4c-71b3-ae74-5749fd82bd0b
@@ -50,6 +50,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0dea1-3b63-7843-b95f-31268bb3a03a
+  author: aida-auto-bump
+  timestamp: 2026-09-26T16:51:43.587617981Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0dea1-3b6e-7c62-b1d5-44eddbb9d8ae
+  timestamp: 2026-09-26T16:51:43.598092620Z
+  agent: implementer
+  commit_sha: 7c6faed6902114a6d1cf1b7843df6e1ef2175da5
+  summary: Completed via merge 7c6faed6
 filed_at:
   code_sha: 63ba7573152fb98eb674bb8570e649997f64dd10
   branch: main
@@ -58,3 +71,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T16:51:43.587593733Z
+  completion_sha: 7c6faed6902114a6d1cf1b7843df6e1ef2175da5
