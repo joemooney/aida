@@ -3,12 +3,12 @@ spec_id: BUG-1634
 agreed_id: BUG-1634
 title: tests/test_distributed.sh writes to the real ~/.aida/roles
 description: 'Found in BUG-1625''s review. tests/test_distributed.sh writes the operator''s real ~/.aida/roles; it only stays clean when run with a temporary HOME. Tests must never touch ~/.aida. Fix: export a temporary HOME (and AIDA_HOME if used) at the top of the script, and assert nothing under the real ~/.aida changes. Acceptance: running the script leaves the real ~/.aida unchanged (compare its listing and mtimes before and after).'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T23:05:27.108447265Z
-modified_at: 2026-09-25T23:06:00.809374191Z
+modified_at: 2026-09-26T00:59:46.699343565Z
 req_type: Bug
 comments:
 - id: 01a0dad1-8ae9-7ba1-a514-006504894d45
