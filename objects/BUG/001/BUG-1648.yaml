@@ -1,0 +1,31 @@
+id: 01a0dd55-e242-77b3-b8bb-283f80fb4a61
+spec_id: BUG-1648
+agreed_id: BUG-1648
+title: 'Windows nightly: 9 more test failures from commits after f9c900b (short-path RUNNER~1, backslash separators, /tmp literals, env/eval-line tests)'
+description: |-
+  Found by BUG-1646 verification run 36234834586 (Cross-platform nightly on claude/bug-1646): Windows shows 6629 passed, 9 failed. The four BUG-1646 tests now pass. The remaining failures come from the 22 commits merged after f9c900b:
+  - bug_1624 session_env_allowlists_names_and_ignores_file_aida_bin
+  - bug_1627 agent_type_accepts_only_known_types
+  - bug_1627 nul_value_is_dropped_from_eval_lines
+  - bug_1629 live_lease_wins_over_the_resolver (Windows short-path RUNNER~1 vs long path mismatch; canonicalize both sides)
+  - bug_1633 followup_failed_add_counts_as_already_filed (docs/plans\ separator)
+  - statusline apply_session_env_to_process_sets_env
+  - bug_1621 watch_pass_dry_run_queues_nothing_and_execute_requeues
+  - task_1507 history_cache_merge_commit_decodes_like_git_show_cc
+  - worktree_handler enter_shell_payload_cd_then_sources_session_env (asserts a /tmp path)
+  For each, decide whether it is a test portability bug or a real Windows product bug; fix production where users would hit it. Acceptance: a workflow_dispatch of Cross-platform (nightly) on the branch is green on windows-latest. Extend scripts/portability-rules.json where a rule would have caught the class.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T10:49:48.354461550Z
+modified_at: 2026-09-26T10:49:48.354461550Z
+req_type: Bug
+filed_at:
+  code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
