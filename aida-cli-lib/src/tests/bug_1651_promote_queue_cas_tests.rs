@@ -206,3 +206,42 @@ fn bug_1651_phase1_restore_line_is_suppressed_under_json() {
         );
     }
 }
+
+/// Review nit: when the earlier entry is put back but its exact `i64::MAX`
+/// position cannot be re-set, the error reports a withdrawal with an inexact
+/// position, never "could not be withdrawn" or an `aida queue remove` hint.
+/// Only a failed withdrawal gets that hint.
+// trace:BUG-1651 | ai:claude
+#[test]
+fn bug_1651_reorder_failure_reports_an_inexact_position_not_a_failed_withdrawal() {
+    use crate::PromoteQueueWithdrawal;
+    let write_err = anyhow::anyhow!("{SPEC} is now Rejected, a final status");
+    let inexact = crate::promote_rollback_error(
+        &write_err,
+        "implementer",
+        SPEC,
+        &Ok(PromoteQueueWithdrawal::WithdrawnPositionInexact(
+            "disk full".into(),
+        )),
+    );
+    assert!(inexact.contains("was withdrawn"), "{inexact}");
+    assert!(
+        inexact.contains("position could not be restored exactly (disk full)"),
+        "{inexact}"
+    );
+    assert!(inexact.contains("The finding is unchanged."), "{inexact}");
+    assert!(!inexact.contains("could not be withdrawn"), "{inexact}");
+    assert!(!inexact.contains("aida queue remove"), "{inexact}");
+
+    let failed = crate::promote_rollback_error(
+        &write_err,
+        "implementer",
+        SPEC,
+        &Err(anyhow::anyhow!("queue file unreadable")),
+    );
+    assert!(failed.contains("could not be withdrawn"), "{failed}");
+    assert!(
+        failed.contains(&format!("aida queue remove {SPEC} --for implementer")),
+        "{failed}"
+    );
+}

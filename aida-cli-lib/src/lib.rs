@@ -709,35 +709,60 @@ pub(crate) fn findings_promote_to_work(
     // The race-test seam between the queue add and the status write.
     status_write_race_seam(store_path);
     if let Err(write_err) = findings_promote_approve_write(backend, req, reason, now) {
-        match withdraw_promoted_queue_entry(&storage, &user_id, &ours, prior_entry.as_ref()) {
-            Ok(PromoteQueueWithdrawal::Withdrawn) => anyhow::bail!(
-                "{write_err:#}. Its {role} queue entry was withdrawn; the finding is unchanged."
-            ),
-            Ok(PromoteQueueWithdrawal::LeftRemoved) => anyhow::bail!(
-                "{write_err:#}. Its {role} queue entry had already been removed by someone \
-                 else meanwhile, so the queue was left as it is; the finding is unchanged."
-            ),
-            Ok(PromoteQueueWithdrawal::LeftReplaced) => anyhow::bail!(
-                "{write_err:#}. Its queue entry was changed by someone else meanwhile, so it \
-                 was left as it is (check it with `aida queue list`); the finding is unchanged."
-            ),
-            Err(undo_err) => anyhow::bail!(
-                "{write_err:#}. It had already been added to the {role} queue, and that entry \
-                 could not be withdrawn ({undo_err:#}); remove it with \
-                 `aida queue remove {display_id} --for {role}`."
-            ),
-        }
+        let undo = withdraw_promoted_queue_entry(&storage, &user_id, &ours, prior_entry.as_ref());
+        anyhow::bail!(
+            "{}",
+            promote_rollback_error(&write_err, &role, display_id, &undo)
+        );
     }
     Ok(role)
+}
+
+/// BUG-1651: the error a promote whose status write failed returns, chosen
+/// by what the queue withdrawal did. Only a failed withdrawal (the entry may
+/// remain) suggests `aida queue remove`.
+// trace:BUG-1651 | ai:claude
+pub(crate) fn promote_rollback_error(
+    write_err: &anyhow::Error,
+    role: &str,
+    display_id: &str,
+    undo: &Result<PromoteQueueWithdrawal>,
+) -> String {
+    match undo {
+        Ok(PromoteQueueWithdrawal::Withdrawn) => format!(
+            "{write_err:#}. Its {role} queue entry was withdrawn; the finding is unchanged."
+        ),
+        Ok(PromoteQueueWithdrawal::WithdrawnPositionInexact(reorder_err)) => format!(
+            "{write_err:#}. Its {role} queue entry was withdrawn and the earlier entry put \
+             back, but its queue position could not be restored exactly ({reorder_err}); \
+             check it with `aida queue list`. The finding is unchanged."
+        ),
+        Ok(PromoteQueueWithdrawal::LeftRemoved) => format!(
+            "{write_err:#}. Its {role} queue entry had already been removed by someone \
+             else meanwhile, so the queue was left as it is; the finding is unchanged."
+        ),
+        Ok(PromoteQueueWithdrawal::LeftReplaced) => format!(
+            "{write_err:#}. Its queue entry was changed by someone else meanwhile, so it \
+             was left as it is (check it with `aida queue list`); the finding is unchanged."
+        ),
+        Err(undo_err) => format!(
+            "{write_err:#}. It had already been added to the {role} queue, and that entry \
+             could not be withdrawn ({undo_err:#}); remove it with \
+             `aida queue remove {display_id} --for {role}`."
+        ),
+    }
 }
 
 /// BUG-1651: what the compare-and-swap withdrawal of a promote's queue entry
 /// did.
 // trace:BUG-1651 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PromoteQueueWithdrawal {
     /// The entry was still ours: it was removed, or the earlier entry put back.
     Withdrawn,
+    /// The earlier entry was put back, but re-setting its exact `i64::MAX`
+    /// position failed (the reason); it sits where `queue_add` placed it.
+    WithdrawnPositionInexact(String),
     /// The spec has no queue entry any more; nothing was written.
     LeftRemoved,
     /// The spec's entry is no longer the one this call added; nothing was
@@ -749,6 +774,8 @@ pub(crate) enum PromoteQueueWithdrawal {
 /// compared: the backend resolves the append sentinel on write.
 // trace:BUG-1651 | ai:claude
 fn is_same_queue_entry(current: &aida_core::QueueEntry, ours: &aida_core::QueueEntry) -> bool {
+    // Relies on the git backend round-tripping `for_role` and the exact
+    // (nanosecond) `added_at` through its YAML queue file.
     current.requirement_id == ours.requirement_id
         && current.note == ours.note
         && current.added_at == ours.added_at
@@ -786,8 +813,15 @@ pub(crate) fn withdraw_promoted_queue_entry(
     match prior {
         Some(prior) => {
             storage.queue_add(prior.clone())?;
+            // Best-effort: the entry is already back, so a failure here is
+            // reported as an inexact position, not a failed withdrawal.
             if prior.position == i64::MAX {
-                storage.queue_reorder(user_id, &[(prior.requirement_id, i64::MAX)])?;
+                if let Err(e) = storage.queue_reorder(user_id, &[(prior.requirement_id, i64::MAX)])
+                {
+                    return Ok(PromoteQueueWithdrawal::WithdrawnPositionInexact(format!(
+                        "{e:#}"
+                    )));
+                }
             }
         }
         None => storage.queue_remove_for_role(
@@ -12027,7 +12061,7 @@ fn queue_promoted_finding(
         .map(|entry| entry.for_role.unwrap_or_default())
 }
 
-/// [`queue_promoted_finding`], returning the entry it wrote so a failed
+/// `queue_promoted_finding`, returning the entry it wrote so a failed
 /// promote can tell whether the queue still holds it (BUG-1651).
 // trace:BUG-1651 | ai:claude
 fn queue_promoted_finding_entry(
