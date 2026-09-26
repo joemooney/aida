@@ -1,0 +1,43 @@
+id: 01a0defb-9c3e-7720-9d24-577c1a32d9e5
+spec_id: STORY-1486
+agreed_id: STORY-1486
+title: 'Scaffolded agent launch profile: writable vs read-only roots, seat-based Git-write policy, and approval-prompt exemptions (permission half split from TASK-1499)'
+description: |
+  Split from TASK-1499 by operator decision (2026-09-26, "Portability only; the permission profile moves to a separate spec"). This is the permission-shaping half of TASK-1499. It changes agent authority (what a launched agent may write and which commands run without an approval prompt), so it stays a DRAFT for the operator; a proxy must not approve it. It should also be read against STORY-1473 (seat authority is session-bound and set at a TTY), which owns seat semantics.
+
+  PROPOSAL (from TASK-1499's original text and the operator's 2026-09-24 comments):
+  - aida scaffold generates an agent launch profile that distinguishes the consumer project's writable roots (source, .git, .aida, .aida-store, cache, build output) from the AIDA source/build checkout, which is read-only unless AIDA itself is being developed.
+  - Seat-based Git policy: normal development seats get Git-write by default, guest seats are Git-read-only, and --git-read-only downgrades any seat.
+  - Routine AIDA commands run without Codex approval prompts under the trusted development profile; remote and destructive operations stay separately gated.
+  - Scaffolding authorizes both target/debug and target/release under the resolved local AIDA checkout, so switching build modes needs no scaffold rerun.
+
+  OPEN DECISIONS (recorded as an aida questions fork): whether to adopt the profile as proposed, adopt it without the no-approval-prompt part, or hold until STORY-1473 lands.
+
+  Acceptance (if approved):
+  1. The generated launch profile lists writable and read-only roots separately; a test asserts the AIDA checkout is read-only for a consumer project and writable when developing AIDA itself.
+  2. A guest seat and any seat launched with --git-read-only cannot run a Git write (test), and the effective policy is printed by --no-exec --verbose before the agent starts.
+  3. The list of commands exempted from approval prompts is explicit, and no remote (push, PR, merge) or destructive (reset --hard, branch delete, rm -rf) operation is on it (test).
+  4. Both target/debug and target/release are authorized; switching between them needs no scaffold rerun (test).
+  5. No generated file contains a machine-specific absolute path (inherits TASK-1499's rule).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:30:26.622729865Z
+modified_at: 2026-09-26T18:30:26.622729865Z
+req_type: Story
+tags:
+- agent-launch
+- authority
+- needs-operator
+- permissions
+- scaffold
+- split-from:TASK-1499
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
