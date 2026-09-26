@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T23:05:27.108447265Z
-modified_at: 2026-09-26T01:14:32.786332715Z
+modified_at: 2026-09-26T01:18:30.346643409Z
 req_type: Bug
 comments:
 - id: 01a0dad1-8ae9-7ba1-a514-006504894d45
@@ -22,6 +22,12 @@ comments:
   content: 'Review: APPROVE (independent reviewer, 8a5c3444df). Acceptance met. I ran all three edited scripts under AIDA_SESSION_ROLE=advisor: test_distributed, test_mcp_stdio and test_mcp_doc_consistency all passed (rc=0), and the guard reported ok. A full recursive before/after listing of the real ~/.aida showed only usage.jsonl appends and this reviewer''s own turn-clock file, both from live sessions. Isolation is correct: HOME, AIDA_HOME and XDG_CONFIG_HOME are temporary. AIDA_HOME means the parent of .aida, which matches presence.rs:138 and maintenance_schedule.rs:563. The code only uses dirs::config_dir among the XDG dirs, so XDG_CONFIG_HOME covers it. CARGO_HOME and RUSTUP_HOME are pinned, the git identity fallback is set, AIDA_SESSION_*/AIDA_ROLE* are cleared and AIDA_DEV_* is left alone. The trap keeps the script''s exit code: exit 3 still exits 3 and a change forces 1. aida_test_cleanup runs before the check. Unchanged CI scripts already use a fake HOME: advisor_code_guard, advisor_code_gate and precommit_provenance_move use env -i or HOME=FAKEHOME, gitlab_live_access uses its own test_home, and there is no global core.hooksPath. I probed the guard against a synthetic real-home. None of the following blocks the merge. (1) isolated_home.sh:88: when %P is empty the root line starts with a space, so awk $1 is the mtime and gets added to the watch set. The lenient mode detected a new top-level ~/.aida file only when the fake and real root mtimes happened to match; with no fake .aida it missed the file (rc=0). Strict mode catches it. (2) As documented, lenient mode misses changes to existing files outside roles/ and outside the fake-written set, e.g. preferences.toml. It also misses appends to roles/*.log (line 98). Strict (CI) catches both. (3) Line 32: -maxdepth 2 means nothing at depth 3 or deeper is compared, even in strict mode. Today only reconstitute/ has files that deep; roles/*.toml are at depth 2 and are covered. (4) Line 69: trap replaces rather than chains. A future script that sets its own ''trap … EXIT'' after sourcing silently turns off the guard, with no output. Consider an explicit guard or documenting aida_test_cleanup as the only hook. (5) Line 43 runs outside a conditional under set -e/pipefail. If a concurrent session renames a temp file away between readdir and stat, find exits 1 and the script aborts before the tests run. This is a rare flake. (6) Not cleared, and not set today: AIDA_STORE (can point the CLI at a real store), AIDA_AGENT_TYPE/AIDA_AGENT_NAME/AIDA_HEADLESS (affect gating), and GIT_DIR/GIT_CONFIG_GLOBAL (matter only if the tests run from a git hook). Worth adding to the unset list as follow-up hardening.'
   created_at: 2026-09-26T01:14:32.786332715Z
   modified_at: 2026-09-26T01:14:32.786332715Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0db4a-d7ca-7c20-afa1-4ce991ecfa9a
+  author: joe
+  content: 'Orchestrator delta check (6eb1aec53c): APPROVE. The four gaps the reviewer found are fixed (root entries, trap chaining, find races, extra vars), with evidence for guard cases A-H against a throwaway home, and the three scripts pass under the advisor role. Integrating.'
+  created_at: 2026-09-26T01:18:30.346643409Z
+  modified_at: 2026-09-26T01:18:30.346643409Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
