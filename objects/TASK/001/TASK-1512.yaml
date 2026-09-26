@@ -1,32 +1,33 @@
 id: 01a0da65-5aa5-7b73-9c93-ea74fa9d41f3
 spec_id: TASK-1512
 agreed_id: TASK-1512
-title: 'aida history: --to/--from status-transition filters and --created'
-description: |
+title: 'aida history: --to/--from status-transition filters and --opened'
+description: |+
   `aida history` can show every status transition (`--status-changes`) or exactly one named one (`--shipped` = Done→Completed), but nothing in between. "What got approved this week?", "what was filed this week?", "what bounced back from review?" all require grepping `events --oneline` output today.
 
   Add two generic filters instead of one flag per status (per-status flags would add 8+ flags and grow with every new status; `--shipped` stays as the one named alias for the most-asked question):
 
   - `--to <status>` / `--from <status>` — filter status-transition events by target and/or source status. Covers `--approved` (`--to approved`), `--to rejected`, `--to superseded`, `--to needs-attention`, rework (`--from in-progress --to approved`), etc.
-  - `--created` — filter to spec-creation ("added") events. Named `--created`, not `--opened`: "opened" is ambiguous (filed vs moved to an open status), and creation is a distinct event kind, not a transition — specs filed directly as `approved` would be missed by `--to draft`.
+  - `--opened` (alias `--created`) — filter to spec-creation ("added") events: the specs filed in the window. Creation is a distinct event kind, not a status transition, so specs filed directly as `approved` are included (they would be missed by `--to draft`). Operator chose `--opened` as the primary name (2026-09-25).
 
   ## Acceptance
   - `aida history --to approved --since 7d` lists only status events whose new status is Approved within the window, newest first; implies events mode like `--shipped`.
   - `aida history --from in-progress --to approved` lists only transitions matching both ends; `--from` alone matches any transition leaving that status.
   - Status values accept the same spellings/aliases as `aida edit --status` (e.g. `in-progress`, `accepted`→approved); an unknown status errors with the valid set.
-  - `aida history --created --since 7d` lists only spec-creation events, including specs filed directly at a non-draft status.
-  - `--created` combined with `--to`/`--from` is the union of both event kinds (or errors clearly — pick one and document it in `--help`).
+  - `aida history --opened --since 7d` (and `--created`, identically) lists only spec-creation events, including specs filed directly at a non-draft status.
+  - `--opened` combined with `--to`/`--from` is the union of both event kinds (or errors clearly — pick one and document it in `--help`).
   - All three compose with `--since`/`--until`/`--limit`/`--type`/`--author`/`--id`/`--oneline`/`--format`, and with the archived/deferred/meta view filters.
   - `--shipped` keeps its current behavior and is documented as equivalent to `--from done --to completed`.
-  - MCP `history` tool schema gains matching `to`/`from`/`created` parameters (CLI↔MCP parity).
+  - MCP `history` tool schema gains matching `to`/`from`/`opened` parameters (CLI↔MCP parity).
   - Works on the current git-log walk; must not be gated on TASK-1505 (history-events cache), which should make it fast once it lands.
   - Tests cover each filter, the combination rules, and alias handling.
+
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:07:50.565068549Z
-modified_at: 2026-09-25T22:32:45.706869909Z
+modified_at: 2026-09-26T00:05:52.068823874Z
 req_type: Task
 tags:
 - aida:history
