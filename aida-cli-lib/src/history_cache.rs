@@ -1764,12 +1764,25 @@ pub(crate) fn serve(store: &Path, opts: &HistoryOpts) -> Option<CacheAnswer> {
     if !cache_enabled() {
         return None;
     }
-    let budget = budget_from(
-        std::env::var("AIDA_HISTORY_INDEX_BUDGET_MS")
-            .ok()
-            .as_deref(),
+    #[cfg(not(test))]
+    let answer = serve_at(
+        store,
+        &history_db_path(store),
+        opts,
+        budget_from(
+            std::env::var("AIDA_HISTORY_INDEX_BUDGET_MS")
+                .ok()
+                .as_deref(),
+        ),
     );
-    match serve_at(store, &history_db_path(store), opts, budget) {
+    // trace:BUG-1643 | ai:claude
+    // A test that opts into env-driven serving indexes a tiny throwaway
+    // store; a wall-clock budget there only makes the "served from the
+    // index" answer depend on machine load. Tests index it unbounded
+    // (`budget_from` and the budgeted paths are tested via `serve_at`).
+    #[cfg(test)]
+    let answer = serve_with_budget_at(store, &history_db_path(store), opts, None);
+    match answer {
         Ok(answer) => answer,
         Err(e) => {
             debug_log(&e);
@@ -1786,6 +1799,18 @@ pub(crate) fn serve_at(
     opts: &HistoryOpts,
     budget: Duration,
 ) -> Result<Option<CacheAnswer>> {
+    serve_with_budget_at(store, db_path, opts, Some(budget))
+}
+
+/// [`serve_at`] with an optional budget: `None` indexes inline unbounded.
+/// The deadline starts right before indexing, as it always has.
+// trace:BUG-1643 | ai:claude
+fn serve_with_budget_at(
+    store: &Path,
+    db_path: &Path,
+    opts: &HistoryOpts,
+    budget: Option<Duration>,
+) -> Result<Option<CacheAnswer>> {
     let head = aida_core::git_ops::head_sha(store)?;
     let lock = IndexLock::try_acquire(db_path)?;
     let heal = |e: anyhow::Error, locked: bool| -> anyhow::Error {
@@ -1799,7 +1824,11 @@ pub(crate) fn serve_at(
     let locked = lock.is_some();
     let mut cache = HistoryCache::open(db_path).map_err(|e| heal(e, locked))?;
     if locked {
-        if let Err(e) = cache.ensure_fresh(store, &head, Budget::for_duration(budget)) {
+        if let Err(e) = cache.ensure_fresh(
+            store,
+            &head,
+            budget.map_or_else(Budget::unbounded, Budget::for_duration),
+        ) {
             // trace:TASK-1507 | ai:claude
             // B4: an index that disagrees with the store is reset (or, if
             // that fails, deleted) so the next query rebuilds it; this
