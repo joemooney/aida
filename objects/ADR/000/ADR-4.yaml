@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:04.203194099Z
-modified_at: 2026-09-26T18:33:51.660317893Z
+modified_at: 2026-09-26T18:34:01.162548144Z
 req_type: Decision
 tags:
 - batch:repositioning
@@ -83,6 +83,12 @@ comments:
   content: 'DOGFOODING EVIDENCE (2026-06-14): a live validation of the front-gate thesis. An agent took an un-spec''d shared-worktree SHORTCUT (skipping the file-a-spec / own-worktree front gate), and that bypass cascaded into two force-pushes to main + dropping a merged PR''s commit — one failed ''cd'' away from clobbering main; saved only by luck (the dropped change was a single re-creatable config line). The discipline AIDA enforces (spec-first, own-worktree, no force-push-main) is not ceremony — it''s the guardrail that the bypass removed. This is concrete proof-by-counterexample for the front-gate wedge: when the gate is skipped, the failure modes it prevents actually happen. File alongside the repositioning evidence (branch ''repositioning''); pairs with the substrate-as-bouncer specs now hardening these exact gates (BUG-548 force-push-main guard, BUG-538 double-drive guard). trace:from-strategic'
   created_at: 2026-06-14T01:16:34.514165607Z
   modified_at: 2026-06-14T01:16:34.514165607Z
+- id: 01a0defe-e24a-7432-9e4e-b59ac456e823
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): superseded by VIS-2 per Joe''s OPERATOR DECISION on SPIKE-86 (2026-09-26, adopt section 7.4). What survived: the governance half is subsumed into the control plane''s corpus-integrity role (TERM-5). What was refuted: ''concede the substrate race to Beads/Gas Town; interop, don''t compete'' - nine months of store and control-plane investment went the other way, and no product source mentions Beads.'
+  created_at: 2026-09-26T18:34:01.162548144Z
+  modified_at: 2026-09-26T18:34:01.162548144Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0defe-b106-73f3-acb1-4deb7b5f1815
   author: joe
