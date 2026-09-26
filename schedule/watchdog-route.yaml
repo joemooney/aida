@@ -1,9 +1,7 @@
 job: watchdog-route
-last_run: 2026-09-26T20:24:16.754809746Z
+last_run: 2026-09-26T20:57:02.164213903Z
 last_by:
   seat: advisor
   session: 71dca616-6150-461d-b64f-18c8288c6e1c
   vendor: antigravity
 result: done
-due_since: 2026-09-26T20:56:17.698903897Z
-due_reason: on CronJobFailed
