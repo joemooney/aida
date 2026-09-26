@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T23:05:05.919232561Z
-modified_at: 2026-09-26T01:26:27.280132485Z
+modified_at: 2026-09-26T01:34:43.358914409Z
 req_type: Bug
 comments:
 - id: 01a0dad1-6517-7663-abb8-8321e942bcc6
@@ -22,6 +22,12 @@ comments:
   content: 'Scope addition from BUG-1626: ''aida push --dry-run'' (handle_push_dry_run, lib.rs ~67930) reads the cached tracking ref and can miss a divergence. Make it fetch, time-bounded, like ''pull --dry-run''.'
   created_at: 2026-09-26T01:26:27.280132485Z
   modified_at: 2026-09-26T01:26:27.280132485Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0db59-b09e-7a83-aaaa-c49969ac752a
+  author: joe
+  content: 'Scope addition from BUG-1626''s re-review: (a) with multiple remote.origin.url entries, the push skip can suppress a needed push to a lagging second URL; require exactly one fetch URL before skipping. (b) When the branch is behind origin, the push summary should say ''nothing to push'', not ''already up to date''.'
+  created_at: 2026-09-26T01:34:43.358914409Z
+  modified_at: 2026-09-26T01:34:43.358914409Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
