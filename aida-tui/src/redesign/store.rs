@@ -1464,6 +1464,36 @@ mod tests {
         assert!(store_path_values("[deployment]\nstore_path = \"\"\n").is_empty());
     }
 
+    /// A pre-BUG-1649 `..\team-store` config parses as TOML with `\t`
+    /// applied; the raw legacy candidate must still win over the enclosing
+    /// project's store.
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_resolve_store_path_uses_the_legacy_backslash_candidate() {
+        for raw in ["..\\team-store", "stores\\new"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let outer = tmp.path().join("outer");
+            std::fs::create_dir_all(outer.join(".aida")).unwrap();
+            std::fs::write(
+                outer.join(".aida/config.toml"),
+                "[deployment]\nstore_path = \".outer\"\n",
+            )
+            .unwrap();
+            std::fs::create_dir_all(outer.join(".outer")).unwrap();
+
+            let proj = outer.join("proj");
+            std::fs::create_dir_all(proj.join(".aida")).unwrap();
+            // Deliberately unescaped, as a pre-BUG-1649 writer produced it.
+            let body = ["[deployment]\nstore_path = \"", raw, "\"\n"].concat();
+            std::fs::write(proj.join(".aida/config.toml"), &body).unwrap();
+            // On Unix one file name containing `\`; on Windows a relative path.
+            let legacy_store = proj.join(raw);
+            std::fs::create_dir_all(&legacy_store).unwrap();
+
+            assert_eq!(resolve_store_path(&proj), Some(legacy_store), "{raw:?}");
+        }
+    }
+
     // trace:BUG-1650 | ai:claude
     #[test]
     fn bug_1650_store_path_value_reads_quote_and_equals() {

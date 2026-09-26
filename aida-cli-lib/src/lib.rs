@@ -109895,3 +109895,8 @@ mod bug_1624_shell_and_git_guard_tests;
 #[cfg(test)]
 #[path = "tests/bug_1627_session_env_hardening_tests.rs"]
 mod bug_1627_session_env_hardening_tests;
+
+// trace:BUG-1650 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1650_store_resolver_tests.rs"]
+mod bug_1650_store_resolver_tests;
