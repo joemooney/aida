@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:49:03.555549390Z
-modified_at: 2026-09-26T17:25:33.976578382Z
+modified_at: 2026-09-26T17:57:00.462772533Z
 req_type: Task
 tags:
 - batch:groom-2026-09-25
@@ -208,6 +208,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): round-2 APPROVE WITH NITS accepted. Remaining nits (anchor ''No medium found'' to the connect prefixes; the unreachable NotStarted arm; item 8 pid adoption) are non-blocking and noted for TASK-1517. It ships as its OWN PR, left OPEN for Joe to merge (unattended-launch path; the proxy does not merge it).'
   created_at: 2026-09-26T17:25:33.976578382Z
   modified_at: 2026-09-26T17:25:33.976578382Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0dedc-ffae-7ad3-937c-9e821768ed65
+  author: joe
+  content: 'PR #2211 opened and LEFT OPEN for Joe (unattended-launch path; the proxy does not merge). Full local preflight green (check-removed-flags is pre-existing noise, BUG-1665).'
+  created_at: 2026-09-26T17:57:00.462772533Z
+  modified_at: 2026-09-26T17:57:00.462772533Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de96-9d83-7a70-864d-bd2651b0e2a0
