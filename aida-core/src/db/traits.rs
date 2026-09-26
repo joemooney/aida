@@ -199,6 +199,16 @@ pub trait DatabaseBackend: Send + Sync {
         Ok(store.get_requirement_unambiguous(id)?.cloned())
     }
 
+    /// [`Self::get_requirement_unambiguous`] for a READ-ONLY caller (`aida
+    /// show`, `aida comment list`, the history filter). A cache-backed store
+    /// may answer from its last committed snapshot while another process is
+    /// writing the cache, instead of refreshing first; a write path must use
+    /// [`Self::get_requirement_unambiguous`], which never skips the refresh.
+    // trace:BUG-1670 | ai:claude
+    fn get_requirement_unambiguous_for_read(&self, id: &str) -> Result<Option<Requirement>> {
+        self.get_requirement_unambiguous(id)
+    }
+
     /// Lists all requirements (non-archived by default)
     fn list_requirements(&self, include_archived: bool) -> Result<Vec<Requirement>> {
         let store = self.load()?;
