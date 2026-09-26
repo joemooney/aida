@@ -3,12 +3,12 @@ spec_id: BUG-1659
 agreed_id: BUG-1659
 title: 'aida-orchestrate skill: a seat rotation can leave the outgoing orchestrator running in the background, so two orchestrators drive the loop at once'
 description: 'Observed 2026-09-26. At a context-ceiling rotation, the outgoing orchestrator wrote its handoff and told the operator to close it, but it still had a running shell and an active /goal. At exit the operator chose ''Move to background'' (Claude Code''s exit dialog offers it whenever background tasks are running). The session kept driving the loop: it merged batch 97 out from under the new session''s preflight, removing wt-int97 mid-run, and dispatched a second TASK-1515 rework agent into the same worktree as the new session''s agent. The skill''s ''Context and handoff'' section covers writing the handoff but not ending the session cleanly. Fix in the template masters aida-core/templates/skills/aida-orchestrate.md and skills-portable/aida-orchestrate.md, then make sync-templates and make check-templates. Acceptance: (1) OUTGOING rotation checklist: start no new dispatches; stop or let finish every subagent, background shell and waiter (none left running); clear any /goal; write the handoff LAST with IN FLIGHT listing spec, worktree, branch, head sha, review state and PR/run ids; tell the operator to choose ''Exit and stop tasks'', never ''Move to background''. (2) INCOMING resume check: before acting on the handoff, check for a live prior orchestrator (claude agents / ListAgents / aida ps) and, if one exists, message it and ask the operator instead of starting a second loop. (3) A guardrail line: exactly one orchestrator per repo; on discovering a second, the later one stands down, stops its duplicate agents and hands its items over via the handoff and a direct message. (4) Wording stays vendor-neutral in the portable copy. (5) check-templates passes.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:28.889551612Z
-modified_at: 2026-09-26T15:51:38.898477315Z
+modified_at: 2026-09-26T15:53:30.565743789Z
 req_type: Bug
 comments:
 - id: 01a0de62-3daf-7e80-9c2a-ae9c380fcffe
@@ -32,6 +32,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0de6b-eec5-7570-a889-53c51626f654
+  author: joe
+  timestamp: 2026-09-26T15:53:30.565741899Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
   branch: main
