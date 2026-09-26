@@ -59,24 +59,40 @@ pub(crate) struct SaveReport {
     pub(crate) stale_untouched: Vec<String>,
 }
 
-/// A whole-store save refused because specs it would write (or delete)
-/// changed on disk after the store was loaded. Nothing was written.
+/// A whole-store save refused because specs it would write (or delete), or
+/// store-level `metadata.yaml` fields it changed, changed on disk after the
+/// store was loaded. Nothing was written.
 /// Downcast from the `anyhow::Error` to detect it.
-// trace:BUG-1612 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq)]
+// trace:BUG-1612 trace:BUG-1613 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StoreConflictError {
     /// The conflicting spec ids.
     pub specs: Vec<String>,
+    /// The conflicting store-level fields of `metadata.yaml` (e.g. `features`).
+    pub metadata_fields: Vec<String>,
 }
 
 impl std::fmt::Display for StoreConflictError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut what: Vec<String> = self.specs.clone();
+        if !self.metadata_fields.is_empty() {
+            what.push(format!(
+                "the store's {} setting{}",
+                self.metadata_fields.join(", "),
+                if self.metadata_fields.len() == 1 {
+                    ""
+                } else {
+                    "s"
+                }
+            ));
+        }
+        let many = self.specs.len() + self.metadata_fields.len() > 1;
         write!(
             f,
             "refusing to save: {} changed on disk after this store was loaded, and this \
              save changes {} too (a concurrent edit). Nothing was written; reload and retry.",
-            self.specs.join(", "),
-            if self.specs.len() == 1 { "it" } else { "them" }
+            what.join(", "),
+            if many { "them" } else { "it" }
         )
     }
 }
@@ -166,6 +182,136 @@ impl Default for StoreMetadata {
             baselines: Vec::new(),
         }
     }
+}
+
+/// Store-level fields that are monotonic ID counters. They are merged as the
+/// maximum of the disk and caller values (per key for the per-prefix maps), so
+/// a save never lowers a counter and re-issues an ID.
+// trace:BUG-1613 | ai:claude
+const METADATA_COUNTER_FIELDS: [&str; 4] = [
+    "next_feature_number",
+    "next_spec_number",
+    "prefix_counters",
+    "meta_counters",
+];
+
+/// The outcome of merging a writer's metadata over the current disk copy.
+// trace:BUG-1613 | ai:claude
+struct MetadataMerge {
+    /// What to write, or `None` when the disk copy already equals the merge
+    /// (nothing store-level changed, so `metadata.yaml` is left alone).
+    write: Option<StoreMetadata>,
+}
+
+/// Serialize metadata as a YAML value (map equality ignores key order, so the
+/// `HashMap`-backed counters compare by content).
+fn metadata_value(meta: &StoreMetadata) -> Result<serde_yaml::Value> {
+    Ok(serde_yaml::to_value(meta)?)
+}
+
+/// Max-merge one counter field: an integer, or a map of prefix -> integer.
+fn max_counter(
+    disk: Option<&serde_yaml::Value>,
+    mine: Option<&serde_yaml::Value>,
+) -> serde_yaml::Value {
+    use serde_yaml::Value;
+    match (disk, mine) {
+        (Some(Value::Mapping(d)), Some(Value::Mapping(m))) => {
+            let mut out = d.clone();
+            for (k, mv) in m {
+                let keep = match (out.get(k).and_then(Value::as_u64), mv.as_u64()) {
+                    (Some(dv), Some(mv)) => dv >= mv,
+                    (Some(_), None) => true,
+                    _ => false,
+                };
+                if !keep {
+                    out.insert(k.clone(), mv.clone());
+                }
+            }
+            Value::Mapping(out)
+        }
+        (Some(d), Some(m)) => match (d.as_u64(), m.as_u64()) {
+            (Some(dv), Some(mv)) if mv > dv => m.clone(),
+            (Some(_), _) => d.clone(),
+            _ => m.clone(),
+        },
+        (Some(d), None) => d.clone(),
+        (None, Some(m)) => m.clone(),
+        (None, None) => Value::Null,
+    }
+}
+
+/// Three-way merge of the store-level fields, the metadata analogue of the
+/// per-spec compare-and-swap in [`GitBackend::save_reporting`] (BUG-1612),
+/// at the granularity of one top-level `metadata.yaml` field:
+/// - a field this writer did not change (equal to `base`) keeps the DISK
+///   value, so a concurrent change to it survives;
+/// - a field only this writer changed takes the writer's value;
+/// - a field both changed, to different values, is a conflict (returned as the
+///   field names; nothing may be written);
+/// - ID counters are never a conflict: they take the max of disk and writer.
+///
+/// `base = None` (a store not loaded from this backend) means every field is
+/// the writer's, as before, but counters are still never lowered. `disk =
+/// None` (no `metadata.yaml` yet) writes the writer's copy.
+// trace:BUG-1613 | ai:claude
+fn merge_metadata(
+    base: Option<&serde_yaml::Value>,
+    mine: &StoreMetadata,
+    disk: Option<&StoreMetadata>,
+) -> Result<std::result::Result<MetadataMerge, Vec<String>>> {
+    use serde_yaml::Value;
+    let Some(disk) = disk else {
+        return Ok(Ok(MetadataMerge {
+            write: Some(mine.clone()),
+        }));
+    };
+    let mine_v = metadata_value(mine)?;
+    let disk_v = metadata_value(disk)?;
+    let (Value::Mapping(mine_m), Value::Mapping(disk_m)) = (&mine_v, &disk_v) else {
+        anyhow::bail!("store metadata did not serialize as a mapping");
+    };
+    let base_m = match base {
+        Some(Value::Mapping(b)) => Some(b),
+        _ => None,
+    };
+    let mut merged = disk_m.clone();
+    let mut conflicts: Vec<String> = Vec::new();
+    for (key, mine_field) in mine_m {
+        let name = key.as_str().unwrap_or_default();
+        let disk_field = disk_m.get(key);
+        if METADATA_COUNTER_FIELDS.contains(&name) {
+            merged.insert(key.clone(), max_counter(disk_field, Some(mine_field)));
+            continue;
+        }
+        let Some(base_m) = base_m else {
+            merged.insert(key.clone(), mine_field.clone());
+            continue;
+        };
+        let base_field = base_m.get(key);
+        if base_field == Some(mine_field) {
+            continue; // untouched by this writer: the disk value stands
+        }
+        if disk_field == Some(mine_field) {
+            continue; // same change on both sides
+        }
+        if disk_field == base_field {
+            merged.insert(key.clone(), mine_field.clone());
+        } else {
+            conflicts.push(name.to_string());
+        }
+    }
+    if !conflicts.is_empty() {
+        conflicts.sort();
+        return Ok(Err(conflicts));
+    }
+    let merged = Value::Mapping(merged);
+    if merged == disk_v {
+        return Ok(Ok(MetadataMerge { write: None }));
+    }
+    Ok(Ok(MetadataMerge {
+        write: Some(serde_yaml::from_value(merged)?),
+    }))
 }
 
 /// Resolve the queue-file user-id to use for `requested`, folding case at the
@@ -473,6 +619,15 @@ impl GitBackend {
         Ok(meta)
     }
 
+    /// The current `metadata.yaml`, or `None` when there is none yet.
+    // trace:BUG-1613 | ai:claude
+    fn read_metadata_if_present(&self) -> Result<Option<StoreMetadata>> {
+        if !self.metadata_path.exists() {
+            return Ok(None);
+        }
+        self.load_metadata().map(Some)
+    }
+
     /// TASK-1065: load ONLY the store metadata into a `RequirementsStore` whose
     /// `requirements` vec is EMPTY. Reads a single `metadata.yaml` file — never
     /// scans the object YAMLs — so callers that need the store's name / features /
@@ -482,6 +637,22 @@ impl GitBackend {
     pub fn load_metadata_only(&self) -> Result<RequirementsStore> {
         let meta = self.load_metadata()?;
         Ok(self.assemble_store(meta, Vec::new()))
+    }
+
+    /// BUG-1629: [`Self::load_metadata_only`] for a store at `root`, strictly
+    /// read-only. Unlike [`Self::new`] it never creates `objects/`, so a
+    /// probe of a missing or partial store has no filesystem side effect.
+    // trace:BUG-1629 | ai:claude
+    pub fn read_metadata_only(root: &Path) -> Result<RequirementsStore> {
+        let backend = Self {
+            root: root.to_path_buf(),
+            objects_root: root.join("objects"),
+            metadata_path: root.join("metadata.yaml"),
+            dispenser: None,
+            auto_commit: false,
+            oplog_enabled: false,
+        };
+        backend.load_metadata_only()
     }
 
     /// Save metadata to the metadata.yaml file.
@@ -533,9 +704,13 @@ impl GitBackend {
     ///   trace:FR-1-002 | ai:claude
     pub fn bulk_writer(&self) -> Result<BulkWriter<'_>> {
         let metadata = self.load_metadata()?;
+        // trace:BUG-1613 | ai:claude — the baseline `finish` merges against.
+        let base = metadata_value(&metadata)?;
         Ok(BulkWriter {
             backend: self,
             metadata,
+            base,
+            assigned: std::collections::HashSet::new(),
             staged: Vec::new(),
         })
     }
@@ -895,14 +1070,32 @@ impl GitBackend {
             to_delete.push(spec_id.clone());
         }
 
-        if !conflicts.is_empty() {
+        // BUG-1613: merge the store-level fields this caller changed over the
+        // CURRENT metadata.yaml (re-read under the lock) instead of writing the
+        // caller's whole in-memory copy, which reverted concurrent changes.
+        // trace:BUG-1613 | ai:claude
+        let mine_meta = Self::extract_metadata(store);
+        let meta_base = snapshot.and_then(|s| s.metadata_baseline());
+        let disk_meta = self.read_metadata_if_present()?;
+        let meta_plan = merge_metadata(meta_base.as_ref(), &mine_meta, disk_meta.as_ref())?;
+
+        if !conflicts.is_empty() || meta_plan.is_err() {
             conflicts.sort();
-            return Err(StoreConflictError { specs: conflicts }.into());
+            return Err(StoreConflictError {
+                specs: conflicts,
+                metadata_fields: meta_plan.err().unwrap_or_default(),
+            }
+            .into());
         }
+        let meta_plan = meta_plan.unwrap_or(MetadataMerge { write: None });
 
         // ---- write phase ----
-        let meta = Self::extract_metadata(store);
-        self.save_metadata(&meta)?;
+        if let Some(meta) = &meta_plan.write {
+            self.save_metadata(meta)?;
+        }
+        if let Some(snapshot) = snapshot {
+            snapshot.record_metadata(metadata_value(&mine_meta)?);
+        }
         let mut written_specs: Vec<String> = Vec::new();
         for (req, caller_fp) in &to_write {
             let spec_id = req.spec_id.as_deref().unwrap_or_default();
@@ -1243,6 +1436,8 @@ impl GitBackend {
             for (sid, _) in &removed {
                 snapshot.remove(sid);
             }
+            // trace:BUG-1613 | ai:claude
+            snapshot.record_metadata(metadata_value(&Self::extract_metadata(&store))?);
         }
         Ok((store, summary))
     }
@@ -1265,7 +1460,10 @@ impl DatabaseBackend for GitBackend {
         let (requirements, snapshot) =
             object_store::load_all_objects_with_fingerprints(&self.objects_root)?;
         let mut store = self.assemble_store(meta, requirements);
-        store.loaded_objects = Some(crate::models::LoadSnapshot::new(snapshot));
+        let snapshot = crate::models::LoadSnapshot::new(snapshot);
+        // trace:BUG-1613 | ai:claude — the metadata baseline a save merges against.
+        snapshot.record_metadata(metadata_value(&Self::extract_metadata(&store))?);
+        store.loaded_objects = Some(snapshot);
         Ok(store)
     }
 
@@ -1713,6 +1911,12 @@ impl DatabaseBackend for GitBackend {
 pub struct BulkWriter<'a> {
     backend: &'a GitBackend,
     metadata: StoreMetadata,
+    /// The metadata as loaded by `bulk_writer()`: what `finish` merges
+    /// against, so only the counters this batch bumped are written.
+    // trace:BUG-1613 | ai:claude
+    base: serde_yaml::Value,
+    /// Spec ids this writer assigned from the counters (not caller-supplied).
+    assigned: std::collections::HashSet<String>,
     staged: Vec<Requirement>,
 }
 
@@ -1734,6 +1938,9 @@ impl<'a> BulkWriter<'a> {
             tmp.add_requirement_with_id(req_clone, None, type_prefix.as_deref());
             if let Some(last) = tmp.requirements.last() {
                 req.spec_id = last.spec_id.clone();
+            }
+            if let Some(sid) = &req.spec_id {
+                self.assigned.insert(sid.clone());
             }
             // Pull the bumped counters back into our metadata snapshot so the
             // next add() sees them. Cheaper than re-extracting the whole.
@@ -1764,6 +1971,32 @@ impl<'a> BulkWriter<'a> {
         crate::git_ops::ensure_store_write_safe(&self.backend.root)?;
         // trace:BUG-1612 | ai:claude — serialize with every other store writer.
         let _lock = self.backend.lock_store()?;
+
+        // BUG-1613: re-read metadata.yaml under the lock and merge this batch's
+        // counter bumps over it (max, never lowered) instead of writing the
+        // snapshot taken at `bulk_writer()`, which reverted concurrent changes.
+        // An id this writer assigned that now exists on disk was issued
+        // concurrently from the same counter: refuse rather than overwrite it.
+        // Both checks run before anything is written.
+        // trace:BUG-1613 | ai:claude
+        let disk_meta = self.backend.read_metadata_if_present()?;
+        let meta_plan = merge_metadata(Some(&self.base), &self.metadata, disk_meta.as_ref())?;
+        let mut collided: Vec<String> = Vec::new();
+        for sid in &self.assigned {
+            if object_store::object_exists(&self.backend.objects_root, sid)? {
+                collided.push(sid.clone());
+            }
+        }
+        if !collided.is_empty() || meta_plan.is_err() {
+            collided.sort();
+            return Err(StoreConflictError {
+                specs: collided,
+                metadata_fields: meta_plan.err().unwrap_or_default(),
+            }
+            .into());
+        }
+        let meta_plan = meta_plan.unwrap_or(MetadataMerge { write: None });
+
         // Persist all object YAMLs first (skipping unchanged just in case the
         // caller is re-running an idempotent import).
         let mut written: Vec<String> = Vec::new();
@@ -1798,15 +2031,16 @@ impl<'a> BulkWriter<'a> {
             );
         }
 
-        // Persist the bumped metadata
-        self.backend.save_metadata(&self.metadata)?;
-
-        // Stage only the written YAMLs + metadata.yaml + oplog.yaml in one shot
+        // Persist the bumped counters, merged over the current disk copy.
+        // trace:BUG-1613 | ai:claude
         let mut paths: Vec<String> = written
             .iter()
             .filter_map(|sid| object_store::relative_object_path(sid).ok())
             .collect();
-        paths.push("metadata.yaml".to_string());
+        if let Some(meta) = &meta_plan.write {
+            self.backend.save_metadata(meta)?;
+            paths.push("metadata.yaml".to_string());
+        }
         let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
 
         let count = self.staged.len();
@@ -3674,5 +3908,310 @@ mod tests {
             object_store::read_object(&objects, "TASK-1").unwrap().title,
             "edited elsewhere"
         );
+    }
+
+    // ---- BUG-1613: metadata.yaml merges or conflicts, never reverts ----
+
+    /// A second writer on the same store (its own backend instance).
+    // trace:BUG-1613 | ai:claude
+    fn bug1613_other(root: &Path) -> GitBackend {
+        GitBackend::new(root).unwrap()
+    }
+
+    /// A seeded store with per-prefix numbering, so each type has a counter.
+    fn bug1613_per_prefix_store() -> (tempfile::TempDir, PathBuf, GitBackend) {
+        let (dir, root, backend, _) = bug1612_git_store(1);
+        backend
+            .update_atomically(|s| {
+                s.id_config.numbering = crate::models::NumberingStrategy::PerPrefix;
+            })
+            .unwrap();
+        (dir, root, backend)
+    }
+
+    fn bug1613_disk_meta(root: &Path) -> StoreMetadata {
+        bug1613_other(root).load_metadata().unwrap()
+    }
+
+    fn bug1613_bug(title: &str) -> Requirement {
+        let mut r = Requirement::new(title.into(), "d".into());
+        r.req_type = crate::models::RequirementType::Bug;
+        r
+    }
+
+    /// A save that changed only a spec leaves metadata.yaml alone, so a
+    /// feature added concurrently between its load and save survives.
+    // trace:BUG-1613 | ai:claude
+    #[test]
+    fn bug1613_save_keeps_concurrent_feature_add() {
+        let (_dir, root, backend, _) = bug1612_git_store(2);
+        let mut stale = backend.load().unwrap();
+        bug1613_other(&root)
+            .update_atomically(|s| {
+                s.add_feature("Concurrent", "CONC").unwrap();
+            })
+            .unwrap();
+        for r in stale.requirements.iter_mut() {
+            if r.spec_id.as_deref() == Some("TASK-1") {
+                r.title = "mine".into();
+            }
+        }
+        backend.save(&stale).unwrap();
+        let meta = bug1613_disk_meta(&root);
+        assert!(
+            meta.features.iter().any(|f| f.name == "Concurrent"),
+            "the concurrent feature add was reverted"
+        );
+        assert_eq!(
+            object_store::read_object(&root.join("objects"), "TASK-1")
+                .unwrap()
+                .title,
+            "mine"
+        );
+    }
+
+    /// Two writers change DIFFERENT store-level fields: both changes survive.
+    // trace:BUG-1613 | ai:claude
+    #[test]
+    fn bug1613_save_merges_different_metadata_fields() {
+        let (_dir, root, backend, _) = bug1612_git_store(1);
+        let mut stale = backend.load().unwrap();
+        bug1613_other(&root)
+            .update_atomically(|s| {
+                s.add_feature("Concurrent", "CONC").unwrap();
+            })
+            .unwrap();
+        stale.title = "My title".into();
+        backend.save(&stale).unwrap();
+        let meta = bug1613_disk_meta(&root);
+        assert_eq!(meta.title, "My title");
+        assert!(meta.features.iter().any(|f| f.name == "Concurrent"));
+        // The concurrent add bumped the feature counter; it is not lowered.
+        assert!(meta.next_feature_number >= 2);
+
+        // The refreshed baseline lets the same store be saved again without
+        // reverting the concurrent feature (its copy is still stale).
+        stale.description = "again".into();
+        backend.save(&stale).unwrap();
+        let meta = bug1613_disk_meta(&root);
+        assert_eq!(meta.description, "again");
+        assert!(meta.features.iter().any(|f| f.name == "Concurrent"));
+    }
+
+    /// Two writers change the SAME store-level field to different values: the
+    /// loser gets a typed conflict and nothing is written.
+    // trace:BUG-1613 | ai:claude
+    #[test]
+    fn bug1613_save_same_metadata_field_is_a_conflict() {
+        let (_dir, root, backend, _) = bug1612_git_store(1);
+        let mut stale = backend.load().unwrap();
+        bug1613_other(&root)
+            .update_atomically(|s| s.title = "theirs".into())
+            .unwrap();
+        stale.title = "mine".into();
+        for r in stale.requirements.iter_mut() {
+            r.title = "spec edit".into();
+        }
+        let err = backend.save(&stale).unwrap_err();
+        let conflict = err
+            .downcast_ref::<StoreConflictError>()
+            .expect("a typed store conflict");
+        assert!(conflict.specs.is_empty());
+        assert_eq!(conflict.metadata_fields, vec!["title"]);
+        assert!(err.to_string().contains("title"));
+        assert_eq!(bug1613_disk_meta(&root).title, "theirs");
+        assert_eq!(
+            object_store::read_object(&root.join("objects"), "TASK-1")
+                .unwrap()
+                .title,
+            "Spec 1",
+            "a refused save writes nothing"
+        );
+    }
+
+    /// A concurrent counter bump between load and save survives: counters are
+    /// merged as the max of disk and caller, never lowered, while the caller's
+    /// own counter bump (another prefix) lands too.
+    // trace:BUG-1613 | ai:claude
+    #[test]
+    fn bug1613_save_keeps_concurrent_counter_bump() {
+        let (_dir, root, backend) = bug1613_per_prefix_store();
+        let mut stale = backend.load().unwrap();
+        let theirs = bug1613_other(&root)
+            .add_requirement(Requirement::new("theirs".into(), "d".into()))
+            .unwrap();
+        let their_sid = theirs.spec_id.clone().unwrap();
+        let their_prefix = their_sid.rsplit_once('-').unwrap().0.to_string();
+        let disk_before = bug1613_disk_meta(&root);
+        let their_counter = disk_before.prefix_counters[&their_prefix];
+
+        // The caller files a BUG (a different prefix) and adds a feature.
+        let prefix = stale.get_type_prefix(&crate::models::RequirementType::Bug);
+        stale.add_requirement_with_id(bug1613_bug("mine"), None, prefix.as_deref());
+        stale.add_feature("Mine", "MINE").unwrap();
+        assert_ne!(prefix.as_deref(), Some(their_prefix.as_str()));
+        backend.save(&stale).unwrap();
+
+        let meta = bug1613_disk_meta(&root);
+        assert_eq!(
+            meta.prefix_counters[&their_prefix], their_counter,
+            "the concurrent counter bump was reverted"
+        );
+        assert!(meta.prefix_counters[prefix.as_deref().unwrap()] >= 2);
+        assert!(meta.features.iter().any(|f| f.name == "Mine"));
+        assert!(object_store::object_exists(&root.join("objects"), &their_sid).unwrap());
+    }
+
+    /// A caller whose in-memory counter would re-issue an id a concurrent
+    /// writer already used gets a conflict on that spec; the other object and
+    /// the higher counter are untouched.
+    // trace:BUG-1613 | ai:claude
+    #[test]
+    fn bug1613_save_reissued_id_is_a_conflict() {
+        let (_dir, root, backend) = bug1613_per_prefix_store();
+        let mut stale = backend.load().unwrap();
+        let theirs = bug1613_other(&root)
+            .add_requirement(bug1613_bug("theirs"))
+            .unwrap();
+        let sid = theirs.spec_id.clone().unwrap();
+        let counter = bug1613_disk_meta(&root).prefix_counters["BUG"];
+        let prefix = stale.get_type_prefix(&crate::models::RequirementType::Bug);
+        stale.add_requirement_with_id(bug1613_bug("mine"), None, prefix.as_deref());
+        assert_eq!(
+            stale.requirements.last().unwrap().spec_id.as_deref(),
+            Some(sid.as_str())
+        );
+        let err = backend.save(&stale).unwrap_err();
+        let conflict = err.downcast_ref::<StoreConflictError>().unwrap();
+        assert_eq!(conflict.specs, vec![sid.clone()]);
+        assert_eq!(
+            object_store::read_object(&root.join("objects"), &sid)
+                .unwrap()
+                .title,
+            "theirs"
+        );
+        assert_eq!(bug1613_disk_meta(&root).prefix_counters["BUG"], counter);
+    }
+
+    /// BulkWriter::finish merges its counter bumps over the CURRENT
+    /// metadata.yaml: a feature added and a counter bumped (another prefix)
+    /// between `bulk_writer()` and `finish()` both survive.
+    // trace:BUG-1613 | ai:claude
+    #[test]
+    fn bug1613_bulk_writer_keeps_concurrent_metadata_changes() {
+        let (_dir, root, backend) = bug1613_per_prefix_store();
+        let mut writer = backend.bulk_writer().unwrap();
+        let other = bug1613_other(&root);
+        other
+            .update_atomically(|s| {
+                s.add_feature("Concurrent", "CONC").unwrap();
+            })
+            .unwrap();
+        let theirs = other
+            .add_requirement(Requirement::new("theirs".into(), "d".into()))
+            .unwrap();
+        let their_prefix = theirs
+            .spec_id
+            .as_deref()
+            .unwrap()
+            .rsplit_once('-')
+            .unwrap()
+            .0
+            .to_string();
+        let their_counter = bug1613_disk_meta(&root).prefix_counters[&their_prefix];
+
+        writer.add(bug1613_bug("bulk 1")).unwrap();
+        writer.add(bug1613_bug("bulk 2")).unwrap();
+        assert_eq!(writer.finish("test(bulk)").unwrap(), 2);
+
+        let meta = bug1613_disk_meta(&root);
+        assert!(
+            meta.features.iter().any(|f| f.name == "Concurrent"),
+            "the concurrent feature add was reverted"
+        );
+        assert_eq!(meta.prefix_counters[&their_prefix], their_counter);
+        assert!(meta.prefix_counters["BUG"] >= 3, "the batch's bumps landed");
+        let loaded = backend.load().unwrap();
+        assert_eq!(
+            loaded
+                .requirements
+                .iter()
+                .filter(|r| r.title.starts_with("bulk "))
+                .count(),
+            2
+        );
+    }
+
+    /// A BulkWriter id that a concurrent writer issued from the same counter
+    /// meanwhile is a conflict: finish writes nothing and the other object and
+    /// counter survive.
+    // trace:BUG-1613 | ai:claude
+    #[test]
+    fn bug1613_bulk_writer_reissued_id_is_a_conflict() {
+        let (_dir, root, backend) = bug1613_per_prefix_store();
+        let mut writer = backend.bulk_writer().unwrap();
+        let theirs = bug1613_other(&root)
+            .add_requirement(bug1613_bug("theirs"))
+            .unwrap();
+        let sid = theirs.spec_id.clone().unwrap();
+        let counter = bug1613_disk_meta(&root).prefix_counters["BUG"];
+        let mine = writer.add(bug1613_bug("bulk")).unwrap().clone();
+        assert_eq!(mine.spec_id.as_deref(), Some(sid.as_str()));
+        let err = writer.finish("test(bulk)").unwrap_err();
+        let conflict = err.downcast_ref::<StoreConflictError>().unwrap();
+        assert_eq!(conflict.specs, vec![sid.clone()]);
+        assert_eq!(
+            object_store::read_object(&root.join("objects"), &sid)
+                .unwrap()
+                .title,
+            "theirs"
+        );
+        assert_eq!(bug1613_disk_meta(&root).prefix_counters["BUG"], counter);
+    }
+
+    /// The merge is pure field logic: untouched fields keep disk, counters
+    /// take the max, and a store with no baseline still never lowers one.
+    // trace:BUG-1613 | ai:claude
+    #[test]
+    fn bug1613_merge_metadata_rules() {
+        let mut base = StoreMetadata::default();
+        base.prefix_counters.insert("BUG".into(), 5);
+        let base_v = metadata_value(&base).unwrap();
+        let mut disk = base.clone();
+        disk.prefix_counters.insert("BUG".into(), 9);
+        disk.description = "disk".into();
+        disk.next_spec_number = 4;
+        let mut mine = base.clone();
+        mine.next_spec_number = 12;
+        mine.prefix_counters.insert("BUG".into(), 7);
+        mine.prefix_counters.insert("TASK".into(), 2);
+        mine.name = "mine".into();
+
+        let merged = merge_metadata(Some(&base_v), &mine, Some(&disk))
+            .unwrap()
+            .unwrap()
+            .write
+            .unwrap();
+        assert_eq!(merged.prefix_counters["BUG"], 9);
+        assert_eq!(merged.prefix_counters["TASK"], 2);
+        assert_eq!(merged.next_spec_number, 12);
+        assert_eq!(merged.name, "mine");
+        assert_eq!(merged.description, "disk");
+
+        // Nothing changed by the writer: nothing to write.
+        let noop = merge_metadata(Some(&base_v), &base, Some(&disk))
+            .unwrap()
+            .unwrap();
+        assert!(noop.write.is_none());
+
+        // No baseline (a store not loaded from the backend): the writer's
+        // fields win, as before, but the counter is not lowered.
+        let legacy = merge_metadata(None, &mine, Some(&disk))
+            .unwrap()
+            .unwrap()
+            .write
+            .unwrap();
+        assert_eq!(legacy.description, "");
+        assert_eq!(legacy.prefix_counters["BUG"], 9);
     }
 }

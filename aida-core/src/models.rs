@@ -5164,9 +5164,17 @@ pub struct RequirementsStore {
 /// Interior-mutable so `save(&store)` can refresh it after a write; a clone is
 /// a deep copy, so two clones of one store never share (and corrupt) each
 /// other's view of what is on disk.
-// trace:BUG-1612 | ai:claude
+///
+/// It also holds the caller's metadata baseline: the store-level fields
+/// (`metadata.yaml`) as of the load or last save, so a whole-store save can
+/// tell which store-level fields THIS caller changed and merge them over the
+/// current disk copy instead of writing its whole in-memory metadata back.
+// trace:BUG-1612 trace:BUG-1613 | ai:claude
 #[derive(Default)]
-pub struct LoadSnapshot(std::sync::Mutex<std::collections::BTreeMap<String, SnapshotEntry>>);
+pub struct LoadSnapshot {
+    objects: std::sync::Mutex<std::collections::BTreeMap<String, SnapshotEntry>>,
+    metadata: std::sync::Mutex<Option<serde_yaml::Value>>,
+}
 
 /// One object's entry in a [`LoadSnapshot`].
 // trace:BUG-1612 | ai:claude
@@ -5182,15 +5190,24 @@ pub struct SnapshotEntry {
 impl LoadSnapshot {
     /// A snapshot fresh from a load: object id -> disk fingerprint.
     pub fn new(map: std::collections::BTreeMap<String, u64>) -> Self {
-        Self(std::sync::Mutex::new(
-            map.into_iter()
-                .map(|(k, disk)| (k, SnapshotEntry { disk, caller: None }))
-                .collect(),
-        ))
+        Self {
+            objects: std::sync::Mutex::new(
+                map.into_iter()
+                    .map(|(k, disk)| (k, SnapshotEntry { disk, caller: None }))
+                    .collect(),
+            ),
+            metadata: std::sync::Mutex::new(None),
+        }
     }
 
     fn map(&self) -> std::sync::MutexGuard<'_, std::collections::BTreeMap<String, SnapshotEntry>> {
-        self.0
+        self.objects
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn meta(&self) -> std::sync::MutexGuard<'_, Option<serde_yaml::Value>> {
+        self.metadata
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -5218,11 +5235,27 @@ impl LoadSnapshot {
     pub fn remove(&self, id: &str) {
         self.map().remove(id);
     }
+
+    /// The caller's store-level metadata baseline (as of the load or last
+    /// save), serialized; `None` when the snapshot never recorded one.
+    // trace:BUG-1613 | ai:claude
+    pub fn metadata_baseline(&self) -> Option<serde_yaml::Value> {
+        self.meta().clone()
+    }
+
+    /// Record the caller's store-level metadata baseline.
+    // trace:BUG-1613 | ai:claude
+    pub fn record_metadata(&self, metadata: serde_yaml::Value) {
+        *self.meta() = Some(metadata);
+    }
 }
 
 impl Clone for LoadSnapshot {
     fn clone(&self) -> Self {
-        Self(std::sync::Mutex::new(self.map().clone()))
+        Self {
+            objects: std::sync::Mutex::new(self.map().clone()),
+            metadata: std::sync::Mutex::new(self.meta().clone()),
+        }
     }
 }
 

@@ -892,9 +892,11 @@ fn discover_lease_n_candidates_unmatched_id_ignores_unrelated_leases() {
     let err = d
         .discover_orchestrated_lease("no-such-claude-id")
         .unwrap_err();
+    // BUG-1629: no lease and no receipt means nothing started, so the
+    // failure must not suggest `--resume`. trace:BUG-1629 | ai:claude
     assert!(
-        err.reason.contains("--resume"),
-        "N-candidate failure should suggest bare --resume; got {:?}",
+        !err.reason.contains("--resume") && err.reason.contains("nothing to resume"),
+        "N-candidate failure must say there is nothing to resume; got {:?}",
         err.reason
     );
     assert!(

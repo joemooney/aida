@@ -653,6 +653,8 @@ pub fn main_entry() {
         Err(err) => {
             record_ambiguous_id_refusal(&err);
             let msg = format!("{:?}", err);
+            // trace:BUG-1629 | ai:claude
+            record_orchestrated_child_refusal(&msg);
             // TASK-972 (AXI #6): agents read STDOUT. An error printed to stderr
             // with a human `Error:` prefix is invisible to the agent loop,
             // forcing blind retries. In AGENT MODE emit the error as a
@@ -100282,6 +100284,230 @@ fn reconcile_verdict(
 #[path = "tests/reconcile_verdict_tests.rs"]
 mod reconcile_verdict_tests;
 
+/// BUG-1629: the workspace phase 1 launches. `fresh` marks a branch the
+/// pickup resolver chose as free that has not been launched yet; see
+/// [`RealPhaseDriver::phase1_launch_workspace`].
+// trace:BUG-1629 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Phase1Workspace {
+    worktree: std::path::PathBuf,
+    branch: String,
+    fresh: bool,
+}
+
+/// BUG-1629: a freshly resolved branch that exists at launch was created by
+/// someone else after resolution.
+// trace:BUG-1629 | ai:claude
+fn phase1_fresh_branch_raced(fresh: bool, branch_exists_now: bool) -> bool {
+    fresh && branch_exists_now
+}
+
+/// BUG-1629: exactly one clean replacement launch per phase-1 run.
+// trace:BUG-1629 | ai:claude
+fn phase1_lost_child_retry_allowed(retries_used: usize) -> bool {
+    retries_used == 0
+}
+
+// trace:BUG-1629 | ai:claude
+fn phase1_branch_race_reason(spec: &str, branch: &str) -> String {
+    format!(
+        "phase 1 workspace race for {spec}: branch `{branch}` was free when phase 1 resolved \
+         it but exists now. `aida queue work --branch` reuses an existing branch, so launching \
+         would adopt a branch this run did not create; refused before launching. Re-run to \
+         resolve a fresh workspace, or inspect `{branch}` first"
+    )
+}
+
+/// BUG-1629: retry cause recorded for the phase-1 replacement launch.
+// trace:BUG-1629 | ai:claude
+const PHASE1_LOST_CHILD_STATE_CAUSE: &str = "lost-child-state";
+
+/// BUG-1629: is `worktree` free of every lease? Lease paths are stored
+/// canonicalized while a pinned path may not be (a symlinked checkout, macOS
+/// `/var`), so both sides are canonicalized before comparing. Fail safe: if
+/// either side cannot be canonicalized, the worktree counts as leased, so
+/// the replacement never passes `--force-claim` over a path it cannot prove
+/// is free.
+// trace:BUG-1629 | ai:claude
+fn worktree_is_unleased(
+    worktree: &std::path::Path,
+    lease_worktrees: &[std::path::PathBuf],
+) -> bool {
+    let Ok(pinned) = worktree.canonicalize() else {
+        return false;
+    };
+    lease_worktrees
+        .iter()
+        .all(|leased| leased.canonicalize().is_ok_and(|leased| leased != pinned))
+}
+
+/// BUG-1629: where `queue work` records its own refusal for an orchestrated
+/// launch — a sibling of the handoff receipt, keyed by the same session id.
+// trace:BUG-1629 | ai:claude
+fn orchestrated_child_refusal_path(receipt: &std::path::Path) -> std::path::PathBuf {
+    receipt.with_extension("refusal.txt")
+}
+
+/// BUG-1629: called on the error path of every `aida` invocation. When this
+/// process is an orchestrated phase-1 `queue work` child that failed before
+/// publishing its handoff receipt, record the refusal next to the receipt so
+/// the parent can name the real reason. Best-effort; see
+/// [`orchestrated_child_refusal_to_record`] for the gates.
+// trace:BUG-1629 | ai:claude
+fn record_orchestrated_child_refusal(message: &str) {
+    let receipt_env = std::env::var(ORCHESTRATED_LEASE_RECEIPT_ENV).ok();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some((refusal, summary)) =
+        orchestrated_child_refusal_to_record(receipt_env.as_deref(), &args, message, |path| {
+            path.exists()
+        })
+    {
+        let _ = write_atomic(&refusal, &summary);
+    }
+}
+
+/// BUG-1629: the pure decision behind [`record_orchestrated_child_refusal`].
+/// Records `(refusal path, summary)` only when all hold: the process carries
+/// the orchestrator's receipt env var, it is a `queue work` invocation, the
+/// receipt does not exist yet (a child that got that far is not a pre-lease
+/// refusal), no refusal was recorded already (never overwrite the first
+/// cause), and the summary is non-empty.
+// trace:BUG-1629 | ai:claude
+fn orchestrated_child_refusal_to_record(
+    receipt_env: Option<&str>,
+    args: &[String],
+    message: &str,
+    exists: impl Fn(&std::path::Path) -> bool,
+) -> Option<(std::path::PathBuf, String)> {
+    let receipt = std::path::PathBuf::from(receipt_env.filter(|r| !r.trim().is_empty())?);
+    if args.len() < 2 || args[0] != "queue" || args[1] != "work" {
+        return None;
+    }
+    let refusal = orchestrated_child_refusal_path(&receipt);
+    if exists(&receipt) || exists(&refusal) {
+        return None;
+    }
+    let summary = orchestrated_child_refusal_summary(message);
+    (!summary.is_empty()).then_some((refusal, summary))
+}
+
+/// BUG-1629: the most characters of child refusal text either side keeps.
+// trace:BUG-1629 | ai:claude
+const ORCHESTRATED_CHILD_REFUSAL_MAX_CHARS: usize = 400;
+
+/// BUG-1629: remove ANSI escape sequences and every other control character
+/// (ESC, CR, NUL, ...) so child text cannot restyle or rewrite the parent's
+/// stderr line, the `SpecRetried` detail, or the shelve reason.
+// trace:BUG-1629 | ai:claude
+fn strip_control_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            match chars.peek() {
+                // CSI: ESC [ params... final byte in @..~
+                Some('[') => {
+                    chars.next();
+                    for c in chars.by_ref() {
+                        if ('@'..='~').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                // OSC: ESC ] ... terminated by BEL or ESC \
+                Some(']') => {
+                    chars.next();
+                    while let Some(c) = chars.next() {
+                        if c == '\u{7}' {
+                            break;
+                        }
+                        if c == '\u{1b}' {
+                            if chars.peek() == Some(&'\\') {
+                                chars.next();
+                            }
+                            break;
+                        }
+                    }
+                }
+                // Two-character escape: drop the next character too.
+                Some(_) => {
+                    chars.next();
+                }
+                None => {}
+            }
+            continue;
+        }
+        if !c.is_control() {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// BUG-1629: the first non-empty line of an error, control characters
+/// stripped, bounded for a message.
+// trace:BUG-1629 | ai:claude
+fn orchestrated_child_refusal_summary(message: &str) -> String {
+    message
+        .lines()
+        .map(|line| strip_control_text(line).trim().to_string())
+        .find(|line| !line.is_empty())
+        .unwrap_or_default()
+        .chars()
+        .take(ORCHESTRATED_CHILD_REFUSAL_MAX_CHARS)
+        .collect()
+}
+
+/// BUG-1629: read and remove the refusal a phase-1 child recorded. The read
+/// is capped (4 KiB) and re-sanitized to the writer's bound, so a file that
+/// was not written by the writer above cannot flood or restyle the message.
+// trace:BUG-1629 | ai:claude
+fn take_orchestrated_child_refusal(
+    project_root: &std::path::Path,
+    session_uuid: &str,
+) -> Option<String> {
+    use std::io::Read;
+    let path = orchestrated_child_refusal_path(&orchestrated_lease_receipt_path(
+        project_root,
+        session_uuid,
+    ));
+    let mut bytes = Vec::new();
+    let read = std::fs::File::open(&path)
+        .and_then(|file| file.take(4096).read_to_end(&mut bytes))
+        .is_ok();
+    let _ = std::fs::remove_file(&path);
+    if !read {
+        return None;
+    }
+    let summary = orchestrated_child_refusal_summary(&String::from_utf8_lossy(&bytes));
+    (!summary.is_empty()).then_some(summary)
+}
+
+/// BUG-1629: drop any refusal file for a session whose child did establish
+/// its lease or receipt. A child can write its receipt and still fail later,
+/// or a refusal can survive a receipt that was published afterwards; the
+/// file is keyed by the session uuid so it is harmless, but the parent
+/// clears it so it never accumulates.
+// trace:BUG-1629 | ai:claude
+fn discard_orchestrated_child_refusal(project_root: &std::path::Path, session_uuid: &str) {
+    let _ = std::fs::remove_file(orchestrated_child_refusal_path(
+        &orchestrated_lease_receipt_path(project_root, session_uuid),
+    ));
+}
+
+/// BUG-1629: the precise recovery state when a phase-1 child kept neither its
+/// session lease nor its handoff receipt.
+// trace:BUG-1629 | ai:claude
+fn lost_child_state_reason(session_uuid: &str, exit: &str, elapsed: std::time::Duration) -> String {
+    format!(
+        "phase 1 child session {} exited {exit} after {}ms without a session lease or an \
+         orchestrator handoff receipt: no implementer session started, so there is nothing \
+         to resume",
+        &session_uuid[..session_uuid.len().min(8)],
+        elapsed.as_millis(),
+    )
+}
+
 /// Lease ids present in `.aida/sessions/` — `<id>.toml` files only, *not*
 /// the `<id>.activity.toml` / `<id>.manifest.toml` companions. A lease id is
 /// a dot-free UUID, so a real lease file's name has exactly one `.`; every
@@ -100364,6 +100590,8 @@ fn prepare_orchestrated_lease_receipt(
         let _ = std::fs::create_dir_all(parent);
     }
     let _ = std::fs::remove_file(&receipt);
+    // trace:BUG-1629 | ai:claude
+    let _ = std::fs::remove_file(orchestrated_child_refusal_path(&receipt));
     cmd.env(ORCHESTRATED_LEASE_RECEIPT_ENV, &receipt);
     receipt
 }
@@ -101727,6 +101955,14 @@ struct RealPhaseDriver {
     // trace:BUG-908 | ai:codex
     retry_implementer_worktree: Option<std::path::PathBuf>,
     retry_implementer_branch: Option<String>,
+    /// BUG-1629: the phase-1 workspace pinned for launch — the value the
+    /// orchestrator checked, never a second resolution.
+    // trace:BUG-1629 | ai:claude
+    phase1_workspace: Option<Phase1Workspace>,
+    /// BUG-1629: the single clean replacement launch spent when a phase-1
+    /// child exits without its session lease and handoff receipt.
+    // trace:BUG-1629 | ai:claude
+    lost_child_state_retries_used: usize,
     /// BUG-1213 / TASK-1265: `(PR, dispatched branch, blocking verdict's
     /// reviewed_sha, the dispatched branch's head AT ARM TIME, authoritative
     /// review delta, round)` captured immediately before a rework implementer
@@ -102020,6 +102256,8 @@ impl RealPhaseDriver {
             empty_launch_retries_used: 0,
             retry_implementer_worktree: None,
             retry_implementer_branch: None,
+            phase1_workspace: None,
+            lost_child_state_retries_used: 0,
             rework_guard: None,
         }
     }
@@ -102399,18 +102637,215 @@ impl RealPhaseDriver {
                     // and releasing its lease cleanly. Typed the same way
                     // as the empty-candidates case above.
                     // trace:BUG-1485 | ai:codex trace:BUG-1524 | ai:claude
+                    // BUG-1629: no lease and no receipt means the child
+                    // never started an implementer session, so there is no
+                    // session to `--resume`; say so instead of suggesting it.
+                    // trace:BUG-1629 | ai:claude
                     auto_complete::PhaseFailure::of(
                         auto_complete::FailureKind::LaunchRefused,
                         format!(
                             "the child session {} neither retained its session lease nor wrote its \
-                             orchestrator handoff receipt. Resume the recorded child with \
-                             `aida queue work {} --resume`; unrelated active leases were ignored.",
+                             orchestrator handoff receipt, so no implementer session started and \
+                             there is nothing to resume; unrelated active leases were ignored.",
                             &claude_session_id[..claude_session_id.len().min(8)],
-                            self.spec,
                         ),
                     )
                 }
             })
+    }
+
+    /// BUG-1629: the workspace this phase-1 launch uses. A BUG-908 retry pin
+    /// wins (the substrate re-targets the predecessor's worktree); otherwise
+    /// the workspace the orchestrator checked and pinned. A direct caller that
+    /// skipped the orchestrator check resolves exactly once and pins the
+    /// result. A resolver failure refuses the launch: the implementer is never
+    /// launched without a pinned worktree (BUG-1244).
+    ///
+    /// The first launch of a freshly resolved branch also closes the explicit
+    /// `--branch` reuse race. `queue work --branch X` checks out `X` when it
+    /// already exists (the TASK-245 fixup rule), while an ordinary pickup only
+    /// ever picks a free name. A branch that was free when phase 1 resolved it
+    /// but exists at launch was created by someone else in between, so the
+    /// launch is refused instead of adopting it. Retries, and workspaces taken
+    /// from this spec's own lease, keep the TASK-245 reuse: that branch is
+    /// this spec's own.
+    // trace:BUG-1629 | ai:claude
+    fn phase1_launch_workspace(
+        &mut self,
+    ) -> Result<(std::path::PathBuf, String), auto_complete::PhaseFailure> {
+        if let (Some(worktree), Some(branch)) = (
+            &self.retry_implementer_worktree,
+            &self.retry_implementer_branch,
+        ) {
+            return Ok((worktree.clone(), branch.clone()));
+        }
+        if self.phase1_workspace.is_none() {
+            match auto_complete::PhaseDriver::implementer_workspace(self) {
+                Ok(Some((worktree, branch))) => {
+                    auto_complete::PhaseDriver::pin_implementer_workspace(self, &worktree, &branch)
+                }
+                Ok(None) => {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::LaunchRefused,
+                        auto_complete::phase1_resolver_failure_reason(
+                            &self.spec,
+                            "no workspace was resolved",
+                        ),
+                    ))
+                }
+                Err(err) => {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::LaunchRefused,
+                        auto_complete::phase1_resolver_failure_reason(&self.spec, &err),
+                    ))
+                }
+            }
+        }
+        let project_root = self.project_root.clone();
+        let spec = self.spec.clone();
+        let pin = self
+            .phase1_workspace
+            .as_mut()
+            .expect("phase-1 workspace pinned above");
+        if pin.fresh {
+            let exists_now = branch_exists_anywhere(&project_root, &pin.branch);
+            if phase1_fresh_branch_raced(pin.fresh, exists_now) {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::LaunchRefused,
+                    phase1_branch_race_reason(&spec, &pin.branch),
+                ));
+            }
+            pin.fresh = false;
+        }
+        Ok((pin.worktree.clone(), pin.branch.clone()))
+    }
+
+    /// BUG-1629: a phase-1 child exited without its session lease and without
+    /// its orchestrator handoff receipt, so no implementer session started
+    /// (nothing ran, nothing to resume). Leave no lease behind, then launch
+    /// one clean replacement. When the pinned worktree already exists on the
+    /// pinned branch with no lease holding it, the replacement re-enters it
+    /// through the BUG-908 retry pin; otherwise it launches fresh on the same
+    /// pinned workspace. A second loss is final: the typed `LaunchRefused`
+    /// failure shelves the spec, so dependents stay blocked.
+    ///
+    /// Launch budget: this replacement is the only launch this method adds.
+    /// Each launch (first or replacement) can still spend the separate
+    /// BUG-826 zero-byte-log budget (two relaunches in total per phase 1
+    /// run), so the total number of child launches can exceed two. Both
+    /// counters live on the driver and are never reset, so the total stays
+    /// bounded.
+    // trace:BUG-1629 | ai:claude
+    fn recover_lost_child_state(
+        &mut self,
+        session_uuid: &str,
+        exit: &str,
+        elapsed: std::time::Duration,
+    ) -> Result<auto_complete::ImplementerOutcome, auto_complete::PhaseFailure> {
+        // No orphan: release any lease keyed to this session id (a no-op when
+        // the child minted none) and drop a partial receipt.
+        self.release_empty_launch_lease(session_uuid);
+        let _ = std::fs::remove_file(orchestrated_lease_receipt_path(
+            &self.project_root,
+            session_uuid,
+        ));
+        // The child's own refusal (a preflight/lease refusal printed on its
+        // stderr), when `queue work` recorded one for this session.
+        let refusal = take_orchestrated_child_refusal(&self.project_root, session_uuid);
+        let mut state = lost_child_state_reason(session_uuid, exit, elapsed);
+        if let Some(refusal) = &refusal {
+            state.push_str(&format!("; the child refused: {refusal}"));
+        }
+        if !phase1_lost_child_retry_allowed(self.lost_child_state_retries_used) {
+            let how = if refusal.is_some() {
+                "was refused"
+            } else {
+                "lost its state the same way"
+            };
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::LaunchRefused,
+                format!(
+                    "{state}. The single clean replacement launch already ran and {how}; no \
+                     session lease was left behind and {} was not advanced",
+                    self.spec
+                ),
+            ));
+        }
+        self.lost_child_state_retries_used += 1;
+        if self.retry_implementer_worktree.is_none() {
+            if let Some(pin) = &self.phase1_workspace {
+                let lease_worktrees: Vec<std::path::PathBuf> = list_leases(&self.project_root)
+                    .into_iter()
+                    .map(|lease| lease.worktree_path)
+                    .collect();
+                if pin.worktree.exists()
+                    && current_branch_at(&pin.worktree).as_deref() == Some(pin.branch.as_str())
+                    && worktree_is_unleased(&pin.worktree, &lease_worktrees)
+                {
+                    self.retry_implementer_worktree = Some(pin.worktree.clone());
+                    self.retry_implementer_branch = Some(pin.branch.clone());
+                }
+            }
+        }
+        self.record_lost_child_replacement(&state);
+        auto_complete::PhaseDriver::run_implementer(self)
+    }
+
+    /// BUG-1629: leave a durable trace of the replacement launch — the drain
+    /// retry ledger, a `SpecRetried` event (cause `lost-child-state`), and a
+    /// `retrying` line under `--json` — the same channels
+    /// `record_transient_retry` uses, without its model escalation.
+    // trace:BUG-1629 | ai:claude
+    fn record_lost_child_replacement(&self, state: &str) {
+        let phase = auto_complete::Phase::Implementer;
+        drain_state::append_phase_retry(
+            &self.project_root,
+            &self.spec,
+            &format!("{} ({})", phase.index(), phase.slug()),
+            PHASE1_LOST_CHILD_STATE_CAUSE,
+            2,
+            2,
+        );
+        let (_, run_uuid) = drain_state::current_context(&self.project_root);
+        events::emit(
+            &self.project_root,
+            &events::Event::new(
+                Some(self.spec.clone()),
+                run_uuid,
+                events::EventKind::SpecRetried {
+                    phase: phase.slug().to_string(),
+                    cause: PHASE1_LOST_CHILD_STATE_CAUSE.to_string(),
+                    attempt: 2,
+                    max: 2,
+                    model_before: None,
+                    model_after: None,
+                    detail: Some(state.to_string()),
+                },
+            ),
+        );
+        if self.json {
+            println!(
+                "{}",
+                auto_complete::phase_event(
+                    phase.slug(),
+                    "retrying",
+                    &self.spec,
+                    0,
+                    None,
+                    &[
+                        ("kind", PHASE1_LOST_CHILD_STATE_CAUSE),
+                        ("attempt", "2"),
+                        ("max", "2"),
+                        ("detail", state),
+                    ],
+                )
+            );
+        } else {
+            eprintln!(
+                "  {} {state}; launching one clean replacement (attempt 2/2)",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            );
+        }
     }
 
     /// BUG-826: after an empty-log phase-1 vendor death, release only the lease
@@ -104101,6 +104536,11 @@ mod bug_1628_pickup_resolver_tests {
     }
 }
 
+// trace:BUG-1629 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1629_phase1_recovery_tests.rs"]
+mod bug_1629_phase1_recovery_tests;
+
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
         self.phase_done_pr = self.pr_number;
@@ -104147,16 +104587,26 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         }
     }
 
-    // trace:BUG-1628 | ai:claude
+    // BUG-1629: read-only and cheap — the same project-rooted lookup
+    // `queue done` uses, so the two ownership checks agree.
+    // trace:BUG-1628 trace:BUG-1629 | ai:claude
     fn known_spec_prefixes(&self) -> Vec<String> {
-        // Read-only and rooted at the driven project: never the legacy
-        // cwd/env store lookup. A missing store degrades to built-ins plus
-        // the target's own prefix.
-        detect_distributed_store_from(&self.project_root)
-            .and_then(|store_path| aida_core::GitBackend::new(&store_path).ok())
-            .and_then(|backend| aida_core::DatabaseBackend::load(&backend).ok())
-            .map(|store| crate::workflow_hints::configured_spec_prefixes(&store))
-            .unwrap_or_default()
+        crate::workflow_hints::project_spec_prefixes(&self.project_root)
+    }
+
+    // trace:BUG-1629 | ai:claude
+    fn pin_implementer_workspace(&mut self, worktree: &str, branch: &str) {
+        let worktree = std::path::PathBuf::from(worktree);
+        let retry_pinned = self.retry_implementer_worktree.as_ref() == Some(&worktree)
+            && self.retry_implementer_branch.as_deref() == Some(branch);
+        let lease_owned = list_leases(&self.project_root)
+            .iter()
+            .any(|lease| lease.scope.eq_ignore_ascii_case(&self.spec) && lease.branch == branch);
+        self.phase1_workspace = Some(Phase1Workspace {
+            worktree,
+            branch: branch.to_string(),
+            fresh: !retry_pinned && !lease_owned,
+        });
     }
     /// BUG-770: the real driver already knows the project it is driving, so it
     /// hands the orchestrator that root rather than letting the escalation
@@ -104396,22 +104846,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             .unwrap_or(false);
         // BUG-1244: pin even the first attempt to the selected spec workspace.
         // Leaving these unset let queue-work inherit a sibling's live cwd/lease.
-        // BUG-1628: orchestrate already refused a resolver failure; here only
-        // a resolved workspace pins the child. trace:BUG-1628 | ai:claude
-        let intended_workspace = self.implementer_workspace().ok().flatten();
-        let intended_path = intended_workspace
-            .as_ref()
-            .map(|(path, _)| std::path::Path::new(path));
-        let intended_branch = intended_workspace
-            .as_ref()
-            .map(|(_, branch)| branch.as_str());
+        // BUG-1629: launch the workspace phase 1 checked and pinned — never a
+        // second resolution, and never an unpinned launch when resolution
+        // fails (the old `.ok().flatten()` launched with no --branch/--path).
+        // trace:BUG-1628 trace:BUG-1629 | ai:claude
+        let (intended_path, intended_branch) = self.phase1_launch_workspace()?;
         let args = build_implementer_phase_args(
             &self.spec,
             &session_uuid,
             self.steal,
             self.force_claim || self.retry_implementer_worktree.is_some(),
-            intended_branch,
-            intended_path,
+            Some(intended_branch.as_str()),
+            Some(intended_path.as_path()),
             headless_impl,
             self.permission_mode.as_deref(),
         );
@@ -104716,8 +105162,34 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         // Locate the session `queue work` created — pinned by the id we
         // minted into `--session-id`, not a lease-set diff (BUG-114).
+        // BUG-1629: a child that kept neither its lease nor its handoff
+        // receipt never started an implementer session. Report that state
+        // exactly and spend the single clean replacement launch.
+        // trace:BUG-1629 | ai:claude
         let (lease_id, recorded_branch, worktree_path) =
-            self.discover_orchestrated_lease(&session_uuid)?;
+            match self.discover_orchestrated_lease(&session_uuid) {
+                Ok(found) => {
+                    // trace:BUG-1629 | ai:claude
+                    discard_orchestrated_child_refusal(&self.project_root, &session_uuid);
+                    found
+                }
+                Err(failure)
+                    if failure.kind == auto_complete::FailureKind::LaunchRefused
+                        && watchdog_failure.is_none() =>
+                {
+                    let exit = match &outcome {
+                        exit_signal::ExitOutcome::Natural(status)
+                        | exit_signal::ExitOutcome::Reaped(status) => status
+                            .code()
+                            .map(|c| format!("with code {c}"))
+                            .unwrap_or_else(|| "on a signal".to_string()),
+                        _ => "abnormally".to_string(),
+                    };
+                    let elapsed = implementer_started_at.elapsed().unwrap_or_default();
+                    return self.recover_lost_child_state(&session_uuid, &exit, elapsed);
+                }
+                Err(failure) => return Err(failure),
+            };
         // A BUG-1485 receipt can outlive the lease it describes. Preserve its
         // branch/worktree recovery data, but do not later try to end a lease
         // the child already released.
