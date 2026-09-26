@@ -1,0 +1,20 @@
+id: 01a0dd65-fbd0-7852-8044-aba0288c5684
+spec_id: BUG-1650
+agreed_id: BUG-1650
+title: Line-by-line store_path readers misread values containing a double quote or '=', and the portability rule does not scan production TOML writers
+description: 'Follow-up from BUG-1649 (implemented at 9fdee63ee8). (1) The line-by-line store_path readers in store_locate.rs (~299), aida-tui/src/redesign/store.rs (~895) and lib.rs (~67344) accept single-quoted strings but misread a path containing a double quote or ''=''. Replace them with the toml crate, or one shared reader in aida-core, and add a round-trip test against aida_core::toml_quote::toml_string output. (2) Extend the BUG-1646 toml-path-interpolation rule in scripts/portability-rules.json to production code (scope production): match any key, not only path|dir|root|worktree, and also catch  interpolation. Opt out or convert the remaining enum-token sites (forge.rs provider, project_capabilities class/ci/forge tokens, doctor counter_scope, mass_change timestamp) to toml_string for consistency.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T11:07:23.472847865Z
+modified_at: 2026-09-26T11:07:23.472847865Z
+req_type: Bug
+filed_at:
+  code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
