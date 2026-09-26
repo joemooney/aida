@@ -2,7 +2,7 @@ id: 01a0da7c-be06-7262-9a06-fdbd736cc59a
 spec_id: STORY-1477
 agreed_id: STORY-1477
 title: aida history --template/--fields with named, scoped, saveable templates (user/project/builtin)
-description: |
+description: |+
   `aida history` output layout is fixed: the `--full` block view or `--oneline`. Users want to choose which fields appear and how they are laid out, and to keep named layouts they can reuse and share.
 
   ## Design
@@ -30,19 +30,20 @@ description: |
   - `--save-as-template approvals` writes to `~/.aida/config.toml`. `--save-as-template project:approvals` writes to `.aida/config.toml` and prints a reminder to commit. `builtin:x` is refused. An existing name is refused unless `--force` is passed.
   - An unqualified name resolves user → project → builtin, and `aida history templates` shows any shadowing.
   - `aida history templates rm [scope:]name` removes a template and refuses builtins.
-  - `--template` composes with every existing filter, including TASK-1512's `--to`/`--from`/`--created`.
+  - `--template` composes with every existing filter, including TASK-1512's `--to`/`--from`/`--opened`.
   - The MCP `history` tool gains `template`/`fields` parameters, so the CLI and MCP stay in parity.
   - Tests cover placeholder rendering, `strftime`, escaping, scope resolution and shadowing, save/overwrite/remove, and the alias equivalence.
 
   ## Follow-ups (not in scope)
   - Saved *views*, i.e. storing filters (`--to approved --since 7d`) together with a template.
   - The same `--template` mechanism for `aida list` / `aida search`.
+
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-25T22:33:04.903987908Z
+modified_at: 2026-09-26T00:06:02.173742175Z
 req_type: Story
 tags:
 - aida:history
