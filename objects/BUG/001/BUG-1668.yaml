@@ -19,8 +19,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:42:42.799238808Z
-modified_at: 2026-09-26T21:17:03.457202808Z
+modified_at: 2026-09-26T21:28:54.377334092Z
 req_type: Bug
+comments:
+- id: 01a0df9e-ff69-7022-a2cb-472b529cbb79
+  author: joe
+  content: 'DRAFT (uncompiled) on claude/bug-1668 @ 01b1d151ae: TRIVIAL_COMMAND_WORDS const (true : echo printf test [ cat ls exit sleep pwd) + is_trivial_command (first word) + TRIVIAL_ONLY_SUMMARY in graded_review.rs; execute_graded_review counts nontrivial_passed_count and, after the Rung-2 veto and ahead of BOTH approve branches, escalates when prose_count == 0 && machine_verified_count > 0 && nontrivial_passed_count == 0 (summary: ''Passed N machine check(s); only trivial executable checks; escalated.''); failing trivial still rejects; reviewer prompt appends a one-line note when every passed check is trivial. Decision: trivial commands next to prose keep the existing evaluator path (settled prose counts as non-trivial evidence), so test_graded_review_mixed_jev_fast_pass is unchanged. Overlap: STORY-1476 (claude/story-1476) edits the same region (adds a policy param + NotRun guard immediately before this guard); whichever merges second needs a small conflict resolution — the two guards should sit NotRun-first then trivial-only. Tests: bug_1668_trivial_criteria_tests.rs — trivial_is_decided_by_first_word, only_true_escalates, several_trivial_commands_still_escalate, true_plus_nontrivial_command_approves (uses git --version), only_echo_with_evaluator_p1_does_not_approve, false_still_rejects, trivial_plus_prose_still_uses_evaluator, prompt_notes_trivial_only_passes. Compile risks: none expected beyond the closure coercion  in the test helper.'
+  created_at: 2026-09-26T21:28:54.377334092Z
+  modified_at: 2026-09-26T21:28:54.377334092Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df94-2661-7b32-be51-51d035035578
   author: aida-session-start
