@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T07:02:15.516176238Z
-modified_at: 2026-09-26T15:05:57.700990700Z
+modified_at: 2026-09-26T15:21:35.353466487Z
 req_type: Bug
 comments:
 - id: 01a0dc85-ca4c-71b3-ae74-5749fd82bd0b
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-09-26T07:02:30.732627326Z
   modified_at: 2026-09-26T07:02:30.732627326Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de4e-b579-73b0-911a-f9e61f0a202c
+  author: joe
+  content: 'Review (fresh strict Opus reviewer): APPROVE WITH NITS at 5200cb3502. Tests run in a scratch worktree (fake HOME, CARGO_BUILD_JOBS=3): core bug1641 7/7, bug1613 7/7, git_backend 83 passed (1 ignored); cli-lib config_cmd 28, bulk 2, import 9, migrate 1. All pass. rustfmt is clean and clippy shows no warnings in the changed files. Mutations: (M1) merge always takes the max, ignoring the reset flag: 3 tests fail (migrate_counter_reset_lands, reset_over_concurrent_bump_is_a_conflict, update_atomically_counter_rules_match_save). (M2) save() always passes reset=true: 2 tests fail (bug1613_save_keeps_concurrent_counter_bump, bug1641_plain_save_never_lowers_a_counter). (M3) BulkWriter re-assignment ignores the disk (drop raise_counters_to and the object_exists probe): all branch tests still pass; see finding 1. All mutations were reverted. Verified: without the flag, counters are max-merged per key on save, update_atomically and BulkWriter, so no lowering and no dropped prefix key. id_counters_reset is serde(skip)+ts(skip); the YAML Storage::save serializes the struct, so it is skipped there; SQLite and Postgres construct stores with false and never persist it; deserialization always gives false. Storage::save and CachedGitBackend::save pass the caller''s store straight to GitBackend, so config migrate''s flag reaches the merge. A reset raced by a bump is a typed StoreConflictError that writes nothing. update_atomically: load() is a pure assemble/extract round trip, so base==disk under the lock, and a legitimate write never conflicts unless a lock-bypassing writer changed the same field. Relationships use UUIDs, so re-assigning a spec id keeps them consistent. Both bulk_writer callers (bulk_import_via_writer, sandbox seed) ignore add()''s returned id and only use the count, so silent re-assignment is acceptable. Caller-supplied ids are not in ''assigned'' and are never re-assigned. The 18 metadata fields are all labelled, and the trace markers are all in // comments. FINDINGS (none blocking): 1. [minor, test gap] Re-assignment against a disk that moved further than the batch is untested. M3 survives. An ad-hoc test (another writer issues BUG-001..003, the batch collides on BUG-001, plus a caller-supplied BUG-50) PASSES on the branch (mine becomes BUG-004, theirs intact, BUG-50 written as given) and FAILS under M3 (overwrites theirs). Please add that test. 2. [nit] The runtime flag stays set on the in-memory store after save/update_atomically return. I traced it: it cannot lower a counter unless the caller lowers one again after the new baseline, and a later concurrent counter change becomes a conflict (fails closed) instead of a max-merge. Today the only caller is the one-shot config migrate, so this is fine. Consider documenting it, or clearing the flag when a caller owns the store mutably. 3. [nit] A reset with no baseline (a store not loaded from this backend) writes the caller''s counters wholesale. This is documented and needs an explicit reset. 4. [nit] Wording: a plural label with a singular pronoun (''the project''s requirement types changed ... this save changes it too''). 5. [info, pre-existing] Caller-supplied BulkWriter ids do not bump the counter and are written over an existing object. This is unchanged by this branch. 6. [info] No CLI-level test of ''aida config migrate'' end to end. The core test covers migrate_to_new_id_format + save through the same GitBackend::save that the CLI reaches.'
+  created_at: 2026-09-26T15:21:35.353466487Z
+  modified_at: 2026-09-26T15:21:35.353466487Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de32-4bea-7412-acf5-1b27b02177d0
   author: aida-session-start
