@@ -2,13 +2,21 @@ id: 01a0d8d9-c566-7802-94c7-29ea05612944
 spec_id: SPIKE-90
 agreed_id: SPIKE-90
 title: Evaluate an immutable stale cache snapshot for lock-tolerant reads
-description: Investigate whether AIDA should maintain an immutable, read-only snapshot of the rebuildable SQLite query cache for read commands when the active cache is rebuilding or locked. The spike must examine SQLite backup/snapshot and atomic replacement guarantees; how to avoid copying a live database/WAL unsafely; snapshot freshness metadata and explicit stale-data labeling; lock-owner detection and bounded wait behavior; which commands may fall back to stale data versus requiring a fresh cache; schema migration and corruption handling; permissions and multi-process access; and interaction with the proposed separate history-event cache. Preserve Git/AIDA store as canonical. Produce an architecture recommendation with failure modes, consistency boundaries, operational cleanup/recovery, and a decision on whether this is worthwhile before implementation.
+description: |
+  Investigate whether AIDA should maintain an immutable, read-only snapshot of the rebuildable SQLite query cache for read commands when the active cache is rebuilding or locked. The spike must examine SQLite backup/snapshot and atomic replacement guarantees; how to avoid copying a live database/WAL unsafely; snapshot freshness metadata and explicit stale-data labeling; lock-owner detection and bounded wait behavior; which commands may fall back to stale data versus requiring a fresh cache; schema migration and corruption handling; permissions and multi-process access; and interaction with the proposed separate history-event cache. Preserve Git/AIDA store as canonical. Produce an architecture recommendation with failure modes, consistency boundaries, operational cleanup/recovery, and a decision on whether this is worthwhile before implementation.
+
+  ## Acceptance (groomed 2026-09-25, proxy)
+  - Deliverable is one report at docs/architecture/2026-MM-DD-spike-90-stale-cache-snapshot.md, pinned to this spike; no production code.
+  - The report covers every question in the description, each with a short answer and its evidence (SQLite docs, a measured prototype, or code references).
+  - It records an explicit GO or NO-GO. A GO names the follow-up specs (filed as drafts), the commands allowed to read stale data, and the stale-label wording. A NO-GO names the cheaper alternative, if any.
+  - The design keeps busy_timeout=0 plus the retry ladder (STORY-543) and uses a durable single-flight snapshot worker, never an untracked in-process task (operator refinement, 2026-09-25).
+  - Any throwaway prototype lives under the spike branch only and is not merged.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T13:55:45.638264382Z
-modified_at: 2026-09-25T22:32:57.066723672Z
+modified_at: 2026-09-26T05:23:11.760398729Z
 req_type: Spike
 tags:
 - architecture
