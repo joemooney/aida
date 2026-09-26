@@ -18,7 +18,10 @@
 //!    `batch:shift-YYYYMMDD-HHMM`, spawns one bounded, detached
 //!    `aida queue work --batch … --auto-complete --no-human=both …` wave
 //!    (which takes the drain lock exactly like a manual drain), and records
-//!    its pid;
+//!    its pid. Under the systemd driver the wave runs in its own transient
+//!    `systemd-run --user` unit (`[shift] wave_unit = "auto"`), with a
+//!    per-wave journal and a hard `RuntimeMaxSec`; otherwise, or when that
+//!    provably fails, it is launched detached and the report says why;
 //! 7. emits one `ShiftTick` event only when it acted or its refusing-guard
 //!    set changed.
 //!
@@ -161,6 +164,39 @@ pub(crate) struct ShiftConfig {
     /// Oldest-unread age above which the operator is notified. Default 30m.
     pub mail_latency: String,
     pub mail_latency_secs: i64,
+    /// Under the systemd driver, run each wave in its own transient unit
+    /// (`auto`, the default) or always launch it detached (`off`).
+    // trace:TASK-1510 | ai:claude
+    pub wave_unit: WaveUnitSetting,
+    /// A configured `max_runtime` that does not parse. The `max-runtime`
+    /// guard refuses every launch while it is set (A7), on both launch paths.
+    pub max_runtime_error: Option<String>,
+}
+
+/// The `[shift] wave_unit` switch.
+// trace:TASK-1510 | ai:claude
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum WaveUnitSetting {
+    #[default]
+    Auto,
+    Off,
+}
+
+impl ShiftConfig {
+    /// `RuntimeMaxSec` for a wave unit: `--max-runtime` plus the grace.
+    /// `None` when `max_runtime` does not parse (the guard refuses then).
+    // trace:TASK-1510 | ai:claude
+    pub(crate) fn wave_runtime_max_secs(&self) -> Option<u64> {
+        if self.max_runtime_error.is_some() {
+            return None;
+        }
+        crate::maintenance_schedule::parse_duration(&self.max_runtime)
+            .ok()
+            .map(|d| {
+                d.num_seconds().max(0) as u64 + crate::schedule_driver::WAVE_UNIT_RUNTIME_GRACE_SECS
+            })
+    }
 }
 
 const DEFAULT_WAVE_SIZE: usize = 6;
@@ -235,6 +271,29 @@ pub(crate) fn build_config(
         .filter(|s| crate::maintenance_schedule::parse_duration(s).is_ok())
         .unwrap_or(DEFAULT_MAX_RUNTIME)
         .to_string();
+    // A7: a configured value that does not parse fails launches closed
+    // instead of silently running with the default.
+    // trace:TASK-1510 | ai:claude
+    let max_runtime_error = get("max_runtime").and_then(|v| match v.as_str() {
+        Some(s) if crate::maintenance_schedule::parse_duration(s).is_ok() => None,
+        Some(s) => Some(format!(
+            "max_runtime {s:?} is not a duration such as 3h or 90m"
+        )),
+        None => Some(format!(
+            "max_runtime {v} is not a duration string such as \"3h\""
+        )),
+    });
+    // trace:TASK-1510 | ai:claude
+    let wave_unit = match get("wave_unit") {
+        Some(v) if v.as_bool() == Some(false) => WaveUnitSetting::Off,
+        Some(v)
+            if v.as_str()
+                .is_some_and(|s| s.trim().eq_ignore_ascii_case("off")) =>
+        {
+            WaveUnitSetting::Off
+        }
+        _ => WaveUnitSetting::Auto,
+    };
     let max_runtime_hours = crate::maintenance_schedule::parse_duration(&max_runtime)
         .map(|d| ((d.num_minutes() + 59) / 60).max(1) as u64)
         .unwrap_or(3);
@@ -304,6 +363,8 @@ pub(crate) fn build_config(
         max_redrives_per_tick,
         mail_latency,
         mail_latency_secs,
+        wave_unit,
+        max_runtime_error,
     }
 }
 
@@ -394,8 +455,23 @@ pub(crate) struct WaveRecord {
     pub pid_start: Option<String>,
     #[serde(default)]
     pub log: Option<String>,
+    /// The transient unit the wave runs in, when it got one. Recorded with
+    /// the pid in the post-spawn save, never before the spawn (A3).
+    // trace:TASK-1510 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
     #[serde(default)]
     pub outcome: Option<WaveOutcome>,
+}
+
+impl WaveRecord {
+    /// A2: the wave was started. A unit whose pid could not be read
+    /// (`MainPID=0`: the wave had already exited) still counts, so it is
+    /// never uncounted from the daily cap or relaunched as an intent.
+    // trace:TASK-1510 | ai:claude
+    pub(crate) fn launched(&self) -> bool {
+        self.pid.is_some() || self.unit.is_some()
+    }
 }
 
 /// A8(b): launches stopped after consecutive zero-progress waves.
@@ -445,20 +521,20 @@ impl ShiftState {
     pub(crate) fn waves_in_day(&self, now: DateTime<Utc>) -> usize {
         self.waves
             .iter()
-            .filter(|w| w.pid.is_some() && w.at > now - Duration::hours(24))
+            .filter(|w| w.launched() && w.at > now - Duration::hours(24))
             .count()
     }
 
     /// The most recent wave whose process was started.
     pub(crate) fn last_launched(&self) -> Option<&WaveRecord> {
-        self.waves.iter().rev().find(|w| w.pid.is_some())
+        self.waves.iter().rev().find(|w| w.launched())
     }
 
     /// A recorded intent with no pid, still unsettled (A4).
     fn pending_intent(&self) -> Option<&WaveRecord> {
         self.waves
             .last()
-            .filter(|w| w.pid.is_none() && w.outcome.is_none())
+            .filter(|w| !w.launched() && w.outcome.is_none())
     }
 }
 
@@ -956,11 +1032,12 @@ pub(crate) fn evaluate_guards(
         "wave-in-flight",
         in_flight.is_none(),
         match in_flight {
-            Some(w) => format!(
-                "wave {} (pid {}) is still running",
-                w.batch,
-                w.pid.unwrap_or_default()
-            ),
+            Some(w) => match (w.pid, &w.unit) {
+                (Some(pid), _) => format!("wave {} (pid {pid}) is still running", w.batch),
+                // trace:TASK-1510 | ai:claude
+                (None, Some(unit)) => format!("wave {} ({unit}) is still running", w.batch),
+                (None, None) => format!("wave {} is still running", w.batch),
+            },
             None => "no shift wave running".to_string(),
         },
     ));
@@ -1071,6 +1148,12 @@ pub(crate) fn evaluate_guards(
             None => "breaker closed".to_string(),
         },
     ));
+    // A7: path-independent, so the detached and the unit launch refuse alike.
+    // trace:TASK-1510 | ai:claude
+    v.push(match &cfg.max_runtime_error {
+        Some(e) => verdict("max-runtime", false, e.clone()),
+        None => verdict("max-runtime", true, format!("{} per wave", cfg.max_runtime)),
+    });
     let launch_ok = ctx.launch_ok();
     v.push(verdict(
         "deadline",
@@ -1160,8 +1243,10 @@ pub(crate) trait ShiftExec {
     /// Reap finished sessions; returns the count.
     fn reap(&mut self) -> usize;
     fn tag_batch(&mut self, batch: &str, specs: &[String]) -> Result<()>;
-    /// Spawn the detached wave; returns (pid, pid start identity).
-    fn spawn_wave(&mut self, argv: &[String], log: &Path) -> Result<(u32, Option<String>)>;
+    /// Start the wave: in its own transient unit under the systemd driver,
+    /// else detached. Returns its pid and/or unit, and how it was isolated.
+    // trace:TASK-1510 | ai:claude
+    fn spawn_wave(&mut self, argv: &[String], log: &Path) -> Result<WaveSpawn>;
     fn save_state(&mut self, state: &ShiftState) -> Result<()>;
     fn emit(&mut self, kind: EventKind);
     /// Re-queue the `would-re-drive` decisions (`SpecReDriven` recorded
@@ -1190,9 +1275,264 @@ pub(crate) trait ShiftExec {
     ) -> Result<crate::notify::DirectDelivery>;
 }
 
+/// What [`ShiftExec::spawn_wave`] started. At least one of `pid` and `unit`
+/// is set: `pid` is `None` only for a unit whose main process could not be
+/// read (it had already exited, or the probe failed).
+// trace:TASK-1510 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WaveSpawn {
+    pub pid: Option<u32>,
+    pub pid_start: Option<String>,
+    pub unit: Option<String>,
+    pub isolation: WaveIsolation,
+}
+
+/// How a launched wave is isolated from the tick.
+// trace:TASK-1510 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub(crate) enum WaveIsolation {
+    /// Its own transient unit. `note` says why the pid is missing, if it is.
+    Unit { name: String, note: Option<String> },
+    /// Detached in the tick's own process tree (`setsid`). `reason` is set
+    /// when the unit path was wanted but not used (a logged fallback).
+    Detached { reason: Option<String> },
+}
+
+impl WaveIsolation {
+    /// The note carried on the launch event, if any.
+    pub(crate) fn note(&self) -> Option<String> {
+        match self {
+            WaveIsolation::Unit { note, .. } => note.clone(),
+            WaveIsolation::Detached { reason } => reason
+                .as_ref()
+                .map(|r| format!("launched detached instead of in its own unit: {r}")),
+        }
+    }
+}
+
+/// Environment keys the wave unit also removes from what it inherits from
+/// the user manager, beyond [`SCRUBBED_ENV`]: an implementer must never
+/// attach to a tmux server of the operator's (A1).
+// trace:TASK-1510 | ai:claude
+const WAVE_UNIT_EXTRA_UNSET: &[&str] = &["TMUX", "AIDA_PANES"];
+
+/// A1: every key the wave unit unsets.
+// trace:TASK-1510 | ai:claude
+pub(crate) fn wave_unit_unset_env() -> Vec<&'static str> {
+    SCRUBBED_ENV
+        .iter()
+        .chain(WAVE_UNIT_EXTRA_UNSET)
+        .copied()
+        .collect()
+}
+
+/// A1: every key the wave unit sets. The detached wave inherits these from
+/// the tick (`PATH`, the invoker tag, and `GIT_TERMINAL_PROMPT=0` from the
+/// scheduler); the unit does not inherit the tick's environment, so it sets
+/// them itself.
+// trace:TASK-1510 | ai:claude
+pub(crate) fn wave_unit_set_env(path_env: &str) -> Vec<(String, String)> {
+    vec![
+        ("PATH".to_string(), path_env.to_string()),
+        ("AIDA_SCHEDULE_INVOKER".to_string(), "systemd".to_string()),
+        ("GIT_TERMINAL_PROMPT".to_string(), "0".to_string()),
+    ]
+}
+
+/// Everything the wave launch needs besides the host.
+// trace:TASK-1510 | ai:claude
+struct WaveLaunch<'a> {
+    setting: WaveUnitSetting,
+    /// `AIDA_SCHEDULE_INVOKER` of this tick.
+    invoker: Option<&'a str>,
+    /// Canonical repo path (the tick unit's name derives from it).
+    repo: &'a str,
+    exe: &'a str,
+    path_env: &'a str,
+    argv: &'a [String],
+    log: &'a str,
+    now: DateTime<Utc>,
+    tick_pid: u32,
+    runtime_max_secs: Option<u64>,
+}
+
+/// Start the wave that `tick_core` has already decided to launch. The ONLY
+/// caller is [`RealExec::spawn_wave`], reached only from `tick_core`'s launch
+/// branch after every guard passed. It takes the already-built wave argv and
+/// never an arbitrary command.
+///
+/// The unit path is used only when this tick was started by the systemd
+/// driver (the invoker tag AND `/proc/self/cgroup` inside this repo's tick
+/// unit, A4), systemd is supported, and `wave_unit` is not `off`. Otherwise,
+/// and whenever `systemd-run` provably started nothing, the wave launches
+/// detached through `detached`. A failure that may have started the unit is
+/// probed: a live unit is adopted; an unknown answer is an error that leaves
+/// the pid-less intent for the next tick. Never a second launch.
+// trace:TASK-1510 | ai:claude
+fn launch_wave_isolated(
+    host: &mut dyn crate::schedule_driver::DriverHost,
+    w: &WaveLaunch<'_>,
+    detached: &mut dyn FnMut() -> Result<(u32, Option<String>)>,
+    identity: &dyn Fn(u32) -> Option<String>,
+) -> Result<WaveSpawn> {
+    use crate::schedule_driver::{
+        build_wave_unit_argv, cgroup_in_unit, classify_systemd_run, classify_unit_show,
+        expands_in_unit, unit_show_args, unit_stem, wave_unit_name, RunFailure, UnitProbe,
+        WaveUnitSpec, WAVE_UNIT_PROBE_TIMEOUT, WAVE_UNIT_RUN_TIMEOUT,
+    };
+    let mut go_detached = |reason: Option<String>| -> Result<WaveSpawn> {
+        let (pid, pid_start) = detached()?;
+        Ok(WaveSpawn {
+            pid: Some(pid),
+            pid_start,
+            unit: None,
+            isolation: WaveIsolation::Detached { reason },
+        })
+    };
+    // Selection gate. Not selected is not a fallback: nothing is attempted.
+    if w.setting == WaveUnitSetting::Off
+        || w.invoker.map(str::trim) != Some("systemd")
+        || !host.systemd_supported()
+    {
+        return go_detached(None);
+    }
+    let tick_unit = format!("{}.service", unit_stem(w.repo));
+    if !host
+        .self_cgroup()
+        .is_some_and(|cg| cgroup_in_unit(&cg, &tick_unit))
+    {
+        return go_detached(Some(format!(
+            "this check is not running inside {tick_unit}"
+        )));
+    }
+    if let Some(bad) = [w.repo, w.log, w.exe, w.path_env]
+        .into_iter()
+        .chain(w.argv.iter().map(String::as_str))
+        .find(|v| expands_in_unit(v))
+    {
+        return go_detached(Some(format!(
+            "{bad:?} contains '%' or '$', which systemd would expand"
+        )));
+    }
+    let Some(runtime_max_secs) = w.runtime_max_secs else {
+        // Unreachable past the max-runtime guard; fail closed regardless.
+        anyhow::bail!("max_runtime does not parse; the wave was not launched");
+    };
+    let unit = wave_unit_name(w.repo, w.now, w.tick_pid);
+    let batch = w
+        .argv
+        .windows(2)
+        .find(|p| p[0] == "--batch")
+        .map(|p| p[1].as_str())
+        .unwrap_or("?");
+    let description = format!("AIDA drain wave batch:{batch} for {}", w.repo);
+    let set_env = wave_unit_set_env(w.path_env);
+    let unset_env = wave_unit_unset_env();
+    let args = build_wave_unit_argv(&WaveUnitSpec {
+        unit: &unit,
+        repo: w.repo,
+        exe: w.exe,
+        log: w.log,
+        description: &description,
+        runtime_max_secs,
+        set_env: &set_env,
+        unset_env: &unset_env,
+        argv: w.argv,
+    });
+    let run = host.systemd_run_user(&args, WAVE_UNIT_RUN_TIMEOUT);
+    let failure = match classify_systemd_run(&run) {
+        Ok(()) => None,
+        Err(RunFailure::NotStarted(why)) => return go_detached(Some(why)),
+        Err(other) => Some(other),
+    };
+    let probe = classify_unit_show(
+        &host.systemctl_user_bounded(&unit_show_args(&unit), WAVE_UNIT_PROBE_TIMEOUT),
+    );
+    let adopted = |main_pid: Option<u32>, note: Option<String>| WaveSpawn {
+        pid: main_pid,
+        pid_start: main_pid.and_then(identity),
+        unit: Some(unit.clone()),
+        isolation: WaveIsolation::Unit {
+            name: unit.clone(),
+            note,
+        },
+    };
+    let Some(failure) = failure else {
+        // Started. MainPID=0 (the wave already exited) or an unreadable
+        // probe keeps the unit, so the launch still counts (A2).
+        return Ok(match probe {
+            UnitProbe::Active {
+                main_pid: Some(pid),
+            } => adopted(Some(pid), None),
+            UnitProbe::Active { main_pid: None } => adopted(
+                None,
+                Some("the unit reported no main process yet".to_string()),
+            ),
+            UnitProbe::NotFound | UnitProbe::Inactive(_) => adopted(
+                None,
+                Some("the wave had already ended when its pid was read".to_string()),
+            ),
+            UnitProbe::Unknown(why) => adopted(None, Some(format!("pid not read: {why}"))),
+        });
+    };
+    let (why, exists) = match &failure {
+        RunFailure::Exists(why) => (why.clone(), true),
+        RunFailure::Ambiguous(why) | RunFailure::NotStarted(why) => (why.clone(), false),
+    };
+    match probe {
+        UnitProbe::Active { main_pid } => Ok(adopted(
+            main_pid,
+            Some(format!("adopted the running unit after: {why}")),
+        )),
+        UnitProbe::NotFound if !exists => go_detached(Some(format!(
+            "{why}; systemd does not know {unit}, so nothing started"
+        ))),
+        UnitProbe::NotFound => Err(pending(&unit, &why, "not found")),
+        UnitProbe::Inactive(state) => Err(pending(&unit, &why, &state)),
+        UnitProbe::Unknown(u) => Err(pending(&unit, &why, &format!("unknown ({u})"))),
+    }
+}
+
+/// The error of a wave launch that may or may not have started: the tick
+/// exits non-zero and the pid-less intent stays for the next tick (Q6).
+// trace:TASK-1510 | ai:claude
+fn pending(unit: &str, why: &str, state: &str) -> anyhow::Error {
+    anyhow::anyhow!(
+        "could not tell whether the drain wave unit {unit} started ({why}; its state is \
+         {state}). The launch is left pending; the next check adopts the wave if it is running"
+    )
+}
+
 pub(crate) struct RealExec<'a> {
     pub project_root: PathBuf,
     pub backend: &'a aida_core::CachedGitBackend,
+    /// The systemd seam of the wave launch.
+    // trace:TASK-1510 | ai:claude
+    pub host: Box<dyn crate::schedule_driver::DriverHost>,
+    pub wave_unit: WaveUnitSetting,
+    pub wave_runtime_max_secs: Option<u64>,
+    pub now: DateTime<Utc>,
+}
+
+impl<'a> RealExec<'a> {
+    /// The production side effects for one tick of `cfg` at `now`.
+    // trace:TASK-1510 | ai:claude
+    pub(crate) fn new(
+        project_root: &Path,
+        backend: &'a aida_core::CachedGitBackend,
+        cfg: &ShiftConfig,
+        now: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            project_root: project_root.to_path_buf(),
+            backend,
+            host: Box::new(crate::schedule_driver::RealDriverHost),
+            wave_unit: cfg.wave_unit,
+            wave_runtime_max_secs: cfg.wave_runtime_max_secs(),
+            now,
+        }
+    }
 }
 
 impl ShiftExec for RealExec<'_> {
@@ -1202,14 +1542,53 @@ impl ShiftExec for RealExec<'_> {
     fn tag_batch(&mut self, batch: &str, specs: &[String]) -> Result<()> {
         tag_specs(self.backend, batch, specs)
     }
-    fn spawn_wave(&mut self, argv: &[String], log: &Path) -> Result<(u32, Option<String>)> {
-        let mut cmd = wave_command(&crate::aida_exe_path(), argv, &self.project_root, log)?;
-        let child = cmd.spawn().context("spawning the night-shift wave")?;
-        let pid = child.id();
-        // The child is deliberately not waited on: it is its own session and
-        // outlives this tick. Dropping the handle does not kill it.
-        drop(child);
-        Ok((pid, crate::process_probe::process_start_identity(pid)))
+    // trace:TASK-1510 | ai:claude
+    fn spawn_wave(&mut self, argv: &[String], log: &Path) -> Result<WaveSpawn> {
+        let exe = crate::aida_exe_path();
+        let project_root = self.project_root.clone();
+        let mut detached = || -> Result<(u32, Option<String>)> {
+            let mut cmd = wave_command(&exe, argv, &project_root, log)?;
+            let child = cmd.spawn().context("spawning the night-shift wave")?;
+            let pid = child.id();
+            // The child is deliberately not waited on: it is its own session
+            // and outlives this tick. Dropping the handle does not kill it.
+            drop(child);
+            Ok((pid, crate::process_probe::process_start_identity(pid)))
+        };
+        let repo = self
+            .project_root
+            .canonicalize()
+            .unwrap_or_else(|_| self.project_root.clone())
+            .display()
+            .to_string();
+        if let Some(parent) = log.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let log_abs = std::path::absolute(log)
+            .unwrap_or_else(|_| log.to_path_buf())
+            .display()
+            .to_string();
+        let invoker = std::env::var("AIDA_SCHEDULE_INVOKER").ok();
+        let path_env = std::env::var("PATH").unwrap_or_default();
+        let exe_s = exe.display().to_string();
+        let launch = WaveLaunch {
+            setting: self.wave_unit,
+            invoker: invoker.as_deref(),
+            repo: &repo,
+            exe: &exe_s,
+            path_env: &path_env,
+            argv,
+            log: &log_abs,
+            now: self.now,
+            tick_pid: std::process::id(),
+            runtime_max_secs: self.wave_runtime_max_secs,
+        };
+        launch_wave_isolated(
+            self.host.as_mut(),
+            &launch,
+            &mut detached,
+            &crate::process_probe::process_start_identity,
+        )
     }
     fn save_state(&mut self, state: &ShiftState) -> Result<()> {
         save_state_to(&state_path(&self.project_root), state)
@@ -1273,6 +1652,9 @@ pub(crate) struct TickReport {
     pub skipped: Vec<(String, String)>,
     pub argv: Vec<String>,
     pub launched: Option<ShiftLaunch>,
+    /// How the launched wave is isolated, with any fallback reason.
+    // trace:TASK-1510 | ai:claude
+    pub wave_isolation: Option<WaveIsolation>,
     pub reaped: usize,
     pub recovered_stale_pid: Option<u32>,
     pub breaker: Option<String>,
@@ -1759,7 +2141,7 @@ fn settle_last_wave(state: &mut ShiftState, p: &Probes, now: DateTime<Utc>) -> O
     let idx = state
         .waves
         .iter()
-        .rposition(|w| w.pid.is_some() && w.outcome.is_none())?;
+        .rposition(|w| w.launched() && w.outcome.is_none())?;
     if p.last_wave_alive {
         return None;
     }
@@ -1969,6 +2351,7 @@ pub(crate) fn tick_core(
             pid: None,
             pid_start: None,
             log: Some(ctx.log_path.display().to_string()),
+            unit: None,
             outcome: None,
         };
         if sel.reused {
@@ -1992,10 +2375,17 @@ pub(crate) fn tick_core(
                     "deadline reached before the spawn; the next check reuses this batch".into();
             }
         } else {
-            let (pid, pid_start) = exec.spawn_wave(&report.argv, &ctx.log_path)?;
+            // trace:TASK-1510 | ai:claude
+            let spawn = exec.spawn_wave(&report.argv, &ctx.log_path)?;
+            if spawn.pid.is_none() && spawn.unit.is_none() {
+                anyhow::bail!("the wave launch reported neither a pid nor a unit");
+            }
+            // A3: the unit is recorded together with the pid, in the one
+            // post-spawn save below.
             if let Some(last) = state.waves.last_mut() {
-                last.pid = Some(pid);
-                last.pid_start = pid_start;
+                last.pid = spawn.pid;
+                last.pid_start = spawn.pid_start.clone();
+                last.unit = spawn.unit.clone();
             }
             for spec in &sel.specs {
                 state.spec_waves.entry(spec.clone()).or_default().push(now);
@@ -2007,9 +2397,12 @@ pub(crate) fn tick_core(
             report.launched = Some(ShiftLaunch {
                 batch,
                 specs: sel.specs.clone(),
-                pid,
+                pid: spawn.pid.unwrap_or(0),
                 argv: report.argv.clone(),
+                unit: spawn.unit.clone(),
+                isolation_note: spawn.isolation.note(),
             });
+            report.wave_isolation = Some(spawn.isolation);
         }
     }
 
@@ -2189,18 +2582,14 @@ fn probe_drain_locks(
 /// Is the last launched shift wave's process still alive?
 // trace:BUG-1621 | ai:claude
 fn last_wave_is_alive(state: &ShiftState) -> bool {
-    state
-        .waves
-        .iter()
-        .rev()
-        .find(|w| w.pid.is_some())
-        .is_some_and(|w| {
-            w.outcome.is_none()
-                && crate::process_probe::process_identity_is_alive(
-                    w.pid.unwrap_or_default(),
-                    w.pid_start.as_deref(),
-                )
-        })
+    // A2: a unit with no pid is not alive, so the next tick settles it.
+    // trace:TASK-1510 | ai:claude
+    state.last_launched().is_some_and(|w| {
+        w.outcome.is_none()
+            && w.pid.is_some_and(|pid| {
+                crate::process_probe::process_identity_is_alive(pid, w.pid_start.as_deref())
+            })
+    })
 }
 
 fn gather_probes(
@@ -2266,7 +2655,7 @@ fn gather_probes(
     let candidates = gather_candidates(backend, &queue_user, &held);
     let mut queue_fingerprint: Vec<String> = candidates.iter().map(|c| c.spec.clone()).collect();
     queue_fingerprint.sort();
-    let last = state.waves.iter().rev().find(|w| w.pid.is_some());
+    let last = state.last_launched();
     let last_wave_alive = last_wave_is_alive(state);
     let mut finished_specs = BTreeSet::new();
     if let Some(w) = last {
@@ -2464,10 +2853,7 @@ pub(crate) fn run_redrive_pass_with(
     dry_run: bool,
 ) -> Result<TickReport> {
     let now = Utc::now();
-    let mut exec = RealExec {
-        project_root: project_root.to_path_buf(),
-        backend,
-    };
+    let mut exec = RealExec::new(project_root, backend, cfg, now);
     let quiet_ctx = |state_error| TickCtx {
         now,
         dry_run,
@@ -2607,10 +2993,7 @@ pub(crate) fn run_tick(
     let fresh = TickCtx::from_clock(now, dry_run, started, TICK_DEADLINE, ctx.log_path.clone());
     ctx.optional_allowed = fresh.optional_allowed;
     ctx.launch_allowed = fresh.launch_allowed;
-    let mut exec = RealExec {
-        project_root: project_root.to_path_buf(),
-        backend,
-    };
+    let mut exec = RealExec::new(project_root, backend, &cfg, now);
     let report = if dry_run {
         let mut scratch = state.clone();
         tick_core(&cfg, &probes, &mut scratch, &ctx, &mut exec)?
@@ -2715,6 +3098,21 @@ pub(crate) fn render_report(r: &TickReport) -> String {
             l.specs.len(),
             l.pid
         ));
+        // trace:TASK-1510 | ai:claude
+        match &r.wave_isolation {
+            Some(WaveIsolation::Unit { name, note }) => {
+                out.push_str(&format!(
+                    "  wave unit: {name} (`journalctl --user -u {name}`)\n"
+                ));
+                if let Some(n) = note {
+                    out.push_str(&format!("    note: {n}\n"));
+                }
+            }
+            Some(WaveIsolation::Detached { reason: Some(why) }) => out.push_str(&format!(
+                "  wave launched detached, not in its own unit: {why}\n"
+            )),
+            Some(WaveIsolation::Detached { reason: None }) | None => {}
+        }
     }
     if r.reaped > 0 {
         out.push_str(&format!("  reaped {} finished session(s)\n", r.reaped));
@@ -2798,11 +3196,11 @@ pub(crate) fn print_status_line(project_root: &Path) {
         return;
     }
     let state = load_state(&state_path(project_root)).unwrap_or_default();
+    // trace:TASK-1510 | ai:claude
     let alive = state.last_launched().is_some_and(|w| {
-        crate::process_probe::process_identity_is_alive(
-            w.pid.unwrap_or_default(),
-            w.pid_start.as_deref(),
-        )
+        w.pid.is_some_and(|pid| {
+            crate::process_probe::process_identity_is_alive(pid, w.pid_start.as_deref())
+        })
     });
     if let Some(line) = status_line(&cfg, &state, alive, Utc::now()) {
         use colored::Colorize;
@@ -2873,16 +3271,22 @@ fn status_command(
         None => println!("  last check: never"),
     }
     match &last {
-        Some(w) => println!(
-            "  last wave: batch:{} ({} specs) {} ago — {}",
-            w.batch,
-            w.specs.len(),
-            human_age(now - w.at),
-            match &w.outcome {
-                Some(o) => format!("{} shipped, {} shelved", o.shipped, o.shelved),
-                None => "not settled yet".to_string(),
+        Some(w) => {
+            println!(
+                "  last wave: batch:{} ({} specs) {} ago — {}",
+                w.batch,
+                w.specs.len(),
+                human_age(now - w.at),
+                match &w.outcome {
+                    Some(o) => format!("{} shipped, {} shelved", o.shipped, o.shelved),
+                    None => "not settled yet".to_string(),
+                }
+            );
+            // trace:TASK-1510 | ai:claude
+            if let Some(unit) = &w.unit {
+                println!("    unit: {unit} (`journalctl --user -u {unit}`)");
             }
-        ),
+        }
         None => println!("  last wave: none"),
     }
     println!(
@@ -3246,3 +3650,7 @@ pub(crate) fn handle_shift_command(
 #[cfg(test)]
 #[path = "tests/story_1218_shift_tick_tests.rs"]
 mod story_1218_shift_tick_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1510_wave_unit_tests.rs"]
+mod task_1510_wave_unit_tests;
