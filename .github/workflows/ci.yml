@@ -227,6 +227,13 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_distributed.sh
 
+      # BUG-1640: real-~/.aida guard self-test (volatile role churn passes,
+      # planted role leaks fail) against a throwaway "real" HOME.
+      # trace:BUG-1640 | ai:claude
+      - name: Run ~/.aida home-guard self-test
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_isolated_home_guard.sh
+
       # STORY-498: CI spec-id validity gate (MVP slice of EPIC-34). Walk the
       # commits this PR adds, resolve every `(SPEC-ID)` subject trailer against
       # the live requirement graph, and FAIL the PR when a trailer references a
