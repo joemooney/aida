@@ -10,12 +10,12 @@ description: |
   - restore_phase1_status_on_lease_failure returns the restore outcome (restored / refused with reason). The orchestrator prints "status restored to X" only when it was, and otherwise prints the refusal. A test covers the refused case.
   - When the spec is deleted mid-flight, zen reports that the spec no longer exists, never "is now Draft, not Draft". A test covers it.
   - The findings promote write goes through update_spec_atomically; a test shows a concurrent edit is not lost.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T03:17:13.020743486Z
-modified_at: 2026-09-26T10:23:47.732051307Z
+modified_at: 2026-09-26T11:14:41.097282860Z
 req_type: Bug
 tags:
 - batch:groom-2026-09-25
@@ -43,6 +43,20 @@ comments:
   created_at: 2026-09-26T10:23:47.732051307Z
   modified_at: 2026-09-26T10:23:47.732051307Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0dd6c-a93f-7231-84f7-6fa6e633bd76
+  author: aida-auto-bump
+  timestamp: 2026-09-26T11:14:41.087318500Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0dd6c-a949-7430-b204-f63619e84bce
+  timestamp: 2026-09-26T11:14:41.097281602Z
+  agent: implementer
+  commit_sha: 348989d2a551a8338de767518a034958593c81a9
+  summary: Completed via merge 348989d2
 execution_mode: drain
 filed_at:
   code_sha: 1b896f60516fbf09faa8ee82affe1b6626a26378
@@ -52,3 +66,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T11:14:41.087314668Z
+  completion_sha: 348989d2a551a8338de767518a034958593c81a9
