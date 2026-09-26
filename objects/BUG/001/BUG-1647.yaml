@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T10:08:29.309145926Z
-modified_at: 2026-09-26T11:48:51.294848051Z
+modified_at: 2026-09-26T11:49:34.268028907Z
 req_type: Bug
 comments:
 - id: 01a0dd30-8d8c-74e1-a02c-ee3aef034cc2
@@ -34,6 +34,12 @@ comments:
   content: 'Review (fresh strict Opus reviewer): APPROVE WITH NITS on ff730227e7 (origin/claude/bug-1647). Verified: dismiss writes via update_spec_atomically and judges the lock-held copy (already Rejected = no-op with no write, because a closure that changes nothing skips the write in git_backend update_spec_atomically_with_subject; Completed/Superseded refused; deleted = clean error). Approved write refuses terminal statuses. transition_to_completed_atomically: already Completed means prepare is not run and nothing is written or emitted; Rejected/Superseded refused; ship record only on Completed, after the lock is released. Its only production caller is findings_promote_auto_complete_write, and the handler reports ''already Completed'' and returns before record_role_activity. Authorship: every status write goes through record_caller_status_transition (caller-authored, BUG-1637 invariant kept), and the audit comment helper keeps the author and session_id. Lock ordering: the git queue ops take no store lock, and the undo runs after update_spec_atomically has returned, so locks never nest and there is no deadlock. The race seam is cfg(test)-only. --json gating of the Refused line is fixed and restore lines use Display. Tests pass: bug_1647 14, bug_1638 13, findings 144, auto_complete 279, story_1418 13, completion 29. fmt clean, no clippy hits on the changed lines. Mutations: (1) dropping the dismiss terminal check fails 2 bug_1647 tests; (2) skipping the queue undo fails 4. Both reverted, tree clean. NITS (non-blocking, follow-up OK): (1) Low, lib.rs findings_promote_to_work undo (~706-710): the undo is not compare-and-swap. Restoring a prior entry uses queue_add, which upserts by requirement_id, so a concurrent ''aida queue remove/done'' of that entry during the window is brought back, and the role-scoped remove drops a concurrent same-role re-add. Git queue writes also take no lock (pre-existing, git_backend.rs queue_add ~1674 and queue_remove_for_role ~1727). Fix: re-read before undoing and act only if the current entry for req.id is still the one this call added (match note, added_at and for_role); otherwise leave it and say so. (2) Nit, lib.rs ~712: ''withdrawn, so nothing was changed'' after two ''update queue'' store commits, and possibly a new empty queue file. Prefer ''its queue entry was withdrawn; the finding is unchanged''. (3) Nit: ''byte-for-byte'' restore is not exact for a legacy entry stored with position i64::MAX, because queue_add re-resolves that to max+1000. Document this, or restore without the sentinel resolution. (4) Nit tests: nothing pins the --json gating of the phase-1 Refused line. (5) Info/follow-up: the Approved write still reopens non-terminal InProgress/Done findings to Approved, and a re-promote of an Approved finding appends another reason comment. History is safe, because record_status_transition no-ops on the same status. Out of scope here.'
   created_at: 2026-09-26T11:48:51.294848051Z
   modified_at: 2026-09-26T11:48:51.294848051Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd8c-99bc-72d1-8144-a6e7d278c586
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): strict review APPROVE WITH NITS accepted; integrating in batch 93. Findings 1-4 filed as BUG-1651.'
+  created_at: 2026-09-26T11:49:34.268028907Z
+  modified_at: 2026-09-26T11:49:34.268028907Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 09a35045a5529f1867b54e5cb974821d0149a832
