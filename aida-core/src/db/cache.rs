@@ -8,8 +8,9 @@
 //! trace:EPIC-1-001 | ai:claude
 
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
@@ -815,6 +816,17 @@ fn is_sqlite_lock_error(err: &anyhow::Error) -> bool {
     })
 }
 
+/// True when `err` is a cache write-lock failure: a raw SQLite busy/locked
+/// error, or the owner-enriched error the retry ladder returns once it is
+/// exhausted.
+// trace:TASK-1515 | ai:claude
+pub(crate) fn is_cache_lock_error(err: &anyhow::Error) -> bool {
+    is_sqlite_lock_error(err)
+        || err
+            .chain()
+            .any(|cause| cause.is::<super::cache_lock::CacheLockExhausted>())
+}
+
 /// True when a cache operation hit SQLite schema drift that can be healed by
 /// dropping and rebuilding the rebuildable projection from the git store.
 // trace:BUG-1097 | ai:codex
@@ -828,10 +840,60 @@ pub fn is_cache_schema_drift_error(err: &anyhow::Error) -> bool {
     })
 }
 
+/// The row operations of an incremental refresh, bound to the ONE open write
+/// transaction of [`Cache::apply_incremental`]. Nothing done through this
+/// handle is visible to other connections until the whole refresh, including
+/// its head-SHA stamp, commits.
+// trace:TASK-1515 | ai:claude
+pub(crate) struct CacheTx<'a> {
+    conn: &'a Connection,
+}
+
+impl CacheTx<'_> {
+    pub(crate) fn upsert_requirement(&self, req: &Requirement) -> Result<()> {
+        upsert_requirement_on(self.conn, req)
+    }
+
+    pub(crate) fn delete_requirement(&self, id: &Uuid) -> Result<()> {
+        delete_requirement_on(self.conn, id)
+    }
+
+    pub(crate) fn uuid_for_spec_id(&self, spec_id: &str) -> Result<Option<Uuid>> {
+        uuid_for_spec_id_on(self.conn, spec_id)
+    }
+
+    pub(crate) fn spec_id_for_uuid(&self, id: &Uuid) -> Result<Option<String>> {
+        spec_id_for_uuid_on(self.conn, id)
+    }
+
+    pub(crate) fn ancestor_epic_ids(&self, id: &Uuid) -> Result<Vec<Uuid>> {
+        ancestor_epic_ids_on(self.conn, id)
+    }
+
+    pub(crate) fn recompute_epic_status_from_hierarchy(
+        &self,
+        epic_id: &Uuid,
+        stored_status: &crate::models::RequirementStatus,
+    ) -> Result<()> {
+        match epic_status_to_stamp(self.conn, epic_id, stored_status) {
+            Some(status) => set_epic_status_on(self.conn, epic_id, &status),
+            None => Ok(()),
+        }
+    }
+}
+
 pub struct Cache {
     conn: Mutex<Connection>,
     path: PathBuf,
     lock_info_path: PathBuf,
+    /// TASK-1515: `open()` found a schema migration was needed while the
+    /// existing tables still held rows. The drop is deferred into the next
+    /// rebuild's single transaction, so a concurrent reader keeps seeing the
+    /// old committed tables until the rebuilt ones commit, never empty tables.
+    /// While set, the recorded head SHA is reported as absent (the cache is
+    /// stale), so the next freshness check does a full rebuild.
+    // trace:TASK-1515 | ai:claude
+    migration_pending: AtomicBool,
 }
 
 impl Cache {
@@ -843,6 +905,11 @@ impl Cache {
     /// schema. `CREATE TABLE IF NOT EXISTS` doesn't add new columns to an
     /// existing table; dropping forces a clean rebuild from git on the next
     /// stale-check. The cache is rebuildable by definition, so this is safe.
+    ///
+    /// TASK-1515: when the old tables still hold rows, the drop is not done
+    /// here but inside the next rebuild's single transaction (see
+    /// [`Cache::migration_pending`]), so concurrent readers never see empty
+    /// tables; empty tables are migrated here in one transaction.
     ///
     /// TASK-1478: the version comparison is ORDERED, not `!=`. A dev build and
     /// an older installed `aida` alternating on one project used to full-rebuild
@@ -901,15 +968,8 @@ impl Cache {
         // here; a NEWER stamp is handled below by the drift check alone.
         let on_disk_version_num: Option<u64> =
             on_disk_version.as_deref().and_then(|v| v.parse().ok());
-        let current_version_num: u64 = SCHEMA_VERSION
-            .parse()
-            .expect("SCHEMA_VERSION must be a plain integer");
-        let version_older = match on_disk_version_num {
-            Some(v) => v < current_version_num,
-            // A stamp that exists but didn't parse is treated the same as an
-            // old/bogus stamp always was: force the migration path.
-            None => on_disk_version.is_some(),
-        };
+        let current_version_num = current_schema_version_num();
+        let version_older = schema_stamp_is_older(on_disk_version.as_deref());
         // BUG-757 / TASK-1185: a torn/partial migration can leave one expected
         // cache table present while another is entirely absent (for example
         // `requirements_cache` present but `requirements_fts` absent, or only
@@ -918,8 +978,7 @@ impl Cache {
         // partial table set as structural drift: drop + reapply + invalidate the
         // head SHA, same as a missing column.
         // trace:BUG-757 trace:TASK-1185 | ai:codex
-        let schema_drifted =
-            fts_schema_drifted(&conn) || cache_schema_drifted(&conn) || cache_tables_partial(&conn);
+        let schema_drifted = schema_structurally_drifted(&conn);
         // BUG-664: a PURE READER must not take the cache write-lock on open. The
         // old open unconditionally re-applied the schema AND re-stamped the
         // schema-version meta on every open — both write transactions. With
@@ -937,28 +996,57 @@ impl Cache {
         // this binary needs" triggers the drop, regardless of which way the
         // version numbers point.
         let needs_migration_drop = version_older || schema_drifted;
-        let needs_schema_apply = needs_migration_drop || !tables_present;
+        // TASK-1515: a migration drop used to commit HERE, on its own, and the
+        // rebuild that refilled the tables committed later (often in another
+        // call). Between the two, every concurrent reader saw committed EMPTY
+        // tables: the one window in which the live WAL cache was genuinely
+        // unreadable. Now:
+        // - the existing tables hold rows: DEFER the drop. Nothing is written
+        //   here; the drop, schema apply, refill and stamps all commit in the
+        //   next rebuild's single transaction (see `rebuild_projection`).
+        //   Readers keep the old committed tables until then. The on-disk
+        //   stamp/drift is left untouched, so any other process opening the
+        //   cache re-detects the same pending migration.
+        // - the tables are already empty (or absent): there is nothing a
+        //   reader could lose, so migrate now, as ONE transaction (drop,
+        //   apply, stamp the version, clear the head SHA).
+        // trace:TASK-1515 | ai:claude
+        let mut migration_pending = false;
         if needs_migration_drop {
-            // Drop the cache tables — the next stale-check will rebuild
-            // from git. `cache_meta` survives so the source HEAD SHA
-            // tracking continues to work after the rebuild stamps it.
-            with_cache_write(
-                &path,
-                &lock_info_path,
-                "drop cache tables for schema migration",
-                || {
-                    conn.execute_batch(
-                        // BUG-764: hierarchy_edges must drop too — `CREATE TABLE IF
-                        // NOT EXISTS` can't add the author_id column to a v12 table.
-                        "DROP TABLE IF EXISTS requirements_cache;
-                     DROP TABLE IF EXISTS requirements_fts;
-                     DROP TABLE IF EXISTS hierarchy_edges;",
-                    )
-                    .context("Failed to drop cache tables for schema migration")
-                },
-            )?;
-        }
-        if needs_schema_apply {
+            if projection_has_rows(&conn) {
+                migration_pending = true;
+            } else {
+                let outcome =
+                    with_cache_write(&path, &lock_info_path, "migrate empty cache schema", || {
+                        let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
+                        // Re-check under the write lock: another process may
+                        // have migrated, or rebuilt rows into the old tables,
+                        // since the unlocked probe above.
+                        if !schema_migration_needed(&tx) {
+                            return Ok(EmptyMigration::NoLongerNeeded);
+                        }
+                        if projection_has_rows(&tx) {
+                            return Ok(EmptyMigration::NowHasRows);
+                        }
+                        // BUG-764: hierarchy_edges must drop too — `CREATE TABLE
+                        // IF NOT EXISTS` can't add the author_id column to a v12
+                        // table.
+                        tx.execute_batch(DROP_PROJECTION_SQL)
+                            .context("Failed to drop cache tables for schema migration")?;
+                        tx.execute_batch(SCHEMA_SQL)
+                            .context("Failed to apply cache schema")?;
+                        set_meta_on(&tx, META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
+                        // The head SHA no longer describes the (empty) tables.
+                        tx.execute(
+                            "DELETE FROM cache_meta WHERE key = ?1",
+                            params![META_KEY_SOURCE_HEAD_SHA],
+                        )?;
+                        tx.commit()?;
+                        Ok(EmptyMigration::Migrated)
+                    })?;
+                migration_pending = outcome == EmptyMigration::NowHasRows;
+            }
+        } else if !tables_present {
             with_cache_write(&path, &lock_info_path, "apply cache schema", || {
                 conn.execute_batch(SCHEMA_SQL)
                     .context("Failed to apply cache schema")
@@ -968,42 +1056,28 @@ impl Cache {
             conn: Mutex::new(conn),
             lock_info_path,
             path,
+            migration_pending: AtomicBool::new(migration_pending),
         };
         // Only stamp the schema version when it needs to change — an
         // unconditional `INSERT … ON CONFLICT DO UPDATE` always takes the write
-        // lock (BUG-664). A fresh cache (None) or a migrated one needs the
-        // stamp; a current cache must not write here.
+        // lock (BUG-664). A fresh cache (None) needs the stamp; a current cache
+        // must not write here. A migration stamps inside its own transaction
+        // (the empty-table path above, or the deferred rebuild), never here.
         //
-        // TASK-1478: never DOWNGRADE the stamp. If we just migration-dropped,
-        // the tables now reflect exactly this binary's schema (any forward
-        // columns a newer binary added are gone with the drop), so the stamp
-        // must be this binary's own version. Otherwise — the steady-state
-        // open, tables left untouched — the stamp is the max of what was on
-        // disk and this binary's version, so an older binary opening a
-        // healthy newer cache leaves the newer binary's higher stamp in
-        // place instead of clobbering it back down (which would make the
-        // newer binary rebuild its own healthy cache on its next open).
-        let target_version: String = if needs_migration_drop {
-            SCHEMA_VERSION.to_string()
-        } else {
-            on_disk_version_num
+        // TASK-1478: never DOWNGRADE the stamp. On the steady-state open
+        // (tables left untouched) the stamp is the max of what was on disk
+        // and this binary's version, so an older binary opening a healthy
+        // newer cache leaves the newer binary's higher stamp in place instead
+        // of clobbering it back down (which would make the newer binary
+        // rebuild its own healthy cache on its next open).
+        if !needs_migration_drop {
+            let target_version: String = on_disk_version_num
                 .map(|v| v.max(current_version_num))
                 .unwrap_or(current_version_num)
-                .to_string()
-        };
-        if on_disk_version.as_deref() != Some(target_version.as_str()) {
-            cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version)?;
-        }
-        // After a schema-version bump (or a structural-drift drop, BUG-485)
-        // the head SHA is no longer valid for the (now-empty) cache tables —
-        // delete it so `is_stale` returns true (None → stale) and the next
-        // read triggers a rebuild.
-        if needs_migration_drop {
-            let conn = cache.conn.lock().unwrap();
-            conn.execute(
-                "DELETE FROM cache_meta WHERE key = ?1",
-                params![META_KEY_SOURCE_HEAD_SHA],
-            )?;
+                .to_string();
+            if on_disk_version.as_deref() != Some(target_version.as_str()) {
+                cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version)?;
+            }
         }
         Ok(cache)
     }
@@ -1024,14 +1098,7 @@ impl Cache {
             &self.path,
             &self.lock_info_path,
             "set cache metadata",
-            || {
-                conn.execute(
-                    "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)
-                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                    params![key, value],
-                )?;
-                Ok(())
-            },
+            || set_meta_on(&conn, key, value),
         )?;
         Ok(())
     }
@@ -1048,8 +1115,23 @@ impl Cache {
         Ok(r)
     }
 
+    /// The store HEAD the cached rows were built from. `None` (stale) while a
+    /// schema migration is pending: the recorded SHA still describes the old
+    /// tables a concurrent reader may be using, but not a projection THIS
+    /// binary can serve, so the next freshness check must full-rebuild.
+    // trace:TASK-1515 | ai:claude
     pub fn source_head_sha(&self) -> Result<Option<String>> {
+        if self.migration_pending() {
+            return Ok(None);
+        }
         self.get_meta(META_KEY_SOURCE_HEAD_SHA)
+    }
+
+    /// True when `open()` deferred a schema migration into the next rebuild
+    /// transaction (the old tables still hold rows other readers may use).
+    // trace:TASK-1515 | ai:claude
+    pub fn migration_pending(&self) -> bool {
+        self.migration_pending.load(Ordering::SeqCst)
     }
 
     pub fn set_source_head_sha(&self, sha: &str) -> Result<()> {
@@ -1095,6 +1177,23 @@ impl Cache {
         &self,
         store: &RequirementsStore,
         source_head_sha: &str,
+    ) -> Result<usize> {
+        self.rebuild_projection(store, source_head_sha, false)
+    }
+
+    /// The one rebuild transaction. TASK-1515: the rows, the hierarchy edges,
+    /// and the `source_head_sha`, `built_at` and `schema_version` stamps all
+    /// commit together (they used to be four transactions), so a concurrent
+    /// reader never sees rows from HEAD B labelled with HEAD A. When
+    /// `force_drop` is set, or `open()` deferred a migration, the projection
+    /// tables are dropped and recreated INSIDE the same transaction: a reader
+    /// sees either the old tables or the fully rebuilt ones, never empty ones.
+    // trace:TASK-1515 | ai:claude
+    fn rebuild_projection(
+        &self,
+        store: &RequirementsStore,
+        source_head_sha: &str,
+        force_drop: bool,
     ) -> Result<usize> {
         // STORY-632: degree/heft is a pure function of the WHOLE relationship
         // graph, so compute it once over the full store before the row inserts.
@@ -1147,8 +1246,16 @@ impl Cache {
         }
         let count = {
             let conn = self.conn.lock().unwrap();
+            let drop_first = force_drop || self.migration_pending();
             with_cache_write(&self.path, &self.lock_info_path, "rebuild cache", || {
-                let tx = conn.unchecked_transaction()?;
+                // TASK-1515: IMMEDIATE takes the write lock at BEGIN, so a
+                // contended rebuild fails (and enters the unchanged retry
+                // ladder) before doing any work, never mid-transaction.
+                let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
+                if drop_first {
+                    tx.execute_batch(DROP_PROJECTION_SQL)
+                        .context("Failed to drop cache tables for schema migration")?;
+                }
                 // BUG-757: apply the idempotent (`IF NOT EXISTS`) schema before
                 // the DELETEs so `aida cache rebuild` is always a valid
                 // recovery verb — a torn migration that left a table missing
@@ -1173,28 +1280,31 @@ impl Cache {
                         params![parent.to_string(), child.to_string(), author.to_string()],
                     )?;
                 }
+                // TASK-1515: stamp freshness in the SAME transaction as the rows.
+                set_meta_on(&tx, META_KEY_SOURCE_HEAD_SHA, source_head_sha)?;
+                set_meta_on(&tx, META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
+                // TASK-1478: a full rebuild just regenerated EVERY row via THIS
+                // binary's own `insert_one`, so the projected data now IS exactly
+                // this binary's schema — unlike `Cache::open`'s steady-state path
+                // (which touches no rows), the max-of-two/no-downgrade rule does not
+                // apply here. Stamp unconditionally, even if that LOWERS the
+                // version: an older binary rebuilding a cache a newer binary had
+                // stamped higher must leave behind an OLDER stamp, precisely so the
+                // newer binary's next `open()` sees `version_older = true` and does
+                // its own migration-drop-and-refill — restoring the columns the
+                // older binary's rebuild just left NULL (see the comment on
+                // `insert_one`). Without this, that refill would depend on some
+                // unrelated future version bump instead of firing exactly once,
+                // right after the older binary's rebuild — not on every subsequent
+                // alternating open (a plain open leaves a healthy, non-dropped cache
+                // stamp alone; only an actual rebuild changes it).
+                set_meta_on(&tx, META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
                 tx.commit()?;
                 Ok(count)
             })?
         };
-        self.set_source_head_sha(source_head_sha)?;
-        self.set_meta(META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
-        // TASK-1478: a full rebuild just regenerated EVERY row via THIS
-        // binary's own `insert_one`, so the projected data now IS exactly
-        // this binary's schema — unlike `Cache::open`'s steady-state path
-        // (which touches no rows), the max-of-two/no-downgrade rule does not
-        // apply here. Stamp unconditionally, even if that LOWERS the
-        // version: an older binary rebuilding a cache a newer binary had
-        // stamped higher must leave behind an OLDER stamp, precisely so the
-        // newer binary's next `open()` sees `version_older = true` and does
-        // its own migration-drop-and-refill — restoring the columns the
-        // older binary's rebuild just left NULL (see the comment on
-        // `insert_one`). Without this, that refill would depend on some
-        // unrelated future version bump instead of firing exactly once,
-        // right after the older binary's rebuild — not on every subsequent
-        // alternating open (a plain open leaves a healthy, non-dropped cache
-        // stamp alone; only an actual rebuild changes it).
-        self.set_meta(META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
+        // The deferred migration (if any) committed with the rebuild.
+        self.migration_pending.store(false, Ordering::SeqCst);
         Ok(count)
     }
 
@@ -1213,26 +1323,48 @@ impl Cache {
         store: &RequirementsStore,
         source_head_sha: &str,
     ) -> Result<usize> {
-        {
-            let conn = self.conn.lock().unwrap();
-            with_cache_write(
-                &self.path,
-                &self.lock_info_path,
-                "reset cache schema after drift",
-                || {
-                    conn.execute_batch(
-                        "DROP TABLE IF EXISTS requirements_cache;
-                     DROP TABLE IF EXISTS requirements_fts;
-                     DROP TABLE IF EXISTS hierarchy_edges;",
-                    )
-                    .context("Failed to reset cache schema after drift")?;
-                    conn.execute_batch(SCHEMA_SQL)
-                        .context("Failed to reapply cache schema after drift")?;
-                    Ok(())
-                },
-            )?;
+        // TASK-1515: the drop now commits with the refill, not before it.
+        // trace:TASK-1515 | ai:claude
+        self.rebuild_projection(store, source_head_sha, true)
+    }
+
+    /// Apply an incremental refresh to `to_head` as ONE write transaction.
+    ///
+    /// `apply` performs every changed row through the [`CacheTx`] handle and
+    /// returns `Ok(true)` when it applied them all; the `source_head_sha`
+    /// stamp is then written and everything commits together. `Ok(false)`
+    /// (the refresh declined) or `Err` rolls the whole transaction back, so
+    /// the cache is left exactly at its previous committed HEAD: a
+    /// concurrent reader never sees rows from `to_head` labelled with the old
+    /// HEAD, nor half of a refresh. The write runs under `with_cache_write`,
+    /// so a lock error re-runs `apply` from the start through the unchanged
+    /// retry ladder. Declines immediately while a schema migration is
+    /// pending (only a full rebuild may apply it).
+    // trace:TASK-1515 | ai:claude
+    pub(crate) fn apply_incremental<F>(&self, to_head: &str, mut apply: F) -> Result<bool>
+    where
+        F: FnMut(&CacheTx<'_>) -> Result<bool>,
+    {
+        if self.migration_pending() {
+            return Ok(false);
         }
-        self.rebuild_from_store(store, source_head_sha)
+        let conn = self.conn.lock().unwrap();
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "refresh cache incrementally",
+            || {
+                let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
+                let applied = apply(&CacheTx { conn: &tx })?;
+                if !applied {
+                    // Dropping `tx` rolls back every row change.
+                    return Ok(false);
+                }
+                set_meta_on(&tx, META_KEY_SOURCE_HEAD_SHA, to_head)?;
+                tx.commit()?;
+                Ok(true)
+            },
+        )
     }
 
     /// Single-row upsert called after a write-through git mutation succeeds.
@@ -1259,52 +1391,7 @@ impl Cache {
             &self.path,
             &self.lock_info_path,
             "upsert cached requirement",
-            || {
-                // Preserve the inbound axis recorded by the last full rebuild.
-                let prior_in: u32 = conn
-                    .query_row(
-                        "SELECT in_degree FROM requirements_cache WHERE id = ?1",
-                        params![req.id.to_string()],
-                        |row| row.get::<_, i64>(0),
-                    )
-                    .ok()
-                    .map(|v| v.max(0) as u32)
-                    .unwrap_or(0);
-                let (out_degree, out_heft) = own_outbound(&req.relationships);
-                // Heft over inbound edges isn't recoverable from a single row's
-                // state, so approximate the inbound contribution as 1-per-edge
-                // (the modal weight) plus the exact outbound heft. The next rebuild
-                // replaces this with the exact type-weighted value.
-                let degrees = Degrees {
-                    in_degree: prior_in,
-                    out_degree,
-                    heft: out_heft + prior_in,
-                };
-                // TASK-902: recompute THIS row's blocked flag from its BlockedBy
-                // targets' cached statuses. Mirrors pickability::blocked_by_incomplete:
-                // any BlockedBy target that isn't Completed (or is unresolvable in the
-                // cache) leaves the row blocked. trace:TASK-902 | ai:claude
-                let blocked = blocked_from_cache(&conn, req);
-                delete_one_uncommitted(&conn, &req.id)?;
-                // TASK-955: refresh THIS spec's own outbound hierarchy edges. Like
-                // the inbound-degree axis, an edge recorded on the OTHER endpoint
-                // (a child carrying `Parent -> this`) is only re-derived on a full
-                // rebuild — same rebuildable-projection contract. delete_one_uncommitted
-                // already cleared this row's outbound edges above. Written BEFORE the
-                // epic override is derived so the rollup walks this row's CURRENT
-                // edges, not the pre-write set. trace:TASK-955 trace:BUG-764
-                insert_edges(&conn, req)?;
-                // BUG-626: if the upserted row is an EPIC, its status is the derived
-                // rollup of its children — resolved through the materialized
-                // hierarchy edges (BUG-764), so child-authored edges count too. A
-                // non-epic projects its stored status (None). Propagating a child's
-                // status flip UP to its parent epic is handled by the backend
-                // wrapper; here we only freshen the epic's own row when the epic
-                // itself is the thing being written. trace:BUG-626 | ai:claude
-                let epic_override = epic_status_override_from_cache(&conn, req);
-                insert_one(&conn, req, degrees, blocked, epic_override.as_deref())?;
-                Ok(())
-            },
+            || upsert_requirement_on(&conn, req),
         )?;
         Ok(())
     }
@@ -1337,32 +1424,14 @@ impl Cache {
         stored_status: &crate::models::RequirementStatus,
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let status_str = if crate::rollup::is_terminal_epic_status(stored_status) {
-            // BUG-768: a force-closed epic is stamped BACK to its stored
-            // terminal status — the row may still carry a stale derived
-            // override from before the close, so skipping the write would
-            // leave the reopened value in place.
-            format!("{stored_status:?}")
-        } else {
-            let rollup = epic_rollup_from_hierarchy(&conn, epic_id);
-            let Some(derived) = crate::rollup::derive_epic_status_from_rollup(&rollup) else {
-                // Only-rejected (or otherwise indeterminate) children: keep the
-                // stored status already in the row.
-                return Ok(());
-            };
-            format!("{derived:?}")
+        let Some(status_str) = epic_status_to_stamp(&conn, epic_id, stored_status) else {
+            return Ok(());
         };
         with_cache_write(
             &self.path,
             &self.lock_info_path,
             "recompute epic status",
-            || {
-                conn.execute(
-                    "UPDATE requirements_cache SET status = ?1 WHERE id = ?2",
-                    params![status_str, epic_id.to_string()],
-                )?;
-                Ok(())
-            },
+            || set_epic_status_on(&conn, epic_id, &status_str),
         )?;
         Ok(())
     }
@@ -1376,26 +1445,7 @@ impl Cache {
     // trace:BUG-764 | ai:claude
     pub fn ancestor_epic_ids(&self, id: &Uuid) -> Result<Vec<Uuid>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "WITH RECURSIVE ancestors(id) AS (
-                 SELECT ?1
-                 UNION
-                 SELECT e.parent_id
-                   FROM hierarchy_edges e
-                   JOIN ancestors a ON e.child_id = a.id
-             )
-             SELECT rc.id
-               FROM requirements_cache rc
-               JOIN ancestors a ON rc.id = a.id
-              WHERE rc.id <> ?1 AND rc.req_type = 'Epic'",
-        )?;
-        let rows = stmt
-            .query_map(params![id.to_string()], |row| row.get::<_, String>(0))?
-            .collect::<rusqlite::Result<Vec<String>>>()?;
-        Ok(rows
-            .into_iter()
-            .filter_map(|s| Uuid::parse_str(&s).ok())
-            .collect())
+        ancestor_epic_ids_on(&conn, id)
     }
 
     /// Single-row delete called after a write-through git delete succeeds.
@@ -1405,17 +1455,7 @@ impl Cache {
             &self.path,
             &self.lock_info_path,
             "delete cached requirement",
-            || {
-                delete_one_uncommitted(&conn, id)?;
-                // BUG-764: the row is GONE, so every hierarchy edge touching it is
-                // dead whichever endpoint authored it — purge beyond the
-                // author-scoped delete above.
-                conn.execute(
-                    "DELETE FROM hierarchy_edges WHERE parent_id = ?1 OR child_id = ?1",
-                    params![id.to_string()],
-                )?;
-                Ok(())
-            },
+            || delete_requirement_on(&conn, id),
         )
     }
 
@@ -1717,15 +1757,7 @@ impl Cache {
     // trace:BUG-634 | ai:claude
     pub fn spec_id_for_uuid(&self, id: &Uuid) -> Result<Option<String>> {
         let conn = self.conn.lock().unwrap();
-        let spec_id = conn
-            .query_row(
-                "SELECT spec_id FROM requirements_cache WHERE id = ?1",
-                params![id.to_string()],
-                |row| row.get::<_, Option<String>>(0),
-            )
-            .optional()?
-            .flatten();
-        Ok(spec_id)
+        spec_id_for_uuid_on(&conn, id)
     }
 
     /// Cache-backed spec-id collision scan: every `(spec_id, uuid, title)` row
@@ -1838,17 +1870,7 @@ impl Cache {
     // trace:BUG-636
     pub fn uuid_for_spec_id(&self, spec_id: &str) -> Result<Option<Uuid>> {
         let conn = self.conn.lock().unwrap();
-        let id_str: Option<String> = conn
-            .query_row(
-                "SELECT id FROM requirements_cache WHERE spec_id = ?1 COLLATE NOCASE",
-                params![spec_id],
-                |row| row.get::<_, String>(0),
-            )
-            .optional()?;
-        match id_str {
-            Some(s) => Ok(Uuid::parse_str(&s).ok()),
-            None => Ok(None),
-        }
+        uuid_for_spec_id_on(&conn, spec_id)
     }
 
     /// The FULL transitive descendant id-set of `root` — the root itself plus
@@ -1965,6 +1987,93 @@ const EXPECTED_CACHE_TABLES: &[&str] = &[
     "hierarchy_edges",
     "cache_meta",
 ];
+
+/// The projection tables a schema migration drops and recreates. `cache_meta`
+/// survives so the head-SHA and version stamps keep their keys.
+// trace:BUG-764 trace:TASK-1515 | ai:claude
+const DROP_PROJECTION_SQL: &str = "DROP TABLE IF EXISTS requirements_cache;
+     DROP TABLE IF EXISTS requirements_fts;
+     DROP TABLE IF EXISTS hierarchy_edges;";
+
+/// Outcome of `Cache::open`'s empty-table migration transaction.
+// trace:TASK-1515 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmptyMigration {
+    /// Dropped, re-applied and stamped in one transaction.
+    Migrated,
+    /// Another process finished the migration first; nothing to do.
+    NoLongerNeeded,
+    /// Another process refilled the old tables first; defer the drop to the
+    /// rebuild transaction like any cache with rows.
+    NowHasRows,
+}
+
+fn current_schema_version_num() -> u64 {
+    SCHEMA_VERSION
+        .parse()
+        .expect("SCHEMA_VERSION must be a plain integer")
+}
+
+/// TASK-1478: `SCHEMA_VERSION` is a plain integer string, so compare
+/// numerically and ORDER the mismatch. Only a stamp OLDER than this binary
+/// (or an unparsable/bogus stamp, indistinguishable from "needs migration")
+/// forces a migration; a NEWER stamp is handled by the drift check alone.
+// trace:TASK-1478 trace:TASK-1515 | ai:claude
+fn schema_stamp_is_older(stamp: Option<&str>) -> bool {
+    match stamp {
+        Some(v) => match v.parse::<u64>() {
+            Ok(n) => n < current_schema_version_num(),
+            Err(_) => true,
+        },
+        None => false,
+    }
+}
+
+/// BUG-485 / BUG-627 / BUG-757: a drifted FTS table, a drifted cache table,
+/// or a partial table set all need a drop + re-apply.
+// trace:TASK-1515 | ai:claude
+fn schema_structurally_drifted(conn: &Connection) -> bool {
+    fts_schema_drifted(conn) || cache_schema_drifted(conn) || cache_tables_partial(conn)
+}
+
+/// The same migration decision `Cache::open` makes, re-evaluated on `conn`
+/// (used under the write lock to re-check an unlocked probe).
+// trace:TASK-1515 | ai:claude
+fn schema_migration_needed(conn: &Connection) -> bool {
+    let stamp: Option<String> = conn
+        .query_row(
+            "SELECT value FROM cache_meta WHERE key = ?1",
+            params![META_KEY_SCHEMA_VERSION],
+            |row| row.get::<_, String>(0),
+        )
+        .ok();
+    schema_stamp_is_older(stamp.as_deref()) || schema_structurally_drifted(conn)
+}
+
+/// True when `requirements_cache` exists and holds at least one row, i.e. a
+/// concurrent reader currently has something to lose if the tables were
+/// dropped ahead of the rebuild.
+// trace:TASK-1515 | ai:claude
+fn projection_has_rows(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM requirements_cache)",
+        [],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|v| v != 0)
+    .unwrap_or(false)
+}
+
+/// Upsert one `cache_meta` key on `conn` (which may be an open transaction).
+// trace:TASK-1515 | ai:claude
+fn set_meta_on(conn: &Connection, key: &str, value: &str) -> Result<()> {
+    conn.execute(
+        "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![key, value],
+    )?;
+    Ok(())
+}
 
 /// Count of `EXPECTED_CACHE_TABLES` that exist on disk. Read-only
 /// `sqlite_master` lookups (no write lock). FTS5 virtual tables are listed in
@@ -2380,6 +2489,151 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         // trace:TASK-1474 | ai:claude — column index 28, nullable TEXT.
         completed_at: row.get(28)?,
     })
+}
+
+/// The single-row upsert on `conn` (a plain connection or an open
+/// transaction). See [`Cache::upsert_requirement`].
+// trace:TASK-1515 | ai:claude
+fn upsert_requirement_on(conn: &Connection, req: &Requirement) -> Result<()> {
+    // Preserve the inbound axis recorded by the last full rebuild.
+    let prior_in: u32 = conn
+        .query_row(
+            "SELECT in_degree FROM requirements_cache WHERE id = ?1",
+            params![req.id.to_string()],
+            |row| row.get::<_, i64>(0),
+        )
+        .ok()
+        .map(|v| v.max(0) as u32)
+        .unwrap_or(0);
+    let (out_degree, out_heft) = own_outbound(&req.relationships);
+    // Heft over inbound edges isn't recoverable from a single row's
+    // state, so approximate the inbound contribution as 1-per-edge
+    // (the modal weight) plus the exact outbound heft. The next rebuild
+    // replaces this with the exact type-weighted value.
+    let degrees = Degrees {
+        in_degree: prior_in,
+        out_degree,
+        heft: out_heft + prior_in,
+    };
+    // TASK-902: recompute THIS row's blocked flag from its BlockedBy
+    // targets' cached statuses. Mirrors pickability::blocked_by_incomplete:
+    // any BlockedBy target that isn't Completed (or is unresolvable in the
+    // cache) leaves the row blocked. trace:TASK-902 | ai:claude
+    let blocked = blocked_from_cache(conn, req);
+    delete_one_uncommitted(conn, &req.id)?;
+    // TASK-955: refresh THIS spec's own outbound hierarchy edges. Like
+    // the inbound-degree axis, an edge recorded on the OTHER endpoint
+    // (a child carrying `Parent -> this`) is only re-derived on a full
+    // rebuild — same rebuildable-projection contract. delete_one_uncommitted
+    // already cleared this row's outbound edges above. Written BEFORE the
+    // epic override is derived so the rollup walks this row's CURRENT
+    // edges, not the pre-write set. trace:TASK-955 trace:BUG-764
+    insert_edges(conn, req)?;
+    // BUG-626: if the upserted row is an EPIC, its status is the derived
+    // rollup of its children — resolved through the materialized
+    // hierarchy edges (BUG-764), so child-authored edges count too. A
+    // non-epic projects its stored status (None). Propagating a child's
+    // status flip UP to its parent epic is handled by the backend
+    // wrapper; here we only freshen the epic's own row when the epic
+    // itself is the thing being written. trace:BUG-626 | ai:claude
+    let epic_override = epic_status_override_from_cache(conn, req);
+    insert_one(conn, req, degrees, blocked, epic_override.as_deref())?;
+    Ok(())
+}
+
+/// The status to stamp on an epic's row, or `None` to keep the row as is.
+/// See [`Cache::recompute_epic_status_from_hierarchy`].
+// trace:BUG-626 trace:BUG-764 trace:BUG-768 trace:TASK-1515 | ai:claude
+fn epic_status_to_stamp(
+    conn: &Connection,
+    epic_id: &Uuid,
+    stored_status: &crate::models::RequirementStatus,
+) -> Option<String> {
+    if crate::rollup::is_terminal_epic_status(stored_status) {
+        // BUG-768: a force-closed epic is stamped BACK to its stored
+        // terminal status — the row may still carry a stale derived
+        // override from before the close, so skipping the write would
+        // leave the reopened value in place.
+        return Some(format!("{stored_status:?}"));
+    }
+    let rollup = epic_rollup_from_hierarchy(conn, epic_id);
+    // Only-rejected (or otherwise indeterminate) children: keep the stored
+    // status already in the row.
+    crate::rollup::derive_epic_status_from_rollup(&rollup).map(|derived| format!("{derived:?}"))
+}
+
+// trace:TASK-1515 | ai:claude
+fn set_epic_status_on(conn: &Connection, epic_id: &Uuid, status: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE requirements_cache SET status = ?1 WHERE id = ?2",
+        params![status, epic_id.to_string()],
+    )?;
+    Ok(())
+}
+
+/// See [`Cache::ancestor_epic_ids`].
+// trace:BUG-764 trace:TASK-1515 | ai:claude
+fn ancestor_epic_ids_on(conn: &Connection, id: &Uuid) -> Result<Vec<Uuid>> {
+    let mut stmt = conn.prepare(
+        "WITH RECURSIVE ancestors(id) AS (
+             SELECT ?1
+             UNION
+             SELECT e.parent_id
+               FROM hierarchy_edges e
+               JOIN ancestors a ON e.child_id = a.id
+         )
+         SELECT rc.id
+           FROM requirements_cache rc
+           JOIN ancestors a ON rc.id = a.id
+          WHERE rc.id <> ?1 AND rc.req_type = 'Epic'",
+    )?;
+    let rows = stmt
+        .query_map(params![id.to_string()], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<String>>>()?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|s| Uuid::parse_str(&s).ok())
+        .collect())
+}
+
+/// See [`Cache::delete_requirement`].
+// trace:TASK-1515 | ai:claude
+fn delete_requirement_on(conn: &Connection, id: &Uuid) -> Result<()> {
+    delete_one_uncommitted(conn, id)?;
+    // BUG-764: the row is GONE, so every hierarchy edge touching it is dead
+    // whichever endpoint authored it — purge beyond the author-scoped delete
+    // above.
+    conn.execute(
+        "DELETE FROM hierarchy_edges WHERE parent_id = ?1 OR child_id = ?1",
+        params![id.to_string()],
+    )?;
+    Ok(())
+}
+
+/// See [`Cache::spec_id_for_uuid`].
+// trace:BUG-634 trace:TASK-1515 | ai:claude
+fn spec_id_for_uuid_on(conn: &Connection, id: &Uuid) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT spec_id FROM requirements_cache WHERE id = ?1",
+            params![id.to_string()],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .optional()?
+        .flatten())
+}
+
+/// See [`Cache::uuid_for_spec_id`].
+// trace:BUG-636 trace:TASK-1515 | ai:claude
+fn uuid_for_spec_id_on(conn: &Connection, spec_id: &str) -> Result<Option<Uuid>> {
+    let id_str: Option<String> = conn
+        .query_row(
+            "SELECT id FROM requirements_cache WHERE spec_id = ?1 COLLATE NOCASE",
+            params![spec_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    Ok(id_str.and_then(|s| Uuid::parse_str(&s).ok()))
 }
 
 fn delete_one_uncommitted(conn: &Connection, id: &Uuid) -> Result<()> {
@@ -6032,5 +6286,256 @@ mod tests {
         // Released at the shared location; nothing leaked beside the symlink.
         assert!(!shared_sidecar.exists());
         assert!(!worktree_sidecar.exists());
+    }
+
+    // ---------------------------------------------------------------- TASK-1515
+
+    /// A store whose every row is labelled with its build: titles are
+    /// `<label>-<k>`, so a reader can check that the rows it sees belong to
+    /// the head SHA it sees (`<label>`).
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_store(label: &str, n: usize) -> RequirementsStore {
+        let mut store = RequirementsStore::new();
+        for k in 0..n {
+            store.requirements.push(sample_req(
+                &format!("FR-1-{:03}", k + 1),
+                &format!("{label}-{k}"),
+            ));
+        }
+        store
+    }
+
+    /// One read transaction on a SEPARATE connection: the recorded head SHA,
+    /// the cached titles, and the stamped schema version.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_snapshot(conn: &Connection) -> (Option<String>, Vec<String>, Option<String>) {
+        conn.execute_batch("BEGIN").unwrap();
+        let meta = |key: &str| {
+            conn.query_row(
+                "SELECT value FROM cache_meta WHERE key = ?1",
+                params![key],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .unwrap()
+        };
+        let sha = meta(META_KEY_SOURCE_HEAD_SHA);
+        let version = meta(META_KEY_SCHEMA_VERSION);
+        let mut stmt = conn
+            .prepare("SELECT title FROM requirements_cache ORDER BY title")
+            .unwrap();
+        let titles = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        drop(stmt);
+        conn.execute_batch("COMMIT").unwrap();
+        (sha, titles, version)
+    }
+
+    /// Make every write of the `source_head_sha` stamp fail, so a test can
+    /// prove the rows roll back with it (they share one transaction).
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_fail_head_stamp(conn: &Connection, on: bool) {
+        if on {
+            conn.execute_batch(&format!(
+                "CREATE TRIGGER t1515_ins BEFORE INSERT ON cache_meta
+                   WHEN NEW.key = '{META_KEY_SOURCE_HEAD_SHA}'
+                   BEGIN SELECT RAISE(ABORT, 'task-1515 injected stamp failure'); END;
+                 CREATE TRIGGER t1515_upd BEFORE UPDATE ON cache_meta
+                   WHEN NEW.key = '{META_KEY_SOURCE_HEAD_SHA}'
+                   BEGIN SELECT RAISE(ABORT, 'task-1515 injected stamp failure'); END;"
+            ))
+            .unwrap();
+        } else {
+            conn.execute_batch("DROP TRIGGER t1515_ins; DROP TRIGGER t1515_upd;")
+                .unwrap();
+        }
+    }
+
+    // TASK-1515: the rows and the head/built_at/version stamps are ONE
+    // transaction. If the stamp fails, the rows must roll back with it; the
+    // pre-fix code committed the rows first and stamped afterwards, leaving
+    // HEAD-B rows labelled HEAD-A.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_rebuild_rows_roll_back_when_the_stamp_fails() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        cache
+            .rebuild_from_store(&task_1515_store("A", 3), "A")
+            .unwrap();
+        let built_a = cache.built_at().unwrap();
+        let reader = Connection::open(&path).unwrap();
+
+        task_1515_fail_head_stamp(&reader, true);
+        let err = cache
+            .rebuild_from_store(&task_1515_store("B", 5), "B")
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("injected"), "{err:#}");
+
+        let (sha, titles, _) = task_1515_snapshot(&reader);
+        assert_eq!(sha.as_deref(), Some("A"));
+        assert_eq!(titles, vec!["A-0", "A-1", "A-2"], "rows must roll back");
+        assert_eq!(
+            cache.built_at().unwrap(),
+            built_a,
+            "built_at rolls back too"
+        );
+
+        task_1515_fail_head_stamp(&reader, false);
+        cache
+            .rebuild_from_store(&task_1515_store("B", 5), "B")
+            .unwrap();
+        let (sha, titles, version) = task_1515_snapshot(&reader);
+        assert_eq!(sha.as_deref(), Some("B"));
+        assert_eq!(titles.len(), 5);
+        assert!(titles.iter().all(|t| t.starts_with("B-")));
+        assert_eq!(version.as_deref(), Some(SCHEMA_VERSION));
+    }
+
+    // TASK-1515: an open that needs a schema migration while the old tables
+    // still hold rows must NOT commit the drop. A reader connection held open
+    // across the migration keeps seeing the old rows (never empty tables)
+    // until the drop, schema apply, refill and stamps commit together, and a
+    // failed rebuild leaves the old tables intact.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_migration_drop_commits_with_the_rebuild_for_a_held_reader() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        {
+            let cache = Cache::open(&path).unwrap();
+            cache
+                .rebuild_from_store(&task_1515_store("A", 3), "A")
+                .unwrap();
+        }
+        let older = (current_schema_version_num() - 1).to_string();
+        let reader = Connection::open(&path).unwrap();
+        reader
+            .execute(
+                "UPDATE cache_meta SET value = ?1 WHERE key = ?2",
+                params![older, META_KEY_SCHEMA_VERSION],
+            )
+            .unwrap();
+
+        // A read transaction that stays open across the whole migration.
+        let held = Connection::open(&path).unwrap();
+        held.execute_batch("BEGIN").unwrap();
+        let held_count = |c: &Connection| -> i64 {
+            c.query_row("SELECT COUNT(*) FROM requirements_cache", [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(held_count(&held), 3);
+
+        let cache = Cache::open(&path).unwrap();
+        assert!(cache.migration_pending(), "rows present: drop is deferred");
+        assert_eq!(cache.source_head_sha().unwrap(), None, "pending = stale");
+        assert!(cache.is_stale("A").unwrap());
+        // Nothing was committed by the open: a fresh reader transaction still
+        // sees the old rows, the old head and the old stamp.
+        let (sha, titles, version) = task_1515_snapshot(&reader);
+        assert_eq!(sha.as_deref(), Some("A"));
+        assert_eq!(titles, vec!["A-0", "A-1", "A-2"], "never empty tables");
+        assert_eq!(version.as_deref(), Some(older.as_str()));
+        // A second open (another process) re-detects the same migration.
+        assert!(Cache::open(&path).unwrap().migration_pending());
+
+        // A rebuild that fails at its stamp rolls back the drop as well.
+        task_1515_fail_head_stamp(&reader, true);
+        cache
+            .rebuild_from_store(&task_1515_store("B", 4), "B")
+            .unwrap_err();
+        let (sha, titles, version) = task_1515_snapshot(&reader);
+        assert_eq!(sha.as_deref(), Some("A"));
+        assert_eq!(titles, vec!["A-0", "A-1", "A-2"]);
+        assert_eq!(version.as_deref(), Some(older.as_str()));
+        assert!(cache.migration_pending());
+        task_1515_fail_head_stamp(&reader, false);
+
+        cache
+            .rebuild_from_store(&task_1515_store("B", 4), "B")
+            .unwrap();
+        assert!(!cache.migration_pending());
+        assert_eq!(cache.source_head_sha().unwrap().as_deref(), Some("B"));
+        // The held snapshot still sees the old committed rows...
+        assert_eq!(held_count(&held), 3);
+        held.execute_batch("COMMIT").unwrap();
+        // ...and the next one sees the fully rebuilt tables and stamps.
+        let (sha, titles, version) = task_1515_snapshot(&held);
+        assert_eq!(sha.as_deref(), Some("B"));
+        assert_eq!(titles, vec!["B-0", "B-1", "B-2", "B-3"]);
+        assert_eq!(version.as_deref(), Some(SCHEMA_VERSION));
+        assert!(!Cache::open(&path).unwrap().migration_pending());
+    }
+
+    // TASK-1515: a second connection reading continuously while rebuilds
+    // (some of them schema migrations) commit must only ever see a complete
+    // build: never empty tables, never rows of one build labelled with
+    // another build's head SHA, never a partial row set.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_concurrent_reader_never_sees_mixed_heads_or_empty_tables() {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::Arc;
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let rows_for = |i: usize| 2 + i % 4;
+        {
+            let cache = Cache::open(&path).unwrap();
+            cache
+                .rebuild_from_store(&task_1515_store("g0", rows_for(0)), "g0")
+                .unwrap();
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        let reads = Arc::new(AtomicUsize::new(0));
+        let reader = {
+            let (path, stop, reads) = (path.clone(), stop.clone(), reads.clone());
+            std::thread::spawn(move || {
+                let conn = Connection::open(&path).unwrap();
+                while !stop.load(Ordering::SeqCst) {
+                    let (sha, titles, _) = task_1515_snapshot(&conn);
+                    let sha = sha.expect("a committed build always carries its head");
+                    let i: usize = sha[1..].parse().unwrap();
+                    assert_eq!(titles.len(), rows_for(i), "partial/empty build {sha}");
+                    assert!(
+                        titles.iter().all(|t| t.starts_with(&format!("{sha}-"))),
+                        "rows from another build labelled {sha}: {titles:?}"
+                    );
+                    reads.fetch_add(1, Ordering::SeqCst);
+                }
+            })
+        };
+        let older = (current_schema_version_num() - 1).to_string();
+        let writer_meta = Connection::open(&path).unwrap();
+        for i in 1..=24 {
+            if i % 3 == 0 {
+                // Force a deferred migration on the next open.
+                writer_meta
+                    .execute(
+                        "UPDATE cache_meta SET value = ?1 WHERE key = ?2",
+                        params![older, META_KEY_SCHEMA_VERSION],
+                    )
+                    .unwrap();
+            }
+            let cache = Cache::open(&path).unwrap();
+            assert_eq!(cache.migration_pending(), i % 3 == 0);
+            let label = format!("g{i}");
+            cache
+                .rebuild_from_store(&task_1515_store(&label, rows_for(i)), &label)
+                .unwrap();
+            // Give the reader a chance to observe this committed build.
+            let seen = reads.load(Ordering::SeqCst);
+            let deadline = std::time::Instant::now() + Duration::from_secs(2);
+            while reads.load(Ordering::SeqCst) == seen && std::time::Instant::now() < deadline {
+                std::thread::yield_now();
+            }
+        }
+        stop.store(true, Ordering::SeqCst);
+        reader.join().expect("reader saw an inconsistent snapshot");
+        assert!(reads.load(Ordering::SeqCst) > 0);
     }
 }
