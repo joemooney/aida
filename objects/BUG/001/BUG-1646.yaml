@@ -1,0 +1,25 @@
+id: 01a0dd25-323d-7181-a0c1-f869b868f067
+spec_id: BUG-1646
+agreed_id: BUG-1646
+title: 'Cross-platform nightly red 3 nights on Windows: four test failures (mock-agent.sh spawn, backslash path in hand-written lease TOML, usage fixture home)'
+description: |-
+  Nightly run 36130453436 (and the two before it): Build (windows-latest) fails with 4 test failures.
+  1. bug_1607_reviewer_vendor_tests::review_spec_resolve_and_launch_uses_codex_for_codex_only_project (:173) and ::run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree_exists (:128): spawning mock-agent.sh fails with 'os error 193 (%1 is not a valid Win32 application)'. The tests need to be unix-gated, or use the portable mock-agent helper that other launch tests use.
+  2. queue_rework_tests::requeue_gate_reads_mcp_claims_like_pickup (:1823): the lease mcp-claim.*.toml fails to parse because worktree_path is written into a TOML basic string with raw backslashes ('invalid unicode 8-digit hex code' at C:\Users\...). First find out whether the production writer or only the test fixture builds lease TOML by string formatting. If production does it, that is a real Windows bug: serialize with toml/serde.
+  3. usage_cmd::usage_timeline_tests::timeline_reads_fixture_usage_log_not_real_home (usage_cmd.rs:647): 0 rows instead of 2. On Windows the fixture home redirect isn't honoured (HOME vs USERPROFILE / crate::home_dir()).
+  Acceptance: all four pass on windows-latest (confirm with a workflow_dispatch of Cross-platform (nightly) on the branch); the portability ratchet gains a rule for the class if feasible.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T09:56:37.565291972Z
+modified_at: 2026-09-26T09:56:37.565291972Z
+req_type: Bug
+filed_at:
+  code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
