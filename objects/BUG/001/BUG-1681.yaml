@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:51:56.911021216Z
-modified_at: 2026-09-26T22:51:56.911021216Z
+modified_at: 2026-09-26T22:56:31.853138660Z
 req_type: Bug
+comments:
+- id: 01a0dfef-386d-79a3-8fb7-6b6bf8f43c90
+  author: joe
+  content: 'Scope additions: from BUG-1656 — attribute a stale lease to a subagent only when a live subagent''s cwd/branch matches the lease''s worktree, end an adopted lease when the subagent ends (not the parent), and show possibly_subagent in aida awaiting''s TOON columns; from BUG-1672 review — order verdict files by their recorded_at field (mtime only as fallback).'
+  created_at: 2026-09-26T22:56:31.853138660Z
+  modified_at: 2026-09-26T22:56:31.853138660Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: b9a986e9fbe3912a0415963c8344ddca4830b700
   branch: main
