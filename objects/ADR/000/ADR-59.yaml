@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:33:14.475824967Z
-modified_at: 2026-09-26T18:36:01.456880166Z
+modified_at: 2026-09-26T18:36:30.779521034Z
 req_type: Decision
 tags:
 - decision-record
@@ -30,6 +30,10 @@ relationships:
 - rel_type: References
   target_id: 01a0c4d5-5cc9-7171-bd5a-d9720d8eff29
   created_at: 2026-09-26T18:36:01.456874112Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0defd-af81-7282-a696-59f70cf334c2
+  created_at: 2026-09-26T18:36:30.779510880Z
   created_by: joe
 filed_at:
   code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
