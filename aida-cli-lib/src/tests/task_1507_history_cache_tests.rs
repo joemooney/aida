@@ -1091,7 +1091,7 @@ fn collect_filtered_events_is_served_from_the_index_when_enabled() {
     history_cache::set_test_serve_enabled(true);
     let records = crate::history::collect_event_records(&store, &o);
     history_cache::set_test_serve_enabled(false);
-    let (records, _) = records.unwrap();
+    let records = records.unwrap().events;
     let expected: Vec<_> = walk
         .iter()
         .map(|e| serde_json::to_value(crate::history::event_record(e)).unwrap())

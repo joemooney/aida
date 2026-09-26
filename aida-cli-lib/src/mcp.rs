@@ -2590,16 +2590,22 @@ impl<'a> McpServer<'a> {
             // visible (the CLI-only default-view hide doesn't apply here).
             exclude_meta: false,
         };
-        let (events, window_exhausted) = history::collect_event_records(self.storage.path(), &opts)
+        let records = history::collect_event_records(self.storage.path(), &opts)
             .map_err(|e| e.to_string())?;
         // BUG-1617: tell a caller when the default commit window ran out
         // before `limit` events were found, so a short `events` array reads
         // as "there may be more — widen the window" rather than "that's
         // everything." trace:BUG-1617 | ai:claude
+        // TASK-1505 slice 2: additive provenance. `source` says whether the
+        // history index or a git walk answered; `index_tip` is the store
+        // commit an index answer reflects (null for a walk).
+        // trace:TASK-1508 | ai:claude
         serde_json::to_string_pretty(&json!({
-            "count": events.len(),
-            "events": events,
-            "window_exhausted": window_exhausted,
+            "count": records.events.len(),
+            "events": records.events,
+            "window_exhausted": records.window_exhausted,
+            "source": records.source.as_str(),
+            "index_tip": records.source.index_tip(),
         }))
         .map_err(|e| e.to_string())
     }
@@ -7418,7 +7424,7 @@ pub fn tool_descriptors() -> Value {
                 }
             },
             "outputSchema": text_envelope_output_schema(
-                "pretty-printed JSON `{ count, events, window_exhausted }`, where each event has `sha`, `timestamp`, `author`, `spec_id`, `req_type`, `kind`, `summary`, and structured `detail` fields. `window_exhausted` is true when the commit walk hit its cap before `count` reached the requested `limit` — there may be older matching events beyond it; a caller who needs them should narrow with `since`/`until`, since the MCP tool has no `max_commits` override of its own."
+                "pretty-printed JSON `{ count, events, window_exhausted, source, index_tip }`, where each event has `sha`, `timestamp`, `author`, `spec_id`, `req_type`, `kind`, `summary`, and structured `detail` fields. `window_exhausted` is true when the commit walk hit its cap before `count` reached the requested `limit` — there may be older matching events beyond it; a caller who needs them should narrow with `since`/`until`, since the MCP tool has no `max_commits` override of its own. `source` is `history-cache` when the rebuildable history index answered or `git-walk` when the store's git log was read directly (the index was off, still filling, or could not prove it held the whole answer); both return the same events. `index_tip` is the full store commit SHA an index answer reflects, or null for `git-walk`."
             )
         },
 
@@ -8771,6 +8777,67 @@ mod tests {
             parsed.get("count").and_then(Value::as_u64).unwrap_or(0) >= 1,
             "expected at least the one status-change event, got: {parsed}"
         );
+    }
+
+    /// TASK-1505 slice 2: the `history` tool reports where its answer came
+    /// from. With the index switched on it answers from the index as of the
+    /// store HEAD (`source: history-cache`, `index_tip: <HEAD>`); switched
+    /// off it walks git (`source: git-walk`, `index_tip: null`), and the
+    /// events are the same either way. The store lives one level down in the
+    /// temp dir so the index file lands inside it.
+    // trace:TASK-1508 | ai:claude
+    #[test]
+    fn task_1508_mcp_history_reports_source_field() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("proj").join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let git = |args: &[&str]| -> String {
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(&store_root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+        git(&["config", "commit.gpgsign", "false"]);
+        let full = store_root.join("objects/BUG/000/BUG-1.yaml");
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(&full, "spec_id: BUG-1\ntitle: t\nstatus: Draft\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "seed"]);
+        std::fs::write(&full, "spec_id: BUG-1\ntitle: t\nstatus: Approved\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "flip"]);
+        let head = git(&["rev-parse", "HEAD"]);
+
+        let storage = Storage::new(&store_root);
+        let server = McpServer::new(&storage, dir.path().to_path_buf());
+        let call = || -> Value {
+            serde_json::from_str(&server.tool_history(&json!({"limit": 5})).unwrap()).unwrap()
+        };
+
+        crate::history_cache::set_test_serve_enabled(true);
+        let served = call();
+        crate::history_cache::set_test_serve_enabled(false);
+        assert_eq!(served["source"], json!("history-cache"), "{served}");
+        assert_eq!(served["index_tip"], json!(head), "{served}");
+
+        let walked = call();
+        assert_eq!(walked["source"], json!("git-walk"), "{walked}");
+        assert_eq!(walked["index_tip"], Value::Null, "{walked}");
+        assert_eq!(served["events"], walked["events"]);
+        assert_eq!(served["count"], walked["count"]);
+        assert_eq!(served["window_exhausted"], walked["window_exhausted"]);
     }
 
     #[test]

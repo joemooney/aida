@@ -146,7 +146,10 @@ pub(crate) fn set_test_serve_enabled(on: bool) {
     TEST_SERVE_ENABLED.with(|c| c.set(on));
 }
 
-fn cache_enabled() -> bool {
+/// Whether the index is switched on for this process (`AIDA_HISTORY_CACHE`).
+/// Callers use it to tell "switched off" from "could not answer".
+// trace:TASK-1508 | ai:claude
+pub(crate) fn cache_enabled() -> bool {
     #[cfg(test)]
     {
         if !TEST_SERVE_ENABLED.with(|c| c.get()) {
@@ -1004,12 +1007,11 @@ pub(crate) struct CacheAnswer {
     pub(crate) hidden_archived: usize,
     pub(crate) window_exhausted: bool,
     /// The store commit the answer was served from.
-    #[allow(dead_code)]
     pub(crate) tip: String,
 }
 
 /// What `aida cache status` shows about the history index.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct HistoryCacheStatus {
     pub(crate) path: PathBuf,
     pub(crate) exists: bool,

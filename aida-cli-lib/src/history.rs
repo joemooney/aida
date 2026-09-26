@@ -376,7 +376,8 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         return run_digest(store_path, opts);
     }
 
-    let (filtered, hidden_archived, window_exhausted) = collect_filtered_events(store_path, opts)?;
+    let (filtered, hidden_archived, window_exhausted, source) =
+        collect_filtered_events_sourced(store_path, opts)?;
 
     if filtered.is_empty() {
         eprintln!("{}", "(no events match the filter)".dimmed());
@@ -390,6 +391,7 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
             );
         }
         print_window_exhausted_notice(opts, window_exhausted, filtered.len());
+        print_fallback_footer(&source);
         return Ok(());
     }
 
@@ -418,8 +420,78 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     }
 
     print_window_exhausted_notice(opts, window_exhausted, filtered.len());
+    print_fallback_footer(&source);
 
     Ok(())
+}
+
+/// Where a history answer came from. MCP reports it as `source` (plus
+/// `index_tip`); a human terminal gets a footer only on a fallback.
+// trace:TASK-1508 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HistorySource {
+    /// Served from the history index, as of this store commit.
+    Index { tip: String },
+    /// Read by walking the store's git log. `fallback` is true when the
+    /// index was switched on but could not answer (a miss or an error),
+    /// false when it was switched off with `AIDA_HISTORY_CACHE=0`.
+    GitWalk { fallback: bool },
+}
+
+impl HistorySource {
+    /// The machine-readable `source` value.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            HistorySource::Index { .. } => "history-cache",
+            HistorySource::GitWalk { .. } => "git-walk",
+        }
+    }
+
+    /// The store commit an index-served answer reflects; `None` for a walk.
+    pub fn index_tip(&self) -> Option<&str> {
+        match self {
+            HistorySource::Index { tip } => Some(tip),
+            HistorySource::GitWalk { .. } => None,
+        }
+    }
+}
+
+/// Records for MCP and other programmatic consumers, with provenance.
+// trace:TASK-1508 | ai:claude
+#[derive(Debug, Clone)]
+pub struct EventRecords {
+    pub events: Vec<HistoryEventRecord>,
+    pub window_exhausted: bool,
+    pub source: HistorySource,
+}
+
+/// The dim footer a human sees when the fast path could not answer and the
+/// slower full read did. `None` when the index answered, when it was
+/// switched off on purpose (then the slow read is expected, not news), or
+/// for agent/piped output (`agent_mode`), which stays script-clean like the
+/// other `(...)` hints; MCP reports `source` instead.
+// trace:TASK-1508 | ai:claude
+pub(crate) fn fallback_footer_text(
+    source: &HistorySource,
+    agent_mode: bool,
+) -> Option<&'static str> {
+    if agent_mode {
+        return None;
+    }
+    match source {
+        HistorySource::GitWalk { fallback: true } => Some(
+            "(answered from the full change history, not the faster saved copy — this can take longer)",
+        ),
+        _ => None,
+    }
+}
+
+/// Print [`fallback_footer_text`] on stderr (human terminal only).
+// trace:TASK-1508 | ai:claude
+fn print_fallback_footer(source: &HistorySource) {
+    if let Some(msg) = fallback_footer_text(source, crate::agent_output_mode()) {
+        eprintln!("{}", msg.dimmed());
+    }
 }
 
 /// BUG-1617: `aida history events` bounds its `git log` walk to
@@ -485,11 +557,15 @@ fn run_single_spec_progress(store_path: &Path, opts: &HistoryOpts) -> Result<()>
         .as_deref()
         .expect("run_single_spec_progress requires opts.id_filter");
 
-    let (mut filtered, _hidden_archived, _window_exhausted) =
-        collect_filtered_events(store_path, opts)?;
+    let (mut filtered, _hidden_archived, _window_exhausted, source) =
+        collect_filtered_events_sourced(store_path, opts)?;
 
     if filtered.is_empty() {
-        return report_empty_single_spec(store_path, opts, id);
+        let out = report_empty_single_spec(store_path, opts, id);
+        if out.is_ok() {
+            print_fallback_footer(&source);
+        }
+        return out;
     }
 
     // Oldest-first: see the doc comment above.
@@ -499,6 +575,7 @@ fn run_single_spec_progress(store_path: &Path, opts: &HistoryOpts) -> Result<()>
         for e in &filtered {
             println!("{}", format_oneline(e));
         }
+        print_fallback_footer(&source);
         return Ok(());
     }
 
@@ -539,6 +616,7 @@ fn run_single_spec_progress(store_path: &Path, opts: &HistoryOpts) -> Result<()>
             ", or --comments for comment history"
         }
     );
+    print_fallback_footer(&source);
 
     Ok(())
 }
@@ -594,15 +672,13 @@ fn current_snapshot(store_path: &Path, spec_id: &str) -> (Option<String>, String
 
 /// Collect structured event records using the same filters as
 /// `aida history events`. Intended for MCP and other non-TTY consumers.
-/// Returns `(records, window_exhausted)` — see [`collect_filtered_events`]
-/// for what `window_exhausted` means; MCP surfaces it as a top-level JSON
-/// field so a caller can tell "fewer results" from "that's everything."
+/// Returns the records, `window_exhausted` (see [`collect_filtered_events`];
+/// MCP surfaces it as a top-level JSON field so a caller can tell "fewer
+/// results" from "that's everything") and where the answer came from.
 // trace:TASK-538 | ai:codex
 // trace:BUG-1617 | ai:claude
-pub fn collect_event_records(
-    store_path: &Path,
-    opts: &HistoryOpts,
-) -> Result<(Vec<HistoryEventRecord>, bool)> {
+// trace:TASK-1508 | ai:claude
+pub fn collect_event_records(store_path: &Path, opts: &HistoryOpts) -> Result<EventRecords> {
     if !store_path.is_dir() {
         anyhow::bail!(
             "Not a git-canonical AIDA store: {}\n\
@@ -616,8 +692,13 @@ pub fn collect_event_records(
     // relative-duration acceptance and since/until validation as the CLI.
     let (resolved_opts, _since_at, _until_at) =
         resolve_history_window(opts, chrono::Utc::now(), &chrono::Local)?;
-    let (events, _, window_exhausted) = collect_filtered_events(store_path, &resolved_opts)?;
-    Ok((events.iter().map(event_record).collect(), window_exhausted))
+    let (events, _, window_exhausted, source) =
+        collect_filtered_events_sourced(store_path, &resolved_opts)?;
+    Ok(EventRecords {
+        events: events.iter().map(event_record).collect(),
+        window_exhausted,
+        source,
+    })
 }
 
 /// Returns `(events, archived_hidden_count, window_exhausted)`.
@@ -633,17 +714,45 @@ fn collect_filtered_events(
     store_path: &Path,
     opts: &HistoryOpts,
 ) -> Result<(Vec<Event>, usize, bool)> {
+    let (events, hidden, exhausted, _source) = collect_filtered_events_sourced(store_path, opts)?;
+    Ok((events, hidden, exhausted))
+}
+
+/// [`collect_filtered_events`] plus where the answer came from.
+// trace:TASK-1508 | ai:claude
+fn collect_filtered_events_sourced(
+    store_path: &Path,
+    opts: &HistoryOpts,
+) -> Result<(Vec<Event>, usize, bool, HistorySource)> {
+    // Switched off (`AIDA_HISTORY_CACHE=0`): the walk is the chosen path,
+    // not a fallback, so no footer is owed.
+    if !crate::history_cache::cache_enabled() {
+        let (events, hidden, exhausted) = collect_filtered_events_git(store_path, opts)?;
+        return Ok((
+            events,
+            hidden,
+            exhausted,
+            HistorySource::GitWalk { fallback: false },
+        ));
+    }
     // The history index answers only when it provably holds the whole
-    // answer; on a miss, an error, or when disabled it returns `None` and
-    // the git walk below (the canonical source) answers instead.
+    // answer; on a miss or an error it returns `None` and the git walk
+    // below (the canonical source) answers instead.
     if let Some(answer) = crate::history_cache::serve(store_path, opts) {
         return Ok((
             answer.events,
             answer.hidden_archived,
             answer.window_exhausted,
+            HistorySource::Index { tip: answer.tip },
         ));
     }
-    collect_filtered_events_git(store_path, opts)
+    let (events, hidden, exhausted) = collect_filtered_events_git(store_path, opts)?;
+    Ok((
+        events,
+        hidden,
+        exhausted,
+        HistorySource::GitWalk { fallback: true },
+    ))
 }
 
 /// The git-walk implementation of [`collect_filtered_events`]: the
