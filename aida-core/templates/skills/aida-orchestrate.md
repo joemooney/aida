@@ -293,6 +293,9 @@ an **already-enabled** scheduled job.
   inherited artifact looks fabricated, reopen it with a CORRECTION comment.
 - **Look before deleting.** Inspect a stray file first, and say why you removed
   it.
+- **Exactly one orchestrator per repo.** If you find a second one, the later
+  session stands down: it stops its duplicate agents and hands its items to the
+  earlier one through the handoff and a direct message.
 
 ## Context and handoff
 
@@ -302,10 +305,22 @@ state:
 
 ```bash
 aida session handoff --seat orchestrator --write - <<'EOF'
-Goal; batch flow; MERGED; IN FLIGHT (spec, worktree, branch, review state);
-AWAITING OPERATOR; DEFERRED (+trigger); CLOSURE-PENDING (+trigger); known flakes.
+Goal; batch flow; MERGED; IN FLIGHT (spec, worktree, branch, head sha, review
+state, PR/run ids); AWAITING OPERATOR; DEFERRED (+trigger); CLOSURE-PENDING
+(+trigger); known flakes.
 EOF
 ```
+
+**Rotating out** (context ceiling or restart): dispatch nothing new; stop or let
+finish every subagent, background shell and waiter until none is running; run
+`/goal clear` if a goal is set; write the handoff **last**; then tell the
+operator to exit with **Exit and stop tasks**, never "Move to background". A
+backgrounded session keeps driving the loop. Find one with `claude agents`
+and stop it with `claude stop <id>`.
+
+**Taking over:** before acting on the handoff, check for a live predecessor
+(`claude agents`, `ListAgents`, `aida ps`). If one is still running, message it
+and ask the operator; do not start a second loop.
 
 ## Report to the operator
 

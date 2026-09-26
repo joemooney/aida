@@ -434,6 +434,9 @@ an **already-enabled** scheduled job.
   refused.
 - **Look before deleting.** Inspect a stray file first, and say why you removed
   it.
+- **Exactly one orchestrator per repo.** If you find a second one, the later
+  session stands down: it stops its duplicate agents and hands its items to the
+  earlier one through the handoff and a direct message.
 
 ## Context and handoff
 
@@ -443,10 +446,21 @@ Refresh the handoff after every batch so a restart never loses state:
 
 ```bash
 aida session handoff --seat orchestrator --write - <<'EOF'
-Goal; batch flow; MERGED; IN FLIGHT (spec, worktree, branch, session, vendor, review state);
-AWAITING OPERATOR; DEFERRED (+trigger); CLOSURE-PENDING (+trigger); known flakes.
+Goal; batch flow; MERGED; IN FLIGHT (spec, worktree, branch, head sha, session,
+vendor, review state, PR/run ids); AWAITING OPERATOR; DEFERRED (+trigger);
+CLOSURE-PENDING (+trigger); known flakes.
 EOF
 ```
+
+**Rotating out** (context ceiling or restart): dispatch nothing new; stop or let
+finish every child session, background job and waiter until none is running;
+clear any standing goal; write the handoff **last**; then exit and stop every
+background task. Do not background the session: a backgrounded orchestrator
+keeps driving the loop.
+
+**Taking over:** before acting on the handoff, check for a live predecessor
+(`aida ps`, plus the harness's own session list). If one is still running,
+message it and ask the operator; do not start a second loop.
 
 ## Report to the operator
 
