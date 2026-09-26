@@ -15,8 +15,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T03:17:13.020743486Z
-modified_at: 2026-09-26T05:26:42.501177406Z
+modified_at: 2026-09-26T05:27:08.108907930Z
 req_type: Bug
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a0da43-e25a-7f40-86bb-c2a662aaff4e
+  created_at: 2026-09-26T05:27:08.108900684Z
+  created_by: joe
 comments:
 - id: 01a0dbb7-c06e-74a3-91a9-fa5808833894
   author: joe
