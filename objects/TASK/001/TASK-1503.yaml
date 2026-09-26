@@ -18,12 +18,17 @@ description: |
   - `aida scaffold upgrade` and a re-run of `aida init` respect the manifest: neither recreates a delivered skill the user deleted.
   - `aida doctor` does not report a delivered-then-deleted skill as missing-skill scaffold drift, and does not recommend `aida scaffold upgrade` for it.
   - The manifest fails closed as in STORY-1475: only a missing manifest means "nothing delivered". Any other read error creates nothing and prints a warning, and the manifest is written atomically.
+
+
+  ## Groomed decision (proxy, 2026-09-25)
+  - Opt-out is carried by the manifest only: deleting a delivered skill is the opt-out, and it sticks. No persisted [scaffold] include_* setting in this task.
+  - The manifest is per pack DIRECTORY, not hard-wired to .codex/.antigravity, so BUG-1639's move to .agents/skills reuses it unchanged. Test: the manifest works for an arbitrary pack root.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:29:48.596407578Z
-modified_at: 2026-09-25T06:03:55.919386307Z
+modified_at: 2026-09-26T05:23:33.796115633Z
 req_type: Task
 tags:
 - antigravity
