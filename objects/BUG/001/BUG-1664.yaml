@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:41.976532939Z
-modified_at: 2026-09-26T18:38:08.176892071Z
+modified_at: 2026-09-26T18:46:21.327919462Z
 req_type: Bug
 comments:
 - id: 01a0dea0-83d9-7411-a92c-03b338a22c1e
@@ -22,6 +22,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): moved to the head of the implementer queue (high priority; a stale snapshot can delete live queue entries). Ordering only; the in-flight work is untouched.'
   created_at: 2026-09-26T18:38:08.176892071Z
   modified_at: 2026-09-26T18:38:08.176892071Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0df0a-2d8f-75a1-9bce-dc1846fe194c
+  author: joe
+  content: 'Main-exposure check: main IS exposed through the foreign-writer skip in ensure_cache_fresh_for_read. The new fixtures make the cache stale without any lock error (the cache is current, another writer commits straight to the store, and a live foreign writer (pid 1) holds the cache lock-info sidecar, so reads serve the old rows). With the re-validation disabled, which restores main''s behavior (queue gc/list self-heal: no re-check; archive paths: archived-flag-only re-check), queue gc and queue list self-heal delete the reopened spec''s live entry, and archive --older-than and the post-pull sweep archive the reopened spec and the recently edited spec. Fix: every mutating sweep re-reads the YAML object (get_requirement -> targeted object read) and re-checks status, the archived flag and age before acting; skipped candidates are reported. Mutation proof: M1 (queue re-check disabled) was caught by 2 queue tests; M2 (status clause) and M3 (age clause) were each caught by 3 archive tests.'
+  created_at: 2026-09-26T18:46:21.327919462Z
+  modified_at: 2026-09-26T18:46:21.327919462Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0dea0-73c7-7152-b2a2-38b2b6faa2df
