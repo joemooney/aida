@@ -27,6 +27,8 @@ fn review_lease(id: &str, scope: &str, creator_pid: Option<u32>) -> SessionLease
         review_verb: true,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 

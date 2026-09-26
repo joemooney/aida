@@ -70,6 +70,16 @@ pub(crate) enum DispatchState {
     /// hand-entered spec starts a SECOND session competing with the human.
     // trace:BUG-778 | ai:claude
     AwaitingAgent,
+    /// The drain wave that ran this session was STOPPED (SIGTERM: systemd
+    /// `RuntimeMaxSec` / `OOMPolicy=stop`, `aida drain stop --now`, a manual
+    /// kill) and its handler stamped the lease `interrupted_at` before
+    /// releasing the drain lock. The process is gone and the tree is clean —
+    /// not a crash, not a stall: an interrupted session whose worktree is
+    /// intact and whose next step is the ordinary resume. A dirty tree still
+    /// reads [`Salvageable`](Self::Salvageable): the diff at risk outranks the
+    /// provenance of the death.
+    // trace:TASK-1518 | ai:claude
+    Stopped,
 }
 
 impl DispatchState {
@@ -83,7 +93,32 @@ impl DispatchState {
             DispatchState::Unknown => "unknown",
             // trace:BUG-778 | ai:claude
             DispatchState::AwaitingAgent => "awaiting-agent",
+            // trace:TASK-1518 | ai:claude
+            DispatchState::Stopped => "stopped",
         }
+    }
+}
+
+/// TASK-1518: fold the lease's interruption stamp into the classified state.
+/// A drain stopped by SIGTERM stamps `interrupted_at` on its in-flight leases
+/// as it releases the drain lock; a lease so stamped whose process is
+/// demonstrably gone and whose tree is clean (the [`DispatchState::Stalled`]
+/// dead-process arm) reads [`DispatchState::Stopped`] instead — an
+/// interrupted session with an intact worktree, not a crashed agent. Every
+/// other state is unchanged: a dirty tree keeps its salvage urgency, a live
+/// process (the wave's vendor child outliving a manual kill) keeps its
+/// movement reading, and undeterminable liveness stays unknown. Pure so the
+/// matrix is unit-testable on fixtures.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn apply_interruption(
+    state: DispatchState,
+    pid_alive: Option<bool>,
+    interrupted: bool,
+) -> DispatchState {
+    if interrupted && state == DispatchState::Stalled && pid_alive == Some(false) {
+        DispatchState::Stopped
+    } else {
+        state
     }
 }
 
@@ -351,6 +386,14 @@ pub(crate) fn next_command_hint(
         }
         DispatchState::Stalled => Some(format!(
             "no branch/dirty movement in {wt} (branch {branch}, last commit \"{last_commit}\") — resume/rebrief: {rebrief}"
+        )),
+        // TASK-1518: the wave was stopped, not crashed — the drain's SIGTERM
+        // handler released the lock and marked this lease on the way out, so
+        // the worktree is intact and the next step is the plain resume.
+        // trace:TASK-1518 | ai:claude
+        DispatchState::Stopped => Some(format!(
+            "drain wave stopped — nothing running in {wt} (branch {branch}, last commit \"{last_commit}\"), \
+             worktree intact — resume/rebrief: {rebrief}"
         )),
         // BUG-752: no pid was recorded and the worktree probe can't see a
         // harness-hosted worker — liveness is unknown, NOT dead. Never emit

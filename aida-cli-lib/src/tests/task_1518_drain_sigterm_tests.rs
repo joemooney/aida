@@ -3,9 +3,12 @@
 //! time; nothing changes without a signal.
 //!
 //! The protocol tests drive `run_handler` through an `mpsc` channel with a
-//! recording exit so the whole first-signal → grace → second-signal/deadline
-//! sequence runs in-process. One Unix test sends a REAL SIGTERM to this
-//! process (the "fake drain") through `install`.
+//! recording exit and a private term flag, so the whole first-signal → grace
+//! → second-signal/deadline sequence runs in-process without a real signal
+//! and without touching process-wide state. The one REAL-signal test re-execs
+//! this test binary as a child (the "fake drain"), which installs the handler
+//! and SIGTERMs itself; the parent only inspects the child's exit status and
+//! the files it left. Sibling tests in this process never see the signal.
 //
 // trace:TASK-1518 | ai:claude
 
@@ -16,11 +19,12 @@ use std::time::Instant;
 
 const SIGTERM: i32 = 15;
 
-/// A project root with the drain lock recorded for `pid`, two leases (one
-/// created by `pid`, one by another process) and no stop request.
-fn fake_drain(pid: u32) -> tempfile::TempDir {
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path();
+/// Env var carrying the fake drain's project root to the re-exec'd child.
+const CHILD_ROOT_ENV: &str = "AIDA_TEST_TASK_1518_SIGTERM_ROOT";
+
+/// Populate `root` as a fake drain: the drain lock recorded for `pid`, two
+/// leases (one created by `pid`, one by another process) and no stop request.
+fn populate_fake_drain(root: &Path, pid: u32) {
     std::fs::create_dir_all(root.join(".aida").join("sessions")).unwrap();
     let lock = DrainLock {
         pid,
@@ -42,6 +46,12 @@ fn fake_drain(pid: u32) -> tempfile::TempDir {
     .unwrap();
     write_lease(root, "aaaa11112222", pid, "TASK-1");
     write_lease(root, "bbbb33334444", pid.wrapping_add(100_000), "TASK-2");
+}
+
+/// A fresh temp root populated by [`populate_fake_drain`].
+fn fake_drain(pid: u32) -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().unwrap();
+    populate_fake_drain(tmp.path(), pid);
     tmp
 }
 
@@ -73,13 +83,40 @@ fn stop_path(root: &Path) -> PathBuf {
     crate::drain_cmd::drain_stop_path(root)
 }
 
-fn ctx(root: &Path, grace: Duration) -> DrainTermContext {
-    DrainTermContext {
+/// The stamp as the production lease reader (`list_leases` → `SessionLease`)
+/// sees it: `(interrupted_at, interrupted_reason)`, or `None` when the lease
+/// is unstamped or does not parse.
+fn lease_interruption(path: &Path) -> Option<(String, String)> {
+    let body = std::fs::read_to_string(path).ok()?;
+    let lease: crate::SessionLease = toml::from_str(&body).ok()?;
+    let at = lease.interrupted_at?;
+    Some((
+        at.to_rfc3339(),
+        lease.interrupted_reason.unwrap_or_default(),
+    ))
+}
+
+/// A private term flag per test, so no test flips the process-wide one.
+fn private_flag() -> &'static AtomicBool {
+    Box::leak(Box::new(AtomicBool::new(false)))
+}
+
+/// A context over an empty (but live) slot; the slot is returned so the
+/// caller keeps it alive for the handler's lifetime.
+fn ctx(
+    root: &Path,
+    grace: Duration,
+    term_flag: &'static AtomicBool,
+) -> (GuardSlot, DrainTermContext) {
+    let slot: GuardSlot = Arc::new(Mutex::new(None));
+    let ctx = DrainTermContext {
         project_root: root.to_path_buf(),
         drain_pid: std::process::id(),
-        guard: Arc::new(Mutex::new(None)),
+        guard: Arc::downgrade(&slot),
         grace,
-    }
+        term_flag,
+    };
+    (slot, ctx)
 }
 
 /// Recording exit: the handler's `exit` stores the code instead of leaving
@@ -126,7 +163,7 @@ fn task_1518_first_term_writes_stop_request_and_releases_lock_file() {
     let root = tmp.path();
     let slot: GuardSlot = Arc::new(Mutex::new(None));
 
-    let report = on_first_term(root, pid, &slot);
+    let report = on_first_term(root, pid, &Arc::downgrade(&slot));
     assert!(report.stop_requested);
     assert!(stop_path(root).exists());
     let stop = std::fs::read_to_string(stop_path(root)).unwrap();
@@ -137,6 +174,11 @@ fn task_1518_first_term_writes_stop_request_and_releases_lock_file() {
         !drain_lock_path(root).exists(),
         "the drain lock must be released"
     );
+
+    // Idempotent: a second pass releases nothing and marks nothing.
+    let again = on_first_term(root, pid, &Arc::downgrade(&slot));
+    assert!(!again.lock_released);
+    assert!(again.leases_marked.is_empty());
 }
 
 /// A lock recorded for ANOTHER pid is never removed (the same ownership rule
@@ -148,7 +190,7 @@ fn task_1518_first_term_never_removes_a_lock_it_does_not_own() {
     let root = tmp.path();
     let slot: GuardSlot = Arc::new(Mutex::new(None));
 
-    let report = on_first_term(root, std::process::id(), &slot);
+    let report = on_first_term(root, std::process::id(), &Arc::downgrade(&slot));
     assert!(!report.lock_released);
     assert!(drain_lock_path(root).exists());
     assert!(report.leases_marked.is_empty());
@@ -166,13 +208,36 @@ fn task_1518_first_term_drops_the_guard_in_the_slot() {
     assert!(drain_lock_path(root).exists());
     let slot: GuardSlot = Arc::new(Mutex::new(Some(guard)));
 
-    let report = on_first_term(root, std::process::id(), &slot);
+    let report = on_first_term(root, std::process::id(), &Arc::downgrade(&slot));
     assert!(report.lock_released);
     assert!(
         slot.lock().unwrap().is_none(),
         "the guard must have been dropped"
     );
     assert!(!drain_lock_path(root).exists());
+}
+
+/// The handler only holds a Weak handle: once the dispatch arm has dropped
+/// the slot (normal return — the guard's own Drop already released the
+/// lock), a signal finds nothing to release and removes nothing.
+#[test]
+fn task_1518_first_term_after_the_slot_is_gone_releases_nothing() {
+    let _env = crate::drain_lock::test_env_isolation();
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    let guard = crate::drain_lock::acquire_drain_lock(root, "queue work --auto-complete").unwrap();
+    let slot: GuardSlot = Arc::new(Mutex::new(Some(guard)));
+    let handle = Arc::downgrade(&slot);
+    drop(slot);
+    assert!(
+        !drain_lock_path(root).exists(),
+        "dropping the slot drops the guard exactly as before"
+    );
+    assert!(handle.upgrade().is_none());
+
+    let report = on_first_term(root, std::process::id(), &handle);
+    assert!(!report.lock_released);
 }
 
 // --- Protocol ---------------------------------------------------------------
@@ -186,7 +251,8 @@ fn task_1518_second_sigterm_forces_exit_after_bookkeeping() {
     let root = tmp.path().to_path_buf();
     let (tx, rx) = mpsc::channel::<i32>();
     let (exit_code, exit) = recording_exit();
-    let ctx = ctx(&root, Duration::from_secs(3600));
+    let flag = private_flag();
+    let (_slot, ctx) = ctx(&root, Duration::from_secs(3600), flag);
 
     let handler = std::thread::spawn(move || run_handler(rx, ctx, exit));
     tx.send(SIGTERM).unwrap();
@@ -211,8 +277,8 @@ fn task_1518_second_sigterm_forces_exit_after_bookkeeping() {
     handler.join().unwrap();
     assert_eq!(*exit_code.lock().unwrap(), Some(SIGTERM_EXIT_CODE));
     assert_ne!(SIGTERM_EXIT_CODE, 0);
-    assert!(term_requested());
-    assert_eq!(stop_exit_code(0), SIGTERM_EXIT_CODE);
+    assert!(flag.load(Ordering::SeqCst));
+    assert_eq!(stop_exit_code_for(flag, 0), SIGTERM_EXIT_CODE);
 }
 
 /// Acceptance (2): the grace deadline forces the exit without a second
@@ -224,7 +290,7 @@ fn task_1518_grace_deadline_forces_exit() {
     let root = tmp.path().to_path_buf();
     let (tx, rx) = mpsc::channel::<i32>();
     let (exit_code, exit) = recording_exit();
-    let ctx = ctx(&root, Duration::from_millis(300));
+    let (_slot, ctx) = ctx(&root, Duration::from_millis(300), private_flag());
 
     let started = Instant::now();
     let handler = std::thread::spawn(move || run_handler(rx, ctx, exit));
@@ -249,7 +315,8 @@ fn task_1518_other_signals_are_ignored() {
     let root = tmp.path().to_path_buf();
     let (tx, rx) = mpsc::channel::<i32>();
     let (exit_code, exit) = recording_exit();
-    let ctx = ctx(&root, Duration::from_millis(200));
+    let flag = private_flag();
+    let (_slot, ctx) = ctx(&root, Duration::from_millis(200), flag);
 
     let handler = std::thread::spawn(move || run_handler(rx, ctx, exit));
     tx.send(1).unwrap(); // SIGHUP
@@ -264,11 +331,12 @@ fn task_1518_other_signals_are_ignored() {
     handler.join().unwrap();
     assert!(exit_code.lock().unwrap().is_none());
     assert!(drain_lock_path(&root).exists());
+    assert!(!flag.load(Ordering::SeqCst));
 }
 
 /// Acceptance (3): no behaviour change without a signal — an installed
 /// handler whose source closes untouched does nothing to lock, leases or
-/// stop request, and never exits.
+/// stop request, never exits, and leaves the stop exit code alone.
 #[test]
 fn task_1518_no_signal_means_no_change() {
     let pid = std::process::id();
@@ -276,7 +344,8 @@ fn task_1518_no_signal_means_no_change() {
     let root = tmp.path().to_path_buf();
     let (tx, rx) = mpsc::channel::<i32>();
     let (exit_code, exit) = recording_exit();
-    let ctx = ctx(&root, Duration::from_millis(100));
+    let flag = private_flag();
+    let (_slot, ctx) = ctx(&root, Duration::from_millis(100), flag);
 
     let handler = std::thread::spawn(move || run_handler(rx, ctx, exit));
     drop(tx);
@@ -286,42 +355,170 @@ fn task_1518_no_signal_means_no_change() {
     assert!(drain_lock_path(&root).exists());
     assert!(lease_interruption(&lease_path(&root, "aaaa11112222")).is_none());
     assert!(!stop_path(&root).exists());
+    assert_eq!(stop_exit_code_for(flag, 0), 0);
+    assert_eq!(stop_exit_code_for(flag, 7), 7);
 }
 
 /// The grace window comes from the env, with a sane fallback.
 #[test]
 fn task_1518_grace_env_parses_and_falls_back() {
-    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_DRAIN_TERM_GRACE_SECS", "7")]);
+    let env = crate::test_env::EnvVarsGuard::set(&[("AIDA_DRAIN_TERM_GRACE_SECS", "7")]);
     assert_eq!(grace_from_env(), Duration::from_secs(7));
-    drop(_env);
-    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_DRAIN_TERM_GRACE_SECS", "soon")]);
+    drop(env);
+    let env = crate::test_env::EnvVarsGuard::set(&[("AIDA_DRAIN_TERM_GRACE_SECS", "soon")]);
     assert_eq!(grace_from_env(), Duration::from_secs(DEFAULT_GRACE_SECS));
-    drop(_env);
+    drop(env);
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_DRAIN_TERM_GRACE_SECS", None)]);
     assert_eq!(grace_from_env(), Duration::from_secs(DEFAULT_GRACE_SECS));
 }
 
-/// Acceptance (1) with a REAL signal: `install` registers the handler, a
-/// SIGTERM to this process (the fake drain) releases the lock and marks the
-/// lease. The grace is an hour so the forced exit never reaches the test
-/// binary; signal-hook keeps SIGTERM caught for the rest of the process, so
-/// the default terminate action can no longer fire either.
-#[cfg(unix)]
+// --- The reader: `aida ps` --------------------------------------------------
+
+/// The stamp survives the production lease parser, and the `aida ps` row
+/// built over it reads STOPPED (wave stopped, worktree intact, plain resume)
+/// where the same unstamped lease reads STALLED with the dead-process hint.
 #[test]
-fn task_1518_real_sigterm_releases_lock_and_marks_leases() {
+fn task_1518_ps_reads_a_marked_lease_as_stopped_not_dead() {
     let pid = std::process::id();
     let tmp = fake_drain(pid);
-    let root = tmp.path().to_path_buf();
+    let root = tmp.path();
+    // Give the drain-created lease a real (clean, existing) worktree so the
+    // dispatch probe has something to classify.
+    let wt = root.join("wt-task-1");
+    std::fs::create_dir_all(&wt).unwrap();
+    let raw = std::fs::read_to_string(lease_path(root, "aaaa11112222")).unwrap();
+    let raw = raw.replace(
+        "worktree_path = \"/tmp/none\"",
+        &format!("worktree_path = \"{}\"", wt.display()),
+    );
+    std::fs::write(lease_path(root, "aaaa11112222"), raw).unwrap();
+
+    let before = crate::list_leases(root)
+        .into_iter()
+        .find(|l| l.id == "aaaa11112222")
+        .unwrap();
+    assert!(before.interrupted_at.is_none());
+
+    assert_eq!(
+        mark_in_flight_leases_interrupted(root, pid),
+        vec!["aaaa11112222".to_string()]
+    );
+    let after = crate::list_leases(root)
+        .into_iter()
+        .find(|l| l.id == "aaaa11112222")
+        .expect("the stamped lease still parses");
+    assert!(after.interrupted_at.is_some(), "the reader sees the mark");
+    assert_eq!(after.interrupted_reason.as_deref(), Some(REASON_SIGTERM));
+
+    let specs = vec![crate::RunningWorkSpec {
+        disp: "TASK-1".into(),
+        agreed_id: Some("TASK-1".into()),
+        spec_id: Some("TASK-1".into()),
+        title: "stopped wave".into(),
+        in_progress: true,
+        orphan_excluded_type: false,
+    }];
+    let now = chrono::Utc::now();
+    let rows_for = |lease: crate::SessionLease| {
+        let (rows, _orphans) = crate::build_running_work(
+            &specs,
+            &[lease],
+            &[],
+            now,
+            |_| crate::dispatch_health_ps::WorktreeGitProbe::default(),
+            |_| None,
+            |_| None,
+            |_| None,
+            |_| None,
+            |_| crate::MailIdentityStatus::Unknown,
+            |_, _| crate::SeatActivity::Unknown,
+        );
+        rows
+    };
+
+    // No live process backs either lease (creator_pid is this test's pid,
+    // but a plain session lease is classified by its worktree, where no
+    // live claude sits), so the only difference is the stamp.
+    let stopped = rows_for(after);
+    assert_eq!(stopped.len(), 1);
+    let d = stopped[0].dispatch.as_ref().unwrap();
+    assert_eq!(d.state, crate::dispatch_health_ps::DispatchState::Stopped);
+    assert_eq!(d.state.label(), "stopped");
+    let hint = d.hint.as_deref().unwrap();
+    assert!(hint.contains("drain wave stopped"), "{hint}");
+    assert!(hint.contains("aida queue work TASK-1"), "{hint}");
+    assert!(!hint.contains("dead process"), "{hint}");
+
+    let stalled = rows_for(before);
+    let d = stalled[0].dispatch.as_ref().unwrap();
+    assert_eq!(d.state, crate::dispatch_health_ps::DispatchState::Stalled);
+}
+
+/// The post-filter's matrix: only the dead-process, clean-tree reading is
+/// re-framed; a dirty tree keeps its salvage urgency, a live or unknown
+/// process keeps its reading, and an unstamped lease is untouched.
+#[test]
+fn task_1518_interruption_only_reframes_the_dead_clean_stalled_arm() {
+    use crate::dispatch_health_ps::{apply_interruption, DispatchState as S};
+    assert_eq!(
+        apply_interruption(S::Stalled, Some(false), true),
+        S::Stopped
+    );
+    assert_eq!(
+        apply_interruption(S::Stalled, Some(false), false),
+        S::Stalled
+    );
+    assert_eq!(apply_interruption(S::Stalled, Some(true), true), S::Stalled);
+    assert_eq!(apply_interruption(S::Stalled, None, true), S::Stalled);
+    assert_eq!(
+        apply_interruption(S::Salvageable, Some(false), true),
+        S::Salvageable
+    );
+    assert_eq!(apply_interruption(S::Moving, Some(true), true), S::Moving);
+    assert_eq!(apply_interruption(S::Unknown, None, true), S::Unknown);
+    assert_eq!(
+        apply_interruption(S::AwaitingAgent, Some(false), true),
+        S::AwaitingAgent
+    );
+    let hint = crate::dispatch_health_ps::next_command_hint(
+        S::Stopped,
+        Path::new("/wt/x"),
+        "claude/x",
+        None,
+        Some("TASK-9"),
+        false,
+    )
+    .unwrap();
+    assert!(hint.contains("aida queue work TASK-9"), "{hint}");
+}
+
+// --- A real signal, in a child process --------------------------------------
+
+/// The child half of the real-signal test. Inert unless the parent set
+/// [`CHILD_ROOT_ENV`]; then this process IS the fake drain: it installs the
+/// handler, SIGTERMs itself, checks the bookkeeping landed, and waits for
+/// the grace deadline to force the exit (status 143). Reaching the end of
+/// the function means the forced exit never came.
+#[cfg(unix)]
+#[test]
+fn task_1518_real_sigterm_child_body() {
+    let Some(root) = std::env::var_os(CHILD_ROOT_ENV).map(PathBuf::from) else {
+        return;
+    };
+    let pid = std::process::id();
+    populate_fake_drain(&root, pid);
+    let slot: GuardSlot = Arc::new(Mutex::new(None));
     install(DrainTermContext {
         project_root: root.clone(),
         drain_pid: pid,
-        guard: Arc::new(Mutex::new(None)),
-        grace: Duration::from_secs(3600),
+        guard: Arc::downgrade(&slot),
+        grace: Duration::from_secs(1),
+        term_flag: process_term_flag(),
     })
     .unwrap();
 
     // SAFETY: signalling our own pid with a signal we have just registered a
-    // handler for.
+    // handler for, in a process that exists only for this test.
     unsafe {
         libc::kill(pid as libc::pid_t, libc::SIGTERM);
     }
@@ -337,4 +534,50 @@ fn task_1518_real_sigterm_releases_lock_and_marks_leases() {
     assert!(lease_interruption(&lease_path(&root, "aaaa11112222")).is_some());
     assert!(lease_interruption(&lease_path(&root, "bbbb33334444")).is_none());
     assert!(stop_path(&root).exists());
+    assert!(process_term_flag().load(Ordering::SeqCst));
+
+    // The grace deadline must now force process::exit(143) from the handler.
+    std::thread::sleep(Duration::from_secs(10));
+    panic!("the grace deadline did not force the exit");
+}
+
+/// Acceptance (1) and (2) with a REAL signal, isolated from every sibling
+/// test: re-exec this test binary filtered to the child body above, with
+/// the fake drain's root in the env. The child catches its own SIGTERM,
+/// releases the lock, marks the lease, and is forced out by the grace
+/// deadline with status 143; an uncaught SIGTERM would instead end it by
+/// signal, and a failed assertion would end it with the harness's 101.
+#[cfg(unix)]
+#[test]
+fn task_1518_real_sigterm_in_a_child_process_releases_lock_and_marks_leases() {
+    use std::os::unix::process::ExitStatusExt as _;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_path_buf();
+    let exe = std::env::current_exe().unwrap();
+    let output = std::process::Command::new(exe)
+        .args(["real_sigterm_child_body", "--nocapture", "--test-threads=1"])
+        .env(CHILD_ROOT_ENV, &root)
+        .env_remove("AIDA_DRAIN_TERM_GRACE_SECS")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(SIGTERM_EXIT_CODE),
+        "child must be forced out with 143 (signal: {:?})\nstdout:\n{stdout}\nstderr:\n{stderr}",
+        output.status.signal()
+    );
+    assert!(
+        !drain_lock_path(&root).exists(),
+        "the child's real SIGTERM must release the lock"
+    );
+    let (_, reason) = lease_interruption(&lease_path(&root, "aaaa11112222")).unwrap();
+    assert_eq!(reason, REASON_SIGTERM);
+    assert!(lease_interruption(&lease_path(&root, "bbbb33334444")).is_none());
+    assert!(stop_path(&root).exists());
+    assert!(
+        stderr.contains("SIGTERM: stop requested"),
+        "the child must report the bookkeeping:\n{stderr}"
+    );
 }

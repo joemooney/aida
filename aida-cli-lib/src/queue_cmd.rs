@@ -6153,11 +6153,12 @@ pub(crate) fn handle_queue_command(
                 // and its leases for the next tick to reap. The guard moves into a
                 // shared slot so the SIGTERM handler can release it properly
                 // (heartbeat, shared claim, pid-checked file) and stamp the
-                // in-flight leases before the bounded exit. Without a signal the
-                // slot behaves exactly like the plain guard did: dropped at the end
-                // of this arm, or left to the atexit hook on `process::exit`.
-                // Advisory install: a failure to register the handler only means
-                // today's kill-then-reap recovery. trace:TASK-1518 | ai:claude
+                // in-flight leases before the bounded exit. The handler holds only
+                // a Weak handle, so without a signal the slot behaves exactly like
+                // the plain guard did: dropped at the end of this arm, or left to
+                // the atexit hook on `process::exit`. Advisory install: a failure
+                // to register the handler only means today's kill-then-reap
+                // recovery. trace:TASK-1518 | ai:claude
                 let _drain_guard: crate::drain_signal::GuardSlot =
                     std::sync::Arc::new(std::sync::Mutex::new(_drain_guard));
                 if !*resume_dry_run {
@@ -6166,8 +6167,9 @@ pub(crate) fn handle_queue_command(
                             crate::drain_signal::install(crate::drain_signal::DrainTermContext {
                                 project_root: root,
                                 drain_pid: std::process::id(),
-                                guard: std::sync::Arc::clone(&_drain_guard),
+                                guard: std::sync::Arc::downgrade(&_drain_guard),
                                 grace: crate::drain_signal::grace_from_env(),
+                                term_flag: crate::drain_signal::process_term_flag(),
                             })
                         {
                             eprintln!(

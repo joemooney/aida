@@ -1237,8 +1237,11 @@ stop request (no further head is picked up), stamps `interrupted_at` /
 *interrupted* lease, not an abandoned one), and releases the drain lock. It
 then waits up to `AIDA_DRAIN_TERM_GRACE_SECS` (default 30) for the in-flight
 phase to land; a second SIGTERM or the end of that window forces the exit
-with `143`. Without a signal nothing changes. Unix only; on Windows the stop
-paths are unchanged (next-tick reap). <!-- trace:TASK-1518 | ai:claude -->
+with `143`. `aida ps` reads the mark: a marked lease with no live process and
+a clean worktree shows as `stopped` (worktree intact; resume with the usual
+`aida queue work <spec>`) rather than as a dead agent. Without a signal
+nothing changes. Unix only; on Windows the stop paths are unchanged
+(next-tick reap). <!-- trace:TASK-1518 | ai:claude -->
 
 Exit `2` is the EPIC-28 signal: "the drain did its job — independents shipped,
 failures parked — but you have triage to do." Scripts that wrap a batch

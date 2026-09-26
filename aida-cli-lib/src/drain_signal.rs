@@ -39,7 +39,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use crate::drain_lock::DrainGuard;
@@ -61,18 +61,25 @@ pub(crate) const REASON_SIGTERM: &str = "sigterm";
 
 /// Set once the first SIGTERM has been handled. Read by the batch loop's
 /// stop-request return so a drain that winds down cooperatively still exits
-/// non-zero (a stopped wave is not a clean drain).
+/// non-zero (a stopped wave is not a clean drain). The handler reaches it
+/// through [`DrainTermContext::term_flag`] so tests drive a private flag and
+/// never flip this process-wide one under sibling tests.
 static TERM_REQUESTED: AtomicBool = AtomicBool::new(false);
 
-/// True once a SIGTERM has been handled in this process.
-pub(crate) fn term_requested() -> bool {
-    TERM_REQUESTED.load(Ordering::SeqCst)
+/// The process-wide "a SIGTERM was handled" flag, for the production context.
+pub(crate) fn process_term_flag() -> &'static AtomicBool {
+    &TERM_REQUESTED
 }
 
 /// The exit code a cooperative stop should report: `default` normally,
-/// [`SIGTERM_EXIT_CODE`] when the stop came from SIGTERM.
+/// [`SIGTERM_EXIT_CODE`] once a SIGTERM has been handled in this process.
 pub(crate) fn stop_exit_code(default: i32) -> i32 {
-    if term_requested() {
+    stop_exit_code_for(process_term_flag(), default)
+}
+
+/// [`stop_exit_code`] over an explicit flag (the testable form).
+pub(crate) fn stop_exit_code_for(term_flag: &AtomicBool, default: i32) -> i32 {
+    if term_flag.load(Ordering::SeqCst) {
         SIGTERM_EXIT_CODE
     } else {
         default
@@ -96,6 +103,12 @@ pub(crate) fn grace_from_env() -> Duration {
 /// file out from under a live guard.
 pub(crate) type GuardSlot = Arc<Mutex<Option<DrainGuard>>>;
 
+/// The handler's view of the slot: a `Weak` so the parked handler thread
+/// never keeps the guard alive. When the dispatch arm returns normally the
+/// slot's only strong reference drops, the guard drops exactly as it did
+/// before this module existed, and a later signal finds nothing to release.
+pub(crate) type GuardHandle = Weak<Mutex<Option<DrainGuard>>>;
+
 /// What the first SIGTERM's bookkeeping did — returned so a test (and the
 /// stderr line) can say exactly what was cleaned up.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -112,8 +125,11 @@ pub(crate) struct TermReport {
 pub(crate) struct DrainTermContext {
     pub(crate) project_root: PathBuf,
     pub(crate) drain_pid: u32,
-    pub(crate) guard: GuardSlot,
+    pub(crate) guard: GuardHandle,
     pub(crate) grace: Duration,
+    /// Raised after the first SIGTERM's bookkeeping; production passes
+    /// [`process_term_flag`].
+    pub(crate) term_flag: &'static AtomicBool,
 }
 
 /// Where the handler's signals come from. Production wraps a signal-hook
@@ -220,7 +236,7 @@ where
         }
     }
 
-    TERM_REQUESTED.store(true, Ordering::SeqCst);
+    ctx.term_flag.store(true, Ordering::SeqCst);
     let report = on_first_term(&ctx.project_root, ctx.drain_pid, &ctx.guard);
     eprintln!(
         "  {} SIGTERM: stop requested; {} lease(s) marked interrupted; drain lock {}; \
@@ -257,7 +273,11 @@ where
 /// slot: stop request, lease stamps, lock release. Every step is
 /// best-effort and independent so a failure in one never skips the others.
 // trace:TASK-1518 | ai:claude
-pub(crate) fn on_first_term(project_root: &Path, drain_pid: u32, guard: &GuardSlot) -> TermReport {
+pub(crate) fn on_first_term(
+    project_root: &Path,
+    drain_pid: u32,
+    guard: &GuardHandle,
+) -> TermReport {
     let stop_requested =
         crate::drain_cmd::write_stop_request(project_root, REASON_SIGTERM, Some(drain_pid)).is_ok();
     let leases_marked = mark_in_flight_leases_interrupted(project_root, drain_pid);
@@ -269,13 +289,23 @@ pub(crate) fn on_first_term(project_root: &Path, drain_pid: u32, guard: &GuardSl
     }
 }
 
-/// Drop the guard if the slot still holds it (the proper release), then
-/// remove a local lock file that still records our pid (covers a borrowed
-/// or already-taken slot). True when either step released something.
-fn release_drain_lock(project_root: &Path, guard: &GuardSlot) -> bool {
-    let dropped = match guard.lock() {
-        Ok(mut slot) => slot.take().is_some(),
-        Err(poisoned) => poisoned.into_inner().take().is_some(),
+/// Drop the guard if the slot is still alive and still holds it (the proper
+/// release), then remove a local lock file that still records our pid
+/// (covers a borrowed or already-taken slot). Idempotent: a second call finds
+/// an empty slot and no file of ours. True when either step released
+/// something. Never touches a lock recorded for another pid.
+fn release_drain_lock(project_root: &Path, guard: &GuardHandle) -> bool {
+    let dropped = match guard.upgrade() {
+        Some(slot) => {
+            let taken = match slot.lock() {
+                Ok(mut slot) => slot.take(),
+                Err(poisoned) => poisoned.into_inner().take(),
+            };
+            // Dropped here, outside the slot's critical section: the guard's
+            // Drop joins the heartbeat thread and releases the shared claim.
+            taken.is_some()
+        }
+        None => false,
     };
     let removed = crate::drain_lock::release_lock_if_ours(project_root);
     dropped || removed
@@ -286,7 +316,9 @@ fn release_drain_lock(project_root: &Path, guard: &GuardSlot) -> bool {
 /// stamp yet. Patched as generic TOML key inserts (the `manual_enter_at`
 /// pattern) so keys this binary does not model survive the round-trip.
 /// Returns the ids stamped, sorted. Unreadable or unparseable leases are
-/// skipped, never deleted.
+/// skipped, never deleted. The reader is `SessionLease::interrupted_at`:
+/// `aida ps` classifies a stamped lease with no live process as `stopped`
+/// (a wave that was stopped, resumable) rather than a dead agent.
 // trace:TASK-1518 | ai:claude
 pub(crate) fn mark_in_flight_leases_interrupted(
     project_root: &Path,
@@ -327,40 +359,24 @@ pub(crate) fn mark_in_flight_leases_interrupted(
             "interrupted_reason".to_string(),
             toml::Value::String(REASON_SIGTERM.to_string()),
         );
+        let id = table
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                path.file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            });
         let Ok(content) = toml::to_string_pretty(&value) else {
             continue;
         };
         if aida_core::write_atomic(&path, &content).is_ok() {
-            let id = table
-                .get("id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| {
-                    path.file_stem()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_default()
-                });
             marked.push(id);
         }
     }
     marked.sort();
     marked
-}
-
-/// Read a lease file's interruption stamp, if any: `(interrupted_at,
-/// interrupted_reason)`. For readers such as `aida ps` / the reaper that
-/// want to tell a stopped wave's lease from an abandoned one.
-// trace:TASK-1518 | ai:claude
-pub(crate) fn lease_interruption(path: &Path) -> Option<(String, String)> {
-    let body = std::fs::read_to_string(path).ok()?;
-    let value: toml::Value = toml::from_str(&body).ok()?;
-    let at = value.get("interrupted_at")?.as_str()?.to_string();
-    let reason = value
-        .get("interrupted_reason")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    Some((at, reason))
 }
 
 #[cfg(test)]

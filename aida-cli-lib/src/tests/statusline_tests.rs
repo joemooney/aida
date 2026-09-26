@@ -5393,6 +5393,8 @@ fn entry_scope_session_match_decision_table() {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
 
     // No routing tags = visible everywhere.
@@ -5762,6 +5764,8 @@ fn parent_project_root_for_session_returns_recorded_parent() {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
     std::fs::write(
         leases.join("abcdef123456.toml"),

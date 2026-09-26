@@ -780,6 +780,8 @@ fn implementer_lease(scope: &str) -> SessionLease {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 
@@ -1629,6 +1631,8 @@ fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 
