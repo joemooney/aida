@@ -567,6 +567,8 @@ fn supervisor_requeue_with<B: DatabaseBackend>(
         reason: Some(format!(
             "supervised re-drive {attempt}/{max_attempts} after transient `{cause}`"
         )),
+        // The supervisor's requeue is automated. trace:BUG-1632 | ai:claude
+        automated: true,
     };
     let (outcome, _) = crate::requeue::return_to_flight_in_backend(
         backend,
@@ -1009,6 +1011,49 @@ mod tests {
         req.spec_id = Some(spec.to_string());
         req.modified_at = chrono::Utc::now() - chrono::Duration::minutes(mins_ago);
         backend.add_requirement(req).unwrap()
+    }
+
+    // BUG-1632: the supervisor's requeue records its NeedsAttention ->
+    // Approved transition under an automated author, so a merge with a clone
+    // that rejected the spec meanwhile keeps Rejected instead of letting the
+    // newer requeue win. trace:BUG-1632 | ai:claude
+    #[test]
+    fn supervisor_requeue_never_regresses_a_terminal_status_on_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+        let base = stored_park(&backend, "STORY-1", 60);
+        let applied = supervisor_requeue_with(
+            &backend,
+            base.id,
+            "STORY-1",
+            "watchdog",
+            1,
+            3,
+            &mut |_| Ok(()),
+            &mut |_, _, _| {},
+        )
+        .unwrap();
+        assert!(matches!(applied, RedriveApply::Applied));
+        let requeued = backend.get_requirement(&base.id).unwrap().unwrap();
+        assert_eq!(requeued.status, RequirementStatus::Approved);
+        let author = requeued
+            .history
+            .iter()
+            .rev()
+            .find(|h| h.changes.iter().any(|c| c.field_name == "status"))
+            .map(|h| h.author.clone());
+        assert_eq!(author.as_deref(), Some("aida-supervisor"));
+
+        let mut rejected = base.clone();
+        rejected.status = RequirementStatus::Rejected;
+        rejected.modified_at = base.modified_at + chrono::Duration::minutes(1);
+        assert!(requeued.modified_at > rejected.modified_at);
+        for merged in [
+            aida_core::conflict::merge_spec_three_way(&base, &requeued, &rejected),
+            aida_core::conflict::merge_spec_three_way(&base, &rejected, &requeued),
+        ] {
+            assert_eq!(merged.status, RequirementStatus::Rejected);
+        }
     }
 
     // B1: the attempt record is written BEFORE the status change. When it

@@ -46438,14 +46438,7 @@ fn shelve_spec_on_failure(
     // never reached InProgress (a phase-0 setup failure) still record the
     // FailureReason so the operator sees it, but skip the status flip so
     // we don't fight the guard.
-    let flip_status = aida_core::forbidden_attention_transition(
-        &req.status,
-        &aida_core::RequirementStatus::NeedsAttention,
-    )
-    .is_none();
-    if flip_status {
-        req.status = aida_core::RequirementStatus::NeedsAttention;
-    }
+    shelve_status_flip(&mut req);
     req.failure_reason = Some(fr.clone());
     req.modified_at = now;
     backend.update_requirement(&req)?;
@@ -46461,6 +46454,34 @@ fn shelve_spec_on_failure(
     record_role_activity(&display_id, "shelve");
 
     Ok(Some(fr))
+}
+
+/// The shelve's status flip: `NeedsAttention` when the STORY-332 transition
+/// guard allows it (from In Progress or Done), otherwise no change, so a
+/// terminal spec is never moved. Returns whether the status changed.
+///
+/// BUG-1632: the shelve is an automated write, so the flip is recorded in the
+/// status history under [`aida_core::conflict::ORCHESTRATOR_SHELVE_AUTHOR`].
+/// The BUG-1625 merge guard then keeps a terminal status another clone reached
+/// meanwhile instead of letting this newer NeedsAttention win.
+// trace:EPIC-28 trace:BUG-1632 | ai:claude
+fn shelve_status_flip(req: &mut aida_core::Requirement) -> bool {
+    if aida_core::forbidden_attention_transition(
+        &req.status,
+        &aida_core::RequirementStatus::NeedsAttention,
+    )
+    .is_some()
+    {
+        return false;
+    }
+    let from = req.status.clone();
+    req.status = aida_core::RequirementStatus::NeedsAttention;
+    aida_core::conflict::record_status_transition(
+        req,
+        aida_core::conflict::ORCHESTRATOR_SHELVE_AUTHOR,
+        &from,
+    );
+    req.status != from
 }
 
 /// TASK-133: undo the orchestrator parent's pre-spawn phase-1 status bump.
@@ -73181,6 +73202,11 @@ mod bug_1609_gitlab_reviewer_preflight_tests;
 #[cfg(test)]
 #[path = "tests/queue_rework_tests.rs"]
 mod queue_rework_tests;
+
+// trace:BUG-1632 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1632_status_writer_tests.rs"]
+mod bug_1632_status_writer_tests;
 
 #[cfg(test)]
 #[path = "tests/eval_subcommand_hint_tests.rs"]

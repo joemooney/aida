@@ -202,6 +202,25 @@ pub(crate) struct ReturnCtx {
     /// The triage reason. It goes into the audit note and nowhere else, so
     /// the spec never carries the same reason twice.
     pub reason: Option<String>,
+    /// True only for a door no person or agent decided on (the re-drive
+    /// supervisor). The status history entry is then authored
+    /// [`aida_core::conflict::SUPERVISOR_REQUEUE_AUTHOR`], which the BUG-1625
+    /// merge guard treats as automated; every other door records `author`, so
+    /// an intentional return still wins a merge exactly as before.
+    // trace:BUG-1632 | ai:claude
+    pub automated: bool,
+}
+
+impl ReturnCtx {
+    /// Author of the status history entry [`return_to_flight`] records.
+    // trace:BUG-1632 | ai:claude
+    pub(crate) fn status_history_author(&self) -> &str {
+        if self.automated {
+            aida_core::conflict::SUPERVISOR_REQUEUE_AUTHOR
+        } else {
+            &self.author
+        }
+    }
 }
 
 /// What [`return_to_flight`] did to the copy it was handed.
@@ -263,6 +282,10 @@ pub(crate) fn return_to_flight(
     }
     let from = req.status.clone();
     req.set_status_from_str(&format!("{target:?}"));
+    // BUG-1632: record the transition in the status history so the BUG-1625
+    // merge guard can tell an automated requeue (supervisor) from a person's.
+    // trace:BUG-1632 | ai:claude
+    aida_core::conflict::record_status_transition(req, ctx.status_history_author(), &from);
     let cleared = if from == RequirementStatus::NeedsAttention
         && req.status != RequirementStatus::NeedsAttention
     {
@@ -744,6 +767,7 @@ mod tests {
             author: "tester".into(),
             clear_escalation: true,
             reason: reason.map(str::to_string),
+            automated: false, // trace:BUG-1632 | ai:claude
         }
     }
 

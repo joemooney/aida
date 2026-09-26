@@ -953,6 +953,31 @@ fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> S
     out
 }
 
+/// The MCP `post_punt` status flip: `NeedsAttention` when the STORY-332
+/// transition guard allows it (from In Progress or Done), otherwise no change,
+/// so a terminal spec is never moved. Returns whether the status changed.
+///
+/// BUG-1632: an agent's punt is an automated write, so the flip is recorded in
+/// the status history under [`aida_core::conflict::MCP_PUNT_AUTHOR`]; the
+/// BUG-1625 merge guard then keeps a terminal status another clone reached
+/// meanwhile.
+// trace:BUG-334 trace:BUG-1632 | ai:claude
+pub(crate) fn mcp_punt_status_flip(req: &mut aida_core::Requirement) -> bool {
+    if aida_core::forbidden_attention_transition(
+        &req.status,
+        &aida_core::RequirementStatus::NeedsAttention,
+    )
+    .is_some()
+    {
+        return false;
+    }
+    let from = req.status.clone();
+    req.status = aida_core::RequirementStatus::NeedsAttention;
+    aida_core::conflict::record_status_transition(req, aida_core::conflict::MCP_PUNT_AUTHOR, &from);
+    req.modified_at = Utc::now();
+    true
+}
+
 impl<'a> McpServer<'a> {
     fn new(storage: &'a Storage, project_root: PathBuf) -> Self {
         // trace:STORY-474 | ai:claude — resolve the active profile from env /
@@ -3087,18 +3112,8 @@ impl<'a> McpServer<'a> {
             .get_requirement_unambiguous_mut(spec)
             .map_err(|e| e.to_string())?
         {
-            Some(req)
-                if aida_core::forbidden_attention_transition(
-                    &req.status,
-                    &aida_core::RequirementStatus::NeedsAttention,
-                )
-                .is_none() =>
-            {
-                req.status = aida_core::RequirementStatus::NeedsAttention;
-                req.modified_at = Utc::now();
-                true
-            }
-            _ => false,
+            Some(req) => mcp_punt_status_flip(req),
+            None => false,
         };
         if flipped {
             self.storage.save(&store).map_err(|e| e.to_string())?;
@@ -4379,6 +4394,7 @@ impl<'a> McpServer<'a> {
                         author: crate::get_default_author(),
                         clear_escalation: false,
                         reason: reason.map(str::to_string),
+                        automated: false, // trace:BUG-1632 | ai:claude
                     };
                     let (outcome, _) = crate::requeue::return_to_flight_in_storage(
                         self.storage,
