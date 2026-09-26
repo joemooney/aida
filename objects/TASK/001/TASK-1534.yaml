@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:57:18.908583588Z
-modified_at: 2026-09-26T21:28:36.777111768Z
+modified_at: 2026-09-26T21:49:18.535688047Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -51,6 +51,12 @@ comments:
     VERDICT: READY (after BUG-1657 merges).
   created_at: 2026-09-26T21:28:36.777111768Z
   modified_at: 2026-09-26T21:28:36.777111768Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfb1-ad47-7db2-87fd-b376f89f4ea3
+  author: joe
+  content: 'Scope addition (from BUG-1657): doctor_cmd worktree gc''s own rev-list probe uses bare branch names, so a same-named tag can shadow the branch; resolve refs/heads/<b>^{commit} once and pin every probe to it, as session_reap now does.'
+  created_at: 2026-09-26T21:49:18.535688047Z
+  modified_at: 2026-09-26T21:49:18.535688047Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: b13b2c611e810a2ba044efb50b32070667d4b37a
