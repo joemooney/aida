@@ -796,12 +796,19 @@ fn codex_ignores_prompt_dir_finding(dir: &std::path::Path) -> Option<DoctorFindi
 /// case that contributed to the TASK-1123 reviewer-bypass incident). Detection
 /// only — each finding names the re-scaffold command, no auto-heal.
 // trace:TASK-1124 | ai:claude
-/// The fix for memory-lane skill drift. `aida scaffold upgrade` ignores the
-/// footprint and installs the full skill set, and `aida init` on an
-/// initialized project changes nothing, so the lane-safe fix is to restore the
-/// skill from the embedded templates by hand.
+/// The fix for a missing memory-lane skill. `aida scaffold upgrade` ignores
+/// the footprint and installs the full skill set, `aida scaffold refresh`
+/// never creates a missing file, and `aida init` on an initialized project
+/// changes nothing, so the lane-safe fix is to restore the skill from the
+/// embedded templates by hand.
 // trace:BUG-1645 | ai:claude
-const MEMORY_LANE_SKILL_ACTION: &str = "Memory-lane project: do not run `aida scaffold upgrade` (it installs the full skill set). Restore or refresh the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.codex/skills/aida-capture/SKILL.md`).";
+const MEMORY_LANE_SKILL_ACTION: &str = "Memory-lane project: do not run `aida scaffold upgrade` (it installs the full skill set). Restore the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.codex/skills/aida-capture/SKILL.md`).";
+
+/// The fix for drifted memory-lane skills: refresh updates unedited AIDA
+/// skills in place (including header-less ones from older memory-lane
+/// installs) and never installs new skills in a memory-lane project.
+// trace:BUG-1653 | ai:claude
+const MEMORY_LANE_DRIFT_ACTION: &str = "Memory-lane project: run `aida scaffold refresh` to update unedited skills in place (it does not add skills). A skill you edited is kept; use `aida scaffold diff` to inspect it. Do not run `aida scaffold upgrade` (it installs the full skill set).";
 
 fn scan_scaffold_drift(
     project_root: &std::path::Path,
@@ -879,7 +886,7 @@ fn scan_scaffold_drift(
                 drifted.len()
             ),
             action: if lane {
-                MEMORY_LANE_SKILL_ACTION.to_string()
+                MEMORY_LANE_DRIFT_ACTION.to_string()
             } else {
                 "aida scaffold upgrade   (or `aida scaffold diff` to inspect)".to_string()
             },
@@ -6693,6 +6700,47 @@ hostname = "localhost"
                     .collect::<Vec<_>>()
             );
         }
+    }
+
+    /// BUG-1653: drifted memory-lane skills point at `aida scaffold refresh`
+    /// (it now wraps header-less unedited copies and adds no skills), and
+    /// following the hint clears the finding.
+    // trace:BUG-1653 | ai:claude
+    #[test]
+    fn bug_1653_doctor_memory_lane_drift_points_at_refresh() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let store = aida_core::RequirementsStore::new();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::MemoryLane).unwrap();
+        crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+        // An older memory-lane install: header-less raw template.
+        let raw = aida_core::templates::EMBEDDED_TEMPLATES
+            .get("skills/aida-capture.md")
+            .unwrap();
+        std::fs::write(root.join(".claude/skills/aida-capture/SKILL.md"), raw).unwrap();
+        let findings = scan_scaffold_drift(root, &store);
+        let finding = findings
+            .iter()
+            .find(|f| f.id == "scaffold-drift/project")
+            .expect("header-less lane skill is drift");
+        assert_eq!(finding.action, MEMORY_LANE_DRIFT_ACTION);
+        assert!(finding.action.contains("aida scaffold refresh"));
+        assert!(!finding.action.contains("Restore"));
+
+        // Following the hint clears the finding.
+        crate::scaffold_refresh::refresh_agent_packs_at(root, None, None);
+        let findings = scan_scaffold_drift(root, &store);
+        assert!(
+            findings.iter().all(|f| f.id != "scaffold-drift/project"),
+            "{:?}",
+            findings.iter().map(|f| &f.id).collect::<Vec<_>>()
+        );
+
+        // A missing lane skill keeps the restore wording (covered end to end
+        // by the BUG-1645 doctor test).
+        assert!(MEMORY_LANE_SKILL_ACTION.contains("Restore the skill by hand"));
+        assert!(!MEMORY_LANE_SKILL_ACTION.contains("aida scaffold refresh"));
     }
 
     /// BUG-1645 review: files behind a user-owned symlinked skill directory

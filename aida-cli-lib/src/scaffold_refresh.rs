@@ -167,6 +167,28 @@ fn install_outcome(
 
 /// Write a newly shipped skill file into an installed pack.
 // trace:TASK-1503 | ai:claude
+/// A memory-lane skill (`aida-capture` / `aida-learn` in the Claude or Codex
+/// pack) that older memory-lane installs wrote without the AIDA header, still
+/// byte-identical to the embedded template apart from line endings. It is
+/// unedited AIDA output, so refresh rewrites it with the header; a header-less
+/// copy with any other content is the user's and is kept as before.
+// trace:BUG-1653 | ai:claude
+fn is_unwrapped_lane_skill(dest: &Path, rel: &Path) -> bool {
+    let Some((pack, name)) = skill_in_pack(rel) else {
+        return false;
+    };
+    let pack = pack.to_string_lossy().replace('\\', "/");
+    if !matches!(pack.as_str(), ".claude/skills" | ".codex/skills")
+        || !crate::init_cmd::MEMORY_LANE_SKILLS.contains(&name.as_str())
+        || aida_core::scaffolding::symlink_target(dest).is_some()
+    {
+        return false;
+    }
+    std::fs::read_to_string(dest).is_ok_and(|on_disk| {
+        aida_core::scaffolding::is_unwrapped_pack_skill(&pack, &name, &on_disk)
+    })
+}
+
 fn install_new_skill(dest: &Path, content: &str) -> std::io::Result<()> {
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
@@ -196,7 +218,7 @@ pub(crate) fn refresh_agent_packs(
 /// destination (or `None`) so parallel pack tests never consult another
 /// test's process-global HOME override.
 // trace:BUG-1579 | ai:codex
-fn refresh_agent_packs_at(
+pub(crate) fn refresh_agent_packs_at(
     project_root: &Path,
     codex_prompts_dest: Option<&Path>,
     roles_dir: Option<&Path>,
@@ -267,7 +289,15 @@ fn refresh_agent_packs_at(
             continue;
         }
         let delivery = delivery_for(&deliveries, &artifact.path);
-        match refresh_file(&dest, &artifact.content, false) {
+        let result = if is_unwrapped_lane_skill(&dest, &artifact.path) {
+            // trace:BUG-1653 | ai:claude
+            std::fs::write(&dest, &artifact.content)
+                .map(|()| RefreshOutcome::Refreshed)
+                .map_err(anyhow::Error::from)
+        } else {
+            refresh_file(&dest, &artifact.content, false)
+        };
+        match result {
             // trace:TASK-1503 | ai:claude
             Ok(RefreshOutcome::Missing) => {
                 if delivery.is_none() {
@@ -1081,6 +1111,95 @@ global = true
                 "{pack}"
             );
         }
+    }
+
+    /// BUG-1653 (c): an older memory-lane install left the skills without the
+    /// AIDA header. Refresh wraps an unedited copy (LF or CRLF), which then
+    /// reads as matching and refreshes like any pristine file; a header-less
+    /// copy the user edited is left alone.
+    // trace:BUG-1653 | ai:claude
+    #[test]
+    fn bug_1653_refresh_wraps_unwrapped_pristine_lane_skills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = aida_core::RequirementsStore::default();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::MemoryLane).unwrap();
+        crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+
+        // The pre-fix memory-lane bytes: the raw Claude master in every pack.
+        let raw = |name: &str| {
+            aida_core::templates::EMBEDDED_TEMPLATES
+                .get(format!("skills/{name}.md").as_str())
+                .unwrap()
+                .to_string()
+        };
+        let claude_capture = PathBuf::from(".claude/skills/aida-capture/SKILL.md");
+        let codex_learn = PathBuf::from(".codex/skills/aida-learn/SKILL.md");
+        let claude_learn = PathBuf::from(".claude/skills/aida-learn/SKILL.md");
+        std::fs::write(root.join(&claude_capture), raw("aida-capture")).unwrap();
+        std::fs::write(
+            root.join(&codex_learn),
+            raw("aida-learn").replace('\n', "\r\n"),
+        )
+        .unwrap();
+        let edited = raw("aida-learn") + "\nMy own note.\n";
+        std::fs::write(root.join(&claude_learn), &edited).unwrap();
+
+        let collect = |packs: &[PackRefresh], f: fn(&RefreshReport) -> &Vec<PathBuf>| {
+            let mut v: Vec<PathBuf> = packs
+                .iter()
+                .flat_map(|p| f(&p.report).iter())
+                .filter(|p| p.starts_with(".claude/skills") || p.starts_with(".codex/skills"))
+                .cloned()
+                .collect();
+            v.sort();
+            v
+        };
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert_eq!(
+            collect(&packs, |r| &r.refreshed),
+            [claude_capture.clone(), codex_learn.clone()]
+        );
+        assert_eq!(
+            collect(&packs, |r| &r.kept_unmarked),
+            [claude_learn.clone()]
+        );
+        assert!(packs.iter().all(|p| p.report.installed.is_empty()));
+        assert_eq!(
+            std::fs::read_to_string(root.join(&claude_capture)).unwrap(),
+            aida_core::scaffolding::rendered_pack_skill(".claude/skills", "aida-capture")
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join(&codex_learn)).unwrap(),
+            aida_core::scaffolding::rendered_pack_skill(".codex/skills", "aida-learn")
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join(&claude_learn)).unwrap(),
+            edited
+        );
+
+        // The wrapped files now match the full scaffold (no drift) ...
+        let status = aida_core::report::check_scaffold_status(
+            &store,
+            root,
+            &aida_core::scaffolding::ScaffoldConfig::default(),
+            &root.join(".aida/cache.db"),
+        );
+        assert!(status.matching.contains(&claude_capture));
+        assert!(status.matching.contains(&codex_learn));
+        assert!(status.modified.iter().any(|(p, _)| p == &claude_learn));
+
+        // ... and a later refresh updates them as ordinary pristine files.
+        let stale = wrap_with_aida_header(&codex_learn, "---\nname: aida-learn\n---\n# Old\n");
+        std::fs::write(root.join(&codex_learn), stale).unwrap();
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert_eq!(collect(&packs, |r| &r.refreshed), [codex_learn.clone()]);
+        assert_eq!(collect(&packs, |r| &r.kept_unmarked), [claude_learn]);
+        assert_eq!(
+            std::fs::read_to_string(root.join(&codex_learn)).unwrap(),
+            aida_core::scaffolding::rendered_pack_skill(".codex/skills", "aida-learn")
+        );
     }
 
     /// A pre-manifest full pack where the user deleted aida-req, then a
