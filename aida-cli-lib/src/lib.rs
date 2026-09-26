@@ -58604,6 +58604,152 @@ fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bo
     )
 }
 
+/// BUG-1672: does the spec-keyed verdict record approve? `aida review <SPEC>`
+/// records under `.aida/review-verdicts/<SPEC>.json` (see `verdict_path`), a
+/// different key from the drain's `PR-<n>.json` that `pr_has_approved_verdict`
+/// reads, so an approval recorded at the keyboard was invisible to
+/// `aida human`. A verdict closed out by a merge is not a fresh approval.
+// trace:BUG-1672 | ai:claude
+fn spec_verdict_record_approves(record: Option<&review_verdict::RecordedVerdict>) -> bool {
+    record.is_some_and(|v| v.kind.approves() && !v.is_closed())
+}
+
+/// BUG-1672: the verdict a review COMMENT on the spec carries, when the
+/// comment is one. Reviewers that only post prose (a fresh reviewer subagent,
+/// a human at the keyboard, the orchestrator's delta check) write no verdict
+/// file at all, so the comment is the only record of the decision.
+///
+/// A comment is a review when its first line's head (the text before the
+/// first `:`, or the whole first line) starts with `review` — `Review:`,
+/// `Review (fresh Opus reviewer):`, `Review round 4 (...)` — or names a
+/// `delta check`. The `REVIEW FINDINGS TO ADDRESS (` block the rework path
+/// posts is not a verdict. The verdict is read from the first line only:
+/// a request-changes / reject word blocks regardless of anything else on
+/// the line; `PARTIAL` counts as request-changes (as `VerdictKind::parse`
+/// does); an approval word approves unless the line qualifies it
+/// (`WITHHELD`, `PENDING`, `NOT APPROVED`), in which case it is `Unknown`,
+/// which never approves. `APPROVE WITH NITS` is an approval — that is the
+/// wording the review skill's accepted-with-nits path posts.
+///
+/// Returns `None` for a comment that is not a review at all.
+// trace:BUG-1672 | ai:claude
+fn review_comment_verdict(content: &str) -> Option<review_verdict::VerdictKind> {
+    if review_verdict::is_findings_block(content) {
+        return None;
+    }
+    let first = content.lines().find(|l| !l.trim().is_empty())?.trim();
+    let head = first
+        .split(':')
+        .next()
+        .unwrap_or(first)
+        .trim()
+        .to_ascii_lowercase();
+    if !(head.starts_with("review") || head.contains("delta check")) {
+        return None;
+    }
+    // Word-level scan of the upper-cased first line: verdict words are written
+    // in capitals by every writer, and the whole-word match keeps a prose
+    // "reviewer" or "approved-by" from counting.
+    let upper = first.to_ascii_uppercase();
+    let words: Vec<String> = upper
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .filter(|w| !w.is_empty())
+        .map(|w| w.trim_matches('_').to_string())
+        .collect();
+    let has = |w: &str| words.iter().any(|x| x == w);
+    let has_seq = |a: &str, b: &str| words.windows(2).any(|p| p[0] == a && p[1] == b);
+    let request_changes = has("REQUEST_CHANGES")
+        || has("REQUESTCHANGES")
+        || has_seq("REQUEST", "CHANGES")
+        || has_seq("CHANGES", "REQUESTED")
+        || has_seq("NEEDS", "CHANGES");
+    if request_changes {
+        return Some(review_verdict::VerdictKind::RequestChanges);
+    }
+    if has("REJECT") || has("REJECTED") {
+        return Some(review_verdict::VerdictKind::Rejected);
+    }
+    if has("PARTIAL") {
+        return Some(review_verdict::VerdictKind::RequestChanges);
+    }
+    if has("APPROVE") || has("APPROVED") || has("LGTM") {
+        let qualified = has("WITHHELD")
+            || has("PENDING")
+            || has_seq("NOT", "APPROVED")
+            || has_seq("NOT", "APPROVE");
+        return Some(if qualified {
+            review_verdict::VerdictKind::Unknown
+        } else {
+            review_verdict::VerdictKind::Approved
+        });
+    }
+    Some(review_verdict::VerdictKind::Unknown)
+}
+
+/// BUG-1672: the LATEST review verdict posted as a comment on the spec, by
+/// anyone other than `exclude_author` (the spec's owner, when it has one — an
+/// implementer's own "looks good" is not an independent review). Top-level
+/// comments only, newest first by `created_at`; the first comment that is a
+/// review decides, so a round-4 APPROVE after a round-3 REQUEST_CHANGES
+/// approves and a REQUEST_CHANGES after an earlier APPROVE blocks.
+// trace:BUG-1672 | ai:claude
+fn latest_review_comment_verdict(
+    comments: &[aida_core::Comment],
+    exclude_author: Option<&str>,
+) -> Option<review_verdict::VerdictKind> {
+    let exclude = exclude_author.map(str::trim).filter(|a| !a.is_empty());
+    let mut ordered: Vec<&aida_core::Comment> = comments
+        .iter()
+        .filter(|c| exclude.map_or(true, |a| !c.author.trim().eq_ignore_ascii_case(a)))
+        .collect();
+    ordered.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    ordered
+        .into_iter()
+        .find_map(|c| review_comment_verdict(&c.content))
+}
+
+/// BUG-1672: has an open PR for `req` already been approved by an independent
+/// review? The one predicate `reviews_awaiting_human` uses to split
+/// awaiting-review from awaiting-merge. Any of three records approves:
+///  1. the drain's PR-keyed verdict file (`PR-<n>.json`, the original signal);
+///  2. the spec-keyed verdict file `aida review <SPEC>` records;
+///  3. the latest review comment on the spec, from someone other than its
+///     owner (the fresh-reviewer and delta-check flows post only a comment).
+/// Files are explicit records and win over prose: when either verdict file
+/// approves, the comment trail is not consulted. The comment trail is the
+/// fallback for work reviewed without a file, and there the NEWEST review
+/// comment decides, so a request-changes posted after an approval blocks.
+// trace:BUG-1672 | ai:claude
+fn spec_review_approved(
+    project_root: &std::path::Path,
+    req: &aida_core::Requirement,
+    spec_id: &str,
+    pr_number: u64,
+) -> bool {
+    if pr_has_approved_verdict(project_root, pr_number) {
+        return true;
+    }
+    let ids: Vec<&str> = [
+        Some(spec_id),
+        req.agreed_id.as_deref(),
+        req.spec_id.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if spec_verdict_record_approves(
+        review_verdict::read_recorded_verdict_any(project_root, &ids).as_ref(),
+    ) {
+        return true;
+    }
+    let owner = if req.owner.trim().is_empty() {
+        None
+    } else {
+        Some(req.owner.as_str())
+    };
+    latest_review_comment_verdict(&req.comments, owner).is_some_and(|k| k.approves())
+}
+
 /// BUG-1291: any valid local reviewer decision means this PR has already
 /// been reviewed. The orphan sweep must not turn RequestChanges or Rejected
 /// back into fresh reviewer work merely because GitHub has no decision.
@@ -58878,7 +59024,12 @@ fn reviews_awaiting_human(
         match surface {
             ReviewSurface::OpenChange { number, .. } => {
                 let forge = crate::forge::resolve_forge_kind(project_root);
-                let reviewed = pr_has_approved_verdict(project_root, number);
+                // BUG-1672: the PR-keyed file is only the drain's record; a
+                // keyboard `aida review` writes the spec-keyed file and a
+                // fresh-reviewer subagent posts only a comment. Read all three
+                // so an already-approved spec lands under awaiting-merge, not
+                // back on the operator's review seat. trace:BUG-1672 | ai:claude
+                let reviewed = spec_review_approved(project_root, req, &spec_id, number);
                 out.push(ReviewAwaiting {
                     spec_id,
                     surface: format!("{}-{}", forge.change_noun(), number),
@@ -75143,6 +75294,12 @@ mod bug_1651_promote_queue_cas_tests;
 #[cfg(test)]
 #[path = "tests/bug_1664_stale_sweep_tests.rs"]
 mod bug_1664_stale_sweep_tests;
+
+// BUG-1672: `aida human` reviews-awaiting must not list already-approved
+// specs. trace:BUG-1672 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1672_reviews_awaiting_approved_tests.rs"]
+mod bug_1672_reviews_awaiting_approved_tests;
 
 // BUG-1633: pull/push follow-ups to BUG-1625 and BUG-1626. trace:BUG-1633 | ai:claude
 #[cfg(test)]
