@@ -3,12 +3,12 @@ spec_id: BUG-1645
 agreed_id: BUG-1645
 title: Skill manifest follow-ups after TASK-1503 (footprint test, pre-STORY-830 memory-lane upgrade nag, partial folder skills, uncommitted manifests, symlinked skill dirs)
 description: 'From TASK-1503''s round-3 strict review. L1: add a test that pins the refresh footprint check (full install, then footprint set to memory-lane, then refresh creates nothing); forcing the check off today leaves the tests green. L2 (medium): a memory-lane project created before STORY-830 has no saved footprint. It gets a complete manifest with about 53 unconfirmed skills, and refresh and doctor then tell the user to run ''aida scaffold upgrade'', which invites the flood. Infer memory-lane from the pack contents, or phrase the hint so it doesn''t encourage a full upgrade. L3: when a supporting file of a folder skill fails to write, SKILL.md is still written last and the skill is recorded; don''t record, or retry. L4: memory-lane init leaves .claude/skills/.aida-delivered and .codex/skills/.aida-delivered uncommitted; add them to the memory-lane commit list (init_cmd.rs ~312-322). L5 (predates this): apply writes through a user-owned symlinked skill directory.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:47:43.331275848Z
-modified_at: 2026-09-26T15:06:39.824139391Z
+modified_at: 2026-09-26T15:16:00.912589418Z
 req_type: Bug
 comments:
 - id: 01a0dd1d-84eb-7b53-a9c2-5265cdd9a6d0
@@ -55,6 +55,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0de49-9b06-70a1-90d9-1ae1fd17faf3
+  author: aida-auto-bump
+  timestamp: 2026-09-26T15:16:00.902151145Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0de49-9b10-7e52-83b6-e60396789434
+  timestamp: 2026-09-26T15:16:00.912588161Z
+  agent: implementer
+  commit_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
+  summary: Completed via merge 12138a04
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
   branch: main
@@ -63,3 +76,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T15:16:00.902087784Z
+  completion_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
