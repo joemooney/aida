@@ -42,6 +42,20 @@ pub struct HistoryOpts {
     // trace:TASK-507 | ai:claude
     // trace:BUG-1636 | ai:claude
     pub shipped_only: bool,
+    /// `--to <status>`: keep status transitions whose new status is this
+    /// one (canonical form from [`resolve_status_filter`]). Implies events
+    /// mode. See [`event_kind_allowed`] for how it combines with the other
+    /// event selectors.
+    // trace:TASK-1512 | ai:claude
+    pub to_status: Option<String>,
+    /// `--from <status>`: keep status transitions leaving this status.
+    /// Combined with `--to`, both ends must match.
+    // trace:TASK-1512 | ai:claude
+    pub from_status: Option<String>,
+    /// `--opened` / `--created`: keep spec-creation (`added`) events, the
+    /// specs filed in the window, whatever status they were filed at.
+    // trace:TASK-1512 | ai:claude
+    pub opened_only: bool,
     pub comments_only: bool,
     pub oneline: bool,
     /// Spec-IDs currently archived. The default `aida history` view hides
@@ -105,14 +119,112 @@ pub(crate) fn is_ship_event(kind: &EventKind) -> bool {
 /// --status-changes, --comments ... coherent" acceptance bar calls out.
 /// Combine them with OR instead: with both set, either kind passes; with
 /// neither set, everything passes (unchanged from before).
+///
+/// TASK-1512 adds two more selectors to the same union: `--opened` selects
+/// spec-creation events, and `--to`/`--from` select status transitions.
+/// `--to`/`--from` also refine every status transition the query keeps,
+/// so `--status-changes --to approved` is just the approvals, while
+/// `--opened --to approved` is the specs filed plus the approvals.
 // trace:TASK-1480 | ai:claude
+// trace:TASK-1512 | ai:claude
 fn event_kind_allowed(kind: &EventKind, opts: &HistoryOpts) -> bool {
-    if !opts.status_changes_only && !opts.comments_only {
+    let transition = has_transition_filter(opts);
+    if !opts.status_changes_only && !opts.comments_only && !opts.opened_only && !transition {
         return true;
     }
-    let is_status = matches!(kind, EventKind::StatusChange { .. });
-    let is_comment = matches!(kind, EventKind::CommentsAdded { .. });
-    (opts.status_changes_only && is_status) || (opts.comments_only && is_comment)
+    match kind {
+        EventKind::StatusChange { from, to } => {
+            (opts.status_changes_only || transition) && transition_matches(from, to, opts)
+        }
+        EventKind::CommentsAdded { .. } => opts.comments_only,
+        EventKind::Added { .. } => opts.opened_only,
+        _ => false,
+    }
+}
+
+/// Whether `--to` or `--from` was given.
+// trace:TASK-1512 | ai:claude
+pub(crate) fn has_transition_filter(opts: &HistoryOpts) -> bool {
+    opts.to_status.is_some() || opts.from_status.is_some()
+}
+
+/// A status spelling reduced to its letters, lowercased, so the stored
+/// `In Progress` / `InProgress` / `in_progress` forms all compare equal.
+// trace:TASK-1512 | ai:claude
+fn status_key(s: &str) -> String {
+    s.chars()
+        .filter(|c| !matches!(c, ' ' | '-' | '_'))
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// Does the transition `from → to` pass `--to`/`--from`? A transition must
+/// change the status (a respelling such as `In Progress → InProgress` is
+/// not one), so `--to completed` is exactly `--shipped`'s "a transition
+/// into Completed from any other status".
+// trace:TASK-1512 | ai:claude
+fn transition_matches(from: &str, to: &str, opts: &HistoryOpts) -> bool {
+    if !has_transition_filter(opts) {
+        return true;
+    }
+    let (from_key, to_key) = (status_key(from), status_key(to));
+    if from_key == to_key {
+        return false;
+    }
+    let to_ok = opts
+        .to_status
+        .as_deref()
+        .is_none_or(|want| status_key(want) == to_key);
+    let from_ok = opts
+        .from_status
+        .as_deref()
+        .is_none_or(|want| status_key(want) == from_key);
+    to_ok && from_ok
+}
+
+/// Refuse `--from X --to X`: a transition always changes the status, so
+/// the pair could never match anything. `from`/`to` are canonical names
+/// from [`resolve_status_filter`]; the flag names are how the caller
+/// spells them (`--from`/`--to` on the CLI, `from`/`to` over MCP). The
+/// message starts with `invalid combination:` so MCP reports it as an
+/// invalid argument.
+// trace:TASK-1512 | ai:claude
+pub(crate) fn validate_transition_pair(
+    from: Option<&str>,
+    to: Option<&str>,
+    from_flag: &str,
+    to_flag: &str,
+) -> Result<()> {
+    if let (Some(f), Some(t)) = (from, to) {
+        if status_key(f) == status_key(t) {
+            anyhow::bail!(
+                "invalid combination: {from_flag} and {to_flag} are both `{t}`; a transition \
+                 always changes the status, so nothing can match. Use {to_flag} alone for \
+                 transitions into it, or {from_flag} alone for transitions out of it"
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Resolve a `--to`/`--from` value to its canonical status name. Accepts
+/// the spellings `aida edit --status` accepts (`in-progress`,
+/// `in_progress`, `InProgress`, any case), plus `accepted` for Approved
+/// (the ADR spelling). An unknown value is an error naming the valid set.
+// trace:TASK-1512 | ai:claude
+pub(crate) fn resolve_status_filter(flag: &str, raw: &str) -> Result<String> {
+    if raw.trim().eq_ignore_ascii_case("accepted") {
+        return Ok("Approved".to_string());
+    }
+    crate::validate_status_input(raw.trim())
+        .map(str::to_string)
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "invalid status `{raw}` for {flag}: expected one of: {} (or `accepted`, \
+                 which means approved)",
+                crate::VALID_STATUS_INPUTS
+            )
+        })
 }
 
 /// Serializable so the history index can store each decoded event and
@@ -301,46 +413,54 @@ pub(crate) fn single_spec_uses_progress_view(opts: &HistoryOpts) -> bool {
 /// per-event feed. Returns the `events_mode` the CLI stores in
 /// [`HistoryOpts`].
 ///
-/// `--full`/`events` and `--shipped` always do. Without a SPEC-ID, so do
+/// `--full`/`events` and the event selectors (`--shipped`, `--to`,
+/// `--from`, `--opened`, passed together as `event_selector`) always do.
+/// Without a SPEC-ID, so do
 /// the flags that only mean something per event: `--status-changes`,
 /// `--comments`, `--oneline` and `--json` (the digest has one row per
 /// spec, so honoring them there is impossible and ignoring them silently
 /// answered a different question). With a SPEC-ID they narrow or restyle
 /// the status-progression view instead, so they leave `events_mode` off.
 // trace:BUG-1635 | ai:claude
+// trace:TASK-1512 | ai:claude
 pub(crate) fn resolve_events_mode(
     explicit_events: bool,
     single_spec: bool,
-    shipped: bool,
+    event_selector: bool,
     status_changes: bool,
     comments: bool,
     oneline: bool,
     json: bool,
 ) -> bool {
-    explicit_events || shipped || (!single_spec && (status_changes || comments || oneline || json))
+    explicit_events
+        || event_selector
+        || (!single_spec && (status_changes || comments || oneline || json))
 }
 
 /// The default `--max-commits` window when the caller did not pin one.
 /// A bare `--full`/`events` feed, or a bare multi-spec `--json`, walks
 /// 5x `--limit` (at least 50): it decodes every commit, so it scans
 /// shallow. Everything else walks 250: the digest touches each commit
-/// once, and a narrowing filter (`--shipped`, `--status-changes`,
-/// `--comments`, `--oneline`) or a single SPEC-ID needs depth to find
+/// once, and a narrowing filter (`--shipped`, `--to`, `--from`,
+/// `--opened`, `--status-changes`, `--comments`, `--oneline`; the first
+/// four arrive together as `event_selector`) or a single SPEC-ID needs
+/// depth to find
 /// anything. The window follows the mode, never the output format:
 /// adding `--json` to a filtered query does not change it.
 // trace:BUG-1635 | ai:claude
+// trace:TASK-1512 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn default_max_commits(
     limit: usize,
     explicit_events: bool,
     single_spec: bool,
     json: bool,
-    shipped: bool,
+    event_selector: bool,
     status_changes: bool,
     comments: bool,
     oneline: bool,
 ) -> usize {
-    let filtered = shipped || status_changes || comments || oneline;
+    let filtered = event_selector || status_changes || comments || oneline;
     let shallow = explicit_events || (json && !single_spec && !filtered);
     if shallow {
         (limit * 5).max(50)
@@ -947,6 +1067,10 @@ fn ensure_spec_has_history(store_path: &Path, opts: &HistoryOpts, id: &str) -> R
     probe.status_changes_only = false;
     probe.comments_only = false;
     probe.shipped_only = false;
+    // trace:TASK-1512 | ai:claude
+    probe.to_status = None;
+    probe.from_status = None;
+    probe.opened_only = false;
     probe.since = None;
     probe.until = None;
     let (any, _, _) = collect_filtered_events(store_path, &probe)?;
@@ -3534,6 +3658,9 @@ mod tests {
             until: None,
             status_changes_only: false,
             shipped_only: false,
+            to_status: None,
+            from_status: None,
+            opened_only: false,
             comments_only: false,
             oneline: false,
             archived_specs: std::collections::HashSet::new(),

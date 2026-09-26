@@ -12820,10 +12820,14 @@ pub enum Command {
     /// `--full` (or the `events` subcommand) for the complete edit/comment
     /// trail, not just status changes. Per-event flags (`--status-changes`,
     /// `--comments`, `--oneline`, `--shipped`, `--json`) switch a
-    /// multi-spec query to the events feed.
+    /// multi-spec query to the events feed. `--to`/`--from <STATUS>`
+    /// select status transitions by target and source status, and
+    /// `--opened` selects the specs filed; they always switch to the
+    /// events feed, like `--shipped`.
     // trace:FR-1-037 | ai:claude
     // trace:BUG-1635 | ai:claude
     // trace:TASK-1480 | ai:claude
+    // trace:TASK-1512 | ai:claude
     History {
         /// SPEC-ID to focus on — shorthand for `--id <SPEC-ID>`.
         /// `aida history <SPEC-ID>` is equivalent to `aida history --id
@@ -12843,9 +12847,10 @@ pub enum Command {
         /// Walk at most N commits on the orphan branch. Default 5x --limit
         /// (at least 50) for --full/events and a bare --json with no
         /// SPEC-ID; 250 for the digest, a single SPEC-ID, and any query with
-        /// --shipped, --status-changes, --comments or --oneline (adding
-        /// --json to those does not change it).
+        /// --shipped, --to, --from, --opened, --status-changes, --comments
+        /// or --oneline (adding --json to those does not change it).
         // trace:BUG-1635 | ai:claude
+        // trace:TASK-1512 | ai:claude
         #[clap(long, global = true)]
         max_commits: Option<usize>,
 
@@ -12928,18 +12933,58 @@ pub enum Command {
         /// window. Honors --since/--until/--limit; `--author me` narrows to
         /// what YOU tried to do and could not.
         // trace:STORY-1436 | ai:claude
-        #[clap(long, global = true, value_name = "KIND")]
+        // trace:TASK-1512 | ai:claude — the event feed has no status
+        // transitions, so the transition/creation selectors conflict.
+        #[clap(
+            long,
+            global = true,
+            value_name = "KIND",
+            conflicts_with_all = ["to", "from", "opened"]
+        )]
         kind: Option<String>,
 
         /// Only transitions into Completed (merged to the default branch),
         /// from any prior status — the "did my ship register?" view. Unlike
         /// `--all` (a recency-blind dump of every terminal-status spec), this
-        /// shows just what merged-to-default, newest first. Implies events
-        /// mode; composes with --since/--until/--limit.
+        /// shows just what merged-to-default, newest first. Equivalent to
+        /// `--to completed`, so it cannot be combined with --to or --opened.
+        /// Implies events mode; composes with --since/--until/--limit.
         // trace:TASK-507 | ai:claude — plain `//` keeps the marker out of `--help`.
         // trace:BUG-1636 | ai:claude
-        #[clap(long, global = true)]
+        // trace:TASK-1512 | ai:claude
+        #[clap(long, global = true, conflicts_with_all = ["to", "opened"])]
         shipped: bool,
+
+        /// Only status transitions INTO this status, newest first, e.g.
+        /// `--to approved` for what got approved. Accepts the spellings
+        /// `aida edit --status` does (`in-progress`, `needs-attention`, any
+        /// case) plus `accepted` for approved. With --from, both ends must
+        /// match. Implies events mode (as --shipped does). With
+        /// --status-changes it narrows the transitions; with --comments or
+        /// --opened the result is the union of those events and the
+        /// matching transitions.
+        // trace:TASK-1512 | ai:claude
+        #[clap(long, global = true, value_name = "STATUS")]
+        to: Option<String>,
+
+        /// Only status transitions OUT OF this status, e.g. `--from
+        /// in-progress --to approved` for work sent back from in progress.
+        /// Alone it matches any transition leaving that status. Same
+        /// spellings and combination rules as --to; implies events mode.
+        /// `--from X --to X` is refused, since a transition always changes
+        /// the status.
+        // trace:TASK-1512 | ai:claude
+        #[clap(long, global = true, value_name = "STATUS")]
+        from: Option<String>,
+
+        /// Only spec-creation events: the specs filed in the window,
+        /// whatever status they were filed at (a spec filed straight as
+        /// approved is included). Creation is not a status transition, so
+        /// with --to/--from (or --status-changes/--comments) the result is
+        /// the union of both kinds of event. Implies events mode.
+        // trace:TASK-1512 | ai:claude
+        #[clap(long, global = true, visible_alias = "created")]
+        opened: bool,
 
         /// Filter to comment events. Without a SPEC-ID this implies events
         /// mode, as --shipped does. For a single spec (`--id` / positional
