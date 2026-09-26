@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T13:48:58.178656696Z
-modified_at: 2026-09-26T13:49:07.933975903Z
+modified_at: 2026-09-26T13:49:12.882131674Z
 req_type: Bug
+comments:
+- id: 01a0ddfa-2332-79e0-a81d-1ecc15894d89
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved and queued; do after BUG-1645 lands.'
+  created_at: 2026-09-26T13:49:12.882131674Z
+  modified_at: 2026-09-26T13:49:12.882131674Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 9beb57f86dd6c8d779c1b3afa03a02b753fc61c5
   branch: main
