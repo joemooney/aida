@@ -294,8 +294,10 @@ fn detect_distributed_store_from_with_roots(
             // store_path is relative to the directory containing config.toml,
             // not to the original start dir — otherwise a nested-dir caller
             // would resolve the store against the wrong base.
+            // Try every candidate in order; the first that resolves wins.
+            // An empty value joins to `current` itself, as it always has.
             // trace:BUG-1650 | ai:claude
-            if let Some(val) = store_path_value(&content) {
+            for val in store_path_candidates(&content) {
                 let store_path = current.join(&val);
                 if store_path.exists() && store_path.is_dir() {
                     return Some(store_path);
@@ -312,59 +314,78 @@ fn detect_distributed_store_from_with_roots(
     }
 }
 
-/// Read the `store_path` value from a `.aida/config.toml` body — the ONE
-/// shared reader behind every store resolver (`aida-core`, `aida-cli-lib`,
-/// `aida-tui`).
+/// The `store_path` candidates in a `.aida/config.toml` body, in the order a
+/// resolver should try them — the ONE shared reader behind every store
+/// resolver (`aida-core`, `aida-cli-lib`, `aida-tui`). A resolver takes the
+/// first candidate that names an existing store.
 ///
-/// The body is parsed with the `toml` crate first, so every form a writer can
-/// produce (escapes from [`crate::toml_quote::toml_string`], literal
-/// `'...'` strings, multi-line and triple-quoted strings) reads back exactly.
-/// The key is looked up in `[deployment]`, then at the top level, then in
-/// any other top-level table. Only when the body is not valid TOML (a
-/// hand-edited file broken elsewhere) does it fall back to a line scan, which
-/// still parses the matching line on its own before stripping quotes by hand.
-/// An empty value counts as absent.
+/// 1. When the body is valid TOML, the parsed `[deployment].store_path`, or
+///    failing that a top-level `store_path`. This reads every form a writer
+///    can produce ([`crate::toml_quote::toml_string`] escapes, `'...'`
+///    literals, multi-line strings) exactly.
+/// 2. Then the legacy line-scan values, in file order, exactly as the old
+///    readers produced them (text after the first `=`, surrounding quotes
+///    trimmed). This keeps two legacy shapes resolving to the same store as
+///    before: a `store_path` in any other table, and a pre-BUG-1649 value with
+///    raw backslashes (`..\team-store`) that now parses as valid TOML with
+///    `\t` applied as an escape, so only the raw text names the real
+///    directory.
+/// 3. Last, when the body is not valid TOML, each matching line parsed on its
+///    own (an escaped value in an otherwise broken file).
+///
+/// Duplicates are dropped. An empty value is kept: it is a candidate that
+/// joins to the config's own directory, as it always was.
 // trace:BUG-1650 | ai:claude
-pub fn store_path_value(config_toml: &str) -> Option<String> {
-    match toml::from_str::<toml::Table>(config_toml) {
-        Ok(table) => store_path_from_table(&table),
-        Err(_) => config_toml.lines().find_map(store_path_from_line),
+pub fn store_path_candidates(config_toml: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |v: String| {
+        if !out.contains(&v) {
+            out.push(v);
+        }
+    };
+    let parsed = toml::from_str::<toml::Table>(config_toml).ok();
+    if let Some(v) = parsed.as_ref().and_then(store_path_from_table) {
+        push(v);
     }
+    for line in config_toml.lines() {
+        if let Some(v) = legacy_store_path_from_line(line) {
+            push(v);
+        }
+    }
+    if parsed.is_none() {
+        for line in config_toml.lines() {
+            if let Some(v) = parsed_store_path_from_line(line) {
+                push(v);
+            }
+        }
+    }
+    out
 }
 
+/// `[deployment].store_path`, else a top-level `store_path`. No other table
+/// is consulted here; those only reach a resolver through the legacy scan.
 fn store_path_from_table(table: &toml::Table) -> Option<String> {
-    let non_empty = |v: &toml::Value| v.as_str().filter(|s| !s.is_empty()).map(str::to_owned);
-    if let Some(v) = table
+    let as_string = |v: &toml::Value| v.as_str().map(str::to_owned);
+    table
         .get("deployment")
         .and_then(|d| d.get("store_path"))
-        .and_then(non_empty)
-    {
-        return Some(v);
-    }
-    if let Some(v) = table.get("store_path").and_then(non_empty) {
-        return Some(v);
-    }
-    table
-        .values()
-        .filter_map(toml::Value::as_table)
-        .find_map(|t| t.get("store_path").and_then(non_empty))
+        .and_then(as_string)
+        .or_else(|| table.get("store_path").and_then(as_string))
 }
 
-/// Line-scan fallback for a config body that does not parse as TOML.
-fn store_path_from_line(line: &str) -> Option<String> {
-    let line = line.trim();
-    let rest = line.strip_prefix("store_path")?.trim_start();
-    let raw = rest.strip_prefix('=')?.trim();
-    // The line alone is usually valid TOML even when the file is not.
-    if let Ok(table) = toml::from_str::<toml::Table>(line) {
-        return table
-            .get("store_path")
-            .and_then(toml::Value::as_str)
-            .filter(|s| !s.is_empty())
-            .map(str::to_owned);
-    }
-    let val = raw.trim_matches('"').trim_matches('\'');
-    (!val.is_empty()).then(|| val.to_owned())
+/// The pre-BUG-1650 reader, unchanged: a trimmed line starting with
+/// `store_path`, the text between the first and second `=`, then surrounding
+/// `"` and `'` trimmed.
+fn legacy_store_path_from_line(line: &str) -> Option<String> {
+    let rest = line.trim().strip_prefix("store_path")?;
+    let val = rest.split('=').nth(1)?;
+    Some(val.trim().trim_matches('"').trim_matches('\'').to_owned())
+}
+
+/// A `store_path = ...` line parsed as TOML on its own.
+fn parsed_store_path_from_line(line: &str) -> Option<String> {
+    let table = toml::from_str::<toml::Table>(line.trim()).ok()?;
+    table.get("store_path")?.as_str().map(str::to_owned)
 }
 
 /// Detect the distributed store from the process's current directory,
@@ -657,24 +678,32 @@ mod tests {
         "../all\"of=them\\'\n/store",
     ];
 
+    fn first(body: &str) -> Option<String> {
+        store_path_candidates(body).into_iter().next()
+    }
+
+    /// A project dir under `tmp` holding `.aida/config.toml` = `body`.
+    fn project(tmp: &Path, name: &str, body: &str) -> PathBuf {
+        let dir = tmp.join(name);
+        std::fs::create_dir_all(dir.join(".aida")).unwrap();
+        std::fs::write(dir.join(".aida/config.toml"), body).unwrap();
+        dir
+    }
+
     #[test]
-    fn bug_1650_store_path_value_round_trips_toml_string_output() {
+    fn bug_1650_store_path_candidates_round_trip_toml_string_output() {
         use crate::toml_quote::toml_string;
         for value in BUG_1650_HOSTILE {
             let body = format!(
                 "# AIDA distributed mode configuration\n[deployment]\nmode = \"distributed\"\nstore_path = {}\nbranch = \"aida-store\"\n",
                 toml_string(value)
             );
-            assert_eq!(
-                store_path_value(&body).as_deref(),
-                Some(value),
-                "body {body:?}"
-            );
+            assert_eq!(first(&body).as_deref(), Some(value), "body {body:?}");
         }
     }
 
     #[test]
-    fn bug_1650_store_path_value_reads_literal_and_multiline_forms() {
+    fn bug_1650_store_path_candidates_read_literal_and_multiline_forms() {
         let cases = [
             ("[deployment]\nstore_path = '.aida-store'\n", ".aida-store"),
             (
@@ -686,56 +715,148 @@ mod tests {
                 "[deployment]\nstore_path = \"\"\"\n../multi\nline\"\"\"\n",
                 "../multi\nline",
             ),
-            ("[deployment]\nstore_path = \'\'\'a=b\'\'\'\n", "a=b"),
-            // A `store_path_old` key must not be mistaken for `store_path`.
-            (
-                "[deployment]\nstore_path_old = \"x\"\nstore_path = \"y\"\n",
-                "y",
-            ),
+            ("[deployment]\nstore_path = '''a=b'''\n", "a=b"),
         ];
         for (body, want) in cases {
-            assert_eq!(store_path_value(body).as_deref(), Some(want), "{body:?}");
+            assert_eq!(first(body).as_deref(), Some(want), "{body:?}");
         }
-        assert_eq!(store_path_value("[deployment]\nmode = \"x\"\n"), None);
-        assert_eq!(store_path_value("[deployment]\nstore_path = \"\"\n"), None);
+        assert!(store_path_candidates("[deployment]\nmode = \"x\"\n").is_empty());
+    }
+
+    /// Review finding 1: `[deployment]` beats a top-level key, which beats a
+    /// `store_path` in any other table, whatever the file order.
+    #[test]
+    fn bug_1650_precedence_deployment_then_top_level_then_other_tables() {
+        let body = "store_path = \"top\"\n\
+                    [aaa]\nstore_path = \"aaa\"\n\
+                    [deployment]\nstore_path = \"dep\"\n\
+                    [zzz]\nstore_path = \"zzz\"\n";
+        assert_eq!(store_path_candidates(body), ["dep", "top", "aaa", "zzz"]);
+
+        let no_dep = "store_path = \"top\"\n\
+                      [aaa]\nstore_path = \"aaa\"\n\
+                      [deployment]\nmode = \"distributed\"\n\
+                      [zzz]\nstore_path = \"zzz\"\n";
+        assert_eq!(store_path_candidates(no_dep), ["top", "aaa", "zzz"]);
+
+        // Resolution agrees when every candidate exists on disk.
+        let tmp = TempDir::new().unwrap();
+        let proj = project(tmp.path(), "proj", body);
+        for d in ["dep", "top", "aaa", "zzz"] {
+            std::fs::create_dir_all(proj.join(d)).unwrap();
+        }
+        assert_eq!(
+            detect_distributed_store_from_with_roots(&proj, &[]),
+            Some(proj.join("dep"))
+        );
+        std::fs::write(proj.join(".aida/config.toml"), no_dep).unwrap();
+        assert_eq!(
+            detect_distributed_store_from_with_roots(&proj, &[]),
+            Some(proj.join("top"))
+        );
+    }
+
+    /// Review finding 2: a pre-BUG-1649 config holds raw backslashes. When
+    /// each one happens to start a valid TOML escape (`\t`, `\n`), the file
+    /// parses, but to the wrong path. The raw legacy value must still
+    /// resolve, instead of the walk-up adopting the enclosing project's store.
+    #[test]
+    fn bug_1650_legacy_unescaped_backslash_config_still_resolves() {
+        for raw in ["..\\team-store", "stores\\new"] {
+            let tmp = TempDir::new().unwrap();
+            // An enclosing project whose store the walk-up must NOT adopt.
+            let outer = project(
+                tmp.path(),
+                "outer",
+                "[deployment]\nstore_path = \".outer\"\n",
+            );
+            std::fs::create_dir_all(outer.join(".outer")).unwrap();
+            // Deliberately unescaped, as a pre-BUG-1649 writer produced it.
+            let body = ["[deployment]\nstore_path = \"", raw, "\"\n"].concat();
+            assert!(
+                toml::from_str::<toml::Table>(&body).is_ok(),
+                "{body:?} parses"
+            );
+            let proj = project(&outer, "proj", &body);
+            // On Unix this is one file name containing `\`; on Windows it is
+            // a real relative path. Either way `proj.join(raw)` names it.
+            let legacy_store = proj.join(raw);
+            std::fs::create_dir_all(&legacy_store).unwrap();
+
+            let candidates = store_path_candidates(&body);
+            assert_eq!(candidates.len(), 2, "{candidates:?}");
+            assert_ne!(candidates[0], raw, "TOML applies the escape");
+            assert_eq!(candidates[1], raw, "raw legacy value kept");
+            assert_eq!(
+                detect_distributed_store_from_with_roots(&proj, &[]),
+                Some(legacy_store),
+                "{raw:?}"
+            );
+        }
+    }
+
+    /// Proxy decision 3: `store_path = ""` keeps its old meaning (the config's
+    /// own dir) and never walks up to an enclosing project.
+    #[test]
+    fn bug_1650_empty_store_path_keeps_legacy_resolution() {
+        assert_eq!(
+            store_path_candidates("[deployment]\nstore_path = \"\"\n"),
+            [""]
+        );
+        let tmp = TempDir::new().unwrap();
+        let outer = project(
+            tmp.path(),
+            "outer",
+            "[deployment]\nstore_path = \".outer\"\n",
+        );
+        std::fs::create_dir_all(outer.join(".outer")).unwrap();
+        let proj = project(&outer, "proj", "[deployment]\nstore_path = \"\"\n");
+        assert_eq!(
+            detect_distributed_store_from_with_roots(&proj, &[]),
+            Some(proj.join(""))
+        );
     }
 
     #[test]
-    fn bug_1650_store_path_value_line_fallback_on_invalid_toml() {
+    fn bug_1650_invalid_toml_falls_back_to_the_legacy_scan() {
         use crate::toml_quote::toml_string;
+        assert_eq!(
+            store_path_candidates("oops\nstore_path = '.aida-store'\n"),
+            [".aida-store"]
+        );
+        assert_eq!(
+            store_path_candidates("oops\nstore_path = .aida-store\n"),
+            [".aida-store"]
+        );
+        // An escaped value in a broken file: the line parsed on its own is
+        // also offered, after the raw legacy text.
         for value in BUG_1650_HOSTILE.iter().filter(|v| !v.contains('\n')) {
-            // A stray unparseable line elsewhere forces the line-scan fallback.
             let body = format!(
                 "[deployment]\nthis is not toml\nstore_path = {}\n",
                 toml_string(value)
             );
-            assert_eq!(store_path_value(&body).as_deref(), Some(*value), "{body:?}");
+            assert!(
+                store_path_candidates(&body).iter().any(|c| c == value),
+                "{body:?}"
+            );
         }
-        assert_eq!(
-            store_path_value("oops\nstore_path = '.aida-store'\n").as_deref(),
-            Some(".aida-store")
-        );
-        assert_eq!(
-            store_path_value("oops\nstore_path = .aida-store\n").as_deref(),
-            Some(".aida-store")
-        );
     }
 
     #[test]
     fn bug_1650_detect_resolves_store_path_with_quote_and_equals() {
         use crate::toml_quote::toml_string;
         let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
         // No `"` here: Windows forbids it in file names.
         let rel = "st'o=re";
-        std::fs::create_dir_all(root.join(".aida")).unwrap();
-        std::fs::write(
-            root.join(".aida/config.toml"),
-            format!("[deployment]\nstore_path = {}\n", toml_string(rel)),
-        )
-        .unwrap();
-        std::fs::create_dir_all(root.join(rel)).unwrap();
-        let found = detect_distributed_store_from_with_roots(root, &[]).expect("store");
-        assert_eq!(found, root.join(rel));
+        let proj = project(
+            tmp.path(),
+            "proj",
+            &format!("[deployment]\nstore_path = {}\n", toml_string(rel)),
+        );
+        std::fs::create_dir_all(proj.join(rel)).unwrap();
+        assert_eq!(
+            detect_distributed_store_from_with_roots(&proj, &[]),
+            Some(proj.join(rel))
+        );
     }
 }

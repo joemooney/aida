@@ -871,7 +871,8 @@ fn resolve_store_path(project_root: &Path) -> Option<PathBuf> {
         }
         let config_path = dir.join(".aida").join("config.toml");
         if let Ok(content) = std::fs::read_to_string(&config_path) {
-            if let Some(rel) = store_path_value(&content) {
+            // trace:BUG-1650 | ai:claude
+            for rel in store_path_values(&content) {
                 let local = dir.join(&rel);
                 if local.exists() && local.is_dir() {
                     return Some(local);
@@ -886,12 +887,14 @@ fn resolve_store_path(project_root: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Extract the `store_path` value from a `config.toml` body via aida-core's
-/// shared TOML-first reader, so the TUI agrees with aida-cli on every value a
-/// writer can produce.
+/// The `store_path` candidates from a `config.toml` body, via aida-core's
+/// shared reader so the TUI agrees with aida-cli. The TUI has always skipped
+/// an empty value (and kept walking up), so it still does.
 // trace:STORY-693 trace:BUG-1650 | ai:claude
-fn store_path_value(content: &str) -> Option<String> {
-    aida_core::store_locate::store_path_value(content)
+fn store_path_values(content: &str) -> Vec<String> {
+    let mut values = aida_core::store_locate::store_path_candidates(content);
+    values.retain(|v| !v.is_empty());
+    values
 }
 
 /// BUG-331: resolve `<main-worktree>/<rel_store>` from inside a git worktree
@@ -1455,8 +1458,9 @@ mod tests {
     fn store_path_value_parses_the_config_line() {
         let cfg =
             "store_type = \"worktree\"\nstore_path = \".aida-store\"\nbranch = \"aida-store\"\n";
-        assert_eq!(store_path_value(cfg), Some(".aida-store".to_string()));
-        assert_eq!(store_path_value("# nothing here\n"), None);
+        assert_eq!(store_path_values(cfg), [".aida-store"]);
+        assert!(store_path_values("# nothing here\n").is_empty());
+        assert!(store_path_values("[deployment]\nstore_path = \"\"\n").is_empty());
     }
 
     // trace:BUG-1650 | ai:claude
@@ -1467,7 +1471,11 @@ mod tests {
                 "[deployment]\nstore_path = {}\n",
                 aida_core::toml_quote::toml_string(value)
             );
-            assert_eq!(store_path_value(&cfg).as_deref(), Some(value), "{cfg:?}");
+            assert_eq!(
+                store_path_values(&cfg).first().map(String::as_str),
+                Some(value),
+                "{cfg:?}"
+            );
         }
     }
 

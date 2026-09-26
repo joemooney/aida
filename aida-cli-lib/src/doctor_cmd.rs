@@ -3099,20 +3099,20 @@ pub(crate) fn scan_project_manifest(
     let mut unknown: Vec<String> = Vec::new();
     if let Some(l) = manifest.project.liveness.as_ref() {
         if !l.is_recognised() {
-            // trace:BUG-1650 | ai:claude
             unknown.push(format!(
-                "liveness = {} (expected one of: {})",
-                aida_core::toml_quote::toml_string(l.as_str()),
+                // toml-ok: diagnostic text, not a TOML writer.
+                "liveness = \"{}\" (expected one of: {})",
+                l.as_str(),
                 pm::Liveness::ALL.join(", ")
             ));
         }
     }
     if let Some(st) = manifest.project.stage.as_ref() {
         if !st.is_recognised() {
-            // trace:BUG-1650 | ai:claude
             unknown.push(format!(
-                "stage = {} (expected one of: {})",
-                aida_core::toml_quote::toml_string(st.as_str()),
+                // toml-ok: diagnostic text, not a TOML writer.
+                "stage = \"{}\" (expected one of: {})",
+                st.as_str(),
                 pm::Stage::ALL.join(", ")
             ));
         }

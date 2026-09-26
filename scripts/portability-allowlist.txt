@@ -211,4 +211,7 @@ toml-path-interpolation	aida-cli-lib/src/tests/story_827_init_readme_registry_te
 # means a hand-built TOML value that bypasses
 # `aida_core::toml_quote::toml_string`. Nothing is baselined; a line that only
 # looks like TOML (a log message) opts out with `// toml-ok: <reason>` on the
-# line or the line above. trace:BUG-1650 | ai:claude
+# line or the line above. Known gaps (accepted; review by eye): a value with
+# text around the placeholder (`= \"{a}/x\"`, `= \"{a}{b}\"`), a
+# single-quoted literal (`= '{x}'`), and raw-string templates (r#"k = "{x}""#).
+# trace:BUG-1650 | ai:claude

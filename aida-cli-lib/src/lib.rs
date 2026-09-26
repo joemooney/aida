@@ -67629,10 +67629,12 @@ fn detect_store_path(repo: &std::path::Path) -> Option<std::path::PathBuf> {
         return None;
     }
     let content = std::fs::read_to_string(&config_path).ok()?;
-    // trace:BUG-1650 | ai:claude
-    let val = aida_core::store_locate::store_path_value(&content)?;
-    let sp = repo.join(val);
-    (sp.exists() && sp.is_dir() && aida_core::git_ops::is_git_repo(&sp)).then_some(sp)
+    // First candidate that is an existing git dir wins, as the old per-line
+    // loop did. trace:BUG-1650 | ai:claude
+    aida_core::store_locate::store_path_candidates(&content)
+        .into_iter()
+        .map(|val| repo.join(val))
+        .find(|sp| sp.exists() && sp.is_dir() && aida_core::git_ops::is_git_repo(sp))
 }
 
 /// HEAD-poll an URL until it returns 200 or `timeout` elapses. Used by

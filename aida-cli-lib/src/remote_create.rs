@@ -34,6 +34,11 @@ pub struct KnownHost {
     pub label: Option<String>,
     /// Preferred SSH port for push-to-create (None → 22).
     pub ssh_port: Option<u16>,
+    /// An `ssh_port` found in `remotes.toml` that is not a valid port
+    /// (`"22a"`, `70000`), kept as TOML value text so a save writes it back
+    /// unchanged instead of silently dropping it. `None` when absent or valid.
+    // trace:BUG-1650 | ai:claude
+    pub ssh_port_raw: Option<String>,
 }
 
 // ───────────────────────────── pure helpers ─────────────────────────────
@@ -152,10 +157,15 @@ pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
                     .filter_map(|e| e.as_table())
                     .filter_map(|t| {
                         let host = t.get("host")?.as_str()?.to_string();
+                        let raw_port = t.get("ssh_port");
+                        let ssh_port = raw_port.and_then(ssh_port_value);
                         (!host.is_empty()).then(|| KnownHost {
                             host,
                             label: t.get("label").and_then(|v| v.as_str()).map(String::from),
-                            ssh_port: t.get("ssh_port").and_then(ssh_port_value),
+                            ssh_port,
+                            ssh_port_raw: raw_port
+                                .filter(|_| ssh_port.is_none())
+                                .map(|v| v.to_string()),
                         })
                     })
                     .collect()
@@ -182,6 +192,7 @@ pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
                 host: String::new(),
                 label: None,
                 ssh_port: None,
+                ssh_port_raw: None,
             });
             continue;
         }
@@ -197,7 +208,13 @@ pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
             match key {
                 "host" => entry.host = val.to_string(),
                 "label" => entry.label = Some(val.to_string()),
-                "ssh_port" => entry.ssh_port = val.trim().parse::<u16>().ok(),
+                "ssh_port" => {
+                    entry.ssh_port = val.trim().parse::<u16>().ok();
+                    entry.ssh_port_raw = entry
+                        .ssh_port
+                        .is_none()
+                        .then(|| aida_core::toml_quote::toml_string(val.trim()));
+                }
                 _ => {}
             }
         }
@@ -238,6 +255,10 @@ pub fn serialize_known_hosts(hosts: &[KnownHost]) -> String {
         }
         if let Some(port) = h.ssh_port {
             s.push_str(&format!("ssh_port = {port}\n"));
+        } else if let Some(raw) = &h.ssh_port_raw {
+            // Unparseable port: write the original value text back unchanged.
+            // trace:BUG-1650 | ai:claude
+            s.push_str(&format!("ssh_port = {raw}\n"));
         }
     }
     s
@@ -253,7 +274,18 @@ pub fn load_known_hosts() -> Vec<KnownHost> {
     let Ok(body) = std::fs::read_to_string(&path) else {
         return Vec::new();
     };
-    parse_known_hosts(&body)
+    let hosts = parse_known_hosts(&body);
+    // trace:BUG-1650 | ai:claude
+    for h in &hosts {
+        if let Some(raw) = &h.ssh_port_raw {
+            eprintln!(
+                "warning: {}: ssh_port = {raw} for {} is not a valid port; using 22 and keeping the value as written",
+                path.display(),
+                h.host
+            );
+        }
+    }
+    hosts
 }
 
 /// Insert-or-update a host in the remembered set (dedup by host), then persist.
@@ -269,6 +301,7 @@ pub fn remember_host(new: KnownHost) -> Result<PathBuf> {
         }
         if new.ssh_port.is_some() {
             existing.ssh_port = new.ssh_port;
+            existing.ssh_port_raw = None;
         }
     } else {
         hosts.push(new);
@@ -484,6 +517,7 @@ fn create_via_gitlab_ssh(
                 host: host.to_string(),
                 label: None,
                 ssh_port: port,
+                ssh_port_raw: None,
             });
             println!("Wired origin + pushed {branch}. Run `aida push` to sync the aida-store leg.");
             Ok(())
@@ -548,6 +582,7 @@ fn interactive_menu(
                     host: host.clone(),
                     label: None,
                     ssh_port: Some(p),
+                    ssh_port_raw: None,
                 });
             }
         }
@@ -2322,11 +2357,13 @@ hosts:
                 host: "gitlab.joemooney.com".to_string(),
                 label: Some("personal GitLab".to_string()),
                 ssh_port: Some(2222),
+                ssh_port_raw: None,
             },
             KnownHost {
                 host: "gitlab.corp.com".to_string(),
                 label: None,
                 ssh_port: None,
+                ssh_port_raw: None,
             },
         ];
         let body = serialize_known_hosts(&hosts);
@@ -2341,6 +2378,7 @@ hosts:
             host: "gitlab.example.com".to_string(),
             label: Some("Joe's \"work\" # GitLab C:\\Users\\RUNNER~1\\x".to_string()),
             ssh_port: Some(2222),
+            ssh_port_raw: None,
         }];
         let body = serialize_known_hosts(&hosts);
         let parsed: toml::Table = toml::from_str(&body).expect("valid TOML");
@@ -2354,6 +2392,7 @@ hosts:
             host: "gitlab.corp.com".to_string(),
             label: Some("corp".to_string()),
             ssh_port: None,
+            ssh_port_raw: None,
         }]);
         assert!(plain.contains("host = \"gitlab.corp.com\"\nlabel = \"corp\"\n"));
     }
@@ -2373,11 +2412,37 @@ hosts:
             table["gitlab_host"].as_array().unwrap()[0]["ssh_port"].as_integer(),
             Some(2222)
         );
-        // Out-of-range or non-numeric strings are ignored, not misread.
-        for bad in ["\"70000\"", "\"ssh\"", "true"] {
+    }
+
+    // Review finding 5: an invalid ssh_port is not used, but it is not
+    // dropped either — the next save writes it back exactly as found.
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_invalid_ssh_port_round_trips_unchanged() {
+        for bad in ["\"22a\"", "\"70000\"", "70000", "\"ssh\"", "true", "-1"] {
             let body = format!("[[gitlab_host]]\nhost = \"h\"\nssh_port = {bad}\n");
-            assert_eq!(parse_known_hosts(&body)[0].ssh_port, None, "{bad}");
+            let parsed = parse_known_hosts(&body);
+            assert_eq!(parsed[0].ssh_port, None, "{bad}");
+            assert_eq!(parsed[0].ssh_port_raw.as_deref(), Some(bad), "{bad}");
+            let resaved = serialize_known_hosts(&parsed);
+            assert!(
+                resaved.contains(&format!("\nssh_port = {bad}\n")),
+                "{resaved}"
+            );
+            assert_eq!(parse_known_hosts(&resaved), parsed, "{bad}");
         }
+        // The line fallback keeps it too (as a quoted string).
+        let body = "not valid toml\n[[gitlab_host]]\nhost = h\nssh_port = 22a\n";
+        let parsed = parse_known_hosts(body);
+        assert_eq!(parsed[0].ssh_port, None);
+        assert_eq!(parsed[0].ssh_port_raw.as_deref(), Some("\"22a\""));
+        assert!(serialize_known_hosts(&parsed).contains("\nssh_port = \"22a\"\n"));
+        // A valid port is never shadowed by a raw value.
+        let ok = parse_known_hosts("[[gitlab_host]]\nhost = \"h\"\nssh_port = 2222\n");
+        assert_eq!(
+            (ok[0].ssh_port, ok[0].ssh_port_raw.as_deref()),
+            (Some(2222), None)
+        );
     }
 
     // trace:BUG-1650 | ai:claude
@@ -2393,6 +2458,7 @@ hosts:
                 host: "gitlab.example.com".to_string(),
                 label: Some("work".to_string()),
                 ssh_port: Some(2222),
+                ssh_port_raw: None,
             }]
         );
     }
