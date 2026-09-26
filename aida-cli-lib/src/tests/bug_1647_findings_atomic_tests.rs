@@ -22,7 +22,7 @@ use aida_core::{Requirement, RequirementStatus};
 
 use crate::bug_1638_race_seam_tests::{
     arm_race, comment_texts, concurrently_comment_and_redescribe, concurrently_set,
-    last_status_author, on_disk, open_backend, project_with, SPEC,
+    last_status_author, on_disk, open_backend, pin_queue_user, project_with, SPEC,
 };
 
 fn queued_ids(store_root: &Path) -> Vec<uuid::Uuid> {
@@ -200,6 +200,7 @@ fn promote_to_work(store_root: &Path, stale: &Requirement) -> anyhow::Result<Str
 // trace:BUG-1647 | ai:claude
 #[test]
 fn bug_1647_promote_queues_and_approves() {
+    let _user = pin_queue_user();
     let (_dir, _root, store_root, stale) = project_with(RequirementStatus::Draft);
     let role = promote_to_work(&store_root, &stale).unwrap();
     assert_eq!(role, "implementer");
@@ -213,6 +214,7 @@ fn bug_1647_promote_queues_and_approves() {
 // trace:BUG-1647 | ai:claude
 #[test]
 fn bug_1647_promote_withdraws_the_queue_entry_when_the_finding_became_final() {
+    let _user = pin_queue_user();
     let (_dir, _root, store_root, stale) = project_with(RequirementStatus::Draft);
     let fired = arm_race(|s| concurrently_set(s, RequirementStatus::Rejected));
 
@@ -234,6 +236,7 @@ fn bug_1647_promote_withdraws_the_queue_entry_when_the_finding_became_final() {
 // trace:BUG-1647 | ai:claude
 #[test]
 fn bug_1647_promote_withdraws_the_queue_entry_when_the_finding_was_deleted() {
+    let _user = pin_queue_user();
     let (_dir, _root, store_root, stale) = project_with(RequirementStatus::Draft);
     let id = stale.id;
     let fired = arm_race(move |s| open_backend(s).delete_requirement(&id).unwrap());
@@ -254,6 +257,7 @@ fn bug_1647_promote_withdraws_the_queue_entry_when_the_finding_was_deleted() {
 // trace:BUG-1647 | ai:claude
 #[test]
 fn bug_1647_promote_restores_an_earlier_queue_entry_when_the_write_fails() {
+    let _user = pin_queue_user();
     let (_dir, _root, store_root, stale) = project_with(RequirementStatus::Draft);
     let storage = aida_core::Storage::new(&store_root);
     let user = crate::current_user_id(None);
@@ -291,6 +295,7 @@ fn bug_1647_promote_restores_an_earlier_queue_entry_when_the_write_fails() {
 // trace:BUG-1647 | ai:claude
 #[test]
 fn bug_1647_promote_reports_a_queue_entry_it_could_not_withdraw() {
+    let _user = pin_queue_user();
     let (_dir, _root, store_root, stale) = project_with(RequirementStatus::Draft);
     let fired = arm_race(|s| {
         concurrently_set(s, RequirementStatus::Rejected);

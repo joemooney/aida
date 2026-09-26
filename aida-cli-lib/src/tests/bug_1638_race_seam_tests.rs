@@ -58,6 +58,18 @@ pub(crate) fn project_with(
     (dir, root, store_root, read)
 }
 
+/// BUG-1658: pin the queue identity (`current_user_id` reads `AIDA_USER`)
+/// for a queue-asserting test, holding the process-wide env lock for the
+/// guard's lifetime. Without it, a parallel test that sets `AIDA_USER`
+/// under its own `EnvVarGuard` can flip the identity between the fixture's
+/// queue writes, the promote under test, and the final `queue_list`, so the
+/// test reads (or the promote writes) a different user's queue file. Hold
+/// the guard for the whole test; do not take another env guard under it.
+// trace:BUG-1658 | ai:claude
+pub(crate) fn pin_queue_user() -> crate::test_env::EnvVarGuard {
+    crate::test_env::EnvVarGuard::set("AIDA_USER", "bug-1658-queue-fixture")
+}
+
 pub(crate) fn open_backend(store_root: &Path) -> aida_core::CachedGitBackend {
     let cache = aida_core::CachedGitBackend::default_cache_path(store_root);
     aida_core::CachedGitBackend::open(store_root, &cache).unwrap()

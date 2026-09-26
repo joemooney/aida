@@ -14,7 +14,7 @@ use std::path::Path;
 use aida_core::{QueueEntry, RequirementStatus};
 
 use crate::bug_1638_race_seam_tests::{
-    arm_race, concurrently_set, open_backend, project_with, SPEC,
+    arm_race, concurrently_set, open_backend, pin_queue_user, project_with, SPEC,
 };
 
 fn promote_to_work(store_root: &Path, stale: &aida_core::Requirement) -> anyhow::Result<String> {
@@ -61,6 +61,7 @@ fn add(store_root: &Path, e: QueueEntry) {
 // trace:BUG-1651 | ai:claude
 #[test]
 fn bug_1651_rollback_keeps_a_concurrent_queue_remove() {
+    let _user = pin_queue_user();
     let (_dir, _root, store_root, stale) = project_with(RequirementStatus::Draft);
     add(
         &store_root,
@@ -93,6 +94,7 @@ fn bug_1651_rollback_keeps_a_concurrent_queue_remove() {
 // trace:BUG-1651 | ai:claude
 #[test]
 fn bug_1651_rollback_keeps_a_concurrent_same_role_re_add() {
+    let _user = pin_queue_user();
     let (_dir, _root, store_root, stale) = project_with(RequirementStatus::Draft);
     let id = stale.id;
     let fired = arm_race(move |s| {
@@ -119,6 +121,7 @@ fn bug_1651_rollback_keeps_a_concurrent_same_role_re_add() {
 // trace:BUG-1651 | ai:claude
 #[test]
 fn bug_1651_rollback_does_not_restore_over_a_concurrent_re_add() {
+    let _user = pin_queue_user();
     let (_dir, _root, store_root, stale) = project_with(RequirementStatus::Draft);
     add(
         &store_root,
@@ -143,6 +146,7 @@ fn bug_1651_rollback_does_not_restore_over_a_concurrent_re_add() {
 // trace:BUG-1651 | ai:claude
 #[test]
 fn bug_1651_undisturbed_rollback_withdraws_with_truthful_wording() {
+    let _user = pin_queue_user();
     let (_dir, _root, store_root, stale) = project_with(RequirementStatus::Draft);
     let fired = arm_race(|s| concurrently_set(s, RequirementStatus::Rejected));
 
@@ -162,6 +166,7 @@ fn bug_1651_undisturbed_rollback_withdraws_with_truthful_wording() {
 // trace:BUG-1651 | ai:claude
 #[test]
 fn bug_1651_rollback_restores_an_i64_max_position_exactly() {
+    let _user = pin_queue_user();
     let (_dir, _root, store_root, stale) = project_with(RequirementStatus::Draft);
     let storage = aida_core::Storage::new(&store_root);
     let user = crate::current_user_id(None);
