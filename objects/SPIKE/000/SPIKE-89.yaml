@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T03:16:37.130372260Z
-modified_at: 2026-09-26T05:27:29.166867872Z
+modified_at: 2026-09-26T05:28:59.705553917Z
 req_type: Spike
 comments:
 - id: 01a0d698-4069-7262-985f-5b089ff43219
@@ -33,6 +33,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved and queued (sign-off). Concrete, bounded and testable.'
   created_at: 2026-09-25T08:03:05.853160481Z
   modified_at: 2026-09-25T08:03:05.853160481Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc30-2c39-77a1-985a-749509ed7045
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): drain-ready, mode drive (acceptance needs a manual real-terminal check, so a human merges). Already queued.'
+  created_at: 2026-09-26T05:28:59.705553917Z
+  modified_at: 2026-09-26T05:28:59.705553917Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
