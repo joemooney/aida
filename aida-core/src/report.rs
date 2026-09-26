@@ -894,6 +894,17 @@ pub fn check_scaffold_status(
             }
         }
 
+        // BUG-1645: a file behind a user-owned symlink (the file itself, or a
+        // symlinked skill / skill pack directory) is never written by
+        // apply, upgrade or refresh, so it is the user's, not drift; flagging
+        // it would nag forever. trace:BUG-1645 | ai:claude
+        if crate::scaffolding::symlink_blocking_write(project_root, &artifact.path, &full_path)
+            .is_some()
+        {
+            status.matching.push(artifact.path.clone());
+            continue;
+        }
+
         if full_path.exists() {
             if let Ok(actual_content) = fs::read_to_string(&full_path) {
                 let matches =
