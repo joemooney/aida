@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:24:49.370047070Z
-modified_at: 2026-09-26T21:42:20.174035867Z
+modified_at: 2026-09-26T21:43:16.509117311Z
 req_type: Bug
 comments:
 - id: 01a0dfa5-c55f-7ba1-898b-0990271d77cf
@@ -28,6 +28,12 @@ comments:
   content: 'CORRECTION: the previous DRAFT comment named 2e01ffe4ab (main''s HEAD) because the pre-commit hook refused the commit (a /// trace line). Demoted it to //; the draft is now committed on claude/bug-1676 @ 2e01ffe4ab with the same content.'
   created_at: 2026-09-26T21:42:20.174035867Z
   modified_at: 2026-09-26T21:42:20.174035867Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfac-271d-7a10-b8b7-e49db532325d
+  author: joe
+  content: 'CORRECTION 2: the draft is committed and pushed on claude/bug-1676 @ de11888a5f (the two earlier comments named main''s HEAD because the pre-commit hook refused a /// trace line twice; fixed). Content as described in the DRAFT comment.'
+  created_at: 2026-09-26T21:43:16.509117311Z
+  modified_at: 2026-09-26T21:43:16.509117311Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df93-b184-7670-89d5-d7caa1ab82b4
