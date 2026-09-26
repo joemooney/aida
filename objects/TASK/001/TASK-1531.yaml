@@ -8,13 +8,43 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:36:46.531543123Z
-modified_at: 2026-09-26T19:38:30.737491511Z
+modified_at: 2026-09-26T21:33:07.404496191Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0df06-4b79-7f61-95f3-b39e88657d9e
   created_at: 2026-09-26T19:38:30.737481968Z
   created_by: joe
+comments:
+- id: 01a0dfa2-dbcc-7a52-bee7-d63058b6bb2b
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; base = origin/claude/bug-1667 d3475bbdd3, not merged: authority PR left open for Joe): make the bypass write unreachable except through the human gate.
+
+    FILES/SYMBOLS (bug-1667 branch)
+    - aida-cli-lib/src/config_cmd.rs: handle_config_permissions_command :869, bypass_confirm_terminal :917, confirm_bypass_at_terminal :934, set_permission_posture_gated :969 (the only gate), apply_permission_posture :1021 (ungated; writes agents + codex), write_agents_posture Bypass arm :1139, write_codex_posture Bypass arm :1165; the config menu blocks "bypass" (:3107) then calls apply (:3121); onboarding contained write :1295.
+    - doctor_cmd.rs:4809 heal_doctor_permission_posture (Contained only).
+    - lib.rs: maybe_prompt_agent_posture :28725 ("3" => Bypass at :28776) -> write_global_agents_permission_posture :29172 writes `[agents] bypass = true` to ~/.aida/agents.toml with plain std::fs::write, NOT via apply_permission_posture. This is a SECOND bypass writer: its TTY check is raw is_terminal (not the seam) and it has no y/N confirmation. TASK-1500 A3 already asks for the seam; the confirmation is missing (see BUG NOTE).
+
+    APPROACH
+    Typestate token (compile-time proof) plus the scan as belt-and-braces: add `pub(crate) struct HumanConfirmedBypass(());` in config_cmd.rs, constructed only by confirm_bypass_at_terminal(..) -> Option<HumanConfirmedBypass> (private fn, same module). Split the writer: apply_permission_posture(root, tier, scope) keeps its signature and does `bail!("bypass posture must go through the confirmed writer")` on Bypass before any backup/write; new apply_bypass_posture(root, scope, _proof: HumanConfirmedBypass) does today's Bypass branch of write_agents_posture / write_codex_posture. Only set_permission_posture_gated can obtain the token. Route maybe_prompt_agent_posture's Bypass pick through set_permission_posture_gated(User) with bypass_confirm_terminal() and real stdin/stdout, so init reuses the [y/N] gate and the seam (satisfies TASK-1500 A3 too); Native/Contained keep write_global_agents_permission_posture. Delete the bypass-writing branch there.
+    Callers unchanged: onboarding Contained :1295, config menu Native/Contained :3121 (bypass stays Blocked), doctor heal Contained :4809, lib.rs Contained via User scope :29181, tests at :3989-4133 (Native/Contained).
+
+    EDGE CASES / FAIL-SAFE
+    - apply_permission_posture(Bypass) returns Err and writes nothing (the check precedes backup_file, so no partial write). The token has no Clone/Default/Debug-construct path and is pub(crate) with a private field, so no other module can forge it. init: EOF/No writes nothing and prints the existing note; non-TTY init already returns early.
+
+    TESTS (fake HOME via EnvVarsGuard::set(("HOME", ..)) / AIDA_HOME, tempdir project; extend the branch's gated() helper at :4417)
+    - apply_permission_posture_refuses_bypass_and_writes_nothing; bypass_writer_requires_human_token_from_gate (the existing bug_1667_bypass_at_terminal_yes_writes_both_scopes keeps passing through the new path); init_posture_pick_bypass_goes_through_gate_and_needs_yes (seam pins stdin/stdout as tty; input "3\nn\n" writes nothing; "3\ny\n" writes bypass = true); scan test bypass_posture_writer_only_reachable_from_human_gate: grep src/ for `apply_bypass_posture(` and `HumanConfirmedBypass(`, allowed only in config_cmd.rs set_permission_posture_gated / confirm_bypass_at_terminal and inside #[cfg(test)] blocks; plus ConfigPermissionTier::Bypass never appears as an argument to apply_permission_posture( outside tests.
+
+    OVERLAP / ORDERING
+    - Blocked on BUG-1667 merging (Done, not Completed; Joe's authority PR). Rebase on its final symbols (set_permission_posture_gated, bypass_confirm_terminal may be renamed in merge review). TASK-1500 (init YOLO prompt, A3 seam) touches maybe_prompt_agent_posture: this task owns the bypass-pick routing, TASK-1500 owns the confirm-setting prompt; coordinate to avoid a double edit.
+
+    BUG NOTE (bug-1667 branch, not filed): the strict review's claim "all bypass write paths enumerated" is incomplete: `aida init`'s posture picker (lib.rs :28776 -> :29172) still writes bypass = true to ~/.aida/agents.toml with raw is_terminal and no confirmation. TASK-1531 as planned closes it; the BUG-1667 merge reviewer may want to know before merging.
+
+    VERDICT: READY (after BUG-1667 merges). Design choice made here: token typestate + refuse in the generic writer; no operator decision needed.
+  created_at: 2026-09-26T21:33:07.404496191Z
+  modified_at: 2026-09-26T21:33:07.404496191Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: b13b2c611e810a2ba044efb50b32070667d4b37a
   branch: main
