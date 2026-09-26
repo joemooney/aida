@@ -37,12 +37,12 @@ description: |
   - After a code failure and store success, `aida push` exits nonzero and reports partial success plus the appropriate `aida pull` recovery command.
   - The symmetric store-failure/code-success case also exits nonzero.
   - Scripted and interactive modes have consistent exit semantics.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T16:59:51.629805515Z
-modified_at: 2026-09-26T01:34:17.701949237Z
+modified_at: 2026-09-26T02:16:46.270259165Z
 req_type: Bug
 tags:
 - diagnostics
@@ -76,6 +76,20 @@ comments:
   created_at: 2026-09-26T01:34:17.701949237Z
   modified_at: 2026-09-26T01:34:17.701949237Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0db80-2fb1-7930-891a-ff3022d258cc
+  author: aida-auto-bump
+  timestamp: 2026-09-26T02:16:46.257568173Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0db80-2fbe-7cc2-a8fb-41356511691f
+  timestamp: 2026-09-26T02:16:46.270255694Z
+  agent: implementer
+  commit_sha: 1b896f60516fbf09faa8ee82affe1b6626a26378
+  summary: Completed via merge 1b896f60
 filed_at:
   code_sha: ac9803a159e1871122232d6e6512ca668da96446
   branch: main
@@ -83,3 +97,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: ac9803a159
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T02:16:46.257536049Z
+  completion_sha: 1b896f60516fbf09faa8ee82affe1b6626a26378
