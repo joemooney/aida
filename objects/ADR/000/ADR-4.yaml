@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:04.203194099Z
-modified_at: 2026-09-26T18:33:48.550501352Z
+modified_at: 2026-09-26T18:33:51.660317893Z
 req_type: Decision
 tags:
 - batch:repositioning
@@ -52,6 +52,10 @@ relationships:
 - rel_type: References
   target_id: 019ebd8f-a31a-7521-915c-80a1cc712061
   created_at: 2026-06-12T20:42:49.524305141Z
+  created_by: joe
+- rel_type: SupersededBy
+  target_id: 01a0defd-af81-7282-a696-59f70cf334c2
+  created_at: 2026-09-26T18:33:51.660314523Z
   created_by: joe
 comments:
 - id: 019ebe00-36d7-75a0-a0a8-4a28f6ee146b
