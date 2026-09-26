@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:12:05.244013845Z
-modified_at: 2026-09-26T21:16:00.222769004Z
+modified_at: 2026-09-26T21:19:43.332189008Z
 req_type: Task
+comments:
+- id: 01a0df96-96e4-7eb1-b263-f19f9d6066a5
+  author: joe
+  content: 'DRAFT (uncompiled) on claude/task-1530 @ a67fa9cc64: rewrote the Context and handoff section in both template masters (skills/ and skills-portable/ aida-orchestrate.md): ceiling is advisory, rely on harness compaction, refresh handoff after every batch, re-read handoff/open list/aida ps after compaction; rotation reserved for operator request or a genuinely broken session and hands off to a successor. make sync-templates and make check-templates pass. Docs-only: complete. No tests (prose only). Nothing uncertain; no compile risk.'
+  created_at: 2026-09-26T21:19:43.332189008Z
+  modified_at: 2026-09-26T21:19:43.332189008Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df93-2f5e-78b0-a1bd-1a55f4a89171
   author: aida-session-start
