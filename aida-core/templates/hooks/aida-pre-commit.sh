@@ -228,16 +228,20 @@ fi
 # source_doc_comments_carry_no_spec_id_provenance catches it minutes later; this
 # gate catches it at the moment of writing.
 #
-# A line is *provenance* — and rejected — when it carries a `trace:` marker, OR
-# is a *bare* SPEC-ID (essentially nothing but SPEC-ID token(s) + punctuation,
-# no descriptive prose words). A *descriptive* mention of a SPEC-ID inside prose
-# (e.g. `/// reuses the STORY-122 usage log`) is legitimate help text, NOT a
-# leak, and is allowed (BUG-629 tightened this from the old over-broad "any
-# SPEC-ID token" criterion, which forced agents to reword legit `///` prose).
-# This is the SAME criterion as the cli.rs `doc_comment_is_provenance_leak`
-# helper — keep the two in lockstep (TASK-903).
-# Fix a real offender: demote the `///` to a plain `//` line above the item.
-# Emergency skip: pass --no-verify (or --allow-intermediate, handled above).
+# A line is *provenance* — and rejected — when it carries a SPEC-ID at all: a
+# `trace:` marker, a *bare* SPEC-ID (essentially nothing but SPEC-ID token(s) +
+# punctuation, no descriptive prose words), OR a *descriptive* mention of a
+# SPEC-ID inside otherwise-legitimate prose (e.g. `/// reuses the STORY-122
+# usage log`). BUG-629 used to allow the descriptive-prose case; TASK-1516 found
+# ~20 real `--help` leaks that carve-out let through and removed it, so any
+# SPEC-ID on a `///` line is now rejected UNLESS the exact trimmed line is in
+# `PROSE_SPEC_ID_ALLOWLIST` (empty today — a reviewed, rare opt-out for
+# deliberately developer-/operator-facing help). This is the SAME criterion as
+# the cli.rs `doc_comment_is_provenance_leak` helper — keep the two in lockstep
+# (TASK-903, TASK-1516).
+# Fix a real offender: demote the `///` to a plain `//` line above the item, or
+# reword the prose without the id. Emergency skip: pass --no-verify (or
+# --allow-intermediate, handled above).
 #
 # Scoped to the STAGED DIFF (added lines only), NOT whole staged files: a commit
 # that merely TOUCHES a file carrying pre-existing `///` provenance debt must not
@@ -259,27 +263,34 @@ fi
 # is still refused, including extra copies beyond the number removed. The
 # removal pass diff-filters D too, so a move whose source file is deleted
 # outright still credits its lines.
-# trace:TASK-135 trace:BUG-624 trace:BUG-629 trace:TASK-903 trace:TASK-144 | ai:claude
+# trace:TASK-135 trace:BUG-624 trace:BUG-629 trace:TASK-903 trace:TASK-144 trace:TASK-1516 | ai:claude
 SPEC_ID_RE='(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN)-[0-9]+'
 
+# TASK-1516: exact, trimmed `///` lines that MAY carry a SPEC-ID because the
+# help they produce is deliberately developer-/operator-facing and reviewed as
+# such. Mirror of the cli.rs `PROSE_SPEC_ID_ALLOWLIST` const — empty today.
+# One entry per line; add a line here only for a genuine, reviewed exception.
+__aida_prose_spec_id_allowlist=(
+)
+
 # Mirror of cli.rs `doc_comment_is_provenance_leak`. Input: a `///`-prefixed doc
-# line. Returns 0 (leak → reject) when it carries `trace:` or is a bare SPEC-ID;
-# returns 1 (allow) for a descriptive prose mention or no SPEC-ID at all.
+# line. Returns 0 (leak → reject) whenever it carries a SPEC-ID at all — bare,
+# `trace:`-marked, or inside descriptive prose — UNLESS the exact trimmed line
+# is in `__aida_prose_spec_id_allowlist`; returns 1 (allow) for no SPEC-ID at
+# all, or an allowlisted line.
 __aida_doc_is_provenance_leak() {
     local docline="$1"
     # No SPEC-ID at all → nothing to leak.
     printf '%s\n' "$docline" | grep -qE "$SPEC_ID_RE" || return 1
-    # A `trace:` marker on a `///` line is always provenance.
-    case "$docline" in *trace:*) return 0 ;; esac
-    # Strip the leading `///`, then delete every SPEC-ID token. If an alphabetic
-    # word (2+ ascii letters) survives, this is descriptive prose → allow.
-    # Otherwise only punctuation/digits remain → bare SPEC-ID → reject.
-    local residual
-    residual="$(printf '%s\n' "$docline" \
-        | sed -E 's#^[[:space:]]*///+##; s/'"$SPEC_ID_RE"'/ /g')"
-    if printf '%s\n' "$residual" | grep -qE '[A-Za-z]{2,}'; then
-        return 1
-    fi
+    # An explicit, reviewed carve-out for deliberately developer-/
+    # operator-facing help that needs to name a real SPEC-ID.
+    local trimmed_docline allowed
+    trimmed_docline="$(__aida_trim_ws "$docline")"
+    for allowed in "${__aida_prose_spec_id_allowlist[@]}"; do
+        [ "$trimmed_docline" = "$allowed" ] && return 1
+    done
+    # Any other SPEC-ID on a `///` line — bare, `trace:`-marked, or inside
+    # descriptive prose — leaks into `--help`. Reject.
     return 0
 }
 
@@ -364,11 +375,11 @@ while IFS= read -r line; do
 done <<< "$__aida_staged_rs_diff"
 
 if [ ${#DOC_TRACE_OFFENDERS[@]} -gt 0 ]; then
-    echo -e "${RED}Refusing commit: SPEC-ID provenance is on a \`///\` doc comment." >&2
-    echo -e "clap pulls \`///\` doc blocks into \`--help\`, so a \`trace:\` marker or a" >&2
-    echo -e "bare SPEC-ID leaks into user-facing output. Demote it to a plain \`//\`" >&2
-    echo -e "comment above the item (a descriptive SPEC-ID mention in prose is fine)." >&2
-    echo -e "See docs/user-facing-text-conventions.md${NC}" >&2
+    echo -e "${RED}Refusing commit: a SPEC-ID is on a \`///\` doc comment." >&2
+    echo -e "clap pulls \`///\` doc blocks into \`--help\`, so a \`trace:\` marker, a bare" >&2
+    echo -e "SPEC-ID, or even a descriptive mention of one in prose leaks it into" >&2
+    echo -e "user-facing output. Demote it to a plain \`//\` comment above the item, or" >&2
+    echo -e "reword the prose without the id. See docs/user-facing-text-conventions.md${NC}" >&2
     echo -e "${YELLOW}Offending lines:${NC}" >&2
     for off in "${DOC_TRACE_OFFENDERS[@]}"; do
         echo -e "  - ${YELLOW}${off}${NC}" >&2

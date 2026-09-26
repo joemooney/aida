@@ -36,10 +36,16 @@ artifacts exist *for* developers.
 
 The trap is a string that is *both* a code comment and user-facing output.
 A `///` doc comment on a `clap` field is the prime example — `clap` renders
-it into `aida <cmd> --help`. There, the `trace:` marker leaks to the user.
-The fix is to keep the trace as a plain `//` comment (still a developer
-artifact, still a code comment) and let only the descriptive prose live in
-the `///` doc comment.
+it into `aida <cmd> --help`. There, a SPEC-ID leaks to the user whether it's
+a bare id, a `trace:` marker, or just mentioned in otherwise-normal prose
+("...reuses the `STORY-122` usage log") — a user reading `--help` has no way
+to tell a deliberate citation from an internal breadcrumb; either way it's
+project-internal noise (TASK-1516). The fix is to keep the id as a plain `//`
+comment above the item (still a developer artifact, still a code comment)
+and reword the `///` doc comment so its prose doesn't need to name the id at
+all. `aida-cli-lib/src/cli.rs`'s `doc_comment_is_provenance_leak` enforces
+this — including the prose case — with a reviewed, per-line allowlist for the
+rare help text that's deliberately developer-/operator-facing.
 
 ## Worked example — the `per TASK-85` wart
 
@@ -76,11 +82,16 @@ have no place in a string a user reads.
 Grep user-facing string sites for SPEC-ID patterns:
 
 ```bash
-# println/eprintln/format! output and clap doc comments
+# println/eprintln/format! output
 rg -nE '(per|see) (TASK|BUG|STORY|EPIC|SPIKE|FR)-[0-9]' aida-cli/src aida-tui/src
-rg -nE 'trace:(TASK|BUG|STORY|EPIC|SPIKE|FR)-[0-9]' aida-cli/src/cli.rs   # clap /// docs → --help
+
+# clap doc comments — any SPEC-ID at all (bare, trace:, or prose-embedded);
+# same criterion `doc_comment_is_provenance_leak` and its unit tests enforce
+rg -nE '^\s*///.*\b(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN)-[0-9]+' aida-cli-lib/src/cli.rs
 ```
 
 Any hit inside a `println!` / `eprintln!` / `format!` that reaches a
 terminal, or inside a `///` doc comment `clap` turns into `--help`, is a
-wart. Hits inside `//` comments, commit messages, and plan files are fine.
+wart — including a descriptive prose mention, not just a bare id or a
+`trace:` marker (TASK-1516). Hits inside `//` comments, commit messages, and
+plan files are fine.
