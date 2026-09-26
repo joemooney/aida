@@ -3224,6 +3224,13 @@ fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str)
         if dest.exists() {
             continue;
         }
+        // Never write through a symlinked file or skill directory.
+        // trace:BUG-1645 | ai:claude
+        if aida_core::scaffolding::symlink_blocking_write(project_root, &artifact.path, &dest)
+            .is_some()
+        {
+            continue;
+        }
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent)?;
         }
