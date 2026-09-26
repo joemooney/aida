@@ -7716,6 +7716,12 @@ mod tests {
             "internal",
             // trace:TASK-1459 | ai:claude
             "review-in-progress",
+            // BUG-1629: a refused launch never started anything, and phase 1
+            // already spent its single replacement; the orchestrator's
+            // transient budget must not multiply it.
+            // trace:BUG-1629 | ai:claude
+            "launch-refused",
+            "lost-child-state",
         ] {
             assert!(!is_transient_retry_cause(cause), "{cause}");
         }
@@ -9815,6 +9821,10 @@ mod tests {
             MockPhaseDriver::failing_at_with_kind(Phase::Implementer, FailureKind::LaunchRefused)
                 .recovering_phase1_failure_from_pr(Phase::Ci);
         driver.shelve_succeeds = true;
+        // BUG-1629: a full transient budget must still not retry a refused
+        // launch; `calls` below proves a single implementer run.
+        // trace:BUG-1629 | ai:claude
+        driver.transient_retry_budget = 3;
         let result = orchestrate(
             &mut driver,
             "BUG-1524",

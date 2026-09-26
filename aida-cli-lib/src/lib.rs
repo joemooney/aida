@@ -100338,53 +100338,148 @@ fn orchestrated_child_refusal_path(receipt: &std::path::Path) -> std::path::Path
 /// BUG-1629: called on the error path of every `aida` invocation. When this
 /// process is an orchestrated phase-1 `queue work` child that failed before
 /// publishing its handoff receipt, record the refusal next to the receipt so
-/// the parent can name the real reason. Best-effort; never overwrites, and
-/// never fires for a child that got as far as its receipt.
+/// the parent can name the real reason. Best-effort; see
+/// [`orchestrated_child_refusal_to_record`] for the gates.
 // trace:BUG-1629 | ai:claude
 fn record_orchestrated_child_refusal(message: &str) {
-    let Ok(receipt) = std::env::var(ORCHESTRATED_LEASE_RECEIPT_ENV) else {
-        return;
-    };
-    let args: Vec<String> = std::env::args().skip(1).take(2).collect();
-    if args != ["queue", "work"] {
-        return;
-    }
-    let receipt = std::path::PathBuf::from(receipt);
-    let refusal = orchestrated_child_refusal_path(&receipt);
-    if receipt.exists() || refusal.exists() {
-        return;
-    }
-    let summary = orchestrated_child_refusal_summary(message);
-    if !summary.is_empty() {
+    let receipt_env = std::env::var(ORCHESTRATED_LEASE_RECEIPT_ENV).ok();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some((refusal, summary)) =
+        orchestrated_child_refusal_to_record(receipt_env.as_deref(), &args, message, |path| {
+            path.exists()
+        })
+    {
         let _ = write_atomic(&refusal, &summary);
     }
 }
 
-/// BUG-1629: the first non-empty line of an error, bounded for a message.
+/// BUG-1629: the pure decision behind [`record_orchestrated_child_refusal`].
+/// Records `(refusal path, summary)` only when all hold: the process carries
+/// the orchestrator's receipt env var, it is a `queue work` invocation, the
+/// receipt does not exist yet (a child that got that far is not a pre-lease
+/// refusal), no refusal was recorded already (never overwrite the first
+/// cause), and the summary is non-empty.
 // trace:BUG-1629 | ai:claude
-fn orchestrated_child_refusal_summary(message: &str) -> String {
-    let line = message
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .unwrap_or_default();
-    line.chars().take(400).collect()
+fn orchestrated_child_refusal_to_record(
+    receipt_env: Option<&str>,
+    args: &[String],
+    message: &str,
+    exists: impl Fn(&std::path::Path) -> bool,
+) -> Option<(std::path::PathBuf, String)> {
+    let receipt = std::path::PathBuf::from(receipt_env.filter(|r| !r.trim().is_empty())?);
+    if args.len() < 2 || args[0] != "queue" || args[1] != "work" {
+        return None;
+    }
+    let refusal = orchestrated_child_refusal_path(&receipt);
+    if exists(&receipt) || exists(&refusal) {
+        return None;
+    }
+    let summary = orchestrated_child_refusal_summary(message);
+    (!summary.is_empty()).then_some((refusal, summary))
 }
 
-/// BUG-1629: read and remove the refusal a phase-1 child recorded.
+/// BUG-1629: the most characters of child refusal text either side keeps.
+// trace:BUG-1629 | ai:claude
+const ORCHESTRATED_CHILD_REFUSAL_MAX_CHARS: usize = 400;
+
+/// BUG-1629: remove ANSI escape sequences and every other control character
+/// (ESC, CR, NUL, ...) so child text cannot restyle or rewrite the parent's
+/// stderr line, the `SpecRetried` detail, or the shelve reason.
+// trace:BUG-1629 | ai:claude
+fn strip_control_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            match chars.peek() {
+                // CSI: ESC [ params... final byte in @..~
+                Some('[') => {
+                    chars.next();
+                    for c in chars.by_ref() {
+                        if ('@'..='~').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                // OSC: ESC ] ... terminated by BEL or ESC \
+                Some(']') => {
+                    chars.next();
+                    while let Some(c) = chars.next() {
+                        if c == '\u{7}' {
+                            break;
+                        }
+                        if c == '\u{1b}' {
+                            if chars.peek() == Some(&'\\') {
+                                chars.next();
+                            }
+                            break;
+                        }
+                    }
+                }
+                // Two-character escape: drop the next character too.
+                Some(_) => {
+                    chars.next();
+                }
+                None => {}
+            }
+            continue;
+        }
+        if !c.is_control() {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// BUG-1629: the first non-empty line of an error, control characters
+/// stripped, bounded for a message.
+// trace:BUG-1629 | ai:claude
+fn orchestrated_child_refusal_summary(message: &str) -> String {
+    message
+        .lines()
+        .map(|line| strip_control_text(line).trim().to_string())
+        .find(|line| !line.is_empty())
+        .unwrap_or_default()
+        .chars()
+        .take(ORCHESTRATED_CHILD_REFUSAL_MAX_CHARS)
+        .collect()
+}
+
+/// BUG-1629: read and remove the refusal a phase-1 child recorded. The read
+/// is capped (4 KiB) and re-sanitized to the writer's bound, so a file that
+/// was not written by the writer above cannot flood or restyle the message.
 // trace:BUG-1629 | ai:claude
 fn take_orchestrated_child_refusal(
     project_root: &std::path::Path,
     session_uuid: &str,
 ) -> Option<String> {
+    use std::io::Read;
     let path = orchestrated_child_refusal_path(&orchestrated_lease_receipt_path(
         project_root,
         session_uuid,
     ));
-    let body = std::fs::read_to_string(&path).ok();
+    let mut bytes = Vec::new();
+    let read = std::fs::File::open(&path)
+        .and_then(|file| file.take(4096).read_to_end(&mut bytes))
+        .is_ok();
     let _ = std::fs::remove_file(&path);
-    body.map(|body| body.trim().to_string())
-        .filter(|body| !body.is_empty())
+    if !read {
+        return None;
+    }
+    let summary = orchestrated_child_refusal_summary(&String::from_utf8_lossy(&bytes));
+    (!summary.is_empty()).then_some(summary)
+}
+
+/// BUG-1629: drop any refusal file for a session whose child did establish
+/// its lease or receipt. A child can write its receipt and still fail later,
+/// or a refusal can survive a receipt that was published afterwards; the
+/// file is keyed by the session uuid so it is harmless, but the parent
+/// clears it so it never accumulates.
+// trace:BUG-1629 | ai:claude
+fn discard_orchestrated_child_refusal(project_root: &std::path::Path, session_uuid: &str) {
+    let _ = std::fs::remove_file(orchestrated_child_refusal_path(
+        &orchestrated_lease_receipt_path(project_root, session_uuid),
+    ));
 }
 
 /// BUG-1629: the precise recovery state when a phase-1 child kept neither its
@@ -105060,7 +105155,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // trace:BUG-1629 | ai:claude
         let (lease_id, recorded_branch, worktree_path) =
             match self.discover_orchestrated_lease(&session_uuid) {
-                Ok(found) => found,
+                Ok(found) => {
+                    // trace:BUG-1629 | ai:claude
+                    discard_orchestrated_child_refusal(&self.project_root, &session_uuid);
+                    found
+                }
                 Err(failure)
                     if failure.kind == auto_complete::FailureKind::LaunchRefused
                         && watchdog_failure.is_none() =>

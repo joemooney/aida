@@ -543,3 +543,144 @@ fn bug_1629_refusal_summary_is_the_first_line_bounded() {
         std::path::PathBuf::from("h/abc.refusal.txt")
     );
 }
+
+/// The refusal-file write gates: env var present, a `queue work` argv, no
+/// receipt yet, no earlier refusal, and a non-empty summary.
+#[test]
+fn bug_1629_refusal_record_gates() {
+    let argv = |words: &[&str]| words.iter().map(|w| w.to_string()).collect::<Vec<_>>();
+    let work = argv(&["queue", "work", "NFR-56", "--session-id", "x"]);
+    let nothing_exists = |_: &std::path::Path| false;
+    let receipt = "h/abc.json";
+
+    let (path, summary) = super::orchestrated_child_refusal_to_record(
+        Some(receipt),
+        &work,
+        "Error: spec is Draft\nCaused by: x",
+        nothing_exists,
+    )
+    .expect("an orchestrated queue-work refusal is recorded");
+    assert_eq!(path, std::path::PathBuf::from("h/abc.refusal.txt"));
+    assert_eq!(summary, "Error: spec is Draft");
+
+    // No orchestrator env var: an ordinary invocation records nothing.
+    assert!(
+        super::orchestrated_child_refusal_to_record(None, &work, "e", nothing_exists).is_none()
+    );
+    assert!(
+        super::orchestrated_child_refusal_to_record(Some(" "), &work, "e", nothing_exists)
+            .is_none()
+    );
+    // Not `queue work`: a nested `aida show` failure inside the session.
+    for other in [
+        argv(&["show", "NFR-56"]),
+        argv(&["queue"]),
+        argv(&["queue", "done", "NFR-56"]),
+        argv(&[]),
+    ] {
+        assert!(
+            super::orchestrated_child_refusal_to_record(Some(receipt), &other, "e", nothing_exists)
+                .is_none(),
+            "{other:?}"
+        );
+    }
+    // The receipt exists: the child got past lease minting.
+    let receipt_exists = |p: &std::path::Path| p.extension().is_some_and(|e| e == "json");
+    assert!(
+        super::orchestrated_child_refusal_to_record(Some(receipt), &work, "e", receipt_exists)
+            .is_none()
+    );
+    // A refusal already exists: never overwrite the first cause.
+    let refusal_exists = |p: &std::path::Path| p.to_string_lossy().ends_with(".refusal.txt");
+    assert!(
+        super::orchestrated_child_refusal_to_record(Some(receipt), &work, "e", refusal_exists)
+            .is_none()
+    );
+    // Empty or control-only message: nothing worth recording.
+    assert!(super::orchestrated_child_refusal_to_record(
+        Some(receipt),
+        &work,
+        "\n \u{1b}[31m\u{1b}[0m\r\n",
+        nothing_exists
+    )
+    .is_none());
+}
+
+/// Control characters and ANSI escapes never reach the parent's message.
+#[test]
+fn bug_1629_refusal_summary_strips_control_text() {
+    assert_eq!(
+        super::orchestrated_child_refusal_summary(
+            "\u{1b}[1;31mError:\u{1b}[0m spec is Draft\r\u{7}\u{0}"
+        ),
+        "Error: spec is Draft"
+    );
+    assert_eq!(
+        super::strip_control_text("a\u{1b}]0;title\u{7}b\u{1b}]8;;x\u{1b}\\c\u{1b}Md\te"),
+        "abcde"
+    );
+    assert_eq!(super::strip_control_text("plain ünïcode"), "plain ünïcode");
+}
+
+/// The parent's read is capped and re-bounded to the writer's limit, and
+/// the file is consumed either way.
+#[test]
+fn bug_1629_parent_refusal_read_is_capped_and_sanitized() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let sid = "cccccccc-1629-7000-8000-000000000000";
+    let path = super::orchestrated_child_refusal_path(&orchestrated_lease_receipt_path(root, sid));
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, format!("\u{1b}[31m{}\u{1b}[0m", "z".repeat(100_000))).unwrap();
+
+    let summary = super::take_orchestrated_child_refusal(root, sid).unwrap();
+    assert_eq!(summary.chars().count(), 400);
+    assert!(summary.chars().all(|c| c == 'z'), "{summary:.40}");
+    assert!(!path.exists(), "the refusal file is consumed");
+    assert!(super::take_orchestrated_child_refusal(root, sid).is_none());
+}
+
+/// A refusal file left by a child that did establish its lease is cleared
+/// when phase 1 finds the lease, so the files never accumulate.
+#[cfg(unix)]
+#[test]
+fn bug_1629_refusal_file_of_a_leased_child_is_discarded() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = project(&temp);
+    let leased_then_refused = r#"printf 'late failure\n' > "${AIDA_ORCHESTRATED_LEASE_RECEIPT%.json}.refusal.txt"
+lease="lease-${sid//-/}"
+cat > ".aida/sessions/${lease}.toml" <<LEASE
+id = "$lease"
+scope = "$spec"
+slug = "nfr-56"
+owner = "test"
+worktree_path = "$PWD/../proj-nfr-56"
+branch = "nfr-56"
+started_at = "2026-09-24T00:00:00Z"
+hostname = "test"
+LEASE
+cat > ".aida/sessions/${lease}.manifest.toml" <<MANIFEST
+session_id = "$lease"
+planned_at = "2026-09-24T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+MANIFEST
+printf '{"spec":"%s","category":"design-fork","detail":"pick one"}' "$spec" > "$AIDA_PUNT_SIGNAL_FILE"
+exit 0"#;
+    let stub = stub(&root, leased_then_refused, "exit 1");
+    let mut d = driver(&root, "NFR-56", stub);
+
+    let outcome = d.run_implementer().expect("the leased child is used");
+    assert!(matches!(outcome, ImplementerOutcome::Punted { .. }));
+    let handoffs = root.join(".aida").join("orchestrator-handoffs");
+    let leftovers: Vec<_> = std::fs::read_dir(&handoffs)
+        .map(|rd| {
+            rd.flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.ends_with(".refusal.txt"))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+}
