@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T10:49:48.354461550Z
-modified_at: 2026-09-26T12:02:00.507820956Z
+modified_at: 2026-09-26T12:02:25.811048931Z
 req_type: Bug
 comments:
 - id: 01a0dd56-4f9f-7042-8d4e-09802099fbec
@@ -39,6 +39,12 @@ comments:
   content: 'Review (fresh Opus reviewer): APPROVE WITH NITS. Reviewed c14cac435e (the BUG-1648 delta; 3-dot diff vs main also shows BUG-1646, already on main). Evidence: check-portability.sh rc=0; --check-allowlist-growth origin/main rc=0; targeted cargo test (bug_1633 bug_1624 bug_1627 bug_1629 bug_1621 task_1507 statusline worktree_handler bug_1607 task_358 mcp_claim_fixture) 439 passed / 0 failed / 1 ignored on Linux; Windows nightly 36237861234 green per operator. Product fix is sound: on Unix, plan_rel_path gives the same string as the old display() for docs/plans/x.md, so existing Linux/macOS markers and followup-src tags still dedup. On Windows, components() also splits the mixed ''C:\..\docs/plans\x.md'' from project_root.join("docs/plans"). No other code compares these strings in OS form; the manifest plan_file (discover_plan_context) only gets joined back to a path. Test fixes keep their intent: the NUL test still drops the value because of the NUL (the path is now absolute on every OS); the TOML fixtures use the encoder; the autocrlf pin does not change what task_1507 asserts. The widened regex finds 0 new test-scope hits beyond the fixed sites and the 2 baselined ones. Its only new match repo-wide is shift.rs:209/265 (message text, production scope, not scanned). FINDINGS: (1) LOW statusline_tests.rs:5807 parent_project_root_for_session_none_for_legacy_lease: the TOML encoding removes the Windows cause, but the test still passes vacuously if the lease ever fails to parse or match. Fix: before the is_none, add assert!(active_lease_for_cwd(&worktree, &worktree.canonicalize().unwrap()).is_some(), "legacy lease must parse and cover cwd"). (2) LOW lib.rs:44001 parse_extracted_plans_from_marker and the followup-src strip (~44990): markers and tags that older builds wrote on Windows hold ''docs/plans\x.md'' and will not match the new ''/'' form, so the plan-path dedup misses once (the global-title guard still catches most duplicates). Fix: normalize read-side values with .replace(''\\'', "/"), or file a follow-up. (3) NIT lib.rs:44857 plan_rel_path duplicates the BUG-466 inline logic at lib.rs:16007-16013. Fix: reuse the helper there. (4) NIT scripts/portability-allowlist.txt:205 header still says ''3 test sites baselined''; there are now 2. (5) INFO: the branch predates batches 91/92, and merge-tree shows content conflicts in scripts/portability-{rules.json,allowlist.txt} because the BUG-1646 squash landed on both sides. Resolve by taking the branch versions when rebasing onto main.'
   created_at: 2026-09-26T12:02:00.507820956Z
   modified_at: 2026-09-26T12:02:00.507820956Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd98-5f93-7992-879d-db3db1647e3f
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): review APPROVE WITH NITS accepted. Nits 1-4 and the main merge are being applied by the implementer before batch 94; the orchestrator will delta-check them.'
+  created_at: 2026-09-26T12:02:25.811048931Z
+  modified_at: 2026-09-26T12:02:25.811048931Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
