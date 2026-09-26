@@ -1,0 +1,38 @@
+id: 01a0db6b-bd86-7333-8fdf-04c2f2df38db
+spec_id: EPIC-74
+agreed_id: EPIC-74
+title: 'Feature lanes: epic-bound side work that cannot reach main until deliberately landed'
+description: |
+  Let an operator (or an agent seat) work a feature **on the side**, bound to an epic, with a guarantee that nothing reaches `main` until the lane is deliberately landed.
+
+  What exists today is `aida worktree enter EPIC-N`: a sibling worktree on `epic-n-work`, with focus scoped to the epic's subtree. The isolation is by convention only:
+  1. **Scoping is one-way.** Main-line seats (drains, `aida integrate`, `aida groom`, the queue) still see the epic's specs. An approved and queued child ships to **main**.
+  2. **There is no integration target.** Implementer PRs target `main`, and Completed is hard-wired to "merged to the default branch", so work merged into a side branch has no truthful status.
+  3. **The side branch drifts.** EPIC-72 was built on `feat/jev-integration` and needed TASK-1470 to transplant it onto a fresh branch from main before it could land.
+
+  Slices:
+  1. The lane record and main-line exclusion (the safety guarantee).
+  2. Lane-targeted PRs and the Done-in-lane status.
+  3. Sync with main and landing the lane.
+
+  Architecture change: it touches drain selection, PR base selection and Completed semantics. It needs a sketch, advisor sign-off and an ADR before implementation. Slice 1 alone already delivers "cannot interfere with main" and ships first.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T01:54:26.310961852Z
+modified_at: 2026-09-26T01:54:26.310961852Z
+req_type: Epic
+tags:
+- architecture
+- lanes
+- orchestrator
+- worktree
+filed_at:
+  code_sha: 979c3137dbe68423d036015b4fb3f6caaa0e3863
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: claude
+  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
