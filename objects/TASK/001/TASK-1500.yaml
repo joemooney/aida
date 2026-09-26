@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:37:34.819007356Z
-modified_at: 2026-09-26T18:47:48.589505426Z
+modified_at: 2026-09-26T19:09:14.799698868Z
 req_type: Task
 tags:
 - agent-launch
@@ -185,6 +185,12 @@ comments:
     Lane after amendments: drive (Joe merges), per the proxy note. Queue for implementer once BUG-1667 is approved.
   created_at: 2026-09-26T18:46:30.259430228Z
   modified_at: 2026-09-26T18:46:30.259430228Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0df1f-22af-7662-8d8a-b112de2a7514
+  author: joe
+  content: 'OPERATOR DECISION (Joe, 2026-09-26 12:08): Q1 accepted as the advisor recommended: machines with [agents] bypass = true get the [y/N] prompt until confirm_bypass = false is added to that machine''s ~/.aida/config.toml, and an orchestrator''s --bg bypass launch without a terminal is refused. Queued for implementation as amended (A1-A12), blocked by BUG-1667; drive lane, PR left for Joe.'
+  created_at: 2026-09-26T19:09:14.799698868Z
+  modified_at: 2026-09-26T19:09:14.799698868Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0def5-4d13-79c1-96d9-dea3179e63f7
