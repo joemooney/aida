@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:06.828604970Z
-modified_at: 2026-09-26T19:09:35.850920916Z
+modified_at: 2026-09-26T21:33:14.402770138Z
 req_type: Task
 tags:
 - criteria
@@ -48,6 +48,43 @@ comments:
   content: 'OPERATOR DECISION (Joe, 2026-09-26 12:08, accepting the orchestrator''s recommendation): queue the SPIKE-86 work items.'
   created_at: 2026-09-26T19:09:35.850920916Z
   modified_at: 2026-09-26T19:09:35.850920916Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfa2-f722-7a41-b800-8f1f8427e29f
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; claude/story-1487 has no commits yet): an interface contract on top of STORY-1487, a config-driven floor, a report line, and a quiet-when-clean status line.
+
+    FILES/SYMBOLS
+    - Tracer (aida-cli-lib): criteria.rs handle_criteria_command :51, build_criteria_report :91, parse_acceptance_criteria :221, scan_tests_for_criteria :403 (walks every test file per spec via collect_test_files :537), traces_in_line :787. cli.rs Criteria { spec, json } :9546-9553 (STORY-1487 adds the corpus-wide form). Gate (must stay untouched): criteria_gate.rs EnforceMode :30-36, evaluate; callers pr_cmd.rs:3273/3348, queue_cmd.rs:5119.
+    - Completion timestamp rule to reuse: digest.rs collect_completed :247-273 (status Completed|Done; implementation_info.completed_at else modified_at, :256-262). Machine-filed rule: lib.rs is_machine_filed_draft :82023-82027 (tag auto-drafted or description prefix "Auto-drafted by `aida queue work").
+    - Config: lib.rs read_project_config_value :20071, config_lookup; integer-key pattern auto_claim_threshold :21264.
+    - Status: status_cmd.rs handle_status_command_distributed :333; section order :585-665 (presence :585, session, branch, PR, queue :592, .. agents :655, claude-code :656, worktrees :664). One-line quiet-when-clean pattern: lib.rs print_status_memory_drift_section :13020-13049.
+    - Digest: digest_cmd.rs handle_digest_command :18 (not needed if status carries the line).
+
+    APPROACH
+    1. Contract on STORY-1487 (post as a request on that spec before it lands): the report lives in aida-cli-lib (the tracer is there) as capture_coverage.rs with pub(crate) struct Ratio { num, den } (pct()), pub(crate) struct SpecCoverage { spec_id, completed_at: Option<DateTime<Utc>>, criteria: usize, traced_criteria: usize }, pub(crate) struct CaptureCoverage { window, trailer_share, criteria_share, criterion_share, trace_comments, specs: Vec<SpecCoverage> }, pub(crate) fn capture_coverage(project_root, store, window: Option<Duration>) -> Result<CaptureCoverage>, and ONE single-pass test scanner (scan_all_criterion_traces(root) -> BTreeMap<spec, BTreeSet<acn>>, generalising traces_in_line :787) instead of N walks of scan_tests_for_criteria. is_authored_work_spec (story/task/bug, not is_machine_filed_draft, not Review-PR records) is exported from there and TASK-1522 reuses it; is_machine_filed_draft :82023 becomes pub(crate) and moves next to it (one definition).
+    2. TASK-1522 adds intent_capture.rs: fn intent_capture_floor_pct(project_root) -> u8 reading `[capture] criterion_test_floor_pct` from .aida/config.toml via read_project_config_value + config_lookup(cfg, "capture", "criterion_test_floor_pct").and_then(as_integer); default 50; out of 0..=100 or non-integer -> one stderr note and 50. fn intent_capture_share(cov: &CaptureCoverage, now) -> IntentCapture { window_days: 30, specs_with_criteria, specs_with_traced_criterion, share_pct, floor_pct, verdict: BelowFloor | AtOrAboveFloor }: numerator = specs in cov.specs with criteria > 0 && traced_criteria >= 1 && completed_at within 30 d; denominator = same with criteria > 0. The 30-day window is fixed by the operator decision and independent of the report's --window (default 90): the report calls capture_coverage once with the larger window and derives the 30-day slice from specs.
+    3. Report line (acceptance 1): human `Intent capture (specs completed, last 30 d): 3 of 12 (25%) vs floor 50%: below floor`; --json adds intent_capture: { window_days, specs_with_criteria, specs_with_traced_criterion, share_pct, floor_pct, verdict }. Add a commented [capture] example to the config template under aida-core/templates (then make sync-templates).
+    4. Status (acceptance 3): print_status_intent_capture_line(project_root, store) after the queue section (status_cmd.rs ~:592), printing only `  Intent capture: 3 of 12 completed specs (25%) traced to tests; below the 50% floor. Run aida criteria coverage` when below floor, nothing otherwise. Performance: `aida status` must not walk every test file on every call; recommended: STORY-1487's report writes .aida/cache/capture-coverage.json (stamped with the store HEAD + the mtime-max of the scanned test tree) on every run, and status reads that file only, silently skipping when absent or stale; a daily substrate schedule job re-runs the report. See VERDICT.
+    5. No gating (acceptance 4): nothing in criteria_gate.rs, pr_cmd.rs, queue_cmd.rs, auto-bump or reconcile reads the floor. A test proves it.
+    6. Baseline (acceptance 5): after merge run `aida criteria coverage --json` in this repo and post `BASELINE: <intent_capture object>` as a comment here.
+
+    EDGE CASES / FAIL-SAFE
+    - No completed work specs with criteria in 30 d: `0 of 0`, verdict at or above floor (nothing to measure; do not nag), exit 0. Spec Completed with no implementation_info.completed_at: modified_at (digest rule); document the approximation in the report. Floor 0 -> always at/above; floor 100 -> below unless every spec is traced. Cache file unreadable/stale -> status prints nothing; the report itself never depends on the cache.
+
+    TESTS (aida-cli-lib/src/tests/task_1522_intent_capture_tests.rs; tempdir project with .aida/config.toml, a tempdir store built with the criteria tests' fixture, HOME fenced; a source tree tests/traced_test.rs containing `// trace:TASK-1.AC1 | ai:test` above a #[test] fn)
+    - intent_share_counts_only_completed_work_specs_in_window: five specs (completed 10 d ago traced -> 1/1; completed 10 d ago untraced -> 0/1; completed 60 d ago traced -> excluded; auto-drafted BUG completed -> excluded; in-progress spec with criteria -> excluded) -> `1 of 2`.
+    - capture_floor_default_is_50_when_unset; capture_floor_reads_config_and_changes_verdict (floor 20 -> at/above, floor 80 -> below); capture_floor_invalid_value_falls_back_to_default ("abc", 150).
+    - status_prints_intent_line_below_floor_and_nothing_at_or_above (drive print_status_intent_capture_line with the cache file the report writes; assert the exact line / empty output).
+    - completion_ignores_intent_capture_floor: floor 100, complete a spec with criteria and no traced test through the existing completion seam (story_1418_completion_seam_tests.rs harness) -> status Completed, no extra output.
+    - report_json_carries_intent_capture_object.
+
+    OVERLAP / ORDERING
+    - Blocked-by STORY-1487 (in progress, no code yet): post the contract in step 1 on STORY-1487 now so its implementer exposes specs/SpecCoverage and the single-pass scanner; TASK-1522 is then ~200 lines on top. Shares is_machine_filed_draft with the lib.rs draft lens; keep one definition. If the cache refresh rides a substrate job, coordinate the job name with TASK-1527's schedule-job addition.
+
+    VERDICT: NEEDS DECISION: may `aida status` read a report-written cache (.aida/cache/capture-coverage.json, refreshed by the coverage report and a scheduled run) and stay silent when it is absent or stale, rather than scanning every test file on each `aida status`? Recommended default: yes (cache-only in status; the report is the authority), which keeps status inside its performance budget. The rest is ready once STORY-1487 lands with the contract above.
+  created_at: 2026-09-26T21:33:14.402770138Z
+  modified_at: 2026-09-26T21:33:14.402770138Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 execution_mode: drive
 filed_at:
