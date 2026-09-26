@@ -17,11 +17,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:16:11.890546672Z
-modified_at: 2026-09-26T06:45:21.372764718Z
+modified_at: 2026-09-26T06:45:41.923794521Z
 req_type: Bug
 tags:
 - aida:history
 - cli
+- docs:impacted
 comments:
 - id: 01a0dab2-e63e-7391-9be3-e8c66be42ec5
   author: joe
