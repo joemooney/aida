@@ -447,6 +447,7 @@ pub const AUTOMATED_STATUS_AUTHORS: &[&str] = &[
     SESSION_START_AUTHOR,
     ZEN_APPROVE_AUTHOR,
     ORCHESTRATOR_PHASE1_AUTHOR,
+    PREFLIGHT_RETRACT_AUTHOR,
 ];
 
 /// History author for the merge-driven auto-bump (Done→Completed,
@@ -478,6 +479,10 @@ pub const ZEN_APPROVE_AUTHOR: &str = "aida-zen-approve";
 /// and its restore after a lease failure.
 // trace:BUG-1637 | ai:claude
 pub const ORCHESTRATOR_PHASE1_AUTHOR: &str = "aida-orchestrator-phase1";
+// The Done -> In Progress return written when the orchestrator retracts a PR
+// the publication guards refused: the PR-open flip is undone for the same
+// implementer. trace:TASK-1529 | ai:claude
+pub const PREFLIGHT_RETRACT_AUTHOR: &str = "aida-preflight-retract";
 
 /// True when `status` is terminal (Completed, Rejected, Superseded — the
 /// `lifecycle::State::is_terminal` set). Automated writers use it to refuse

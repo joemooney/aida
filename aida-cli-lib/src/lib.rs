@@ -133,6 +133,8 @@ mod feature_cmd;
 mod findings;
 pub mod graded_review;
 mod implementer_preflight;
+// trace:TASK-1529 | ai:claude
+mod preflight_retraction;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
 mod first_run;
 mod focus;
@@ -47004,6 +47006,25 @@ pub(crate) fn pr_open_done_flip(req: &mut Requirement) -> bool {
         RequirementStatus::Done,
         aida_core::conflict::PR_OPEN_AUTHOR,
     );
+    true
+}
+
+/// TASK-1529: the inverse of [`pr_open_done_flip`] — a `Done` spec whose PR
+/// the publication guards retracted goes back to `InProgress` for the same
+/// implementer. Any other status (terminal included) is left alone. Recorded
+/// under [`aida_core::conflict::PREFLIGHT_RETRACT_AUTHOR`]. Returns whether
+/// it moved.
+// trace:TASK-1529 | ai:claude
+pub(crate) fn retraction_in_progress_flip(req: &mut Requirement) -> bool {
+    if !matches!(req.status, RequirementStatus::Done) {
+        return false;
+    }
+    aida_core::conflict::set_status_recorded(
+        req,
+        RequirementStatus::InProgress,
+        aida_core::conflict::PREFLIGHT_RETRACT_AUTHOR,
+    );
+    req.modified_at = chrono::Utc::now();
     true
 }
 
@@ -102451,6 +102472,11 @@ struct RealPhaseDriver {
     /// observe the forge calls the publication boundary makes.
     // trace:TASK-1421 | ai:claude
     forge_factory: Option<crate::forge::ForgeFactory>,
+    /// TASK-1529: the open PR already on the phase-1 branch BEFORE the
+    /// implementer was launched, when there was one. The refused-preflight
+    /// retraction never touches that PR: the agent did not open it.
+    // trace:TASK-1529 | ai:claude
+    preexisting_phase1_pr: Option<u64>,
     spec: String,
     /// Queue owner captured when the drain selected this pipeline member. Phase
     /// children keep this identity while their role changes per phase.
@@ -102835,6 +102861,7 @@ impl RealPhaseDriver {
             project_root,
             lifecycle_forge,
             forge_factory: None,
+            preexisting_phase1_pr: None,
             spec,
             queue_user_id,
             permission_mode,
@@ -102903,44 +102930,225 @@ impl RealPhaseDriver {
         }
     }
 
-    /// TASK-1289: the publication guards refused, but the implementer may
-    /// already have opened the PR. Retract an OPEN change through the forge so
-    /// "the guards refused" and "nothing is published" are the same state. An
-    /// already-merged change is left alone: closing is meaningless there and
-    /// the drive's AlreadyMerged handling owns it. Best-effort: a failed
-    /// close is reported and the phase still fails. Split out of
-    /// `run_implementer` so a test can drive it with an injected forge.
-    // trace:TASK-1289 trace:TASK-1421 | ai:claude
-    fn retract_refused_publication(&mut self, branch: &str, detail: &str) {
-        if let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(branch) {
-            let change = crate::forge::ChangeRef {
-                id: pr.number,
-                url: pr.url.clone(),
-                branch: pr.head_branch.clone().unwrap_or_else(|| branch.to_string()),
-                base: String::new(),
-                title: Some(pr.title.clone()),
-            };
-            let note = implementer_preflight::retraction_notice(detail);
-            match self.project_forge().close_change(&change, &note) {
-                Ok(()) => {
-                    if !self.json {
-                        eprintln!(
-                            "  {} closed PR-{} — it was opened before the publication \
-                             guards ran, and they refused it",
-                            crate::glyph(crate::glyphs::Glyph::Check).green(),
-                            pr.number,
-                        );
-                    }
+    /// TASK-1289 / TASK-1529 (ADR-51): the publication guards refused, but the
+    /// implementer may already have opened the PR. Retract the change the
+    /// agent opened during this phase so "the guards refused" and "nothing is
+    /// published" are the same state, and REPORT what actually happened:
+    ///
+    /// - only a PR that was not open before the implementer launched is the
+    ///   agent's to retract (`preexisting_phase1_pr`); any other open PR is
+    ///   `NotOurs` and untouched;
+    /// - a change the forge already reports closed or merged is left alone
+    ///   (idempotent re-runs, a human who closed it first, the drive's
+    ///   AlreadyMerged handling);
+    /// - the close is VERIFIED: the change must report `Closed` afterwards.
+    ///   A close call that returns Ok while the PR stays open is a failure;
+    /// - the outcome is written to `.aida/preflight-retractions/PR-<n>.json`,
+    ///   and a failed retraction also places a `rework` merge-hold on the PR
+    ///   so nothing merges it while it sits open with failing guards;
+    /// - a verified retraction returns the spec from Done (the PR-open flip)
+    ///   to In Progress for the same implementer.
+    ///
+    /// Split out of `run_implementer` so a test can drive it with an injected
+    /// forge.
+    // trace:TASK-1289 trace:TASK-1421 trace:TASK-1529 | ai:claude
+    fn retract_refused_publication(
+        &mut self,
+        branch: &str,
+        detail: &str,
+    ) -> preflight_retraction::RetractionOutcome {
+        use preflight_retraction::{RetractionOutcome, RetractionTarget};
+        let pr = match self.detect_phase1_pr(branch) {
+            Phase1PrResolve::Found(pr) => pr,
+            Phase1PrResolve::AlreadyMerged(pr) => {
+                return RetractionOutcome::AlreadyMerged { pr: pr.number };
+            }
+            _ => return RetractionOutcome::NoOpenPr,
+        };
+        let number = match preflight_retraction::decide_target(
+            Some(pr.number),
+            self.preexisting_phase1_pr,
+        ) {
+            RetractionTarget::Retract(n) => n,
+            RetractionTarget::NotOurs(n) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{n} was already open on `{branch}` before the implementer \
+                         ran — not the agent's to retract; the guards still refused, so \
+                         review it before merging",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    );
                 }
-                Err(e) => {
-                    if !self.json {
-                        eprintln!(
-                            "  {} PR-{} is OPEN and its publication guards FAILED — \
-                             close it by hand: {e}",
-                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                            pr.number,
-                        );
-                    }
+                return RetractionOutcome::NotOurs { pr: n };
+            }
+            RetractionTarget::Nothing => return RetractionOutcome::NoOpenPr,
+        };
+        let change = crate::forge::ChangeRef {
+            id: number,
+            url: pr.url.clone(),
+            branch: pr.head_branch.clone().unwrap_or_else(|| branch.to_string()),
+            base: String::new(),
+            title: Some(pr.title.clone()),
+        };
+        let forge = self.project_forge();
+        // Idempotent: a change already closed/merged needs no second close,
+        // and claiming one would be a fabrication.
+        if let Ok(status) = forge.change_status(&change) {
+            if status.state != crate::forge::ChangeState::Open {
+                return RetractionOutcome::AlreadyRetracted { pr: number };
+            }
+        }
+        let note = implementer_preflight::retraction_notice(detail);
+        let close = forge
+            .close_change(&change, &note)
+            .map_err(|e| format!("{e:#}"));
+        let verified = close.and_then(|()| {
+            preflight_retraction::verify_closed(
+                forge
+                    .change_status(&change)
+                    .map(|s| s.state)
+                    .map_err(|e| format!("{e:#}")),
+            )
+        });
+        match verified {
+            Ok(()) => {
+                let _ = preflight_retraction::write_record(
+                    &self.project_root,
+                    number,
+                    &self.spec,
+                    branch,
+                    preflight_retraction::STATE_RETRACTED,
+                    detail,
+                    None,
+                );
+                self.return_spec_to_implementer_after_retraction(number);
+                if !self.json {
+                    eprintln!(
+                        "  {} closed PR-{number} (verified closed) — it was opened before \
+                         the publication guards ran, and they refused it",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    );
+                }
+                RetractionOutcome::Retracted { pr: number }
+            }
+            Err(error) => {
+                let marker = preflight_retraction::write_record(
+                    &self.project_root,
+                    number,
+                    &self.spec,
+                    branch,
+                    preflight_retraction::STATE_FAILED,
+                    detail,
+                    Some(&error),
+                );
+                // Substrate-as-bouncer: while the PR sits open with failing
+                // guards, no AIDA merge path may take it. Best-effort — the
+                // marker above is the record; the hold is the gate.
+                let hold = merge_hold::write_typed_hold(
+                    &self.project_root,
+                    &merge_hold::typed_hold(
+                        number,
+                        merge_hold::HoldReasonKind::Rework,
+                        preflight_retraction::failed_retraction_hold_detail(&self.spec, &error),
+                        None,
+                    ),
+                );
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{number} is OPEN and its publication guards FAILED — the \
+                         automatic retraction did not close it ({error}); close it by hand. \
+                         Recorded at {}; merge-hold {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        marker
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_else(|e| format!("(marker write failed: {e})")),
+                        match hold {
+                            Ok(()) => "placed".to_string(),
+                            Err(e) => format!("NOT placed ({e})"),
+                        },
+                    );
+                }
+                RetractionOutcome::RetractionFailed { pr: number, error }
+            }
+        }
+    }
+
+    /// TASK-1529: the phase failure for a refused preflight, after the
+    /// retraction ran. Its text states the retraction's verified outcome so a
+    /// failed retraction is DISTINCT from a clean one in the drain log, the
+    /// shelve detail and the operator's eyes.
+    // trace:TASK-1529 | ai:claude
+    fn refused_preflight_failure(
+        &mut self,
+        branch: &str,
+        detail: &str,
+    ) -> auto_complete::PhaseFailure {
+        use preflight_retraction::RetractionOutcome;
+        let outcome = self.retract_refused_publication(branch, detail);
+        let publication = match &outcome {
+            RetractionOutcome::Retracted { pr } => {
+                format!("PR-{pr} was retracted (verified closed)")
+            }
+            RetractionOutcome::AlreadyRetracted { pr } => {
+                format!("PR-{pr} was already closed")
+            }
+            RetractionOutcome::RetractionFailed { pr, error } => format!(
+                "PR-{pr} is STILL OPEN with failing guards — retraction failed: {error}; a \
+                 merge-hold and .aida/preflight-retractions/PR-{pr}.json record it"
+            ),
+            RetractionOutcome::NotOurs { pr } => {
+                format!("PR-{pr} was open before the implementer ran and was left untouched")
+            }
+            RetractionOutcome::AlreadyMerged { pr } => {
+                format!("PR-{pr} had already merged")
+            }
+            RetractionOutcome::NoOpenPr => "no PR was open".to_string(),
+        };
+        auto_complete::PhaseFailure::new(format!(
+            "implementer preflight refused to open the PR ({publication}):\n{detail}"
+        ))
+    }
+
+    /// TASK-1529: after a verified retraction, undo the PR-open Done flip so
+    /// the spec is In Progress again for the same implementer (the lease and
+    /// worktree are untouched). Only a `Done` spec moves; any other status is
+    /// left alone. Best-effort: no store (a test fixture) is not an error.
+    // trace:TASK-1529 | ai:claude
+    fn return_spec_to_implementer_after_retraction(&self, pr: u64) {
+        let spec = self.spec.clone();
+        let result = (|| -> anyhow::Result<bool> {
+            let Some(store_path) = detect_distributed_store_from(&self.project_root) else {
+                return Ok(false);
+            };
+            let dispenser = load_dispenser(&store_path)?;
+            let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+            let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+            let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+            let Some(req) = backend.get_requirement_unambiguous(&spec)? else {
+                return Ok(false);
+            };
+            let mut moved = false;
+            backend.update_spec_atomically(&req, |r| moved = retraction_in_progress_flip(r))?;
+            Ok(moved)
+        })();
+        match result {
+            Ok(true) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} {spec} returned to In Progress for the same implementer after \
+                         PR-{pr} was retracted",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    );
+                }
+            }
+            Ok(false) => {}
+            Err(e) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} could not return {spec} to In Progress after retracting \
+                         PR-{pr}: {e:#}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    );
                 }
             }
         }
@@ -104975,7 +105183,8 @@ fn prepare_graded_review(
 mod forge_seam_tests {
     use super::*;
     use crate::forge::fake::RecordingForge;
-    use crate::forge::{ChangeLookup, ChangeRef};
+    use crate::forge::{ChangeLookup, ChangeRef, ChangeState};
+    use crate::preflight_retraction::RetractionOutcome;
 
     fn driver_with(root: &std::path::Path, forge: &RecordingForge) -> RealPhaseDriver {
         let mut driver = RealPhaseDriver::new(
@@ -105011,11 +105220,12 @@ mod forge_seam_tests {
     #[test]
     fn refused_preflight_closes_the_open_change() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut forge = RecordingForge::new();
+        let mut forge = RecordingForge::new().with_state(ChangeState::Open);
         forge.open_for_branch = ChangeLookup::Found(change(42, "claude/task-1421"));
         let mut driver = driver_with(tmp.path(), &forge);
 
-        driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed:\ndrift");
+        let outcome =
+            driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed:\ndrift");
 
         let closed = forge.closed();
         assert_eq!(closed.len(), 1, "exactly one close_change call: {closed:?}");
@@ -105025,6 +105235,163 @@ mod forge_seam_tests {
             "the retraction note carries the guard output: {}",
             closed[0].1
         );
+        // TASK-1529: the close is verified through the forge, recorded, and
+        // reported as a retraction — not merely attempted.
+        assert_eq!(outcome, RetractionOutcome::Retracted { pr: 42 });
+        assert_eq!(forge.current_state(), Some(ChangeState::Closed));
+        let record = preflight_retraction::read_record(tmp.path(), 42).expect("marker written");
+        assert_eq!(record.state, preflight_retraction::STATE_RETRACTED);
+        assert_eq!(record.spec, "TASK-1421");
+        assert!(record.detail.contains("guard `fmt` failed"));
+        assert!(
+            !merge_hold::hold_path(tmp.path(), 42).exists(),
+            "a verified retraction places no merge-hold"
+        );
+    }
+
+    // TASK-1529 acceptance 2: passing guards touch nothing — no close, no
+    // comment, no marker.
+    #[test]
+    fn passing_preflight_leaves_the_open_change_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new().with_state(ChangeState::Open);
+        forge.open_for_branch = ChangeLookup::Found(change(42, "claude/task-1421"));
+        let driver = driver_with(tmp.path(), &forge);
+
+        let decision = implementer_preflight::decide(&[
+            implementer_preflight::GuardResult::Passed("fmt".into()),
+            implementer_preflight::GuardResult::Skipped("no clippy configured".into()),
+        ]);
+        assert_eq!(decision, implementer_preflight::PreflightDecision::Open);
+        // The retraction is only ever reached through a Refuse decision; with
+        // Open the driver never calls it. Pin that the forge saw nothing.
+        drop(driver);
+        assert!(forge.closed().is_empty());
+        assert!(forge.comments().is_empty());
+        assert_eq!(forge.current_state(), Some(ChangeState::Open));
+        assert!(preflight_retraction::read_record(tmp.path(), 42).is_none());
+    }
+
+    // TASK-1529 acceptance 3: a PR that was already open on the branch before
+    // the implementer launched is not the agent's; it is never closed.
+    #[test]
+    fn refused_preflight_never_touches_a_pr_the_agent_did_not_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new().with_state(ChangeState::Open);
+        forge.open_for_branch = ChangeLookup::Found(change(42, "claude/task-1421"));
+        let mut driver = driver_with(tmp.path(), &forge);
+        // What run_implementer records before spawning the child.
+        driver.preexisting_phase1_pr = Some(42);
+
+        let outcome = driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+
+        assert_eq!(outcome, RetractionOutcome::NotOurs { pr: 42 });
+        assert!(forge.closed().is_empty(), "not ours: never closed");
+        assert_eq!(forge.current_state(), Some(ChangeState::Open));
+        assert!(preflight_retraction::read_record(tmp.path(), 42).is_none());
+        let failure = driver.refused_preflight_failure("claude/task-1421", "guard `fmt` failed");
+        assert!(
+            failure.reason.contains("left untouched"),
+            "the phase failure names the not-ours outcome: {}",
+            failure.reason
+        );
+
+        // A NEW PR on the branch (a different number) is ours even though an
+        // older one pre-existed.
+        forge.open_for_branch = ChangeLookup::Found(change(43, "claude/task-1421"));
+        let mut driver = driver_with(tmp.path(), &forge);
+        driver.preexisting_phase1_pr = Some(42);
+        let outcome = driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+        assert_eq!(outcome, RetractionOutcome::Retracted { pr: 43 });
+        assert_eq!(forge.closed().len(), 1);
+    }
+
+    // TASK-1529 (ADR-51 addition 1 + 2): a close call that does not result in
+    // an observed CLOSED state is a FAILED retraction — distinct in the phase
+    // failure, recorded durably, and merge-held.
+    #[test]
+    fn refused_preflight_reports_a_retraction_that_did_not_close_the_pr() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new().with_state(ChangeState::Open);
+        forge.open_for_branch = ChangeLookup::Found(change(42, "claude/task-1421"));
+        forge.close_takes_effect = false; // gh said ok; the PR stayed open
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        let failure = driver.refused_preflight_failure("claude/task-1421", "guard `fmt` failed");
+
+        assert_eq!(forge.closed().len(), 1, "the close was attempted");
+        assert!(
+            failure.reason.contains("STILL OPEN") && failure.reason.contains("retraction failed"),
+            "the phase failure is distinct for a failed retraction: {}",
+            failure.reason
+        );
+        let record = preflight_retraction::read_record(tmp.path(), 42).expect("marker written");
+        assert_eq!(record.state, preflight_retraction::STATE_FAILED);
+        assert!(record
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("still reports OPEN"));
+        let hold = merge_hold::read_hold_record(tmp.path(), 42).expect("merge-hold placed");
+        assert_eq!(hold.reason_kind, merge_hold::HoldReasonKind::Rework);
+        assert!(hold.detail.contains("retraction failed"));
+
+        // The close call itself failing is the same failed-retraction shape.
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new().with_state(ChangeState::Open);
+        forge.open_for_branch = ChangeLookup::Found(change(42, "claude/task-1421"));
+        forge.close_error = Some("gh pr close failed for #42: HTTP 502".into());
+        let mut driver = driver_with(tmp.path(), &forge);
+        let outcome = driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+        assert!(
+            matches!(outcome, RetractionOutcome::RetractionFailed { pr: 42, ref error } if error.contains("502"))
+        );
+        assert!(outcome.leaves_pr_open());
+        assert!(merge_hold::hold_path(tmp.path(), 42).exists());
+    }
+
+    // TASK-1529 acceptance 3: idempotent — a change the forge already reports
+    // closed is not closed again and not claimed as newly retracted.
+    #[test]
+    fn refused_preflight_retraction_is_idempotent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new().with_state(ChangeState::Open);
+        forge.open_for_branch = ChangeLookup::Found(change(42, "claude/task-1421"));
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        let first = driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+        let second = driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+
+        assert_eq!(first, RetractionOutcome::Retracted { pr: 42 });
+        assert_eq!(second, RetractionOutcome::AlreadyRetracted { pr: 42 });
+        assert_eq!(forge.closed().len(), 1, "closed exactly once");
+        assert_eq!(
+            preflight_retraction::read_record(tmp.path(), 42)
+                .unwrap()
+                .attempts,
+            1,
+            "an already-closed change writes no second record"
+        );
+    }
+
+    // TASK-1529: the Done -> In Progress return is pure and only moves Done.
+    #[test]
+    fn retraction_returns_a_done_spec_to_in_progress_only() {
+        let mut req = Requirement::new("t".into(), "d".into());
+        req.status = RequirementStatus::Done;
+        assert!(retraction_in_progress_flip(&mut req));
+        assert_eq!(req.status, RequirementStatus::InProgress);
+        assert!(!retraction_in_progress_flip(&mut req), "InProgress stays");
+        for status in [
+            RequirementStatus::Completed,
+            RequirementStatus::Approved,
+            RequirementStatus::NeedsAttention,
+        ] {
+            let mut req = Requirement::new("t".into(), "d".into());
+            req.status = status.clone();
+            assert!(!retraction_in_progress_flip(&mut req));
+            assert_eq!(req.status, status);
+        }
     }
 
     #[test]
@@ -105460,6 +105827,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // fails (the old `.ok().flatten()` launched with no --branch/--path).
         // trace:BUG-1628 trace:BUG-1629 | ai:claude
         let (intended_path, intended_branch) = self.phase1_launch_workspace()?;
+        // TASK-1529: remember any PR that is ALREADY open on the branch before
+        // the implementer runs. If the guards refuse afterwards, only a PR
+        // that appeared during the phase is the agent's to retract; an
+        // operator-opened or earlier-round PR is left alone. Branch-keyed on
+        // purpose (no spec-wide search, no branch realignment) and read-only
+        // through the forge seam. trace:TASK-1529 | ai:claude
+        self.preexisting_phase1_pr = match self.project_forge().change_for_branch(&intended_branch)
+        {
+            Ok(crate::forge::ChangeLookup::Found(c)) => Some(c.id),
+            _ => None,
+        };
         let args = build_implementer_phase_args(
             &self.spec,
             &session_uuid,
@@ -105979,14 +106357,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // Retract it here, so "the guards refused" and "nothing is
                 // published" are the same state.
                 //
-                // Best-effort by design: a retraction that fails is reported
-                // loudly and the phase still fails. The branch is untouched
-                // either way, so no work is lost.
-                // trace:TASK-1289 | ai:claude
-                self.retract_refused_publication(&branch, &detail);
-                return Err(auto_complete::PhaseFailure::new(format!(
-                    "implementer preflight refused to open the PR:\n{detail}"
-                )));
+                // TASK-1529 (ADR-51): the retraction is VERIFIED, not
+                // attempted — the phase failure names whether the PR is
+                // observed closed, and a failed retraction leaves a durable
+                // marker plus a merge-hold. The branch is untouched either
+                // way, so no work is lost.
+                // trace:TASK-1289 trace:TASK-1529 | ai:claude
+                return Err(self.refused_preflight_failure(&branch, &detail));
             }
         }
 

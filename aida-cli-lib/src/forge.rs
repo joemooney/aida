@@ -3600,6 +3600,19 @@ pub(crate) mod fake {
         pub(crate) merged_for_branch: ChangeLookup,
         /// `(change id, reason)` for every `close_change` call.
         pub(crate) closed: Arc<Mutex<Vec<(u64, String)>>>,
+        /// TASK-1529: the state `change_status` reports. `None` keeps the
+        /// pre-TASK-1529 "not scripted" error. Shared across clones so a
+        /// close performed through one handle is observed through another.
+        pub(crate) state: Arc<Mutex<Option<ChangeState>>>,
+        /// TASK-1529: when set, `close_change` fails with this error and
+        /// changes nothing.
+        pub(crate) close_error: Option<String>,
+        /// TASK-1529: when false, `close_change` returns Ok but the state
+        /// stays as it was — the "close call succeeded, PR still open" shape
+        /// the verification exists to catch.
+        pub(crate) close_takes_effect: bool,
+        /// TASK-1529: `(change id, body)` for every `comment` call.
+        pub(crate) comments: Arc<Mutex<Vec<(u64, String)>>>,
     }
 
     impl RecordingForge {
@@ -3609,7 +3622,30 @@ pub(crate) mod fake {
                 open_for_spec: ChangeLookup::NoChange,
                 merged_for_branch: ChangeLookup::NoChange,
                 closed: Arc::new(Mutex::new(Vec::new())),
+                state: Arc::new(Mutex::new(None)),
+                close_error: None,
+                close_takes_effect: true,
+                comments: Arc::new(Mutex::new(Vec::new())),
             }
+        }
+
+        /// TASK-1529: script the state `change_status` reports.
+        // trace:TASK-1529 | ai:claude
+        pub(crate) fn with_state(mut self, state: ChangeState) -> Self {
+            self.state = Arc::new(Mutex::new(Some(state)));
+            self
+        }
+
+        /// TASK-1529: the state the forge currently reports, if scripted.
+        // trace:TASK-1529 | ai:claude
+        pub(crate) fn current_state(&self) -> Option<ChangeState> {
+            *self.state.lock().unwrap()
+        }
+
+        /// TASK-1529: every `comment` call so far.
+        // trace:TASK-1529 | ai:claude
+        pub(crate) fn comments(&self) -> Vec<(u64, String)> {
+            self.comments.lock().unwrap().clone()
         }
 
         /// A factory handing out clones that share this forge's call log.
@@ -3640,7 +3676,16 @@ pub(crate) mod fake {
             Ok(self.merged_for_branch.clone())
         }
         fn change_status(&self, _: &ChangeRef) -> Result<ChangeStatus> {
-            anyhow::bail!("RecordingForge: change_status not scripted")
+            // trace:TASK-1529 | ai:claude
+            match *self.state.lock().unwrap() {
+                Some(state) => Ok(ChangeStatus {
+                    state,
+                    mergeable: false,
+                    review: ReviewDecision::None,
+                    head_sha: String::new(),
+                }),
+                None => anyhow::bail!("RecordingForge: change_status not scripted"),
+            }
         }
         fn change_metadata(
             &self,
@@ -3686,11 +3731,23 @@ pub(crate) mod fake {
         ) -> Result<MergeResult> {
             anyhow::bail!("RecordingForge: merge_change not scripted")
         }
-        fn comment(&self, _: &ChangeRef, _: &str) -> Result<()> {
+        fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
+            // trace:TASK-1529 | ai:claude
+            self.comments.lock().unwrap().push((c.id, body.to_string()));
             Ok(())
         }
         fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()> {
+            // trace:TASK-1529 | ai:claude
+            if let Some(err) = &self.close_error {
+                anyhow::bail!("{err}");
+            }
             self.closed.lock().unwrap().push((c.id, reason.to_string()));
+            if self.close_takes_effect {
+                let mut state = self.state.lock().unwrap();
+                if state.is_some() {
+                    *state = Some(ChangeState::Closed);
+                }
+            }
             Ok(())
         }
         fn checkout_change(&self, _: &ChangeRef) -> Result<()> {
