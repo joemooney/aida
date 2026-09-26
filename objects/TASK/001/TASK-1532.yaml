@@ -8,13 +8,47 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:29:13.952391653Z
-modified_at: 2026-09-26T20:29:21.264560408Z
+modified_at: 2026-09-26T21:33:05.849804613Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0dee0-f96c-75f1-9a3e-cfebef109e14
   created_at: 2026-09-26T20:29:21.264549390Z
   created_by: joe
+comments:
+- id: 01a0dfa2-d5b9-74f0-ad66-ff2209557b21
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; base = claude/integrate-101, where BUG-1666 lives): convert every remaining raw test env write to a guard and add the lint.
+
+    FILES/SYMBOLS (integrate-101)
+    - aida-cli-lib/src/test_env.rs: ENV_LOCK, env_lock() :44, EnvVarGuard :52, EnvVarsGuard::apply/set/snapshot :65-123, pin_queue_user, AmbientGuard.
+    - aida-core/src/lib.rs:168 TEST_ENV_LOCK (bare mutex, no guard type); users db/cache.rs:2759 env_lock() + 23 raw writes at :5017-5388; worktree_pool.rs:1044-1050.
+    - Remaining raw writes in aida-cli-lib TEST code (238 hits in the crate incl. production; test-only below):
+      * locked helpers that still write raw (convert the body to EnvVarsGuard::apply, keep the helper name): glyphs.rs lock() + 46 raw writes (:727-1076), first_run.rs with_env :264, advisor.rs with_env_vars :882, user_alias.rs with_test_home :486 + 14 raw writes in tests, workflow_hints.rs with_hints_env :877, session.rs OsWrapEnvGuard/AgentCmdEnvGuard/HeadlessVendorEnvGuard (:4126, :4203, :5475) + 16 raw writes inside tests (:5718-6702), lib.rs scoped_prepend_path :49617, maintenance_schedule.rs 12 sites (:3735-5277), tests/story_1463 (:651-735), tests/bug_775 (:301-936), tests/preflight_spec_status (:213-221), tests/real_phase_driver_wiring publish_fixture_receipt :138, tests/statusline with_bg_fetch_env :658, tests/story_780 (:189/214), tests/bug_1624 :380, tests/bug_1627 (:61/62/134).
+      * UNLOCKED (a real race BUG-1666 missed): locking_gate.rs:539-543 test enforce_posture_allows_a_matching_token_read_from_the_snapshot sets AIDA_AGENT_REGISTRY_TOKEN with a module-local EnvGuard and no env_lock.
+      * aida-tui/src/redesign/mod.rs:5149 module-local mutex (separate crate, outside the spec's crate list; convert opportunistically or note).
+    - Production writes the lint must NOT flag: drain_cmd.rs:579, harvest.rs:807-812/1204-1209, queue_cmd.rs (5570-11918), reconstitute.rs:340-345, session.rs:1539, tracker_cmd.rs:554/1191, lib.rs 9029/41019/56239/56514/62851 (ScopedEnvVar)/67690/89218/101535/108531.
+
+    APPROACH
+    (1) Mechanical: every test helper above becomes a thin wrapper over EnvVarsGuard::apply (RAII, restores on panic); raw writes inside test bodies that iterate values use EnvVarGuard::reset/reset_unset (already exist) instead of set_var. Nothing may nest a second guard (BUG-1666's single-acquisition rule).
+    (2) aida-core: add #[cfg(test)] pub(crate) mod test_env with EnvVarsGuard (copy of the cli-lib apply/snapshot/Drop; lock = TEST_ENV_LOCK); convert the cache.rs and worktree_pool.rs tests to it.
+    (3) Lint test no_raw_env_writes_in_test_code in aida-cli-lib/src/test_env.rs and a twin in aida-core: walk src/, scan (a) every file under src/tests/, (b) each #[cfg(test)]-attributed `mod x {` block by brace depth; needles `env::set_var(` / `env::remove_var(`; allow-list = test_env.rs (both crates), test_home.rs (the pre-main constructor, explicitly listed), and the line marker `// allow-raw-env-write: <reason>` for line-level exemptions. Do not scan production code (the ~40 pre-spawn writes are a separate class).
+    (4) Env reads through code under test: story_465 already holds EnvVarsGuard::set(AIDA_USER..) on integrate-101 (:127/175/269); audit the rest by grepping tests that call current_user_id, resolve_headless_vendor, os_wrap_enabled, aida_home_dir, session-role readers without a guard in the same fn, and give each an EnvVarsGuard::apply clearing AIDA_USER/USER/AIDA_SESSION_*/AIDA_HOME as relevant (a checklist in the PR, not lintable).
+
+    EDGE CASES / FAIL-SAFE
+    - Poisoned lock: guards already into_inner. A helper that spawns git while holding the guard is fine. Never hold the guard across Command calls that themselves acquire env guards (deadlock).
+
+    TESTS
+    - no_raw_env_writes_in_test_code (cli-lib), core_no_raw_env_writes_in_test_code, core_env_guard_restores_and_survives_poison, locking_gate_token_test_holds_env_lock (regression: the converted test uses the guard; pinned by the lint).
+
+    OVERLAP / ORDERING
+    - After integrate-101 lands. After TASK-1513 (test_home.rs), which the lint allow-lists by path. Touches only test modules of session.rs/glyphs.rs/user_alias.rs etc.; TASK-1499's new tests must use EnvVarsGuard from the start.
+
+    VERDICT: READY.
+  created_at: 2026-09-26T21:33:05.849804613Z
+  modified_at: 2026-09-26T21:33:05.849804613Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: b13b2c611e810a2ba044efb50b32070667d4b37a
   branch: main
