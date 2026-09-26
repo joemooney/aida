@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T13:55:45.638264382Z
-modified_at: 2026-09-26T09:48:54.838611236Z
+modified_at: 2026-09-26T09:51:16.496575177Z
 req_type: Spike
 tags:
 - architecture
@@ -55,6 +55,40 @@ comments:
   content: 'Report moved to its acceptance path: docs/architecture/2026-09-26-spike-90-stale-cache-snapshot.md (branch claude/spike-90, 32e8d5856e). aida has no pin or attach command for files, so this comment records the path. Verdict unchanged: NO-GO; follow-ups BUG-1644, STORY-1484, TASK-1514, TASK-1515.'
   created_at: 2026-09-26T09:48:54.838611236Z
   modified_at: 2026-09-26T09:48:54.838611236Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd20-4c10-71e1-9da9-753595e3c96c
+  author: joe
+  content: |-
+    ADVISOR REVIEW: ACCEPT NO-GO — with corrections to fold in before merge and into the follow-ups.
+
+    EVIDENCE (checked against the code at 8238ac8; I did not re-run the timings, but each mechanism matches the code)
+    - WAL plus busy_timeout=0 on every open: cache.rs open_connection_inner, with a test asserting both. The ladder is DEFAULT_CACHE_RETRY_DELAYS_MS [100..12800], about 25.6 s. Case A (a fresh read under a held write lock, 0.04 s) is expected WAL behaviour.
+    - Double ladder (case B): in ensure_cache_fresh, an incremental Err prints the warning and falls through to full_rebuild. Incremental upserts go through with_cache_write one row at a time. So one lock gives two ladders (~52 s). Confirmed.
+    - Thundering herd (cases I and D): rebuild_from_store does not re-check is_stale under the lock, and the sidecar is written only when the write transaction starts. Confirmed.
+    - Worktree sidecar (case W): cache_lock_info_path() is with_file_name() on the unresolved path, and the BUG-52 symlink list (lib.rs ~36540 and ~41310) links cache.db, -shm and -wal but not the lock-info. Confirmed.
+    - graph tree strict (case C2): CachedGitBackend::load() and list_requirements() call ensure_cache_fresh_with_schema_retry, the strict path. Confirmed.
+    - Non-atomic stamping: rebuild_from_store commits the rows, then runs set_source_head_sha, BUILT_AT and SCHEMA_VERSION as separate writes. Cache::open runs the migration DROP and the apply in separate transactions, with the rebuild later. Confirmed.
+    Conclusion: every measured stall comes from the refresh protocol, not from being unable to read. A second DB file does not fix that. NO-GO is well supported, and O5 is the right direction.
+
+    CORRECTIONS / GAPS (the dangerous ones first)
+    1. The must-be-fresh list is stated as a principle, but today's code already sends several state-deciding callers through the TOLERANT path. O5 would widen their stale window unless the sketch lists them one by one:
+       (a) id_candidates / get_requirement_unambiguous (BUG-1535). This is the write-path ambiguity guard, and it uses ensure_cache_fresh_for_read. If a stale cache misses a newly merged duplicate claimant, the guard sees 1 candidate and resolves silently. It is an ID-collision case, and it is missing from 4.3.
+       (b) Mutations fed by list_summaries: queue gc (dead_queue_entries), archive_sweep and maybe_auto_archive_sweep, session_reap classification, rules_sync, try_emit_nonblocking_findings_on_completion, and the handle_integrate queue/merge rows.
+       Required: a strict variant of list_summaries/id_candidates for these callers, or a per-row YAML re-validation before they act. The spec_id_collisions check for `aida add` is correctly strict today.
+    2. "aida show is unaffected" is only partly true. It resolves IDs through id_candidates (cache) and show_cached_context uses list_summaries.
+    3. The label is wrong for load()-backed commands. load() and list_requirements() return the git-canonical store (inner.load()), so graph tree and the other ~300 load() callers are NEVER stale. They only pay for a cache warm-up they don't read. They must not print the stale note.
+    4. A contradiction in STORY-1484. "Readers never enter the write ladder" and "No reader path calls with_cache_write" conflict with "stale + try_lock won -> refresh inline". The flock winner still has to take the SQLite write lock, and spec writers' write-through upserts do not take the refresh flock. So the winner can still sit in the 25.6 s ladder (case B, and non-AIDA holders). The sketch must resolve this. Options: the inline refresh uses the fast-fail ladder (like --notice), and on BUSY it records the request, spawns the worker and serves labelled-stale. Separately: a lock error during incremental must NOT escalate to a full rebuild. That is the second ladder, and it should be an acceptance line.
+    5. Worker/stamp race. The worker must stamp the HEAD it actually loaded. Today full_rebuild reads HEAD before load(), so rows at B can be stamped A. This is self-healing, but the sketch should state it. Add an opt-out for spawning detached processes (for example AIDA_CACHE_REFRESH_SPAWN=0 for CI/tests), and say how the MCP server and statusline hooks behave. Durable single-flight (request file + flock + detached process + schedule re-spawn) meets Joe's refinement.
+    6. Report path. The acceptance says docs/architecture/2026-MM-DD-...; git mv it to docs/architecture/2026-09-26-spike-90-stale-cache-snapshot.md and pin it to SPIKE-90 before merge.
+
+    FOLLOW-UP DISPOSITIONS
+    - BUG-1644: APPROVE. A real bug with a small fix. Add to the acceptance: cover both symlink sites (lib.rs ~36540 and ~41310), use a canonicalize fallback when the cache does not exist yet, and derive STORY-1484's refresh.lock from the same canonical helper. Land it first.
+    - TASK-1515: APPROVE. Bump heft to about 2, because it refactors per-row upsert/epic-rollup into one tx and moves the migration DROP out of Cache::open into the rebuild transaction. Add "a BUSY during incremental does not trigger a full rebuild" unless STORY-1484 owns it. Second in order.
+    - STORY-1484: APPROVE-WITH-SKETCH (architecture; advisor signoff). The sketch must cover items 1, 4 and 5: an enumerated strict-caller list, the inline-refresh vs. ladder contradiction, the spawn opt-out, and the stamp-the-loaded-HEAD rule. Label wording and the JSON cache object are fine.
+    - TASK-1514: APPROVE-WITH-SKETCH (the call-site classification is the sketch). Correct the acceptance: drop "labelled stale" (load() data is canonical), and keep strict load() for writers so restamp_head stays incremental-friendly. The blocked-by STORY-1484 is soft: the read-entry-point split needs no flock. Recommend relaxing it to follow BUG-1644. Joe's call only if he wants the ~300-site sweep prioritized.
+    Order: BUG-1644 -> TASK-1515 -> STORY-1484 sketch -> TASK-1514 (may run in parallel with STORY-1484 once relaxed). Nothing needs Joe except the report move, which is a mechanical fix.
+  created_at: 2026-09-26T09:51:16.496575177Z
+  modified_at: 2026-09-26T09:51:16.496575177Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
