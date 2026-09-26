@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-09-26T18:49:27.009456595Z
+modified_at: 2026-09-26T18:50:30.116796658Z
 req_type: Story
 tags:
 - cache
@@ -182,6 +182,45 @@ comments:
     Then TASK-1514 on top of B. Each slice is independently reviewable; A needs no advisor signoff beyond this sketch since it only tightens.
   created_at: 2026-09-26T18:44:48.129427595Z
   modified_at: 2026-09-26T18:44:48.129427595Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0df0d-f964-78f3-a715-046e37e50915
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF: APPROVED (independent advisor, session 71dca616 advisor fork; verified against origin/main 4407b94716 and origin/claude/task-1515 3d56853e55). The design is sound; the amendments below are binding.
+
+    VERIFICATION OF CLAIM (a), today's hazard: CONFIRMED on main, and wider than the sketch says. ensure_cache_fresh_for_read returns the stale snapshot whenever the lock-info record names an Alive OR Unknown foreign owner. with_cache_write writes that record on EVERY cache write, including single-row write-through and a writer still waiting in the ladder. Neither brings the cache current (the TASK-712 restamp guard keeps it stale), so the BUG-664 premise "the foreign writer is itself bringing the cache current" is false: the stale window is unbounded while others keep writing. Confirmed mutating consumers: queue gc and the queue list auto-gc, the archive sweeps (BUG-1664; exposure recorded there), worker gc, completion findings idempotency, focus_scope_guard, the write-path id_candidates ambiguity check (miss direction only; the cache-said-ambiguous direction is already re-confirmed on YAML), and rules sync. Filed as BUG-1670 (approved, high). One FALSE POSITIVE in the sketch's section 5: session reap is NOT exposed. spec_finished comes from finished_scopes -> get_requirement_by_spec_id, which reads the authoritative YAML; the tolerant summaries only feed the unshipped-work report.
+
+    BINDING AMENDMENTS
+    A1. Slice A becomes BUG-1664 + BUG-1670 (bugs, no further signoff; they land before B). Drop the session-reap row (keep only a regression test, in BUG-1670). Drop the strict-by-delta resolver from A: write-path callers of get_requirement_unambiguous take strict freshness, and `aida show` stays tolerant. Strict-by-delta is deferred to TASK-1514, only if show's 1 s budget needs it.
+    A2. B DELETES the BUG-664 lock-info shortcut. foreign_writer_holds_lock_at is no longer a stale-serve trigger. Stale serving is decided only by the refresh flock plus a fast-fail SQLite attempt. Lock-info is diagnostic only. WriterBusy is derived from a fast-fail SQLite lock error, not from the sidecar. Otherwise an Unknown record (a foreign host or container, per A6) would keep readers stale indefinitely.
+    A3. Correctness must never depend on the flock; it provides single-flight only. The re-read of source_head_sha inside the IMMEDIATE txn (skip if already at or past the target) is the correctness guard, pinned by a named test (refresh_txn_rechecks_head_inside_txn). Filesystems where flock silently "succeeds" without cross-host coherence (NFS local_lock, some FUSE/CIFS) degrade to today's parallel refreshes, which are still correct. Errors other than WouldBlock fail closed exactly as sketched.
+    A4. In-process re-entrancy: flock is per open file description, so a second try_lock in the SAME process returns WouldBlock against itself. Hold the RefreshLock guard in a process-global, and make nested freshen_for_read calls (a refresh that reads; a command opening two backends) short-circuit instead of waiting 1.5 s and self-labelling stale. Test: nested_freshen_in_lock_holder_does_not_wait.
+    A5. Lock ordering: never BLOCK on the refresh flock (acquire_blocking_until, the Q2 wait) while holding the store lock or a SQLite write txn; use try_lock only in those contexts. Enforce with a thread-local "holding write" debug assertion. Writers never take the flock (as sketched). With this rule there is no cycle.
+    A6. Lock-record identity: compare boot_id (/proc/sys/kernel/random/boot_id) + pid_ns inode; hostname is display only. The init pid-ns inode (4026531836) is the same on every Linux host, and hostnames collide across containers. A legacy record without these fields keeps today's local classification, so existing dead-owner cleanup does not regress. A mismatch is Unknown and the record is kept. doctor reports Unknown records past their soft deadline. Unknown never triggers stale serving (A2).
+    A7. Request lifecycle (C): clear the request when is_stale(current HEAD) is false under the flock. Do NOT use "target is an ancestor-or-equal of the stamped head": that never clears after a force-push, which leaves a respawn loop. Add spawn backoff: the request records attempts and last_error. After 3 failed workers within 10 min, readers stop spawning and take today's strict inline path, and `cache status` and doctor show the failure. Test: worker_crash_loop_stops_spawning.
+    A8. Worker invocation (C): pass explicit --store and --cache paths (no reliance on cwd or the worktree); the flock fd stays CLOEXEC (assert it); stdin is null. Document that a cgroup kill (systemd-run drain units) can reap a setsid worker. The durable request covers this; no extra mechanism.
+    A9. Labels: StaleServe goes into a scoped collector (per CLI invocation, per MCP tools/call), not into a backend instance, because commands open several backends. One emit point in the CLI dispatcher prints the stderr note and injects the JSON. JSON shape: object-shaped outputs get an ALWAYS-present top-level `cache` key (stale:false when fresh). Top-level ARRAY outputs (e.g. `aida search --json`) keep their shape, with no conditional reshaping, and are labelled via stderr only. B adds a test that enumerates every stale-allowed command's --json/TOON output under a forced-stale fixture and asserts the label per that rule. MCP: every tool whose call touched the tolerant path returns `cache` in structuredContent plus a one-line text note. On main, MCP read tools use storage.load() (strict), so they never serve stale today. The MCP label therefore becomes load-bearing only when TASK-1514 converts them, and TASK-1514's acceptance must add "each converted MCP read tool carries the cache object on every call".
+    A10. The TASK-1515 nits (1: name BUG-1663 in the comment; 2: head re-capture; 3: refill skip; 4: epic pre-resolve) move to B, not A. They are refresh internals; A is caller-side only.
+    A11. STORY-1484 is now blocked-by TASK-1515 (not on main). B implements "incremental lock error never escalates to a full rebuild": TASK-1515 restored the escalation, so this point is NOT done.
+    A12. Paths: use the existing BUG-1644 helper cache_sidecar_path(cache_path, "refresh.lock" | "refresh-request" | "refresh.log"). Do not add a second derivation.
+    A13. Acceptance contradiction: "No reader path calls with_cache_write" conflicts with the flock WINNER's inline incremental refresh. The binding reading: a reader that LOST the single-flight race never calls with_cache_write or enters the ladder; the winner's inline refresh goes through with_cache_write in fast-fail mode (one attempt). Scope reader_path_never_calls_with_cache_write to losers. The orchestrator should reword that acceptance line on the child task.
+
+    Q ANSWERS
+    Q1. Accepted. Interactive human output at a TTY: inline full rebuild under the flock with the normal ladder (today's behaviour). --json/TOON/MCP/--notice/statusline: file the request, spawn the worker, do the bounded wait, serve labelled stale. AIDA_CACHE_NO_DETACH=1 forces inline everywhere. There is no special case for a non-ancestor snapshot; it is labelled like any other.
+    Q2. Accepted with conditions: poll the flock for up to 15 s only when no store/SQLite lock is held (A5), then fail nonzero with "the cache is being upgraded; re-run shortly". Budget-0 advisory paths (--notice, statusline, awaiting --notice) print nothing and exit 0.
+    Q3. Skip, with no refresh attempt inside `queue list`, and not silent: one line goes to the refresh log. Explicit commands (queue gc, archive) are strict. BUG-1664 owns this.
+    Q4. Keep the request file as a hint, never as truth; clearing follows A7.
+    Q5. Moot: spec_finished is already YAML-authoritative on main. The scan stays tolerant; a regression test lives in BUG-1670.
+    Q6. Neither: the sibling callers (worker gc, findings emit, focus guard, write-path id resolution, rules sync) are BUG-1670. BUG-1664 keeps queue gc + archive. Session reap needs no fix.
+
+    SLICE PLAN: SPLIT.
+    - A = BUG-1664 + BUG-1670 (bugs, filed; land first; no further signoff).
+    - B = child task: single-flight flock + double-check + fast-fail inline refresh with no lock-error escalation + bounded wait + the StaleServe collector and stderr/JSON/TOON/MCP labels + lock-record identity + NFS fail-closed + TASK-1515 nits (A2-A6, A9-A13). Blocked-by BUG-1664, BUG-1670, TASK-1515. Carries story acceptance #1, #2 and #4.
+    - C = child task: durable request + detached worker + runtime cap + log + `cache refresh --worker/--if-requested` + schedule job + `cache status` fields + doctor report + AIDA_CACHE_NO_DETACH + backoff (A7, A8). Blocked-by B. Carries story acceptance #3 and #5.
+    - TASK-1514: retarget its blocked-by from STORY-1484 to B, and add the MCP-label acceptance from A9.
+    - STORY-1484: tag closure:pending; it closes when B and C complete. Edges added now: STORY-1484 blocked-by BUG-1670, BUG-1664, TASK-1515.
+  created_at: 2026-09-26T18:50:30.116796658Z
+  modified_at: 2026-09-26T18:50:30.116796658Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
