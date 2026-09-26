@@ -1,0 +1,20 @@
+id: 01a0de33-599b-7e90-8c2b-97f0f9f62dc0
+spec_id: BUG-1654
+agreed_id: BUG-1654
+title: 'read_atomic''s retry budget counts attempts, not time: on a loaded macOS runner 200 x 1 ms sleeps exceeded 2 s (nightly red)'
+description: 'Nightly 2026-09-26 (run on 348989d2a5) macOS failure: aida-core fs_atomic::tests::read_atomic_returns_notfound_when_missing panicked at fs_atomic.rs:183, where the elapsed-time bound is asserted. read_atomic (fs_atomic.rs:97) retries NotFound/PermissionDenied up to READ_ATOMIC_MAX_ATTEMPTS times with a 1 ms thread::sleep. On a loaded macOS runner each sleep overshoots, so the documented ~200 ms cap becomes over 2 s. This is also a product cost: every read of a genuinely missing file pays the whole budget. Fix: bound the retry by a wall-clock deadline (Instant-based, about 200 ms) and keep the attempt cap as a secondary ceiling. Keep the test''s semantics (NotFound surfaces, time is bounded). Acceptance: (1) retry bounded by a deadline; (2) the existing test passes, plus a test that the budget holds when sleeps overshoot (e.g. an injected slow sleep); (3) cargo test -p aida-core --lib fs_atomic is green.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T14:51:42.363940530Z
+modified_at: 2026-09-26T14:51:42.363940530Z
+req_type: Bug
+filed_at:
+  code_sha: b331809ce75b22e67d4bd86b4ab16500f4b41217
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: b331809ce7
+  vendor: antigravity
+  session: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
