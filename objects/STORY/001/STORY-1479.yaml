@@ -1,0 +1,33 @@
+id: 01a0db2e-06fc-7d01-902f-e54f9b66da1b
+spec_id: STORY-1479
+agreed_id: STORY-1479
+title: 'Aggregate cycle-time breakdown: aida metrics cycle-time (per-activity p50/p90, work vs wait, rework rates, slowest specs)'
+description: |
+  `aida metrics cycle-time [--since 7d] [--type T] [--tags …]` aggregates the per-spec span model (from the timeline story) across every spec completed in the window.
+
+  ## Acceptance
+  - Per activity, it shows count, p50, p90 and total time, plus the overall **work vs wait vs unknown** share.
+  - Rework signals: CI failure rate, reviewer bounce rate (specs with more than one reviewer pass), the average number of implementer passes, and shelve count with total shelved time.
+  - It lists the N slowest specs, each with its dominant span (e.g. "BUG-1424 — 51% shelved").
+  - It excludes specs with no data in the window and reports how many were excluded and why (for example, no events on this machine).
+  - Output is human, toon and json.
+  - Tests use fixtures and assert the percentile and share arithmetic.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T00:47:01.884267876Z
+modified_at: 2026-09-26T00:47:01.884267876Z
+req_type: Story
+tags:
+- aida:history
+- aida:metrics
+- observability
+filed_at:
+  code_sha: 193a7c9769995ddd7b643b626af8fdb576bbf20b
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: claude
+  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
