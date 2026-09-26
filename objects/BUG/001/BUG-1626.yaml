@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T16:59:51.629805515Z
-modified_at: 2026-09-26T01:20:40.928653097Z
+modified_at: 2026-09-26T01:26:15.785412528Z
 req_type: Bug
 tags:
 - diagnostics
@@ -63,6 +63,12 @@ comments:
   content: 'Strict review: REQUEST CHANGES — reviewed 8a1788a092. BLOCKING (1): the new skip path drops mirror fan-out. aida-cli-lib/src/lib.rs:68469-68486: when fresh state proves nothing to push, the None arm sets Pushed but never calls fan_out_mirror_push (lib.rs:68502), clear_store_mirror_fanout_failure, or gitlab_mirror_link::sync_mirror_ci_link. Before this change, git push on an up-to-date branch exited 0 (''Everything up-to-date'') and the fan-out ran. That was how a lagging mirror got caught up. This repo sets [store.sync] mirror_remotes=["gitlab"], and the everyday flow is: PR merges on GitHub, aida pull, then aida push on main with (0,0). That flow no longer pushes main to gitlab, and recorded mirror drift is never cleared. Fix: run the mirror fan-out and CI link in the skip arm too (at least for (0,0)), and add a regression test with a mirror remote. NON-BLOCKING: (2) lib.rs:68481-68483 and push_failure_summary: a skipped no-op code leg is recorded as Pushed, so ''store rejected + code up to date'' is reported as ''partial success — code leg pushed''. That is inaccurate. Consider an UpToDate outcome. (3) Acceptance ''scripted and interactive have consistent exit semantics'' is still not met on one path (this predates the change). The BUG-88 and TASK-54 prompts (lib.rs:68405/68412 and 68454/68460) read stdin without an is_terminal check. A non-TTY run without --no-rebase-check reads EOF and returns Ok(()), exiting 0 with neither leg pushed. File a follow-up or gate them like confirm_push_plan. (4) lib.rs:67349-67366: when the fetch fails, the ls-remote fallback is a second 20s-bounded call, so the worst case is about 40s, not 20s. The mapping is correct: exit 2 means Absent, anything else means Unknown, and nothing maps to up to date. (5) Skip-safety holds for force-pushed remotes (the + refspec takes the rewrite, so ahead>0 pushes and gets rejected), for diverged branches (push is attempted and fails nonzero), and for a remote that is ahead (the skip exits 0, which the spec accepts). Caveat: if remote.origin.pushurl differs from url, fetch freshness does not describe the push target, and the skip could suppress a needed push. This is an edge case; consider comparing against ls-remote on the push URL, or skip only when url==pushurl. (6) Dry-run (lib.rs:67930) still reads the cached ref, so it can under-report or miss DIVERGED, which is the same class of bug. pull --dry-run already fetches, so a follow-up is recommended; this does not block. (7) Ordering: code goes first, then store, even when code failed. The spec allows attempting the independent leg, so this is acceptable. Store-first would match BUG-1625''s model better, but it is not required. VERIFIED OK: run_git_with_timeout adding GIT_TERMINAL_PROMPT=0 and stdin=null does not regress auto_push_store_best_effort (lib.rs:67745). SSH-agent, ssh, credential helpers and askpass are unaffected, and only the invisible terminal fallback is disabled. Exit-code consumers: no Rust, orchestrator, queue done, drain or hook code shells out to ''aida push''. The only scripted caller is scripts/multi-clone-harness.sh:238, which falls back with ''|| db sync --push || true'' and is unaffected. Tests: bug_1626 10/10, push 69, pull 54, sync 30, remote 89 all pass. Mutations: reverting the nonzero exit fails 3 tests, and disabling the fetch fails 3 tests. Tests use tempdirs only. The live store HEAD was unchanged, and ~/.aida writes came only from session hooks.'
   created_at: 2026-09-26T01:20:40.928653097Z
   modified_at: 2026-09-26T01:20:40.928653097Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0db51-f1e9-7983-8d89-a25e6df1f616
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept that declining the interactive push plan exits nonzero; nothing pushed never exits 0. The dry-run fresh-state follow-up is folded into BUG-1633.'
+  created_at: 2026-09-26T01:26:15.785412528Z
+  modified_at: 2026-09-26T01:26:15.785412528Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: ac9803a159e1871122232d6e6512ca668da96446
