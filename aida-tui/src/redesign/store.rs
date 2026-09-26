@@ -871,6 +871,7 @@ fn resolve_store_path(project_root: &Path) -> Option<PathBuf> {
         }
         let config_path = dir.join(".aida").join("config.toml");
         if let Ok(content) = std::fs::read_to_string(&config_path) {
+            // Deliberately unlike the CLI: an empty store_path is skipped (legacy TUI walk-up).
             // trace:BUG-1650 | ai:claude
             for rel in store_path_values(&content) {
                 let local = dir.join(&rel);
