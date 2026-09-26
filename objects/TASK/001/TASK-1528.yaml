@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:54:18.075888955Z
-modified_at: 2026-09-26T19:57:09.997567442Z
+modified_at: 2026-09-26T21:33:09.478341158Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -21,6 +21,43 @@ comments:
   content: 'Scope addition (BUG-1639 merge review): fix the doc comment on scaffold_refresh.rs is_unwrapped_lane_skill (mention .agents/skills; move the stray ''Write a newly shipped skill file...'' line to install_new_skill), and add a refresh-wrap test case for an unwrapped copy in .agents/skills.'
   created_at: 2026-09-26T19:57:09.997567442Z
   modified_at: 2026-09-26T19:57:09.997567442Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfa2-e3e6-7350-8b32-ee536ccedae2
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; origin/claude/bug-1662 daea75f379 noted): thread the saved agent selection into the report generator, gate the memory-lane portable pack on it, and fix the doc-comment placement.
+
+    FILES/SYMBOLS
+    - aida-core/src/report.rs: ReportGenerator struct :157-161, new :165, with_project_root :173, generate :178-195 (calls self.check_scaffold_status(root) :191), private check_scaffold_status :401-406 (ScaffoldConfig::default() at :406). The public check_scaffold_status(store, root, config, db) :855 already takes a config; the CLI entry points (scaffold_cmd.rs:43-44, doctor_cmd.rs:825) already pass init_cmd::scaffold_config_for_project.
+    - aida-cli-lib/src/report_cmd.rs:107 (ReportGenerator::new), :119-121 (with_project_root); :261 already reads read_enabled_agent_selection in this file.
+    - aida-cli-lib/src/init_cmd.rs: scaffold_config_for_project :1337-1344 (the A5 helper); memory_lane_skill_packs :1167-1177 (always includes PORTABLE_PACK); write_memory_lane_scaffolding :1180; caller complete_init_scaffolding :1476, memory-lane branch :1497-1505, early return :1600, resolve_init_agent_selection_for_root + write_enabled_agent_selection :1609-1610 (non-lane only); AgentSelection::apply_to_scaffold_config :541.
+    - aida-cli-lib/src/scaffold_refresh.rs: the misplaced doc line "Write a newly shipped skill file into an installed pack." :174 (+ its trace :175) sits above is_unwrapped_lane_skill :182 instead of install_new_skill :203; test bug_1653_refresh_wraps_unwrapped_pristine_lane_skills :1143.
+
+    APPROACH
+    1. Report (acceptance 1): thread it in from the CLI. aida-core has no reader of [agents] enabled (agents_config.rs reads vendor/model/tiers only) and read_enabled_agent_selection_with_source :1304 walks ~/.aida/agents.toml via aida_home_dir(), which lives in aida-cli-lib; duplicating it in aida-core would create a second selection reader. Add ReportGenerator::with_scaffold_config(mut self, config: ScaffoldConfig) -> Self (field scaffold_config: Option<ScaffoldConfig>) and in the private check_scaffold_status :406 use self.scaffold_config.clone().unwrap_or_default(). report_cmd.rs:119-121: generator = generator.with_project_root(root.clone()).with_scaffold_config(crate::init_cmd::scaffold_config_for_project(&root)). `// trace:TASK-1528 | ai:<tool>` beside both.
+    2. Memory-lane writer (acceptance 2): memory-lane init never persists the selection (the early return :1600 precedes :1609-1610), so "selected" must come from `agent`. In complete_init_scaffolding hoist `let selection = resolve_init_agent_selection_for_root(root, agent)?; write_enabled_agent_selection(root, selection)?;` above the footprint branch (:1497) so every footprint records [agents] enabled (memory-lane already writes .aida/config.toml, see candidate paths :312-330). Give write_memory_lane_scaffolding a `portable: bool` parameter (= selection.codex || selection.antigravity) and memory_lane_skill_packs(root, portable) pushes PORTABLE_PACK only when portable; the legacy .codex/skills kept-level rule (:1170-1175) is unchanged. Callers: init :1505 and the test call sites (scaffold_refresh.rs :1041, :1075, :1153; init_cmd.rs :5493-5754) pass true where they set up a Codex pack, false otherwise. Do not change init_scaffold_candidate_paths_for_footprint :312 (candidates are only staged if present).
+    3. Doc-comment fix: move :174-175 above install_new_skill :203; leave the BUG-1653 paragraph :176-181 on is_unwrapped_lane_skill and mention .agents/skills there.
+
+    EDGE CASES / FAIL-SAFE
+    - No saved selection at report/refresh time -> scaffold_config_for_project already returns today's default (A5); with_scaffold_config absent -> ScaffoldConfig::default() (unchanged for other aida-core callers).
+    - Memory-lane init with no --agent: resolve_init_agent_selection_for_root :807 falls to detected_agent_selection() exactly as full init does; a detected Codex binary still yields .agents/skills, which is the documented rule.
+    - An existing memory-lane project that already has .agents/skills from an earlier init but a Claude-only selection: refresh never creates packs (refresh_agent_packs doc :214-220) and the writer's plan.record only runs when the dir exists; nothing is deleted.
+
+    TESTS (aida-cli-lib, tempdir project; HOME is fenced by test_home.rs, but write .aida/config.toml explicitly so ~/.aida/agents.toml is never consulted)
+    - claude_only_project_memory_lane_writer_writes_no_agents_skills (init_cmd tests next to :5493): write_memory_lane_scaffolding(root, &store, "test", false, false, /*portable*/ false) -> no .agents/ dir, .claude/skills/aida-{capture,learn}/SKILL.md present; with true -> .agents/skills/.. present. Plus memory_lane_init_persists_agent_selection: after the hoist, read_enabled_agent_selection(root) is Some for a memory-lane init with --agent claude.
+    - report_scaffold_check_honours_saved_selection_no_missing_skill_item: project with `[agents]\nenabled = ["claude"]`; build ReportGenerator::new(store, db).with_project_root(root).with_scaffold_config(scaffold_config_for_project(root)); assert report.scaffold_status.missing has no path starting with .agents/skills; rewrite the config to ["claude","codex"] and assert it does. Mirror the doctor_cmd.rs:6828-6858 fixture.
+    - aida-core: report_generator_uses_supplied_scaffold_config (generate_codex_skills=false + generate_antigravity_skills=false -> no .agents/ artifact in scaffold_status.missing; default -> present).
+    - refresh_wraps_unwrapped_copy_in_agents_skills: as :1143 but write the raw master to .agents/skills/aida-capture/SKILL.md (after a portable=true lane write); refresh_agent_packs_at reports it in refreshed and the bytes equal rendered_pack_skill(".agents/skills", "aida-capture").
+
+    OVERLAP / ORDERING
+    - origin/claude/bug-1662 edits scaffold_refresh.rs refresh_agent_packs_at :267-370, agents_md_block_refresh :480-530, adds is_memory_lane ~:600 and tests at the file end, and inserts current_memory_lane_block in init_cmd.rs ~:1052. It does not touch is_unwrapped_lane_skill, install_new_skill, write_memory_lane_scaffolding or report.rs, so conflicts are offset-only; still land TASK-1528 after BUG-1662 (same scaffold chain BUG-1639 -> BUG-1662 -> TASK-1499) and rebase once.
+    - TASK-1519 (migration) will touch memory_lane_skill_packs / legacy handling later; keep the portable gate a single boolean so it composes.
+
+    BUG NOTE (main, not filed): memory-lane `aida init` never records the agent selection (return at :1600 precedes :1610), so a lane project has no [agents] enabled and every later scaffold status / doctor / refresh falls to the A5 default (codex = true); and write_memory_lane_scaffolding writes .agents/skills unconditionally (:1167-1169). Both are what this task fixes; the hoist in step 2 is required, not optional.
+
+    VERDICT: READY.
+  created_at: 2026-09-26T21:33:09.478341158Z
+  modified_at: 2026-09-26T21:33:09.478341158Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
