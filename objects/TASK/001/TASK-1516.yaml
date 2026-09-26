@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T14:04:12.230277346Z
-modified_at: 2026-09-26T16:09:20.716782204Z
+modified_at: 2026-09-26T16:15:19.146040741Z
 req_type: Task
 tags:
 - docs:impacted
@@ -36,6 +36,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe) on the review (REQUEST CHANGES): (1+3) the pre-commit hook TEMPLATE keeps the OLD rule (block only bare IDs and trace: markers on /// lines). The ''no spec ID in prose'' rule stays in the cli.rs help guard (the CI test) only, NOT the hook that ships to user projects. (2) Add word boundaries (^|[^A-Za-z0-9_]) to the hook''s ID pattern, and keep the hook and cli.rs patterns genuinely in lockstep (or document the difference). Add a hook test: prose mentions ADR-12, FR-1-042, DEBUG-2, SCR-4 in a non-CLI .rs file pass, and a bare trace marker on /// is still blocked. (4) Nits: session end help uses a placeholder example (e.g. task-<n>); reword the lock help without ''early slice'' internal-speak; add DOC to both ID patterns. Then a fresh re-review.'
   created_at: 2026-09-26T16:03:18.523822373Z
   modified_at: 2026-09-26T16:03:18.523822373Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0de7f-e66a-7570-8e15-5455afcb947b
+  author: joe
+  content: 'Review round 2 (fresh Opus reviewer): APPROVE WITH NITS @ 37652abf18. PROXY DECISION met. (1) The hook template is back to the bare-id/trace-only rule. I installed the real template in a throwaway repo (fake HOME) and ran real commits. These PASS: ''/// See ADR-12...'', ''/// Implements FR-1-042'', ''/// Log at DEBUG-2 verbosity'', ''/// Handles the SCR-4 screen'', bare ''/// DEBUG-2'', bare ''/// SCR-4'', ''/// See DOC-3...'', ''// trace:BUG-1 | ai:x'', and /// lines in .md/.py files. These BLOCK: ''/// BUG-12'', ''/// trace:BUG-1 | ai:x'', ''/// FR-1-042'', ''    /// (STORY-122, TASK-903)'', a tab-indented ''/// BUG-7.''. (2) Word boundary (^|[^A-Za-z0-9_]) plus DOC in both patterns. cli.rs SPEC_ID_PATTERN is byte-identical to the hook''s SPEC_ID_RE, and spec_id_pattern_matches_the_hook_template enforces it by exact-line match via include_str. (3) Cases 6-8 pass on the branch. My own control run: the origin/main hook and the b5a1618067 hook both FAIL case 6 (prose) and case 8 (DOC); case 7 passes on all, as expected for a regression guard. (4) Nits done: session end uses TASK-<n>/task-<n> placeholders, lock help has no ''early slice'' wording, DOC added. Portability: the new awk step uses only POSIX features (-v, sub/gsub with a dynamic ERE, [[:space:]]). Identical results under mawk 1.3.4 and busybox awk. I read the BWK/one-true-awk source (FreeBSD contrib; macOS awk is the same lineage): it supports [[:space:]], handles ^ inside an alternation as HAT, and gsub resets initstat after the first match, so the anchored alternative can''t re-fire mid-string. No bashisms added, and the hook has no set -u. Cost is one grep plus at most one awk per added /// line, same order as the old sed -E. Checks: make check-templates OK; check-portability rc=0; test_precommit_provenance_move.sh all pass; cargo test -p aida-cli-lib --lib cli::tests 54/54; rustfmt --check cli.rs clean. The commit touches exactly 4 files (cli.rs, the hook template, the conventions doc, the hook test), with no fixtures, debug output or conflict markers, so nothing stray from the reset --hard incident. Nits (non-blocking): (a) docs/user-facing-text-conventions.md: the new ''rg -nE ...'' command is broken, because ripgrep''s -E is --encoding (error: unknown encoding). Use ''rg -n'' (the neighbouring pre-existing rg -nE lines have the same bug). (b) Edge case: ''/// BUG-1BUG-2'' is allowed by the hook (the second id has no boundary, so ''BUG'' survives as prose) but rejected by the CI guard. Harmless. (c) Pre-existing, not this change: the hook treats ''////'' (a non-doc comment in Rust) as a doc line, and the cargo-fmt step prints ''drift fixed and re-staged'' even when cargo fails (no rustup default).'
+  created_at: 2026-09-26T16:15:19.146040741Z
+  modified_at: 2026-09-26T16:15:19.146040741Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de4a-67d1-7062-84ed-39e88e24c72e
