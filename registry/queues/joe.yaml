@@ -5,50 +5,8 @@
   added_at: 2026-09-25T08:03:05.081126691Z
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0d64e-56c6-74d2-8b0c-26bd42b7bfcc
-  position: 8000
-  added_by: joe
-  added_at: 2026-09-25T08:03:19.549397080Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d7a1-cfb9-7ed2-add8-b69091986e6d
-  position: 11000
-  added_by: joe
-  added_at: 2026-09-25T08:16:21.884437631Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d7ed-81d6-7151-a733-529c6b8815e1
-  position: 12000
-  added_by: joe
-  added_at: 2026-09-25T09:37:51.787536038Z
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0d7f7-e8c3-7673-8b75-e553e0a9f30e
   position: 13000
   added_by: joe
   added_at: 2026-09-25T09:49:19.500319472Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d81c-2d21-7433-b98e-98b85beab348
-  position: 14000
-  added_by: joe
-  added_at: 2026-09-25T10:28:50.117140431Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d88b-4ebc-76f3-8066-fed8285fef38
-  position: 15000
-  added_by: joe
-  added_at: 2026-09-25T12:30:31.376354169Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d88d-d192-7e91-b372-03bbff5ed1ac
-  position: 16000
-  added_by: joe
-  added_at: 2026-09-25T12:32:58.925968909Z
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0d899-017b-7a22-a655-16e884096020
-  position: 17000
-  added_by: joe
-  added_at: 2026-09-25T12:45:16.997766268Z
   added_by_machine: imac
