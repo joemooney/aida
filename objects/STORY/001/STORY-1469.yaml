@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T02:15:53.618911294Z
-modified_at: 2026-09-24T08:13:53.453707853Z
+modified_at: 2026-09-26T00:57:24.257375075Z
 req_type: Story
 comments:
 - id: 01a0d1ca-4878-7c12-8f76-2e7745df97b1
@@ -22,6 +22,25 @@ comments:
   created_at: 2026-09-24T08:13:53.453707853Z
   modified_at: 2026-09-24T08:13:53.453707853Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0db37-8621-7b03-95c3-d1c63aef7dec
+  author: joe
+  content: |-
+    Vote storage + sync (product note, 2026-09-25; operator: exact counts are not critical, an occasional lost vote is acceptable).
+
+    Recommendation — keep it inside the existing three-way merge, no new substrate:
+    - Store votes ON the idea's YAML as a map keyed by voter identity: votes: { <canonical_user_id>: { dir: up|down, at: <ts> } }. Key by canonical_user_id (case-folded, TASK-951) so one person = one key.
+    - NEVER store a count. The tally is derived at read time from the map. A stored counter is the only thing that would genuinely conflict.
+    - Merge in conflict.rs merge_spec_three_way as a keyed three-way merge: different voters on two machines = disjoint keys, both survive; same voter on two machines = later 'at' wins (same LWW shape as queue_entry_lww); withdrawn vote = key removed, handled with the base-aware removal semantics of merge_string_set_three_way so a retraction is not resurrected.
+    - Worst case accepted: a same-voter race or a clock skew picks the 'wrong' direction for that one voter. No lost votes across different voters.
+    - Rejected: per-node vote files / a separate branch (overkill for a non-critical tally), and append-only vote events (needs replay for a number nobody audits).
+
+    Acceptance additions:
+    - Two clones voting on the same idea concurrently (different voters) → both votes present after aida pull on either clone; test via merge_spec_three_way fixtures.
+    - Same voter changes vote on two clones → exactly one vote for that voter after merge.
+    - Vote retraction on one clone + no change on the other → retraction survives merge.
+  created_at: 2026-09-26T00:57:24.257375075Z
+  modified_at: 2026-09-26T00:57:24.257375075Z
+  session_id: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
 deferred: true
 deferred_at: 2026-09-24T08:13:50.256176271Z
 deferred_until: draft inbox regularly holds >10 non-actionable ideas
