@@ -1,0 +1,20 @@
+id: 01a0df0e-fff9-7721-a831-7dc2f96c4f13
+spec_id: TASK-1527
+agreed_id: TASK-1527
+title: Durable cache refresh request and detached refresh worker (slice C)
+description: 'Slice C of STORY-1484, implemented exactly per the ADVISOR SIGNOFF on STORY-1484: amendments A7 and A8 (request file is a hint only; cleared when the cache is fresh at the current head; stop spawning workers after 3 failures in 10 minutes; runtime cap, log file, AIDA_CACHE_NO_DETACH for CI/tests). Acceptance = those amendments with named tests; fixtures and fake HOME only.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:51:37.337431823Z
+modified_at: 2026-09-26T18:51:37.337431823Z
+req_type: Task
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
