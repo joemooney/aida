@@ -12896,6 +12896,11 @@ mod task_1480_history_id_alias_tests;
 #[path = "tests/task_1507_history_cache_tests.rs"]
 mod task_1507_history_cache_tests;
 
+// trace:TASK-1508 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1508_history_source_tests.rs"]
+mod task_1508_history_source_tests;
+
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
 ///
