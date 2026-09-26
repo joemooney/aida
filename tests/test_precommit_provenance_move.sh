@@ -166,6 +166,47 @@ git add -A
 assert_exit "duplicating a moved line beyond its removal count is refused" 1 "$(commit "feat: dup")"
 git reset -q --hard
 
+# 6. PROSE MENTIONS in ordinary rustdoc (TASK-1516): the hook ships to every
+#    scaffolded project and scans every staged *.rs file, so a descriptive
+#    mention of a project's own id on a `///` line in a non-CLI file must NOT
+#    block, and an id-shaped substring of a longer word (DEBUG-2 -> BUG-2,
+#    SCR-4 -> CR-4) is not an id at all (leading word boundary).
+cat >src/prose.rs <<'EOF'
+/// See ADR-12 for the rationale.
+pub fn adr() {}
+/// Implements FR-1-042 from the product requirements.
+pub fn fr() {}
+/// Log at DEBUG-2 verbosity.
+pub fn debug() {}
+/// Handles the SCR-4 screen.
+pub fn scr() {}
+/// DEBUG-2
+pub fn bare_debug() {}
+/// SCR-4
+pub fn bare_scr() {}
+EOF
+git add -A
+assert_exit "prose id mentions on /// in a non-CLI .rs file are allowed" 0 "$(commit "docs: prose ids")"
+
+# 7. A bare `trace:` marker on a `///` line is still provenance -> REFUSED.
+cat >>src/prose.rs <<'EOF'
+/// trace:BUG-1 | ai:x
+pub fn traced() {}
+EOF
+git add -A
+assert_exit "bare /// trace marker is still refused" 1 "$(commit "feat: trace on doc")"
+assert_stderr_contains "refusal names the trace line" "trace:BUG-1"
+git reset -q --hard
+
+# 8. A bare id (no prose) on a `///` line is still refused, DOC prefix included.
+cat >>src/prose.rs <<'EOF'
+/// DOC-3
+pub fn doc_bare() {}
+EOF
+git add -A
+assert_exit "bare /// DOC id is still refused" 1 "$(commit "feat: bare doc id")"
+git reset -q --hard
+
 if [ "$fail" -ne 0 ]; then
     echo "PRE-COMMIT PROVENANCE MOVE GATE (TASK-144): FAILURES"
     exit 1

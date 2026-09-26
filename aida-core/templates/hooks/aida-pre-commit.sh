@@ -234,8 +234,14 @@ fi
 # (e.g. `/// reuses the STORY-122 usage log`) is legitimate help text, NOT a
 # leak, and is allowed (BUG-629 tightened this from the old over-broad "any
 # SPEC-ID token" criterion, which forced agents to reword legit `///` prose).
-# This is the SAME criterion as the cli.rs `doc_comment_is_provenance_leak`
-# helper — keep the two in lockstep (TASK-903).
+# This hook ships to every scaffolded project and scans every staged `*.rs`
+# file, where ordinary rustdoc legitimately cites a project's own ids (`/// See
+# ADR-12 for the rationale`), so it deliberately keeps this narrower criterion.
+# AIDA's own stricter "no SPEC-ID in `--help` prose at all" rule lives ONLY in
+# the cli.rs CI guard (`doc_comment_is_provenance_leak`), which scans just the
+# clap source (TASK-1516). The two share the SAME id pattern (prefixes and
+# leading word boundary) — keep `SPEC_ID_RE` here and the cli.rs regex in
+# lockstep (TASK-903).
 # Fix a real offender: demote the `///` to a plain `//` line above the item.
 # Emergency skip: pass --no-verify (or --allow-intermediate, handled above).
 #
@@ -259,10 +265,16 @@ fi
 # is still refused, including extra copies beyond the number removed. The
 # removal pass diff-filters D too, so a move whose source file is deleted
 # outright still credits its lines.
-# trace:TASK-135 trace:BUG-624 trace:BUG-629 trace:TASK-903 trace:TASK-144 | ai:claude
-SPEC_ID_RE='(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN)-[0-9]+'
+#
+# `SPEC_ID_RE` carries an explicit leading word boundary `(^|[^A-Za-z0-9_])`
+# (POSIX ERE has no portable `\b`), so an id-shaped substring of a longer word
+# (`DEBUG-2` → `BUG-2`, `SCR-4` → `CR-4`) is not mistaken for a SPEC-ID. The
+# cli.rs guard uses this exact pattern string — change both together.
+# trace:TASK-135 trace:BUG-624 trace:BUG-629 trace:TASK-903 trace:TASK-144 trace:TASK-1516 | ai:claude
+SPEC_ID_RE='(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+'
 
-# Mirror of cli.rs `doc_comment_is_provenance_leak`. Input: a `///`-prefixed doc
+# Bare-ID / `trace:` provenance check (the cli.rs CI guard is intentionally
+# stricter — see above; only the id pattern is shared). Input: a `///`-prefixed doc
 # line. Returns 0 (leak → reject) when it carries `trace:` or is a bare SPEC-ID;
 # returns 1 (allow) for a descriptive prose mention or no SPEC-ID at all.
 __aida_doc_is_provenance_leak() {
@@ -271,12 +283,14 @@ __aida_doc_is_provenance_leak() {
     printf '%s\n' "$docline" | grep -qE "$SPEC_ID_RE" || return 1
     # A `trace:` marker on a `///` line is always provenance.
     case "$docline" in *trace:*) return 0 ;; esac
-    # Strip the leading `///`, then delete every SPEC-ID token. If an alphabetic
-    # word (2+ ascii letters) survives, this is descriptive prose → allow.
-    # Otherwise only punctuation/digits remain → bare SPEC-ID → reject.
+    # Strip the leading `///`, then delete every SPEC-ID token (plus the single
+    # boundary char before it). If an alphabetic word (2+ ascii letters)
+    # survives, this is descriptive prose → allow. Otherwise only
+    # punctuation/digits remain → bare SPEC-ID → reject. POSIX awk (not
+    # `sed -E`) keeps this portable to BSD/macOS and bash 3.2.
     local residual
     residual="$(printf '%s\n' "$docline" \
-        | sed -E 's#^[[:space:]]*///+##; s/'"$SPEC_ID_RE"'/ /g')"
+        | awk -v re="$SPEC_ID_RE" '{ sub(/^[[:space:]]*\/\/\/+/, ""); gsub(re, " "); print }')"
     if printf '%s\n' "$residual" | grep -qE '[A-Za-z]{2,}'; then
         return 1
     fi
