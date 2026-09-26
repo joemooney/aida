@@ -73,6 +73,9 @@ fn opts() -> HistoryOpts {
         until: None,
         status_changes_only: false,
         shipped_only: false,
+        to_status: None,
+        from_status: None,
+        opened_only: false,
         comments_only: false,
         oneline: false,
         archived_specs: Default::default(),
@@ -103,6 +106,9 @@ fn task_1508_index_answer_reports_source_and_tip() {
     let store = store_with_history(tmp.path());
     let head = git(&store, &["rev-parse", "HEAD"]);
 
+    // trace:BUG-1643 | ai:claude
+    // The query builds the index itself; under test that inline build is
+    // unbounded, so this answer never depends on machine load.
     let served = with_index_on(|| collect_event_records(&store, &opts()).unwrap());
     assert_eq!(
         served.source,

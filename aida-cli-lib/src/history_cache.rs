@@ -479,6 +479,25 @@ fn kind_name(kind: &EventKind) -> &'static str {
     }
 }
 
+/// The stored `kind` names a query's event-kind selectors admit, or empty
+/// when none is set (every kind passes). A superset of what
+/// `history::event_passes_filters` keeps, so narrowing on it in SQL never
+/// drops an event the git walk would return.
+// trace:TASK-1512 | ai:claude
+fn history_kind_selection(opts: &HistoryOpts) -> Vec<&'static str> {
+    let mut kinds = Vec::new();
+    if opts.status_changes_only || history::has_transition_filter(opts) {
+        kinds.push("status_change");
+    }
+    if opts.comments_only {
+        kinds.push("comments_added");
+    }
+    if opts.opened_only {
+        kinds.push("added");
+    }
+    kinds
+}
+
 // ---------------------------------------------------------------------------
 // Batched decoder: one `git log --raw` stream + one `git cat-file --batch`
 // ---------------------------------------------------------------------------
@@ -1653,6 +1672,16 @@ impl HistoryCache {
             if opts.exclude_meta {
                 sql.push_str(" AND e.is_meta = 0");
             }
+            // The event-kind selectors (`--status-changes`, `--comments`,
+            // `--opened`, `--to`/`--from`) narrow on the stored `kind`
+            // column; `--to`/`--from` themselves are re-checked in Rust by
+            // `event_passes_filters`, the same predicate the git walk uses.
+            // trace:TASK-1512 | ai:claude
+            let kinds = history_kind_selection(opts);
+            if !kinds.is_empty() {
+                let list: Vec<String> = kinds.iter().map(|k| format!("'{k}'")).collect();
+                sql.push_str(&format!(" AND e.kind IN ({})", list.join(", ")));
+            }
             sql.push_str(" ORDER BY e.commit_ts DESC, e.commit_seq DESC, e.ordinal ASC");
             let mut stmt = tx.prepare(&sql)?;
             let mut rows = stmt.query(params![low_ts, low_seq, since_ts, until_ts, id_path])?;
@@ -1764,12 +1793,25 @@ pub(crate) fn serve(store: &Path, opts: &HistoryOpts) -> Option<CacheAnswer> {
     if !cache_enabled() {
         return None;
     }
-    let budget = budget_from(
-        std::env::var("AIDA_HISTORY_INDEX_BUDGET_MS")
-            .ok()
-            .as_deref(),
+    #[cfg(not(test))]
+    let answer = serve_at(
+        store,
+        &history_db_path(store),
+        opts,
+        budget_from(
+            std::env::var("AIDA_HISTORY_INDEX_BUDGET_MS")
+                .ok()
+                .as_deref(),
+        ),
     );
-    match serve_at(store, &history_db_path(store), opts, budget) {
+    // trace:BUG-1643 | ai:claude
+    // A test that opts into env-driven serving indexes a tiny throwaway
+    // store; a wall-clock budget there only makes the "served from the
+    // index" answer depend on machine load. Tests index it unbounded
+    // (`budget_from` and the budgeted paths are tested via `serve_at`).
+    #[cfg(test)]
+    let answer = serve_with_budget_at(store, &history_db_path(store), opts, None);
+    match answer {
         Ok(answer) => answer,
         Err(e) => {
             debug_log(&e);
@@ -1786,6 +1828,18 @@ pub(crate) fn serve_at(
     opts: &HistoryOpts,
     budget: Duration,
 ) -> Result<Option<CacheAnswer>> {
+    serve_with_budget_at(store, db_path, opts, Some(budget))
+}
+
+/// [`serve_at`] with an optional budget: `None` indexes inline unbounded.
+/// The deadline starts right before indexing, as it always has.
+// trace:BUG-1643 | ai:claude
+fn serve_with_budget_at(
+    store: &Path,
+    db_path: &Path,
+    opts: &HistoryOpts,
+    budget: Option<Duration>,
+) -> Result<Option<CacheAnswer>> {
     let head = aida_core::git_ops::head_sha(store)?;
     let lock = IndexLock::try_acquire(db_path)?;
     let heal = |e: anyhow::Error, locked: bool| -> anyhow::Error {
@@ -1799,7 +1853,11 @@ pub(crate) fn serve_at(
     let locked = lock.is_some();
     let mut cache = HistoryCache::open(db_path).map_err(|e| heal(e, locked))?;
     if locked {
-        if let Err(e) = cache.ensure_fresh(store, &head, Budget::for_duration(budget)) {
+        if let Err(e) = cache.ensure_fresh(
+            store,
+            &head,
+            budget.map_or_else(Budget::unbounded, Budget::for_duration),
+        ) {
             // trace:TASK-1507 | ai:claude
             // B4: an index that disagrees with the store is reset (or, if
             // that fails, deleted) so the next query rebuilds it; this
