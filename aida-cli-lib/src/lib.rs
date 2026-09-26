@@ -2009,7 +2009,14 @@ fn enforce_json_format_capability(argv: &mut Vec<String>) -> Result<()> {
     let mut command = &root;
     let mut selected = &matches;
     let mut path = vec!["aida".to_string()];
+    // BUG-1631: a `global = true` `--json` on an ancestor (e.g. `aida
+    // history`) also covers its subcommands (`aida history events`).
+    // trace:BUG-1631 | ai:claude
+    let mut inherited_json = false;
     while let Some((name, submatches)) = selected.subcommand() {
+        inherited_json |= command
+            .get_arguments()
+            .any(|argument| argument.get_id().as_str() == "json" && argument.is_global_set());
         let Some(subcommand) = command
             .get_subcommands()
             .find(|candidate| candidate.get_name() == name)
@@ -2024,9 +2031,10 @@ fn enforce_json_format_capability(argv: &mut Vec<String>) -> Result<()> {
         selected = submatches;
     }
 
-    let supports_json = command
-        .get_arguments()
-        .any(|argument| argument.get_id().as_str() == "json");
+    let supports_json = inherited_json
+        || command
+            .get_arguments()
+            .any(|argument| argument.get_id().as_str() == "json");
     if !supports_json {
         anyhow::bail!(
             "`{} --format json` is unsupported: this command has no JSON projection; use `--format human` or `--format toon`",
@@ -12958,6 +12966,11 @@ mod task_1507_history_cache_tests;
 #[cfg(test)]
 #[path = "tests/task_1508_history_source_tests.rs"]
 mod task_1508_history_source_tests;
+
+// trace:BUG-1631 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1631_history_spec_id_tests.rs"]
+mod bug_1631_history_spec_id_tests;
 
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.

@@ -7778,6 +7778,7 @@ pub(crate) fn handle_git_backend_command(
             shipped,
             comments,
             oneline,
+            json,
             all,
             archived,
             deferred,
@@ -7791,7 +7792,15 @@ pub(crate) fn handle_git_backend_command(
             let requested_id = id.as_ref().or(spec.as_ref());
             // STORY-1436: `--kind` reads the local event feed (non-actions
             // included) rather than the spec git log. trace:STORY-1436 | ai:claude
+            // BUG-1631: `--json` / `--format json` is the events feed's
+            // JSON projection. trace:BUG-1631 | ai:claude
+            let json = *json || crate::output_format_is_json();
             if let Some(kind) = kind {
+                if json {
+                    anyhow::bail!(
+                        "`aida history --kind` has no JSON projection; use `--format human` or `--format toon`"
+                    );
+                }
                 return crate::history_kind_report(
                     kind,
                     since.as_deref(),
@@ -7811,7 +7820,7 @@ pub(crate) fn handle_git_backend_command(
                     }
                     // trace:TASK-1480 | ai:claude — `--full` is the
                     // discoverable, non-hidden spelling of the same mode.
-                    *events || *full
+                    *events || *full || json
                 }
             };
             // trace:FR-1-037 | ai:claude
@@ -7959,7 +7968,7 @@ pub(crate) fn handle_git_backend_command(
                 // default-view drowning. trace:STORY-737 | ai:claude
                 exclude_meta: history_should_exclude_meta(*include_meta, r#type.as_deref()),
             };
-            history::run(store_path, &opts)?;
+            history::run(store_path, &opts, json)?;
         }
         Command::StateSnapshot {
             spec,

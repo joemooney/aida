@@ -2603,13 +2603,13 @@ impl<'a> McpServer<'a> {
         // history index or a git walk answered; `index_tip` is the store
         // commit an index answer reflects (null for a walk).
         // trace:TASK-1508 | ai:claude
-        serde_json::to_string_pretty(&json!({
-            "count": records.events.len(),
-            "events": records.events,
-            "window_exhausted": records.window_exhausted,
-            "source": records.source.as_str(),
-            "index_tip": records.source.index_tip(),
-        }))
+        // BUG-1631: one JSON builder for MCP and `aida history --json`.
+        // trace:BUG-1631 | ai:claude
+        serde_json::to_string_pretty(&history::records_json(
+            &records.events,
+            records.window_exhausted,
+            &records.source,
+        ))
         .map_err(|e| e.to_string())
     }
 
