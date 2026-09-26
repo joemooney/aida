@@ -3,13 +3,21 @@ spec_id: TASK-1520
 agreed_id: TASK-1520
 title: 'Dev repo: make sync-templates/check-templates manage .agents/skills as regular-file copies with a drift check, plus the remaining docs'
 description: Child of BUG-1639 (advisor signoff child B). A new script copies the template skills into .agents/skills as regular files (Codex ignores symlinked SKILL.md) and checks byte drift; wire it into make sync-templates/check-templates; finish the docs listed in the signoff. Commits use only this task's ID.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:00:59.566482093Z
-modified_at: 2026-09-26T16:00:59.566482093Z
+modified_at: 2026-09-26T16:01:23.928638197Z
 req_type: Task
+history:
+- id: 01a0de73-27d8-7eb3-8893-a2373e0a1866
+  author: joe
+  timestamp: 2026-09-26T16:01:23.928636258Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
   branch: main
