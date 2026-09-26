@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:23:42.715664058Z
-modified_at: 2026-09-26T21:17:20.633807372Z
+modified_at: 2026-09-26T21:31:33.051518099Z
 req_type: Bug
 tags:
 - performance schedule
@@ -36,6 +36,12 @@ comments:
   content: 'Evidence 2026-09-26 13:47 local: guard runs again ended failed:124 (120 s timeout) under heavy build load, and all four routes came due again (BUG-1655 over-firing). No real low-disk or runaway-seat finding; performance limb is BUG-1674.'
   created_at: 2026-09-26T20:57:05.561707440Z
   modified_at: 2026-09-26T20:57:05.561707440Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfa1-6b3b-7521-8d86-3bc3517e1389
+  author: joe
+  content: 'DRAFT (uncompiled) on claude/bug-1675 @ 8dbcb8f82b: doctor_cmd.rs Check arm dispatches single-category disk-headroom (no --all) to new doctor_check_disk_headroom_light (find_project_root -> main_worktree_root_from -> disk_headroom_light_report -> render/JSON -> same --fail-on-findings bail text shape as the runaway-seats light path); pure disk_headroom_light_report(project_root) = read_project_config_value + disk_headroom_min_free_gib + scan_disk_headroom + DoctorReport::from_findings; DISK_HEADROOM_CATEGORY const. No Storage::load, no collect_doctor_findings. Left for the implementer: the sub-2 s timing measurement (needs a build); follow-up filing. Answer to the acceptance question: the same light path applies to performance (needs only read_project_config_value + usage::read_events + binary lineage, no store) and to remote-drift (scan_remote_drift takes only project_root) — both 6 h guards, so a follow-up TASK is warranted but lower risk; not filed from this draft. Tests: bug_1675_disk_headroom_light_tests.rs (registered inside doctor_cmd.rs via #[path]) — fixture_store_is_unloadable (.aida-store is a regular file; asserts Storage::new(..).load() is_err), light_path_reports_healthy_without_loading_store (floor 1 GiB), light_path_reports_below_floor_without_loading_store (u64::MAX/GiB floor; compares category/id/summary with scan_disk_headroom), light_path_without_config_uses_default_and_serializes. Compile risks: Storage must be in scope in doctor_cmd via crate::* for the test''s use super::*; DoctorReport field visibility inside the child test module (private fields are visible to a child module, so fine); the 1 GiB healthy-floor test assumes the CI disk has >1 GiB free.'
+  created_at: 2026-09-26T21:31:33.051518099Z
+  modified_at: 2026-09-26T21:31:33.051518099Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df94-6979-7cd1-bd64-1750310484fa
