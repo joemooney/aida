@@ -3,12 +3,12 @@ spec_id: BUG-1634
 agreed_id: BUG-1634
 title: tests/test_distributed.sh writes to the real ~/.aida/roles
 description: 'Found in BUG-1625''s review. tests/test_distributed.sh writes the operator''s real ~/.aida/roles; it only stays clean when run with a temporary HOME. Tests must never touch ~/.aida. Fix: export a temporary HOME (and AIDA_HOME if used) at the top of the script, and assert nothing under the real ~/.aida changes. Acceptance: running the script leaves the real ~/.aida unchanged (compare its listing and mtimes before and after).'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T23:05:27.108447265Z
-modified_at: 2026-09-26T01:18:30.346643409Z
+modified_at: 2026-09-26T02:16:48.065373995Z
 req_type: Bug
 comments:
 - id: 01a0dad1-8ae9-7ba1-a514-006504894d45
@@ -29,6 +29,20 @@ comments:
   created_at: 2026-09-26T01:18:30.346643409Z
   modified_at: 2026-09-26T01:18:30.346643409Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0db80-36b8-7953-a08d-fbebbf562fc7
+  author: aida-auto-bump
+  timestamp: 2026-09-26T02:16:48.056532113Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0db80-36c1-72c1-b2c2-ed4e4e9dcced
+  timestamp: 2026-09-26T02:16:48.065373204Z
+  agent: implementer
+  commit_sha: 1b896f60516fbf09faa8ee82affe1b6626a26378
+  summary: Completed via merge 1b896f60
 filed_at:
   code_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
   branch: main
@@ -37,3 +51,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T02:16:48.056528168Z
+  completion_sha: 1b896f60516fbf09faa8ee82affe1b6626a26378
