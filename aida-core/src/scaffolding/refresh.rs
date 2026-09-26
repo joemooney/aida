@@ -44,12 +44,16 @@ use std::path::{Path, PathBuf};
 /// aida-req
 /// # opted-out: delivered, then deleted by the user
 /// aida-orchestrate
+/// # unconfirmed: missing when refresh first tracked this pack
+/// aida-digest
 /// ```
 ///
-/// Every name line, in either section, means "AIDA has shipped this name
-/// here before", so it is never re-created. A STORY-1475 manifest (no `v2`
-/// marker) lists only allow-listed skills and is treated as legacy: it is
-/// re-seeded from the directories on disk.
+/// A delivered or opted-out name is never re-created. An `unconfirmed` name
+/// was missing from a pre-manifest pack when an automatic refresh first saw
+/// it: AIDA cannot tell a deletion from a skill shipped later, so refresh
+/// never creates it, but an explicit `aida init` / `aida scaffold upgrade`
+/// delivers it once. A STORY-1475 manifest (no `v2` marker) lists only
+/// allow-listed skills and is treated as legacy.
 // trace:STORY-1475 | ai:claude
 // trace:TASK-1503 | ai:claude
 pub const DELIVERED_MANIFEST: &str = ".aida-delivered";
@@ -62,6 +66,10 @@ const MANIFEST_V2_MARKER: &str = "# aida-delivered v2";
 // trace:TASK-1503 | ai:claude
 const OPTED_OUT_MARKER: &str = "# opted-out";
 
+/// Comment line that starts the unconfirmed section.
+// trace:TASK-1503 | ai:claude
+const UNCONFIRMED_MARKER: &str = "# unconfirmed";
+
 /// The parsed contents of one pack's [`DELIVERED_MANIFEST`].
 // trace:TASK-1503 | ai:claude
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -70,6 +78,9 @@ pub struct SkillManifest {
     pub delivered: BTreeSet<String>,
     /// Skills AIDA delivered that the user deleted: the opt-out record.
     pub opted_out: BTreeSet<String>,
+    /// Skills missing from a pre-manifest pack when refresh first tracked
+    /// it. Refresh never creates them; an explicit install delivers them once.
+    pub unconfirmed: BTreeSet<String>,
     /// `true` when the manifest records EVERY delivered skill (the v2
     /// format). `false` for a STORY-1475 allow-list-only manifest.
     pub complete: bool,
@@ -83,23 +94,39 @@ impl SkillManifest {
 
     fn parse(text: &str) -> Self {
         let mut manifest = SkillManifest::default();
-        let mut in_opted_out = false;
+        #[derive(PartialEq)]
+        enum Section {
+            Delivered,
+            OptedOut,
+            Unconfirmed,
+        }
+        let mut section = Section::Delivered;
         for line in text.lines().map(str::trim) {
             if line == MANIFEST_V2_MARKER {
                 manifest.complete = true;
             } else if line.starts_with(OPTED_OUT_MARKER) {
-                in_opted_out = true;
+                section = Section::OptedOut;
+            } else if line.starts_with(UNCONFIRMED_MARKER) {
+                section = Section::Unconfirmed;
             } else if line.is_empty() || line.starts_with('#') {
                 continue;
-            } else if in_opted_out {
-                manifest.opted_out.insert(line.to_string());
             } else {
-                manifest.delivered.insert(line.to_string());
+                let set = match section {
+                    Section::Delivered => &mut manifest.delivered,
+                    Section::OptedOut => &mut manifest.opted_out,
+                    Section::Unconfirmed => &mut manifest.unconfirmed,
+                };
+                set.insert(line.to_string());
             }
         }
-        manifest
-            .delivered
-            .retain(|n| !manifest.opted_out.contains(n));
+        let SkillManifest {
+            delivered,
+            opted_out,
+            unconfirmed,
+            ..
+        } = &mut manifest;
+        delivered.retain(|n| !opted_out.contains(n));
+        unconfirmed.retain(|n| !delivered.contains(n) && !opted_out.contains(n));
         manifest
     }
 
@@ -109,7 +136,8 @@ impl SkillManifest {
              # Skills AIDA has delivered into this pack. A listed skill is never\n\
              # re-created by `aida init`, `aida scaffold upgrade` or\n\
              # `aida scaffold refresh`, so deleting one sticks. Remove a line to\n\
-             # have AIDA deliver that skill again.\n"
+             # have AIDA deliver that skill again. Unconfirmed skills are never\n\
+             # created by refresh; `aida scaffold upgrade` delivers them once.\n"
         );
         for name in &self.delivered {
             out.push_str(name);
@@ -119,6 +147,14 @@ impl SkillManifest {
             out.push_str(OPTED_OUT_MARKER);
             out.push_str(": delivered, then deleted by the user\n");
             for name in &self.opted_out {
+                out.push_str(name);
+                out.push('\n');
+            }
+        }
+        if !self.unconfirmed.is_empty() {
+            out.push_str(UNCONFIRMED_MARKER);
+            out.push_str(": missing when refresh first tracked this pack\n");
+            for name in &self.unconfirmed {
                 out.push_str(name);
                 out.push('\n');
             }
@@ -174,27 +210,64 @@ pub fn skill_in_pack(rel: &Path) -> Option<(PathBuf, String)> {
     (pack.file_name()? == "skills").then(|| (pack.to_path_buf(), name.to_string()))
 }
 
-/// Is `name` installed in `pack_dir` in any form the user owns: a directory
-/// (or symlink) `<name>/`, or the pre-BUG-1135 flat file `<name>.md`?
+/// Is `name` installed in `pack_dir`: its `<name>/SKILL.md` exists (as a
+/// file or a symlink), the skill directory itself is a symlink the user owns,
+/// or the pre-BUG-1135 flat file `<name>.md` exists? A bare `<name>/`
+/// directory holding only supporting files (e.g. `examples/`) is NOT a
+/// present skill, so a partial write can never turn an opt-out back into a
+/// delivery.
 // trace:TASK-1503 | ai:claude
 pub fn skill_present(pack_dir: &Path, name: &str) -> bool {
-    pack_dir.join(name).symlink_metadata().is_ok()
+    let dir = pack_dir.join(name);
+    dir.join("SKILL.md").symlink_metadata().is_ok()
+        || symlink_target(&dir).is_some()
         || pack_dir
             .join(format!("{name}.md"))
             .symlink_metadata()
             .is_ok()
 }
 
+/// Is `path` a file of skill `name` in `pack`: the skill's `SKILL.md` or any
+/// supporting file under `<pack>/<name>/`?
+// trace:TASK-1503 | ai:claude
+pub fn is_file_of_skill(path: &Path, pack: &Path, name: &str) -> bool {
+    path.starts_with(pack.join(name))
+}
+
+/// The AIDA source repo dogfoods its own skills: `.claude/skills/<name>/SKILL.md`
+/// are symlinks into `aida-core/templates/`, maintained by
+/// `make sync-templates`, not by delivery. Such a pack is never tracked (no
+/// manifest is written into the checkout). Same detection as BUG-917's
+/// `check_scaffold_status` exemption.
+// trace:TASK-1503 | ai:claude
+fn is_template_mirror_pack(
+    project_root: &Path,
+    pack_dir: &Path,
+    shipped: &BTreeSet<String>,
+) -> bool {
+    let Ok(templates) = std::fs::canonicalize(project_root.join("aida-core").join("templates"))
+    else {
+        return false;
+    };
+    shipped.iter().any(|name| {
+        let skill = pack_dir.join(name).join("SKILL.md");
+        symlink_target(&skill).is_some()
+            && std::fs::canonicalize(&skill).is_ok_and(|t| t.starts_with(&templates))
+    })
+}
+
 /// Which command is planning the pack.
 // trace:TASK-1503 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ManifestMode {
-    /// `aida init` / `scaffold apply` / `scaffold upgrade`: installing. A pack
-    /// with no manifest and none of AIDA's skills on disk is a fresh install
-    /// and receives every skill.
+    /// `aida init` / `scaffold apply` / `scaffold upgrade`: an explicit
+    /// install. A pack without a complete manifest (fresh or pre-manifest)
+    /// receives every missing skill ONCE; the manifest is then written from
+    /// what exists, and deletions are honoured from then on.
     Install,
-    /// `aida scaffold refresh`: converging an installed pack. A pack without a
-    /// complete manifest is legacy, and the first refresh creates nothing.
+    /// `aida scaffold refresh`: automatic convergence. A pack without a
+    /// complete manifest is legacy and fails closed: it is seeded from disk
+    /// and nothing is created.
     Refresh,
 }
 
@@ -244,10 +317,13 @@ impl SkillPackPlan {
         for name in &self.shipped {
             if skill_present(&pack_dir, name) || delivering.contains(name) {
                 manifest.opted_out.remove(name);
+                manifest.unconfirmed.remove(name);
                 manifest.delivered.insert(name.clone());
-            } else if manifest.delivered.contains(name) || self.withheld.contains(name) {
+            } else if manifest.knows(name) {
                 manifest.delivered.remove(name);
                 manifest.opted_out.insert(name.clone());
+            } else if self.withheld.contains(name) {
+                manifest.unconfirmed.insert(name.clone());
             }
         }
         manifest.complete = true;
@@ -277,14 +353,17 @@ impl SkillPackPlan {
 ///
 /// - Complete manifest: a missing skill is created only when the manifest has
 ///   never recorded its name.
-/// - No manifest (or a STORY-1475 allow-list manifest) and some of AIDA's
-///   skills on disk, or any such pack under [`ManifestMode::Refresh`]: a legacy
-///   pack. It is seeded from the directories present and nothing is created,
-///   because a missing skill may be one the user deleted.
-/// - No manifest, no AIDA skill on disk, [`ManifestMode::Install`]: a fresh
-///   install; every shipped skill is delivered.
+/// - No complete manifest (none, or a STORY-1475 allow-list manifest):
+///   - [`ManifestMode::Refresh`] fails closed: every missing skill is withheld
+///     and recorded as `unconfirmed`, because it may be one the user deleted.
+///     Refresh keeps withholding unconfirmed names.
+///   - [`ManifestMode::Install`] (explicit operator intent) delivers the
+///     missing skills once, except names a STORY-1475 manifest already
+///     recorded (delivered, then deleted).
 /// - Unreadable manifest or symlinked pack directory: fail closed — nothing is
 ///   created and nothing is written.
+/// - The AIDA source repo's template-mirror pack: untracked (no manifest);
+///   refresh creates nothing there, install keeps its pre-manifest behaviour.
 // trace:TASK-1503 | ai:claude
 pub fn plan_skill_pack(
     project_root: &Path,
@@ -298,43 +377,62 @@ pub fn plan_skill_pack(
         .filter(|n| !skill_present(&pack_dir, n))
         .cloned()
         .collect();
-    let untracked = |warning: String| SkillPackPlan {
+    let untracked = |withheld: BTreeSet<String>, warning: Option<String>| SkillPackPlan {
         pack: pack.to_path_buf(),
         shipped: shipped.clone(),
-        withheld: missing.clone(),
+        withheld,
         base: None,
         on_disk: None,
-        warning: Some(warning),
+        warning,
     };
     if symlink_target(&pack_dir).is_some() {
-        return untracked(format!(
-            "{} is a symlink; its missing skills are not created",
-            pack.display()
-        ));
+        return untracked(
+            missing.clone(),
+            Some(format!(
+                "{} is a symlink; its missing skills are not created",
+                pack.display()
+            )),
+        );
+    }
+    if is_template_mirror_pack(project_root, &pack_dir, &shipped) {
+        let withheld = match mode {
+            ManifestMode::Refresh => missing.clone(),
+            ManifestMode::Install => BTreeSet::new(),
+        };
+        return untracked(withheld, None);
     }
     let on_disk = match read_skill_manifest(&pack_dir) {
         Ok(m) => m,
         Err(e) => {
-            return untracked(format!(
-                "delivered-skills manifest in {} is unreadable ({e}); nothing created",
-                pack.display()
-            ))
+            return untracked(
+                missing.clone(),
+                Some(format!(
+                    "delivered-skills manifest in {} is unreadable ({e}); nothing created",
+                    pack.display()
+                )),
+            )
         }
     };
     let (base, withheld) = match &on_disk {
         Some(m) if m.complete => {
-            let withheld = missing.iter().filter(|n| m.knows(n)).cloned().collect();
+            let withheld = missing
+                .iter()
+                .filter(|n| {
+                    m.knows(n) || (mode == ManifestMode::Refresh && m.unconfirmed.contains(*n))
+                })
+                .cloned()
+                .collect();
             (m.clone(), withheld)
         }
         legacy => {
-            let fresh =
-                mode == ManifestMode::Install && legacy.is_none() && missing.len() == shipped.len();
             let base = legacy.clone().unwrap_or_default();
-            if fresh {
-                (base, BTreeSet::new())
-            } else {
-                (base, missing.clone())
-            }
+            let withheld = match mode {
+                ManifestMode::Refresh => missing.clone(),
+                ManifestMode::Install => {
+                    missing.iter().filter(|n| base.knows(n)).cloned().collect()
+                }
+            };
+            (base, withheld)
         }
     };
     SkillPackPlan {
@@ -576,6 +674,7 @@ mod tests {
         let manifest = SkillManifest {
             delivered: names(&["aida-req"]),
             opted_out: names(&["aida-orchestrate"]),
+            unconfirmed: names(&["aida-digest"]),
             complete: true,
         };
         write_skill_manifest(tmp.path(), &manifest).unwrap();
@@ -650,6 +749,7 @@ mod tests {
             &SkillManifest {
                 delivered: names(&["aida-req", "aida-commit"]),
                 opted_out: BTreeSet::new(),
+                unconfirmed: BTreeSet::new(),
                 complete: true,
             },
         )
@@ -677,30 +777,99 @@ mod tests {
         assert!(pack_dir.join(DELIVERED_MANIFEST).is_file());
     }
 
-    /// Legacy pack (no manifest, some AIDA skills on disk): seeded from what
-    /// is present, and nothing is created, under both modes. The seeded
-    /// manifest records the missing names as opt-outs so a later pass still
-    /// creates nothing that may have been deleted.
+    /// Legacy pack (no manifest, some AIDA skills on disk): automatic refresh
+    /// fails closed — seeded from what is present, missing names recorded as
+    /// opt-outs, nothing created, then or later. An explicit install
+    /// delivers the missing skills once.
     // trace:TASK-1503 | ai:claude
     #[test]
-    fn legacy_pack_is_seeded_and_creates_nothing() {
+    fn legacy_pack_refresh_creates_nothing_but_install_delivers_once() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let pack = Path::new(".codex/skills");
         install_skill(&root.join(pack), "aida-req");
         let shipped = names(&["aida-req", "aida-commit"]);
+
+        let install = plan_skill_pack(root, pack, shipped.clone(), ManifestMode::Install);
+        assert_eq!(install.deliverable(root), names(&["aida-commit"]));
+
+        let plan = plan_skill_pack(root, pack, shipped.clone(), ManifestMode::Refresh);
+        assert!(plan.deliverable(root).is_empty());
+        plan.record(root, &BTreeSet::new()).unwrap();
+        let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
+        assert_eq!(m.delivered, names(&["aida-req"]));
+        assert_eq!(m.unconfirmed, names(&["aida-commit"]));
+        assert!(m.opted_out.is_empty());
+        let again = plan_skill_pack(root, pack, shipped.clone(), ManifestMode::Refresh);
+        assert!(again.deliverable(root).is_empty());
+        assert!(!again.record(root, &BTreeSet::new()).unwrap(), "idempotent");
+
+        // The explicit install after that refresh still delivers it once.
+        let install = plan_skill_pack(root, pack, shipped.clone(), ManifestMode::Install);
+        assert_eq!(install.deliverable(root), names(&["aida-commit"]));
+        install_skill(&root.join(pack), "aida-commit");
+        install.record(root, &BTreeSet::new()).unwrap();
+        let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
+        assert_eq!(m.delivered, names(&["aida-commit", "aida-req"]));
+        assert!(m.unconfirmed.is_empty());
+        // From then on a deletion is an opt-out, under both modes.
+        std::fs::remove_dir_all(root.join(pack).join("aida-commit")).unwrap();
         for mode in [ManifestMode::Install, ManifestMode::Refresh] {
             let plan = plan_skill_pack(root, pack, shipped.clone(), mode);
             assert!(plan.deliverable(root).is_empty(), "{mode:?}");
         }
-        let plan = plan_skill_pack(root, pack, shipped.clone(), ManifestMode::Refresh);
-        plan.record(root, &BTreeSet::new()).unwrap();
-        let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
-        assert_eq!(m.delivered, names(&["aida-req"]));
-        assert_eq!(m.opted_out, names(&["aida-commit"]));
-        let again = plan_skill_pack(root, pack, shipped, ManifestMode::Refresh);
-        assert!(again.deliverable(root).is_empty());
-        assert!(!again.record(root, &BTreeSet::new()).unwrap(), "idempotent");
+    }
+
+    /// A skill directory holding only supporting files is not a present
+    /// skill; a user-owned symlinked skill directory is.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn skill_present_requires_skill_md_or_flat_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pack = tmp.path();
+        std::fs::create_dir_all(pack.join("aida-pr/examples")).unwrap();
+        assert!(!skill_present(pack, "aida-pr"));
+        std::fs::write(pack.join("aida-pr/SKILL.md"), "x").unwrap();
+        assert!(skill_present(pack, "aida-pr"));
+        std::fs::write(pack.join("aida-req.md"), "x").unwrap();
+        assert!(skill_present(pack, "aida-req"));
+        assert!(is_file_of_skill(
+            Path::new(".claude/skills/aida-pr/examples/x.md"),
+            Path::new(".claude/skills"),
+            "aida-pr"
+        ));
+        assert!(!is_file_of_skill(
+            Path::new(".claude/skills/aida-prx/SKILL.md"),
+            Path::new(".claude/skills"),
+            "aida-pr"
+        ));
+    }
+
+    /// The AIDA source repo's `.claude/skills` (SKILL.md symlinked into
+    /// `aida-core/templates/`) is never given a manifest.
+    // trace:TASK-1503 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn template_mirror_pack_gets_no_manifest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let templates = root.join("aida-core/templates/skills");
+        std::fs::create_dir_all(&templates).unwrap();
+        std::fs::write(templates.join("aida-req.md"), "x").unwrap();
+        let pack = Path::new(".claude/skills");
+        std::fs::create_dir_all(root.join(pack).join("aida-req")).unwrap();
+        std::os::unix::fs::symlink(
+            templates.join("aida-req.md"),
+            root.join(pack).join("aida-req/SKILL.md"),
+        )
+        .unwrap();
+        let shipped = names(&["aida-req", "aida-commit"]);
+        let refresh = plan_skill_pack(root, pack, shipped.clone(), ManifestMode::Refresh);
+        assert!(refresh.deliverable(root).is_empty());
+        assert!(!refresh.record(root, &BTreeSet::new()).unwrap());
+        let install = plan_skill_pack(root, pack, shipped, ManifestMode::Install);
+        assert!(!install.record(root, &BTreeSet::new()).unwrap());
+        assert!(!root.join(pack).join(DELIVERED_MANIFEST).exists());
     }
 
     /// A fresh install (no manifest, none of AIDA's skills present) delivers

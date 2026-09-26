@@ -70,6 +70,17 @@ fn plan_refresh_deliveries(
             continue;
         }
         let deliver = plan.deliverable(project_root);
+        let unconfirmed = plan
+            .settled(project_root, &deliver)
+            .map_or(0, |m| m.unconfirmed.len());
+        if unconfirmed > 0 {
+            println!(
+                "  {} {}: {} skill(s) missing since before delivery tracking were not created; run `aida scaffold upgrade` to install them once",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                plan.pack.display(),
+                unconfirmed
+            );
+        }
         if let Err(e) = plan.record(project_root, &deliver) {
             eprintln!(
                 "  {} could not record delivered skills in {} ({}); nothing created",
@@ -755,9 +766,10 @@ global = true
     }
 
     /// A pack installed before the manifest existed (no manifest, or a
-    /// STORY-1475 allow-list manifest) fails closed: the first refresh seeds
-    /// the manifest from the skill directories on disk and creates nothing,
-    /// and the next refresh creates nothing either.
+    /// STORY-1475 allow-list manifest) fails closed under refresh: the first
+    /// refresh seeds the manifest from the skill directories on disk and
+    /// creates nothing, and the next refresh creates nothing either. An
+    /// explicit install then delivers the missing skills once.
     // trace:TASK-1503 | ai:claude
     #[test]
     fn legacy_pack_is_seeded_from_disk_and_refresh_creates_nothing() {
@@ -799,14 +811,61 @@ global = true
             let m = read_skill_manifest(dir).unwrap().unwrap();
             assert!(m.complete);
             assert_eq!(m.delivered.iter().collect::<Vec<_>>(), ["aida-req"]);
-            assert!(m.opted_out.contains("aida-orchestrate"));
-            assert!(m.opted_out.contains("aida-commit"));
+            assert!(m.unconfirmed.contains("aida-commit"), "{m:?}");
         }
+        // The STORY-1475 manifest's name was delivered, then deleted.
+        let m = read_skill_manifest(&agy).unwrap().unwrap();
+        assert!(m.opted_out.contains("aida-orchestrate"), "{m:?}");
         let claude: Vec<_> = std::fs::read_dir(root.join(".claude/skills"))
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())
             .collect();
         assert_eq!(claude, vec![DELIVERED_MANIFEST.to_string()]);
+
+        // Revised policy: an explicit `aida init` / `scaffold upgrade`
+        // delivers the missing skills ONCE, except a known opt-out.
+        install_all_packs(root);
+        for dir in [&codex, &agy, &root.join(".claude/skills")] {
+            assert!(
+                dir.join("aida-commit/SKILL.md").is_file(),
+                "{}",
+                dir.display()
+            );
+            let m = read_skill_manifest(dir).unwrap().unwrap();
+            assert!(m.unconfirmed.is_empty(), "{m:?}");
+        }
+        assert!(codex.join("aida-orchestrate/SKILL.md").is_file());
+        assert!(!agy.join("aida-orchestrate").exists(), "opt-out honoured");
+        // After that run, deletions are opt-outs.
+        std::fs::remove_dir_all(codex.join("aida-commit")).unwrap();
+        install_all_packs(root);
+        refresh_agent_packs_at(root, None, None);
+        assert!(!codex.join("aida-commit").exists());
+    }
+
+    /// Deleting a folder-form skill with supporting files (aida-pr ships
+    /// `examples/`) sticks: no supporting file is re-written into its
+    /// directory, so neither re-apply nor refresh resurrects SKILL.md.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn deleted_folder_skill_with_supporting_files_stays_deleted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        let pr = root.join(".claude/skills/aida-pr");
+        assert!(pr.join("SKILL.md").is_file());
+        let supporting = std::fs::read_dir(&pr).unwrap().count();
+        assert!(supporting > 1, "aida-pr ships supporting files");
+        std::fs::remove_dir_all(&pr).unwrap();
+
+        install_all_packs(root);
+        install_all_packs(root);
+        refresh_agent_packs_at(root, None, None);
+        assert!(!pr.exists(), "nothing of aida-pr reappears");
+        let m = read_skill_manifest(&root.join(".claude/skills"))
+            .unwrap()
+            .unwrap();
+        assert!(m.opted_out.contains("aida-pr"), "{m:?}");
     }
 
     /// An unreadable delivered manifest fails closed: refresh creates nothing

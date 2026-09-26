@@ -204,6 +204,10 @@ pub(crate) fn handle_scaffold_command(
             }
 
             let preview = scaffolder.preview(&store);
+            // Records on every exit, including an early IO error.
+            // trace:TASK-1503 | ai:claude
+            let skill_recorder =
+                aida_core::scaffolding::SkillDeliveryRecorder::new(&root, &preview, !*dry_run);
 
             let mut created = 0usize;
             let mut updated = 0usize;
@@ -316,15 +320,7 @@ pub(crate) fn handle_scaffold_command(
             }
 
             // trace:TASK-1503 | ai:claude
-            if !*dry_run {
-                for warning in aida_core::scaffolding::record_skill_deliveries(&root, &preview) {
-                    eprintln!(
-                        "{} {}",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                        warning
-                    );
-                }
-            }
+            drop(skill_recorder);
 
             println!();
             if *dry_run {
@@ -847,6 +843,10 @@ fn run_scaffold_upgrade(
         unchanged: usize,
     }
 
+    // Records on every exit, including an early IO error.
+    // trace:TASK-1503 | ai:claude
+    let skill_recorder =
+        aida_core::scaffolding::SkillDeliveryRecorder::new(project_root, preview, !dry_run);
     let mut by_cat: std::collections::BTreeMap<&str, CategoryStats> =
         std::collections::BTreeMap::new();
 
@@ -1070,15 +1070,7 @@ fn run_scaffold_upgrade(
     }
 
     // trace:TASK-1503 | ai:claude
-    if !dry_run {
-        for warning in aida_core::scaffolding::record_skill_deliveries(project_root, preview) {
-            eprintln!(
-                "{} {}",
-                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                warning
-            );
-        }
-    }
+    drop(skill_recorder);
 
     // Render. One block per category, in the same order as the SPIKE
     // doc + the FileCategory enum (template → seed → managed-merge).

@@ -260,14 +260,6 @@ pub fn symlink_target(path: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Resolve where a scaffold artifact actually lives on disk.
-///
-/// Git hook artifacts are displayed as `.git/hooks/<name>` because that is the
-/// stable project-facing scaffold identity, but linked worktrees and submodules
-/// store hooks under Git's resolved admin directory rather than under the
-/// `.git` pointer file. Use `git rev-parse --git-path ...` for those paths and
-/// fall back to the project-relative path for non-hook artifacts.
-// trace:BUG-1094 | ai:codex
 /// Group the skill artifacts in `artifacts` by pack directory and plan each
 /// pack's deliveries (TASK-1503).
 // trace:TASK-1503 | ai:claude
@@ -315,6 +307,46 @@ pub fn record_skill_deliveries(project_root: &Path, preview: &ScaffoldPreview) -
     warnings
 }
 
+/// Records skill deliveries (see [`record_skill_deliveries`]) when dropped,
+/// so an install that fails partway still records whatever it wrote instead
+/// of stranding the pack without a manifest. Warnings go to stderr.
+// trace:TASK-1503 | ai:claude
+pub struct SkillDeliveryRecorder<'a> {
+    project_root: &'a Path,
+    preview: &'a ScaffoldPreview,
+    armed: bool,
+}
+
+impl<'a> SkillDeliveryRecorder<'a> {
+    /// Arm a recorder; `armed = false` (a dry run) records nothing.
+    pub fn new(project_root: &'a Path, preview: &'a ScaffoldPreview, armed: bool) -> Self {
+        Self {
+            project_root,
+            preview,
+            armed,
+        }
+    }
+}
+
+impl Drop for SkillDeliveryRecorder<'_> {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        for warning in record_skill_deliveries(self.project_root, self.preview) {
+            eprintln!("warning: {warning}");
+        }
+    }
+}
+
+/// Resolve where a scaffold artifact actually lives on disk.
+///
+/// Git hook artifacts are displayed as `.git/hooks/<name>` because that is the
+/// stable project-facing scaffold identity, but linked worktrees and submodules
+/// store hooks under Git's resolved admin directory rather than under the
+/// `.git` pointer file. Use `git rev-parse --git-path ...` for those paths and
+/// fall back to the project-relative path for non-hook artifacts.
+// trace:BUG-1094 | ai:codex
 pub fn resolve_artifact_path(project_root: &Path, artifact_path: &Path) -> PathBuf {
     let s = artifact_path.to_string_lossy();
     let Some(git_rel) = s.strip_prefix(".git/") else {
@@ -2681,14 +2713,17 @@ aida show <SPEC-ID>
             &artifacts,
             refresh::ManifestMode::Install,
         );
+        // Every file of a withheld skill is held back, not just SKILL.md: a
+        // supporting file (e.g. `aida-pr/examples/`) written into a deleted
+        // skill's directory would otherwise re-create that directory.
         let withheld = |path: &Path| {
-            refresh::skill_in_pack(path).is_some_and(|(pack, name)| {
-                skill_packs
+            skill_packs.iter().any(|p| {
+                p.withheld
                     .iter()
-                    .any(|p| p.pack == pack && p.withheld.contains(&name))
+                    .any(|name| refresh::is_file_of_skill(path, &p.pack, name))
             })
         };
-        artifacts.retain(|a| a.exists || !withheld(&a.path));
+        artifacts.retain(|a| !withheld(&a.path));
         new_files.retain(|p| !withheld(p));
 
         ScaffoldPreview {
@@ -2716,6 +2751,9 @@ aida show <SPEC-ID>
     ) -> Result<Vec<PathBuf>, ScaffoldError> {
         let mut written_files = Vec::new();
         let mut skipped_files = Vec::new();
+        // Record deliveries on every exit, including an early IO error.
+        // trace:TASK-1503 | ai:claude
+        let _recorder = SkillDeliveryRecorder::new(&self.project_root, preview, true);
 
         // Create directories first
         for dir in &preview.new_dirs {
@@ -2834,11 +2872,6 @@ aida show <SPEC-ID>
             }
 
             written_files.push(artifact.path.clone());
-        }
-
-        // trace:TASK-1503 | ai:claude
-        for warning in record_skill_deliveries(&self.project_root, preview) {
-            eprintln!("warning: {warning}");
         }
 
         Ok(written_files)

@@ -6545,6 +6545,24 @@ hostname = "localhost"
         );
     }
 
+    /// A pre-manifest (legacy) Codex pack with missing skills still gets the
+    /// `aida scaffold upgrade` hint: the explicit upgrade delivers them once.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn scaffold_drift_still_flags_legacy_pack_missing_skills() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = aida_core::RequirementsStore::new();
+        let req = dir.path().join(".codex/skills/aida-req");
+        std::fs::create_dir_all(&req).unwrap();
+        std::fs::write(req.join("SKILL.md"), "legacy\n").unwrap();
+        let findings = scan_scaffold_drift(dir.path(), &store);
+        let finding = findings
+            .iter()
+            .find(|f| f.id == "scaffold-drift/codex-skills-missing")
+            .expect("legacy pack's missing skills are flagged");
+        assert!(finding.action.contains("aida scaffold upgrade"));
+    }
+
     #[test]
     fn scaffold_drift_flags_missing_codex_skills_with_exact_fix() {
         let dir = tempfile::tempdir().unwrap();
