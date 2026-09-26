@@ -266,3 +266,162 @@ fn bug_1631_history_json_flag_parses_on_both_sides_of_events() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Review rework: every stored rel_type form, format rewrites, counts, and
+// `--json` stdout purity.
+// trace:BUG-1631 | ai:claude
+// ---------------------------------------------------------------------------
+
+// A store with one spec, STORY-1, committed once per relationships block in
+// `versions` (an empty block means no edges). Returns the store path.
+fn edge_history_store(tmp: &Path, versions: &[&str]) -> std::path::PathBuf {
+    let store = tmp.join("store");
+    std::fs::create_dir_all(&store).unwrap();
+    git(&store, &["init", "-q", "-b", "aida-store"]);
+    git(&store, &["config", "user.email", "t@example.com"]);
+    git(&store, &["config", "user.name", "t"]);
+    git(&store, &["config", "commit.gpgsign", "false"]);
+    write_spec(&store, "TASK", "TASK-2", TASK_UUID, "Draft", "");
+    for (i, rels) in versions.iter().enumerate() {
+        write_spec(&store, "STORY", "STORY-1", STORY_UUID, "Draft", rels);
+        git(&store, &["add", "-A"]);
+        git(
+            &store,
+            &["commit", "-q", "--allow-empty", "-m", &format!("v{i}")],
+        );
+    }
+    store
+}
+
+fn rel_events(events: &[Event]) -> Vec<&Event> {
+    events
+        .iter()
+        .filter(|e| {
+            matches!(
+                e.kind,
+                crate::history::EventKind::RelationshipsChange { .. }
+            )
+        })
+        .collect()
+}
+
+const TAGGED: &str =
+    "relationships:\n- rel_type: !Custom implemented-by\n  target_id: 22222222-2222-4222-8222-222222222222\n";
+const MAPPING: &str =
+    "relationships:\n- rel_type:\n    custom: implemented-by\n  target_id: 22222222-2222-4222-8222-222222222222\n";
+const MAPPING_UPPER: &str =
+    "relationships:\n- rel_type:\n    Custom: implemented-by\n  target_id: 22222222-2222-4222-8222-222222222222\n";
+const PLAIN_CUSTOM: &str =
+    "relationships:\n- rel_type: implemented-by\n  target_id: 22222222-2222-4222-8222-222222222222\n";
+
+#[test]
+fn bug_1631_mapping_form_custom_edge_is_named() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = edge_history_store(tmp.path(), &["", MAPPING]);
+    let evs = events(&store, None);
+    let rels = rel_events(&evs);
+    assert_eq!(rels.len(), 1, "{rels:?}");
+    let body = strip_ansi(&render_events_human(&evs, true));
+    assert!(
+        body.contains("relationships: +STORY-1 \u{2192} implemented-by TASK-2"),
+        "{body}"
+    );
+    assert!(!body.contains(" more"), "every edge is named: {body}");
+}
+
+#[test]
+fn bug_1631_rel_type_format_rewrite_is_not_an_edge_change() {
+    // Tagged → mapping (the store migration), → `Custom:` mapping, → plain
+    // string, → back to tagged: the same edge each time, so no
+    // relationship event after the first add, and never a removal.
+    let tmp = tempfile::tempdir().unwrap();
+    let store = edge_history_store(
+        tmp.path(),
+        &["", TAGGED, MAPPING, MAPPING_UPPER, PLAIN_CUSTOM, TAGGED],
+    );
+    let evs = events(&store, None);
+    let rels = rel_events(&evs);
+    assert_eq!(rels.len(), 1, "only the original add: {rels:?}");
+    match &rels[0].kind {
+        crate::history::EventKind::RelationshipsChange {
+            added,
+            removed,
+            edges,
+        } => {
+            assert_eq!((*added, *removed), (1, 0));
+            assert!(edges.iter().all(|e| e.added), "{edges:?}");
+        }
+        _ => unreachable!(),
+    }
+    let body = strip_ansi(&render_events_human(&evs, true));
+    assert!(!body.contains("relationships: -"), "{body}");
+}
+
+#[test]
+fn bug_1631_custom_plus_standard_edges_are_all_counted_and_named() {
+    let both =
+        format!("{MAPPING}- rel_type: Parent\n  target_id: 33333333-3333-4333-8333-333333333333\n");
+    let tmp = tempfile::tempdir().unwrap();
+    let store = edge_history_store(tmp.path(), &["", &both]);
+    let evs = events(&store, None);
+    let rels = rel_events(&evs);
+    assert_eq!(rels.len(), 1);
+    match &rels[0].kind {
+        crate::history::EventKind::RelationshipsChange {
+            added,
+            removed,
+            edges,
+        } => {
+            assert_eq!((*added, *removed, edges.len()), (2, 0, 2));
+        }
+        _ => unreachable!(),
+    }
+    let json = events_json(&evs, false, &HistorySource::GitWalk { fallback: false });
+    let rel = json["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["kind"] == "relationships_change")
+        .unwrap();
+    assert_eq!(rel["detail"]["added"], 2);
+    assert_eq!(rel["detail"]["edges"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn bug_1631_unreadable_or_duplicate_edges_never_undercount() {
+    // An edge with no readable rel_type still counts (labelled unknown),
+    // and a duplicated entry the set diff cannot see still moves the count.
+    let odd =
+        "relationships:\n- rel_type: [1, 2]\n  target_id: 44444444-4444-4444-8444-444444444444\n";
+    let dup = format!("{PLAIN_CUSTOM}- rel_type: implemented-by\n  target_id: 22222222-2222-4222-8222-222222222222\n");
+    let tmp = tempfile::tempdir().unwrap();
+    let store = edge_history_store(tmp.path(), &["", odd, &dup]);
+    let evs = events(&store, None);
+    let mut rels = rel_events(&evs);
+    rels.reverse(); // oldest first
+    assert_eq!(rels.len(), 2, "{rels:?}");
+    match &rels[0].kind {
+        crate::history::EventKind::RelationshipsChange { added, edges, .. } => {
+            assert_eq!(*added, 1);
+            assert_eq!(edges[0].rel_type, "unknown");
+        }
+        _ => unreachable!(),
+    }
+    match &rels[1].kind {
+        crate::history::EventKind::RelationshipsChange { added, removed, .. } => {
+            // 1 edge → 2 entries: +1 at least (the duplicate), -1 (the odd one).
+            assert!(*added >= 1 && *removed == 1, "{:?}", rels[1].kind);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn bug_1631_json_suppresses_the_window_line() {
+    use crate::history::show_window_line;
+    assert!(show_window_line(false, false), "human terminal keeps it");
+    assert!(!show_window_line(true, false), "--json at a terminal");
+    assert!(!show_window_line(true, true));
+    assert!(!show_window_line(false, true));
+}

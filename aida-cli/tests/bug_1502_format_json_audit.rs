@@ -500,3 +500,38 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         }
     }
 }
+
+// BUG-1631: `aida history --json` stdout is pure JSON even where the human
+// `Window: …` line would otherwise print (human mode forced with
+// AIDA_AGENT_OUTPUT=0, or `--format human --json`).
+// trace:BUG-1631 | ai:claude
+#[test]
+fn bug_1631_history_json_stdout_is_pure_json_outside_agent_mode() {
+    let (_tmp, repo, home, _spec) = fixture();
+    let cases: &[(&[&str], Option<&str>)] = &[
+        (&["history", "--json", "--since", "7d"], Some("0")),
+        (&["history", "events", "--json", "--since", "7d"], Some("0")),
+        (
+            &["history", "--format", "human", "--json", "--since", "7d"],
+            None,
+        ),
+    ];
+    for (args, agent_env) in cases {
+        let mut command = aida_command(&repo, &home);
+        command.args(*args);
+        if let Some(v) = agent_env {
+            command.env("AIDA_AGENT_OUTPUT", v);
+        }
+        let out = command.output().expect("run aida");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!stdout.contains("Window:"), "{args:?} leaked: {stdout}");
+        let value: serde_json::Value = serde_json::from_str(&stdout)
+            .unwrap_or_else(|e| panic!("{args:?} stdout is not JSON ({e}): {stdout}"));
+        assert!(value["events"].is_array(), "{args:?}: {value}");
+    }
+}

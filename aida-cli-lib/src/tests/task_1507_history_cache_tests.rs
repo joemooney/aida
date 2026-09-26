@@ -37,6 +37,11 @@ struct Spec {
     tags: Vec<String>,
     comments: Vec<(String, String)>,
     relationships: usize,
+    /// How custom edges are written: the legacy `!Custom name` tag (false)
+    /// or the current `{custom: name}` mapping (true). Flipping it models
+    /// a store-wide format rewrite, which must decode to no edge change.
+    // trace:BUG-1631 | ai:claude
+    rel_mapping_form: bool,
 }
 
 impl Spec {
@@ -55,6 +60,7 @@ impl Spec {
             tags: Vec::new(),
             comments: Vec::new(),
             relationships: 0,
+            rel_mapping_form: false,
         }
     }
 
@@ -84,8 +90,19 @@ impl Spec {
             y.push_str(&format!("  - author: {a:?}\n    text: {t:?}\n"));
         }
         y.push_str("relationships:\n");
+        // BUG-1631: real `rel_type`/`target_id` edges in every stored form
+        // (plain, tagged custom, mapping custom) so index/walk parity
+        // covers relationship edges. trace:BUG-1631 | ai:claude
         for i in 0..self.relationships {
-            y.push_str(&format!("  - rel: depends-on\n    target: X-{i}\n"));
+            let rel_type = match i % 3 {
+                0 => "Parent".to_string(),
+                1 if self.rel_mapping_form => "\n      custom: depends-on".to_string(),
+                1 => "!Custom depends-on".to_string(),
+                _ => "References".to_string(),
+            };
+            y.push_str(&format!(
+                "  - rel_type: {rel_type}\n    target_id: 00000000-0000-4000-8000-{i:012}\n"
+            ));
         }
         y
     }
@@ -1164,10 +1181,10 @@ fn history_decoder_version_matches_event_kind_shape() {
     ];
     let snapshot = serde_json::to_string(&kinds).unwrap();
     // trace:BUG-1631 | ai:claude
-    const V2: &str = r#"[{"Added":{"title":"t","req_type":"r","priority":"p"}},{"Deleted":{"title":"t"}},{"StatusChange":{"from":"a","to":"b"}},{"PriorityChange":{"from":"a","to":"b"}},{"TitleChange":{"from":"a","to":"b"}},"DescriptionEdited",{"OwnerChange":{"from":"a","to":"b"}},{"FeatureChange":{"from":"a","to":"b"}},{"TypeChange":{"from":"a","to":"b"}},{"TagsChange":{"added":["x"],"removed":["y"]}},{"CommentsAdded":{"count":2,"author":"a"}},{"RelationshipsChange":{"added":1,"removed":0,"edges":[{"added":true,"rel_type":"Parent","target_id":"u"}]}}]"#;
+    const V3: &str = r#"[{"Added":{"title":"t","req_type":"r","priority":"p"}},{"Deleted":{"title":"t"}},{"StatusChange":{"from":"a","to":"b"}},{"PriorityChange":{"from":"a","to":"b"}},{"TitleChange":{"from":"a","to":"b"}},"DescriptionEdited",{"OwnerChange":{"from":"a","to":"b"}},{"FeatureChange":{"from":"a","to":"b"}},{"TypeChange":{"from":"a","to":"b"}},{"TagsChange":{"added":["x"],"removed":["y"]}},{"CommentsAdded":{"count":2,"author":"a"}},{"RelationshipsChange":{"added":1,"removed":0,"edges":[{"added":true,"rel_type":"Parent","target_id":"u"}]}}]"#;
     assert_eq!(
         (history_cache::HISTORY_DECODER_VERSION, snapshot.as_str()),
-        (2, V2),
+        (3, V3),
         "EventKind's serialized shape changed: bump HISTORY_DECODER_VERSION \
          and record the new shape here"
     );
@@ -2423,7 +2440,8 @@ mod sweep {
                     s.status = (*rng.pick(&STAT)).into();
                     st.insert(id, s);
                 }
-                Some(s) => match rng.below(10) {
+                // trace:BUG-1631 | ai:claude — 9 and 10 exercise edges.
+                Some(s) => match rng.below(12) {
                     0 => {
                         st.remove(id);
                     }
@@ -2433,6 +2451,14 @@ mod sweep {
                         .push(("alice".into(), format!("c{}", rng.below(1000)))),
                     7 => s.tags.push(format!("t{}", rng.below(100))),
                     8 => s.owner = format!("o{}", rng.below(5)),
+                    9 => {
+                        if s.relationships > 0 && rng.pct(40) {
+                            s.relationships -= 1;
+                        } else {
+                            s.relationships += 1;
+                        }
+                    }
+                    10 => s.rel_mapping_form = !s.rel_mapping_form,
                     _ => s.description = format!("d{}", rng.below(1000)),
                 },
             }

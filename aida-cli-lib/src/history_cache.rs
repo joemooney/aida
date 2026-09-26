@@ -53,9 +53,11 @@ pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 5;
 /// name, so the old one is simply ignored (and pruned by an explicit
 /// rebuild).
 /// v2: `RelationshipsChange` records the changed `edges` (BUG-1631).
+/// v3: every stored `rel_type` form decodes to one key, so a format
+/// rewrite is not an edge change; v2 files could hold false removals.
 // trace:TASK-1507 | ai:claude
 // trace:BUG-1631 | ai:claude
-pub(crate) const HISTORY_DECODER_VERSION: u32 = 2;
+pub(crate) const HISTORY_DECODER_VERSION: u32 = 3;
 
 /// Default cap on inline indexing work per query, in milliseconds.
 const DEFAULT_INDEX_BUDGET_MS: u64 = 1500;

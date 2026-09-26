@@ -431,7 +431,9 @@ pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
     let (resolved_opts, since_at, until_at) =
         resolve_history_window(opts, chrono::Utc::now(), &chrono::Local)?;
     let opts = &resolved_opts;
-    if !crate::agent_output_mode() {
+    // BUG-1631: `--json` stdout is pure JSON, even at a human terminal.
+    // trace:BUG-1631 | ai:claude
+    if show_window_line(json, crate::agent_output_mode()) {
         if let Some(line) = format_resolved_window(since_at, until_at, &chrono::Local) {
             println!("{}", line.dimmed());
         }
@@ -495,6 +497,13 @@ pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
     print_fallback_footer(&source);
 
     Ok(())
+}
+
+/// Whether `run` prints the human `Window: …` line on stdout: never for
+/// `--json` (its stdout must parse as JSON) nor for agent output.
+// trace:BUG-1631 | ai:claude
+pub(crate) fn show_window_line(json: bool, agent_mode: bool) -> bool {
+    !json && !agent_mode
 }
 
 /// Where a history answer came from. MCP reports it as `source` (plus
@@ -804,14 +813,15 @@ fn collect_filtered_events_sourced(
     Ok((events, hidden, exhausted, source))
 }
 
-/// Fill in each relationship edge's `target` spec ID from the live store.
-/// Runs after filtering, and only reads the store when an edge needs it;
-/// a target that is no longer in the store keeps `target: None` and
-/// renders as its short UUID.
+/// Fill in each relationship edge's `target` spec ID. Runs after
+/// filtering, and only when an edge needs it. The requirements cache's
+/// uuid→spec_id rows answer first (one indexed lookup per target; the
+/// mapping never changes once assigned). Only when there is no readable
+/// cache are the object files scanned. A target the source cannot name (a
+/// since-deleted spec) keeps `target: None` and renders as its short UUID.
 // trace:BUG-1631 | ai:claude
 pub(crate) fn resolve_edge_targets(store_path: &Path, events: &mut [Event]) {
     use std::collections::{HashMap, HashSet};
-    use std::io::BufRead;
 
     let mut wanted: HashSet<String> = HashSet::new();
     for e in events.iter() {
@@ -826,10 +836,64 @@ pub(crate) fn resolve_edge_targets(store_path: &Path, events: &mut [Event]) {
     if wanted.is_empty() {
         return;
     }
+    let found: HashMap<String, String> = edge_targets_from_cache(store_path, &wanted)
+        .unwrap_or_else(|| edge_targets_from_objects(store_path, &wanted));
+    for e in events.iter_mut() {
+        if let EventKind::RelationshipsChange { edges, .. } = &mut e.kind {
+            for edge in edges.iter_mut() {
+                if edge.target.is_none() {
+                    edge.target = found.get(&edge.target_id).cloned();
+                }
+            }
+        }
+    }
+}
+
+/// uuid→spec_id from the project's requirements cache, opened read-only.
+/// `None` when there is no cache or it cannot be read.
+// trace:BUG-1631 | ai:claude
+fn edge_targets_from_cache(
+    store_path: &Path,
+    wanted: &std::collections::HashSet<String>,
+) -> Option<std::collections::HashMap<String, String>> {
+    use rusqlite::{Connection, OpenFlags, OptionalExtension};
+    let path = aida_core::CachedGitBackend::default_cache_path(store_path);
+    if !path.is_file() {
+        return None;
+    }
+    let conn = Connection::open_with_flags(
+        &path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .ok()?;
+    let mut stmt = conn
+        .prepare("SELECT spec_id FROM requirements_cache WHERE id = ?1")
+        .ok()?;
+    let mut found = std::collections::HashMap::new();
+    for uuid in wanted {
+        let row: Option<Option<String>> = stmt
+            .query_row([uuid], |row| row.get::<_, Option<String>>(0))
+            .optional()
+            .ok()?;
+        if let Some(Some(spec_id)) = row {
+            found.insert(uuid.clone(), spec_id);
+        }
+    }
+    Some(found)
+}
+
+/// uuid→spec_id by reading the `id:` line near the top of each object
+/// file: the fallback when no cache is readable.
+// trace:BUG-1631 | ai:claude
+fn edge_targets_from_objects(
+    store_path: &Path,
+    wanted: &std::collections::HashSet<String>,
+) -> std::collections::HashMap<String, String> {
+    use std::io::BufRead;
+    let mut found = std::collections::HashMap::new();
     let Ok(objects) = aida_core::object_store::list_objects(&store_path.join("objects")) else {
-        return;
+        return found;
     };
-    let mut found: HashMap<String, String> = HashMap::new();
     for (spec_id, path) in objects {
         if found.len() == wanted.len() {
             break;
@@ -837,7 +901,6 @@ pub(crate) fn resolve_edge_targets(store_path: &Path, events: &mut [Event]) {
         let Ok(file) = std::fs::File::open(&path) else {
             continue;
         };
-        // `id:` is a top-level scalar near the top of every object.
         for line in std::io::BufReader::new(file).lines().take(8) {
             let Ok(line) = line else { break };
             if let Some(uuid) = line.strip_prefix("id:") {
@@ -849,15 +912,7 @@ pub(crate) fn resolve_edge_targets(store_path: &Path, events: &mut [Event]) {
             }
         }
     }
-    for e in events.iter_mut() {
-        if let EventKind::RelationshipsChange { edges, .. } = &mut e.kind {
-            for edge in edges.iter_mut() {
-                if edge.target.is_none() {
-                    edge.target = found.get(&edge.target_id).cloned();
-                }
-            }
-        }
-    }
+    found
 }
 
 /// The index-or-walk answer before edge targets are resolved.
@@ -1821,14 +1876,19 @@ fn diff_modified(
         });
     }
     if ra != rb || !edges.is_empty() {
-        let (added, removed) = if edges.is_empty() {
-            (ra.saturating_sub(rb), rb.saturating_sub(ra))
-        } else {
-            (
-                edges.iter().filter(|e| e.added).count(),
-                edges.iter().filter(|e| !e.added).count(),
-            )
-        };
+        // Never undercount: an edge the set diff cannot see (a duplicate
+        // entry) still moves the array length, so take the larger of the
+        // two. Rendering says how many changed edges went unnamed.
+        let added = edges
+            .iter()
+            .filter(|e| e.added)
+            .count()
+            .max(ra.saturating_sub(rb));
+        let removed = edges
+            .iter()
+            .filter(|e| !e.added)
+            .count()
+            .max(rb.saturating_sub(ra));
         out.push(mk(EventKind::RelationshipsChange {
             added,
             removed,
@@ -1846,16 +1906,43 @@ fn yaml_edge_set(v: &Value) -> BTreeSet<(String, String)> {
         return BTreeSet::new();
     };
     seq.iter()
-        .filter_map(|rel| {
-            let rel_type = match rel.get("rel_type")? {
-                Value::String(s) => s.clone(),
-                Value::Tagged(t) => t.value.as_str()?.to_string(),
-                _ => return None,
-            };
-            let target = rel.get("target_id").and_then(Value::as_str)?;
-            Some((rel_type, target.to_string()))
+        .map(|rel| {
+            let rel_type = rel
+                .get("rel_type")
+                .map(rel_type_key)
+                .unwrap_or_else(|| UNKNOWN_REL.to_string());
+            let target = rel
+                .get("target_id")
+                .and_then(Value::as_str)
+                .unwrap_or("?")
+                .to_string();
+            (rel_type, target)
         })
         .collect()
+}
+
+/// Label for an edge whose `rel_type` cannot be read at all.
+// trace:BUG-1631 | ai:claude
+const UNKNOWN_REL: &str = "unknown";
+
+/// One canonical key per relationship type, whatever its stored form:
+/// a bare string (`Parent`, or a custom `implemented-by`), the legacy
+/// tagged `!Custom name`, or the current mapping `{custom: name}`. Parsed
+/// through `RelationshipType`'s own deserializer, so a store-wide rewrite
+/// from one form to another yields the same key and no false edge events.
+/// Standard types key as their stored variant name (`Parent`), custom ones
+/// as their name.
+// trace:BUG-1631 | ai:claude
+fn rel_type_key(v: &Value) -> String {
+    use aida_core::models::RelationshipType;
+    match serde_yaml::from_value::<RelationshipType>(v.clone()) {
+        Ok(RelationshipType::Custom(name)) => name,
+        Ok(rt) => serde_json::to_value(&rt)
+            .ok()
+            .and_then(|j| j.as_str().map(str::to_string))
+            .unwrap_or_else(|| rt.to_string()),
+        Err(_) => UNKNOWN_REL.to_string(),
+    }
 }
 
 fn pick_author(before: &Option<Value>, after: &Option<Value>, commit: &CommitMeta) -> String {
@@ -2027,6 +2114,17 @@ pub(crate) fn events_json(
     source: &HistorySource,
 ) -> JsonValue {
     let records: Vec<HistoryEventRecord> = events.iter().map(event_record).collect();
+    records_json(&records, window_exhausted, source)
+}
+
+/// The history JSON document for already-built records; shared by the CLI
+/// (`--json`) and the MCP history tool so the two cannot drift.
+// trace:BUG-1631 | ai:claude
+pub(crate) fn records_json(
+    records: &[HistoryEventRecord],
+    window_exhausted: bool,
+    source: &HistorySource,
+) -> JsonValue {
     json!({
         "count": records.len(),
         "events": records,
@@ -2149,13 +2247,20 @@ fn event_kind_record(kind: &EventKind, spec_id: &str) -> (String, String, JsonVa
             let summary = if edges.is_empty() {
                 format!("relationships: +{added} added, -{removed} removed")
             } else {
-                let parts: Vec<String> = edges
+                let mut parts: Vec<String> = edges
                     .iter()
                     .map(|edge| {
                         let sign = if edge.added { '+' } else { '-' };
                         format!("{sign}{}", edge.describe(spec_id))
                     })
                     .collect();
+                let (more_added, more_removed) = unnamed_edge_counts(*added, *removed, edges);
+                if more_added > 0 {
+                    parts.push(format!("+{more_added} more"));
+                }
+                if more_removed > 0 {
+                    parts.push(format!("-{more_removed} more"));
+                }
                 format!("relationships: {}", parts.join(", "))
             };
             let edge_detail: Vec<JsonValue> = edges
@@ -2249,8 +2354,12 @@ fn format_event_body(e: &Event) -> String {
         }
         // BUG-1631: name each changed edge when it is known.
         // trace:BUG-1631 | ai:claude
-        EventKind::RelationshipsChange { edges, .. } if !edges.is_empty() => {
-            let parts: Vec<String> = edges
+        EventKind::RelationshipsChange {
+            edges,
+            added,
+            removed,
+        } if !edges.is_empty() => {
+            let mut parts: Vec<String> = edges
                 .iter()
                 .map(|edge| {
                     let text = edge.describe(&e.spec_id);
@@ -2261,6 +2370,13 @@ fn format_event_body(e: &Event) -> String {
                     }
                 })
                 .collect();
+            let (more_added, more_removed) = unnamed_edge_counts(*added, *removed, edges);
+            if more_added > 0 {
+                parts.push(format!("+{more_added} more").green().to_string());
+            }
+            if more_removed > 0 {
+                parts.push(format!("-{more_removed} more").red().to_string());
+            }
             format!("{}: {}", "relationships".bold(), parts.join(", "))
         }
         EventKind::RelationshipsChange { added, removed, .. } => {
@@ -2274,6 +2390,17 @@ fn format_event_body(e: &Event) -> String {
             format!("{}: {}", "relationships".bold(), parts.join(", "))
         }
     }
+}
+
+/// Changed edges counted in `added`/`removed` but not named in `edges`.
+// trace:BUG-1631 | ai:claude
+fn unnamed_edge_counts(added: usize, removed: usize, edges: &[RelEdge]) -> (usize, usize) {
+    let named_added = edges.iter().filter(|e| e.added).count();
+    let named_removed = edges.len() - named_added;
+    (
+        added.saturating_sub(named_added),
+        removed.saturating_sub(named_removed),
+    )
 }
 
 fn maybe_dash(s: &str) -> String {
