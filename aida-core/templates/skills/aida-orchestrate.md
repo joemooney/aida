@@ -293,9 +293,12 @@ an **already-enabled** scheduled job.
   inherited artifact looks fabricated, reopen it with a CORRECTION comment.
 - **Look before deleting.** Inspect a stray file first, and say why you removed
   it.
-- **Exactly one orchestrator per repo.** If you find a second one, the later
-  session stands down: it stops its duplicate agents and hands its items to the
-  earlier one through the handoff and a direct message.
+- **Exactly one orchestrator per repo.** If you find an unplanned second one,
+  the later session stands down unless the operator has handed the seat to it:
+  it stops its duplicate agents and hands its items to the earlier one through
+  the handoff and a direct message. In a planned rotation the incoming session
+  is the successor: it asks the outgoing one to finish its rotation checklist
+  and asks the operator to stop it.
 
 ## Context and handoff
 
@@ -315,8 +318,8 @@ EOF
 finish every subagent, background shell and waiter until none is running; run
 `/goal clear` if a goal is set; write the handoff **last**; then tell the
 operator to exit with **Exit and stop tasks**, never "Move to background". A
-backgrounded session keeps driving the loop. Find one with `claude agents`
-and stop it with `claude stop <id>`.
+backgrounded session keeps driving the loop. If a session was backgrounded
+anyway, find it with `claude agents` and stop it with `claude stop <id>`.
 
 **Taking over:** before acting on the handoff, check for a live predecessor
 (`claude agents`, `ListAgents`, `aida ps`). If one is still running, message it

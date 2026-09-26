@@ -434,9 +434,12 @@ an **already-enabled** scheduled job.
   refused.
 - **Look before deleting.** Inspect a stray file first, and say why you removed
   it.
-- **Exactly one orchestrator per repo.** If you find a second one, the later
-  session stands down: it stops its duplicate agents and hands its items to the
-  earlier one through the handoff and a direct message.
+- **Exactly one orchestrator per repo.** If you find an unplanned second one,
+  the later session stands down unless the operator has handed the seat to it:
+  it stops its duplicate agents and hands its items to the earlier one through
+  the handoff and a direct message. In a planned rotation the incoming session
+  is the successor: it asks the outgoing one to finish its rotation checklist
+  and asks the operator to stop it.
 
 ## Context and handoff
 
@@ -456,7 +459,8 @@ EOF
 finish every child session, background job and waiter until none is running;
 clear any standing goal; write the handoff **last**; then exit and stop every
 background task. Do not background the session: a backgrounded orchestrator
-keeps driving the loop.
+keeps driving the loop. If a session was backgrounded anyway, find it in the
+harness's session list and stop it with the harness's stop command.
 
 **Taking over:** before acting on the handoff, check for a live predecessor
 (`aida ps`, plus the harness's own session list). If one is still running,
