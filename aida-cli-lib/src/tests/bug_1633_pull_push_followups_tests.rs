@@ -252,6 +252,61 @@ fn bug_1633_pull_retry_after_store_failure_resumes_persisted_reconcile_scan() {
     );
 }
 
+/// Review fix: a pull that returns without scanning (HEAD on a feature
+/// branch) must NOT clear the persisted scan start — the next pull on the
+/// default branch still resumes from it.
+#[test]
+fn bug_1633_pull_reconcile_base_survives_a_feature_branch_pull() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (proj, code_bare) = code_project(tmp.path());
+    let spec_id = "BUG-9821";
+    let store_path = proj.join(".aida-store");
+    init_store(&store_path, vec![spec(spec_id, "Done")]);
+    let hub = tmp.path().join("store-hub.git");
+    git(
+        &store_path,
+        &["remote", "add", "origin", hub.to_str().unwrap()],
+    );
+    let pre_pull = git(&proj, &["rev-parse", "HEAD"]);
+    land_remote_commits(tmp.path(), &code_bare, spec_id, 55);
+
+    // Store fails on main → base persisted.
+    assert!(handle_pull_command(&store_path, false, false, true, true, false).is_err());
+    let base_file = state_file(&proj, PENDING_RECONCILE_BASE_STATE);
+    assert_eq!(
+        std::fs::read_to_string(&base_file).unwrap().trim(),
+        pre_pull
+    );
+
+    // Store fixed; a successful pull on a feature branch does not scan.
+    std::fs::create_dir_all(&hub).unwrap();
+    git(&hub, &["init", "-q", "--bare", "-b", "aida-store"]);
+    git(&store_path, &["push", "-q", "origin", "aida-store"]);
+    git(&proj, &["checkout", "-q", "-b", "feature"]);
+    git(&proj, &["push", "-q", "-u", "origin", "feature"]);
+    handle_pull_command(&store_path, false, false, true, true, false).expect("feature pull");
+    assert!(
+        base_file.exists(),
+        "no scan ran on the feature branch, so the base must be kept"
+    );
+    let status = |p: &Path| {
+        Storage::new(p)
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id(spec_id)
+            .unwrap()
+            .status
+            .clone()
+    };
+    assert!(matches!(status(&store_path), RequirementStatus::Done));
+
+    // Back on main: the no-op pull resumes from the kept base.
+    git(&proj, &["checkout", "-q", "main"]);
+    handle_pull_command(&store_path, false, false, true, true, false).expect("main pull");
+    assert!(matches!(status(&store_path), RequirementStatus::Completed));
+    assert!(!base_file.exists());
+}
+
 // ----- Item 2: followup filing -----
 
 /// A failed `aida add` whose followup another clone filed meanwhile (tagged
@@ -452,6 +507,55 @@ fn bug_1633_pull_code_only_defers_followup_extraction_to_next_full_pull() {
     assert_eq!(calls.borrow().len(), 1, "{:?}", calls.borrow());
     assert!(followups_marker(&store_path, parent).is_some());
     assert!(!state_file(&proj, PENDING_FOLLOWUPS_STATE).exists());
+}
+
+/// Review fix: a deferred followup whose extraction errors stays pending;
+/// only filed ids are removed, and an id appended concurrently (another
+/// `--code-only` pull) while the drain runs is kept.
+#[test]
+fn bug_1633_followup_drain_keeps_failed_and_concurrent_ids() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project_root = tmp.path().join("proj");
+    std::fs::create_dir_all(&project_root).unwrap();
+    git(&project_root, &["init", "-q", "-b", "main"]);
+    let parent = "BUG-9822";
+    write_plan(
+        &project_root,
+        "2026-01-05-drain.md",
+        parent,
+        &["Retune the drain"],
+    );
+    let store_path = project_root.join(".aida-store");
+    init_store(&store_path, vec![spec(parent, "Completed")]);
+    write_reconcile_state(&project_root, PENDING_FOLLOWUPS_STATE, parent);
+
+    // A store that cannot be read: extraction errors, the id is kept.
+    let broken = tmp.path().join("broken.yaml");
+    std::fs::write(&broken, "requirements: [ : : not yaml\n").unwrap();
+    let broken_storage = Storage::new(&broken);
+    assert!(broken_storage.load().is_err(), "fixture must fail to load");
+    let kept = drain_pending_followups(&project_root, &broken_storage);
+    assert_eq!(kept, vec![parent.to_string()]);
+    assert_eq!(
+        read_reconcile_state_lines(&project_root, PENDING_FOLLOWUPS_STATE),
+        vec![parent.to_string()]
+    );
+
+    // Healthy store: the id is filed and removed; an id appended by a
+    // concurrent `--code-only` pull mid-drain survives.
+    let hook_root = project_root.clone();
+    let (_guard, calls) = install_add_hook(move |_, _, _, _| {
+        update_pending_followups(&hook_root, |ids| ids.push("BUG-9823".to_string()));
+        Some("TASK-9824".to_string())
+    });
+    let kept = drain_pending_followups(&project_root, &Storage::new(&store_path));
+    assert_eq!(calls.borrow().len(), 1);
+    assert_eq!(kept, vec!["BUG-9823".to_string()]);
+    assert_eq!(
+        read_reconcile_state_lines(&project_root, PENDING_FOLLOWUPS_STATE),
+        vec!["BUG-9823".to_string()]
+    );
+    assert!(followups_marker(&store_path, parent).is_some());
 }
 
 // ----- Items 4-6: aida push -----

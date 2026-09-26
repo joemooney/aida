@@ -44356,13 +44356,6 @@ fn discover_plan_context(
     })
 }
 
-/// Self-invoke `aida add` to file one followup as a child TASK of
-/// `parent_spec`. Always passes `--force-parent` — the parent is Done or
-/// Completed by the time we file, and we explicitly want the children
-/// regardless. When `source_plan` is set, stamps the plan's provenance as a
-/// [`FOLLOWUP_SRC_TAG_PREFIX`] tag so a later re-extraction can dedup against
-/// this followup even after it ships (BUG-680). Returns the new spec id on
-/// success.
 /// BUG-1633: test-only stand-in for the followup `aida add` subprocess.
 /// Receives `(project_root, parent, title, source_plan)` and returns the new
 /// spec id, or `None` to simulate a failed add.
@@ -44376,6 +44369,13 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+/// Self-invoke `aida add` to file one followup as a child TASK of
+/// `parent_spec`. Always passes `--force-parent` — the parent is Done or
+/// Completed by the time we file, and we explicitly want the children
+/// regardless. When `source_plan` is set, stamps the plan's provenance as a
+/// [`FOLLOWUP_SRC_TAG_PREFIX`] tag so a later re-extraction can dedup against
+/// this followup even after it ships (BUG-680). Returns the new spec id on
+/// success.
 fn aida_subcmd_add_followup_task(
     project_root: &std::path::Path,
     parent_spec: &str,
@@ -68368,8 +68368,14 @@ fn push_dry_run_legs(
             let store_branch =
                 git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
             let freshness = refresh_remote_branch_state(store_path, &store_branch, remaining());
-            let (ahead, behind) = orphan_branch_sync_state(store_path).unwrap_or((0, 0));
-            let subjects = commit_subjects(store_path, &["origin/aida-store..HEAD"], LIMIT);
+            // BUG-1633: compare against the ref just refreshed, not a
+            // hardcoded `origin/aida-store`. trace:BUG-1633 | ai:claude
+            let store_origin_ref = format!("origin/{store_branch}");
+            let (ahead, behind) = ahead_behind_vs_ref(store_path, &store_branch, &store_origin_ref)
+                .map(|(a, b)| (a as usize, b as usize))
+                .unwrap_or((0, 0));
+            let store_range = format!("{store_origin_ref}..HEAD");
+            let subjects = commit_subjects(store_path, &[store_range.as_str()], LIMIT);
             let mut summary = format!(
                 "aida-store → origin: {} commit{} to push",
                 ahead,
@@ -70145,11 +70151,19 @@ fn handle_pull_command(
 /// BUG-1633: per-worktree git-path file holding the auto-bump scan start of a
 /// pull whose store leg failed, so the retry scans exactly what that pull
 /// brought in instead of falling back to the last 50 commits.
+///
+/// Both BUG-1633 state files live in the worktree's own git dir
+/// (`.git/` for the main checkout, `.git/worktrees/<name>/` for a linked
+/// worktree). That is enough because the auto-bump only acts on the default
+/// branch, which one worktree at a time can have checked out — but
+/// `git worktree remove` discards the state with the worktree. Recover a lost
+/// scan start with `aida db reconcile-status --since <sha>`.
 // trace:BUG-1633 | ai:claude
 const PENDING_RECONCILE_BASE_STATE: &str = "aida-pending-reconcile-base";
 
 /// BUG-1633: per-worktree git-path file listing specs a `--code-only` pull
-/// flipped without filing their plan followups (one spec id per line).
+/// flipped without filing their plan followups (one spec id per line). See
+/// [`PENDING_RECONCILE_BASE_STATE`] for the per-worktree caveat.
 // trace:BUG-1633 | ai:claude
 const PENDING_FOLLOWUPS_STATE: &str = "aida-pending-followups";
 
@@ -70189,10 +70203,15 @@ fn read_reconcile_state_lines(project_root: &std::path::Path, name: &str) -> Vec
         .unwrap_or_default()
 }
 
+/// BUG-1633: write via a temp file + rename, so a reader never sees a
+/// half-written file and a crash never leaves a truncated one.
 // trace:BUG-1633 | ai:claude
 fn write_reconcile_state(project_root: &std::path::Path, name: &str, body: &str) {
     if let Some(p) = reconcile_state_path(project_root, name) {
-        if let Err(e) = std::fs::write(&p, format!("{body}\n")) {
+        let tmp = p.with_file_name(format!("{name}.tmp.{}", std::process::id()));
+        let res = std::fs::write(&tmp, format!("{body}\n")).and_then(|_| std::fs::rename(&tmp, &p));
+        if let Err(e) = res {
+            let _ = std::fs::remove_file(&tmp);
             eprintln!(
                 "  {} could not save {}: {e}",
                 "Warning:".yellow().bold(),
@@ -70200,6 +70219,50 @@ fn write_reconcile_state(project_root: &std::path::Path, name: &str, body: &str)
             );
         }
     }
+}
+
+/// BUG-1633: read-modify-write of the pending-followups list against a
+/// FRESH read, so a concurrent `--code-only` append made while this process
+/// was filing followups is kept. An empty result removes the file.
+// trace:BUG-1633 | ai:claude
+fn update_pending_followups(project_root: &std::path::Path, f: impl FnOnce(&mut Vec<String>)) {
+    let mut ids = read_reconcile_state_lines(project_root, PENDING_FOLLOWUPS_STATE);
+    f(&mut ids);
+    if ids.is_empty() {
+        clear_reconcile_state(project_root, PENDING_FOLLOWUPS_STATE);
+    } else {
+        write_reconcile_state(project_root, PENDING_FOLLOWUPS_STATE, &ids.join("\n"));
+    }
+}
+
+/// BUG-1633: file the plan followups a prior `--code-only` pull deferred.
+/// Removes only the ids whose extraction succeeded; an id whose extraction
+/// errored (e.g. a transient store read failure) stays pending for the next
+/// pull — safe, because extraction is idempotent via the followups marker.
+/// Returns the ids still pending.
+// trace:BUG-1633 | ai:claude
+fn drain_pending_followups(project_root: &std::path::Path, storage: &Storage) -> Vec<String> {
+    let pending = read_reconcile_state_lines(project_root, PENDING_FOLLOWUPS_STATE);
+    if pending.is_empty() {
+        return Vec::new();
+    }
+    let mut filed: Vec<String> = Vec::new();
+    for spec_id in &pending {
+        match extract_plan_followups(storage, project_root, spec_id, spec_id, false) {
+            Ok(()) => filed.push(spec_id.clone()),
+            Err(e) => eprintln!(
+                "  {} deferred plan-followup filing for {spec_id} failed: {e} \
+                 (kept pending; the next `aida pull` retries it)",
+                "Warning:".yellow().bold(),
+            ),
+        }
+    }
+    let mut remaining = Vec::new();
+    update_pending_followups(project_root, |ids| {
+        ids.retain(|id| !filed.contains(id));
+        remaining = ids.clone();
+    });
+    remaining
 }
 
 // trace:BUG-1633 | ai:claude
@@ -70241,8 +70304,8 @@ fn load_pending_reconcile_base(project_root: &std::path::Path) -> Option<String>
 /// BUG-1633: `extract_followups = false` (a `--code-only` pull against a store
 /// with a remote) flips specs but records them in [`PENDING_FOLLOWUPS_STATE`]
 /// instead of filing their plan followups; the next reconcile that runs
-/// against a synced store files them. A successful run also clears the
-/// persisted scan start ([`PENDING_RECONCILE_BASE_STATE`]).
+/// against a synced store files them. A run whose auto-bump actually scanned
+/// also clears the persisted scan start ([`PENDING_RECONCILE_BASE_STATE`]).
 // trace:BUG-1625 trace:BUG-1633 | ai:claude
 fn run_deferred_code_reconcile(
     project_root: &std::path::Path,
@@ -70259,15 +70322,10 @@ fn run_deferred_code_reconcile(
     // that the store is synced. Idempotent via the followups marker.
     // trace:BUG-1633 | ai:claude
     if extract_followups {
-        let pending = read_reconcile_state_lines(project_root, PENDING_FOLLOWUPS_STATE);
-        for spec_id in &pending {
-            let _ = extract_plan_followups(&storage, project_root, spec_id, spec_id, false);
-        }
-        if !pending.is_empty() {
-            clear_reconcile_state(project_root, PENDING_FOLLOWUPS_STATE);
-        }
+        drain_pending_followups(project_root, &storage);
     }
-    let mut bump_ok = true;
+    // BUG-1633: set only when the auto-bump actually walked a commit range.
+    let mut scanned = false;
     // trace:STORY-86 | ai:claude
     if auto_bump_enabled() {
         match auto_bump_done_to_completed_with(
@@ -70277,17 +70335,20 @@ fn run_deferred_code_reconcile(
             &storage,
             extract_followups,
         ) {
-            Ok(flips) => {
+            Ok((flips, did_scan)) => {
+                scanned = did_scan;
                 // BUG-1633: defer followup filing for these flips to the next
                 // reconcile against a synced store. trace:BUG-1633 | ai:claude
                 if !extract_followups && !flips.is_empty() {
-                    let mut ids = read_reconcile_state_lines(project_root, PENDING_FOLLOWUPS_STATE);
-                    for f in &flips {
-                        if !ids.contains(&f.spec_id) {
-                            ids.push(f.spec_id.clone());
+                    let mut ids = Vec::new();
+                    update_pending_followups(project_root, |pending| {
+                        for f in &flips {
+                            if !pending.contains(&f.spec_id) {
+                                pending.push(f.spec_id.clone());
+                            }
                         }
-                    }
-                    write_reconcile_state(project_root, PENDING_FOLLOWUPS_STATE, &ids.join("\n"));
+                        ids = pending.clone();
+                    });
                     if !quiet {
                         eprintln!(
                             "  {} plan-followup filing deferred for {} — `--code-only` did not \
@@ -70316,7 +70377,6 @@ fn run_deferred_code_reconcile(
                 }
             }
             Err(e) => {
-                bump_ok = false;
                 eprintln!(
                     "  {} auto-bump failed: {} (specs stay at Done; \
                      re-run `aida pull` after fixing)",
@@ -70326,10 +70386,12 @@ fn run_deferred_code_reconcile(
             }
         }
     }
-    // BUG-1633: the scan covered the persisted start point — drop it. Kept on
-    // an auto-bump error so the retry still covers the same range.
+    // BUG-1633: drop the persisted start point only once a scan actually
+    // covered it. Kept when the auto-bump errored, is disabled, or returned
+    // without scanning (HEAD off the default branch, `git log` failed), so a
+    // later pull on the default branch still resumes from it.
     // trace:BUG-1633 | ai:claude
-    if bump_ok {
+    if scanned {
         clear_reconcile_state(project_root, PENDING_RECONCILE_BASE_STATE);
     }
     // STORY-441: opt-in auto-archive sweep after the auto-bump settles. Reads
@@ -72402,11 +72464,15 @@ fn auto_bump_done_to_completed(
     storage: &Storage,
 ) -> Result<Vec<AutoBumpFlip>> {
     auto_bump_done_to_completed_with(project_root, store_path, pre_sha, storage, true)
+        .map(|(flips, _scanned)| flips)
 }
 
 /// [`auto_bump_done_to_completed`] with plan-followup filing (step 7)
 /// optional. BUG-1633: `aida pull --code-only` flips against a store it did
 /// not pull, so it defers followup filing instead of acting on stale data.
+/// Returns `(flips, scanned)`: `scanned` is false when no commit range was
+/// walked (HEAD off the default branch, no default branch, `git log`
+/// failed), so a persisted scan start must be kept for a later pull.
 // trace:STORY-86 trace:BUG-1633 | ai:claude
 fn auto_bump_done_to_completed_with(
     project_root: &std::path::Path,
@@ -72414,7 +72480,7 @@ fn auto_bump_done_to_completed_with(
     pre_sha: Option<&str>,
     storage: &Storage,
     extract_followups: bool,
-) -> Result<Vec<AutoBumpFlip>> {
+) -> Result<(Vec<AutoBumpFlip>, bool)> {
     use aida_core::git_ops;
     use std::process::Command as ProcessCommand;
 
@@ -72443,10 +72509,10 @@ fn auto_bump_done_to_completed_with(
         _ => None,
     });
     let Some(default_branch) = default_branch else {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), false));
     };
     if current.as_deref() != Some(default_branch.as_str()) {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), false));
     }
 
     // BUG-568: this scan only walks the LOCAL repo's default branch. If the
@@ -72492,7 +72558,7 @@ fn auto_bump_done_to_completed_with(
         .output();
     let log = match log_out {
         Ok(o) if o.status.success() => o.stdout,
-        _ => return Ok(Vec::new()),
+        _ => return Ok((Vec::new(), false)),
     };
     let log_str = String::from_utf8_lossy(&log);
 
@@ -72617,7 +72683,7 @@ fn auto_bump_done_to_completed_with(
         && stranded_review_pr.is_empty()
         && released_holds.is_empty()
     {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), true));
     }
 
     // ── Step 4: figure out which candidates are eligible to ship ──
@@ -72786,7 +72852,7 @@ fn auto_bump_done_to_completed_with(
         && stranded_review_pr.is_empty()
         && closure_holds.is_empty()
     {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), true));
     }
 
     // ── Step 5: write the flips ──
@@ -73182,7 +73248,7 @@ fn auto_bump_done_to_completed_with(
         }
     }
 
-    Ok(confirmed)
+    Ok((confirmed, true))
 }
 
 /// TASK-226: manual replay of the Done → Completed scan over a wider
