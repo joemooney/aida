@@ -7584,7 +7584,7 @@ hostname = "localhost"
             aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
         let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
         let info = aida_core::CacheLockInfo {
-            pid: 999_999,
+            pid: BUG_1644_DEAD_PID,
             command: "aida list".to_string(),
             started_at: (chrono::Utc::now() - chrono::Duration::minutes(10)).to_rfc3339(),
             user: "tester".to_string(),
@@ -7620,6 +7620,142 @@ hostname = "localhost"
         .unwrap();
         assert_eq!(result.status, "healed");
         assert!(!lock_info_path.exists());
+    }
+
+    /// A PID that cannot name a live process: above every platform's pid_max
+    /// (Linux caps it at 4194304), the same value the cache_lock tests use.
+    /// A plausible PID such as 999_999 can belong to a live process.
+    // trace:BUG-1644 | ai:claude
+    const BUG_1644_DEAD_PID: u32 = 0x7fff_fffe;
+
+    // BUG-1644: the two BUG-52 symlink sites (session start's
+    // `link_worktree_runtime_state`, session end's
+    // `unlink_worktree_aida_runtime`) retire a DEAD owner's unshared lock-info
+    // left beside the worktree's symlinked cache.db and keep a LIVE owner's.
+    // trace:BUG-1644 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_symlink_sites_retire_dead_stray_and_keep_live_stray() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(dir.path()).unwrap();
+        let main = base.join("main");
+        std::fs::create_dir_all(main.join(".aida")).unwrap();
+        std::fs::create_dir_all(main.join(".aida-store")).unwrap();
+        std::fs::write(main.join(".aida").join("cache.db"), b"").unwrap();
+        let record = |pid: u32| {
+            serde_json::to_string(&aida_core::CacheLockInfo {
+                pid,
+                command: "aida list (pre-BUG-1644 binary)".to_string(),
+                started_at: chrono::Utc::now().to_rfc3339(),
+                user: "tester".to_string(),
+                ..Default::default()
+            })
+            .unwrap()
+        };
+
+        for (label, pid, expect_kept) in [("dead", BUG_1644_DEAD_PID, false), ("live", 1, true)] {
+            // Session start into a reused worktree that still holds a stray.
+            let wt = base.join(format!("wt-start-{label}"));
+            let stray = wt.join(".aida").join("cache.db.lock-info");
+            std::fs::create_dir_all(wt.join(".aida")).unwrap();
+            crate::link_worktree_runtime_state(&main, &wt).unwrap();
+            assert!(wt.join(".aida").join("cache.db").is_symlink());
+            std::fs::write(&stray, record(pid)).unwrap();
+            // Re-running the start site (a reused worktree) retires it.
+            crate::link_worktree_runtime_state(&main, &wt).unwrap();
+            assert_eq!(stray.exists(), expect_kept, "session start, {label} owner");
+
+            // Session end on a worktree that holds a stray.
+            let wt = base.join(format!("wt-end-{label}"));
+            let stray = wt.join(".aida").join("cache.db.lock-info");
+            std::fs::create_dir_all(&wt).unwrap();
+            crate::link_worktree_runtime_state(&main, &wt).unwrap();
+            std::fs::write(&stray, record(pid)).unwrap();
+            crate::unlink_worktree_aida_runtime(&wt.join(".aida"));
+            assert!(!wt.join(".aida").join("cache.db").exists());
+            assert_eq!(stray.exists(), expect_kept, "session end, {label} owner");
+        }
+        // The shared cache and main's own sidecar location are untouched.
+        assert!(main.join(".aida").join("cache.db").exists());
+    }
+
+    // BUG-1644: from a sibling worktree whose `.aida/cache.db` symlinks to the
+    // main checkout's cache, doctor inspects the SHARED sidecar, and also
+    // reports an older binary's stray per-worktree sidecar (healing it only
+    // when its owner is dead).
+    // trace:BUG-1644 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_doctor_checks_shared_and_stray_worktree_lock_info() {
+        let dir = tempfile::tempdir().unwrap();
+        // Canonical root: on macOS the temp dir is under the `/var` symlink.
+        let base = std::fs::canonicalize(dir.path()).unwrap();
+        let main_aida = base.join("main").join(".aida");
+        let wt = base.join("wt-sibling");
+        std::fs::create_dir_all(&main_aida).unwrap();
+        std::fs::create_dir_all(wt.join(".aida")).unwrap();
+        std::fs::create_dir_all(wt.join(".aida-store")).unwrap();
+        let main_cache = main_aida.join("cache.db");
+        std::fs::write(&main_cache, b"").unwrap();
+        std::os::unix::fs::symlink(&main_cache, wt.join(".aida").join("cache.db")).unwrap();
+        let wt_cache = aida_core::CachedGitBackend::default_cache_path(&wt.join(".aida-store"));
+        assert_eq!(wt_cache, wt.join(".aida").join("cache.db"));
+
+        let record = |pid: u32| {
+            serde_json::to_string(&aida_core::CacheLockInfo {
+                pid,
+                command: "aida list".to_string(),
+                started_at: (chrono::Utc::now() - chrono::Duration::minutes(10)).to_rfc3339(),
+                user: "tester".to_string(),
+                ..Default::default()
+            })
+            .unwrap()
+        };
+        let findings = |root: &std::path::Path| {
+            collect_doctor_findings(
+                root,
+                &aida_core::models::RequirementsStore::new(),
+                Some("stale-locks"),
+            )
+            .unwrap()
+        };
+
+        // A dead writer's sidecar in the MAIN checkout is found from the worktree.
+        let shared = main_cache.with_file_name("cache.db.lock-info");
+        std::fs::write(&shared, record(BUG_1644_DEAD_PID)).unwrap();
+        let found = findings(&wt);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(
+            std::fs::canonicalize(&found[0].id).unwrap(),
+            std::fs::canonicalize(&shared).unwrap()
+        );
+        std::fs::remove_file(&shared).unwrap();
+
+        // A stray per-worktree sidecar from a LIVE older binary: reported, not healed.
+        let stray = wt.join(".aida").join("cache.db.lock-info");
+        std::fs::write(&stray, record(1)).unwrap();
+        let found = findings(&wt);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(std::path::Path::new(&found[0].id), stray.as_path());
+        assert!(
+            found[0]
+                .summary
+                .contains("unshared lock-info beside a symlinked cache"),
+            "{found:?}"
+        );
+        assert!(!found[0].safe_heal);
+        crate::retire_stray_worktree_lock_info(&wt.join(".aida"));
+        assert!(stray.exists(), "a live owner's stray sidecar must be kept");
+
+        // A DEAD owner's stray sidecar: a safe heal, and retired at the
+        // worktree symlink sites.
+        std::fs::write(&stray, record(BUG_1644_DEAD_PID)).unwrap();
+        let found = findings(&wt);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].safe_heal && found[0].summary.contains("dead pid"));
+        crate::retire_stray_worktree_lock_info(&wt.join(".aida"));
+        assert!(!stray.exists());
+        assert!(findings(&wt).is_empty());
     }
 
     // TASK-1484: a LIVE owner past its expected duration is reported as

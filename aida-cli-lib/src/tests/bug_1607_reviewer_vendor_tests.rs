@@ -34,11 +34,9 @@ fn write_argv_capture_mock(dir: &std::path::Path, capture: &std::path::Path) -> 
         ),
     )
     .unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    // The whole helper is unix-only, so no inner cfg. trace:BUG-1648 | ai:claude
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
     script
 }
 
@@ -139,6 +137,34 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
         crate::session::codex_session_args(prompt, false, None),
         "run_standalone_reviewer must spawn codex with codex_session_args' argv, not claude"
     );
+
+    crate::session::set_headless_vendor_override(None);
+}
+
+/// BUG-1607: the vendor half of the `aida review` launch kernel on its own.
+/// `review_spec_resolve_vendor` only checks that the mock binary exists
+/// (`is_file`), so unlike the launch test below it needs no shell mock and
+/// runs on every OS, Windows included.
+// trace:BUG-1607 trace:BUG-1648 | ai:claude
+#[test]
+fn review_spec_resolve_vendor_picks_codex_for_codex_only_project() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, project) = codex_only_project(tmp.path());
+    let mock = tmp.path().join("mock-agent");
+    std::fs::write(&mock, "").unwrap();
+
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_HEADLESS_VENDOR", None),
+        ("AIDA_HOME", Some(home.to_str().unwrap())),
+        ("HOME", Some(home.to_str().unwrap())),
+        ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
+    ]);
+    crate::session::set_headless_vendor_override(None);
+
+    let vendor = review_spec_resolve_vendor(&project, false)
+        .expect("codex-only project must resolve cleanly")
+        .expect("no_agent is false, so a vendor must be resolved");
+    assert_eq!(vendor, crate::session::HeadlessVendor::Codex);
 
     crate::session::set_headless_vendor_override(None);
 }

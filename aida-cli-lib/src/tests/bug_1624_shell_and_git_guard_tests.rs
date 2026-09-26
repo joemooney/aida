@@ -322,12 +322,15 @@ fn bug_1624_session_env_allowlists_names_and_ignores_file_aida_bin() {
     );
 
     // An absolute CARGO_TARGET_DIR is kept; a relative running binary never
-    // yields an AIDA_BIN or a PATH entry.
+    // yields an AIDA_BIN or a PATH entry. The target is a real tempdir path:
+    // `/w/target` is not absolute on Windows (no drive), so it would be
+    // dropped there. trace:BUG-1648 | ai:claude
+    let target = tree.path().join("target").display().to_string();
     let ok = session_env_eval_lines(
-        "export CARGO_TARGET_DIR='/w/target'\nexport AIDA_BIN='/w/bin/aida'\n",
+        &format!("export CARGO_TARGET_DIR='{target}'\nexport AIDA_BIN='/w/bin/aida'\n"),
         std::path::Path::new("rel/aida"),
     );
-    assert_eq!(ok, "export CARGO_TARGET_DIR='/w/target'\n");
+    assert_eq!(ok, format!("export CARGO_TARGET_DIR='{target}'\n"));
 
     // The worktree-enter payload uses the same filter.
     std::fs::create_dir_all(tree.path().join(".aida")).unwrap();

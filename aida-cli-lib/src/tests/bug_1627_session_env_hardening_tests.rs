@@ -26,9 +26,15 @@ const SESSION_ENV_KEYS: [&str; 3] = ["CARGO_TARGET_DIR", "AIDA_AGENT_TYPE", "AID
 fn bug_1627_nul_value_is_dropped_from_eval_lines() {
     let tree = tempfile::TempDir::new().unwrap();
     let exe = fake_running_exe(tree.path());
-    let body = "export CARGO_TARGET_DIR='/w/tar\0get'\nexport AIDA_AGENT_TYPE='cla\0ude'\n\
-                export AIDA_BIN='/w/bin/aida'\n";
-    let lines = session_env_eval_lines(body, &exe);
+    // A real (absolute on every OS) tempdir path, so the NUL — not a
+    // non-absolute `/w/...` on Windows — is what drops the value.
+    // trace:BUG-1648 | ai:claude
+    let target = tree.path().join("target").display().to_string();
+    let body = format!(
+        "export CARGO_TARGET_DIR='{target}\0x'\nexport AIDA_AGENT_TYPE='cla\0ude'\n\
+         export AIDA_BIN='/w/bin/aida'\n"
+    );
+    let lines = session_env_eval_lines(&body, &exe);
     assert!(!lines.contains('\0'), "{lines:?}");
     assert!(!lines.contains("CARGO_TARGET_DIR"), "{lines}");
     assert!(!lines.contains("AIDA_AGENT_TYPE"), "{lines}");
@@ -36,12 +42,12 @@ fn bug_1627_nul_value_is_dropped_from_eval_lines() {
 
     // A later clean value for a dropped name is still taken.
     let pairs = trusted_session_env(
-        "export CARGO_TARGET_DIR='/w/a\0b'\nexport CARGO_TARGET_DIR='/w/target'\n",
+        &format!("export CARGO_TARGET_DIR='{target}\0b'\nexport CARGO_TARGET_DIR='{target}'\n"),
         &exe,
     );
     assert_eq!(
         pairs,
-        vec![("CARGO_TARGET_DIR".to_string(), "/w/target".to_string())]
+        vec![("CARGO_TARGET_DIR".to_string(), target.clone())]
     );
 }
 
@@ -107,11 +113,13 @@ fn bug_1627_agent_type_accepts_only_known_types() {
         }
     }
     // The generated file (`render_session_env_file`) round-trips.
-    let rendered = render_session_env_file(std::path::Path::new("/w/target"), Some("codex"), None);
+    // trace:BUG-1648 | ai:claude — a tempdir target is absolute on Windows too.
+    let target = tree.path().join("target");
+    let rendered = render_session_env_file(&target, Some("codex"), None);
     assert_eq!(
         trusted_session_env(&rendered, &exe),
         vec![
-            ("CARGO_TARGET_DIR".to_string(), "/w/target".to_string()),
+            ("CARGO_TARGET_DIR".to_string(), target.display().to_string()),
             ("AIDA_AGENT_TYPE".to_string(), "codex".to_string()),
         ]
     );
