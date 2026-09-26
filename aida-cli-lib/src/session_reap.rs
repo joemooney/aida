@@ -250,6 +250,11 @@ pub(crate) struct ReapRow {
     /// near-miss worth naming; one whose scope isn't even a finished spec is
     /// just an ordinary in-flight session and is summarized as a count.
     pub spec_finished: bool,
+    /// The branch tip commit the merge and content proofs were run against.
+    /// The reap deletes the branch only while it still points here.
+    // trace:BUG-1657 | ai:claude
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_tip: Option<String>,
     /// What the execution leg did. `None` on a scan-only / dry run.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outcome: Option<String>,
@@ -452,6 +457,16 @@ pub(crate) fn worktree_head_on_branch(worktree: &std::path::Path, branch: &str) 
         })
 }
 
+/// The scan's `head_on_branch` fact: no worktree, a worktree directory that
+/// was removed by hand (no checkout left to be off-branch — the merge and
+/// content proofs still gate removal), or a worktree checked out on `branch`.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn session_head_on_branch(worktree: &std::path::Path, branch: &str) -> bool {
+    worktree.as_os_str().is_empty()
+        || !worktree.exists()
+        || worktree_head_on_branch(worktree, branch)
+}
+
 /// Gather the merge facts for one session branch — the probes the shared
 /// worktree classifier needs. `worth_probing` is "the spec is finished and the
 /// process exited"; the dearer probes (trailer scan, forge lookup, content
@@ -469,6 +484,7 @@ pub(crate) fn worktree_head_on_branch(worktree: &std::path::Path, branch: &str) 
 /// the session is kept.
 // trace:TASK-1177 | ai:claude
 // trace:BUG-1657 | ai:claude
+#[cfg(test)]
 pub(crate) fn gather_merge_facts(
     project_root: &std::path::Path,
     default_ref: Option<&str>,
@@ -478,17 +494,75 @@ pub(crate) fn gather_merge_facts(
     worth_probing: bool,
     pr_merged: impl FnOnce(&str) -> bool,
 ) -> AgentWorktreeFacts {
+    gather_merge_facts_pinned(
+        project_root,
+        default_ref,
+        branch,
+        spec,
+        dirty,
+        worth_probing,
+        pr_merged,
+    )
+    .0
+}
+
+/// Resolve the LOCAL branch `branch` to its tip commit, spelled
+/// `refs/heads/<branch>` so a tag or remote ref of the same name can never
+/// shadow it. `None` when the branch does not exist or git fails.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn resolve_local_branch_tip(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> Option<String> {
     let branch = branch.trim();
+    if branch.is_empty() {
+        return None;
+    }
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            &format!("refs/heads/{branch}^{{commit}}"),
+        ])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|sha| !sha.is_empty())
+}
+
+/// [`gather_merge_facts`], also returning the branch tip commit every probe
+/// was run against. The tip is resolved ONCE from `refs/heads/<branch>` and
+/// every git probe then uses that commit id, so a same-named tag cannot shadow
+/// the branch and the facts describe one fixed commit; the reap later deletes
+/// the branch only if it still points there.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn gather_merge_facts_pinned(
+    project_root: &std::path::Path,
+    default_ref: Option<&str>,
+    branch: &str,
+    spec: &str,
+    dirty: bool,
+    worth_probing: bool,
+    pr_merged: impl FnOnce(&str) -> bool,
+) -> (AgentWorktreeFacts, Option<String>) {
+    let branch = branch.trim();
+    let tip = resolve_local_branch_tip(project_root, branch);
     // A lease with no worktree and no branch has nothing on disk that could
     // carry unmerged work, so it counts as merged.
     let mut count_known = true;
-    let (ancestor_of_main, unique_unmerged_commits) = match (branch.is_empty(), default_ref) {
-        (true, _) => (true, 0),
-        (false, Some(default_ref)) => {
+    let (ancestor_of_main, unique_unmerged_commits) = match (branch.is_empty(), default_ref, &tip) {
+        (true, _, _) => (true, 0),
+        (false, Some(default_ref), Some(tip)) => {
             let n = std::process::Command::new("git")
                 .arg("-C")
                 .arg(project_root)
-                .args(["rev-list", "--count", &format!("{default_ref}..{branch}")])
+                .args(["rev-list", "--count", &format!("{default_ref}..{tip}")])
                 .stderr(std::process::Stdio::null())
                 .output()
                 .ok()
@@ -504,28 +578,31 @@ pub(crate) fn gather_merge_facts(
             count_known = n.is_some();
             (n == Some(0), n.unwrap_or(u32::MAX))
         }
-        // Without a resolvable default ref merged-ness cannot be proven, and
-        // no signal (not even a forge-merged PR) may make it removable.
-        // trace:BUG-1657 | ai:claude
-        (false, None) => {
+        // Without a resolvable default ref or branch tip merged-ness cannot be
+        // proven, and no signal (not even a forge-merged PR) may make it
+        // removable. trace:BUG-1657 | ai:claude
+        _ => {
             count_known = false;
             (false, u32::MAX)
         }
     };
     let worth_probing = worth_probing && count_known && !ancestor_of_main && !dirty;
+    let probe = match (worth_probing, default_ref, tip.as_deref()) {
+        (true, Some(default_ref), Some(tip)) => Some((default_ref, tip)),
+        _ => None,
+    };
     // BUG-1657: a spec landed through a batched integration PR has no merge
     // of its own branch and no PR of its own; the landing commit on the
     // default branch names it in a trailer instead. Local and cheap, so it
     // runs before (and can spare) the forge lookup.
-    let spec_trailer_on_main = match (worth_probing, default_ref) {
-        (true, Some(default_ref)) => {
-            spec_trailer_landed_on(project_root, default_ref, branch, spec)
-        }
-        _ => false,
-    };
+    let spec_trailer_on_main = probe.is_some_and(|(default_ref, tip)| {
+        spec_trailer_landed_on(project_root, default_ref, tip, spec)
+    });
     // Only pay for the forge lookup when the cheap probes were inconclusive
     // (the squash-merge case) AND everything else already points at a reap.
-    let pr_merged = worth_probing && !spec_trailer_on_main && pr_merged(branch);
+    // The forge is asked by branch NAME; the content proof below still runs
+    // against the pinned tip.
+    let pr_merged = probe.is_some() && !spec_trailer_on_main && pr_merged(branch);
     // BUG-1287: a squash-merged branch's own commits keep a different SHA
     // from the squash commit forever, so `unique_unmerged_commits` stays
     // positive whether or not anything is unshipped. Only pay for the content
@@ -533,21 +610,24 @@ pub(crate) fn gather_merge_facts(
     // other specs' work into the same commit, so patch-ids never match; the
     // per-path probe proves every file the branch touched is already there.
     let merge_signal = pr_merged || spec_trailer_on_main;
-    let content_fully_landed = match (merge_signal && unique_unmerged_commits > 0, default_ref) {
-        (true, Some(default_ref)) => {
-            branch_content_fully_landed(project_root, default_ref, branch)
-                || branch_paths_match_default(project_root, default_ref, branch)
+    let content_fully_landed = match probe {
+        Some((default_ref, tip)) if merge_signal && unique_unmerged_commits > 0 => {
+            branch_content_fully_landed(project_root, default_ref, tip)
+                || branch_paths_match_default(project_root, default_ref, tip)
         }
         _ => false,
     };
-    AgentWorktreeFacts {
-        dirty,
-        ancestor_of_main,
-        pr_merged,
-        unique_unmerged_commits,
-        content_fully_landed,
-        spec_trailer_on_main,
-    }
+    (
+        AgentWorktreeFacts {
+            dirty,
+            ancestor_of_main,
+            pr_merged,
+            unique_unmerged_commits,
+            content_fully_landed,
+            spec_trailer_on_main,
+        },
+        tip,
+    )
 }
 
 /// Gather the facts for every session lease and classify each. Read-only: git
@@ -598,6 +678,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
                 verdict: "skip",
                 reason: "protected checkout/branch — never reaped".to_string(),
                 spec_finished: finished.contains(&lease.scope.to_ascii_uppercase()),
+                branch_tip: None,
                 outcome: None,
             });
             continue;
@@ -625,7 +706,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
 
         // Merge facts.
         let dirty = has_worktree && !worktree_dirty_entries(&lease.worktree_path).is_empty();
-        let worktree = gather_merge_facts(
+        let (worktree, branch_tip) = gather_merge_facts_pinned(
             project_root,
             default_ref.as_deref(),
             &lease.branch,
@@ -644,8 +725,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
             spec_finished,
             process_exited,
             locked: has_worktree && worktree_is_locked(project_root, &lease.worktree_path),
-            head_on_branch: !has_worktree
-                || worktree_head_on_branch(&lease.worktree_path, &lease.branch),
+            head_on_branch: session_head_on_branch(&lease.worktree_path, &lease.branch),
             worktree,
         };
 
@@ -661,6 +741,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
             },
             reason: verdict.reason().to_string(),
             spec_finished,
+            branch_tip,
             outcome: None,
         };
         // FR-284 NOTIFY: a finished + merged session whose process is STILL
@@ -702,8 +783,20 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
 /// removal itself goes through the shared teardown (pre-destroy cargo-clean hook
 /// + worktree-pool deregistration) that the worktree-GC heal uses.
 // trace:TASK-1177 | ai:claude
-fn reap_one(project_root: &std::path::Path, lease: &SessionLease) -> String {
+fn reap_one(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+    checked_tip: Option<&str>,
+) -> String {
     let has_worktree = !lease.worktree_path.as_os_str().is_empty();
+    let branch = lease.branch.trim();
+
+    // The scan proved a specific commit shipped. If the branch moved since
+    // (or its tip was never pinned), those proofs say nothing about the new
+    // commits — leave everything in place. trace:BUG-1657 | ai:claude
+    if !branch.is_empty() && !branch_still_at(project_root, branch, checked_tip) {
+        return format!("skipped — branch `{branch}` moved since the scan");
+    }
 
     if has_worktree && lease.worktree_path.exists() {
         // Never destroy work that appeared between scan and reap.
@@ -747,28 +840,66 @@ fn reap_one(project_root: &std::path::Path, lease: &SessionLease) -> String {
         let _ = std::fs::remove_file(&manifest);
     }
 
-    // Branch cleanup. `-D` because a squash-merged branch is not recognized as
-    // merged by `-d`, and the scan already verified the work shipped. The
-    // protected-ref floor is re-asserted here so the destructive call can never
-    // be reached by a future caller that skipped the scan's guard.
-    let branch = lease.branch.trim();
+    // Branch cleanup. The protected-ref floor is re-asserted here so the
+    // destructive call can never be reached by a future caller that skipped
+    // the scan's guard.
     if branch.is_empty()
         || branch_is_protected(branch, resolve_default_branch_ref(project_root).as_deref())
     {
         return "reaped — lease released".to_string();
     }
-    let deleted = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["branch", "-D", crate::git_arg_guard::END_OF_OPTIONS, branch]) // trace:BUG-1622 | ai:claude
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if deleted {
+    if delete_branch_at(project_root, branch, checked_tip) {
         format!("reaped — worktree removed, lease released, branch `{branch}` deleted")
     } else {
-        format!("reaped — worktree removed, lease released (branch `{branch}` already gone)")
+        format!("reaped — worktree removed, lease released (branch `{branch}` kept: gone or moved)")
     }
+}
+
+/// Does local branch `branch` still point at `tip`? `None` (never pinned) or
+/// any git failure → `false`.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn branch_still_at(
+    project_root: &std::path::Path,
+    branch: &str,
+    tip: Option<&str>,
+) -> bool {
+    match tip {
+        Some(tip) => resolve_local_branch_tip(project_root, branch).as_deref() == Some(tip),
+        None => false,
+    }
+}
+
+/// Delete `refs/heads/<branch>` only if it still points at `tip`:
+/// `git update-ref -d <ref> <old>` refuses when the ref moved, so a commit
+/// added after the scan can never be lost. A squash-merged branch is not
+/// "merged" to `git branch -d`, which is why this is not `-d`; the scan
+/// already proved the pinned commit shipped. Returns whether it was deleted.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn delete_branch_at(
+    project_root: &std::path::Path,
+    branch: &str,
+    tip: Option<&str>,
+) -> bool {
+    let (branch, Some(tip)) = (branch.trim(), tip) else {
+        return false;
+    };
+    if branch.is_empty() || tip.is_empty() {
+        return false;
+    }
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "update-ref",
+            "-d",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            &format!("refs/heads/{branch}"),
+            tip,
+        ])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 /// The once-per-session sentinel for the FR-284 NOTIFY slice. A file per lease
@@ -1132,7 +1263,7 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
             row.outcome = Some("skipped — lease already gone".to_string());
             continue;
         };
-        let outcome = reap_one(&project_root, lease);
+        let outcome = reap_one(&project_root, lease, row.branch_tip.as_deref());
         if !opts.json {
             let marker = if outcome.starts_with("reaped") {
                 crate::glyph(crate::glyphs::Glyph::Check)
@@ -1194,8 +1325,13 @@ pub(crate) fn reap_quiet(project_root: &std::path::Path) -> usize {
     report
         .reapable
         .iter()
-        .filter_map(|row| leases.iter().find(|l| l.id == row.session))
-        .map(|lease| reap_one(project_root, lease))
+        .filter_map(|row| {
+            leases
+                .iter()
+                .find(|l| l.id == row.session)
+                .map(|lease| (lease, row.branch_tip.as_deref()))
+        })
+        .map(|(lease, tip)| reap_one(project_root, lease, tip))
         .filter(|outcome| outcome.starts_with("reaped"))
         .count()
 }

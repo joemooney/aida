@@ -580,3 +580,163 @@ fn bug_1657_unresolved_default_ref_fails_closed() {
     assert!(!facts.pr_merged && !facts.ancestor_of_main, "{facts:?}");
     assert!(matches!(reap_verdict(facts, true), ReapVerdict::Skip(_)));
 }
+
+fn reap_verdict_at(worktree: AgentWorktreeFacts, head_on_branch: bool) -> ReapVerdict {
+    classify_session_reap(&ReapFacts {
+        spec_finished: true,
+        process_exited: true,
+        locked: false,
+        head_on_branch,
+        worktree,
+    })
+}
+
+/// A lease whose worktree directory was removed by hand is not "off its
+/// branch": a landed spec reaps, unshipped work is still kept.
+#[test]
+fn bug_1657_removed_worktree_dir_reaps_only_landed_work() {
+    let (tmp, root) = batched_repo();
+    let wt = tmp.path().join("wt-spec-a");
+    git(
+        &root,
+        &["worktree", "add", "-q", wt.to_str().unwrap(), "spec-a"],
+    );
+    std::fs::remove_dir_all(&wt).unwrap();
+    assert!(session_head_on_branch(&wt, "spec-a"));
+    assert!(session_head_on_branch(Path::new(""), "spec-a"));
+    let dirty = !worktree_dirty_entries(&wt).is_empty();
+    assert!(!dirty);
+
+    let facts = gather_merge_facts(
+        &root,
+        Some("main"),
+        "spec-a",
+        "BUG-9001",
+        dirty,
+        true,
+        |_| false,
+    );
+    assert!(matches!(
+        reap_verdict_at(facts, session_head_on_branch(&wt, "spec-a")),
+        ReapVerdict::Reap(_)
+    ));
+
+    // Same setup, but the branch carries a commit that never shipped. (The
+    // removed worktree is still registered, so the checkout must say so.)
+    git(
+        &root,
+        &["checkout", "-q", "--ignore-other-worktrees", "spec-a"],
+    );
+    commit_file(
+        &root,
+        "a-extra.txt",
+        "never shipped\n",
+        "fix(a): follow-up (BUG-9001)",
+    );
+    git(&root, &["checkout", "-q", "main"]);
+    let facts = gather_merge_facts(
+        &root,
+        Some("main"),
+        "spec-a",
+        "BUG-9001",
+        dirty,
+        true,
+        |_| false,
+    );
+    assert!(matches!(
+        reap_verdict_at(facts, session_head_on_branch(&wt, "spec-a")),
+        ReapVerdict::Skip(_)
+    ));
+}
+
+/// A tag named like the branch must not shadow it: every probe runs against
+/// `refs/heads/<branch>`, so the branch's unshipped commit keeps the session.
+#[test]
+fn bug_1657_same_named_tag_does_not_shadow_the_branch() {
+    let (_tmp, root) = batched_repo();
+    git(&root, &["checkout", "-q", "-b", "spec-z", "main"]);
+    commit_file(
+        &root,
+        "z.txt",
+        "never shipped\n",
+        "fix(z): change (BUG-9012)",
+    );
+    git(&root, &["checkout", "-q", "main"]);
+    // The tag points at main, so a bare `main..spec-z` would read as merged.
+    git(&root, &["tag", "spec-z", "main"]);
+    let bare = git(&root, &["rev-list", "--count", "main..spec-z"]);
+    assert_eq!(
+        bare, "0",
+        "fixture: the tag shadows the branch for bare names"
+    );
+
+    let (facts, tip) = gather_merge_facts_pinned(
+        &root,
+        Some("main"),
+        "spec-z",
+        "BUG-9012",
+        false,
+        true,
+        |_| true,
+    );
+    assert_eq!(
+        tip.as_deref(),
+        Some(git(&root, &["rev-parse", "refs/heads/spec-z"]).as_str())
+    );
+    assert!(!facts.ancestor_of_main, "{facts:?}");
+    assert!(facts.unique_unmerged_commits > 0, "{facts:?}");
+    assert!(!facts.content_fully_landed, "{facts:?}");
+    assert!(matches!(reap_verdict(facts, true), ReapVerdict::Skip(_)));
+}
+
+/// The branch deletion is pinned to the tip the scan checked: if the branch
+/// moved between scan and reap, it is kept.
+#[test]
+fn bug_1657_branch_moved_since_scan_is_kept() {
+    let (_tmp, root) = batched_repo();
+    let (facts, tip) = gather_merge_facts_pinned(
+        &root,
+        Some("main"),
+        "spec-a",
+        "BUG-9001",
+        false,
+        true,
+        |_| false,
+    );
+    assert!(matches!(reap_verdict(facts, true), ReapVerdict::Reap(_)));
+    let tip = tip.expect("pinned tip");
+
+    // The branch moves after the scan.
+    git(&root, &["checkout", "-q", "spec-a"]);
+    commit_file(
+        &root,
+        "late.txt",
+        "added after the scan\n",
+        "fix(a): late (BUG-9001)",
+    );
+    git(&root, &["checkout", "-q", "main"]);
+    assert!(!branch_still_at(&root, "spec-a", Some(&tip)));
+    assert!(!delete_branch_at(&root, "spec-a", Some(&tip)));
+    assert!(
+        resolve_local_branch_tip(&root, "spec-a").is_some(),
+        "branch kept"
+    );
+    assert!(
+        !delete_branch_at(&root, "spec-a", None),
+        "unpinned never deletes"
+    );
+
+    // Unmoved: the pinned delete succeeds.
+    let (_, tip_b) = gather_merge_facts_pinned(
+        &root,
+        Some("main"),
+        "spec-b",
+        "BUG-9002",
+        false,
+        true,
+        |_| false,
+    );
+    assert!(branch_still_at(&root, "spec-b", tip_b.as_deref()));
+    assert!(delete_branch_at(&root, "spec-b", tip_b.as_deref()));
+    assert!(resolve_local_branch_tip(&root, "spec-b").is_none());
+}
