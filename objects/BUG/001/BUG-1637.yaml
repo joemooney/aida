@@ -3,12 +3,12 @@ spec_id: BUG-1637
 agreed_id: BUG-1637
 title: 'Status writers that skip status history: doctor heal moves Completed to Done unrecorded; human edits record no history (BUG-1632 follow-up)'
 description: 'From BUG-1632. (1) doctor_cmd.rs ~5045 heal_doctor_completed_without_commit moves Completed to Done without a status-history entry. It is an automated writer that can leave a terminal status, and the BUG-1625 merge guard can''t see it. Record it under an automated author, or reconsider whether heal should ever regress Completed. (2) Other automated writers skip history: doctor_cmd ~4993/5002, lib.rs ~9004 ensure_spec_done_after_pr, ~31461 SubagentStart, ~36637 session start, ~97710 zen_auto_approve, ~97921 orchestrator phase 1. (3) Human writers (aida edit --status, MCP update_requirement, queue done, findings, questions, CLI punt, non-NA rework) record no history. When one side has an automated entry followed by an unrecorded human change, the guard reads that side as all-automated. Fix: record status history under the caller for every status write, through one shared helper. Acceptance: every status write path records history with the right author class, plus a test that a human edit after an automated one is not read as automated.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:13:30.973906114Z
-modified_at: 2026-09-26T03:17:33.968512758Z
+modified_at: 2026-09-26T04:03:38.600872025Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -74,6 +74,20 @@ comments:
   created_at: 2026-09-26T03:16:46.769163170Z
   modified_at: 2026-09-26T03:16:46.769163170Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0dbe2-07d1-7793-ad54-7fb750dfd428
+  author: aida-auto-bump
+  timestamp: 2026-09-26T04:03:38.577508045Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0dbe2-07e8-74e0-9243-aa042fe98580
+  timestamp: 2026-09-26T04:03:38.600870208Z
+  agent: implementer
+  commit_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
+  summary: Completed via merge 68ab1631
 filed_at:
   code_sha: 193a7c9769995ddd7b643b626af8fdb576bbf20b
   branch: main
@@ -82,3 +96,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T04:03:38.577481368Z
+  completion_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
