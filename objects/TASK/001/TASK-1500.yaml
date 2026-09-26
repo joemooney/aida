@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:37:34.819007356Z
-modified_at: 2026-09-26T18:23:33.139210597Z
+modified_at: 2026-09-26T18:31:56.640741913Z
 req_type: Task
 tags:
 - agent-launch
@@ -29,6 +29,12 @@ comments:
   created_at: 2026-09-26T05:29:28.399850310Z
   modified_at: 2026-09-26T05:29:28.399850310Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0defc-fbe0-7660-9455-7786810e1bfa
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): Joe answered ''Approve as specced'' (2026-09-26), so it stays Approved, but it is NOT queued yet. It is architecture-class: it adds a persisted project-config setting (config file format) and changes the agent-launch permission default (YOLO prompt), and there is no SKETCH / ADVISOR SIGNOFF: APPROVED on the spec. Next step: post a sketch (config key name and location, interactive vs non-interactive init behaviour with non-interactive never enabling YOLO, migration for configs without the key, what the init summary and --verbose show), get advisor signoff, then aida queue add TASK-1500 --for implementer. Lane once signed off: drive (Joe merges).'
+  created_at: 2026-09-26T18:31:56.640741913Z
+  modified_at: 2026-09-26T18:31:56.640741913Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0def5-4d13-79c1-96d9-dea3179e63f7
   author: joe
