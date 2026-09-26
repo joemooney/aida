@@ -3,12 +3,12 @@ spec_id: BUG-1637
 agreed_id: BUG-1637
 title: 'Status writers that skip status history: doctor heal moves Completed to Done unrecorded; human edits record no history (BUG-1632 follow-up)'
 description: 'From BUG-1632. (1) doctor_cmd.rs ~5045 heal_doctor_completed_without_commit moves Completed to Done without a status-history entry. It is an automated writer that can leave a terminal status, and the BUG-1625 merge guard can''t see it. Record it under an automated author, or reconsider whether heal should ever regress Completed. (2) Other automated writers skip history: doctor_cmd ~4993/5002, lib.rs ~9004 ensure_spec_done_after_pr, ~31461 SubagentStart, ~36637 session start, ~97710 zen_auto_approve, ~97921 orchestrator phase 1. (3) Human writers (aida edit --status, MCP update_requirement, queue done, findings, questions, CLI punt, non-NA rework) record no history. When one side has an automated entry followed by an unrecorded human change, the guard reads that side as all-automated. Fix: record status history under the caller for every status write, through one shared helper. Acceptance: every status write path records history with the right author class, plus a test that a human edit after an automated one is not read as automated.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:13:30.973906114Z
-modified_at: 2026-09-26T00:24:22.916495045Z
+modified_at: 2026-09-26T02:17:33.401517215Z
 req_type: Bug
 comments:
 - id: 01a0db10-005c-7da3-afd4-a3255820e41b
