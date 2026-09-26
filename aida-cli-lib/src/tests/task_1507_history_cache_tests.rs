@@ -1171,7 +1171,7 @@ fn history_decoder_version_matches_event_kind_shape() {
 
 // ---------------------------------------------------------------------------
 // Rework: exact since-eligibility (B1), date-priority order and coverage
-// (R1-R5), merge side-branch paths (N1b), stale readers (N2), no
+// (R1-R5), `--id` across merges (N1b, now BUG-1620), stale readers (N2), no
 // checkpoint on close (N3), lock-safe prune (N4).
 // trace:TASK-1507 | ai:claude
 // ---------------------------------------------------------------------------
@@ -1466,11 +1466,11 @@ fn task_1507_boundary_tie_inside_merge_region_falls_back() {
     assert!(run(&o).is_none(), "-n boundary on the cross-branch tie");
 }
 
-#[test]
-fn task_1507_id_on_a_path_touched_across_an_ours_merge_uses_the_walk() {
-    // N1b: `-s ours` discards the side branch's tree, so `git log -- <path>`
-    // prunes the side commits that touched it; the index has them.
-    let mut fx = Fixture::new();
+/// A spec edited only on a side branch that an `-s ours` merge discards,
+/// plus a main-line spec, and one untouched after the base. The side
+/// branch's changes never reach HEAD's tree, so `git log -- <path>` without
+/// `--full-history` simplifies the side commits away.
+fn build_ours_merge(fx: &mut Fixture) {
     let mut bug = Spec::new("BUG-70", "Bug", "Both sides");
     let epic = Spec::new("EPIC-72", "Epic", "Untouched after the base");
     fx.put(&bug);
@@ -1490,34 +1490,116 @@ fn task_1507_id_on_a_path_touched_across_an_ours_merge_uses_the_walk() {
     fr.status = "Approved".into();
     fx.put(&fr);
     fx.commit_at(BASE_TS + 400, "main: update FR-71");
+}
 
+#[test]
+fn bug_1620_id_on_an_ours_merged_side_branch_agrees_with_unfiltered_events() {
+    // BUG-1620 (was N1b): the `--id` walk uses `--full-history`, so the
+    // side commits of an `-s ours` merge appear under `--id` exactly as they
+    // do in unfiltered `history events`, and the index serves `--id` on
+    // merge-touched paths instead of routing them to the walk.
+    // trace:BUG-1620 | ai:claude
+    let mut fx = Fixture::new();
+    build_ours_merge(&mut fx);
+    let (all, _, _) = collect_filtered_events_git(&fx.store, &opts()).unwrap();
+    for id in ["BUG-70", "FR-71", "EPIC-72"] {
+        let mut o = opts();
+        o.id_filter = Some(id.into());
+        let (walk, _, _) = collect_filtered_events_git(&fx.store, &o).unwrap();
+        let unfiltered: Vec<Event> = all.iter().filter(|e| e.spec_id == id).cloned().collect();
+        assert_eq!(
+            walk, unfiltered,
+            "--id {id} must agree with unfiltered events"
+        );
+    }
     let mut o = opts();
     o.id_filter = Some("BUG-70".into());
     let (walk, _, _) = collect_filtered_events_git(&fx.store, &o).unwrap();
-    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
     assert!(
-        !walk.iter().any(|e| e.kind
+        walk.iter().any(|e| e.kind
             == EventKind::StatusChange {
                 from: "Approved".into(),
                 to: "Done".into()
             }),
-        "fixture: the walk simplifies the side branch away"
+        "the side-branch status change shows under --id"
     );
-    assert!(
-        serve(&fx, &o).is_none(),
-        "--id on a side-branch path must use the walk"
-    );
-    // A path untouched across the merge: with the merge in range the
-    // conservative `--id` rule uses the walk; above the merge it serves.
-    let mut o = opts();
-    o.id_filter = Some("EPIC-72".into());
-    assert!(serve(&fx, &o).is_none(), "--id with a merge in range");
-    let mut epic = epic.clone();
+
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    for id in ["BUG-70", "FR-71", "EPIC-72"] {
+        let mut o = opts();
+        o.id_filter = Some(id.into());
+        assert_parity(&fx, &o, &format!("--id {id} across the ours merge"));
+    }
+    // Still served once HEAD moves past the merge.
+    let mut epic = Spec::new("EPIC-72", "Epic", "Untouched after the base");
     epic.status = "Approved".into();
     fx.put(&epic);
     fx.commit_at(BASE_TS + 500, "main: update EPIC-72");
+    let mut o = opts();
+    o.id_filter = Some("EPIC-72".into());
+    assert_parity(&fx, &o, "--id after catch-up");
     o.since = Some(rfc3339(BASE_TS + 450));
-    assert_parity(&fx, &o, "id above the merge");
+    assert_parity(&fx, &o, "--id above the merge");
+}
+
+#[test]
+fn bug_1620_id_every_cut_across_merges_matches_the_walk() {
+    // BUG-1620: every `-n`, `--max-commits` and `--since` cut of `--id` on
+    // every spec, across an interleaved merge and an `-s ours` merge, on a
+    // complete index, one caught up across the merges, and every partial
+    // back-fill. A complete index must serve all of them (no merge
+    // routing is left for `--id`); partial states match or fall back.
+    // trace:BUG-1620 | ai:claude
+    let mut fx = Fixture::new();
+    build_dated_merge(
+        &mut fx,
+        &[150, 250, 350],
+        &[100, 200, 300, 400],
+        500,
+        &[600],
+    );
+    // A second side branch, discarded by an ours merge.
+    fx.git(&["checkout", "-q", "-b", "dropped"]);
+    let mut b = Spec::new("BUG-2", "Bug", "Side work");
+    b.status = "Rejected".into();
+    fx.put(&b);
+    fx.commit_at(BASE_TS + 650, "dropped: BUG-2");
+    fx.git(&["checkout", "-q", "aida-store"]);
+    let mut e = Spec::new("EPIC-1", "Epic", "Base");
+    e.status = "Approved".into();
+    fx.put(&e);
+    fx.commit_at(BASE_TS + 700, "main: EPIC-1");
+    fx.merge_at(BASE_TS + 800, "dropped", &["-s", "ours"]);
+    e.status = "Done".into();
+    fx.put(&e);
+    fx.commit_at(BASE_TS + 900, "main: EPIC-1 done");
+
+    let mut probes = Vec::new();
+    for id in ["EPIC-1", "BUG-2", "FR-3"] {
+        for (l, mut o) in all_probes(&fx) {
+            o.id_filter = Some(id.into());
+            probes.push((format!("--id {id} {l}"), o));
+        }
+    }
+    let (served, fell_back) = check_complete(&fx, &probes, "bug-1620");
+    assert_eq!(fell_back, 0, "a complete index serves every --id cut");
+    assert!(served > 0);
+
+    // Caught up across both merges from an index built before them.
+    let walks = walk_all(&fx, &probes);
+    let head = fx.head();
+    fx.drop_index();
+    fx.git(&["checkout", "-q", "-b", "pre-merges", "HEAD~6"]);
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+    fx.git(&["checkout", "-q", "aida-store"]);
+    assert_eq!(fx.head(), head);
+    for ((label, o), walk) in probes.iter().zip(&walks) {
+        let got = serve(&fx, o).unwrap_or_else(|| panic!("[catch-up: {label}] did not serve"));
+        assert_same(&got, walk, &format!("catch-up: {label}"));
+    }
+
+    let (served, _) = check_partial_states(&fx, &probes);
+    assert!(served > 0, "some partial states serve --id");
 }
 
 #[test]
@@ -2493,6 +2575,20 @@ mod sweep {
             o.id_filter = Some(id.to_string());
             o.limit = rng.below(4);
             out.push((format!("--id {id} -n {}", o.limit), o));
+            // trace:BUG-1620 | ai:claude
+            // `--id` windows and `--since` now serve across merges too.
+            let mut o = opts();
+            let (id, _) = *rng.pick(&IDS);
+            o.id_filter = Some(id.to_string());
+            o.max_commits = rng.below(ncommits + 2);
+            o.max_commits_explicit = true;
+            out.push((format!("--id {id} --max-commits {}", o.max_commits), o));
+            let mut o = opts();
+            let (id, _) = *rng.pick(&IDS);
+            let s = rt(rng);
+            o.id_filter = Some(id.to_string());
+            o.since = Some(rfc3339(s));
+            out.push((format!("--id {id} --since {s}"), o));
         }
         let mut o = opts();
         o.shipped_only = true;
@@ -2588,10 +2684,13 @@ mod sweep {
     }
 
     #[test]
-    fn task_1507_id_over_an_evil_merge_simplified_away_uses_the_walk() {
+    fn task_1507_id_over_an_evil_merge_on_a_discarded_side_matches_the_walk() {
         // B5: the side branch's own merge M1 edits FR-1 (an evil merge);
-        // the outer merge keeps main's FR-1, so `git log -- FR-1` drops
-        // the side and never shows M1. The index must not serve M1.
+        // the outer merge keeps main's FR-1. Without `--full-history`,
+        // `git log -- FR-1` dropped the side and never showed M1, so the
+        // index had to route `--id FR-1` to the walk. BUG-1620: the walk
+        // now shows M1 and the index serves it, exactly.
+        // trace:BUG-1620 | ai:claude
         let mut d = Dag::new();
         let mut st = State::new();
         st.insert("FR-1", Spec::new("FR-1", "Functional", "fr"));
@@ -2610,10 +2709,12 @@ mod sweep {
         m1s.insert("EPIC-5", s2s["EPIC-5"].clone());
         m1s.get_mut("FR-1").unwrap().status = "Done".into();
         let m1 = d.write_commit(&[s1, s2], m1s.clone(), BASE_TS + 30, "m1 evil");
+        let m1_sha = m1.clone();
         let mut ms = a.clone();
         ms.insert("TASK-4", m1s["TASK-4"].clone());
         ms.insert("EPIC-5", m1s["EPIC-5"].clone());
         let m = d.write_commit(&[a1, m1], ms, BASE_TS + 200, "outer merge");
+        let m1 = m1_sha;
         d.set_head(&m);
         let fx = &d.fx;
         let mut probes = Vec::new();
@@ -2630,15 +2731,13 @@ mod sweep {
         assert!(bad.is_empty(), "{bad:#?}");
         let mut o = opts();
         o.id_filter = Some("FR-1".into());
+        let got = test_support::query_only(&fx.store, &fx.db, &o)
+            .unwrap()
+            .expect("--id FR-1 is served");
         assert!(
-            test_support::query_only(&fx.store, &fx.db, &o)
-                .unwrap()
-                .is_none(),
-            "--id FR-1 must use the walk"
+            got.events.iter().any(|e| e.sha == m1),
+            "the evil merge's own FR-1 change shows under --id"
         );
-        // The evil merge's own FR-1 change is recorded (`log -m`).
-        let fr1 = aida_core::object_store::relative_object_path("FR-1").unwrap();
-        assert!(test_support::has_merge_path(&fx.db, &fr1));
     }
 
     #[test]
@@ -2685,12 +2784,100 @@ mod sweep {
     // trace:TASK-1507 | ai:claude
 
     #[test]
+    fn bug_1620_octopus_merge_touch_from_the_third_parent_only() {
+        // T5: an octopus merge M(a1, s1, s2) keeps root's FR-1, which only
+        // s2 changed. M differs from its THIRD parent alone, so
+        // `git log --full-history -- FR-1` lists M (no events: its combined
+        // diff is empty) and counts it against `--max-commits`. The index
+        // must record that touch from every parent, not just the first two.
+        // trace:BUG-1620 | ai:claude
+        let mut d = Dag::new();
+        let mut st = State::new();
+        st.insert("FR-1", Spec::new("FR-1", "Functional", "fr"));
+        st.insert("BUG-3", Spec::new("BUG-3", "Bug", "b"));
+        let root = d.write_commit(&[], st.clone(), BASE_TS, "root");
+        let mut a = st.clone();
+        a.get_mut("BUG-3").unwrap().status = "Approved".into();
+        let a1 = d.write_commit(&[root.clone()], a.clone(), BASE_TS + 10, "a1");
+        let mut s1s = st.clone();
+        s1s.insert("TASK-4", Spec::new("TASK-4", "Task", "t"));
+        let s1 = d.write_commit(&[root.clone()], s1s.clone(), BASE_TS + 20, "s1");
+        let mut s2s = st.clone();
+        s2s.get_mut("FR-1").unwrap().status = "Done".into();
+        let s2 = d.write_commit(&[root.clone()], s2s, BASE_TS + 30, "s2");
+        let mut ms = a.clone();
+        ms.insert("TASK-4", s1s["TASK-4"].clone());
+        let m = d.write_commit(&[a1.clone(), s1, s2], ms.clone(), BASE_TS + 40, "octopus");
+        let mut zs = ms.clone();
+        zs.get_mut("FR-1").unwrap().description = "z1".into();
+        let z1 = d.write_commit(&[m], zs, BASE_TS + 50, "z1");
+        d.set_head(&z1);
+        let fx = &d.fx;
+
+        let commits = commit_times(fx).len();
+        let mut probes = Vec::new();
+        for n in 0..=6 {
+            let mut o = opts();
+            o.id_filter = Some("FR-1".into());
+            o.limit = n;
+            probes.push((format!("--id FR-1 -n {n}"), o));
+        }
+        for max in 0..=commits + 1 {
+            let mut o = opts();
+            o.id_filter = Some("FR-1".into());
+            o.max_commits = max;
+            o.max_commits_explicit = true;
+            probes.push((format!("--id FR-1 --max-commits {max}"), o));
+        }
+        let walks = walk_all(fx, &probes);
+
+        // The pinned example: M fills the second slot of the window.
+        let two = probes
+            .iter()
+            .position(|(l, _)| l == "--id FR-1 --max-commits 2")
+            .unwrap();
+        let shas: Vec<&str> = walks[two].0.iter().map(|e| e.sha.as_str()).collect();
+        assert!(
+            shas.iter().all(|s| *s == z1),
+            "walk --max-commits 2 is [z1]"
+        );
+        assert!(!shas.is_empty());
+        assert!(walks[two].1, "walk --max-commits 2 is window-exhausted");
+
+        let check = |tag: &str| {
+            for ((label, o), walk) in probes.iter().zip(&walks) {
+                let got = test_support::query_only(&fx.store, &fx.db, o)
+                    .unwrap()
+                    .unwrap_or_else(|| panic!("[{tag}: {label}] did not serve"));
+                assert_same(&got, walk, &format!("{tag}: {label}"));
+            }
+        };
+        // (i) a complete index.
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        check("complete");
+        // (ii) an index built at a1 and caught up across the octopus.
+        fx.drop_index();
+        d.set_head(&a1);
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        d.set_head(&z1);
+        history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS).unwrap();
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(z1.as_str())
+        );
+        check("catch-up");
+        fx.drop_index();
+    }
+
+    #[test]
     fn task_1507_id_plus_one_probe_below_an_ours_merge() {
         // T3: an ours-merge drops the side commit that added FR-1; a later
         // main commit adds FR-1. `--id FR-1 --max-commits 1` has no merge
-        // in its served range, but its +1 probe candidate (the dropped
-        // side commit) decides window_exhausted. The global merge_paths
-        // check must route it to the walk, or it must match exactly.
+        // in its served range, but its +1 probe candidate (the side
+        // commit) decides window_exhausted. BUG-1620: the `--full-history`
+        // walk keeps that side commit too, so a complete index serves every
+        // probe, exactly.
+        // trace:BUG-1620 | ai:claude
         let mut d = Dag::new();
         let mut st = State::new();
         st.insert("BUG-3", Spec::new("BUG-3", "Bug", "b"));
@@ -2720,6 +2907,14 @@ mod sweep {
         let mut bad = Vec::new();
         history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
         compare(&mut bad, fx, &probes, &walks, "complete");
+        for (label, o) in &probes {
+            assert!(
+                test_support::query_only(&fx.store, &fx.db, o)
+                    .unwrap()
+                    .is_some(),
+                "[{label}] a complete index serves it"
+            );
+        }
         for c in 1..=3usize {
             for k in 1..=5usize.div_ceil(c) {
                 fx.drop_index();

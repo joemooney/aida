@@ -799,6 +799,18 @@ pub(crate) fn collect_filtered_events_git(
         .as_deref()
         .and_then(|id| aida_core::object_store::relative_object_path(id).ok());
     if let Some(ref path) = id_pathspec {
+        // `--full-history`: git's default path simplification follows only
+        // one TREESAME parent of a merge, so it drops a merged side branch
+        // whose changes did not survive the merge (an `-s ours` merge, for
+        // one). Unfiltered `history events` shows those side commits, so
+        // `--id` must too. With it, git walks every commit the unfiltered
+        // walk does, in the same order, and prints the ones whose path
+        // differs from at least one parent: a subsequence of the
+        // unfiltered walk. A merge that kept one side's version is listed
+        // but decodes to no events (its combined diff is empty), as in the
+        // unfiltered walk.
+        // trace:BUG-1620 | ai:claude
+        log_args.push("--full-history".into());
         log_args.push("--".into());
         log_args.push(path.clone());
     }

@@ -42,8 +42,11 @@ use crate::history::{self, CommitMeta, Event, EventKind, HistoryOpts};
 /// replaces the boundary-only `merges` table.
 /// v4: `merge_region_ts` (every commit time in a merge's parallel region,
 /// fork point included) replaces `merge_ties`.
+/// v5: `merge_paths` is gone. The `--id` walk uses `--full-history`, so it
+/// no longer simplifies merged side branches away and needs no routing.
 // trace:TASK-1507 | ai:claude
-pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 4;
+// trace:BUG-1620 | ai:claude
+pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 5;
 
 /// Bump whenever `decode_into_events`, `diff_modified` or `EventKind`
 /// changes meaning or serialized shape. A bump gives the index a new file
@@ -435,9 +438,6 @@ CREATE INDEX IF NOT EXISTS events_kind ON events(kind, commit_seq);
 CREATE INDEX IF NOT EXISTS events_author ON events(author, commit_seq);
 CREATE TABLE IF NOT EXISTS merge_region_ts (
     ts INTEGER PRIMARY KEY
-) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS merge_paths (
-    path TEXT PRIMARY KEY
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS skew (
     child_sha  TEXT NOT NULL,
@@ -881,25 +881,50 @@ fn git_commit_times(store: &Path, shas: &[String]) -> Result<HashMap<String, i64
     Ok(out)
 }
 
-/// Record a merge commit for the coverage rules:
-/// - `merge_region_ts`: the time of every commit in the merge's parallel
-///   region, meaning both sides (`M^i...M^j`) and the merge bases. git's
-///   walk orders same-second commits there by queue insertion, not by
-///   ancestry: a merge queues its first parent first, and a fork point can
-///   come before its own side-branch child. `seq` cannot express that, so
-///   a served range holding such a second shared with another commit falls
-///   back (B2, B3).
-/// - `merge_paths`: every path touched on either side since the base
-///   (`M^1...M^k`). `git log -- <path>` simplifies TREESAME side branches
-///   away and the index does not, so `--id` on these paths uses the walk
-///   (N1b).
+/// Record a merge commit for the coverage rule `merge_region_ts`: the time
+/// of every commit in the merge's parallel region, meaning both sides
+/// (`M^i...M^j`) and the merge bases. git's walk orders same-second commits
+/// there by queue insertion, not by ancestry: a merge queues its first
+/// parent first, and a fork point can come before its own side-branch
+/// child. `seq` cannot express that, so a served range holding such a
+/// second shared with another commit falls back (B2, B3).
+///
+/// It also completes the merge's `touches`. `git log --full-history --
+/// <path>` (the `--id` walk) lists a merge whose path differs from ANY
+/// parent, while the combined diff that fills `touches` lists only paths
+/// that differ from EVERY parent. A merge that took one side's version
+/// (an `-s ours` merge, for one) produces no events for the path, but the
+/// walk still counts it against `--max-commits`, so it must be a touch.
+/// (This replaces the former `merge_paths` routing, N1b.)
 // trace:TASK-1507 | ai:claude
-fn record_merge(tx: &Connection, store: &Path, raw: &RawCommit) -> Result<()> {
+// trace:BUG-1620 | ai:claude
+fn record_merge(tx: &Connection, store: &Path, seq: i64, raw: &RawCommit) -> Result<()> {
     if raw.parents.len() < 2 {
         return Ok(());
     }
+    let mut touch =
+        tx.prepare_cached("INSERT OR IGNORE INTO touches (path, commit_seq) VALUES (?1, ?2)")?;
+    for parent in &raw.parents {
+        let changed = git_lines(
+            store,
+            &[
+                "diff-tree",
+                "-r",
+                "--no-renames",
+                "--name-only",
+                "--no-commit-id",
+                parent,
+                &raw.sha,
+            ],
+        )?;
+        for path in changed
+            .iter()
+            .filter(|p| p.starts_with("objects/") && p.ends_with(".yaml"))
+        {
+            touch.execute(params![path, seq])?;
+        }
+    }
     let mut region = tx.prepare_cached("INSERT OR IGNORE INTO merge_region_ts (ts) VALUES (?1)")?;
-    let mut ins = tx.prepare_cached("INSERT OR IGNORE INTO merge_paths (path) VALUES (?1)")?;
     for (i, a) in raw.parents.iter().enumerate() {
         for b in &raw.parents[i + 1..] {
             let range = format!("{a}...{b}");
@@ -915,23 +940,6 @@ fn record_merge(tx: &Connection, store: &Path, raw: &RawCommit) -> Result<()> {
             let bases = git_lines(store, &["merge-base", "--all", a, b]).unwrap_or_default();
             for ts in git_commit_times(store, &bases)?.values() {
                 region.execute([ts])?;
-            }
-            let paths = git_lines(
-                store,
-                // trace:TASK-1507 | ai:claude
-                // B5: `-m` also lists what merges inside the range changed
-                // themselves (evil merges, reconciles).
-                &[
-                    "log",
-                    "-m",
-                    "--format=",
-                    "--name-only",
-                    "--no-renames",
-                    &range,
-                ],
-            )?;
-            for path in &paths {
-                ins.execute([path])?;
             }
         }
     }
@@ -1192,7 +1200,7 @@ impl HistoryCache {
         let tx = self.conn.transaction()?;
         tx.execute_batch(
             "DELETE FROM events; DELETE FROM touches; DELETE FROM commits; DELETE FROM meta;
-             DELETE FROM merge_region_ts; DELETE FROM merge_paths; DELETE FROM skew;",
+             DELETE FROM merge_region_ts; DELETE FROM skew;",
         )?;
         let now = now_rfc3339();
         for (k, v) in [
@@ -1253,7 +1261,7 @@ impl HistoryCache {
             let dec = decode_commit(&raw, &mut blobs)?;
             insert_commit(&tx, next_seq, &raw, &dec)?;
             // trace:TASK-1507 | ai:claude
-            record_merge(&tx, store, &raw)?;
+            record_merge(&tx, store, next_seq, &raw)?;
             seen.push((raw.sha.clone(), raw.commit_ts, raw.parents.clone()));
             next_seq += 1;
             indexed += 1;
@@ -1489,7 +1497,7 @@ impl HistoryCache {
                 }
                 let dec = decode_commit(&raw, &mut blobs)?;
                 insert_commit(&tx, next_seq, &raw, &dec)?;
-                record_merge(&tx, store, &raw)?;
+                record_merge(&tx, store, next_seq, &raw)?;
                 next_seq -= 1;
                 i += 1;
                 last = Some(raw);
@@ -1534,10 +1542,21 @@ impl HistoryCache {
     /// - no clock-skewed edge may reach into the served range (R3);
     /// - the served range may not hold a second, inside a merge's parallel
     ///   region (fork point included), shared by more than one commit,
-    ///   where git's tie order is not `seq` (B2, B3);
-    /// - `--id` on a path touched across a merge uses the walk, because
-    ///   `git log -- <path>` simplifies TREESAME side branches away (N1b).
+    ///   where git's tie order is not `seq` (B2, B3).
+    ///
+    /// `--id` needs no rule of its own. The walk runs `git log
+    /// --full-history -- <path>`, which visits exactly the commits of the
+    /// unfiltered walk, in the same order, and prints those whose path
+    /// differs from at least one parent (a root commit: holds the path).
+    /// `touches` holds exactly those commits: the raw diff for a
+    /// single-parent or root commit, and a per-parent diff for a merge
+    /// (`record_merge`). So the `--id` walk is the unfiltered walk restricted to
+    /// `touches`, and every coverage rule above, proven for the unfiltered
+    /// walk, carries over to that subsequence. (Before BUG-1620 the walk
+    /// simplified TREESAME side branches away, so `--id` fell back on any
+    /// merge-touched path or any merge in range.)
     // trace:TASK-1507 | ai:claude
+    // trace:BUG-1620 | ai:claude
     fn query(&self, opts: &HistoryOpts, head: &str) -> Result<Option<CacheAnswer>> {
         let tx = self.conn.unchecked_transaction()?;
         let versions_ok = self.meta("schema_version")?.as_deref()
@@ -1573,17 +1592,6 @@ impl HistoryCache {
             .id_filter
             .as_deref()
             .and_then(|id| aida_core::object_store::relative_object_path(id).ok());
-        if let Some(path) = &id_path {
-            let across_merge: bool = tx.query_row(
-                "SELECT EXISTS(SELECT 1 FROM merge_paths WHERE path = ?1)",
-                [path],
-                |r| r.get(0),
-            )?;
-            if across_merge {
-                return Ok(None);
-            }
-        }
-
         // Candidate commits, newest first: (commit_ts, seq).
         let probe = i64::try_from(opts.max_commits.saturating_add(1)).unwrap_or(i64::MAX);
         let row = |r: &rusqlite::Row| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?));
@@ -1710,27 +1718,6 @@ impl HistoryCache {
         if cross_tie {
             return Ok(None);
         }
-        // trace:TASK-1507 | ai:claude
-        // Conservative `--id` rule (round-4 proxy decision): `git log --
-        // <path>` simplifies merges, which the index cannot mirror in
-        // general, so an `--id` query whose served range holds any merge
-        // uses the walk. This rule alone does NOT cover everything a merge
-        // below `lower` can change: the capped window's +1 probe candidate
-        // (and so `window_exhausted`) can be a commit that git simplifies
-        // away below `lower`. The global `merge_paths` check above (N1b)
-        // covers that case; both are needed.
-        if id_path.is_some() {
-            let merge_in_range: bool = tx.query_row(
-                "SELECT EXISTS(SELECT 1 FROM commits
-                     WHERE is_merge = 1 AND (?1 IS NULL OR commit_ts >= ?1))",
-                [lower],
-                |r| r.get(0),
-            )?;
-            if merge_in_range {
-                return Ok(None);
-            }
-        }
-
         let window_exhausted = capped && events.len() < opts.limit;
         events.truncate(opts.limit);
         Ok(Some(CacheAnswer {
@@ -2038,19 +2025,6 @@ pub(crate) mod test_support {
             cache.reset(store, &head, None)?;
         }
         cache.backfill_chunks(store, Budget::unbounded(), chunk_size, Some(max_chunks))
-    }
-
-    /// Whether `path` is recorded as touched across some merge.
-    pub(crate) fn has_merge_path(db_path: &Path, path: &str) -> bool {
-        HistoryCache::open_existing(db_path)
-            .unwrap()
-            .conn
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM merge_paths WHERE path = ?1)",
-                [path],
-                |r| r.get(0),
-            )
-            .unwrap()
     }
 
     /// Every indexed commit SHA, newest (highest seq) first.
