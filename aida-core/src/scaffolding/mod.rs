@@ -3269,6 +3269,68 @@ Use this skill when:
     }
 }
 
+/// Raw (pre-header) body of a portable (`.agents/skills`, or legacy
+/// `.codex/skills` / `.antigravity/skills`) pack skill: the template the
+/// portable inventory picks, so the scaffold and partial installers share
+/// one source (`skills-portable/<name>.md` wins over the master).
+// trace:STORY-1475 | ai:claude
+// trace:BUG-1639 | ai:claude
+fn portable_skill_raw(skill_name: &str) -> String {
+    inventory::portable_skill_md_source(skill_name)
+        .and_then(|key| crate::templates::EMBEDDED_TEMPLATES.get(key))
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("# {}\n\n(template not found)", skill_name))
+}
+
+/// The exact bytes the full scaffold writes for skill `name` in skill pack
+/// `pack` (`.claude/skills`, `.agents/skills`, or a legacy `.codex/skills` /
+/// `.antigravity/skills`): the pack's template body wrapped with the AIDA-Generated header at
+/// `<pack>/<name>/SKILL.md`. Partial installers (the memory-lane footprint)
+/// write this so `scaffold status`, doctor and refresh recognise the file as
+/// pristine AIDA output instead of drift.
+// trace:BUG-1653 | ai:claude
+pub fn rendered_pack_skill(pack: &str, name: &str) -> String {
+    let path = Path::new(pack).join(name).join("SKILL.md");
+    wrap_with_aida_header(&path, &pack_skill_raw(pack, name))
+}
+
+/// Raw (pre-header) body of a Claude pack skill: the `skills/<name>.md` master.
+// trace:BUG-1653 | ai:claude
+fn claude_skill_raw(name: &str) -> String {
+    crate::templates::EMBEDDED_TEMPLATES
+        .get(format!("skills/{name}.md").as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("# {name}\n\n(template not found)"))
+}
+
+/// Raw (pre-header) body the full scaffold wraps for skill `name` in `pack`.
+// trace:BUG-1653 | ai:claude
+fn pack_skill_raw(pack: &str, name: &str) -> String {
+    if pack.trim_end_matches('/') == ".claude/skills" {
+        claude_skill_raw(name)
+    } else {
+        portable_skill_raw(name)
+    }
+}
+
+/// True when `on_disk` is a header-less copy of an embedded template for skill
+/// `name` in `pack`: the pack's raw body, or the Claude master (older partial
+/// installers wrote the Claude master into every pack). Line endings and
+/// trailing newlines are ignored. Such a file is unedited AIDA output written
+/// without its header, so refresh may safely replace it with the wrapped form.
+// trace:BUG-1653 | ai:claude
+pub fn is_unwrapped_pack_skill(pack: &str, name: &str, on_disk: &str) -> bool {
+    if refresh::refresh_disposition(on_disk) != refresh::RefreshDisposition::Unmarked {
+        return false;
+    }
+    let pack_raw = pack_skill_raw(pack, name);
+    let claude_raw = claude_skill_raw(name);
+    [pack_raw, claude_raw]
+        .iter()
+        .filter(|raw| !raw.ends_with("(template not found)"))
+        .any(|raw| generated_text_matches(on_disk, raw))
+}
+
 /// README scaffolded into `.claude/skills/local/` so a new project sees the
 /// per-project skill-extension contract the first time it pokes around in
 /// `.claude/skills/`. Kept verbatim in sync with `docs/extending-skills.md`

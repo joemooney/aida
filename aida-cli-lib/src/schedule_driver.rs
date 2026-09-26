@@ -4,13 +4,18 @@
 //!
 //! The binding advisor rules this module implements:
 //!
-//! - A12 (unit shape): `Type=oneshot`, `KillMode=process` (a detached drain
-//!   wave stays in the tick's cgroup; without it systemd kills the wave when
-//!   the oneshot exits), `OnActiveSec` + `OnBootSec` first-fire triggers
-//!   (`OnUnitInactiveSec` alone never fires the first time), no
-//!   `Persistent=` (it only applies to `OnCalendar`), `TimeoutStartSec=15min`
-//!   as a backstop, and NO resource limits (they would silently constrain the
-//!   wave left behind in the cgroup).
+//! - A12 (unit shape): `Type=oneshot`, `KillMode=process`, `OnActiveSec` +
+//!   `OnBootSec` first-fire triggers (`OnUnitInactiveSec` alone never fires
+//!   the first time), no `Persistent=` (it only applies to `OnCalendar`),
+//!   `TimeoutStartSec=15min` as a backstop, and NO resource limits (they
+//!   would silently constrain a wave left behind in the cgroup). Under this
+//!   driver a drain wave normally runs in its OWN transient unit
+//!   (`aida-wave-*.service`, started with `systemd-run --user`; see "Wave
+//!   units" below), outside the tick's cgroup. `KillMode=process` remains for
+//!   the detached fallback: when the wave cannot get its own unit it is
+//!   launched in the tick's cgroup, and without it systemd would kill that
+//!   wave when the oneshot exits. The tick unit files are unchanged by the
+//!   wave units.
 //! - A13 (switch): install and verify the new driver before removing the old
 //!   one, so a failure part-way leaves both (harmless under the tick lock,
 //!   flagged by doctor) and never none; cron removal goes through
@@ -23,9 +28,15 @@
 //! Every process and filesystem side effect goes through [`DriverHost`], so
 //! tests run against an in-memory crontab, a fake `systemctl` and a unit
 //! directory under a temporary HOME. The real host refuses to call
-//! `systemctl` or resolve the real unit directory under `cfg(test)`.
+//! `systemctl` or `systemd-run`, or resolve the real unit directory, under
+//! `cfg(test)`.
+//!
+//! Wave units: the builders here are pure. They never add a timer flag
+//! (`--on-calendar`, `--on-active`, ...), a `Restart=` or any other way for
+//! systemd to start a wave on its own; only a guarded tick launches one.
 //!
 //! trace:TASK-1491 | ai:claude
+//! trace:TASK-1510 | ai:claude
 
 use crate::maintenance_schedule::{
     classify_cron_driver, crontab_after_driver_switch, crontab_after_install,
@@ -35,6 +46,7 @@ use crate::maintenance_schedule::{
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// How long after the previous tick finished the timer fires the next one.
 pub(crate) const SYSTEMD_TICK_EVERY: &str = "10min";
@@ -66,6 +78,41 @@ pub(crate) trait DriverHost {
     fn linger_enabled(&mut self) -> Option<bool>;
     /// Whether systemd user timers exist on this platform at all.
     fn systemd_supported(&self) -> bool;
+    /// `systemd-run <args>` (the args start with `--user`), killed after
+    /// `timeout`. Only the night-shift wave launch calls it. A host that
+    /// does not implement it never runs anything: the wave falls back to
+    /// the detached launch.
+    // trace:TASK-1510 | ai:claude
+    fn systemd_run_user(&mut self, _args: &[String], _timeout: Duration) -> BoundedRun {
+        BoundedRun::SpawnFailed("this host does not run systemd-run".to_string())
+    }
+    /// `systemctl --user <args>`, killed after `timeout`. The wave launch
+    /// uses it only for the read-only `show` probe.
+    // trace:TASK-1510 | ai:claude
+    fn systemctl_user_bounded(&mut self, args: &[&str], _timeout: Duration) -> BoundedRun {
+        match self.systemctl_user(args) {
+            Ok(out) => BoundedRun::Exited(out),
+            Err(e) => BoundedRun::SpawnFailed(format!("{e:#}")),
+        }
+    }
+    /// The contents of `/proc/self/cgroup`; `None` when it cannot be read.
+    // trace:TASK-1510 | ai:claude
+    fn self_cgroup(&self) -> Option<String> {
+        None
+    }
+}
+
+/// How a bounded `systemd-run` / `systemctl` call ended.
+// trace:TASK-1510 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BoundedRun {
+    /// The command ran and exited.
+    Exited(CommandOutput),
+    /// The command ran past its timeout and was killed. What it did before
+    /// that is unknown.
+    TimedOut,
+    /// The command could not be started at all (missing binary, refused).
+    SpawnFailed(String),
 }
 
 /// The real host: the user's crontab, `systemctl --user`, and the unit
@@ -108,6 +155,114 @@ impl DriverHost for RealDriverHost {
 
     fn systemd_supported(&self) -> bool {
         cfg!(target_os = "linux")
+    }
+
+    // trace:TASK-1510 | ai:claude
+    fn systemd_run_user(&mut self, args: &[String], timeout: Duration) -> BoundedRun {
+        if cfg!(test) {
+            return BoundedRun::SpawnFailed(
+                "refusing to run the real `systemd-run` from a test".to_string(),
+            );
+        }
+        if !cfg!(target_os = "linux") {
+            return BoundedRun::SpawnFailed("systemd-run is only available on Linux".to_string());
+        }
+        if args.first().map(String::as_str) != Some("--user") {
+            return BoundedRun::SpawnFailed(
+                "refusing a systemd-run call that is not `--user`".to_string(),
+            );
+        }
+        let mut cmd = std::process::Command::new("systemd-run");
+        cmd.args(args);
+        run_bounded(cmd, timeout)
+    }
+
+    // trace:TASK-1510 | ai:claude
+    fn systemctl_user_bounded(&mut self, args: &[&str], timeout: Duration) -> BoundedRun {
+        if cfg!(test) {
+            return BoundedRun::SpawnFailed(
+                "refusing to run the real `systemctl --user` from a test".to_string(),
+            );
+        }
+        if !cfg!(target_os = "linux") {
+            return BoundedRun::SpawnFailed("systemctl is only available on Linux".to_string());
+        }
+        let mut cmd = std::process::Command::new("systemctl");
+        cmd.arg("--user").args(args);
+        run_bounded(cmd, timeout)
+    }
+
+    // trace:TASK-1510 | ai:claude
+    fn self_cgroup(&self) -> Option<String> {
+        if cfg!(target_os = "linux") {
+            std::fs::read_to_string("/proc/self/cgroup").ok()
+        } else {
+            None
+        }
+    }
+}
+
+/// Run `cmd` with piped output, killing it after `timeout`. A spawn failure
+/// and a timeout are told apart: the first proves nothing ran.
+// trace:TASK-1510 | ai:claude
+fn run_bounded(mut cmd: std::process::Command, timeout: Duration) -> BoundedRun {
+    use std::io::Read;
+    use std::process::Stdio;
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => return BoundedRun::SpawnFailed(e.to_string()),
+    };
+    let readers: Vec<_> = [
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    ]
+    .into_iter()
+    .map(|pipe| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(mut p) = pipe {
+                let _ = p.read_to_end(&mut buf);
+            }
+            String::from_utf8_lossy(&buf).to_string()
+        })
+    })
+    .collect();
+    let started = std::time::Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if started.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+        }
+    };
+    let mut texts = readers.into_iter().map(|h| h.join().unwrap_or_default());
+    let stdout = texts.next().unwrap_or_default();
+    let stderr = texts.next().unwrap_or_default();
+    match status {
+        Some(s) => BoundedRun::Exited(CommandOutput {
+            success: s.success(),
+            stdout,
+            stderr,
+        }),
+        None => BoundedRun::TimedOut,
     }
 }
 
@@ -191,9 +346,15 @@ pub(crate) struct SystemdUnits {
 /// builds and platforms (not `DefaultHasher`), and distinct per clone.
 // trace:TASK-1491 | ai:claude
 pub(crate) fn unit_stem(repo: &str) -> String {
+    format!("aida-tick-{}", repo_hash8(repo))
+}
+
+/// First 8 hex digits of sha256(canonical repo path), shared by the tick
+/// unit and the wave units of one repo.
+// trace:TASK-1510 | ai:claude
+pub(crate) fn repo_hash8(repo: &str) -> String {
     let digest = Sha256::digest(repo.as_bytes());
-    let hex: String = digest.iter().take(4).map(|b| format!("{b:02x}")).collect();
-    format!("aida-tick-{hex}")
+    digest.iter().take(4).map(|b| format!("{b:02x}")).collect()
 }
 
 /// `(service, timer)` file names for a canonical repo path.
@@ -1146,6 +1307,243 @@ pub(crate) fn real_tick_invocation(project_root: &Path) -> Result<TickInvocation
     let exe = crate::aida_exe_path();
     let exe = exe.canonicalize().unwrap_or(exe);
     tick_invocation(&canonical_repo(project_root), &exe)
+}
+
+// ---------------------------------------------------------------------------
+// Wave units (TASK-1510): one transient unit per night-shift drain wave
+// ---------------------------------------------------------------------------
+
+/// The longest the `systemd-run` call of a wave launch may take. With
+/// [`WAVE_UNIT_PROBE_TIMEOUT`] the two calls fit in the tick's 30s launch
+/// reserve, well inside the scheduler's 120s kill (A5).
+// trace:TASK-1510 | ai:claude
+pub(crate) const WAVE_UNIT_RUN_TIMEOUT: Duration = Duration::from_secs(20);
+/// The longest the read-only `systemctl --user show` probe may take.
+pub(crate) const WAVE_UNIT_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+/// `RuntimeMaxSec` = the wave's `--max-runtime` plus this grace (Q2): the
+/// drain stops between specs, so one spec can overrun; this is the hard stop.
+pub(crate) const WAVE_UNIT_RUNTIME_GRACE_SECS: u64 = 30 * 60;
+
+/// PURE: `aida-wave-<hex8>-<YYYYMMDD-HHMMSS>-<tick pid>.service`. Only
+/// `[a-z0-9-]`, so it needs no escaping and never holds a `%` specifier.
+// trace:TASK-1510 | ai:claude
+pub(crate) fn wave_unit_name(
+    repo: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tick_pid: u32,
+) -> String {
+    format!(
+        "aida-wave-{}-{}-{tick_pid}.service",
+        repo_hash8(repo),
+        now.format("%Y%m%d-%H%M%S")
+    )
+}
+
+/// PURE: a value systemd would expand (`%` specifiers, `$` variables) in a
+/// unit property or command line. Such a value is never escaped in place:
+/// the wave falls back to the detached launch (A6).
+// trace:TASK-1510 | ai:claude
+pub(crate) fn expands_in_unit(value: &str) -> bool {
+    value.contains('%') || value.contains('$')
+}
+
+/// PURE: whether `/proc/self/cgroup` puts this process inside `unit` (the
+/// last path segment of a cgroup line is the unit's own cgroup).
+// trace:TASK-1510 | ai:claude
+pub(crate) fn cgroup_in_unit(cgroup: &str, unit: &str) -> bool {
+    cgroup.lines().any(|line| {
+        line.splitn(3, ':')
+            .nth(2)
+            .and_then(|path| path.trim_end().rsplit('/').next())
+            .is_some_and(|last| last == unit)
+    })
+}
+
+/// Everything one wave unit is made of.
+// trace:TASK-1510 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct WaveUnitSpec<'a> {
+    pub unit: &'a str,
+    pub repo: &'a str,
+    pub exe: &'a str,
+    pub log: &'a str,
+    pub description: &'a str,
+    pub runtime_max_secs: u64,
+    /// `-E KEY=VALUE` pairs.
+    pub set_env: &'a [(String, String)],
+    /// Keys removed from the environment the unit inherits from the user
+    /// manager (`-p UnsetEnvironment=`): `-E` can only set, never unset.
+    pub unset_env: &'a [&'a str],
+    /// The wave argv, exactly as the detached launch passes it.
+    pub argv: &'a [String],
+}
+
+/// PURE: the full `systemd-run` argument list for one wave unit (A7): a
+/// transient `Type=exec` service, garbage-collected when it ends, with the
+/// wave log appended, `RuntimeMaxSec`, `OOMPolicy=stop` and the env delta.
+/// No timer flag and no `Restart=`: systemd never starts or restarts a wave
+/// on its own.
+// trace:TASK-1510 | ai:claude
+pub(crate) fn build_wave_unit_argv(s: &WaveUnitSpec<'_>) -> Vec<String> {
+    let mut a: Vec<String> = vec![
+        "--user".to_string(),
+        format!("--unit={}", s.unit),
+        "--collect".to_string(),
+        "--no-ask-password".to_string(),
+        "--quiet".to_string(),
+        "--service-type=exec".to_string(),
+        format!("--working-directory={}", s.repo),
+    ];
+    for (k, v) in s.set_env {
+        a.push("-E".to_string());
+        a.push(format!("{k}={v}"));
+    }
+    for k in s.unset_env {
+        a.push("-p".to_string());
+        a.push(format!("UnsetEnvironment={k}"));
+    }
+    for p in [
+        format!("StandardOutput=append:{}", s.log),
+        format!("StandardError=append:{}", s.log),
+        format!("RuntimeMaxSec={}", s.runtime_max_secs),
+        "OOMPolicy=stop".to_string(),
+    ] {
+        a.push("-p".to_string());
+        a.push(p);
+    }
+    a.push(format!("--description={}", s.description));
+    a.push("--".to_string());
+    a.push(s.exe.to_string());
+    a.extend(s.argv.iter().cloned());
+    a
+}
+
+/// Why a `systemd-run` call did not report a clean start.
+// trace:TASK-1510 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RunFailure {
+    /// Provably nothing started: the detached fallback is safe.
+    NotStarted(String),
+    /// The unit may or may not have started: probe it, never relaunch blind.
+    Ambiguous(String),
+    /// A unit with this name already exists (it could be a live wave).
+    Exists(String),
+}
+
+/// `systemd-run` messages that mean the user manager was never reached, so
+/// nothing was started. Only counted together with a non-zero exit.
+const WAVE_RUN_NO_BUS: [&str; 5] = [
+    "Failed to connect to bus",
+    "Failed to connect to user scope bus",
+    "Failed to get D-Bus connection",
+    "No medium found",
+    "$DBUS_SESSION_BUS_ADDRESS",
+];
+
+/// PURE: `Ok(())` for a clean start, else why not. A spawn failure proves
+/// nothing ran; a non-zero exit is "not started" only with a recognised
+/// no-bus message; a timeout or any other failure is ambiguous (A5).
+// trace:TASK-1510 | ai:claude
+pub(crate) fn classify_systemd_run(run: &BoundedRun) -> Result<(), RunFailure> {
+    match run {
+        BoundedRun::SpawnFailed(e) => Err(RunFailure::NotStarted(format!(
+            "systemd-run could not be started ({e})"
+        ))),
+        BoundedRun::TimedOut => Err(RunFailure::Ambiguous(format!(
+            "systemd-run did not finish within {}s",
+            WAVE_UNIT_RUN_TIMEOUT.as_secs()
+        ))),
+        BoundedRun::Exited(out) if out.success => Ok(()),
+        BoundedRun::Exited(out) => {
+            let stderr = out.stderr.trim();
+            if stderr.contains("already exists")
+                || stderr.contains("already loaded")
+                || stderr.contains("has a fragment file")
+            {
+                Err(RunFailure::Exists(format!("systemd-run: {stderr}")))
+            } else if WAVE_RUN_NO_BUS.iter().any(|m| stderr.contains(m)) {
+                Err(RunFailure::NotStarted(format!(
+                    "systemd-run could not reach the user manager: {stderr}"
+                )))
+            } else if stderr.is_empty() {
+                Err(RunFailure::Ambiguous(
+                    "systemd-run failed without a message".to_string(),
+                ))
+            } else {
+                Err(RunFailure::Ambiguous(format!(
+                    "systemd-run failed: {stderr}"
+                )))
+            }
+        }
+    }
+}
+
+/// What `systemctl --user show -p LoadState -p ActiveState -p MainPID`
+/// says about a wave unit.
+// trace:TASK-1510 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum UnitProbe {
+    /// Active, activating or reloading. `main_pid` is `None` for `MainPID=0`.
+    Active { main_pid: Option<u32> },
+    /// systemd does not know the unit (never started, or already collected).
+    NotFound,
+    /// Loaded but not running (the state).
+    Inactive(String),
+    /// Could not tell.
+    Unknown(String),
+}
+
+/// The `show` arguments for [`classify_unit_show`].
+pub(crate) fn unit_show_args(unit: &str) -> [&str; 8] {
+    [
+        "show",
+        "-p",
+        "LoadState",
+        "-p",
+        "ActiveState",
+        "-p",
+        "MainPID",
+        unit,
+    ]
+}
+
+/// PURE: classify the `show` probe of a wave unit.
+// trace:TASK-1510 | ai:claude
+pub(crate) fn classify_unit_show(run: &BoundedRun) -> UnitProbe {
+    let out = match run {
+        BoundedRun::Exited(out) if out.success => out,
+        BoundedRun::Exited(out) => return UnitProbe::Unknown(unreadable("show", out)),
+        BoundedRun::TimedOut => {
+            return UnitProbe::Unknown(format!(
+                "`systemctl --user show` did not finish within {}s",
+                WAVE_UNIT_PROBE_TIMEOUT.as_secs()
+            ))
+        }
+        BoundedRun::SpawnFailed(e) => return UnitProbe::Unknown(e.clone()),
+    };
+    let prop = |key: &str| {
+        out.stdout.lines().find_map(|l| {
+            l.trim()
+                .strip_prefix(key)
+                .and_then(|r| r.strip_prefix('='))
+                .map(str::to_string)
+        })
+    };
+    let (Some(load), Some(active)) = (prop("LoadState"), prop("ActiveState")) else {
+        return UnitProbe::Unknown(unreadable("show", out));
+    };
+    if load == "not-found" {
+        return UnitProbe::NotFound;
+    }
+    match active.as_str() {
+        "active" | "activating" | "reloading" => UnitProbe::Active {
+            main_pid: prop("MainPID")
+                .and_then(|p| p.parse::<u32>().ok())
+                .filter(|p| *p > 0),
+        },
+        "inactive" | "failed" | "deactivating" if load == "loaded" => UnitProbe::Inactive(active),
+        _ => UnitProbe::Unknown(unreadable("show", out)),
+    }
 }
 
 // ---------------------------------------------------------------------------

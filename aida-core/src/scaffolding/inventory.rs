@@ -274,6 +274,25 @@ impl PortableSkill {
     }
 }
 
+/// The embedded template key a portable pack's `SKILL.md` for `name` comes
+/// from: `skills-portable/<name>.md` when that exists, else the master
+/// (`skills/<name>.md` or the folder-form `skills/<name>/SKILL.md`). The one
+/// rule for the portable body, shared by the scaffold and partial installers.
+// trace:BUG-1639 | ai:claude
+pub fn portable_skill_md_source(name: &str) -> Option<&'static str> {
+    [
+        format!("skills-portable/{name}.md"),
+        format!("skills/{name}.md"),
+        format!("skills/{name}/SKILL.md"),
+    ]
+    .iter()
+    .find_map(|key| {
+        EMBEDDED_TEMPLATES
+            .get_key_value(key.as_str())
+            .map(|(k, _)| *k)
+    })
+}
+
 /// Every skill master that is a real skill (not on the `not_a_skill` list),
 /// with each of its template keys, in sorted order.
 fn skill_masters() -> BTreeMap<&'static str, Vec<(&'static str, &'static str, bool)>> {
@@ -313,14 +332,11 @@ pub fn portable_skill_inventory(config: &ScaffoldConfig) -> BTreeMap<String, Por
         {
             continue;
         }
-        let portable = format!("skills-portable/{name}.md");
-        let portable_key = EMBEDDED_TEMPLATES
-            .get_key_value(portable.as_str())
-            .map(|(k, _)| *k);
+        let skill_md_key = portable_skill_md_source(name);
         let mut files = Vec::new();
         for (key, rel_path, is_prompt) in keys {
             let (rel, source) = if is_prompt {
-                ("SKILL.md".to_string(), portable_key.unwrap_or(key))
+                ("SKILL.md".to_string(), skill_md_key.unwrap_or(key))
             } else {
                 // Folder-form helper: `<name>/<sub>` keeps its sub-path.
                 let sub = rel_path
