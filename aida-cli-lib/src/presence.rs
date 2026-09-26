@@ -137,13 +137,16 @@ pub(crate) fn effective_presence(
 pub(crate) fn presence_path() -> Option<PathBuf> {
     let home = if let Ok(p) = std::env::var("AIDA_HOME") {
         if p.is_empty() {
-            dirs::home_dir()?
+            crate::home_dir()?
         } else {
             PathBuf::from(p)
         }
     } else {
-        dirs::home_dir()?
+        crate::home_dir()?
     };
+    // trace:BUG-1642 | ai:claude
+    #[cfg(test)]
+    crate::test_home::assert_hermetic(&home);
     Some(home.join(".aida").join(PRESENCE_FILENAME))
 }
 
@@ -927,9 +930,12 @@ impl TurnClock {
 pub(crate) fn turn_clock_dir() -> Option<PathBuf> {
     let home = match std::env::var("AIDA_HOME") {
         Ok(p) if !p.is_empty() => Some(PathBuf::from(p)),
-        _ => dirs::home_dir(),
+        _ => crate::home_dir(),
     };
     if let Some(home) = home {
+        // trace:BUG-1642 | ai:claude
+        #[cfg(test)]
+        crate::test_home::assert_hermetic(&home);
         return Some(home.join(".aida").join(TURN_CLOCK_DIRNAME));
     }
     std::env::var("XDG_RUNTIME_DIR")

@@ -70,7 +70,7 @@ pub(crate) fn profiles_path() -> Result<PathBuf> {
     if let Some(home) = std::env::var_os("AIDA_TEST_HOME") {
         return Ok(PathBuf::from(home).join(".aida").join("forges.toml"));
     }
-    let home = dirs::home_dir().context("HOME not set; cannot locate ~/.aida/forges.toml")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate ~/.aida/forges.toml")?;
     Ok(home.join(".aida").join("forges.toml"))
 }
 

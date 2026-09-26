@@ -218,7 +218,7 @@ pub(crate) fn default_sources(project_root: &Path) -> Sources {
             roots.push(wt);
         }
     }
-    let transcript_dirs = match dirs::home_dir() {
+    let transcript_dirs = match crate::home_dir() {
         Some(home) => roots
             .iter()
             .map(|r| {
