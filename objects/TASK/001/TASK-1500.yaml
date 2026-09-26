@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:37:34.819007356Z
-modified_at: 2026-09-26T05:29:28.399850310Z
+modified_at: 2026-09-26T18:23:04.240672Z
 req_type: Task
 tags:
 - agent-launch
@@ -48,4 +48,7 @@ decision_request:
   - label: Defer
     consequence: Revisit with the STORY-1473 seat-authority work
     resolution: Defer until STORY-1473 is decided
+  answered: 0
+  note: 'Operator: the prompt-before-YOLO setting is ON by default; non-interactive init never enables YOLO.'
   asked_at: 2026-09-25T08:03:11.609899573Z
+  answered_at: 2026-09-26T18:23:04.240660562Z
