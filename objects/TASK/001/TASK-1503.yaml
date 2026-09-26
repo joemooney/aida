@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:29:48.596407578Z
-modified_at: 2026-09-26T09:31:21.391967687Z
+modified_at: 2026-09-26T09:47:11.131458448Z
 req_type: Task
 tags:
 - antigravity
@@ -103,6 +103,48 @@ comments:
   content: 'Round 3 at 509901f952. BLOCKER fixed on two layers. (1) SkillPackPlan.partial: memory-lane marks its plan partial, and settled() never promotes an absent or legacy manifest to complete from a partial plan (complete = base.complete || !partial). The incomplete manifest is written without the v2 marker, so refresh still treats the pack as legacy. (2) aida scaffold refresh now reads the persisted [scaffold] footprint; minimal and memory-lane projects get no deliveries and no manifest writes, the same gate as init --refresh. Tests: memory_lane_then_refresh_creates_nothing (with and without a persisted footprint, two refreshes each) and legacy_full_pack_memory_lane_rerun_then_refresh_keeps_deletion (aida-req is not resurrected), plus the core test partial_plan_never_completes_a_manifest. LOWs fixed: (a) refresh first records the manifest without the new names (opt-outs and seeding; if that fails, nothing is delivered), then records deliveries only after the files are written. Test failed_refresh_write_is_not_recorded_as_delivered: a failed write stays unknown and the next refresh delivers it. (b) a new folder-form skill is delivered whole, with SKILL.md written last. Test refresh_delivers_whole_folder_form_skill covers aida-pr/examples. (c) the TUI enable-agent writer uses the SkillDeliveryRecorder guard. (d) the manifest header and the CLI docs say how to decline an unconfirmed skill (move it under ''# opted-out''). Not addressed: the pre-existing (d) from the reviewer, where apply writes through a symlinked skill dir. All tests use temp dirs only; no command was run against a real project or the live store.'
   created_at: 2026-09-26T09:31:21.391967687Z
   modified_at: 2026-09-26T09:31:21.391967687Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd1c-8d9b-7a20-aff8-a2054814439d
+  author: joe
+  content: |
+    Strict review round 3: APPROVE — I reviewed 66838ec3ad..509901f952, then the full branch against origin/main, in a throwaway worktree that is now removed. No aida command was run against a real project. All probes were temp-dir unit tests.
+
+    Tests are green:
+    - aida-core scaffold: 150/150.
+    - aida-cli-lib --lib: scaffold 65, refresh 33, skill 30, init 98, doctor 159.
+    - make check-templates: OK.
+
+    MUTATION: I set settled() to complete=true (refresh.rs:343). Three tests fail:
+    - memory_lane_then_refresh_creates_nothing
+    - legacy_full_pack_memory_lane_rerun_then_refresh_keeps_deletion
+    - memory_lane_records_manifest_and_full_init_delivers_the_rest
+
+    With the structural !m.complete assert also removed, memory_lane_then_refresh_creates_nothing still fails on its behavioural check: with persist=false, refresh installed skills.
+
+    VERIFIED:
+    (1) A partial plan never completes an absent or legacy manifest. The incomplete manifest is written without the v2 marker, so refresh stays fail-closed.
+    (2) scaffold refresh gates on the persisted footprint (scaffold_refresh.rs:233). Probe: a full install, then the footprint set to memory-lane, then aida-orchestrate forgotten. Refresh creates nothing. With the gate removed, the skill is created.
+    (3) Refresh records the manifest before writing with nothing marked as delivered, then records from disk after writing. A failed write stays unknown and the next refresh retries it.
+    (4) A folder-form skill is delivered whole, with SKILL.md deferred until last (scaffold_refresh.rs:260 and :275).
+    (5) The TUI writer is armed with SkillDeliveryRecorder. Its preview is limited to the chosen agent, so it records no other pack.
+    (6) The manifest header and docs/cli/07-project-setup.md explain how to decline a skill: move its line under '# opted-out'.
+
+    HUNT:
+    (a) Resurrecting a deleted skill: none found. Every recorder and every record() works from disk, and the delivering set is always empty. Only Install mode delivers to legacy packs, and that is proxy-approved.
+    (b) Flooding a partial or minimal install: memory-lane is blocked on both layers. Minimal writes no packs.
+    (c) Permanently blocking a new skill: a name becomes known only when it is present on disk. A legitimate new skill is withheld only as 'unconfirmed' on a legacy pack, and upgrade clears that, as the policy intends.
+    (d) Writing outside the pack: delivered names come only from the embedded templates. is_file_of_skill uses component-wise starts_with. The manifest write refuses a symlinked pack directory and is atomic.
+
+    Concurrency: the read-modify-write of the manifest is not locked. Reconciliation is disk-based, so a lost update self-heals at the next record. One theoretical hole remains: a memory-lane partial record overwrites a concurrent refresh's post-write record, and the user deletes that newly delivered skill before any further record. I accept that risk.
+
+    NON-BLOCKING LOWs:
+    (L1) No test covers the footprint gate on its own. Forcing full_footprint=true at scaffold_refresh.rs:233 leaves all 33 refresh tests green, because the partial manifest masks the gate. Add the full→memory-lane probe above as a test.
+    (L2) A memory-lane project with no persisted footprint (pre-STORY-830) gets a complete manifest with 53 unconfirmed skills on its first refresh. Refresh then prints 'run aida scaffold upgrade' for 53 + 21 skills, which invites a flood, and doctor nags in the same way. Refresh itself creates nothing.
+    (L3) A deferred SKILL.md is written even if one of its supporting files failed to write. The skill is then recorded as delivered without that file. Refresh never back-fills it; upgrade does.
+    (L4) A memory-lane init leaves .claude/skills/.aida-delivered and .codex/skills/.aida-delivered untracked. They are not in the memory-lane commit paths (init_cmd.rs:312-322).
+    (L5) Still open from earlier rounds and older than this branch: apply writes through a symlinked skill directory.
+  created_at: 2026-09-26T09:47:11.131458448Z
+  modified_at: 2026-09-26T09:47:11.131458448Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
