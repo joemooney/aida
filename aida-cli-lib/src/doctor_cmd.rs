@@ -3100,6 +3100,7 @@ pub(crate) fn scan_project_manifest(
     if let Some(l) = manifest.project.liveness.as_ref() {
         if !l.is_recognised() {
             unknown.push(format!(
+                // toml-ok: diagnostic text, not a TOML writer.
                 "liveness = \"{}\" (expected one of: {})",
                 l.as_str(),
                 pm::Liveness::ALL.join(", ")
@@ -3109,6 +3110,7 @@ pub(crate) fn scan_project_manifest(
     if let Some(st) = manifest.project.stage.as_ref() {
         if !st.is_recognised() {
             unknown.push(format!(
+                // toml-ok: diagnostic text, not a TOML writer.
                 "stage = \"{}\" (expected one of: {})",
                 st.as_str(),
                 pm::Stage::ALL.join(", ")
@@ -9856,7 +9858,11 @@ fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -
             continue;
         }
         if in_id_format && trimmed_owned.starts_with("counter_scope") {
-            *line = format!("counter_scope = \"{}\"", new_value);
+            // trace:BUG-1650 | ai:claude
+            *line = format!(
+                "counter_scope = {}",
+                aida_core::toml_quote::toml_string(new_value)
+            );
             replaced = true;
         }
         if in_id_format && !trimmed_owned.is_empty() && !trimmed_owned.starts_with('#') {
@@ -9866,7 +9872,10 @@ fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -
     if !replaced {
         // Insert after the last line of the [id_format] section.
         let insert_at = last_id_format_line.map(|i| i + 1);
-        let new_line = format!("counter_scope = \"{}\"", new_value);
+        let new_line = format!(
+            "counter_scope = {}",
+            aida_core::toml_quote::toml_string(new_value)
+        );
         match insert_at {
             Some(idx) => lines.insert(idx, new_line),
             None => {

@@ -871,7 +871,9 @@ fn resolve_store_path(project_root: &Path) -> Option<PathBuf> {
         }
         let config_path = dir.join(".aida").join("config.toml");
         if let Ok(content) = std::fs::read_to_string(&config_path) {
-            if let Some(rel) = store_path_value(&content) {
+            // Deliberately unlike the CLI: an empty store_path is skipped (legacy TUI walk-up).
+            // trace:BUG-1650 | ai:claude
+            for rel in store_path_values(&content) {
                 let local = dir.join(&rel);
                 if local.exists() && local.is_dir() {
                     return Some(local);
@@ -886,22 +888,14 @@ fn resolve_store_path(project_root: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Extract `store_path = "<value>"` from a `config.toml` body (a focused
-/// line-scan rather than a full TOML parse, matching aida-cli's reader).
-/// trace:STORY-693 | ai:claude
-fn store_path_value(content: &str) -> Option<String> {
-    for line in content.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("store_path") {
-            if let Some(val) = rest.split('=').nth(1) {
-                let val = val.trim().trim_matches('"').trim_matches('\'');
-                if !val.is_empty() {
-                    return Some(val.to_string());
-                }
-            }
-        }
-    }
-    None
+/// The `store_path` candidates from a `config.toml` body, via aida-core's
+/// shared reader so the TUI agrees with aida-cli. The TUI has always skipped
+/// an empty value (and kept walking up), so it still does.
+// trace:STORY-693 trace:BUG-1650 | ai:claude
+fn store_path_values(content: &str) -> Vec<String> {
+    let mut values = aida_core::store_locate::store_path_candidates(content);
+    values.retain(|v| !v.is_empty());
+    values
 }
 
 /// BUG-331: resolve `<main-worktree>/<rel_store>` from inside a git worktree
@@ -1465,8 +1459,55 @@ mod tests {
     fn store_path_value_parses_the_config_line() {
         let cfg =
             "store_type = \"worktree\"\nstore_path = \".aida-store\"\nbranch = \"aida-store\"\n";
-        assert_eq!(store_path_value(cfg), Some(".aida-store".to_string()));
-        assert_eq!(store_path_value("# nothing here\n"), None);
+        assert_eq!(store_path_values(cfg), [".aida-store"]);
+        assert!(store_path_values("# nothing here\n").is_empty());
+        assert!(store_path_values("[deployment]\nstore_path = \"\"\n").is_empty());
+    }
+
+    /// A pre-BUG-1649 `..\team-store` config parses as TOML with `\t`
+    /// applied; the raw legacy candidate must still win over the enclosing
+    /// project's store.
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_resolve_store_path_uses_the_legacy_backslash_candidate() {
+        for raw in ["..\\team-store", "stores\\new"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let outer = tmp.path().join("outer");
+            std::fs::create_dir_all(outer.join(".aida")).unwrap();
+            std::fs::write(
+                outer.join(".aida/config.toml"),
+                "[deployment]\nstore_path = \".outer\"\n",
+            )
+            .unwrap();
+            std::fs::create_dir_all(outer.join(".outer")).unwrap();
+
+            let proj = outer.join("proj");
+            std::fs::create_dir_all(proj.join(".aida")).unwrap();
+            // Deliberately unescaped, as a pre-BUG-1649 writer produced it.
+            let body = ["[deployment]\nstore_path = \"", raw, "\"\n"].concat();
+            std::fs::write(proj.join(".aida/config.toml"), &body).unwrap();
+            // On Unix one file name containing `\`; on Windows a relative path.
+            let legacy_store = proj.join(raw);
+            std::fs::create_dir_all(&legacy_store).unwrap();
+
+            assert_eq!(resolve_store_path(&proj), Some(legacy_store), "{raw:?}");
+        }
+    }
+
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_store_path_value_reads_quote_and_equals() {
+        for value in ["../has\"quote=eq", "../it's", "C:\\x\\y"] {
+            let cfg = format!(
+                "[deployment]\nstore_path = {}\n",
+                aida_core::toml_quote::toml_string(value)
+            );
+            assert_eq!(
+                store_path_values(&cfg).first().map(String::as_str),
+                Some(value),
+                "{cfg:?}"
+            );
+        }
     }
 
     // --- EPIC focus picker + persistence (STORY-697) ---------------------

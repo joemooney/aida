@@ -31,7 +31,7 @@ use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::toml_quote::toml_string;
+use crate::toml_quote::{toml_key, toml_string};
 
 /// A vendor-agnostic MCP server registration — everything the Codex and
 /// Gemini translations need to reproduce Claude's `.mcp.json` entry.
@@ -165,7 +165,11 @@ pub fn render_codex_config_document(name: &str, spec: &McpServerSpec) -> String 
             "# If `aida` is not on PATH, replace `command` with the absolute binary path.\n",
         );
     }
-    out.push_str(&format!("[mcp_servers.{name}]\n"));
+    // The server name and env keys are data: quote them unless they are bare
+    // TOML keys, or a `.`/space/quote in them breaks the table header.
+    // trace:BUG-1650 | ai:claude
+    let table = toml_key(name);
+    out.push_str(&format!("[mcp_servers.{table}]\n"));
     // Rust `{:?}` is not TOML: it renders control and some Unicode characters
     // as `\u{..}`, which TOML rejects. trace:BUG-1649 | ai:claude
     out.push_str(&format!("command = {}\n", toml_string(&spec.command)));
@@ -177,9 +181,9 @@ pub fn render_codex_config_document(name: &str, spec: &McpServerSpec) -> String 
         .join(", ");
     out.push_str(&format!("args = [{args_toml}]\n"));
     if !spec.env.is_empty() {
-        out.push_str(&format!("\n[mcp_servers.{name}.env]\n"));
+        out.push_str(&format!("\n[mcp_servers.{table}.env]\n"));
         for (k, v) in &spec.env {
-            out.push_str(&format!("{k} = {}\n", toml_string(v)));
+            out.push_str(&format!("{} = {}\n", toml_key(k), toml_string(v)));
         }
     }
     out
@@ -402,5 +406,32 @@ mod tests {
         for (k, v) in &spec.env {
             assert_eq!(server["env"][k.as_str()].as_str(), Some(v.as_str()));
         }
+    }
+
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_codex_document_quotes_server_name_and_env_keys() {
+        let mut env = BTreeMap::new();
+        env.insert("AIDA_AGENT_OUTPUT".to_string(), "toon".to_string());
+        env.insert("weird.key = x".to_string(), "v1".to_string());
+        env.insert("q\"uote".to_string(), "v2".to_string());
+        let spec = McpServerSpec {
+            command: "aida".to_string(),
+            args: vec!["mcp-serve".to_string()],
+            env,
+        };
+        let name = "my.server \"x\"";
+        let toml_text = render_codex_config_document(name, &spec);
+        let parsed: toml::Table = toml::from_str(&toml_text).expect("valid TOML");
+        let server = parsed["mcp_servers"][name].as_table().unwrap();
+        assert_eq!(server["command"].as_str(), Some("aida"));
+        for (k, v) in &spec.env {
+            assert_eq!(server["env"][k.as_str()].as_str(), Some(v.as_str()));
+        }
+        // A bare name and bare env keys keep the historical, unquoted output.
+        let plain = render_codex_config_document("aida", &spec);
+        assert!(plain.contains("[mcp_servers.aida]\n"));
+        assert!(plain.contains("[mcp_servers.aida.env]\n"));
+        assert!(plain.contains("\nAIDA_AGENT_OUTPUT = \"toon\"\n"));
     }
 }

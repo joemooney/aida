@@ -22,6 +22,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::forge::{self, ForgeKind};
+use aida_core::toml_quote::toml_string;
 
 /// Upper bound on the one network-capable probe (`gh auth status`).
 // trace:STORY-1467 | ai:claude
@@ -282,9 +283,10 @@ fn render_section(caps: &ProjectCapabilities) -> String {
     s.push('\n');
     // Repo facts only: no host (a self-hosted or internal hostname must not
     // be committed to a possibly-public repo) and no per-machine CLI/auth.
-    s.push_str(&format!("class = \"{}\"\n", caps.class.token()));
-    s.push_str(&format!("ci = \"{}\"\n", caps.ci.token()));
-    let list: Vec<String> = caps.ci_config.iter().map(|c| format!("\"{c}\"")).collect();
+    // trace:BUG-1650 | ai:claude
+    s.push_str(&format!("class = {}\n", toml_string(caps.class.token())));
+    s.push_str(&format!("ci = {}\n", toml_string(caps.ci.token())));
+    let list: Vec<String> = caps.ci_config.iter().map(|c| toml_string(c)).collect();
     s.push_str(&format!("ci_config = [{}]\n", list.join(", ")));
     s
 }
@@ -396,19 +398,23 @@ fn render_local_state(caps: &ProjectCapabilities) -> String {
          # Runtime state: gitignored, rewritten on every init.\n\
          # Each value: available | unavailable | not-applicable | unknown.\n",
     );
-    s.push_str(&format!("class = \"{}\"\n", caps.class.token()));
+    // trace:BUG-1650 | ai:claude
+    s.push_str(&format!("class = {}\n", toml_string(caps.class.token())));
     if let Some(host) = &caps.origin_host {
         // trace:BUG-1649 | ai:claude
-        s.push_str(&format!(
-            "origin_host = {}\n",
-            aida_core::toml_quote::toml_string(host)
-        ));
+        s.push_str(&format!("origin_host = {}\n", toml_string(host)));
     }
-    s.push_str(&format!("forge_cli = \"{}\"\n", caps.forge_cli.token()));
-    s.push_str(&format!("forge_auth = \"{}\"\n", caps.forge_auth.token()));
     s.push_str(&format!(
-        "forge_lifecycle = \"{}\"\n",
-        caps.forge_lifecycle.token()
+        "forge_cli = {}\n",
+        toml_string(caps.forge_cli.token())
+    ));
+    s.push_str(&format!(
+        "forge_auth = {}\n",
+        toml_string(caps.forge_auth.token())
+    ));
+    s.push_str(&format!(
+        "forge_lifecycle = {}\n",
+        toml_string(caps.forge_lifecycle.token())
     ));
     s
 }

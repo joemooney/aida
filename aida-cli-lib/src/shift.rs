@@ -3126,6 +3126,7 @@ fn apply_enable(project_root: &Path, layer: &Path, hint_driver: bool) -> Result<
         .iter()
         .any(|(_, enabled)| *enabled)
     {
+        // toml-ok: operator hint quoting a fixed constant, not a TOML writer.
         println!("  needed: an enabled `watchdog` job (`command = \"{WATCHDOG_COMMAND}\"`) — without its spend evidence the tick refuses");
     }
     // trace:TASK-1491 | ai:claude
