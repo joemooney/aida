@@ -1,0 +1,17 @@
+{
+  "id": "e515d32c-d5c1-4c36-9893-97aedb6f0873",
+  "thread_id": "e515d32c-d5c1-4c36-9893-97aedb6f0873",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "-include"
+  },
+  "timestamp": 1790399506816,
+  "body": "You were mentioned on BUG-1639 by joe: Single-location option for Claude (2026-09-25, operator question): Claude Code d…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
