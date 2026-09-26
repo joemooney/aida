@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:07:37.946734152Z
-modified_at: 2026-09-26T06:27:17.819274325Z
+modified_at: 2026-09-26T07:01:50.771510477Z
 req_type: Bug
 tags:
 - batch:groom-2026-09-25
@@ -27,6 +27,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): APPROVED, mode drive. Not a Joe call: a store-integrity bug with concrete acceptance (metadata CAS, monotonic ID counters, two concurrency tests); no authority or product question. Drive (human merges) because it touches the store''s save path.'
   created_at: 2026-09-26T05:28:08.451147454Z
   modified_at: 2026-09-26T05:28:08.451147454Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc85-2e33-7181-b040-484d8d16852c
+  author: joe
+  content: 'Strict review: APPROVE (fresh Opus reviewer, da2121035d). Verified: the three-way merge (git_backend.rs:258) runs under the lock before any write, and a conflict writes nothing. Counters are max-merged (:191, :213). metadata.yaml is written only when the merge differs from disk. The snapshot metadata baseline is recorded on load (:1449), on save (:1081, set to the caller''s copy, so a stale untouched field keeps the disk value on the next save), and on update_atomically (:1424). Clones deep-copy it. aida-server save_store reloads and returns 409/ABORTED on the same StoreConflictError type, so metadata conflicts are covered. MCP and CLI surface the error text (''reload and retry''); MCP re-loads per call, so a re-invoke is the retry. Tests: core bug1613 8/8, git_backend 76, store 66, conflict 71, metadata 10; cli-lib store 161, requeue 42; aida-server 16. All pass. Mutation (merge_metadata forced to a wholesale write): 6/8 bug1613 tests fail, including concurrent-feature-add. The 2 reissued-id tests still pass because they exercise the spec CAS and the BulkWriter collision check, not the merge. Fixtures use tempdirs only. NON-BLOCKING: (1) Top-level granularity: two concurrent feature adds conflict. This is acceptable, and arguably correct: both would allocate the same next_feature_number/prefix, so a key-level merge would still need collision handling. It fails safe with a retryable error. (2) Counter max makes a legitimate decrease through save() silently impossible: ''aida config migrate'' (config_cmd.rs:164, migrate_to_new_id_format resets counters then Storage::save) now keeps the old higher counters, so new ids get gaps. Uniqueness is preserved and old ids in trace comments are not re-issued. update_atomically still writes metadata wholesale (:1340), so a reset path exists there. Worth a doc note or a follow-up. The same max also means removing a prefix_counters key through save() is dropped. (3) No-baseline stores (RequirementsStore::new() seeding, migrate-into-target, sandbox) still overwrite non-counter fields. None of them races a normal writer on a live store (fresh or target-only stores), and Storage import loads first, so it has a baseline. (4) The merge base is the struct-serialized disk copy, so unknown fields written by a newer binary are still dropped when a field changes (they are now preserved on no-op saves, which is better than before). (5) The conflict prose shows internal names (''type_definitions setting''). This is a minor end-user nit. (6) BulkWriter finish (~:1968) refuses the whole import on a single id collision. Re-allocating the colliding ids under the lock would be friendlier. This is a follow-up candidate. (7) No test asserts that metadata.yaml is left unwritten or uncommitted on a spec-only save.'
+  created_at: 2026-09-26T07:01:50.771510477Z
+  modified_at: 2026-09-26T07:01:50.771510477Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
