@@ -680,10 +680,14 @@ pub(crate) fn findings_promote_approve_write(
 /// retryable draft), then write Approved. When the status write does not land
 /// (the finding was deleted or reached a final status meanwhile, or the write
 /// failed), the queue entry is withdrawn (any entry the spec had before is put
-/// back as it was) so the error can say nothing was changed; when the
-/// withdrawal also fails, the error says the entry remains and how to remove
-/// it. Returns the role it was queued for.
-// trace:BUG-231 trace:BUG-1638 trace:BUG-1647 | ai:claude
+/// back as it was); when the withdrawal also fails, the error says the entry
+/// remains and how to remove it. Returns the role it was queued for.
+///
+/// BUG-1651: the withdrawal is compare-and-swap. It re-reads the queue and
+/// acts only while the spec's entry is still the one this call added, so a
+/// concurrent `aida queue remove`/`done` or re-add in the window is kept and
+/// the error says so.
+// trace:BUG-231 trace:BUG-1638 trace:BUG-1647 trace:BUG-1651 | ai:claude
 pub(crate) fn findings_promote_to_work(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
@@ -700,17 +704,22 @@ pub(crate) fn findings_promote_to_work(
         .queue_list(&user_id, true)
         .ok()
         .and_then(|entries| entries.into_iter().find(|e| e.requirement_id == req.id));
-    let role = queue_promoted_finding(store_path, req.id, display_id, for_role)?;
+    let ours = queue_promoted_finding_entry(store_path, req.id, display_id, for_role)?;
+    let role = ours.for_role.clone().unwrap_or_default();
     // The race-test seam between the queue add and the status write.
     status_write_race_seam(store_path);
     if let Err(write_err) = findings_promote_approve_write(backend, req, reason, now) {
-        let undo = match &prior_entry {
-            Some(prior) => storage.queue_add(prior.clone()),
-            None => storage.queue_remove_for_role(&user_id, &req.id, Some(&role)),
-        };
-        match undo {
-            Ok(()) => anyhow::bail!(
-                "{write_err:#}. Its {role} queue entry was withdrawn, so nothing was changed."
+        match withdraw_promoted_queue_entry(&storage, &user_id, &ours, prior_entry.as_ref()) {
+            Ok(PromoteQueueWithdrawal::Withdrawn) => anyhow::bail!(
+                "{write_err:#}. Its {role} queue entry was withdrawn; the finding is unchanged."
+            ),
+            Ok(PromoteQueueWithdrawal::LeftRemoved) => anyhow::bail!(
+                "{write_err:#}. Its {role} queue entry had already been removed by someone \
+                 else meanwhile, so the queue was left as it is; the finding is unchanged."
+            ),
+            Ok(PromoteQueueWithdrawal::LeftReplaced) => anyhow::bail!(
+                "{write_err:#}. Its queue entry was changed by someone else meanwhile, so it \
+                 was left as it is (check it with `aida queue list`); the finding is unchanged."
             ),
             Err(undo_err) => anyhow::bail!(
                 "{write_err:#}. It had already been added to the {role} queue, and that entry \
@@ -720,6 +729,74 @@ pub(crate) fn findings_promote_to_work(
         }
     }
     Ok(role)
+}
+
+/// BUG-1651: what the compare-and-swap withdrawal of a promote's queue entry
+/// did.
+// trace:BUG-1651 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PromoteQueueWithdrawal {
+    /// The entry was still ours: it was removed, or the earlier entry put back.
+    Withdrawn,
+    /// The spec has no queue entry any more; nothing was written.
+    LeftRemoved,
+    /// The spec's entry is no longer the one this call added; nothing was
+    /// written.
+    LeftReplaced,
+}
+
+/// BUG-1651: the entry `current` is the one `ours` wrote. Positions are not
+/// compared: the backend resolves the append sentinel on write.
+// trace:BUG-1651 | ai:claude
+fn is_same_queue_entry(current: &aida_core::QueueEntry, ours: &aida_core::QueueEntry) -> bool {
+    current.requirement_id == ours.requirement_id
+        && current.note == ours.note
+        && current.added_at == ours.added_at
+        && current.for_role == ours.for_role
+}
+
+/// BUG-1651: undo a promote's queue add only if the spec's entry is still the
+/// one it added (`ours`): restore `prior` when there was one, otherwise remove
+/// ours. Anything else means someone changed the entry meanwhile, and it is
+/// left alone. Queue writes are not locked, so this narrows the window to the
+/// re-read; it does not close it.
+///
+/// A `prior` entry positioned at `i64::MAX` (a legacy unresolved sentinel) is
+/// put back at exactly that position: `queue_add` would re-resolve it to the
+/// bottom, so the position is re-set with `queue_reorder`, which stores it as
+/// given.
+// trace:BUG-1651 | ai:claude
+pub(crate) fn withdraw_promoted_queue_entry(
+    storage: &Storage,
+    user_id: &str,
+    ours: &aida_core::QueueEntry,
+    prior: Option<&aida_core::QueueEntry>,
+) -> Result<PromoteQueueWithdrawal> {
+    let current: Vec<aida_core::QueueEntry> = storage
+        .queue_list(user_id, true)?
+        .into_iter()
+        .filter(|e| e.requirement_id == ours.requirement_id)
+        .collect();
+    if current.is_empty() {
+        return Ok(PromoteQueueWithdrawal::LeftRemoved);
+    }
+    if !current.iter().any(|e| is_same_queue_entry(e, ours)) {
+        return Ok(PromoteQueueWithdrawal::LeftReplaced);
+    }
+    match prior {
+        Some(prior) => {
+            storage.queue_add(prior.clone())?;
+            if prior.position == i64::MAX {
+                storage.queue_reorder(user_id, &[(prior.requirement_id, i64::MAX)])?;
+            }
+        }
+        None => storage.queue_remove_for_role(
+            user_id,
+            &ours.requirement_id,
+            ours.for_role.as_deref(),
+        )?,
+    }
+    Ok(PromoteQueueWithdrawal::Withdrawn)
 }
 
 /// BUG-1647: what `aida findings dismiss` did.
@@ -11935,14 +12012,32 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
 /// half-state because the old promote path flipped status and printed
 /// "joins the work queue" without ever calling `queue add`.
 /// trace:BUG-231 | ai:claude
+///
+/// BUG-1651: production promotes go through [`queue_promoted_finding_entry`];
+/// this role-returning form remains for the BUG-231 tests.
+// trace:BUG-1651 | ai:claude
+#[cfg(test)]
 fn queue_promoted_finding(
     store_path: &std::path::Path,
     requirement_id: Uuid,
     display_id: &str,
     for_override: Option<&str>,
 ) -> Result<String> {
+    queue_promoted_finding_entry(store_path, requirement_id, display_id, for_override)
+        .map(|entry| entry.for_role.unwrap_or_default())
+}
+
+/// [`queue_promoted_finding`], returning the entry it wrote so a failed
+/// promote can tell whether the queue still holds it (BUG-1651).
+// trace:BUG-1651 | ai:claude
+fn queue_promoted_finding_entry(
+    store_path: &std::path::Path,
+    requirement_id: Uuid,
+    display_id: &str,
+    for_override: Option<&str>,
+) -> Result<aida_core::QueueEntry> {
     let role = for_override.unwrap_or("implementer");
-    queue_spec_for_role(
+    queue_spec_entry_for_role(
         store_path,
         requirement_id,
         role,
@@ -11966,6 +12061,20 @@ fn queue_spec_for_role(
     role: &str,
     note: String,
 ) -> Result<String> {
+    queue_spec_entry_for_role(store_path, requirement_id, role, note)?;
+    Ok(role.to_string())
+}
+
+/// [`queue_spec_for_role`], returning the entry as written (its `position`
+/// still the append sentinel the backend resolves). BUG-1651: the promote
+/// rollback matches the queue against it.
+// trace:STORY-1428 trace:BUG-1651 | ai:claude
+fn queue_spec_entry_for_role(
+    store_path: &std::path::Path,
+    requirement_id: Uuid,
+    role: &str,
+    note: String,
+) -> Result<aida_core::QueueEntry> {
     let role = role.to_string();
     let user_id = current_user_id(None);
     let storage = Storage::new(store_path);
@@ -11978,13 +12087,13 @@ fn queue_spec_for_role(
         added_by: user_id,
         note: Some(note),
         added_at: chrono::Utc::now(),
-        for_role: Some(role.clone()),
+        for_role: Some(role),
         for_scope: None,
         for_session: None,
         added_by_machine: None,
     };
-    storage.queue_add(entry)?;
-    Ok(role)
+    storage.queue_add(entry.clone())?;
+    Ok(entry)
 }
 
 // trace:TASK-0001 | ai:claude:high
@@ -47023,6 +47132,29 @@ pub(crate) fn phase1_restore_outcome_message(
     }
 }
 
+/// BUG-1651: the stderr line the orchestrator prints for a phase-1 restore
+/// outcome, or `None` under `--json`: both the restore and the refusal are
+/// suppressed so JSON output stays machine-readable (BUG-1647).
+// trace:BUG-1647 trace:BUG-1651 | ai:claude
+pub(crate) fn phase1_restore_report_line(
+    outcome: &Phase1RestoreOutcome,
+    display_id: &str,
+    prior: &RequirementStatus,
+    json: bool,
+) -> Option<String> {
+    if json {
+        return None;
+    }
+    let glyph = match outcome {
+        Phase1RestoreOutcome::Restored => "↩".cyan(),
+        Phase1RestoreOutcome::Refused(_) => crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+    };
+    Some(format!(
+        "  {glyph} {}",
+        phase1_restore_outcome_message(outcome, display_id, prior)
+    ))
+}
+
 /// TASK-133: undo the orchestrator parent's pre-spawn phase-1 status bump.
 ///
 /// `prepare_auto_complete_phase1_status` flips a spec Approved/Planned/Draft →
@@ -74879,6 +75011,12 @@ mod bug_1638_race_seam_tests;
 #[path = "tests/bug_1647_findings_atomic_tests.rs"]
 mod bug_1647_findings_atomic_tests;
 
+// BUG-1651: compare-and-swap queue rollback on a failed findings promote.
+// trace:BUG-1651 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1651_promote_queue_cas_tests.rs"]
+mod bug_1651_promote_queue_cas_tests;
+
 // BUG-1633: pull/push follow-ups to BUG-1625 and BUG-1626. trace:BUG-1633 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_1633_pull_push_followups_tests.rs"]
@@ -94343,24 +94481,15 @@ fn run_auto_complete(
                     // BUG-1638: report the restore only when it happened.
                     // trace:BUG-1638 | ai:claude
                     match restore_phase1_status_on_lease_failure(&project_root, spec, prior) {
-                        Ok(outcome @ Phase1RestoreOutcome::Restored) => {
-                            if !json {
-                                eprintln!(
-                                    "  {} {}",
-                                    "↩".cyan(),
-                                    phase1_restore_outcome_message(&outcome, display_id, prior)
-                                );
-                            }
-                        }
                         // BUG-1647: the refusal honours --json like the
-                        // restore does. trace:BUG-1647 | ai:claude
-                        Ok(outcome @ Phase1RestoreOutcome::Refused(_)) => {
-                            if !json {
-                                eprintln!(
-                                    "  {} {}",
-                                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                                    phase1_restore_outcome_message(&outcome, display_id, prior)
-                                );
+                        // restore does (BUG-1651: pinned through
+                        // `phase1_restore_report_line`).
+                        // trace:BUG-1647 trace:BUG-1651 | ai:claude
+                        Ok(outcome) => {
+                            if let Some(line) =
+                                phase1_restore_report_line(&outcome, display_id, prior, json)
+                            {
+                                eprintln!("{line}");
                             }
                         }
                         Err(e) => {
