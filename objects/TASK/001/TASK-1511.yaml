@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:05:27.587470098Z
-modified_at: 2026-09-25T12:05:36.029300731Z
+modified_at: 2026-09-26T05:29:16.488709720Z
 req_type: Task
 comments:
 - id: 01a0d874-ea9d-7a92-85e1-29059ec6ad72
@@ -16,6 +16,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): left as a DRAFT for Joe. Question 5 is an authority question: can an unattended process launch a seat that has approve or merge power? Under the operator''s rules the proxy can''t decide that. Recommendation for Joe: default off, and cold-boot only non-authority implementer seats.'
   created_at: 2026-09-25T12:05:36.029300731Z
   modified_at: 2026-09-25T12:05:36.029300731Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc30-6dc8-79d2-b78f-920b7d902f07
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): re-checked, still Joe''s. Question 5 decides whether an unattended process may start a seat with approve/merge authority, which is outside proxy authority. Recommended default: default-off switch; cold-boot only non-authority implementer seats.'
+  created_at: 2026-09-26T05:29:16.488709720Z
+  modified_at: 2026-09-26T05:29:16.488709720Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
