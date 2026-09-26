@@ -3,12 +3,12 @@ spec_id: BUG-1658
 agreed_id: BUG-1658
 title: 'Windows nightly: bug_1651_rollback_restores_an_i64_max_position_exactly finds an empty queue (left 0, right 1)'
 description: 'Cross-platform run 36249925145 (main b331809ce7, batch 96): on windows-latest, aida-cli-lib/src/tests/bug_1651_promote_queue_cas_tests.rs:180 panics with ''assertion left == right failed: [] left: 0 right: 1''. After a promote rollback that should restore a prior entry at position i64::MAX, the queue is empty on Windows; it passes on Linux and macOS. Determine whether this is a test-fixture portability issue (path/role/queue file location, CRLF in the queue YAML, the i64::MAX round-trip through YAML on Windows) or a real product bug in withdraw_promoted_queue_entry / queue_reorder on Windows. Fix production code if users would hit it. Acceptance: the test passes on windows-latest via a workflow_dispatch of Cross-platform (nightly) on the branch.'
-status: Completed
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:31:55.695978208Z
-modified_at: 2026-09-26T17:47:24.960573326Z
+modified_at: 2026-09-26T17:47:27.381390380Z
 req_type: Bug
 comments:
 - id: 01a0de58-b867-7b53-aad3-2a8f3fb870d8
@@ -51,6 +51,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a0ded4-4115-7520-b491-ebe17eed329d
+  author: joe
+  timestamp: 2026-09-26T17:47:27.381388587Z
+  changes:
+  - field_name: status
+    old_value: Completed
+    new_value: Done
 filed_at:
   code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
   branch: main
@@ -61,4 +68,3 @@ filed_at:
   session: 156a4900-9e60-4f0b-9739-948c3b0efd27
 implementation_info:
   implemented: false
-  completed_at: 2026-09-26T17:46:57.856411986Z
