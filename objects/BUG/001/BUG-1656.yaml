@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:09:46.732993537Z
-modified_at: 2026-09-26T22:56:24.803309188Z
+modified_at: 2026-09-26T23:38:04.311541948Z
 req_type: Bug
 comments:
 - id: 01a0de44-9000-72a3-a708-076238101753
@@ -28,6 +28,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): (1) fixed 10-min recent-change window accepted for now; (2) loose ''possibly worked by a subagent'' wording and (3) adopted lease staying live for the parent''s lifetime -> folded into BUG-1681 (fan-out attribution must match the spec''s worktree/branch; an adopted lease should end when the subagent ends); (4) add possibly_subagent to the awaiting TOON columns in BUG-1681 too.'
   created_at: 2026-09-26T22:56:24.803309188Z
   modified_at: 2026-09-26T22:56:24.803309188Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e015-4097-77f3-a865-44e5b76cd458
+  author: joe
+  content: 'Review: APPROVE (fresh reviewer, 13d0daf80d): porcelain -z parsed without trimming (rename layout verified against real git), future mtime = unknown, swap/hidden untracked files don''t count as movement. -> batch 103.'
+  created_at: 2026-09-26T23:38:04.311541948Z
+  modified_at: 2026-09-26T23:38:04.311541948Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0de44-67f6-7c70-907e-9af7fb4e3e10
