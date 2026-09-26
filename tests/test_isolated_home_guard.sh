@@ -32,6 +32,7 @@ last_active_at = "2026-09-26T07:35:35.945564499Z"
 working_directory = "/work/aida"
 global = true
 system_prompt = "You are the independent judgment gate."
+activity = []
 EOF
     cat >"$home/.aida/roles/implementer.toml" <<'EOF'
 name = "implementer"
@@ -88,6 +89,9 @@ rewrite='rewrite() { local f="$1"; shift; sed "$@" "$f" >"$(dirname "$f")/.$(bas
 # (a) volatile churn from a concurrent live session: passes by default.
 run_case bump-last-active pass "" "$rewrite; rewrite \"\$R/roles/advisor.toml\" -e 's/^last_active_at = .*/last_active_at = \"2026-09-26T09:00:00Z\"/'"
 run_case append-first-activity pass "" "printf '\n[[activity]]\nspec_id = \"STORY-52\"\naction = \"rework\"\nat = \"2026-09-26T09:00:00Z\"\n' >>\"\$R/roles/advisor.toml\""
+# Never-active role (`activity = []`) records its first entry: the CLI rewrites
+# the empty array into an [[activity]] table.
+run_case empty-array-to-first-activity pass "" "$rewrite; rewrite \"\$R/roles/advisor.toml\" -e 's/^activity = \\[\\]\$/[[activity]]\\nspec_id = \"STORY-52\"\\naction = \"rework\"\\nat = \"2026-09-26T09:00:00Z\"/' -e 's/^last_active_at = .*/last_active_at = \"2026-09-26T09:00:00Z\"/'"
 run_case append-more-activity pass "" "printf '\n[[activity]]\nspec_id = \"STORY-9\"\naction = \"queue-add\"\nat = \"2026-09-26T09:00:00Z\"\n' >>\"\$R/roles/implementer.toml\""
 run_case bump-and-append pass "" "$rewrite; rewrite \"\$R/roles/implementer.toml\" -e 's/^last_active_at = .*/last_active_at = \"2026-09-26T09:00:00Z\"/' -e '/^\\[\\[activity\\]\\]/i [[activity]]\\nspec_id = \"X-1\"\\naction = \"a\"\\nat = \"t\"\\n'"
 run_case leftover-temp-file-mid-write pass "" ": >\"\$R/roles/.advisor.toml.tmp-0192\""

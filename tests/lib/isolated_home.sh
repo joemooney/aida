@@ -36,8 +36,9 @@
 # roles/*.toml in the default mode: live sessions rewrite their role file all
 # the time (`last_active_at` and the `[[activity]]` log), so an mtime compare
 # flakes. The default mode therefore compares each role file by a hash of its
-# stable content (volatile `last_active_at` line and `[[activity]]` tables
-# stripped) plus the presence of every non-transient entry in roles/. A new or
+# stable content (volatile `last_active_at` line, empty `activity = []`, and
+# `[[activity]]` tables stripped; blank lines, including those inside
+# multi-line strings, are ignored) plus the presence of every non-transient entry in roles/. A new or
 # deleted role file, or a changed name / purpose / system_prompt /
 # working_directory / global, still fails.
 # Strict mode keeps comparing every mtime, roles/ included: it runs where no
@@ -72,9 +73,12 @@ _aida_hash() {
 }
 
 # Emits "roles/<file>\t<hash of stable content>" per roles/*.toml below $1.
-# Stable content = the file minus the `last_active_at` line, every
-# `[[activity]]` table, and blank lines (appending the first activity entry
-# adds a separator line). Never fails, like _aida_home_snapshot.
+# Stable content = the file minus the `last_active_at` line, the empty
+# `activity = []` line (a role with no activity yet; the first entry replaces
+# it with a table), every `[[activity]]` table, and blank lines (appending the
+# first activity entry adds a separator line). Blank lines inside multi-line
+# strings are ignored too, so a blank-line-only edit there is not detected.
+# Never fails, like _aida_home_snapshot.
 # trace:BUG-1640 | ai:claude
 _aida_roles_digest() {
     local dir="$1/roles" f
@@ -82,7 +86,7 @@ _aida_roles_digest() {
     for f in "$dir"/*.toml; do
         [ -f "$f" ] || continue
         printf 'roles/%s\t%s\n' "${f##*/}" "$(
-            { awk '/^[[:space:]]*last_active_at[[:space:]]*=/ { next }
+            { awk '/^[[:space:]]*(last_active_at|activity)[[:space:]]*=/ { next }
                    /^[[:space:]]*\[\[[[:space:]]*activity[[:space:]]*\]\][[:space:]]*$/ { skip = 1; next }
                    /^[[:space:]]*\[/ { skip = 0 }
                    skip || /^[[:space:]]*$/ { next }
