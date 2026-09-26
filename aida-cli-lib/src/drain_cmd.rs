@@ -590,7 +590,15 @@ pub(crate) fn stop_requested_from_env() -> bool {
         .unwrap_or(false)
 }
 
-fn write_stop_request(project_root: &std::path::Path, mode: &str, pid: Option<u32>) -> Result<()> {
+/// Write the cooperative stop request. Crate-visible so the drain's SIGTERM
+/// handler can ask the dispatch loop to stop through the same file
+/// `aida drain stop` uses.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn write_stop_request(
+    project_root: &std::path::Path,
+    mode: &str,
+    pid: Option<u32>,
+) -> Result<()> {
     let path = drain_stop_path(project_root);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;

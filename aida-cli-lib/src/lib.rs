@@ -68,6 +68,8 @@ mod doctor_cmd;
 mod drain_caps;
 mod drain_cmd;
 mod drain_lock;
+// trace:TASK-1518 | ai:claude
+mod drain_signal;
 mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
 mod git_arg_guard;

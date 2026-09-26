@@ -1,0 +1,368 @@
+//! SIGTERM handling for the unattended drain (`aida queue work --auto-complete`).
+//!
+//! # The problem
+//!
+//! A drain wave is stopped from outside more often than it finishes: systemd
+//! `RuntimeMaxSec` / `OOMPolicy=stop` on the transient wave unit (TASK-1510),
+//! `aida drain stop --now`, or an operator's `kill`. Until this module the
+//! drain had no SIGTERM handler, so the default action killed it mid-phase
+//! and left `.aida/drain.lock` plus its phase leases on disk for the next
+//! tick's reap / stale-lock paths to clean up — the same recovery class as a
+//! crash, and indistinguishable from one.
+//!
+//! # The protocol
+//!
+//! On the FIRST SIGTERM the handler thread, in this order and bounded by
+//! plain file operations:
+//!
+//! 1. writes the cooperative stop request (`aida drain stop` shape, mode
+//!    `sigterm`) so the dispatch loop picks up no further head;
+//! 2. stamps `interrupted_at` / `interrupted_reason = "sigterm"` on every
+//!    lease this drain created (`creator_pid` == the drain pid) — an
+//!    *interrupted* lease, not an abandoned one, so `aida ps` and the reaper
+//!    can tell a stopped wave from a crashed one;
+//! 3. releases the drain lock by dropping the guard the dispatch arm handed
+//!    it (heartbeat stopped, shared claim released, local file removed only
+//!    when it still records our pid).
+//!
+//! It then waits up to a grace window for the drain to finish on its own
+//! (the in-flight phase may land, and the batch loop then returns through
+//! the stop request with [`SIGTERM_EXIT_CODE`]). A SECOND SIGTERM, or the
+//! end of the grace window, forces `process::exit(SIGTERM_EXIT_CODE)`.
+//!
+//! Without a signal nothing here runs: installing the handler only spawns a
+//! parked thread. Unix only; on Windows [`install`] is a documented no-op
+//! (there is no SIGTERM; the wave is stopped by the job-object / console
+//! event paths the launcher already owns).
+//!
+//! trace:TASK-1518 | ai:claude
+
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use crate::drain_lock::DrainGuard;
+
+/// Exit status of a drain stopped by SIGTERM: the conventional 128 + 15.
+pub(crate) const SIGTERM_EXIT_CODE: i32 = 143;
+
+/// How long the first SIGTERM waits for the drain to finish on its own
+/// before the handler forces the exit. Override with
+/// `AIDA_DRAIN_TERM_GRACE_SECS`. Kept under systemd's default
+/// `TimeoutStopSec=60s` so the bookkeeping and the forced exit both land
+/// before the SIGKILL.
+pub(crate) const DEFAULT_GRACE_SECS: u64 = 30;
+
+const GRACE_ENV: &str = "AIDA_DRAIN_TERM_GRACE_SECS";
+
+/// The reason string stamped on interrupted leases and the stop request.
+pub(crate) const REASON_SIGTERM: &str = "sigterm";
+
+/// Set once the first SIGTERM has been handled. Read by the batch loop's
+/// stop-request return so a drain that winds down cooperatively still exits
+/// non-zero (a stopped wave is not a clean drain).
+static TERM_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// True once a SIGTERM has been handled in this process.
+pub(crate) fn term_requested() -> bool {
+    TERM_REQUESTED.load(Ordering::SeqCst)
+}
+
+/// The exit code a cooperative stop should report: `default` normally,
+/// [`SIGTERM_EXIT_CODE`] when the stop came from SIGTERM.
+pub(crate) fn stop_exit_code(default: i32) -> i32 {
+    if term_requested() {
+        SIGTERM_EXIT_CODE
+    } else {
+        default
+    }
+}
+
+/// The grace window, from `AIDA_DRAIN_TERM_GRACE_SECS` or the default. A
+/// non-numeric value falls back to the default; `0` means "exit as soon as
+/// the bookkeeping is done".
+pub(crate) fn grace_from_env() -> Duration {
+    let secs = std::env::var(GRACE_ENV)
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_GRACE_SECS);
+    Duration::from_secs(secs)
+}
+
+/// The shared slot the dispatch arm keeps its [`DrainGuard`] in, so the
+/// handler thread can release the lock properly (drop = heartbeat stop +
+/// shared-claim release + pid-checked file removal) instead of deleting a
+/// file out from under a live guard.
+pub(crate) type GuardSlot = Arc<Mutex<Option<DrainGuard>>>;
+
+/// What the first SIGTERM's bookkeeping did — returned so a test (and the
+/// stderr line) can say exactly what was cleaned up.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct TermReport {
+    /// The cooperative stop request was written.
+    pub(crate) stop_requested: bool,
+    /// Lease ids stamped `interrupted_at`.
+    pub(crate) leases_marked: Vec<String>,
+    /// The drain lock was released (guard dropped and/or file removed).
+    pub(crate) lock_released: bool,
+}
+
+/// Everything the handler needs; built by the dispatch arm.
+pub(crate) struct DrainTermContext {
+    pub(crate) project_root: PathBuf,
+    pub(crate) drain_pid: u32,
+    pub(crate) guard: GuardSlot,
+    pub(crate) grace: Duration,
+}
+
+/// Where the handler's signals come from. Production wraps a signal-hook
+/// iterator; tests feed an `mpsc` channel so the whole protocol (first
+/// signal → bookkeeping → grace → second signal or deadline → exit) runs
+/// in-process without a real signal.
+// trace:TASK-1518 | ai:claude
+pub(crate) trait SignalSource {
+    /// Block until a signal arrives; `None` once the source is closed.
+    fn wait(&mut self) -> Option<i32>;
+    /// Wait up to `timeout` for a signal; `None` on timeout or close.
+    fn wait_timeout(&mut self, timeout: Duration) -> Option<i32>;
+}
+
+impl SignalSource for std::sync::mpsc::Receiver<i32> {
+    fn wait(&mut self) -> Option<i32> {
+        self.recv().ok()
+    }
+    fn wait_timeout(&mut self, timeout: Duration) -> Option<i32> {
+        self.recv_timeout(timeout).ok()
+    }
+}
+
+/// signal-hook backed source. `wait` blocks on the iterator; `wait_timeout`
+/// polls `pending()` on a short cadence so the grace deadline is honoured.
+#[cfg(unix)]
+struct HookSource(signal_hook::iterator::Signals);
+
+#[cfg(unix)]
+impl SignalSource for HookSource {
+    fn wait(&mut self) -> Option<i32> {
+        loop {
+            if let Some(sig) = self.0.wait().next() {
+                return Some(sig);
+            }
+            if self.0.is_closed() {
+                return None;
+            }
+        }
+    }
+    fn wait_timeout(&mut self, timeout: Duration) -> Option<i32> {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if let Some(sig) = self.0.pending().next() {
+                return Some(sig);
+            }
+            if self.0.is_closed() || std::time::Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+}
+
+/// Install the SIGTERM handler for this drain. Spawns one parked thread;
+/// nothing else changes until a signal arrives. Errors only when the signal
+/// iterator cannot be registered, which the caller treats as advisory.
+// trace:TASK-1518 | ai:claude
+#[cfg(unix)]
+pub(crate) fn install(ctx: DrainTermContext) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    let signals = signal_hook::iterator::Signals::new([signal_hook::consts::SIGTERM])
+        .context("installing the drain SIGTERM handler")?;
+    std::thread::Builder::new()
+        .name("aida-drain-sigterm".into())
+        .spawn(move || {
+            run_handler(HookSource(signals), ctx, |code| std::process::exit(code));
+        })
+        .context("spawning the drain SIGTERM handler thread")?;
+    Ok(())
+}
+
+/// Windows has no SIGTERM: the wave is stopped through the launcher's own
+/// process-tree paths, and the next tick's reap / stale-lock recovery
+/// applies exactly as before this module existed. Deliberately a no-op
+/// rather than a console-control-event port, so the Unix contract above is
+/// the only one to reason about.
+// trace:TASK-1518 | ai:claude
+#[cfg(not(unix))]
+pub(crate) fn install(_ctx: DrainTermContext) -> anyhow::Result<()> {
+    Ok(())
+}
+
+/// The signal number this handler acts on.
+const SIGTERM_NUM: i32 = 15;
+
+/// The handler loop: the FIRST SIGTERM runs the bookkeeping and arms the
+/// grace deadline; a SECOND SIGTERM, or the deadline, calls `exit` with
+/// [`SIGTERM_EXIT_CODE`]. Signals other than SIGTERM are ignored. Generic
+/// over the source and the exit so a test can drive it in-process.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn run_handler<S, F>(mut source: S, ctx: DrainTermContext, exit: F)
+where
+    S: SignalSource,
+    F: Fn(i32),
+{
+    // Park until the first SIGTERM.
+    loop {
+        match source.wait() {
+            Some(sig) if sig == SIGTERM_NUM => break,
+            Some(_) => continue,
+            // Source closed without a signal: nothing to do, ever.
+            None => return,
+        }
+    }
+
+    TERM_REQUESTED.store(true, Ordering::SeqCst);
+    let report = on_first_term(&ctx.project_root, ctx.drain_pid, &ctx.guard);
+    eprintln!(
+        "  {} SIGTERM: stop requested; {} lease(s) marked interrupted; drain lock {}; \
+         exiting {} within {}s (a second SIGTERM exits now)",
+        crate::glyph(crate::glyphs::Glyph::Warning),
+        report.leases_marked.len(),
+        if report.lock_released {
+            "released"
+        } else {
+            "not held"
+        },
+        SIGTERM_EXIT_CODE,
+        ctx.grace.as_secs()
+    );
+
+    // Grace: a second SIGTERM or the deadline, whichever comes first.
+    let deadline = std::time::Instant::now() + ctx.grace;
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        match source.wait_timeout(remaining) {
+            Some(sig) if sig == SIGTERM_NUM => break,
+            Some(_) => continue,
+            // Timeout, or the source closed: either way the window is over.
+            None => break,
+        }
+    }
+    exit(SIGTERM_EXIT_CODE);
+}
+
+/// The first SIGTERM's bookkeeping, pure over the filesystem and the guard
+/// slot: stop request, lease stamps, lock release. Every step is
+/// best-effort and independent so a failure in one never skips the others.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn on_first_term(project_root: &Path, drain_pid: u32, guard: &GuardSlot) -> TermReport {
+    let stop_requested =
+        crate::drain_cmd::write_stop_request(project_root, REASON_SIGTERM, Some(drain_pid)).is_ok();
+    let leases_marked = mark_in_flight_leases_interrupted(project_root, drain_pid);
+    let lock_released = release_drain_lock(project_root, guard);
+    TermReport {
+        stop_requested,
+        leases_marked,
+        lock_released,
+    }
+}
+
+/// Drop the guard if the slot still holds it (the proper release), then
+/// remove a local lock file that still records our pid (covers a borrowed
+/// or already-taken slot). True when either step released something.
+fn release_drain_lock(project_root: &Path, guard: &GuardSlot) -> bool {
+    let dropped = match guard.lock() {
+        Ok(mut slot) => slot.take().is_some(),
+        Err(poisoned) => poisoned.into_inner().take().is_some(),
+    };
+    let removed = crate::drain_lock::release_lock_if_ours(project_root);
+    dropped || removed
+}
+
+/// Stamp `interrupted_at` / `interrupted_reason` on every lease under
+/// `.aida/sessions/` whose `creator_pid` is `drain_pid` and that carries no
+/// stamp yet. Patched as generic TOML key inserts (the `manual_enter_at`
+/// pattern) so keys this binary does not model survive the round-trip.
+/// Returns the ids stamped, sorted. Unreadable or unparseable leases are
+/// skipped, never deleted.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn mark_in_flight_leases_interrupted(
+    project_root: &Path,
+    drain_pid: u32,
+) -> Vec<String> {
+    let dir = project_root.join(".aida").join("sessions");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut marked = Vec::new();
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+            continue;
+        }
+        let Ok(body) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(mut value) = toml::from_str::<toml::Value>(&body) else {
+            continue;
+        };
+        let Some(table) = value.as_table_mut() else {
+            continue;
+        };
+        let creator = table
+            .get("creator_pid")
+            .and_then(|v| v.as_integer())
+            .and_then(|v| u32::try_from(v).ok());
+        if creator != Some(drain_pid) || table.contains_key("interrupted_at") {
+            continue;
+        }
+        table.insert(
+            "interrupted_at".to_string(),
+            toml::Value::String(now.clone()),
+        );
+        table.insert(
+            "interrupted_reason".to_string(),
+            toml::Value::String(REASON_SIGTERM.to_string()),
+        );
+        let Ok(content) = toml::to_string_pretty(&value) else {
+            continue;
+        };
+        if aida_core::write_atomic(&path, &content).is_ok() {
+            let id = table
+                .get("id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    path.file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_default()
+                });
+            marked.push(id);
+        }
+    }
+    marked.sort();
+    marked
+}
+
+/// Read a lease file's interruption stamp, if any: `(interrupted_at,
+/// interrupted_reason)`. For readers such as `aida ps` / the reaper that
+/// want to tell a stopped wave's lease from an abandoned one.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn lease_interruption(path: &Path) -> Option<(String, String)> {
+    let body = std::fs::read_to_string(path).ok()?;
+    let value: toml::Value = toml::from_str(&body).ok()?;
+    let at = value.get("interrupted_at")?.as_str()?.to_string();
+    let reason = value
+        .get("interrupted_reason")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    Some((at, reason))
+}
+
+#[cfg(test)]
+#[path = "tests/task_1518_drain_sigterm_tests.rs"]
+mod task_1518_drain_sigterm_tests;

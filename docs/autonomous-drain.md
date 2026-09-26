@@ -1229,6 +1229,16 @@ relationship at file-time.
 | **Drained with shelved members (EPIC-28)** | **`2`** |
 | **Hard failure — un-shelvable phase fail, build / env / internal (TASK-1054)** | **`3`** |
 | `--max-tokens` / `--max-iterations` / `--max-runtime` cap stop | `7` |
+| Stopped by SIGTERM (systemd `RuntimeMaxSec` / `OOMPolicy=stop`, `aida drain stop --now`, a manual kill) | `143` |
+
+**SIGTERM.** The drain catches SIGTERM: the first one writes the cooperative
+stop request (no further head is picked up), stamps `interrupted_at` /
+`interrupted_reason = "sigterm"` on every lease this drain created (an
+*interrupted* lease, not an abandoned one), and releases the drain lock. It
+then waits up to `AIDA_DRAIN_TERM_GRACE_SECS` (default 30) for the in-flight
+phase to land; a second SIGTERM or the end of that window forces the exit
+with `143`. Without a signal nothing changes. Unix only; on Windows the stop
+paths are unchanged (next-tick reap). <!-- trace:TASK-1518 | ai:claude -->
 
 Exit `2` is the EPIC-28 signal: "the drain did its job — independents shipped,
 failures parked — but you have triage to do." Scripts that wrap a batch
