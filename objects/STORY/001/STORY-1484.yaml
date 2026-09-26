@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-09-26T11:43:25.995544149Z
+modified_at: 2026-09-26T14:29:59.071032930Z
 req_type: Story
 tags:
 - cache
@@ -51,6 +51,12 @@ comments:
   content: 'Scope note from the BUG-1644 strict review, finding 4 (orchestrator proxy): lock-info records carry no host or pid-namespace identity. A writer in another container or on another host sharing a mounted .aida looks dead against the local process table, so its record can be deleted by retire_stray_worktree_lock_info, post-write dead-owner cleanup or doctor heal. SQLite still holds the real lock, so there is no unprotected write, only lost diagnostics. The sketch must add hostname and pid-namespace identity to lock records and treat a mismatch as unknown (keep the record).'
   created_at: 2026-09-26T11:43:25.995544149Z
   modified_at: 2026-09-26T11:43:25.995544149Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de1f-769f-7841-b12f-44d412cf2614
+  author: joe
+  content: 'Note (orchestrator): TASK-1515 (9dcdb6e0f9, in strict review) implements ''a lock error in incremental refresh must not escalate to a full rebuild'', via the typed CacheLockExhausted. If it merges, mark that point done in the STORY-1484 sketch.'
+  created_at: 2026-09-26T14:29:59.071032930Z
+  modified_at: 2026-09-26T14:29:59.071032930Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
