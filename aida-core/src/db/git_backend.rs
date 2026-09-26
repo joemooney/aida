@@ -984,6 +984,29 @@ impl GitBackend {
         super::store_lock::acquire(&self.root)
     }
 
+    // Serialize a queue-file read-modify-write (registry/queues/<user>.yaml)
+    // with every other store writer. Hold the returned guard from before the
+    // queue file is read until after its auto-commit, so no lock-respecting
+    // writer (another queue command, a spec save, a bulk import) can land
+    // between the read and the write-back and have its entries dropped.
+    //
+    // Lock order: the store write lock is the ONLY lock a queue writer takes.
+    // Nothing else is acquired inside it: `read_queue_file`, `get_requirement`
+    // (used by `queue_clear --completed`) and `auto_commit_paths` are lock-free,
+    // and the queue writers never touch the SQLite cache or its lock. The lock
+    // is re-entrant per thread, so a caller that already holds it (for example
+    // `CachedGitBackend` write paths, which take it before delegating to the
+    // inner backend) can call a queue writer without deadlocking; a different
+    // thread or process blocks until the holder releases. As of this writing
+    // no `lock_store()` holder calls a queue writer, so there is no nested
+    // order to maintain; if one appears, it must take the store lock FIRST
+    // and the cache lock (if any) second, matching `CachedGitBackend`.
+    // trace:BUG-1677 | ai:claude
+    fn lock_queue_write(&self) -> Result<super::store_lock::StoreWriteGuard> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        self.lock_store()
+    }
+
     /// Whole-store save (the `DatabaseBackend::save` body), under the store
     /// write lock.
     ///
@@ -1759,7 +1782,9 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // Held across the read-modify-write AND the commit below.
+        // trace:BUG-1677 | ai:claude
+        let _lock = self.lock_queue_write()?;
         let dir = self.root.join("registry/queues");
         std::fs::create_dir_all(&dir)?;
         // trace:TASK-951 — resolve the FILENAME case-insensitively (so `Joe`
@@ -1817,7 +1842,9 @@ impl DatabaseBackend for GitBackend {
         requirement_id: &uuid::Uuid,
         role: Option<&str>,
     ) -> Result<()> {
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // Held across the read-modify-write AND the commit below.
+        // trace:BUG-1677 | ai:claude
+        let _lock = self.lock_queue_write()?;
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
         let path = queue_file_path(&self.root, &user_id);
@@ -1885,7 +1912,9 @@ impl DatabaseBackend for GitBackend {
     // look up a requirement (transient I/O error) errs on the safe
     // side: keep the entry. trace:TASK-1-109 | ai:claude
     fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // Held across the read-modify-write AND the commit below.
+        // trace:BUG-1677 | ai:claude
+        let _lock = self.lock_queue_write()?;
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
         let path = queue_file_path(&self.root, &user_id);
@@ -4632,5 +4661,199 @@ mod tests {
         assert!(git(&["status", "--porcelain", "metadata.yaml"])
             .stdout
             .is_empty());
+    }
+
+    // trace:BUG-1677 | ai:claude — the queue writers are read-modify-write on
+    // one file; without the store lock two of them interleave (both read the
+    // same entries, the later write drops the earlier writer's change). The
+    // tests below use the git backend on a plain directory, where each writer
+    // opens its own lock descriptor, so threads contend exactly as processes
+    // do under flock(2).
+
+    fn bug1677_backend(root: &Path) -> GitBackend {
+        GitBackend::new(root).unwrap()
+    }
+
+    #[test]
+    fn bug_1677_concurrent_queue_adds_and_removes_lose_nothing() {
+        use std::sync::{Arc, Barrier};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = bug1677_backend(&root);
+        let user = "carol";
+
+        // Seed entries that the remover threads will drain concurrently.
+        const REMOVERS: usize = 4;
+        const REMOVES_EACH: usize = 10;
+        const ADDERS: usize = 4;
+        const ADDS_EACH: usize = 25;
+        let mut seeded: Vec<uuid::Uuid> = Vec::new();
+        for i in 0..(REMOVERS * REMOVES_EACH) {
+            let e = sample_queue_entry(user, (i as i64 + 1) * 1000);
+            seeded.push(e.requirement_id);
+            backend.queue_add(e).unwrap();
+        }
+        assert_eq!(backend.queue_list(user, false).unwrap().len(), seeded.len());
+
+        let barrier = Arc::new(Barrier::new(ADDERS + REMOVERS));
+        let mut handles = Vec::new();
+        let mut expected_added: Vec<uuid::Uuid> = Vec::new();
+        for _ in 0..ADDERS {
+            let entries: Vec<QueueEntry> = (0..ADDS_EACH)
+                .map(|_| sample_queue_entry(user, i64::MAX))
+                .collect();
+            expected_added.extend(entries.iter().map(|e| e.requirement_id));
+            let (root, barrier) = (root.clone(), Arc::clone(&barrier));
+            handles.push(std::thread::spawn(move || -> Result<()> {
+                let backend = bug1677_backend(&root);
+                barrier.wait();
+                for e in entries {
+                    backend.queue_add(e)?;
+                }
+                Ok(())
+            }));
+        }
+        for chunk in seeded.chunks(REMOVES_EACH) {
+            let ids: Vec<uuid::Uuid> = chunk.to_vec();
+            let (root, barrier) = (root.clone(), Arc::clone(&barrier));
+            handles.push(std::thread::spawn(move || -> Result<()> {
+                let backend = bug1677_backend(&root);
+                barrier.wait();
+                for id in &ids {
+                    backend.queue_remove_for_role("carol", id, None)?;
+                }
+                Ok(())
+            }));
+        }
+        let mut errors = Vec::new();
+        for h in handles {
+            if let Err(e) = h.join().expect("queue writer thread panicked") {
+                errors.push(e.to_string());
+            }
+        }
+        assert!(errors.is_empty(), "queue writers failed: {errors:?}");
+
+        let mut remaining: Vec<uuid::Uuid> = backend
+            .queue_list(user, false)
+            .unwrap()
+            .into_iter()
+            .map(|e| e.requirement_id)
+            .collect();
+        remaining.sort();
+        expected_added.sort();
+        let lost = expected_added
+            .iter()
+            .filter(|id| !remaining.contains(id))
+            .count();
+        let unremoved = seeded.iter().filter(|id| remaining.contains(id)).count();
+        assert_eq!(
+            (lost, unremoved),
+            (0, 0),
+            "lost {lost} added entries and {unremoved} removals; {} entries remain",
+            remaining.len()
+        );
+        assert_eq!(remaining, expected_added);
+        let positions: Vec<i64> = backend
+            .queue_list(user, false)
+            .unwrap()
+            .iter()
+            .map(|e| e.position)
+            .collect();
+        assert!(
+            positions.iter().all(|p| *p != i64::MAX),
+            "the append sentinel must be resolved under the lock"
+        );
+    }
+
+    // Each of the three writers blocks while ANOTHER thread holds the store
+    // lock and proceeds once it is released: the lock is really taken.
+    #[test]
+    fn bug_1677_queue_writers_block_while_another_thread_holds_the_store_lock() {
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = bug1677_backend(&root);
+        let seeded = sample_queue_entry("dan", 1000);
+        let seeded_id = seeded.requirement_id;
+        backend.queue_add(seeded).unwrap();
+
+        type Writer = Box<dyn FnOnce(&GitBackend) -> Result<()> + Send>;
+        let writers: Vec<(&str, Writer)> = vec![
+            (
+                "queue_add",
+                Box::new(|b: &GitBackend| b.queue_add(sample_queue_entry("dan", i64::MAX))),
+            ),
+            (
+                "queue_remove_for_role",
+                Box::new(move |b: &GitBackend| b.queue_remove_for_role("dan", &seeded_id, None)),
+            ),
+            (
+                "queue_clear",
+                Box::new(|b: &GitBackend| b.queue_clear("dan", false)),
+            ),
+        ];
+        for (name, writer) in writers {
+            let guard = backend.lock_store().unwrap();
+            let (tx, rx) = mpsc::channel();
+            let r2 = root.clone();
+            let handle = std::thread::spawn(move || {
+                let b = bug1677_backend(&r2);
+                let result = writer(&b);
+                tx.send((Instant::now(), result)).unwrap();
+            });
+            std::thread::sleep(Duration::from_millis(200));
+            assert!(
+                rx.try_recv().is_err(),
+                "{name} must block while another thread holds the store lock"
+            );
+            let released = Instant::now();
+            drop(guard);
+            let (finished, result) = rx
+                .recv_timeout(Duration::from_secs(30))
+                .unwrap_or_else(|_| panic!("{name} never completed after the lock was released"));
+            handle.join().unwrap();
+            result.unwrap_or_else(|e| panic!("{name} failed: {e}"));
+            assert!(finished >= released, "{name} finished before the release");
+        }
+    }
+
+    // A caller that already holds the store lock on ITS OWN thread (as the
+    // cached backend's write paths do) can call every queue writer without
+    // deadlocking: the lock is re-entrant per thread. The channel timeout is
+    // the guard; the default lock wait is 120s, so a regression shows up here
+    // as a 30s failure rather than a hung test.
+    #[test]
+    fn bug_1677_queue_writers_reenter_a_store_lock_held_by_the_caller() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let (tx, rx) = mpsc::channel();
+        let handle = std::thread::spawn(move || {
+            let b = bug1677_backend(&root);
+            let run = || -> Result<usize> {
+                let _outer = b.lock_store()?;
+                let e = sample_queue_entry("erin", i64::MAX);
+                let id = e.requirement_id;
+                b.queue_add(e)?;
+                b.queue_add(sample_queue_entry("erin", i64::MAX))?;
+                b.queue_remove_for_role("erin", &id, None)?;
+                let after_remove = b.queue_list("erin", false)?.len();
+                b.queue_clear("erin", false)?;
+                assert!(b.queue_list("erin", false)?.is_empty());
+                assert!(
+                    super::super::store_lock::held_by_this_thread(&root),
+                    "the caller's outer hold must survive the inner releases"
+                );
+                Ok(after_remove)
+            };
+            tx.send(run()).unwrap();
+        });
+        let result = rx
+            .recv_timeout(Duration::from_secs(30))
+            .expect("queue writers deadlocked against the caller's own store lock");
+        handle.join().unwrap();
+        assert_eq!(result.unwrap(), 1);
     }
 }
