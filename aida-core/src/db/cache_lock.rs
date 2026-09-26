@@ -635,6 +635,21 @@ pub(crate) fn clear_dead_owner_lock_info_at(lock_info_path: &Path) {
     let _ = reclaim_dead_lock_info(lock_info_path);
 }
 
+/// The terminal cache-lock error: the SQLite write lock stayed contended
+/// through the whole retry ladder. Carries the owner-enriched message built by
+/// [`enrich_cache_lock_error`]; see [`is_cache_lock_error`].
+// trace:TASK-1515 | ai:claude
+#[derive(Debug)]
+pub(crate) struct CacheLockExhausted(String);
+
+impl std::fmt::Display for CacheLockExhausted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for CacheLockExhausted {}
+
 /// Build the terminal "database is locked" error, distinguishing live
 /// contention from stale metadata left by a dead owner.
 // trace:TASK-1484 | ai:claude
@@ -644,8 +659,8 @@ pub(crate) fn enrich_cache_lock_error(
     err: anyhow::Error,
 ) -> anyhow::Error {
     let now = chrono::Utc::now();
-    match observation {
-        Some(obs) if obs.owner == LockOwnerState::Current => anyhow::anyhow!(
+    let message = match observation {
+        Some(obs) if obs.owner == LockOwnerState::Current => format!(
             "database is locked while trying to {action}. \
              Try again. If this persists, run `aida doctor heal stale-locks`.\ncaused by: {}",
             err
@@ -661,12 +676,12 @@ pub(crate) fn enrich_cache_lock_error(
             if let Some(note) = obs.overrun_note() {
                 msg.push_str(&format!(" Note: {note}."));
             }
-            anyhow::anyhow!(
+            format!(
                 "{msg} Try again or check that process. If it's stuck, run `aida doctor heal stale-locks`.\ncaused by: {}",
                 err
             )
         }
-        Some(obs) => anyhow::anyhow!(
+        Some(obs) => format!(
             "database is locked while trying to {action}. The lock-info names pid={} ({}) from {} ({} ago), \
              but that process {} (stale metadata), so another process holds the database without a record. \
              Try again; the stale record is cleared automatically after the next successful write, \
@@ -682,12 +697,16 @@ pub(crate) fn enrich_cache_lock_error(
             },
             err
         ),
-        None => anyhow::anyhow!(
+        None => format!(
             "database is locked while trying to {action}. \
              Try again. If this persists, run `aida doctor heal stale-locks`.\ncaused by: {}",
             err
         ),
-    }
+    };
+    // TASK-1515: typed, so a caller can tell an exhausted lock ladder from
+    // any other failure without matching the prose. Display is unchanged.
+    // trace:TASK-1515 | ai:claude
+    anyhow::Error::new(CacheLockExhausted(message))
 }
 
 fn age_label(obs: &CacheLockObservation, now: chrono::DateTime<chrono::Utc>) -> String {

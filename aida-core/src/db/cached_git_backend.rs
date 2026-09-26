@@ -13,7 +13,8 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 use super::cache::{
-    is_cache_schema_drift_error, ArchiveFilter, Cache, DeferFilter, ListFilter, RequirementSummary,
+    is_cache_schema_drift_error, ArchiveFilter, Cache, CacheTx, DeferFilter, ListFilter,
+    RequirementSummary,
 };
 use super::git_backend::GitBackend;
 use super::traits::{BackendType, DatabaseBackend, UpdateResult};
@@ -275,7 +276,19 @@ impl CachedGitBackend {
     /// BUG-1606 removed.
     // trace:BUG-1606 | ai:claude
     fn stored_status_targeted(&self, id: &Uuid) -> Option<crate::models::RequirementStatus> {
-        let spec_id = self.cache.spec_id_for_uuid(id).ok().flatten()?;
+        self.stored_status_for_spec_id(id, self.cache.spec_id_for_uuid(id).ok().flatten())
+    }
+
+    /// The object-read half of [`Self::stored_status_targeted`], for a
+    /// spec_id the caller already resolved (from the cache, or from the open
+    /// incremental-refresh transaction).
+    // trace:BUG-1606 trace:TASK-1515 | ai:claude
+    fn stored_status_for_spec_id(
+        &self,
+        id: &Uuid,
+        spec_id: Option<String>,
+    ) -> Option<crate::models::RequirementStatus> {
+        let spec_id = spec_id?;
         // Read exactly that object file. Not `get_requirement_by_spec_id`: on
         // a missing file it falls through to an agreed_id scan of every object.
         let objects_root = self.inner.path().join("objects");
@@ -299,32 +312,67 @@ impl CachedGitBackend {
     /// rebuild.
     // trace:BUG-636 | ai:claude
     fn ensure_cache_fresh(&self) -> Result<()> {
+        // TASK-1515: an incremental refresh declines when HEAD moves while it
+        // reads the changed objects (it cannot stamp one HEAD on rows that may
+        // come from a later one). On a busy store that is common, so retry the
+        // cheap incremental from the newly captured HEAD a bounded number of
+        // times before paying for a full rebuild.
+        // trace:TASK-1515 | ai:claude
+        const INCREMENTAL_ATTEMPTS: usize = 3;
+        let mut head = self.current_head_sha();
+        for _ in 0..INCREMENTAL_ATTEMPTS {
+            if !self.cache.is_stale(&head)? {
+                return Ok(());
+            }
+            // Non-git fixture (empty HEAD): nothing to diff — full rebuild is
+            // the only correct path (and is cheap, there are no commits).
+            if head.is_empty() {
+                break;
+            }
+            let Some(recorded) = self.cache.source_head_sha()? else {
+                break;
+            };
+            if recorded.is_empty()
+                || !crate::git_ops::is_ancestor(self.inner.path(), &recorded, &head)
+                    .unwrap_or(false)
+            {
+                break;
+            }
+            match self.try_incremental_update(&recorded, &head) {
+                Ok(true) => return Ok(()),
+                // Ok(false): incremental declined. If HEAD moved during the
+                // reads, retry from the new HEAD; otherwise (diff too large /
+                // a row the diff named couldn't be read) fall through to a
+                // full rebuild, which is always correct.
+                Ok(false) => {
+                    let now = self.current_head_sha();
+                    if now == head {
+                        break;
+                    }
+                    head = now;
+                }
+                // Any error, a cache lock error included: fall back to the
+                // full rebuild, which re-enters the lock retry ladder and
+                // fails the command if the lock is still held.
+                Err(e) => {
+                    eprintln!("warning: incremental cache update failed ({e}); full rebuild");
+                    break;
+                }
+            }
+        }
+        // TASK-1515: re-capture HEAD immediately before the rebuild loads the
+        // worktree, so the stamp is never older than a HEAD captured before
+        // the incremental attempts, and never newer than the rows: the load
+        // reads at or after this HEAD. If HEAD moves DURING the load, the
+        // stamp is older than some rows. That usually heals on the next
+        // incremental (it re-reads every file changed since the stamp), but
+        // not always: a file changed during the load and then reverted shows
+        // no net change in that diff, so its newer (or ghost) row persists
+        // until a full rebuild. Tracked separately as a follow-up bug.
+        // trace:TASK-1515 | ai:claude
         let head = self.current_head_sha();
         if !self.cache.is_stale(&head)? {
             return Ok(());
-        }
-        // Non-git fixture (empty HEAD): nothing to diff — full rebuild is the
-        // only correct path (and is cheap, there are no commits).
-        if !head.is_empty() {
-            if let Some(recorded) = self.cache.source_head_sha()? {
-                if !recorded.is_empty()
-                    && crate::git_ops::is_ancestor(self.inner.path(), &recorded, &head)
-                        .unwrap_or(false)
-                {
-                    match self.try_incremental_update(&recorded, &head) {
-                        Ok(true) => return Ok(()),
-                        // Ok(false): incremental declined (diff too large / a row
-                        // the diff named couldn't be read) — fall through to a
-                        // full rebuild, which is always correct.
-                        Ok(false) => {}
-                        Err(e) => {
-                            eprintln!(
-                                "warning: incremental cache update failed ({e}); full rebuild"
-                            );
-                        }
-                    }
-                }
-            }
         }
         self.full_rebuild(&head)
     }
@@ -347,7 +395,14 @@ impl CachedGitBackend {
         }
         // Stale, but if another live process is already rebuilding, don't pile
         // onto the write lock — read the prior consistent snapshot.
-        if super::cache::foreign_writer_holds_lock_at(self.cache.lock_info_path()) {
+        //
+        // TASK-1515: not while a schema migration is pending. The committed
+        // snapshot is then in the OLD schema, so it is not a snapshot this
+        // binary can serve; take the strict path (which full-rebuilds).
+        // trace:TASK-1515 | ai:claude
+        if !self.cache.migration_pending()
+            && super::cache::foreign_writer_holds_lock_at(self.cache.lock_info_path())
+        {
             return Ok(());
         }
         self.ensure_cache_fresh()
@@ -455,6 +510,18 @@ impl CachedGitBackend {
         if changes.len() > INCREMENTAL_MAX_FILES {
             return Ok(false);
         }
+        // TASK-1515: read every changed object BEFORE taking the cache write
+        // lock (the YAML reads are the slow part), then apply all the rows and
+        // the head-SHA stamp in ONE transaction. Previously each row committed
+        // on its own and the SHA was stamped last, so a concurrent reader could
+        // see rows from `to` labelled `from`, and a decline part-way through
+        // left the rows it had already committed behind.
+        // trace:TASK-1515 | ai:claude
+        enum Step {
+            Upsert(Box<Requirement>),
+            Delete(String),
+        }
+        let mut steps = Vec::with_capacity(changes.len());
         for (kind, path) in &changes {
             // The spec_id is the file stem: objects/TYPE/000/<SPEC-ID>.yaml.
             let Some(spec_id) = path.file_stem().and_then(|s| s.to_str()) else {
@@ -465,18 +532,7 @@ impl CachedGitBackend {
                 ObjectChange::Added | ObjectChange::Modified => {
                     // Authoritative read of the ONE object at the worktree HEAD.
                     match self.inner.get_requirement_by_spec_id(spec_id)? {
-                        Some(req) => {
-                            self.cache.upsert_requirement(&req)?;
-                            // BUG-626 parity with the write path: a child's status
-                            // / hierarchy change shifts its parent epic's rollup.
-                            // BUG-1606: an ancestor epic the targeted read cannot
-                            // resolve is a cache/store disagreement. Don't guess:
-                            // decline, and the caller does a full rebuild.
-                            // trace:BUG-1606 | ai:claude
-                            if !self.refresh_parent_epic_status(&req) {
-                                return Ok(false);
-                            }
-                        }
+                        Some(req) => steps.push(Step::Upsert(Box::new(req))),
                         None => {
                             // The diff says present at `to` but the worktree can't
                             // read it (HEAD moved underneath us, or a torn state).
@@ -485,18 +541,78 @@ impl CachedGitBackend {
                         }
                     }
                 }
-                ObjectChange::Deleted => {
-                    // Resolve the spec_id (from the path) to its uuid via the
-                    // cache and drop the row. Absent already → harmless no-op.
-                    if let Some(uuid) = self.cache.uuid_for_spec_id(spec_id)? {
-                        self.cache.delete_requirement(&uuid)?;
+                ObjectChange::Deleted => steps.push(Step::Delete(spec_id.to_string())),
+            }
+        }
+        // TASK-1515: the reads above came from the live worktree. If HEAD
+        // moved while they ran, some rows may be from a later HEAD than `to`
+        // and stamping `to` would mislabel them. Decline; the caller retries
+        // the incremental from the new HEAD (bounded), then full-rebuilds at
+        // a freshly captured HEAD.
+        // trace:TASK-1515 | ai:claude
+        #[cfg(test)]
+        tests::task_1515_after_incremental_reads();
+        if self.current_head_sha() != to {
+            return Ok(false);
+        }
+        self.cache.apply_incremental(to, |tx| {
+            for step in &steps {
+                match step {
+                    Step::Upsert(req) => {
+                        tx.upsert_requirement(req)?;
+                        // BUG-626 parity with the write path: a child's status
+                        // / hierarchy change shifts its parent epic's rollup.
+                        // BUG-1606: an ancestor epic the targeted read cannot
+                        // resolve is a cache/store disagreement. Don't guess:
+                        // decline (rolling back every row), and the caller does
+                        // a full rebuild.
+                        // trace:BUG-1606 | ai:claude
+                        if !self.refresh_parent_epic_status_in(tx, req) {
+                            return Ok(false);
+                        }
+                    }
+                    Step::Delete(spec_id) => {
+                        // Resolve the spec_id (from the path) to its uuid via the
+                        // cache and drop the row. Absent already → harmless no-op.
+                        if let Some(uuid) = tx.uuid_for_spec_id(spec_id)? {
+                            tx.delete_requirement(&uuid)?;
+                        }
                     }
                 }
             }
+            // Every changed row refreshed — `apply_incremental` stamps `to`
+            // and commits it all together.
+            Ok(true)
+        })
+    }
+
+    /// [`Self::refresh_parent_epic_status`] inside the incremental refresh
+    /// transaction: same ancestor walk, same targeted stored-status read, same
+    /// fail-closed `false` on a miss, but every cache read and write goes
+    /// through `tx` (the cache connection is held by the open transaction).
+    ///
+    /// Known cost, left for STORY-1484: `stored_status_for_spec_id` reads the
+    /// epic YAML here, INSIDE the write transaction, once per ancestor epic
+    /// per upserted row, which lengthens how long the write lock is held on a
+    /// cold disk. Pre-resolving candidate ancestor epics' stored statuses
+    /// before `apply_incremental`, and reading in here only on a miss, would
+    /// move that I/O out from under the lock.
+    // trace:TASK-1515 trace:BUG-1606 | ai:claude
+    #[must_use]
+    fn refresh_parent_epic_status_in(&self, tx: &CacheTx<'_>, req: &Requirement) -> bool {
+        let Ok(ancestor_epics) = tx.ancestor_epic_ids(&req.id) else {
+            return false;
+        };
+        let mut all_resolved = true;
+        for epic_id in ancestor_epics {
+            let spec_id = tx.spec_id_for_uuid(&epic_id).ok().flatten();
+            let Some(stored) = self.stored_status_for_spec_id(&epic_id, spec_id) else {
+                all_resolved = false;
+                continue;
+            };
+            let _ = tx.recompute_epic_status_from_hierarchy(&epic_id, &stored);
         }
-        // Every changed row refreshed — the cache now matches `to`.
-        self.cache.set_source_head_sha(to)?;
-        Ok(true)
+        all_resolved
     }
 
     /// Cache-backed list query with filter pushdown. Returns lightweight
@@ -608,6 +724,18 @@ impl CachedGitBackend {
     /// picks up the pulled rows. This trades one extra rebuild for correctness.
     /// trace:TASK-712
     fn restamp_head(&self, pre_write_head: &str) {
+        // TASK-1515: while a schema migration is pending, `source_head_sha()`
+        // reads `None`, which the freshness match below would take for "just
+        // rebuilt" and stamp the post-write HEAD on rows that never ingested
+        // external commits. Raw `cache_meta` readers (and older binaries) do
+        // not see the pending flag, so keep the on-disk head empty (stale)
+        // until the migration rebuild stamps it. `refresh_epics_then_restamp`
+        // routes through here, so it is covered too.
+        // trace:TASK-1515 | ai:claude
+        if self.cache.migration_pending() {
+            let _ = self.cache.set_source_head_sha("");
+            return;
+        }
         let head = self.current_head_sha();
         if head.is_empty() {
             return;
@@ -694,6 +822,13 @@ impl CachedGitBackend {
     /// an authoritative full rebuild (a targeted epic read missed).
     // trace:BUG-1606 | ai:claude
     fn refresh_epics_then_restamp(&self, reqs: &[&Requirement], pre_write_head: &str) {
+        // TASK-1515: a pending migration keeps the on-disk head empty; see
+        // `restamp_head`. Skip the epic rollups too: the next read rebuilds.
+        // trace:TASK-1515 | ai:claude
+        if self.cache.migration_pending() {
+            let _ = self.cache.set_source_head_sha("");
+            return;
+        }
         let mut all_resolved = true;
         for req in reqs {
             all_resolved &= self.refresh_parent_epic_status(req);
@@ -1021,6 +1156,7 @@ impl DatabaseBackend for CachedGitBackend {
 
 #[cfg(test)]
 mod tests {
+    use super::super::cache::is_cache_lock_error;
     use super::*;
     use tempfile::tempdir;
 
@@ -2217,5 +2353,489 @@ mod tests {
         );
         assert_eq!(rows.len(), 1, "serves the last committed snapshot");
         holder.execute_batch("ROLLBACK").unwrap();
+    }
+
+    // ---------------------------------------------------------------- TASK-1515
+
+    /// A long-lived backend over a fresh git store holding FR-1-001 and
+    /// FR-1-002 (both titled `gen0`) plus FR-1-003 (`static`).
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_backend(dir: &Path) -> (CachedGitBackend, PathBuf, PathBuf) {
+        let store_root = dir.join("store");
+        let cache_path = dir.join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        for (id, title) in [
+            ("FR-1-001", "gen0"),
+            ("FR-1-002", "gen0"),
+            ("FR-1-003", "static"),
+        ] {
+            backend.add_requirement(sample_req(id, title)).unwrap();
+        }
+        (backend, store_root, cache_path)
+    }
+
+    /// External writer: retitle FR-1-001 and FR-1-002 in ONE store commit.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_external_retitle(store_root: &Path, title: &str) -> String {
+        let ext = GitBackend::new(store_root).unwrap();
+        let reqs: Vec<Requirement> = ["FR-1-001", "FR-1-002"]
+            .iter()
+            .map(|id| {
+                let mut r = ext.get_requirement_by_spec_id(id).unwrap().unwrap();
+                r.title = title.into();
+                r
+            })
+            .collect();
+        let before = crate::git_ops::head_sha(store_root).unwrap();
+        ext.bulk_update(&reqs, &format!("retitle {title}")).unwrap();
+        let after = crate::git_ops::head_sha(store_root).unwrap();
+        assert_ne!(before, after, "retitle {title} must make a store commit");
+        after
+    }
+
+    /// One read transaction on a separate connection: the recorded head and
+    /// the titles of FR-1-001 and FR-1-002.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_read(conn: &rusqlite::Connection) -> (Option<String>, Vec<String>) {
+        conn.execute_batch("BEGIN").unwrap();
+        let sha: Option<String> = conn
+            .query_row(
+                "SELECT value FROM cache_meta WHERE key = 'source_head_sha'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        let mut stmt = conn
+            .prepare(
+                "SELECT title FROM requirements_cache
+                  WHERE spec_id IN ('FR-1-001', 'FR-1-002') ORDER BY spec_id",
+            )
+            .unwrap();
+        let titles = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        drop(stmt);
+        conn.execute_batch("COMMIT").unwrap();
+        (sha, titles)
+    }
+
+    // TASK-1515: the incremental refresh applies every changed row and the
+    // head stamp in ONE transaction. When the stamp fails, no row of the
+    // refresh may remain (the pre-fix code committed each row on its own and
+    // stamped last).
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_incremental_rows_roll_back_when_the_stamp_fails() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let from = backend.cache().source_head_sha().unwrap().unwrap();
+        let to = task_1515_external_retitle(&store_root, "gen1");
+        let raw = rusqlite::Connection::open(&cache_path).unwrap();
+        raw.execute_batch(
+            "CREATE TRIGGER t1515 BEFORE UPDATE ON cache_meta
+               WHEN NEW.key = 'source_head_sha'
+               BEGIN SELECT RAISE(ABORT, 'task-1515 injected stamp failure'); END;",
+        )
+        .unwrap();
+
+        let err = backend.try_incremental_update(&from, &to).unwrap_err();
+        assert!(format!("{err:#}").contains("injected"), "{err:#}");
+        assert_eq!(
+            task_1515_read(&raw),
+            (Some(from.clone()), vec!["gen0".into(), "gen0".into()]),
+            "a failed refresh must leave the cache exactly at its previous head"
+        );
+
+        raw.execute_batch("DROP TRIGGER t1515;").unwrap();
+        assert!(backend.try_incremental_update(&from, &to).unwrap());
+        assert_eq!(
+            task_1515_read(&raw),
+            (Some(to), vec!["gen1".into(), "gen1".into()])
+        );
+    }
+
+    // TASK-1515: a second connection reading while incremental refreshes
+    // commit must see each row set together with the head it belongs to:
+    // never rows from HEAD n labelled HEAD n-1, never half a refresh.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_concurrent_reader_sees_whole_incremental_refreshes() {
+        use std::collections::HashMap;
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        use std::sync::{Arc, Mutex};
+
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let built_at = backend.cache().built_at().unwrap();
+        let head0 = backend.cache().source_head_sha().unwrap().unwrap();
+        let generation: Arc<Mutex<HashMap<String, usize>>> =
+            Arc::new(Mutex::new(HashMap::from([(head0, 0)])));
+        let stop = Arc::new(AtomicBool::new(false));
+        let reads = Arc::new(AtomicUsize::new(0));
+        let reader = {
+            let (generation, stop, reads) = (generation.clone(), stop.clone(), reads.clone());
+            let cache_path = cache_path.clone();
+            std::thread::spawn(move || {
+                let conn = rusqlite::Connection::open(&cache_path).unwrap();
+                while !stop.load(Ordering::SeqCst) {
+                    let (sha, titles) = task_1515_read(&conn);
+                    let sha = sha.expect("the cache always carries a head here");
+                    let n = *generation
+                        .lock()
+                        .unwrap()
+                        .get(&sha)
+                        .unwrap_or_else(|| panic!("unknown head {sha}"));
+                    let want = format!("gen{n}");
+                    assert_eq!(titles, vec![want.clone(), want], "head {sha}");
+                    reads.fetch_add(1, Ordering::SeqCst);
+                }
+            })
+        };
+        for n in 1..=8 {
+            let title = format!("gen{n}");
+            // Register the head before the refresh can stamp it.
+            let head = task_1515_external_retitle(&store_root, &title);
+            generation.lock().unwrap().insert(head.clone(), n);
+            // A read-path freshen takes the incremental route.
+            let rows = row_snapshot(&backend);
+            assert!(rows.iter().any(|r| r.0 == "FR-1-001" && r.1 == title));
+            assert_eq!(
+                backend.cache().source_head_sha().unwrap().as_deref(),
+                Some(head.as_str())
+            );
+        }
+        stop.store(true, Ordering::SeqCst);
+        reader
+            .join()
+            .expect("reader saw a torn incremental refresh");
+        assert!(reads.load(Ordering::SeqCst) > 0);
+        assert_eq!(
+            backend.cache().built_at().unwrap(),
+            built_at,
+            "every refresh above was incremental, not a full rebuild"
+        );
+    }
+
+    /// The on-disk `source_head_sha`, read on a separate connection (what raw
+    /// `cache_meta` readers and older binaries see).
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_raw_head(cache_path: &Path) -> Option<String> {
+        rusqlite::Connection::open(cache_path)
+            .unwrap()
+            .query_row(
+                "SELECT value FROM cache_meta WHERE key = 'source_head_sha'",
+                [],
+                |row| row.get(0),
+            )
+            .ok()
+    }
+
+    // TASK-1515 review finding 1: while a schema migration is pending, a
+    // write must not stamp the post-write HEAD on disk (the rows never
+    // ingested external commits). It leaves the recorded head empty.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_write_while_migration_pending_leaves_head_empty() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        drop(backend);
+        // An external commit the cache never ingests.
+        task_1515_external_retitle(&store_root, "generation-1");
+        {
+            let raw = rusqlite::Connection::open(&cache_path).unwrap();
+            let current: String = raw
+                .query_row(
+                    "SELECT value FROM cache_meta WHERE key = 'schema_version'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            let older = (current.parse::<i64>().unwrap() - 1).to_string();
+            raw.execute(
+                "UPDATE cache_meta SET value = ?1 WHERE key = 'schema_version'",
+                rusqlite::params![older],
+            )
+            .unwrap();
+        }
+        // Open without a refresh, so the migration stays pending.
+        let writer = CachedGitBackend::with_inner_cache_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        assert!(writer.cache().migration_pending());
+        assert!(task_1515_raw_head(&cache_path).is_some_and(|s| !s.is_empty()));
+
+        writer
+            .add_requirement(sample_req("FR-1-004", "written"))
+            .unwrap();
+        assert_eq!(
+            task_1515_raw_head(&cache_path).as_deref(),
+            Some(""),
+            "a write during a pending migration must leave the head stale"
+        );
+        let mut r = writer
+            .get_requirement_by_spec_id("FR-1-003")
+            .unwrap()
+            .unwrap();
+        r.title = "edited".into();
+        writer.update_requirement(&r).unwrap();
+        assert_eq!(task_1515_raw_head(&cache_path).as_deref(), Some(""));
+    }
+
+    // TASK-1515 review finding 4: if HEAD moved past `to` while the changed
+    // objects were being read, the incremental refresh declines rather than
+    // stamping `to` on rows that may come from a later HEAD.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_incremental_declines_when_head_moved_during_reads() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let from = backend.cache().source_head_sha().unwrap().unwrap();
+        let to = task_1515_external_retitle(&store_root, "gen1");
+        task_1515_external_retitle(&store_root, "generation-2");
+
+        assert!(!backend.try_incremental_update(&from, &to).unwrap());
+        let raw = rusqlite::Connection::open(&cache_path).unwrap();
+        assert_eq!(
+            task_1515_read(&raw),
+            (Some(from), vec!["gen0".into(), "gen0".into()]),
+            "a declined refresh leaves the cache untouched"
+        );
+    }
+
+    thread_local! {
+        /// Test hook run inside `try_incremental_update` after the pre-lock
+        /// object reads and before the HEAD re-check (thread-local, so
+        /// parallel tests never see each other's hook).
+        // trace:TASK-1515 | ai:claude
+        static TASK_1515_AFTER_READS: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
+            std::cell::RefCell::new(None);
+    }
+
+    /// Called from `try_incremental_update` under `cfg(test)`.
+    // trace:TASK-1515 | ai:claude
+    pub(super) fn task_1515_after_incremental_reads() {
+        let hook = TASK_1515_AFTER_READS.with(|h| h.borrow_mut().take());
+        if let Some(mut f) = hook {
+            f();
+            TASK_1515_AFTER_READS.with(|h| {
+                let mut slot = h.borrow_mut();
+                if slot.is_none() {
+                    *slot = Some(f);
+                }
+            });
+        }
+    }
+
+    /// Install a hook that makes an external store commit (retitling
+    /// FR-1-001 and FR-1-002 to `hookN`) on each of the first `moves`
+    /// incremental attempts. Returns the attempt counter.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_move_head_during_reads(
+        store_root: &Path,
+        moves: usize,
+    ) -> std::rc::Rc<std::cell::Cell<usize>> {
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0usize));
+        let counter = calls.clone();
+        let root = store_root.to_path_buf();
+        TASK_1515_AFTER_READS.with(|h| {
+            *h.borrow_mut() = Some(Box::new(move || {
+                let n = counter.get() + 1;
+                counter.set(n);
+                if n <= moves {
+                    task_1515_external_retitle(&root, &format!("hook{n}"));
+                }
+            }));
+        });
+        calls
+    }
+
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_clear_hook() {
+        TASK_1515_AFTER_READS.with(|h| *h.borrow_mut() = None);
+    }
+
+    // TASK-1515 round-2 finding 2: when HEAD moves during the incremental
+    // reads, the refresh retries the incremental from the new HEAD instead of
+    // full-rebuilding, and the stamp is the HEAD the rows came from.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_head_move_during_reads_retries_incremental_from_new_head() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let built_at = backend.cache().built_at().unwrap();
+        task_1515_external_retitle(&store_root, "gen1");
+        let calls = task_1515_move_head_during_reads(&store_root, 1);
+
+        let result = backend.ensure_cache_fresh();
+        task_1515_clear_hook();
+        result.unwrap();
+
+        assert_eq!(calls.get(), 2, "one declined attempt, one retry");
+        let head = crate::git_ops::head_sha(&store_root).unwrap();
+        let raw = rusqlite::Connection::open(&cache_path).unwrap();
+        assert_eq!(
+            task_1515_read(&raw),
+            (Some(head), vec!["hook1".into(), "hook1".into()]),
+            "the stamp is the HEAD the rows were read at"
+        );
+        assert_eq!(
+            backend.cache().built_at().unwrap(),
+            built_at,
+            "the retry stayed incremental"
+        );
+    }
+
+    // TASK-1515 round-2 finding 2: when HEAD keeps moving through every
+    // bounded incremental attempt, the full rebuild stamps a HEAD captured
+    // right before its load (the current one), not the HEAD captured before
+    // the attempts, which would label newer rows with an older SHA.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_head_moving_every_attempt_full_rebuilds_at_current_head() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let first = task_1515_external_retitle(&store_root, "gen1");
+        let calls = task_1515_move_head_during_reads(&store_root, usize::MAX);
+
+        let result = backend.ensure_cache_fresh();
+        task_1515_clear_hook();
+        result.unwrap();
+
+        let n = calls.get();
+        assert!(n >= 2, "the incremental was retried: {n}");
+        let head = crate::git_ops::head_sha(&store_root).unwrap();
+        assert_ne!(head, first);
+        let raw = rusqlite::Connection::open(&cache_path).unwrap();
+        let last = format!("hook{n}");
+        assert_eq!(
+            task_1515_read(&raw),
+            (Some(head), vec![last.clone(), last]),
+            "the rebuild stamps the HEAD its rows were loaded at"
+        );
+    }
+
+    /// A live (pid 1) foreign writer's lock sidecar beside `cache_path`,
+    /// without holding the SQLite lock.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_write_foreign_sidecar(cache_path: &Path) {
+        let info = super::super::cache::CacheLockInfo {
+            pid: 1,
+            command: "foreign-writer".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            user: "test".to_string(),
+            ..Default::default()
+        };
+        std::fs::write(
+            cache_path.with_file_name("cache.db.lock-info"),
+            serde_json::to_string(&info).unwrap(),
+        )
+        .unwrap();
+    }
+
+    // TASK-1515 round-2 finding 3: the foreign-writer shortcut must not serve
+    // an OLD-schema snapshot while a migration is pending; the read takes
+    // the strict path and rebuilds.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_foreign_writer_shortcut_skipped_while_migration_pending() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        drop(backend);
+        task_1515_external_retitle(&store_root, "gen1");
+        task_1515_mark_schema_older(&cache_path);
+        task_1515_write_foreign_sidecar(&cache_path);
+
+        let reader = CachedGitBackend::with_inner_cache_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        assert!(reader.cache().migration_pending());
+        let rows = reader.list_summaries(&ListFilter::default()).unwrap();
+        assert!(!reader.cache().migration_pending(), "the read rebuilt");
+        let title = rows
+            .iter()
+            .find(|r| r.spec_id.as_deref() == Some("FR-1-001"))
+            .map(|r| r.title.clone());
+        assert_eq!(title.as_deref(), Some("gen1"));
+        assert!(!reader.cache_snapshot_is_stale().unwrap());
+    }
+
+    /// Rewrite the on-disk schema version one lower, so the next open sees a
+    /// pending migration.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_mark_schema_older(cache_path: &Path) {
+        let raw = rusqlite::Connection::open(cache_path).unwrap();
+        let current: String = raw
+            .query_row(
+                "SELECT value FROM cache_meta WHERE key = 'schema_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let older = (current.parse::<i64>().unwrap() - 1).to_string();
+        raw.execute(
+            "UPDATE cache_meta SET value = ?1 WHERE key = 'schema_version'",
+            rusqlite::params![older],
+        )
+        .unwrap();
+    }
+
+    // TASK-1515: a lock error that ends the incremental refresh on a READ
+    // path behaves exactly as before this spec: it falls back to the full
+    // rebuild, whose own lock ladder then fails the command. No stale
+    // snapshot is served, and the cache is left untouched.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_read_path_lock_error_falls_back_to_full_rebuild_then_fails() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let from = backend.cache().source_head_sha().unwrap().unwrap();
+        let built_at = backend.cache().built_at().unwrap();
+        let to = task_1515_external_retitle(&store_root, "gen1");
+
+        let holder = rusqlite::Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        // Thread-local short ladder, so the test stays fast without touching
+        // process-wide env vars other tests read.
+        let prev = super::super::cache::set_fast_fail_cache(true);
+        let listed = backend.list_summaries(&ListFilter::default());
+        let opened = CachedGitBackend::open(&store_root, &cache_path);
+        super::super::cache::set_fast_fail_cache(prev);
+        holder.execute_batch("ROLLBACK").unwrap();
+
+        for err in [
+            listed.expect_err("a read must fail, not serve a stale snapshot"),
+            opened
+                .err()
+                .expect("the read-path constructor must fail too"),
+        ] {
+            let msg = format!("{err:#}");
+            assert!(is_cache_lock_error(&err), "{msg}");
+            assert!(
+                msg.contains("rebuild cache"),
+                "no full-rebuild fallback: {msg}"
+            );
+        }
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap().as_deref(),
+            Some(from.as_str())
+        );
+        assert_eq!(backend.cache().built_at().unwrap(), built_at);
+
+        // Once the lock is free, the next read catches up incrementally.
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap().as_deref(),
+            Some(to.as_str())
+        );
+        assert_eq!(backend.cache().built_at().unwrap(), built_at);
     }
 }
