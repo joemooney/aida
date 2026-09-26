@@ -610,20 +610,37 @@ fn bug1625_followup_filed_in_store_recognises_existing_followups() {
         requirements: vec![parent, child, tagged, unrelated],
         ..Default::default()
     };
+    let plan = "docs/plans/x.md";
     assert!(followup_filed_in_store(
         &store,
         "BUG-9727",
-        "  tighten the WIDGET "
+        "  tighten the WIDGET ",
+        plan
     ));
     assert!(followup_filed_in_store(
         &store,
         "BUG-9727",
-        "Document the knob"
+        "Document the knob",
+        plan
     ));
     assert!(!followup_filed_in_store(
         &store,
         "BUG-9727",
-        "Unrelated work"
+        "Unrelated work",
+        plan
     ));
-    assert!(!followup_filed_in_store(&store, "BUG-9727", "Never filed"));
+    assert!(!followup_filed_in_store(
+        &store,
+        "BUG-9727",
+        "Never filed",
+        plan
+    ));
+    // BUG-1633: a same-titled spec filed from ANOTHER plan is not this
+    // plan's followup. trace:BUG-1633 | ai:claude
+    assert!(!followup_filed_in_store(
+        &store,
+        "BUG-9727",
+        "Document the knob",
+        "docs/plans/other.md"
+    ));
 }
