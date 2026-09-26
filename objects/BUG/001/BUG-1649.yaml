@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T10:49:57.059093421Z
-modified_at: 2026-09-26T10:54:21.080995693Z
+modified_at: 2026-09-26T11:14:58.159965236Z
 req_type: Bug
 comments:
 - id: 01a0dd56-6b2c-7181-b2be-ea825ad27ebe
@@ -22,6 +22,22 @@ comments:
   content: 'Scope added from the BUG-1646 review: aida-core/src/workspace.rs:236 has the same pattern. Also route rule_violation.rs:356, auto_complete_telemetry.rs:103 and field_study.rs:91 through aida_home_dir().'
   created_at: 2026-09-26T10:54:21.080995693Z
   modified_at: 2026-09-26T10:54:21.080995693Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd6c-ebef-7d00-8b83-2308f952f18a
+  author: joe
+  content: |-
+    Review (fresh strict Opus reviewer): APPROVE WITH NITS on origin/claude/bug-1649 @ 9fdee63ee8.
+    Verified: aida-core bug_1649 (4), mcp_translate (10), workspace (6), codex (26), store_locate (10); aida-cli-lib bug_1649 (8), init_cmd (48), remote_create (38), project_capabilities (19), field_study (18), rule_violation (15), auto_complete_telemetry (17), store_walkup (16): all pass. check-portability.sh and --check-allowlist-growth origin/main pass; cargo fmt is clean. Mutation (toml_string -> format!("\"{}\"")): 7 of the 12 bug_1649 tests fail, so the mutation is caught; reverted, tree clean. Init refactor: the old worktree template (both main copies were identical) and the sibling template match the new heads byte-for-byte, apart from the placeholders. Field order, the branch key and the comments are preserved. toml 0.8.23 output was probed: ordinary values are byte-identical; every hostile value round-trips. No golden/snapshot churn; tests/test_distributed.sh:216 still matches. Telemetry paths are the same when AIDA_HOME is unset, and the AIDA_HOME branch goes through assert_hermetic, so BUG-1642 hermeticity holds. Codex: plain entries are identical; a Windows command changes from "C:\\x" to 'C:\x', which is valid TOML either way.
+    Findings:
+    1 (low) The claim is incomplete. A value containing a double quote also becomes a literal ('say "hi"'). A value containing a newline becomes a multi-line """/''' string, and a backslash value containing an apostrophe becomes '''...'''. All of these are valid TOML. The line readers (aida-core/src/store_locate.rs:299-301, aida-tui/src/redesign/store.rs:895-897, aida-cli-lib/src/lib.rs:67344-67346) trim both kinds of quote, so single-quoted paths read correctly, better than before. They still misread multi-line values and a '''...''' value that ends in an apostrophe (edge case only). Fix (follow-up): parse with the toml crate first and keep the line scan as a fallback, the same way remote_create now does.
+    2 (low) aida-cli-lib/src/remote_create.rs:143-164. The TOML path drops a hand-written ssh_port = "2222" (string), which the old line parser accepted. The next save_known_host then erases the port without warning. Fix: also accept a string that parses as u16. Separately, the line fallback at :197 strips only double quotes, so a single-quoted label written by the new serializer comes back with its quotes when the file is otherwise invalid; also trim single quotes there. The doc comment at :134 ('Hand-rolled ... avoid a serde round-trip') is now stale.
+    3 (low, acceptance gap) The spec asks to extend the BUG-1646 portability rule (toml-path-interpolation) to production code. Not done, because that rule is not on main yet. Either do it after BUG-1646 integrates or file a follow-up; do not close silently.
+    4 (nit) The doc comments at auto_complete_telemetry.rs:102, field_study.rs:90 and rule_violation.rs:355 say the path 'agrees with usage::log_path'. That is only true once BUG-1646 lands (on main, usage.rs:52 still uses crate::home_dir). Integrate after BUG-1646; otherwise, with AIDA_HOME set, metrics joins usage.jsonl and auto-complete.jsonl from different homes. Also add the three jsonl files to the AIDA_HOME row in docs/environment-variables.md:197.
+    5 (nit) aida-core/src/scaffolding/mcp_translate.rs:168,181. The table name [mcp_servers.{name}] and the env keys are still interpolated bare. A .mcp.json server name with a dot or space, or an unusual env key, produces invalid or wrongly nested TOML. Quote keys that fall outside the bare-key charset.
+    6 (nit) aida-core/src/lib.rs:144. The BUG-1649 trace comment sits above '#[cfg(feature = "native")] pub mod templates;' when it belongs above 'pub mod toml_quote;'.
+    No blocker. Readers audited: scripts/, tests/*.sh, the templates/hooks and every trim_matches('"') config reader; no other consumer of store_path, branch, workspace, origin_host, remotes.toml or the codex config breaks.
+  created_at: 2026-09-26T11:14:58.159965236Z
+  modified_at: 2026-09-26T11:14:58.159965236Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
