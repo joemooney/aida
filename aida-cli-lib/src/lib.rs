@@ -18008,8 +18008,12 @@ fn maybe_auto_archive_sweep(
             if !stale {
                 continue;
             }
+            // BUG-1664: `row` may come from a stale cache snapshot. The
+            // object read is authoritative, so re-check status and age on it,
+            // not only the archive flag.
+            // trace:BUG-1664 | ai:claude
             if let Ok(Some(req)) = backend.get_requirement(&row.id) {
-                if !req.archived {
+                if archive_cmd::archive_sweep_still_eligible(&req, &statuses, cutoff) {
                     to_archive.push(req);
                 }
             }
@@ -75134,6 +75138,11 @@ mod bug_1647_findings_atomic_tests;
 #[cfg(test)]
 #[path = "tests/bug_1651_promote_queue_cas_tests.rs"]
 mod bug_1651_promote_queue_cas_tests;
+
+// trace:BUG-1664 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1664_stale_sweep_tests.rs"]
+mod bug_1664_stale_sweep_tests;
 
 // BUG-1633: pull/push follow-ups to BUG-1625 and BUG-1626. trace:BUG-1633 | ai:claude
 #[cfg(test)]

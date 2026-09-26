@@ -1128,6 +1128,42 @@ pub(crate) fn unsatisfied_blocker_facts(
         .collect()
 }
 
+/// Whether the AUTHORITATIVE object behind a queue entry is still dead
+/// (archived or terminal). `get_requirement` on the cached backend reads the
+/// spec's YAML object, not the cache row, so a spec reopened after the cache
+/// snapshot was taken reads as live. A missing or unreadable object is not
+/// provably dead, so the entry is kept (deleted specs are `queue prune
+/// --orphaned`'s job).
+// trace:BUG-1664 | ai:claude
+pub(crate) fn queue_target_still_dead(
+    backend: &aida_core::CachedGitBackend,
+    requirement_id: &uuid::Uuid,
+) -> bool {
+    match backend.get_requirement(requirement_id) {
+        Ok(Some(req)) => req.archived || is_terminal_status_str(&format!("{:?}", req.status)),
+        _ => false,
+    }
+}
+
+/// Split the cache-selected dead queue entries into those whose authoritative
+/// spec is still dead and a count of those that no longer are. The candidates
+/// come from the cache projection, which a read may serve from a stale
+/// snapshot (a live foreign cache writer skips the catch-up), so a destructive
+/// sweep re-checks every candidate before removing it.
+// trace:BUG-1664 | ai:claude
+pub(crate) fn revalidate_dead_queue_entries<'a>(
+    backend: &aida_core::CachedGitBackend,
+    candidates: Vec<&'a aida_core::models::QueueEntry>,
+) -> (Vec<&'a aida_core::models::QueueEntry>, usize) {
+    let total = candidates.len();
+    let still_dead: Vec<_> = candidates
+        .into_iter()
+        .filter(|e| queue_target_still_dead(backend, &e.requirement_id))
+        .collect();
+    let skipped = total - still_dead.len();
+    (still_dead, skipped)
+}
+
 /// TASK-1052: opportunistic queue self-heal on read. Drops dead routed entries
 /// (archived/Completed/Rejected targets) from the user's local queue so the
 /// underlying queue stays clean, not just the view. Cheap — reuses the
@@ -1146,13 +1182,16 @@ pub(crate) fn opportunistic_queue_gc(
         Ok(e) if !e.is_empty() => e,
         _ => return 0,
     };
-    let summaries = match advance_backend(store_path)
-        .and_then(|b| b.list_summaries(&queue_dead_target_summary_filter()))
-    {
+    let Ok(backend) = advance_backend(store_path) else {
+        return 0;
+    };
+    let summaries = match backend.list_summaries(&queue_dead_target_summary_filter()) {
         Ok(s) => s,
         Err(_) => return 0,
     };
-    let dead: Vec<uuid::Uuid> = dead_queue_entries(&entries, &summaries, None)
+    let candidates = dead_queue_entries(&entries, &summaries, None);
+    let dead: Vec<uuid::Uuid> = revalidate_dead_queue_entries(&backend, candidates)
+        .0
         .iter()
         .map(|e| e.requirement_id)
         .collect();
@@ -4185,9 +4224,26 @@ pub(crate) fn handle_queue_command(
         } => {
             let user_id = get_user(user);
             let entries = storage.queue_list(&user_id, /* include_completed */ true)?;
-            let summaries =
-                advance_backend(store_path)?.list_summaries(&queue_dead_target_summary_filter())?;
-            let dead = dead_queue_entries(&entries, &summaries, r#for.as_deref());
+            let gc_backend = advance_backend(store_path)?;
+            let summaries = gc_backend.list_summaries(&queue_dead_target_summary_filter())?;
+            // BUG-1664: the summaries may be a stale snapshot; keep only the
+            // candidates whose authoritative spec is still dead.
+            // trace:BUG-1664 | ai:claude
+            let (dead, revived) = revalidate_dead_queue_entries(
+                &gc_backend,
+                dead_queue_entries(&entries, &summaries, r#for.as_deref()),
+            );
+            if revived > 0 {
+                println!(
+                    "  {}",
+                    format!(
+                        "kept {revived} entr{} whose spec changed since the cached view \
+                         (no longer closed or archived)",
+                        if revived == 1 { "y" } else { "ies" }
+                    )
+                    .dimmed()
+                );
+            }
             let dead_ids: std::collections::HashSet<Uuid> =
                 dead.iter().map(|e| e.requirement_id).collect();
 

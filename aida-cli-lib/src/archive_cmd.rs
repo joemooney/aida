@@ -184,6 +184,29 @@ fn archive_single(
     Ok(())
 }
 
+/// Whether the AUTHORITATIVE object `req` still qualifies for an age-based
+/// archive sweep: not already archived, its own status is one of `statuses`
+/// (matched the way the cache's status filter matches: case-insensitive,
+/// ignoring spaces, hyphens and underscores), and its own `modified_at` is
+/// older than `cutoff`. The sweeps select candidates from the cache projection,
+/// which a read may serve from a stale snapshot, so each candidate is
+/// re-checked here before it is archived.
+// trace:BUG-1664 | ai:claude
+pub(crate) fn archive_sweep_still_eligible<S: AsRef<str>>(
+    req: &aida_core::Requirement,
+    statuses: &[S],
+    cutoff: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    fn norm(s: &str) -> String {
+        s.chars()
+            .filter(|c| !matches!(c, ' ' | '-' | '_'))
+            .collect::<String>()
+            .to_lowercase()
+    }
+    let status = norm(&format!("{:?}", req.status));
+    !req.archived && statuses.iter().any(|s| norm(s.as_ref()) == status) && req.modified_at < cutoff
+}
+
 fn archive_sweep(
     duration: &str,
     status_csv: Option<&str>,
@@ -272,25 +295,37 @@ fn archive_sweep(
     }
 
     if dry_run {
+        // BUG-1664: preview what the real sweep would do — re-check each
+        // candidate against its authoritative object, as the write path does.
+        // trace:BUG-1664 | ai:claude
+        let mut would: Vec<aida_core::Requirement> = Vec::with_capacity(eligible.len());
+        for s in &eligible {
+            if let Some(req) = backend.get_requirement(&s.id)? {
+                if archive_sweep_still_eligible(&req, &statuses, cutoff) {
+                    would.push(req);
+                }
+            }
+        }
         println!(
             "{} {} spec(s) older than {duration} with status in {} (--dry-run, no writes):",
             "Would archive:".cyan().bold(),
-            eligible.len(),
+            would.len(),
             statuses.join(",")
         );
-        for s in &eligible {
-            let display_id = s
+        for req in &would {
+            let display_id = req
                 .agreed_id
                 .as_deref()
-                .or(s.spec_id.as_deref())
+                .or(req.spec_id.as_deref())
                 .unwrap_or("?");
             println!(
                 "  {:<14} {:<10} {}",
                 display_id,
-                s.status,
-                shorten_text(&s.title, 60)
+                format!("{:?}", req.status),
+                shorten_text(&req.title, 60)
             );
         }
+        print_sweep_skipped_note(eligible.len() - would.len());
         return Ok(());
     }
 
@@ -318,6 +353,7 @@ fn archive_sweep(
         statuses.join(",")
     );
     let mut to_archive = Vec::with_capacity(total);
+    let mut skipped = 0usize;
     let mut last_tick = std::time::Instant::now();
     for (i, s) in eligible.iter().enumerate() {
         let display_id = s
@@ -326,10 +362,17 @@ fn archive_sweep(
             .or(s.spec_id.as_deref())
             .unwrap_or_default()
             .to_string();
+        // `get_requirement` reads the spec's YAML object, not the cache row.
+        // BUG-1664: `s` came from the cache projection, which may be a stale
+        // snapshot, so re-check status and age on the object itself (a spec
+        // reopened or edited since then is skipped).
+        // trace:BUG-1664 | ai:claude
         let Some(mut req) = backend.get_requirement(&s.id)? else {
+            skipped += 1;
             continue;
         };
-        if req.archived {
+        if !archive_sweep_still_eligible(&req, &statuses, cutoff) {
+            skipped += 1;
             continue;
         }
         req.archived = true;
@@ -354,7 +397,24 @@ fn archive_sweep(
         "Archived:".cyan().bold(),
         statuses.join(",")
     );
+    print_sweep_skipped_note(skipped);
     Ok(())
+}
+
+/// Name the candidates the sweep left alone because their spec changed since
+/// the cached view it selected them from.
+// trace:BUG-1664 | ai:claude
+fn print_sweep_skipped_note(skipped: usize) {
+    if skipped > 0 {
+        println!(
+            "  {}",
+            format!(
+                "skipped {skipped} spec(s) that changed since the cached view \
+                 (status, age or archive flag no longer match)"
+            )
+            .dimmed()
+        );
+    }
 }
 
 // trace:STORY-441 | ai:claude
