@@ -8,13 +8,47 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:04:26.679365787Z
-modified_at: 2026-09-26T21:04:29.061361254Z
+modified_at: 2026-09-26T21:28:40.944958723Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0de43-c326-7762-b554-613b92f21560
   created_at: 2026-09-26T21:04:29.061347918Z
   created_by: joe
+comments:
+- id: 01a0df9e-caf0-7d03-9352-dddd14cf4006
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; claude/integrate-101 noted; all line refs are integrate-101 aida-cli-lib/src/maintenance_schedule.rs unless stated): five small polish items on BUG-1655's route binding.
+
+    FILES/SYMBOLS
+    - Task struct :240-254 (enabled, problem: Option<String>); raw job config enabled :109; load_registry :736-744 -> disable_unknown_bindings :752-768 (sets enabled=false + problem for ANY task whose `on` names an unknown job, including user-disabled ones); tick loop :938-942 (`if let Some(problem) = &task.problem { lines.push("schedule tick: {name} skipped: {problem}") }` runs BEFORE the `!task.enabled` continue, so it logs every tick); status_row :1349 ("invalid"); build_unbound_route_findings :2366-2391 (category "scheduler-driver", id schedule-route-unbound:<name>, action "bind it ... CronJobFailed:{guard}" with guard = name.trim_end_matches("-route") unconditionally); scheduler_driver_doctor_findings :2397-2409 (calls it with load_registry(..).tasks, i.e. AFTER disable_unknown_bindings); run_with_kill_timeout :2913-2947 (command_output_with_timeout -> Option<Output>; None = spawn failure OR timeout -> status 124, stderr "... did not complete within Ns (killed) or could not be spawned"); TIMEOUT_EXIT_PREFIX :2897 and its consumer in the due-item renderer :401-405 ("timed out before reporting - this is not a finding"); record_outcome_local :2962-2990 builds CronJobFailed.error = "exit {status}: {last stderr line}".
+    - aida-cli-lib/src/lib.rs command_output_with_timeout (BUG-1288/TASK-1424; shared with gitlab_mirror_link).
+    - docs/cli/03-work-autonomy.md :296: "`MailReceived`, ...))" has the stray second ')'.
+
+    APPROACH
+    1. Doctor finding for a route disabled by an unknown binding: in build_unbound_route_findings (rename to build_route_binding_findings; keep the old name as a thin alias if tests reference it) add a second pass over tasks.iter().filter(|t| t.problem.is_some()) emitting DoctorFinding { category: "scheduler-driver", id: format!("schedule-route-invalid:{name}"), summary: "scheduled job '{name}' is disabled: {problem}", action: <bind_hint from item 2>, safe_heal: false }. `problem` is set only by disable_unknown_bindings and is already computed by load_registry at :741, so no new state. Emit for any job with a problem, not only *-route names (a renamed guard's route may not end in -route); the id keeps "route" for continuity with BUG-1655's finding.
+    2. Guard-aware action text: fn bind_hint(tasks: &[Task], route: &str) -> String: let guard = route.strip_suffix("-route"); if guard.is_some_and(|g| tasks.iter().any(|t| t.name == g)) { format!("bind it to its guard in .aida/config.toml: on = [\"CronJobFailed:{g}\"]") } else { "bind it to the job it guards in .aida/config.toml: on = [\"CronJobFailed:<that job's name>\"]" }. Use it in both findings (existing one at :2385 and the new one).
+    3. Quiet ticks for user-disabled routes: in disable_unknown_bindings add `if !task.enabled { continue; }` at the top of the loop, so a route the user disabled keeps problem = None (no per-tick "skipped" line; status_row shows "no", not "invalid"). Doc comment gains "a job the user disabled is not validated; it cannot fire". Rejected alternative: a separate disabled_by_user flag (more state, no visible benefit).
+    4. Exit-124 label: in lib.rs add pub(crate) enum TimedCommandOutcome { Completed(Output), TimedOut { after: Duration }, SpawnFailed(std::io::Error) } and pub(crate) fn command_outcome_with_timeout(cmd, timeout) -> TimedCommandOutcome (move the body; command_output_with_timeout becomes `match .. { Completed(o) => Some(o), _ => None }` so the gitlab callers are untouched). In run_with_kill_timeout map TimedOut -> status 124, stderr "{display} did not complete within {N}s (killed)"; SpawnFailed(e) -> status 124 (keep the sentinel so ledger back-compat and TIMEOUT_EXIT_PREFIX routing are unchanged), stderr "{display} could not be spawned: {e}". CronJobFailed.error carries the LAST stderr line (:2975-2980), so the due-item renderer at :401 can distinguish: keep "timed out before reporting - this is not a finding" when the error contains "did not complete", and print "{source} could not be started - this is not a finding: {error}" when it contains "could not be spawned". No ledger schema change.
+    5. docs/cli/03-work-autonomy.md :296 -> "`MailReceived`, ...)". Check whether the master lives under aida-core/templates/docs/cli/ (CLAUDE.md rule: edit the master, run make sync-templates); integrate-101's BUG-1670 commit edited docs/cli/03-work-autonomy.md directly, which suggests it is not a mirror, but confirm with make check-templates.
+
+    EDGE CASES / FAIL-SAFE
+    - A route with no -route suffix and an unknown binding: finding still emitted (problem-based), generic hint. A task with a problem AND user-disabled cannot occur after item 3. `schedule run <job>` on an invalid job: unchanged (:1158 filter). Doctor with no registry: unwrap_or_default unchanged. Spawn failure must stay non-zero (PRIN-5): status 124 retained.
+
+    TESTS (same fixture style as bug_1655_unknown_bound_job_disables_only_that_route :5244: tempdir project with .aida/config.toml, AIDA_HOME set to a tempdir under crate::test_env::env_lock(), load_registry, tick_with_executor, status_row, at(h))
+    - task_1535_doctor_flags_route_disabled_by_unknown_binding: config with guard-route bound to CronJobFailed:gaurd; build_route_binding_findings(&cfg.tasks) has id schedule-route-invalid:guard-route whose summary contains "gaurd"; an enabled valid route yields nothing.
+    - task_1535_bind_hint_names_guard_only_when_registered: unbound watchdog-route with a watchdog job -> action contains "CronJobFailed:watchdog"; unbound orphan-route with no orphan job -> action contains "the job it guards" and not "CronJobFailed:orphan".
+    - task_1535_user_disabled_route_with_bad_binding_is_quiet: enabled = false route bound to an unknown job -> problem.is_none(), status_row(..).status != "invalid", and tick_with_executor lines contain no "skipped" for it; keep the existing :5244 test asserting an ENABLED bad route still logs once per tick.
+    - task_1535_spawn_failure_is_labelled_distinctly (item 4, cheap): run_with_kill_timeout(ProcessCommand::new("/nonexistent/aida-x"), ..) -> status 124 and stderr contains "could not be spawned"; bug_1655_timeout_is_labelled_as_not_a_finding :5159 keeps covering the timeout wording.
+
+    OVERLAP / ORDERING
+    - Branch after integrate-101 lands (everything here is inside BUG-1655's hunks). No overlap with TASK-1526/1527 or the other queued specs; BUG-1675 (disk-headroom scheduler timeout) is evidence only.
+
+    VERDICT: READY.
+  created_at: 2026-09-26T21:28:40.944958723Z
+  modified_at: 2026-09-26T21:28:40.944958723Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: 2e01ffe4ab06c30ac99d44d18438a1b156ef455d
   branch: main
