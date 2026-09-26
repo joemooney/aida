@@ -1,0 +1,20 @@
+id: 01a0dd30-0e7d-7452-beb7-b98a6440e67c
+spec_id: BUG-1647
+agreed_id: BUG-1647
+title: aida findings dismiss writes the spec with unlocked update_requirement (promote was moved to update_spec_atomically in BUG-1638)
+description: 'Found while implementing BUG-1638: findings promote now writes through update_spec_atomically, but findings dismiss still uses the old unlocked update_requirement read-modify-write. A concurrent edit made between the read and the write can be clobbered. Fix: route dismiss through update_spec_atomically, add a race-seam test like bug_1638_race_seam_tests, and make dismissing a finding that was deleted in the meantime fail cleanly.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T10:08:29.309145926Z
+modified_at: 2026-09-26T10:08:29.309145926Z
+req_type: Bug
+filed_at:
+  code_sha: 09a35045a5529f1867b54e5cb974821d0149a832
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
