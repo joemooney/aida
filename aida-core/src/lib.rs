@@ -141,8 +141,10 @@ pub mod store_locate;
 // trace:STORY-648 | ai:claude
 pub mod team;
 pub mod telemetry;
+// TOML string quoting for hand-built config files. trace:BUG-1649 | ai:claude
 #[cfg(feature = "native")]
 pub mod templates;
+pub mod toml_quote;
 #[cfg(feature = "native")]
 pub mod user_prefs;
 #[cfg(feature = "native")]

@@ -352,8 +352,12 @@ fn repo_commit_count(root: &Path) -> usize {
 
 /// Resolve `~/.aida/rule-violations.jsonl`. `None` when the home dir can't be
 /// located (treat as "off" — never error out).
+/// Resolves home through `crate::aida_home_dir()` so the `AIDA_HOME` override
+/// is honoured on every platform and agrees with `usage::log_path`; with
+/// `AIDA_HOME` unset it is the same `~/.aida/...` path as before.
+// trace:BUG-1649 | ai:claude
 pub fn log_path() -> Option<PathBuf> {
-    crate::home_dir().map(|h| h.join(".aida").join("rule-violations.jsonl"))
+    crate::aida_home_dir().map(|h| h.join(".aida").join("rule-violations.jsonl"))
 }
 
 /// Append events as JSONL. Best-effort: errors are swallowed — instrumentation

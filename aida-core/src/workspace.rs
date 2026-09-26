@@ -229,15 +229,8 @@ pub fn init_workspace(
         std::fs::create_dir_all(&aida_dir)?;
 
         let relative_store = format!("../{}", store_dir);
-        let config = format!(
-            "# AIDA workspace configuration\n\
-             [deployment]\n\
-             mode = \"distributed\"\n\
-             store_path = \"{}\"\n\
-             store_type = \"sibling\"\n\
-             workspace = \"{}\"\n",
-            relative_store, name
-        );
+        // trace:BUG-1649 | ai:claude
+        let config = workspace_repo_config(&relative_store, name);
         std::fs::write(aida_dir.join("config.toml"), config)?;
     }
 
@@ -245,6 +238,23 @@ pub fn init_workspace(
     manifest.save(workspace_root)?;
 
     Ok(manifest)
+}
+
+/// Body of a member repo's `.aida/config.toml` pointing at the shared
+/// workspace store. Values are quoted by [`crate::toml_quote::toml_string`]
+/// so a Windows path or a name containing `"` still yields valid TOML.
+// trace:BUG-1649 | ai:claude
+fn workspace_repo_config(relative_store: &str, workspace_name: &str) -> String {
+    format!(
+        "# AIDA workspace configuration\n\
+         [deployment]\n\
+         mode = \"distributed\"\n\
+         store_path = {}\n\
+         store_type = \"sibling\"\n\
+         workspace = {}\n",
+        crate::toml_quote::toml_string(relative_store),
+        crate::toml_quote::toml_string(workspace_name)
+    )
 }
 
 #[cfg(test)]
@@ -340,5 +350,23 @@ mod tests {
         // Check each repo got a config
         assert!(ws.join("repo-a/.aida/config.toml").exists());
         assert!(ws.join("repo-b/.aida/config.toml").exists());
+    }
+
+    // trace:BUG-1649 | ai:claude
+    #[test]
+    fn bug_1649_workspace_repo_config_round_trips_hostile_values() {
+        let plain = workspace_repo_config("../aida-store", "ws");
+        assert!(plain.contains("store_path = \"../aida-store\"\n"));
+        assert!(plain.contains("workspace = \"ws\"\n"));
+        for (store, name) in [
+            ("C:\\Users\\RUNNER~1\\x", "plain"),
+            ("../has\"quote", "name \"with\" quotes"),
+        ] {
+            let body = workspace_repo_config(store, name);
+            let parsed: toml::Table = toml::from_str(&body).expect("valid TOML");
+            let deployment = parsed["deployment"].as_table().unwrap();
+            assert_eq!(deployment["store_path"].as_str(), Some(store));
+            assert_eq!(deployment["workspace"].as_str(), Some(name));
+        }
     }
 }

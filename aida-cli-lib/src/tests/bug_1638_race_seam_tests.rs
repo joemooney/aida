@@ -12,7 +12,8 @@
 //! 3. Zen reports a spec deleted mid-flight as gone.
 //! 4. The findings promote writes keep a concurrent edit.
 //!
-//! Every test uses a temporary git-canonical store.
+//! Every test uses a temporary git-canonical store. The fixture helpers are
+//! shared with BUG-1647's `bug_1647_findings_atomic_tests`.
 //! trace:BUG-1638 | ai:claude
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
@@ -24,12 +25,14 @@ use aida_core::{Requirement, RequirementStatus};
 
 use crate::Phase1RestoreOutcome;
 
-const SPEC: &str = "TASK-9638";
+pub(crate) const SPEC: &str = "TASK-9638";
 
 /// A project at `<tmp>` whose `.aida/config.toml` points at a git-canonical
 /// store `<tmp>/.aida-store` holding one spec at `status`. Returns (tempdir,
 /// project root, store root, the spec as read now).
-fn project_with(status: RequirementStatus) -> (tempfile::TempDir, PathBuf, PathBuf, Requirement) {
+pub(crate) fn project_with(
+    status: RequirementStatus,
+) -> (tempfile::TempDir, PathBuf, PathBuf, Requirement) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().to_path_buf();
     std::fs::create_dir_all(root.join(".aida")).unwrap();
@@ -55,19 +58,19 @@ fn project_with(status: RequirementStatus) -> (tempfile::TempDir, PathBuf, PathB
     (dir, root, store_root, read)
 }
 
-fn open_backend(store_root: &Path) -> aida_core::CachedGitBackend {
+pub(crate) fn open_backend(store_root: &Path) -> aida_core::CachedGitBackend {
     let cache = aida_core::CachedGitBackend::default_cache_path(store_root);
     aida_core::CachedGitBackend::open(store_root, &cache).unwrap()
 }
 
-fn on_disk(store_root: &Path) -> Option<Requirement> {
+pub(crate) fn on_disk(store_root: &Path) -> Option<Requirement> {
     open_backend(store_root)
         .get_requirement_by_spec_id(SPEC)
         .unwrap()
 }
 
 /// Another writer changes the stored spec with `edit`.
-fn concurrently_edit(store_root: &Path, edit: impl FnOnce(&mut Requirement)) {
+pub(crate) fn concurrently_edit(store_root: &Path, edit: impl FnOnce(&mut Requirement)) {
     let backend = open_backend(store_root);
     let mut r = on_disk(store_root).expect("the spec exists");
     edit(&mut r);
@@ -75,7 +78,7 @@ fn concurrently_edit(store_root: &Path, edit: impl FnOnce(&mut Requirement)) {
 }
 
 /// A person moves the stored spec to `status`.
-fn concurrently_set(store_root: &Path, status: RequirementStatus) {
+pub(crate) fn concurrently_set(store_root: &Path, status: RequirementStatus) {
     concurrently_edit(store_root, |r| {
         conflict::set_status_recorded(r, status, "joe");
     });
@@ -91,7 +94,7 @@ fn concurrently_redescribe(store_root: &Path) {
 /// Arm the race seam with `edit`, run against the store root the writer
 /// resolved. The returned flag records that the seam fired, so a test can't
 /// pass because the writer never reached its write.
-fn arm_race(edit: impl FnOnce(&Path) + 'static) -> Rc<Cell<bool>> {
+pub(crate) fn arm_race(edit: impl FnOnce(&Path) + 'static) -> Rc<Cell<bool>> {
     let fired = Rc::new(Cell::new(false));
     let flag = fired.clone();
     crate::inject_status_write_race(move |store_root| {
@@ -101,7 +104,7 @@ fn arm_race(edit: impl FnOnce(&Path) + 'static) -> Rc<Cell<bool>> {
     fired
 }
 
-fn last_status_author(r: &Requirement) -> &str {
+pub(crate) fn last_status_author(r: &Requirement) -> &str {
     r.history
         .iter()
         .rev()
@@ -299,7 +302,7 @@ fn bug_1638_zen_reports_a_spec_deleted_mid_flight_as_gone() {
 // ---------------------------------------------------------------------------
 
 /// Another writer rewrites the description and adds a comment.
-fn concurrently_comment_and_redescribe(store_root: &Path) {
+pub(crate) fn concurrently_comment_and_redescribe(store_root: &Path) {
     concurrently_edit(store_root, |r| {
         r.description = "edited concurrently".into();
         r.add_comment(aida_core::Comment::new(
@@ -309,7 +312,7 @@ fn concurrently_comment_and_redescribe(store_root: &Path) {
     });
 }
 
-fn comment_texts(r: &Requirement) -> Vec<&str> {
+pub(crate) fn comment_texts(r: &Requirement) -> Vec<&str> {
     r.comments.iter().map(|c| c.content.as_str()).collect()
 }
 
