@@ -1,0 +1,20 @@
+id: 01a0dfcb-3d35-7e52-9f4f-baf07f6d4a13
+spec_id: TASK-1538
+agreed_id: TASK-1538
+title: 'Slice 1: mechanical split of lib.rs into ~45 flat modules (STORY-1488 T2)'
+description: 'Per the ADVISOR SIGNOFF on STORY-1488: V1-V10 as amended, the 14 non-move retargets (1a-1n incl. include_str guards, adr9 guardrail, trace-header and portability allowlists + check-portability-growth crediting moves, pub use shims), trait-impl methods excluded from pub(crate), explicit test-module ownership in the manifest, rebase helper + note; landed as the only PR in a declared quiet window.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T22:17:13.781726062Z
+modified_at: 2026-09-26T22:17:13.781726062Z
+req_type: Task
+filed_at:
+  code_sha: b9a986e9fbe3912a0415963c8344ddca4830b700
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
