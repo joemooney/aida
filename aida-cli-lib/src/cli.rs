@@ -12921,11 +12921,13 @@ pub enum Command {
         #[clap(long, global = true, value_name = "KIND")]
         kind: Option<String>,
 
-        /// Only recent Done→Completed ship transitions — the "did my ship
-        /// register?" view. Unlike `--all` (a recency-blind dump of every
-        /// terminal-status spec), this shows just what merged-to-default,
-        /// newest first. Implies events mode; composes with --since/--until/--limit.
+        /// Only transitions into Completed (merged to the default branch),
+        /// from any prior status — the "did my ship register?" view. Unlike
+        /// `--all` (a recency-blind dump of every terminal-status spec), this
+        /// shows just what merged-to-default, newest first. Implies events
+        /// mode; composes with --since/--until/--limit.
         // trace:TASK-507 | ai:claude — plain `//` keeps the marker out of `--help`.
+        // trace:BUG-1636 | ai:claude
         #[clap(long, global = true)]
         shipped: bool,
 
