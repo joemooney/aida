@@ -4,8 +4,11 @@
 //!
 //! - [`transition_to_completed`] — the single-spec path: stamp Completed, let
 //!   the caller persist it by whatever write path it already uses, then emit
-//!   the `SpecCompleted` ship record. `aida done`, the queue's close action and
-//!   `aida promote --auto-complete` use it.
+//!   the `SpecCompleted` ship record. `aida done` and the queue's close action
+//!   use it.
+//! - [`transition_to_completed_atomically`] — the same, as one per-spec atomic
+//!   write that re-reads the spec under the store lock. `aida findings promote
+//!   --auto-complete` uses it (BUG-1638).
 //! - [`mark_completed`] — the in-memory stamp alone, for paths whose
 //!   persistence and emission are separated by work this module cannot own:
 //!   the batch auto-bump / reconcile flips (stamped inside an
@@ -74,6 +77,43 @@ pub(crate) fn transition_to_completed(
         }
     }
     Ok(into)
+}
+
+/// [`transition_to_completed`] as one per-spec atomic write: re-read `target`
+/// under the store lock, move that copy into Completed, let `prepare` add the
+/// caller's history, comments and timestamps, and write only that spec, so a
+/// concurrent edit made after the caller's read is kept. The ship record is
+/// emitted after the write lands. Returns `None` when the spec no longer
+/// exists (nothing is written), else whether it was an into-Completed
+/// transition.
+// trace:BUG-1638 | ai:claude
+pub(crate) fn transition_to_completed_atomically<B: aida_core::db::DatabaseBackend>(
+    backend: &B,
+    target: &Requirement,
+    project_root: Option<&std::path::Path>,
+    spec_id: &str,
+    sha: &str,
+    closed_by: &str,
+    prepare: impl FnOnce(&mut Requirement, &RequirementStatus),
+) -> Result<Option<bool>> {
+    let mut prior = None;
+    let written = backend.update_spec_atomically(target, |r| {
+        let p = mark_completed(r);
+        prepare(r, &p);
+        prior = Some(p);
+    })?;
+    if written.is_none() {
+        return Ok(None);
+    }
+    let into = prior
+        .as_ref()
+        .is_some_and(|p| crate::is_into_completed_transition(p, "Completed"));
+    if into {
+        if let Some(project_root) = project_root {
+            emit_spec_completed(project_root, spec_id, sha, None, closed_by);
+        }
+    }
+    Ok(Some(into))
 }
 
 /// Clear a stale `implementation_info.completed_at` when a status edit takes
