@@ -89,6 +89,12 @@ pub(crate) struct ReapFacts {
     /// about the commits the worktree actually holds — keep it.
     // trace:BUG-1657 | ai:claude
     pub head_on_branch: bool,
+    /// `Some(reason)` when the lease branch is checked out in a registered
+    /// worktree other than the lease's own (e.g. the worktree was moved and
+    /// the lease path is stale), or the worktree listing cannot be read. The
+    /// branch delete would orphan that live checkout — keep the session.
+    // trace:BUG-1657 | ai:claude
+    pub branch_checked_out_elsewhere: Option<String>,
     /// The worktree-GC safety facts, fed to the very same classifier
     /// `aida worktree gc` uses for its dirty / merged / unique-commit gates.
     pub worktree: AgentWorktreeFacts,
@@ -112,6 +118,7 @@ pub(crate) fn session_should_notify(facts: &ReapFacts) -> bool {
     !facts.worktree.dirty
         && !facts.locked
         && facts.head_on_branch
+        && facts.branch_checked_out_elsewhere.is_none()
         && facts.spec_finished
         // The load-bearing distinction from a reap: the process is STILL ALIVE.
         && !facts.process_exited
@@ -144,6 +151,10 @@ pub(crate) fn classify_session_reap(facts: &ReapFacts) -> ReapVerdict {
              operator decision"
                 .to_string(),
         );
+    }
+    // trace:BUG-1657 | ai:claude
+    if let Some(reason) = &facts.branch_checked_out_elsewhere {
+        return ReapVerdict::Skip(reason.clone());
     }
     // HARD BOUNDARY: a live session owns its worktree as its cwd. Leave it
     // running and leave its tree in place — AIDA never force-closes an agent.
@@ -482,6 +493,56 @@ pub(crate) fn worktree_status_dirty(worktree: &std::path::Path) -> bool {
     worktree_status_unreadable(worktree) || !worktree_dirty_entries(worktree).is_empty()
 }
 
+/// Is `branch` checked out in a registered worktree OTHER than `lease_path`
+/// whose directory exists? Reads `git worktree list --porcelain`. Returns the
+/// keep reason, or `None` when no other live checkout holds the branch. A
+/// listing that cannot be read fails closed (a keep reason). Entries whose
+/// directories are gone (prunable) do not count — nothing lives there.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn branch_checked_out_elsewhere(
+    project_root: &std::path::Path,
+    branch: &str,
+    lease_path: &std::path::Path,
+) -> Option<String> {
+    let branch = branch.trim();
+    if branch.is_empty() {
+        return None;
+    }
+    let Some(listing) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "list", "--porcelain", "-z"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+    else {
+        return Some("the worktree listing could not be read — operator decision".to_string());
+    };
+    let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let lease_canon = (!lease_path.as_os_str().is_empty()).then(|| canon(lease_path));
+    let want = format!("branch refs/heads/{branch}");
+    let text = String::from_utf8_lossy(&listing.stdout);
+    let mut path: Option<std::path::PathBuf> = None;
+    // `-z` terminates each attribute with NUL and each entry with an extra NUL.
+    for field in text.split('\0') {
+        if let Some(p) = field.strip_prefix("worktree ") {
+            path = Some(std::path::PathBuf::from(p));
+        } else if field == want {
+            let Some(p) = path.as_deref() else { continue };
+            if p.exists() && lease_canon.as_deref() != Some(canon(p).as_path()) {
+                return Some(format!(
+                    "branch is checked out in another worktree at {}",
+                    p.display()
+                ));
+            }
+        } else if field.is_empty() {
+            path = None;
+        }
+    }
+    None
+}
+
 /// The scan's `head_on_branch` fact: no worktree, a worktree directory that
 /// was removed by hand (no checkout left to be off-branch — the merge and
 /// content proofs still gate removal), or a worktree checked out on `branch`.
@@ -751,6 +812,11 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
             process_exited,
             locked: has_worktree && worktree_is_locked(project_root, &lease.worktree_path),
             head_on_branch: session_head_on_branch(&lease.worktree_path, &lease.branch),
+            branch_checked_out_elsewhere: branch_checked_out_elsewhere(
+                project_root,
+                &lease.branch,
+                &lease.worktree_path,
+            ),
             worktree,
         };
 
@@ -822,6 +888,13 @@ fn reap_one(
     if !branch.is_empty() && !branch_still_at(project_root, branch, checked_tip) {
         return format!("skipped — branch `{branch}` moved since the scan");
     }
+    // The branch delete below does not refuse a branch checked out in another
+    // worktree (e.g. the session's worktree was moved and the lease path is
+    // stale), so re-check the live listing. trace:BUG-1657 | ai:claude
+    if let Some(reason) = branch_checked_out_elsewhere(project_root, branch, &lease.worktree_path) {
+        return format!("skipped — {reason}");
+    }
+    let worktree_missing = has_worktree && !lease.worktree_path.exists();
 
     if has_worktree && lease.worktree_path.exists() {
         // An unreadable status is not "clean": the teardown below forces
@@ -879,6 +952,19 @@ fn reap_one(
     {
         return "reaped — lease released".to_string();
     }
+    // A worktree directory removed by hand leaves a prunable registration
+    // behind; clear it so no dangling entry still names the deleted branch.
+    // `prune` only drops entries whose directories are gone.
+    // trace:BUG-1657 | ai:claude
+    if worktree_missing {
+        let _ = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["worktree", "prune"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
     if delete_branch_at(project_root, branch, checked_tip) {
         format!("reaped — worktree removed, lease released, branch `{branch}` deleted")
     } else {
@@ -905,6 +991,10 @@ pub(crate) fn branch_still_at(
 /// added after the scan can never be lost. A squash-merged branch is not
 /// "merged" to `git branch -d`, which is why this is not `-d`; the scan
 /// already proved the pinned commit shipped. Returns whether it was deleted.
+///
+/// Unlike `git branch -D`, `update-ref -d` does NOT refuse a branch that is
+/// checked out in another worktree. Callers must guard with
+/// [`branch_checked_out_elsewhere`] first (`reap_one` does).
 // trace:BUG-1657 | ai:claude
 pub(crate) fn delete_branch_at(
     project_root: &std::path::Path,

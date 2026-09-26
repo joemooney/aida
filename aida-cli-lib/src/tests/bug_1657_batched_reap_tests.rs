@@ -93,6 +93,7 @@ fn reap_verdict(worktree: AgentWorktreeFacts, spec_finished: bool) -> ReapVerdic
         process_exited: true,
         locked: false,
         head_on_branch: true,
+        branch_checked_out_elsewhere: None,
         worktree,
     })
 }
@@ -432,6 +433,7 @@ fn bug_1657_worktree_off_its_session_branch_is_kept() {
             process_exited: true,
             locked: false,
             head_on_branch,
+            branch_checked_out_elsewhere: None,
             worktree: landed(),
         })
     };
@@ -587,6 +589,7 @@ fn reap_verdict_at(worktree: AgentWorktreeFacts, head_on_branch: bool) -> ReapVe
         process_exited: true,
         locked: false,
         head_on_branch,
+        branch_checked_out_elsewhere: None,
         worktree,
     })
 }
@@ -776,4 +779,132 @@ fn bug_1657_unreadable_worktree_status_is_kept() {
     }
     // A directory that no longer exists is not "unreadable".
     assert!(!worktree_status_unreadable(&tmp.path().join("gone")));
+}
+
+/// A minimal lease record for the fixture repo — only what `reap_one` reads.
+fn fixture_lease(worktree: &Path, branch: &str, scope: &str) -> SessionLease {
+    serde_json::from_value(serde_json::json!({
+        "id": "b1657fixture",
+        "scope": scope,
+        "slug": scope.to_ascii_lowercase(),
+        "owner": "test",
+        "worktree_path": worktree,
+        "branch": branch,
+        "started_at": "2026-01-01T00:00:00Z",
+        "hostname": "fixture",
+    }))
+    .expect("fixture lease parses")
+}
+
+/// A worktree moved with `git worktree move` leaves the lease path stale.
+/// The branch is still checked out at the new path, so neither the scan nor
+/// the reap may delete it — clean or dirty.
+#[test]
+fn bug_1657_moved_worktree_is_kept() {
+    for dirty_variant in [false, true] {
+        let (tmp, root) = batched_repo();
+        let old = tmp.path().join("wt-old");
+        let new = tmp.path().join("wt-new");
+        git(
+            &root,
+            &["worktree", "add", "-q", old.to_str().unwrap(), "spec-a"],
+        );
+        // The lease records the canonical path it was created at.
+        let old = old.canonicalize().unwrap();
+        assert_eq!(branch_checked_out_elsewhere(&root, "spec-a", &old), None);
+        git(
+            &root,
+            &[
+                "worktree",
+                "move",
+                old.to_str().unwrap(),
+                new.to_str().unwrap(),
+            ],
+        );
+        if dirty_variant {
+            std::fs::write(new.join("scratch.txt"), "uncommitted\n").unwrap();
+        }
+
+        // The stale lease path reads as "missing": on-branch, not dirty.
+        assert!(session_head_on_branch(&old, "spec-a"));
+        let dirty = worktree_status_dirty(&old);
+        assert!(!dirty);
+        let elsewhere = branch_checked_out_elsewhere(&root, "spec-a", &old);
+        let reason = elsewhere.clone().expect("moved checkout is found");
+        assert!(reason.contains("another worktree"), "{reason}");
+
+        let (facts, tip) = gather_merge_facts_pinned(
+            &root,
+            Some("main"),
+            "spec-a",
+            "BUG-9001",
+            dirty,
+            true,
+            |_| false,
+        );
+        let verdict = classify_session_reap(&ReapFacts {
+            spec_finished: true,
+            process_exited: true,
+            locked: false,
+            head_on_branch: true,
+            branch_checked_out_elsewhere: elsewhere,
+            worktree: facts,
+        });
+        match verdict {
+            ReapVerdict::Skip(r) => assert!(r.contains("another worktree"), "{r}"),
+            v => panic!("a moved, live checkout must be kept, got {v:?}"),
+        }
+
+        // Even if the reap is reached, it re-checks and leaves everything.
+        let lease = fixture_lease(&old, "spec-a", "BUG-9001");
+        let outcome = reap_one(&root, &lease, tip.as_deref());
+        assert!(outcome.starts_with("skipped"), "{outcome}");
+        assert!(
+            resolve_local_branch_tip(&root, "spec-a").is_some(),
+            "branch kept"
+        );
+        assert_eq!(
+            git(&new, &["symbolic-ref", "HEAD"]),
+            "refs/heads/spec-a",
+            "the live checkout still sits on its branch"
+        );
+        if dirty_variant {
+            assert!(new.join("scratch.txt").exists());
+        }
+    }
+}
+
+/// A worktree removed by hand is reaped, and no dangling (prunable)
+/// registration is left naming the deleted branch.
+#[test]
+fn bug_1657_removed_worktree_reaps_without_dangling_entry() {
+    let (tmp, root) = batched_repo();
+    let wt = tmp.path().join("wt-spec-a");
+    git(
+        &root,
+        &["worktree", "add", "-q", wt.to_str().unwrap(), "spec-a"],
+    );
+    let wt = wt.canonicalize().unwrap();
+    std::fs::remove_dir_all(&wt).unwrap();
+    assert!(git(&root, &["worktree", "list", "--porcelain"]).contains("prunable"));
+    assert_eq!(branch_checked_out_elsewhere(&root, "spec-a", &wt), None);
+
+    let (facts, tip) = gather_merge_facts_pinned(
+        &root,
+        Some("main"),
+        "spec-a",
+        "BUG-9001",
+        false,
+        true,
+        |_| false,
+    );
+    assert!(matches!(reap_verdict(facts, true), ReapVerdict::Reap(_)));
+    let lease = fixture_lease(&wt, "spec-a", "BUG-9001");
+    let outcome = reap_one(&root, &lease, tip.as_deref());
+    assert!(outcome.starts_with("reaped"), "{outcome}");
+    assert!(outcome.contains("deleted"), "{outcome}");
+    assert!(resolve_local_branch_tip(&root, "spec-a").is_none());
+    let listing = git(&root, &["worktree", "list", "--porcelain"]);
+    assert!(!listing.contains("prunable"), "{listing}");
+    assert!(!listing.contains("refs/heads/spec-a"), "{listing}");
 }
