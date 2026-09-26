@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:28.889551612Z
-modified_at: 2026-09-26T15:54:59.541672623Z
+modified_at: 2026-09-26T15:56:00.297993173Z
 req_type: Bug
 comments:
 - id: 01a0de62-3daf-7e80-9c2a-ae9c380fcffe
@@ -22,6 +22,12 @@ comments:
   content: 'Review (fresh Opus reviewer): APPROVE WITH NITS on 7bdc99dbe6. (1) Acceptance 1-5 all met: rotating-out checklist (no new dispatch; stop/finish subagents, shells, waiters; /goal clear; handoff last with head sha + PR/run ids; Exit and stop tasks, never Move to background); taking-over check; one-orchestrator guardrail; portable copy vendor-neutral (harness''s own session list, no Claude tool names); make check-templates passes in a scratch worktree. (2) Verified against Claude Code 2.1.283: claude agents and claude stop <id> exist; /goal clear matches existing drain-queue skill usage; aida ps exists. The exit-dialog labels come from the operator''s observation and are plausible. ListAgents is not a tool in this reviewer session, so I could not verify it; it is in the acceptance text, so keeping it is fine. (3) No claim that the substrate guard exists. No spec IDs in prose. No conflict with the handoff template or guardrails. Nits, not blocking: (a) ''Find one with claude agents'' reads slightly ambiguously; ''If a session was backgrounded anyway, find it with claude agents and stop it with claude stop <id>'' is clearer. (b) The guardrail says the later session stands down, but in a planned rotation the later session is the intended successor. Taking over already says to ask the operator, so there is no real conflict, but ''unless the operator says otherwise'' would remove the tension.'
   created_at: 2026-09-26T15:54:59.541672623Z
   modified_at: 2026-09-26T15:54:59.541672623Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0de6e-37aa-7fb2-bb52-355f1a75ca71
+  author: joe
+  content: 'Orchestrator delta check (proxy for Joe) of 7bdc99dbe6..7369646290: APPROVED. Nit (a) is reworded in both copies; nit (b) limits the stand-down to an unplanned duplicate and adds the planned-rotation successor path. check-templates is OK and the orchestrate tests pass (3). It joins batch 98.'
+  created_at: 2026-09-26T15:56:00.297993173Z
+  modified_at: 2026-09-26T15:56:00.297993173Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de62-192b-7dc2-9462-24f639b584c0
