@@ -131,13 +131,23 @@ impl SkillManifest {
     }
 
     fn render(&self) -> String {
-        let mut out = format!(
-            "{MANIFEST_V2_MARKER}\n\
-             # Skills AIDA has delivered into this pack. A listed skill is never\n\
+        // An incomplete manifest (written by a partial plan, e.g. the
+        // memory-lane footprint, into a pack with no complete manifest) keeps
+        // no v2 marker, so it stays legacy: refresh creates nothing in it.
+        // trace:TASK-1503 | ai:claude
+        let mut out = if self.complete {
+            format!("{MANIFEST_V2_MARKER}\n")
+        } else {
+            String::new()
+        };
+        out.push_str(
+            "# Skills AIDA has delivered into this pack. A listed skill is never\n\
              # re-created by `aida init`, `aida scaffold upgrade` or\n\
              # `aida scaffold refresh`, so deleting one sticks. Remove a line to\n\
              # have AIDA deliver that skill again. Unconfirmed skills are never\n\
-             # created by refresh; `aida scaffold upgrade` delivers them once.\n"
+             # created by refresh; `aida scaffold upgrade` delivers them once. To\n\
+             # decline an unconfirmed skill for good, move its line under the\n\
+             # `# opted-out` heading (add the heading if it is absent).\n",
         );
         for name in &self.delivered {
             out.push_str(name);
@@ -291,6 +301,10 @@ pub struct SkillPackPlan {
     pub on_disk: Option<SkillManifest>,
     /// Why the pack could not be tracked, for the caller to print.
     pub warning: Option<String>,
+    /// `true` when `shipped` is only part of what AIDA ships into this pack
+    /// (e.g. the memory-lane footprint's two skills). A partial plan never
+    /// promotes an absent or legacy manifest to complete.
+    pub partial: bool,
 }
 
 impl SkillPackPlan {
@@ -326,7 +340,7 @@ impl SkillPackPlan {
                 manifest.unconfirmed.insert(name.clone());
             }
         }
-        manifest.complete = true;
+        manifest.complete = manifest.complete || !self.partial;
         Some(manifest)
     }
 
@@ -384,6 +398,7 @@ pub fn plan_skill_pack(
         base: None,
         on_disk: None,
         warning,
+        partial: false,
     };
     if symlink_target(&pack_dir).is_some() {
         return untracked(
@@ -442,6 +457,7 @@ pub fn plan_skill_pack(
         base: Some(base),
         on_disk,
         warning: None,
+        partial: false,
     }
 }
 
@@ -818,6 +834,50 @@ mod tests {
             let plan = plan_skill_pack(root, pack, shipped.clone(), mode);
             assert!(plan.deliverable(root).is_empty(), "{mode:?}");
         }
+    }
+
+    /// A partial plan (only some of the pack's skills) never promotes an
+    /// absent or legacy manifest to complete, but keeps a complete one
+    /// complete; the incomplete manifest round-trips without the v2 marker.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn partial_plan_never_completes_a_manifest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let pack = Path::new(".claude/skills");
+        install_skill(&root.join(pack), "aida-capture");
+        let mut plan = plan_skill_pack(root, pack, names(&["aida-capture"]), ManifestMode::Install);
+        plan.partial = true;
+        plan.record(root, &BTreeSet::new()).unwrap();
+        let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
+        assert!(!m.complete);
+        assert!(m.delivered.contains("aida-capture"));
+        let text = std::fs::read_to_string(root.join(pack).join(DELIVERED_MANIFEST)).unwrap();
+        assert!(!text.contains(MANIFEST_V2_MARKER), "{text}");
+        let refresh = plan_skill_pack(
+            root,
+            pack,
+            names(&["aida-capture", "aida-req"]),
+            ManifestMode::Refresh,
+        );
+        assert!(
+            refresh.deliverable(root).is_empty(),
+            "still legacy for refresh"
+        );
+
+        // A full plan completes it; a later partial plan keeps it complete.
+        let full = plan_skill_pack(root, pack, names(&["aida-capture"]), ManifestMode::Install);
+        full.record(root, &BTreeSet::new()).unwrap();
+        let mut again =
+            plan_skill_pack(root, pack, names(&["aida-capture"]), ManifestMode::Install);
+        again.partial = true;
+        again.record(root, &BTreeSet::new()).unwrap();
+        assert!(
+            read_skill_manifest(&root.join(pack))
+                .unwrap()
+                .unwrap()
+                .complete
+        );
     }
 
     /// A skill directory holding only supporting files is not a present

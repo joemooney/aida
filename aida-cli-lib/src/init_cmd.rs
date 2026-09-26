@@ -1002,7 +1002,7 @@ fn write_memory_lane_artifact(
 }
 
 // trace:STORY-1093 | ai:codex
-fn write_memory_lane_scaffolding(
+pub(crate) fn write_memory_lane_scaffolding(
     root: &std::path::Path,
     store: &RequirementsStore,
     storage_label: &str,
@@ -1033,12 +1033,15 @@ fn write_memory_lane_scaffolding(
             .map(|n| n.to_string())
             .collect();
         for pack in [".claude/skills", ".codex/skills"] {
-            let plan = aida_core::scaffolding::refresh::plan_skill_pack(
+            let mut plan = aida_core::scaffolding::refresh::plan_skill_pack(
                 root,
                 std::path::Path::new(pack),
                 names.clone(),
                 aida_core::scaffolding::refresh::ManifestMode::Install,
             );
+            // Two skills are not the full pack: never complete a manifest
+            // from them, or refresh would treat every other skill as new.
+            plan.partial = true;
             if let Some(warning) = &plan.warning {
                 eprintln!(
                     "{} {}",
@@ -5272,7 +5275,7 @@ mod task_1503_memory_lane_manifest_tests {
         write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
         for pack in [".claude/skills", ".codex/skills"] {
             let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
-            assert!(m.complete, "{pack}");
+            assert!(!m.complete, "{pack}: two skills never complete a manifest");
             assert!(m.delivered.contains("aida-capture") && m.delivered.contains("aida-learn"));
         }
 
@@ -5290,6 +5293,7 @@ mod task_1503_memory_lane_manifest_tests {
                 assert!(dir.join(name).join("SKILL.md").is_file(), "{pack}/{name}");
             }
             let m = read_skill_manifest(&dir).unwrap().unwrap();
+            assert!(m.complete, "{pack}: the full install completes it");
             assert!(m.unconfirmed.is_empty(), "{pack}: {m:?}");
         }
         assert!(!root.join(".claude/skills/aida-capture").exists());
