@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:41.012539596Z
-modified_at: 2026-09-26T17:48:22.252668603Z
+modified_at: 2026-09-26T17:48:49.688312724Z
 req_type: Task
 tags:
 - cache
@@ -110,6 +110,12 @@ comments:
     No blockers.
   created_at: 2026-09-26T17:48:22.252668603Z
   modified_at: 2026-09-26T17:48:22.252668603Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0ded5-8298-7643-8a64-fbcfd44983c8
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): round-4 APPROVE WITH NITS accepted; batch 99. Nits 2-4 go to STORY-1484 (HEAD re-capture test after an incremental error, redundant refill under a pending migration, epic YAML read inside the transaction). Nit 1 (name BUG-1663 in the comment) is cosmetic and skipped. Noted: this also fixes a main bug where a pending migration plus a foreign-writer sidecar served empty tables (''aida list'' printed [] and emptied the cache).'
+  created_at: 2026-09-26T17:48:49.688312724Z
+  modified_at: 2026-09-26T17:48:49.688312724Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
