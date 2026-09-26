@@ -1,0 +1,37 @@
+id: 01a0deff-e2cc-7122-be74-8ecc805c0c00
+spec_id: TASK-1522
+agreed_id: TASK-1522
+title: 'Intent-capture effort target: report the criterion-to-test share of newly completed specs against a configurable floor (default 50%)'
+description: |
+  From SPIKE-86 section 8 item 4, resolved by OPERATOR DECISION on SPIKE-86 (Joe, 2026-09-26) as "the effort-balance target": option (b), set a target that rebalances effort toward intent capture. Evidence: intent work (criteria, traces, reconstitute) took 6.6% of attributed changed lines over 30 days against the control plane's 50.9%, and criterion-level tracing covers 10 specs.
+
+  The target is a floor on criterion-to-test tracing for newly completed work, measured by the capture-coverage report (STORY-1487) and reported, not enforced (PRIN-9 is advisory; raising enforcement is a separate operator decision).
+
+  PROXY DECISION (orchestrator for Joe) on the starting number, which Joe may overrule by comment: of work specs (story/task/bug) completed in a rolling 30-day window that carry acceptance criteria, at least 50% have at least one criterion with a traced test. The number lives in project config with that default.
+
+  Acceptance:
+  1. The capture-coverage report shows the criterion-to-test share for specs completed in the last 30 days next to the configured floor, and states "below floor" or "at or above floor".
+  2. The floor is read from project config; the default is 50%; changing it changes the verdict (test).
+  3. `aida status` (or the digest) shows a one-line intent-capture indicator when the share is below the floor, and nothing when at or above (test).
+  4. Nothing blocks a merge, a drain, or a completion because of this metric (test: a spec completed with no traced criterion still completes).
+  5. The current AIDA value at filing is recorded in a comment on this spec once implemented, as the baseline.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:35:06.828604970Z
+modified_at: 2026-09-26T18:35:06.828604970Z
+req_type: Task
+tags:
+- criteria
+- from-spike:SPIKE-86
+- measurement
+- north-star
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
