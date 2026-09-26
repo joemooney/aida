@@ -43995,11 +43995,19 @@ fn followup_filed_anywhere(existing_titles: &[String], bullet: &str) -> bool {
 
 /// BUG-1625: does `store` already hold `bullet` as a filed followup of
 /// `parent`? True when a spec with the same trimmed, case-insensitive title is
-/// a child of `parent` or carries a [`FOLLOWUP_SRC_TAG_PREFIX`] provenance tag.
+/// a child of `parent` or carries the [`FOLLOWUP_SRC_TAG_PREFIX`] provenance
+/// tag of `source_plan` — the plan this bullet came from. BUG-1633: a
+/// same-titled spec filed from a DIFFERENT plan is not this followup.
 /// Used to classify a failed `aida add` as "already filed" instead of
 /// "declined". Pure + total.
-// trace:BUG-1625 | ai:claude
-fn followup_filed_in_store(store: &RequirementsStore, parent: &str, bullet: &str) -> bool {
+// trace:BUG-1625 trace:BUG-1633 | ai:claude
+fn followup_filed_in_store(
+    store: &RequirementsStore,
+    parent: &str,
+    bullet: &str,
+    source_plan: &str,
+) -> bool {
+    let plan_tag = format!("{FOLLOWUP_SRC_TAG_PREFIX}{source_plan}");
     use aida_core::models::RelationshipType;
     let want = bullet.trim().to_ascii_lowercase();
     let child_ids: std::collections::HashSet<uuid::Uuid> = store
@@ -44014,10 +44022,7 @@ fn followup_filed_in_store(store: &RequirementsStore, parent: &str, bullet: &str
         .unwrap_or_default();
     store.requirements.iter().any(|r| {
         r.title.trim().to_ascii_lowercase() == want
-            && (child_ids.contains(&r.id)
-                || r.tags
-                    .iter()
-                    .any(|t| t.starts_with(FOLLOWUP_SRC_TAG_PREFIX)))
+            && (child_ids.contains(&r.id) || r.tags.iter().any(|t| *t == plan_tag))
     })
 }
 
@@ -44358,12 +44363,35 @@ fn discover_plan_context(
 /// [`FOLLOWUP_SRC_TAG_PREFIX`] tag so a later re-extraction can dedup against
 /// this followup even after it ships (BUG-680). Returns the new spec id on
 /// success.
+/// BUG-1633: test-only stand-in for the followup `aida add` subprocess.
+/// Receives `(project_root, parent, title, source_plan)` and returns the new
+/// spec id, or `None` to simulate a failed add.
+// trace:BUG-1633 | ai:claude
+#[cfg(test)]
+type FollowupAddHook = Box<dyn FnMut(&std::path::Path, &str, &str, Option<&str>) -> Option<String>>;
+
+#[cfg(test)]
+thread_local! {
+    static FOLLOWUP_ADD_HOOK: std::cell::RefCell<Option<FollowupAddHook>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 fn aida_subcmd_add_followup_task(
     project_root: &std::path::Path,
     parent_spec: &str,
     title: &str,
     source_plan: Option<&str>,
 ) -> Option<String> {
+    // BUG-1633: tests substitute the `aida add` subprocess (the test binary is
+    // not `aida`). trace:BUG-1633 | ai:claude
+    #[cfg(test)]
+    if let Some(result) = FOLLOWUP_ADD_HOOK.with(|h| {
+        h.borrow_mut()
+            .as_mut()
+            .map(|f| f(project_root, parent_spec, title, source_plan))
+    }) {
+        return result;
+    }
     let aida = aida_exe_path();
     let mut args: Vec<String> = vec![
         "add".into(),
@@ -45044,9 +45072,13 @@ fn extract_plan_followups(
                 // pull output never reports an existing task as declined.
                 // trace:BUG-1625 | ai:claude
                 None => {
+                    // BUG-1633: only THIS plan's provenance tag counts.
+                    // trace:BUG-1633 | ai:claude
                     let exists = storage
                         .load()
-                        .map(|fresh| followup_filed_in_store(&fresh, spec_id, followup))
+                        .map(|fresh| {
+                            followup_filed_in_store(&fresh, spec_id, followup, source_plan)
+                        })
                         .unwrap_or(false);
                     if exists {
                         deduped.push(followup.clone());
@@ -67585,9 +67617,12 @@ struct CodeLegPlan {
     push_matches_fetch: bool,
 }
 
-/// BUG-1626: does `origin` push to exactly the URL(s) it fetches from?
+/// BUG-1626: does `origin` push to exactly the URL it fetches from?
 /// Unreadable config counts as "no" — the safe answer is to push.
-// trace:BUG-1626 | ai:claude
+/// BUG-1633: requires exactly ONE fetch URL. With several `remote.origin.url`
+/// entries `git push` pushes to all of them, but the fetch only refreshed the
+/// first — a lagging second URL would never be caught up.
+// trace:BUG-1626 trace:BUG-1633 | ai:claude
 fn origin_push_url_matches_fetch(project_root: &std::path::Path) -> bool {
     let urls = |push: bool| -> Option<Vec<String>> {
         let mut args = vec!["remote", "get-url", "--all"];
@@ -67611,7 +67646,7 @@ fn origin_push_url_matches_fetch(project_root: &std::path::Path) -> bool {
         Some(v)
     };
     match (urls(false), urls(true)) {
-        (Some(fetch), Some(push)) => !fetch.is_empty() && fetch == push,
+        (Some(fetch), Some(push)) => fetch.len() == 1 && fetch == push,
         _ => false,
     }
 }
@@ -67717,6 +67752,10 @@ enum PushLegOutcome {
     Pushed,
     /// Fresh remote state proved there was nothing to publish.
     UpToDate,
+    /// BUG-1633: fresh remote state shows origin is AHEAD of the local
+    /// branch — nothing to push, but the branch is not "up to date".
+    // trace:BUG-1633 | ai:claude
+    NothingToPush,
     Failed(String),
 }
 
@@ -67774,6 +67813,9 @@ fn push_failure_summary(
             PushLegOutcome::Skipped => Some(format!("{label} leg skipped")),
             PushLegOutcome::Pushed => Some(format!("{label} leg pushed")),
             PushLegOutcome::UpToDate => Some(format!("{label} leg already up to date")),
+            PushLegOutcome::NothingToPush => Some(format!(
+                "{label} leg nothing to push (behind origin — run `aida pull`)"
+            )),
             PushLegOutcome::Failed(why) => Some(format!("{label} leg FAILED ({why})")),
         }
     };
@@ -68185,19 +68227,45 @@ fn store_sync_config_project_root(storage: &Storage) -> std::path::PathBuf {
 }
 
 /// TASK-108: `aida push --dry-run` — report what each in-scope leg would
-/// push without touching origin. trace:TASK-108 | ai:claude
+/// push without pushing anything.
+/// BUG-1633: the report is built from a fresh, time-bounded fetch (the same
+/// shared budget `aida push` uses), never from the cached tracking refs alone.
+// trace:TASK-108 trace:BUG-1633 | ai:claude
 fn handle_push_dry_run(
     store_path: &std::path::Path,
     code_only: bool,
     store_only: bool,
     json: bool,
 ) -> Result<()> {
+    let legs = push_dry_run_legs(
+        store_path,
+        code_only,
+        store_only,
+        PUSH_REMOTE_REFRESH_TIMEOUT,
+    );
+    emit_dry_run("push", &legs, json);
+    Ok(())
+}
+
+/// BUG-1633: the legs of `aida push --dry-run`. Both legs refresh their
+/// `origin/<branch>` ref first, drawing on ONE `budget` so an offline or hung
+/// remote costs at most `budget` in total; a leg whose refresh failed says its
+/// counts come from the cached ref.
+// trace:TASK-108 trace:BUG-1633 | ai:claude
+fn push_dry_run_legs(
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+    budget: std::time::Duration,
+) -> Vec<DryRunLeg> {
     use aida_core::git_ops;
     const LIMIT: usize = 10;
     let project_root = store_path
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let deadline = std::time::Instant::now() + budget;
+    let remaining = || deadline.saturating_duration_since(std::time::Instant::now());
 
     let mut legs: Vec<DryRunLeg> = Vec::new();
 
@@ -68213,7 +68281,20 @@ fn handle_push_dry_run(
             let branch =
                 git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
             let origin_ref = format!("origin/{}", branch);
-            match ahead_behind_vs_ref(&project_root, &branch, &origin_ref) {
+            let freshness = refresh_remote_branch_state(&project_root, &branch, remaining());
+            let tracking = if freshness == RemoteBranchFreshness::Absent {
+                None
+            } else {
+                ahead_behind_vs_ref(&project_root, &branch, &origin_ref)
+            };
+            let stale_note = match &freshness {
+                RemoteBranchFreshness::Unknown(why) => format!(
+                    " (remote state unknown — could not refresh {origin_ref}: {why}; \
+                     counts use the cached ref)"
+                ),
+                _ => String::new(),
+            };
+            match tracking {
                 Some((ahead, behind)) => {
                     let range = format!("{}..HEAD", origin_ref);
                     let subjects = commit_subjects(&project_root, &[range.as_str()], LIMIT);
@@ -68224,13 +68305,20 @@ fn handle_push_dry_run(
                         ahead,
                         if ahead == 1 { "" } else { "s" }
                     );
-                    if behind > 0 {
+                    if behind > 0 && ahead > 0 {
                         summary += &format!(
                             " (DIVERGED — {} commit{} behind; rebase before pushing)",
                             behind,
                             if behind == 1 { "" } else { "s" }
                         );
+                    } else if behind > 0 {
+                        summary += &format!(
+                            " (behind origin by {} commit{} — run `aida pull`)",
+                            behind,
+                            if behind == 1 { "" } else { "s" }
+                        );
                     }
+                    summary += &stale_note;
                     DryRunLeg {
                         label: "code",
                         summary,
@@ -68238,7 +68326,7 @@ fn handle_push_dry_run(
                         subjects,
                     }
                 }
-                // No origin/<branch> ref — first push of a new branch.
+                // No origin/<branch> — first push of a new branch.
                 None => {
                     let spec = ["HEAD", "--not", "--remotes"];
                     let count = commit_count(&project_root, &spec);
@@ -68246,10 +68334,11 @@ fn handle_push_dry_run(
                     DryRunLeg {
                         label: "code",
                         summary: format!(
-                            "{} → origin (new branch — would publish {} commit{})",
+                            "{} → origin (new branch — would publish {} commit{}){}",
                             branch,
                             count,
-                            if count == 1 { "" } else { "s" }
+                            if count == 1 { "" } else { "s" },
+                            stale_note
                         ),
                         count,
                         subjects,
@@ -68276,17 +68365,31 @@ fn handle_push_dry_run(
                 subjects: Vec::new(),
             }
         } else {
-            let ahead = orphan_branch_sync_state(store_path)
-                .map(|(a, _)| a)
-                .unwrap_or(0);
+            let store_branch =
+                git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+            let freshness = refresh_remote_branch_state(store_path, &store_branch, remaining());
+            let (ahead, behind) = orphan_branch_sync_state(store_path).unwrap_or((0, 0));
             let subjects = commit_subjects(store_path, &["origin/aida-store..HEAD"], LIMIT);
             let mut summary = format!(
                 "aida-store → origin: {} commit{} to push",
                 ahead,
                 if ahead == 1 { "" } else { "s" }
             );
+            if behind > 0 {
+                summary += &format!(
+                    " (origin has {} store commit{} you do not — pull first)",
+                    behind,
+                    if behind == 1 { "" } else { "s" }
+                );
+            }
             if git_ops::has_changes(store_path).unwrap_or(false) {
                 summary += " (+ uncommitted changes that would be bundled)";
+            }
+            if let RemoteBranchFreshness::Unknown(why) = &freshness {
+                summary += &format!(
+                    " (remote state unknown — could not refresh origin/{store_branch}: {why}; \
+                     counts use the cached ref)"
+                );
             }
             DryRunLeg {
                 label: "store",
@@ -68298,8 +68401,7 @@ fn handle_push_dry_run(
         legs.push(leg);
     }
 
-    emit_dry_run("push", &legs, json);
-    Ok(())
+    legs
 }
 
 /// TASK-108: `aida pull --dry-run` — fetch both in-scope legs, then
@@ -68761,11 +68863,22 @@ fn handle_push_command(
             };
             match res {
                 None => {
-                    code_outcome = PushLegOutcome::UpToDate;
-                    println!(
-                        "  {}",
-                        "code push complete (origin already has these commits)".green()
-                    );
+                    // BUG-1633: behind origin is "nothing to push", not "up to
+                    // date". trace:BUG-1633 | ai:claude
+                    let behind_origin = matches!(plan.ahead_behind, Some((0, b)) if b > 0);
+                    if behind_origin {
+                        code_outcome = PushLegOutcome::NothingToPush;
+                        println!(
+                            "  {}",
+                            "nothing to push (origin already has these commits)".green()
+                        );
+                    } else {
+                        code_outcome = PushLegOutcome::UpToDate;
+                        println!(
+                            "  {}",
+                            "code push complete (origin already has these commits)".green()
+                        );
+                    }
                     if let Some((0, behind)) = plan.ahead_behind.filter(|(_, b)| *b > 0) {
                         // Behind origin: the local branch is stale, so fanning
                         // it out would push an old tip at the mirrors.
@@ -69687,7 +69800,14 @@ fn handle_pull_command(
                         // pulled — running them here acted on a stale local
                         // store and regressed remotely-Completed specs.
                         // trace:BUG-1625 | ai:claude
-                        deferred_reconcile = Some(scan_pre.map(str::to_string));
+                        // BUG-1633: a prior pull whose store leg failed saved
+                        // its scan start — resume from it so the commits that
+                        // pull brought in are still scanned, however many.
+                        // trace:BUG-1633 | ai:claude
+                        deferred_reconcile = Some(
+                            load_pending_reconcile_base(&project_root)
+                                .or_else(|| scan_pre.map(str::to_string)),
+                        );
                         // STORY-248: stacked-branch cascade. Walks
                         // `.aida/stacks.json`; for each entry whose parent
                         // branch is no longer reachable locally + on origin
@@ -69773,9 +69893,19 @@ fn handle_pull_command(
     // ---- Store pull (orphan branch via pull_rebase) ----
     // `--code-only`: the operator opted out of the store leg, so the deferred
     // reconcile runs against the local store as before. trace:BUG-1625
+    // BUG-1633: when that store has a remote it may be stale, so plan-followup
+    // filing is deferred to the next full pull. trace:BUG-1633 | ai:claude
     if code_only {
         if let Some(scan_pre) = deferred_reconcile.take() {
-            run_deferred_code_reconcile(&project_root, store_path, scan_pre.as_deref(), quiet);
+            let store_may_be_stale =
+                git_ops::is_git_repo(store_path) && git_ops::has_remote(store_path, "origin");
+            run_deferred_code_reconcile(
+                &project_root,
+                store_path,
+                scan_pre.as_deref(),
+                quiet,
+                !store_may_be_stale,
+            );
         }
     }
     if !code_only {
@@ -69787,7 +69917,13 @@ fn handle_pull_command(
             // BUG-1625: no store leg to wait for (legacy / not-yet-attached
             // store) — the local store IS the canonical one. trace:BUG-1625
             if let Some(scan_pre) = deferred_reconcile.take() {
-                run_deferred_code_reconcile(&project_root, store_path, scan_pre.as_deref(), quiet);
+                run_deferred_code_reconcile(
+                    &project_root,
+                    store_path,
+                    scan_pre.as_deref(),
+                    quiet,
+                    true,
+                );
             }
             // BUG-476: skipping the store pull must NOT launder a failed code
             // leg into a success. A code-only clone (or a not-yet-attached
@@ -69808,7 +69944,13 @@ fn handle_pull_command(
             );
             // BUG-1625: nothing remote to pull first. trace:BUG-1625
             if let Some(scan_pre) = deferred_reconcile.take() {
-                run_deferred_code_reconcile(&project_root, store_path, scan_pre.as_deref(), quiet);
+                run_deferred_code_reconcile(
+                    &project_root,
+                    store_path,
+                    scan_pre.as_deref(),
+                    quiet,
+                    true,
+                );
             }
             // BUG-476: same as above — a no-origin store does not redeem a
             // failed code leg. trace:BUG-476
@@ -69916,6 +70058,7 @@ fn handle_pull_command(
                             store_path,
                             scan_pre.as_deref(),
                             quiet,
+                            true,
                         );
                     }
                 }
@@ -69938,11 +70081,23 @@ fn handle_pull_command(
     // BUG-1625: the store leg failed (or its post-pull scan did), so the local
     // store may be stale — leave code-derived reconciliation unapplied rather
     // than write status transitions against it. trace:BUG-1625 | ai:claude
-    if deferred_reconcile.is_some() {
+    // BUG-1633: persist the scan start so the retry covers every commit this
+    // pull brought in, not just the last 50. trace:BUG-1633 | ai:claude
+    if let Some(scan_pre) = deferred_reconcile.take() {
+        let resume = match scan_pre.as_deref() {
+            Some(base) => {
+                write_reconcile_state(&project_root, PENDING_RECONCILE_BASE_STATE, base);
+                "the scan start is saved, so the retry covers every commit this pull brought in"
+                    .to_string()
+            }
+            None => {
+                "if more than 50 commits landed, also run `aida db reconcile-status`".to_string()
+            }
+        };
         eprintln!(
             "  {} Done→Completed auto-bump and plan-followup filing skipped — the \
              store did not sync, so they would act on stale data. Fix the store \
-             pull above, then re-run `aida pull` to apply them.",
+             pull above, then re-run `aida pull` to apply them ({resume}).",
             "Note:".dimmed(),
         );
     }
@@ -69987,6 +70142,94 @@ fn handle_pull_command(
     }
 }
 
+/// BUG-1633: per-worktree git-path file holding the auto-bump scan start of a
+/// pull whose store leg failed, so the retry scans exactly what that pull
+/// brought in instead of falling back to the last 50 commits.
+// trace:BUG-1633 | ai:claude
+const PENDING_RECONCILE_BASE_STATE: &str = "aida-pending-reconcile-base";
+
+/// BUG-1633: per-worktree git-path file listing specs a `--code-only` pull
+/// flipped without filing their plan followups (one spec id per line).
+// trace:BUG-1633 | ai:claude
+const PENDING_FOLLOWUPS_STATE: &str = "aida-pending-followups";
+
+/// BUG-1633: `git rev-parse --git-path <name>`, absolutized. Lives in the git
+/// dir, so it never dirties the working tree.
+// trace:BUG-1633 | ai:claude
+fn reconcile_state_path(project_root: &std::path::Path, name: &str) -> Option<std::path::PathBuf> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--git-path", name])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if raw.is_empty() {
+        return None;
+    }
+    let p = std::path::PathBuf::from(raw);
+    Some(if p.is_absolute() {
+        p
+    } else {
+        project_root.join(p)
+    })
+}
+
+// trace:BUG-1633 | ai:claude
+fn read_reconcile_state_lines(project_root: &std::path::Path, name: &str) -> Vec<String> {
+    reconcile_state_path(project_root, name)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|body| {
+            body.lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+// trace:BUG-1633 | ai:claude
+fn write_reconcile_state(project_root: &std::path::Path, name: &str, body: &str) {
+    if let Some(p) = reconcile_state_path(project_root, name) {
+        if let Err(e) = std::fs::write(&p, format!("{body}\n")) {
+            eprintln!(
+                "  {} could not save {}: {e}",
+                "Warning:".yellow().bold(),
+                p.display()
+            );
+        }
+    }
+}
+
+// trace:BUG-1633 | ai:claude
+fn clear_reconcile_state(project_root: &std::path::Path, name: &str) {
+    if let Some(p) = reconcile_state_path(project_root, name) {
+        let _ = std::fs::remove_file(p);
+    }
+}
+
+/// BUG-1633: the scan start a previous pull persisted when its store leg
+/// failed — only while it is still an ancestor of HEAD (a rewritten history
+/// makes it meaningless, and the normal range takes over).
+// trace:BUG-1633 | ai:claude
+fn load_pending_reconcile_base(project_root: &std::path::Path) -> Option<String> {
+    let base = read_reconcile_state_lines(project_root, PENDING_RECONCILE_BASE_STATE)
+        .into_iter()
+        .next()?;
+    if base.starts_with('-') {
+        return None;
+    }
+    let is_ancestor = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["merge-base", "--is-ancestor", &base, "HEAD"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    is_ancestor.then_some(base)
+}
+
 /// BUG-1625: the store-touching half of `aida pull`'s code leg — the
 /// merge-driven auto-bump (reconcile, closure steps, plan-followup extraction)
 /// and the opt-in archive sweep. `handle_pull_command` calls this only AFTER
@@ -69994,21 +70237,67 @@ fn handle_pull_command(
 /// orphan worktree, no store `origin`), so every automated status transition
 /// reads and writes the freshly pulled canonical store instead of a stale local
 /// snapshot. Best-effort: failures warn and never change pull's exit code.
-// trace:BUG-1625 | ai:claude
+///
+/// BUG-1633: `extract_followups = false` (a `--code-only` pull against a store
+/// with a remote) flips specs but records them in [`PENDING_FOLLOWUPS_STATE`]
+/// instead of filing their plan followups; the next reconcile that runs
+/// against a synced store files them. A successful run also clears the
+/// persisted scan start ([`PENDING_RECONCILE_BASE_STATE`]).
+// trace:BUG-1625 trace:BUG-1633 | ai:claude
 fn run_deferred_code_reconcile(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
     scan_pre: Option<&str>,
     quiet: bool,
+    extract_followups: bool,
 ) {
     let dbg_autobump = std::env::var("AIDA_DEBUG_AUTOBUMP")
         .map(|v| v != "0" && !v.is_empty())
         .unwrap_or(false);
+    let storage = Storage::new(store_path);
+    // BUG-1633: file the followups a prior `--code-only` pull deferred, now
+    // that the store is synced. Idempotent via the followups marker.
+    // trace:BUG-1633 | ai:claude
+    if extract_followups {
+        let pending = read_reconcile_state_lines(project_root, PENDING_FOLLOWUPS_STATE);
+        for spec_id in &pending {
+            let _ = extract_plan_followups(&storage, project_root, spec_id, spec_id, false);
+        }
+        if !pending.is_empty() {
+            clear_reconcile_state(project_root, PENDING_FOLLOWUPS_STATE);
+        }
+    }
+    let mut bump_ok = true;
     // trace:STORY-86 | ai:claude
     if auto_bump_enabled() {
-        let storage = Storage::new(store_path);
-        match auto_bump_done_to_completed(project_root, store_path, scan_pre, &storage) {
+        match auto_bump_done_to_completed_with(
+            project_root,
+            store_path,
+            scan_pre,
+            &storage,
+            extract_followups,
+        ) {
             Ok(flips) => {
+                // BUG-1633: defer followup filing for these flips to the next
+                // reconcile against a synced store. trace:BUG-1633 | ai:claude
+                if !extract_followups && !flips.is_empty() {
+                    let mut ids = read_reconcile_state_lines(project_root, PENDING_FOLLOWUPS_STATE);
+                    for f in &flips {
+                        if !ids.contains(&f.spec_id) {
+                            ids.push(f.spec_id.clone());
+                        }
+                    }
+                    write_reconcile_state(project_root, PENDING_FOLLOWUPS_STATE, &ids.join("\n"));
+                    if !quiet {
+                        eprintln!(
+                            "  {} plan-followup filing deferred for {} — `--code-only` did not \
+                             sync the store, so it could be stale. The next full `aida pull` \
+                             files them.",
+                            "Note:".dimmed(),
+                            ids.join(", ")
+                        );
+                    }
+                }
                 if dbg_autobump {
                     eprintln!(
                         "  [autobump-debug] auto_bump_done_to_completed → {} flip(s): {:?}",
@@ -70027,6 +70316,7 @@ fn run_deferred_code_reconcile(
                 }
             }
             Err(e) => {
+                bump_ok = false;
                 eprintln!(
                     "  {} auto-bump failed: {} (specs stay at Done; \
                      re-run `aida pull` after fixing)",
@@ -70035,6 +70325,12 @@ fn run_deferred_code_reconcile(
                 );
             }
         }
+    }
+    // BUG-1633: the scan covered the persisted start point — drop it. Kept on
+    // an auto-bump error so the retry still covers the same range.
+    // trace:BUG-1633 | ai:claude
+    if bump_ok {
+        clear_reconcile_state(project_root, PENDING_RECONCILE_BASE_STATE);
     }
     // STORY-441: opt-in auto-archive sweep after the auto-bump settles. Reads
     // `[archive] auto_after_days` from `.aida/config.toml`; absent → no-op.
@@ -72105,6 +72401,20 @@ fn auto_bump_done_to_completed(
     pre_sha: Option<&str>,
     storage: &Storage,
 ) -> Result<Vec<AutoBumpFlip>> {
+    auto_bump_done_to_completed_with(project_root, store_path, pre_sha, storage, true)
+}
+
+/// [`auto_bump_done_to_completed`] with plan-followup filing (step 7)
+/// optional. BUG-1633: `aida pull --code-only` flips against a store it did
+/// not pull, so it defers followup filing instead of acting on stale data.
+// trace:STORY-86 trace:BUG-1633 | ai:claude
+fn auto_bump_done_to_completed_with(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    pre_sha: Option<&str>,
+    storage: &Storage,
+    extract_followups: bool,
+) -> Result<Vec<AutoBumpFlip>> {
     use aida_core::git_ops;
     use std::process::Command as ProcessCommand;
 
@@ -72865,8 +73175,11 @@ fn auto_bump_done_to_completed(
     // idempotent via the followups marker, so specs already handled at
     // `aida queue done` time are skipped. Best-effort.
     // trace:TASK-96 | ai:claude
-    for flip in &confirmed {
-        let _ = extract_plan_followups(storage, project_root, &flip.spec_id, &flip.spec_id, false);
+    if extract_followups {
+        for flip in &confirmed {
+            let _ =
+                extract_plan_followups(storage, project_root, &flip.spec_id, &flip.spec_id, false);
+        }
     }
 
     Ok(confirmed)
@@ -74116,6 +74429,11 @@ mod bug_1632_status_writer_tests;
 #[cfg(test)]
 #[path = "tests/bug_1637_status_writer_tests.rs"]
 mod bug_1637_status_writer_tests;
+
+// BUG-1633: pull/push follow-ups to BUG-1625 and BUG-1626. trace:BUG-1633 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1633_pull_push_followups_tests.rs"]
+mod bug_1633_pull_push_followups_tests;
 
 #[cfg(test)]
 #[path = "tests/eval_subcommand_hint_tests.rs"]
