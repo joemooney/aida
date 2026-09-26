@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:56.753902915Z
-modified_at: 2026-09-26T22:46:08.691709239Z
+modified_at: 2026-09-26T22:56:15.233143546Z
 req_type: Bug
 comments:
 - id: 01a0dfa3-2bc6-7c62-9371-a5dfe1014e2b
@@ -28,6 +28,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): (1) confirmed — a first line beginning with ''Review'' (incl. ''Review (…)'', ''Review round N …'') or ''VERDICT:'' counts; (2) delta-check comments don''t count (fails toward listing; BUG-1653 is completed anyway); (3) implementer-self-review exclusion needs session IDs in history — not in scope.'
   created_at: 2026-09-26T22:46:08.691709239Z
   modified_at: 2026-09-26T22:46:08.691709239Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfee-f781-7770-a4cf-6910ad003625
+  author: joe
+  content: 'Review: APPROVE (independent, 688477d939). Follow-up note: prefer the verdict file''s recorded_at over filesystem mtime -> folded into BUG-1681''s scope. -> batch 102.'
+  created_at: 2026-09-26T22:56:15.233143546Z
+  modified_at: 2026-09-26T22:56:15.233143546Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df93-9784-7f82-b31e-9692e353f93a
