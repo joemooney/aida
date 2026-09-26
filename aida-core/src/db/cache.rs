@@ -1119,6 +1119,12 @@ impl Cache {
     /// schema migration is pending: the recorded SHA still describes the old
     /// tables a concurrent reader may be using, but not a projection THIS
     /// binary can serve, so the next freshness check must full-rebuild.
+    ///
+    /// The pending state lives only in this process (derived at open from an
+    /// older on-disk `schema_version` stamp). Code that reads
+    /// `cache_meta.source_head_sha` directly, and older binaries, do not see
+    /// it: they may take the old-schema rows as fresh, so they must query
+    /// only columns every schema version has (today: `id` and `spec_id`).
     // trace:TASK-1515 | ai:claude
     pub fn source_head_sha(&self) -> Result<Option<String>> {
         if self.migration_pending() {
@@ -1246,12 +1252,17 @@ impl Cache {
         }
         let count = {
             let conn = self.conn.lock().unwrap();
-            let drop_first = force_drop || self.migration_pending();
+            let migration_pending = self.migration_pending();
             with_cache_write(&self.path, &self.lock_info_path, "rebuild cache", || {
                 // TASK-1515: IMMEDIATE takes the write lock at BEGIN, so a
                 // contended rebuild fails (and enters the unchanged retry
                 // ladder) before doing any work, never mid-transaction.
                 let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
+                // The pending flag was probed at open, without the lock. If
+                // another process has since completed the migration, skip the
+                // redundant drop (the refill below is the same either way).
+                // trace:TASK-1515 | ai:claude
+                let drop_first = force_drop || (migration_pending && schema_migration_needed(&tx));
                 if drop_first {
                     tx.execute_batch(DROP_PROJECTION_SQL)
                         .context("Failed to drop cache tables for schema migration")?;
