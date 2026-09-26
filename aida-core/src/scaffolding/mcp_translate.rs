@@ -31,6 +31,8 @@ use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::toml_quote::toml_string;
+
 /// A vendor-agnostic MCP server registration — everything the Codex and
 /// Gemini translations need to reproduce Claude's `.mcp.json` entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,18 +166,20 @@ pub fn render_codex_config_document(name: &str, spec: &McpServerSpec) -> String 
         );
     }
     out.push_str(&format!("[mcp_servers.{name}]\n"));
-    out.push_str(&format!("command = {:?}\n", spec.command));
+    // Rust `{:?}` is not TOML: it renders control and some Unicode characters
+    // as `\u{..}`, which TOML rejects. trace:BUG-1649 | ai:claude
+    out.push_str(&format!("command = {}\n", toml_string(&spec.command)));
     let args_toml = spec
         .args
         .iter()
-        .map(|a| format!("{a:?}"))
+        .map(|a| toml_string(a))
         .collect::<Vec<_>>()
         .join(", ");
     out.push_str(&format!("args = [{args_toml}]\n"));
     if !spec.env.is_empty() {
         out.push_str(&format!("\n[mcp_servers.{name}.env]\n"));
         for (k, v) in &spec.env {
-            out.push_str(&format!("{k} = {v:?}\n"));
+            out.push_str(&format!("{k} = {}\n", toml_string(v)));
         }
     }
     out
@@ -368,5 +372,35 @@ mod tests {
             parsed["mcpServers"]["aida"]["env"]["AIDA_AGENT_OUTPUT"].as_str(),
             Some("toon")
         );
+    }
+
+    // trace:BUG-1649 | ai:claude
+    #[test]
+    fn bug_1649_codex_document_round_trips_windows_paths_and_quotes() {
+        let mut env = BTreeMap::new();
+        env.insert(
+            "AIDA_HOME".to_string(),
+            "C:\\Users\\RUNNER~1\\x".to_string(),
+        );
+        env.insert("NOTE".to_string(), "say \"hi\"\u{1b}".to_string());
+        let spec = McpServerSpec {
+            command: "C:\\Users\\RUNNER~1\\x\\aida.exe".to_string(),
+            args: vec!["mcp-serve".to_string(), "--label=\"q\"".to_string()],
+            env,
+        };
+        let toml_text = render_codex_config_document("aida", &spec);
+        let parsed: toml::Table = toml::from_str(&toml_text).expect("valid TOML");
+        let server = parsed["mcp_servers"]["aida"].as_table().unwrap();
+        assert_eq!(server["command"].as_str(), Some(spec.command.as_str()));
+        let args: Vec<&str> = server["args"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(args, spec.args);
+        for (k, v) in &spec.env {
+            assert_eq!(server["env"][k.as_str()].as_str(), Some(v.as_str()));
+        }
     }
 }

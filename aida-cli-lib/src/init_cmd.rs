@@ -3696,6 +3696,73 @@ mod task_631_init_self_commit_tests {
     }
 }
 
+/// The `[deployment]` head of a sibling-store `.aida/config.toml`. The
+/// store path goes through [`aida_core::toml_quote::toml_string`] so an
+/// absolute Windows path or a path containing `"` still yields valid TOML.
+// trace:BUG-1649 | ai:claude
+pub(crate) fn sibling_store_config_head(store_rel: &str) -> String {
+    let store_rel_toml = aida_core::toml_quote::toml_string(store_rel);
+    format!(
+        "# AIDA distributed mode configuration\n\
+         [deployment]\n\
+         mode = \"distributed\"\n\
+         # STORY-676: a separate store repo at this path (relative to the project\n\
+         # root, or absolute); code repos pointing at the same path share a store.\n\
+         store_path = {store_rel_toml}\n\
+         store_type = \"sibling\"\n\
+         \n"
+    )
+}
+
+/// The `[deployment]` … `[block_allocation]` head of a worktree-mode
+/// `.aida/config.toml`, shared by fresh init and post-clone attach. The
+/// store path and branch go through [`aida_core::toml_quote::toml_string`] so a
+/// Windows path or a value containing `"` still yields valid TOML.
+// trace:BUG-1649 | ai:claude
+pub(crate) fn distributed_worktree_config_head(worktree_dir: &str, branch_name: &str) -> String {
+    let store_path = aida_core::toml_quote::toml_string(worktree_dir);
+    let branch = aida_core::toml_quote::toml_string(branch_name);
+    format!(
+        "# AIDA distributed mode configuration\n\
+         [deployment]\n\
+         mode = \"distributed\"\n\
+         store_path = {store_path}\n\
+         store_type = \"worktree\"\n\
+         branch = {branch}\n\
+         \n\
+         [store.sync]\n\
+         # Auto-push store commits after local writes. Values: manual,\n\
+         # session-end, per-write, periodic. `periodic` is reserved until\n\
+         # aida-worker (EPIC-30) ships.\n\
+         auto_push = \"manual\"\n\
+         \n\
+         # trace:EPIC-1-052 Phase 2 | ai:claude\n\
+         # How `aida add` chooses between agreed-id blocks and node-aware ids:\n\
+         #   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>\n\
+         #   blocks-then-fallback — try block first; fall through silently (default)\n\
+         #   blocks-only          — error if no block is allocated for the type\n\
+         #\n\
+         # counter_scope (FR-271):\n\
+         #   global               — single counter shared across all types (default for new projects)\n\
+         #                          → FR-1, BUG-2, EPIC-3, ... ids globally unique by number\n\
+         #   per-type             — separate counter per type prefix (legacy default)\n\
+         #                          → FR-1, BUG-1, EPIC-1, ... each type starts fresh\n\
+         [id_format]\n\
+         policy = \"blocks-then-fallback\"\n\
+         counter_scope = \"global\"\n\
+         \n\
+         # trace:TASK-281 | ai:claude\n\
+         # Auto-claim a fresh block when aggregate remaining IDs drop below\n\
+         # threshold. On by default (threshold 20, size 100). Opt out with:\n\
+         #   [block_allocation]\n\
+         #   auto_claim = false\n\
+         # Per-type override (e.g. larger BUG blocks):\n\
+         #   [block_allocation.bug]\n\
+         #   auto_claim_threshold = 50\n\
+         #   auto_claim_size = 200\n",
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_init_distributed_worktree(
     force: bool,
@@ -4229,46 +4296,8 @@ pub(crate) fn handle_init_distributed_worktree(
 
     // Create .aida/config.toml
     std::fs::create_dir_all(&aida_dir)?;
-    let config_content = format!(
-        "# AIDA distributed mode configuration\n\
-         [deployment]\n\
-         mode = \"distributed\"\n\
-         store_path = \"{}\"\n\
-         store_type = \"worktree\"\n\
-         branch = \"{}\"\n\
-         \n\
-         [store.sync]\n\
-         # Auto-push store commits after local writes. Values: manual,\n\
-         # session-end, per-write, periodic. `periodic` is reserved until\n\
-         # aida-worker (EPIC-30) ships.\n\
-         auto_push = \"manual\"\n\
-         \n\
-         # trace:EPIC-1-052 Phase 2 | ai:claude\n\
-         # How `aida add` chooses between agreed-id blocks and node-aware ids:\n\
-         #   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>\n\
-         #   blocks-then-fallback — try block first; fall through silently (default)\n\
-         #   blocks-only          — error if no block is allocated for the type\n\
-         #\n\
-         # counter_scope (FR-271):\n\
-         #   global               — single counter shared across all types (default for new projects)\n\
-         #                          → FR-1, BUG-2, EPIC-3, ... ids globally unique by number\n\
-         #   per-type             — separate counter per type prefix (legacy default)\n\
-         #                          → FR-1, BUG-1, EPIC-1, ... each type starts fresh\n\
-         [id_format]\n\
-         policy = \"blocks-then-fallback\"\n\
-         counter_scope = \"global\"\n\
-         \n\
-         # trace:TASK-281 | ai:claude\n\
-         # Auto-claim a fresh block when aggregate remaining IDs drop below\n\
-         # threshold. On by default (threshold 20, size 100). Opt out with:\n\
-         #   [block_allocation]\n\
-         #   auto_claim = false\n\
-         # Per-type override (e.g. larger BUG blocks):\n\
-         #   [block_allocation.bug]\n\
-         #   auto_claim_threshold = 50\n\
-         #   auto_claim_size = 200\n",
-        worktree_dir, branch_name
-    );
+    // trace:BUG-1649 | ai:claude
+    let config_content = distributed_worktree_config_head(worktree_dir, branch_name);
     // EPIC-35: scaffold the [forge] section with the auto-detected provider.
     let config_content = config_content + &forge::init_forge_config_section(&cwd);
     // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
@@ -4545,46 +4574,8 @@ fn handle_init_post_clone(
     // Write .aida/config.toml — same contents as a fresh init
     let aida_dir = cwd.join(".aida");
     std::fs::create_dir_all(&aida_dir)?;
-    let config_content = format!(
-        "# AIDA distributed mode configuration\n\
-         [deployment]\n\
-         mode = \"distributed\"\n\
-         store_path = \"{}\"\n\
-         store_type = \"worktree\"\n\
-         branch = \"{}\"\n\
-         \n\
-         [store.sync]\n\
-         # Auto-push store commits after local writes. Values: manual,\n\
-         # session-end, per-write, periodic. `periodic` is reserved until\n\
-         # aida-worker (EPIC-30) ships.\n\
-         auto_push = \"manual\"\n\
-         \n\
-         # trace:EPIC-1-052 Phase 2 | ai:claude\n\
-         # How `aida add` chooses between agreed-id blocks and node-aware ids:\n\
-         #   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>\n\
-         #   blocks-then-fallback — try block first; fall through silently (default)\n\
-         #   blocks-only          — error if no block is allocated for the type\n\
-         #\n\
-         # counter_scope (FR-271):\n\
-         #   global               — single counter shared across all types (default for new projects)\n\
-         #                          → FR-1, BUG-2, EPIC-3, ... ids globally unique by number\n\
-         #   per-type             — separate counter per type prefix (legacy default)\n\
-         #                          → FR-1, BUG-1, EPIC-1, ... each type starts fresh\n\
-         [id_format]\n\
-         policy = \"blocks-then-fallback\"\n\
-         counter_scope = \"global\"\n\
-         \n\
-         # trace:TASK-281 | ai:claude\n\
-         # Auto-claim a fresh block when aggregate remaining IDs drop below\n\
-         # threshold. On by default (threshold 20, size 100). Opt out with:\n\
-         #   [block_allocation]\n\
-         #   auto_claim = false\n\
-         # Per-type override (e.g. larger BUG blocks):\n\
-         #   [block_allocation.bug]\n\
-         #   auto_claim_threshold = 50\n\
-         #   auto_claim_size = 200\n",
-        worktree_dir, branch_name
-    );
+    // trace:BUG-1649 | ai:claude
+    let config_content = distributed_worktree_config_head(worktree_dir, branch_name);
     // EPIC-35: scaffold the [forge] section with the auto-detected provider.
     let config_content = config_content + &forge::init_forge_config_section(cwd);
     // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
@@ -5133,16 +5124,9 @@ pub(crate) fn handle_init_distributed_sibling(
 
     // Create .aida/ config in the project root (not the store)
     std::fs::create_dir_all(&aida_dir)?;
-    let config_content = format!(
-        "# AIDA distributed mode configuration\n\
-         [deployment]\n\
-         mode = \"distributed\"\n\
-         # STORY-676: a separate store repo at this path (relative to the project\n\
-         # root, or absolute); code repos pointing at the same path share a store.\n\
-         store_path = \"{store_rel}\"\n\
-         store_type = \"sibling\"\n\
-         \n"
-    ) + "[store.sync]\n\
+    // trace:BUG-1649 | ai:claude
+    let config_content = sibling_store_config_head(store_rel)
+        + "[store.sync]\n\
          # Auto-push store commits after local writes. Values: manual,\n\
          # session-end, per-write, periodic. `periodic` is reserved until\n\
          # aida-worker (EPIC-30) ships.\n\
@@ -5306,5 +5290,56 @@ mod task_1503_memory_lane_manifest_tests {
             ["aida-capture"],
             "only the real deletion is an opt-out"
         );
+    }
+}
+
+// trace:BUG-1649 | ai:claude
+#[cfg(test)]
+mod bug_1649_init_config_toml_tests {
+    use super::{distributed_worktree_config_head, sibling_store_config_head};
+
+    const HOSTILE: [&str; 3] = [
+        "C:\\Users\\RUNNER~1\\x",
+        "../has\"quote/.aida-store",
+        "C:\\Users\\RUNNER~1\\\"both'\\store",
+    ];
+
+    fn deployment(body: &str) -> toml::Table {
+        let parsed: toml::Table =
+            toml::from_str(body).unwrap_or_else(|e| panic!("invalid TOML ({e}):\n{body}"));
+        parsed["deployment"].as_table().unwrap().clone()
+    }
+
+    #[test]
+    fn bug_1649_worktree_head_keeps_plain_values_byte_identical() {
+        let body = distributed_worktree_config_head(".aida-store", "aida-store");
+        assert!(body.contains(
+            "mode = \"distributed\"\nstore_path = \".aida-store\"\nstore_type = \"worktree\"\nbranch = \"aida-store\"\n"
+        ));
+    }
+
+    #[test]
+    fn bug_1649_worktree_head_round_trips_backslash_and_quote_paths() {
+        for value in HOSTILE {
+            let d = deployment(&distributed_worktree_config_head(value, value));
+            assert_eq!(d["store_path"].as_str(), Some(value));
+            assert_eq!(d["branch"].as_str(), Some(value));
+            assert_eq!(d["store_type"].as_str(), Some("worktree"));
+        }
+    }
+
+    #[test]
+    fn bug_1649_sibling_head_keeps_plain_values_byte_identical() {
+        let body = sibling_store_config_head("../aida-store");
+        assert!(body.contains("store_path = \"../aida-store\"\nstore_type = \"sibling\"\n"));
+    }
+
+    #[test]
+    fn bug_1649_sibling_head_round_trips_backslash_and_quote_paths() {
+        for value in HOSTILE {
+            let d = deployment(&sibling_store_config_head(value));
+            assert_eq!(d["store_path"].as_str(), Some(value));
+            assert_eq!(d["store_type"].as_str(), Some("sibling"));
+        }
     }
 }

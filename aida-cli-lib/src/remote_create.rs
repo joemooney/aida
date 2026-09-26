@@ -134,7 +134,36 @@ pub fn known_hosts_path() -> Option<PathBuf> {
 /// Hand-rolled (mirrors the project's other section parsers) to avoid a serde
 /// round-trip for a tiny file. Pure over its `&str` input → unit-testable.
 /// trace:STORY-537 | ai:claude
+///
+/// A body that parses as TOML is read through the `toml` crate, so quoted
+/// values (a label containing `"` or `#`) come back exactly as
+/// [`serialize_known_hosts`] wrote them; the line scan stays as the lenient
+/// fallback for a hand-edited file that is not valid TOML.
+// trace:BUG-1649 | ai:claude
 pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
+    if let Ok(table) = toml_body.parse::<toml::Table>() {
+        return table
+            .get("gitlab_host")
+            .and_then(|v| v.as_array())
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|e| e.as_table())
+                    .filter_map(|t| {
+                        let host = t.get("host")?.as_str()?.to_string();
+                        (!host.is_empty()).then(|| KnownHost {
+                            host,
+                            label: t.get("label").and_then(|v| v.as_str()).map(String::from),
+                            ssh_port: t
+                                .get("ssh_port")
+                                .and_then(|v| v.as_integer())
+                                .and_then(|n| u16::try_from(n).ok()),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
     let mut hosts = Vec::new();
     let mut cur: Option<KnownHost> = None;
     let flush = |cur: &mut Option<KnownHost>, hosts: &mut Vec<KnownHost>| {
@@ -187,9 +216,16 @@ pub fn serialize_known_hosts(hosts: &[KnownHost]) -> String {
     );
     for h in hosts {
         s.push_str("\n[[gitlab_host]]\n");
-        s.push_str(&format!("host = \"{}\"\n", h.host));
+        // trace:BUG-1649 | ai:claude
+        s.push_str(&format!(
+            "host = {}\n",
+            aida_core::toml_quote::toml_string(&h.host)
+        ));
         if let Some(label) = &h.label {
-            s.push_str(&format!("label = \"{label}\"\n"));
+            s.push_str(&format!(
+                "label = {}\n",
+                aida_core::toml_quote::toml_string(label)
+            ));
         }
         if let Some(port) = h.ssh_port {
             s.push_str(&format!("ssh_port = {port}\n"));
@@ -2287,6 +2323,30 @@ hosts:
         let body = serialize_known_hosts(&hosts);
         let parsed = parse_known_hosts(&body);
         assert_eq!(parsed, hosts);
+    }
+
+    // trace:BUG-1649 | ai:claude
+    #[test]
+    fn bug_1649_known_hosts_quote_and_backslash_round_trip() {
+        let hosts = vec![KnownHost {
+            host: "gitlab.example.com".to_string(),
+            label: Some("Joe's \"work\" # GitLab C:\\Users\\RUNNER~1\\x".to_string()),
+            ssh_port: Some(2222),
+        }];
+        let body = serialize_known_hosts(&hosts);
+        let parsed: toml::Table = toml::from_str(&body).expect("valid TOML");
+        let entry = parsed["gitlab_host"].as_array().unwrap()[0]
+            .as_table()
+            .unwrap();
+        assert_eq!(entry["label"].as_str(), hosts[0].label.as_deref());
+        assert_eq!(parse_known_hosts(&body), hosts);
+        // Ordinary values keep the historical basic-string rendering.
+        let plain = serialize_known_hosts(&[KnownHost {
+            host: "gitlab.corp.com".to_string(),
+            label: Some("corp".to_string()),
+            ssh_port: None,
+        }]);
+        assert!(plain.contains("host = \"gitlab.corp.com\"\nlabel = \"corp\"\n"));
     }
 
     #[test]

@@ -398,8 +398,11 @@ fn render_local_state(caps: &ProjectCapabilities) -> String {
     );
     s.push_str(&format!("class = \"{}\"\n", caps.class.token()));
     if let Some(host) = &caps.origin_host {
-        let escaped = host.replace('\\', "\\\\").replace('"', "\\\"");
-        s.push_str(&format!("origin_host = \"{escaped}\"\n"));
+        // trace:BUG-1649 | ai:claude
+        s.push_str(&format!(
+            "origin_host = {}\n",
+            aida_core::toml_quote::toml_string(host)
+        ));
     }
     s.push_str(&format!("forge_cli = \"{}\"\n", caps.forge_cli.token()));
     s.push_str(&format!("forge_auth = \"{}\"\n", caps.forge_auth.token()));
@@ -819,6 +822,23 @@ mod tests {
             first,
             "rewrite must be idempotent"
         );
+    }
+
+    // trace:BUG-1649 | ai:claude
+    #[test]
+    fn bug_1649_local_state_origin_host_round_trips_hostile_values() {
+        let d = fixture();
+        let mut caps = classify(
+            d.path(),
+            Some("https://github.com/o/r.git"),
+            &probes(&all_cli, &not_authed),
+        );
+        for host in ["C:\\Users\\RUNNER~1\\x", "host\"with\"quotes", "tab\there"] {
+            caps.origin_host = Some(host.to_string());
+            let body = render_local_state(&caps);
+            let parsed: toml::Value = toml::from_str(&body).expect("valid TOML");
+            assert_eq!(parsed["origin_host"].as_str(), Some(host));
+        }
     }
 
     #[test]
