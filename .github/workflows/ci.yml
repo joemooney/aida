@@ -362,7 +362,10 @@ jobs:
 
       - name: Removed mode-flag spelling guard
         if: steps.changes.outputs.full_ci == 'true'
-        run: bash scripts/check-removed-flags.sh
+        # trace:BUG-1665 | ai:claude
+        run: |
+          bash scripts/check-removed-flags.sh
+          bash tests/test_check_removed_flags.sh
 
       # TASK-1205: portability ratchet for Linux-only assumptions in test code.
       # Existing sites live in scripts/portability-allowlist.txt. The growth

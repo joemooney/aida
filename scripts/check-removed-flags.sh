@@ -11,6 +11,12 @@ common_rg=(
   --glob '!bench/agent-surface/results/**'
   --glob '!docs/casts/**'
   --glob '!scripts/check-removed-flags.sh'
+  # Release history quotes flag spellings that were live when each entry
+  # shipped; it is a dated record, not current usage. Anchored to the root
+  # file so any other doc, template, help text or code is still scanned.
+  # trace:BUG-1665 | ai:claude
+  --glob '!/CHANGELOG.md'
+  --glob '!tests/test_check_removed_flags.sh'
 )
 
 literal_patterns=(
