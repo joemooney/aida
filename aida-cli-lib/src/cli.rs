@@ -3469,15 +3469,29 @@ pub enum RemoteCommand {
 
     /// (plumbing) Fan the refs of an in-flight `git push` out to every mirror
     /// hub. The pre-push hook shim calls this with the pushed remote's name,
-    /// piping through the ref lines git feeds the hook on stdin. No-op unless
-    /// the push targets `origin`; skips the store branch (the store leg fans
-    /// out separately); always exits 0 so a mirror failure never blocks the
-    /// push.
-    // trace:TASK-1097 | ai:claude
+    /// piping through the ref lines git feeds the hook on stdin. Says why it
+    /// skipped when the push does not target `origin` or carries only the
+    /// store branch; exits non-zero when a mirror push fails (the hook shim
+    /// tolerates that, so the origin push is never blocked).
+    // trace:TASK-1097 trace:BUG-1676 | ai:claude
     #[clap(hide = true)]
     MirrorPush {
         /// The remote the triggering push targets (hook argument $1).
         pushed_remote: String,
+    },
+
+    /// Push origin's tips of the default branch and the spec store to every
+    /// mirror hub, by sha. The pre-push hook only mirrors what this machine
+    /// pushes; a merge performed on the forge and a store push from another
+    /// clone never fire it, so mirrors drift. `aida pull` runs this after a
+    /// successful pull; run it by hand when `aida remote status` shows a hub
+    /// behind. Never force-pushes: a diverged hub is reported and exits
+    /// non-zero.
+    // trace:BUG-1676 | ai:claude
+    MirrorSync {
+        /// Emit machine-readable JSON instead of the report.
+        #[clap(long)]
+        json: bool,
     },
 
     /// Reconcile a diverged spec store across every configured hub: fetch each
