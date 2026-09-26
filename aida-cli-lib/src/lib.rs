@@ -110023,6 +110023,11 @@ mod story_1426_contradictions_tests;
 #[path = "tests/story_1424_graded_review_tests.rs"]
 mod story_1424_graded_review_tests;
 
+// trace:BUG-1668 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1668_trivial_criteria_tests.rs"]
+mod bug_1668_trivial_criteria_tests;
+
 // trace:BUG-1418 | ai:codex
 #[cfg(test)]
 #[path = "tests/bug_1418_drain_token_measurement_tests.rs"]
