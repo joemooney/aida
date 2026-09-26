@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:10:23.321824627Z
-modified_at: 2026-09-26T07:35:16.603834940Z
+modified_at: 2026-09-26T08:30:41.320751473Z
 req_type: Bug
 tags:
 - aida:history
@@ -41,6 +41,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): APPROVED, mode drain. Clear, small, reproducible bug with a regression test in acceptance. First link of the history chain: BUG-1636 -> BUG-1635 -> TASK-1512 -> STORY-1477 (serialized; all touch aida-cli-lib/src/history.rs).'
   created_at: 2026-09-26T05:28:11.903666434Z
   modified_at: 2026-09-26T05:28:11.903666434Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dcd6-84a8-7cd0-91d6-7bfb02e44562
+  author: joe
+  content: 'Review: APPROVE — independent review of claude/bug-1636 @ 64a637b042. (1) is_ship_event (history.rs:93) = to==Completed && from!=Completed, case-insensitive. Correct for all RequirementStatus values: Rejected/Superseded/Done/Approved→Completed all count, which is consistent with ''Completed means merged'' and with --to completed. A case-only rewrite (completed→Completed) is correctly excluded. (2) Reopen then re-complete counts as 2 ships. This matches status_cmd.rs:1103 (the absence digest counts every status_change into Completed). digest.rs is state-based and does not use --shipped, so there is no conflict. (3) HISTORY_SCHEMA_VERSION 5→6 (history_cache.rs:54) changes the file name to history-v6-4.db (line 208), and ensure_fresh also resets on a meta mismatch (line 1151). DECODER stays at 4 from BUG-1631. The schema bump is the right lever because is_ship is a derived stored column, not a decoder change. The is_ship write at line 803 uses the same predicate as the Rust re-check. (4) The empty-result footer is now neutral, which satisfies the acceptance''s ''worded neutrally'' option. The TASK-1512 store edit (729845e36d) is a one-phrase fix that the BUG-1636 acceptance explicitly requires. It is appropriate. (5) --help, MCP schema (mcp.rs:7413) and docs/cli/08-reporting.md:84 agree. verify-manual passes 4/4. fmt is clean. (6) Tests: bug_1636 3/3, history 138/138, task_1507 59/59, bug_1631 12/12, ignored sweep ok (the STAT set now includes InProgress). Mutation 1: reverting to Done→Completed fails all three bug_1636 tests plus the unit test. Mutation 2: a stale is_ship column with the correct Rust predicate is caught by bug_1636_shipped_index_matches_the_walk. The fixtures are tempdir-only. Live smoke (7d, --limit 400) gives identical walk and index output. Nits, not blocking: a status field absent before the change (''—''→Completed) would count as a ship. The default --max-commits cap makes ''--since 7d -n 200'' return only 10 ships; that behavior predates this branch.'
+  created_at: 2026-09-26T08:30:41.320751473Z
+  modified_at: 2026-09-26T08:30:41.320751473Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
 filed_at:
