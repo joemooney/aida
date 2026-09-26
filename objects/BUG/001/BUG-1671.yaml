@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:05:13.973900512Z
-modified_at: 2026-09-26T22:25:12.120139519Z
+modified_at: 2026-09-26T22:51:34.142407642Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -74,6 +74,12 @@ comments:
   content: 'Scope addition (from BUG-1677): also give queue_reorder (~git_backend.rs:1875) the new lock_queue_write() guard, use lock_queue_write() in queue_remove_many, and write the queue file atomically (write_atomic temp+rename) so lock-free readers never see a partial file.'
   created_at: 2026-09-26T22:25:12.120139519Z
   modified_at: 2026-09-26T22:25:12.120139519Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfea-ad7e-7502-9679-7972b8774734
+  author: joe
+  content: 'Scope change (PROXY DECISION, orchestrator for Joe): locking queue_remove_many/queue_reorder and atomic queue writes moved to BUG-1677. BUG-1671 keeps: in-lock eligibility re-check for archive sweeps (bulk_update_atomically), per-candidate in-lock re-check before queue removal, archive --older-than skip-on-unreadable, and the BUG-1670 lint exemption cleanup.'
+  created_at: 2026-09-26T22:51:34.142407642Z
+  modified_at: 2026-09-26T22:51:34.142407642Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
