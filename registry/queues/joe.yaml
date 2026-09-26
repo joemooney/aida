@@ -10,3 +10,10 @@
   added_by: joe
   added_at: 2026-09-25T09:49:19.500319472Z
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0db0c-7ad9-7180-9c50-2a05aab315ad
+  position: 14000
+  added_by: joe
+  note: proxy groom 2026-09-25
+  added_at: 2026-09-26T05:30:08.582654904Z
+  for_role: implementer
