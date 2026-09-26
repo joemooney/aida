@@ -45,6 +45,7 @@
 - [Multi-node](multi-node.md)
 - [Multi-advisor coordination](multi-advisor-coordination.md)
 - [Session lifecycle](session-lifecycle.md)
+- [Feature lanes: working on the side](explanations/feature-lanes.md)
 - [Environment variables](environment-variables.md)
 - [Forge providers](forge-providers.md)
 
