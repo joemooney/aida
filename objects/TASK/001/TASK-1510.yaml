@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:49:03.555549390Z
-modified_at: 2026-09-26T15:54:24.810636582Z
+modified_at: 2026-09-26T15:57:24.642693168Z
 req_type: Task
 tags:
 - batch:groom-2026-09-25
@@ -121,6 +121,39 @@ comments:
     Q6 Should the ambiguous-failure Err (exit non-zero, CronJobFailed) wake a seat, or should it be a notify through the shift-breaker rule?
   created_at: 2026-09-26T15:54:24.810636582Z
   modified_at: 2026-09-26T15:54:24.810636582Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0de6f-8122-7cf2-bcc3-9aa3039d93ce
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF: APPROVED — with binding amendments (independent advisor; verified against shift.rs tick_core step 5, ShiftExec/RealExec::spawn_wave, WaveRecord, schedule_driver.rs DriverHost/build_systemd_units/A12, maintenance_schedule.rs run_with_kill_timeout).
+
+    AUTHORITY: argv allowlist (B-a), no Restart= (B-b), single call site from tick_core's launch branch (B-c), identical build_wave_argv on both paths (B-d), no enable/start/link/daemon-reload/unit files (B-e) are all BINDING and must be tested as the sketch lists. Two sketch claims are wrong and widen authority unless amended (A1, A2).
+
+    CLAIMS CORRECTED:
+    - WRONG: 'env is an allowlist, SCRUBBED_ENV cannot leak in'. A transient unit inherits the user manager's environment block (systemctl --user show-environment; desktop logins often import the whole session env). -E can only set, never unset, so AIDA_DRAIN_FORCE/AIDA_DRAIN_BORROW/etc. in the manager env WOULD reach the wave, while the detached path env_remove()s them.
+    - INCOMPLETE: the detached wave today also inherits GIT_TERMINAL_PROMPT=0 (set by run_with_kill_timeout on the shift tick child). The unit env as sketched drops it.
+    - WRONG: a MainPID=0 result (wave already exited, --collect removed the unit) leaves pid=None, which waves_in_day, last_launched, settle_last_wave and pending_intent all read as 'never launched'. That uncounts the wave from the A8(d) daily cap and makes the next tick reuse the batch and launch again. This is a cap bypass.
+    - Minor: unit_stem() returns 'aida-tick-<hex8>', so derive hex8 with a shared helper, not by reusing the stem. RealExec has no DriverHost today; add it as a field.
+
+    BINDING AMENDMENTS:
+    A1 env parity: add -p UnsetEnvironment= for every SCRUBBED_ENV key plus TMUX and AIDA_PANES; -E GIT_TERMINAL_PROMPT=0 alongside PATH and AIDA_SCHEDULE_INVOKER=systemd. A PURE test asserts that the unit env delta equals the detached path's set/remove list and never sets a scrubbed key.
+    A2 'launched' predicate: add one fn launched(&WaveRecord) = pid.is_some() || unit.is_some(). Use it in waves_in_day, last_launched, settle_last_wave's rposition and pending_intent (a record with unit set is never a pending intent). last_wave_is_alive treats unit-with-no-pid as not alive, so it settles next tick. Test: mainpid_zero_counts_toward_daily_cap_and_is_never_relaunched.
+    A3 record the unit name together with the pid in the existing post-spawn save_state. No pre-spawn write from spawn_wave. A crash in between leaves the ordinary pid-less intent that TASK-1497 adoption already handles.
+    A4 stricter gate: the unit path also requires the tick process itself to be inside <unit_stem(repo)>.service, per /proc/self/cgroup read through DriverHost. A manual or agent tick that exports AIDA_SCHEDULE_INVOKER=systemd stays on the detached path (closes B-f).
+    A5 bounded call: run systemd-run and the show probe through a timeout (<=30s, inside the scheduler's 120s budget). A timeout is Ambiguous, never NotStarted.
+    A6 quoting: fall back to detached with a logged reason if the repo, log path, exe or any argv element contains '%' or '$' (systemd-run specifier or env expansion). Never escape in place.
+    A7 unit properties are exactly: RuntimeMaxSec=<max_runtime + 30m>, OOMPolicy=stop, plus the sketched StandardOutput/StandardError append, WorkingDirectory, description and env. max_runtime that does not parse fails the existing launch path closed (guard refuses) on BOTH paths, so evaluate_guards stays path-independent.
+    A8 SCOPE CUT (split): MemoryHigh/MemoryMax/TasksMax/CPUWeight/IOWeight, the wave_memory_* config keys, the wave-limits guard and the delegation doctor finding move to a follow-up spec (orchestrator files it; it needs its own sketch and signoff). This spec keeps only the wave_unit=auto|off switch. Also drop the 'unit alive, pid gone' doctor finding (Type=exec makes it moot). shift status may show the last unit name, read-only.
+    A9 module docs: update the A12 doc in schedule_driver.rs to say that under the systemd driver the wave normally runs in its own unit and KillMode=process remains for the fallback. build_systemd_units output stays byte-identical, and the task_1491 A12 tests stay green unchanged.
+
+    Q1: MainPID via systemctl show after a successful start. No is-active polling in gather_probes. MainPID=0 is handled by A2.
+    Q2: RuntimeMaxSec = max_runtime + 30m.
+    Q3: OOMPolicy=stop, passed explicitly.
+    Q4: deferred with the limits follow-up (A8). Binding defaults for that follow-up: percentages of MemTotal, High 40% / Max 50%. An undelegated memory controller WARNS and never forces a fallback.
+    Q5: kill-then-next-tick-reap is accepted as 'clean' for this spec (the same recovery class as a crash today). A drain SIGTERM handler (release lock, mark lease) is a separate follow-up spec.
+    Q6: no seat wake and no new notify rule. The ambiguous Err exits non-zero through the existing CronJobFailed path, and the pid-less intent is adopted or reused by the next tick.
+  created_at: 2026-09-26T15:57:24.642693168Z
+  modified_at: 2026-09-26T15:57:24.642693168Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 execution_mode: drive
 filed_at:
