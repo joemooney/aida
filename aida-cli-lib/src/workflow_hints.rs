@@ -278,17 +278,51 @@ pub fn queue_done_should_bypass_pr_check(yes: bool, force: bool, skip_pr_check: 
     force || skip_pr_check
 }
 
-/// BUG-1244: branch-name ownership is positive evidence, not an absence of
-/// contradictory evidence. An unscoped branch must be checked against its
-/// since-merge-base commits by the queue-done command.
-// trace:BUG-1244 | ai:codex
-pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
-    let Some((target_prefix, target_numeric_core)) = requirement_id_parts(spec) else {
-        return false;
-    };
+/// BUG-1628: every requirement-ID prefix a project recognises — the built-in
+/// type prefixes, the `id_config` requirement-type prefixes, custom
+/// `type_definitions` prefixes, and the allowed + in-use prefixes
+/// (`RequirementsStore::get_all_prefixes`). Uppercased and de-duplicated.
+// trace:BUG-1628 | ai:claude
+pub(crate) fn configured_spec_prefixes(store: &aida_core::RequirementsStore) -> Vec<String> {
+    let mut prefixes: Vec<String> = RequirementType::ALL
+        .iter()
+        .map(|req_type| req_type.default_prefix().to_string())
+        .chain(store.id_config.reserved_prefixes())
+        .chain(
+            store
+                .type_definitions
+                .iter()
+                .filter_map(|def| def.prefix.clone()),
+        )
+        .chain(store.get_all_prefixes())
+        .map(|prefix| prefix.trim().to_ascii_uppercase())
+        .filter(|prefix| !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_alphabetic()))
+        .collect();
+    prefixes.sort();
+    prefixes.dedup();
+    prefixes
+}
+
+/// BUG-1628: the prefixes that count as requirement IDs when scanning a
+/// branch name: the built-ins, the caller-supplied configured prefixes, and
+/// the target spec's own prefix (a stored requirement ID is its own evidence
+/// that its prefix is valid, even when no configuration names it).
+// trace:BUG-1628 | ai:claude
+fn recognised_prefixes(target_prefix: Option<&str>, configured: &[String]) -> Vec<String> {
+    RequirementType::ALL
+        .iter()
+        .map(|req_type| req_type.default_prefix().to_string())
+        .chain(configured.iter().map(|p| p.trim().to_ascii_uppercase()))
+        .chain(target_prefix.map(str::to_string))
+        .collect()
+}
+
+/// Requirement IDs named by whole `<prefix>-<digits>` segments of `branch`,
+/// restricted to `prefixes`.
+// trace:BUG-1628 | ai:claude
+fn branch_requirement_ids(branch: &str, prefixes: &[String]) -> Vec<(String, String)> {
     let re = regex::Regex::new(r"(?i)([a-z]+)-(\d+(?:-\d+)*)").expect("valid branch spec regex");
-    let ids: Vec<(String, String)> = re
-        .captures_iter(branch)
+    re.captures_iter(branch)
         .filter_map(|capture| {
             let whole = capture.get(0)?;
             let starts_at_boundary =
@@ -299,12 +333,42 @@ pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
                 return None;
             }
             let prefix = capture[1].to_ascii_uppercase();
-            RequirementType::ALL
+            prefixes
                 .iter()
-                .any(|req_type| req_type.default_prefix() == prefix)
+                .any(|known| known == &prefix)
                 .then(|| (prefix, capture[2].to_string()))
         })
-        .collect();
+        .collect()
+}
+
+/// BUG-1244: branch-name ownership is positive evidence, not an absence of
+/// contradictory evidence. An unscoped branch must be checked against its
+/// since-merge-base commits by the queue-done command.
+/// BUG-1628: the target's own prefix is always recognised, so project-defined
+/// prefixes such as `SPEC-016` are accepted; see
+/// [`branch_belongs_to_spec_with_prefixes`] to also recognise other
+/// configured prefixes as foreign requirement IDs.
+// trace:BUG-1244 | ai:codex
+// trace:BUG-1628 | ai:claude
+pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
+    branch_belongs_to_spec_with_prefixes(branch, spec, &[])
+}
+
+/// BUG-1628: [`branch_belongs_to_spec`] with the project's configured
+/// prefixes (see [`configured_spec_prefixes`]). Every requirement ID the
+/// branch names — under any recognised prefix — must be the target (or one of
+/// its dotted/dashed children); at least one must be present.
+// trace:BUG-1628 | ai:claude
+pub(crate) fn branch_belongs_to_spec_with_prefixes(
+    branch: &str,
+    spec: &str,
+    configured_prefixes: &[String],
+) -> bool {
+    let Some((target_prefix, target_numeric_core)) = requirement_id_parts(spec) else {
+        return false;
+    };
+    let prefixes = recognised_prefixes(Some(&target_prefix), configured_prefixes);
+    let ids = branch_requirement_ids(branch, &prefixes);
     !ids.is_empty()
         && ids.iter().all(|(prefix, numeric_core)| {
             prefix == &target_prefix
@@ -315,22 +379,10 @@ pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
         })
 }
 
-fn branch_names_requirement(branch: &str) -> bool {
-    let re = regex::Regex::new(r"(?i)([a-z]+)-(\d+(?:-\d+)*)").expect("valid branch spec regex");
-    let found = re.captures_iter(branch).any(|capture| {
-        let Some(whole) = capture.get(0) else {
-            return false;
-        };
-        let bounded = (whole.start() == 0
-            || !branch.as_bytes()[whole.start() - 1].is_ascii_alphanumeric())
-            && (whole.end() == branch.len()
-                || !branch.as_bytes()[whole.end()].is_ascii_alphanumeric());
-        bounded
-            && RequirementType::ALL
-                .iter()
-                .any(|req_type| req_type.default_prefix() == capture[1].to_ascii_uppercase())
-    });
-    found
+fn branch_names_requirement(branch: &str, spec: &str) -> bool {
+    let target_prefix = requirement_id_parts(spec).map(|(prefix, _)| prefix);
+    let prefixes = recognised_prefixes(target_prefix.as_deref(), &[]);
+    !branch_requirement_ids(branch, &prefixes).is_empty()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -359,7 +411,7 @@ pub(crate) fn queue_done_ownership(
     if branch_belongs_to_spec(branch, spec) {
         return QueueDoneOwnership::Proceed;
     }
-    let foreign_branch = branch_names_requirement(branch);
+    let foreign_branch = branch_names_requirement(branch, spec);
     if !foreign_branch {
         if let Some(evidence) = commit_evidence {
             if evidence.commits_seen == 0
@@ -392,15 +444,14 @@ pub(crate) fn queue_done_ownership(
     }
 }
 
+// BUG-1628: any alphabetic prefix is accepted — the caller passes a stored
+// requirement ID, and projects define their own prefixes (e.g. `SPEC`).
+// trace:BUG-1628 | ai:claude
 fn requirement_id_parts(spec: &str) -> Option<(String, String)> {
     let re =
         regex::Regex::new(r"(?i)^([a-z]+)-(\d+(?:-\d+)*)$").expect("valid canonical spec id regex");
-    let capture = re.captures(spec)?;
-    let prefix = capture[1].to_ascii_uppercase();
-    RequirementType::ALL
-        .iter()
-        .any(|req_type| req_type.default_prefix() == prefix)
-        .then(|| (prefix, capture[2].to_string()))
+    let capture = re.captures(spec.trim())?;
+    Some((capture[1].to_ascii_uppercase(), capture[2].to_string()))
 }
 
 /// BUG-269 / BUG-285: pure decision for the `aida queue done` pre-check.
@@ -1352,6 +1403,70 @@ mod tests {
             |_, _| panic!("pr lookup must not run when nothing is ahead"),
         );
         assert_eq!(result, QueueDoneGateDiagnose::Proceed);
+    }
+
+    // BUG-1628: a project-defined prefix such as `SPEC` is accepted — the
+    // phase-1 ownership check used to reject every non-built-in prefix.
+    // trace:BUG-1628 | ai:claude
+    #[test]
+    fn bug_1628_branch_belongs_to_spec_accepts_custom_prefix() {
+        assert!(branch_belongs_to_spec("spec-016", "SPEC-016"));
+        assert!(branch_belongs_to_spec("claude/spec-016", "SPEC-016"));
+        assert!(branch_belongs_to_spec("spec-016-2", "SPEC-016"));
+        assert!(branch_belongs_to_spec("SPEC-016", "spec-016"));
+        assert!(!branch_belongs_to_spec("spec-017", "SPEC-016"));
+        assert!(!branch_belongs_to_spec("spec-0160", "SPEC-016"));
+        assert!(!branch_belongs_to_spec("bug-16", "SPEC-016"));
+        // A configured foreign prefix in the branch is another requirement.
+        let configured = vec!["SEC".to_string()];
+        assert!(branch_belongs_to_spec_with_prefixes(
+            "spec-016",
+            "SPEC-016",
+            &configured
+        ));
+        assert!(!branch_belongs_to_spec_with_prefixes(
+            "spec-016-sec-3",
+            "SPEC-016",
+            &configured
+        ));
+        assert!(branch_belongs_to_spec_with_prefixes(
+            "sec-3",
+            "SEC-3",
+            &configured
+        ));
+        // Built-in behaviour is unchanged.
+        assert!(branch_belongs_to_spec("bug-1628", "BUG-1628"));
+        assert!(!branch_belongs_to_spec("story-1221", "BUG-1628"));
+        // queue-done ownership proceeds on the custom-prefix branch.
+        assert_eq!(
+            queue_done_ownership("spec-016", "SPEC-016", None, false),
+            QueueDoneOwnership::Proceed
+        );
+        assert!(matches!(
+            queue_done_ownership("spec-9", "SPEC-016", None, false),
+            QueueDoneOwnership::Refuse(reason) if reason.contains("different requirement")
+        ));
+    }
+
+    // BUG-1628: configured prefixes come from the store — type definitions,
+    // allowed prefixes, and prefixes already in use — plus the built-ins.
+    // trace:BUG-1628 | ai:claude
+    #[test]
+    fn bug_1628_configured_spec_prefixes_reads_store_configuration() {
+        let mut store = aida_core::RequirementsStore {
+            allowed_prefixes: vec!["spec".to_string()],
+            ..Default::default()
+        };
+        if let Some(def) = store.type_definitions.first_mut() {
+            def.prefix = Some("cr".to_string());
+        }
+        let prefixes = configured_spec_prefixes(&store);
+        assert!(prefixes.contains(&"SPEC".to_string()), "{prefixes:?}");
+        assert!(prefixes.contains(&"BUG".to_string()), "{prefixes:?}");
+        if !store.type_definitions.is_empty() {
+            assert!(prefixes.contains(&"CR".to_string()), "{prefixes:?}");
+        }
+        assert!(!prefixes.iter().any(|p| p.starts_with('$')));
     }
 
     #[test]

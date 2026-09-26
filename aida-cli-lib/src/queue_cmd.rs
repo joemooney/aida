@@ -11048,16 +11048,11 @@ pub(crate) fn handle_queue_work(
             // the bare slug rather than failing a read-only preview.
             resolve_session_branch(&project_root, &slug, "auto").unwrap_or_else(|_| slug.clone())
         };
-        let repo_name = project_root
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("project");
+        // trace:BUG-1628 | ai:claude — the shared pickup resolver.
         let worktree_path = match path_override {
             Some(p) => std::path::PathBuf::from(p),
-            None => project_root
-                .parent()
-                .map(|parent| parent.join(format!("{}-{}", repo_name, slug)))
-                .unwrap_or_else(|| std::path::PathBuf::from(format!("{}-{}", repo_name, slug))),
+            None => pickup_worktree_path(&project_root, &slug)
+                .unwrap_or_else(|_| std::path::PathBuf::from(&slug)),
         };
         let executable = session::resolve_agent_program(launch_vendor.program());
         dry_line("branch", branch.cyan().to_string());

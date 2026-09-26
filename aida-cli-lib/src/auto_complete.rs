@@ -1491,9 +1491,20 @@ pub(crate) trait PhaseDriver {
 
     /// BUG-1244: phase 1 must be operating in the target spec's own worktree.
     /// Real drivers validate the lease's live branch; mocks default to valid.
+    /// BUG-1628: `Err` carries a resolver failure (the shared pickup resolver
+    /// could not derive a workspace), reported before any lease is taken.
     // trace:BUG-1244 | ai:codex
-    fn implementer_workspace(&self) -> Option<(String, String)> {
-        None
+    // trace:BUG-1628 | ai:claude
+    fn implementer_workspace(&self) -> Result<Option<(String, String)>, String> {
+        Ok(None)
+    }
+    /// BUG-1628: every requirement-ID prefix the project recognises (built-in,
+    /// custom type, allowed, and in-use prefixes). The phase-1 ownership check
+    /// uses it so a project-defined prefix such as `SPEC` counts as a real
+    /// requirement ID. The target spec's own prefix is always accepted.
+    // trace:BUG-1628 | ai:claude
+    fn known_spec_prefixes(&self) -> Vec<String> {
+        Vec::new()
     }
     /// Phase 2 — wait for CI to go terminal, then end the implementer session
     /// (which auto-queues the `Review PR-N` item for the reviewer).
@@ -3140,6 +3151,30 @@ fn finish_reconciled(
     }
 }
 
+/// BUG-1628: the phase-1 refusal when the workspace auto-complete resolved
+/// does not belong to the target spec. It names the resolver mismatch — the
+/// workspace disagrees with what `aida queue work <spec>` would pick up — so
+/// the operator is not left reading a generic sibling-workspace refusal.
+// trace:BUG-1628 | ai:claude
+pub(crate) fn phase1_resolver_mismatch_reason(spec: &str, worktree: &str, branch: &str) -> String {
+    format!(
+        "phase 1 workspace resolver mismatch for {spec}: branch `{branch}` (worktree \
+         `{worktree}`) does not name {spec}, so it is not the workspace the pickup \
+         resolver (`aida queue work {spec}`) would use; refused before taking a lease"
+    )
+}
+
+/// BUG-1628: the phase-1 refusal when the shared pickup resolver could not
+/// derive a workspace at all.
+// trace:BUG-1628 | ai:claude
+pub(crate) fn phase1_resolver_failure_reason(spec: &str, err: &str) -> String {
+    format!(
+        "phase 1 workspace resolver failed for {spec}: {err} (auto-complete uses the \
+         same branch/worktree resolver as `aida queue work {spec}`); refused before \
+         taking a lease"
+    )
+}
+
 /// Resolve a phase `Err` through the BUG-241 reconcile step. The orchestrator
 /// asks the driver — via [`PhaseDriver::reconcile_failure`] — whether ground
 /// truth shows the spec shipped despite the missing artifact. If it did, the
@@ -3749,7 +3784,28 @@ pub(crate) fn orchestrate_with_resume(
         // continues) or escalates it (the run ends per `escalate_mode`).
         // trace:STORY-276, STORY-306 | ai:claude
         emit_start(Phase::Implementer, spec, json, start.elapsed().as_millis());
-        if let Some((worktree, branch)) = driver.implementer_workspace() {
+        // BUG-1628: a resolver failure and a resolver mismatch are named as
+        // such, before any lease exists, instead of a generic refusal.
+        // trace:BUG-1628 | ai:claude
+        let workspace = match driver.implementer_workspace() {
+            Ok(workspace) => workspace,
+            Err(err) => {
+                let failure = PhaseFailure::of(
+                    FailureKind::Failed,
+                    phase1_resolver_failure_reason(spec, &err),
+                );
+                return resolve_phase_failure(
+                    driver,
+                    Phase::Implementer,
+                    spec,
+                    json,
+                    &start,
+                    &failure,
+                    durations,
+                );
+            }
+        };
+        if let Some((worktree, branch)) = workspace {
             if !json {
                 eprintln!(
                     "  {} phase 1 workspace: {} [{}]",
@@ -3758,10 +3814,15 @@ pub(crate) fn orchestrate_with_resume(
                     branch
                 );
             }
-            if !crate::workflow_hints::branch_belongs_to_spec(&branch, spec) {
+            let known_prefixes = driver.known_spec_prefixes();
+            if !crate::workflow_hints::branch_belongs_to_spec_with_prefixes(
+                &branch,
+                spec,
+                &known_prefixes,
+            ) {
                 let failure = PhaseFailure::of(
                     FailureKind::Failed,
-                    format!("phase 1 refused sibling workspace `{worktree}` on branch `{branch}` for {spec}"),
+                    phase1_resolver_mismatch_reason(spec, &worktree, &branch),
                 );
                 return resolve_phase_failure(
                     driver,
@@ -6530,6 +6591,7 @@ mod tests {
         /// BUG-1244: selected phase-1 worktree/branch, when a test needs to
         /// exercise the cross-spec isolation gate.
         workspace: Option<(String, String)>,
+        workspace_error: Option<String>,
         /// BUG-1244: run-local phase-1 PR marker; `suppress_phase_done_pr`
         /// models the recurrence where branch lookup found a sibling PR but
         /// this run never emitted PhaseDonePr.
@@ -6586,6 +6648,7 @@ mod tests {
                 rework_no_op: false,
                 already_merged: None,
                 workspace: None,
+                workspace_error: None,
                 phase_done_pr: None,
                 suppress_phase_done_pr: false,
             }
@@ -6874,8 +6937,11 @@ mod tests {
         fn requires_phase_done_pr(&self) -> bool {
             self.suppress_phase_done_pr
         }
-        fn implementer_workspace(&self) -> Option<(String, String)> {
-            self.workspace.clone()
+        fn implementer_workspace(&self) -> Result<Option<(String, String)>, String> {
+            match &self.workspace_error {
+                Some(err) => Err(err.clone()),
+                None => Ok(self.workspace.clone()),
+            }
         }
         fn rework_no_op_failure(&mut self) -> Option<PhaseFailure> {
             self.rework_no_op.then(|| {
@@ -7455,6 +7521,85 @@ mod tests {
             .failure
             .as_ref()
             .is_some_and(|f| f.reason.contains("story-1221")));
+    }
+
+    // BUG-1628: a custom-prefix spec whose workspace came from the shared
+    // pickup resolver (`spec-016`) passes the phase-1 ownership check.
+    // trace:BUG-1628 | ai:claude
+    #[test]
+    fn bug_1628_phase_one_accepts_custom_prefix_pickup_workspace() {
+        let mut driver = MockPhaseDriver::all_ok();
+        driver.workspace = Some((
+            std::env::temp_dir()
+                .join("qci-spec-016")
+                .display()
+                .to_string(),
+            "spec-016".to_string(),
+        ));
+        let result = orchestrate(
+            &mut driver,
+            "SPEC-016",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_ne!(result.failed_phase, Some(Phase::Implementer));
+        assert!(
+            driver.calls.contains(&Phase::Implementer),
+            "the implementer must run in the spec's own pickup workspace"
+        );
+    }
+
+    // BUG-1628: a mismatched workspace is refused with a message naming the
+    // resolver mismatch, not a generic sibling-workspace refusal.
+    // trace:BUG-1628 | ai:claude
+    #[test]
+    fn bug_1628_phase_one_mismatch_names_the_resolver() {
+        let mut driver = MockPhaseDriver::all_ok();
+        driver.workspace = Some((
+            std::env::temp_dir()
+                .join("qci-spec-017")
+                .display()
+                .to_string(),
+            "spec-017".to_string(),
+        ));
+        let result = orchestrate(
+            &mut driver,
+            "SPEC-016",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert!(driver.calls.is_empty());
+        let reason = &result.failure.as_ref().expect("failure").reason;
+        assert!(reason.contains("resolver mismatch"), "{reason}");
+        assert!(reason.contains("spec-017"), "{reason}");
+        assert!(reason.contains("aida queue work SPEC-016"), "{reason}");
+        assert!(!reason.contains("refused sibling workspace"), "{reason}");
+    }
+
+    // BUG-1628: a resolver failure is reported as such before any lease.
+    // trace:BUG-1628 | ai:claude
+    #[test]
+    fn bug_1628_phase_one_resolver_failure_is_named() {
+        let mut driver = MockPhaseDriver::all_ok();
+        driver.workspace_error = Some("all 20 candidate branch names are taken".to_string());
+        let result = orchestrate(
+            &mut driver,
+            "SPEC-016",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert!(driver.calls.is_empty());
+        let reason = &result.failure.as_ref().expect("failure").reason;
+        assert!(reason.contains("resolver failed for SPEC-016"), "{reason}");
+        assert!(
+            reason.contains("candidate branch names are taken"),
+            "{reason}"
+        );
     }
 
     #[test]
