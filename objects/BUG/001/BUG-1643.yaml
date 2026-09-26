@@ -8,8 +8,30 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:45:20.158116321Z
-modified_at: 2026-09-26T12:20:18.188495952Z
+modified_at: 2026-09-26T12:56:51.324037866Z
 req_type: Bug
+comments:
+- id: 01a0ddca-337c-7a30-8909-28ef63cfa61c
+  author: joe
+  content: |-
+    Review (fresh reviewer): APPROVE WITH NITS.
+
+    Checked at 735e2cb1ec (git diff origin/main...origin/claude/bug-1643).
+
+    (1) Production behaviour unchanged: the #[cfg(not(test))] branch in history_cache::serve() computes budget_from(env) and calls serve_at(...) exactly as before the refactor (verified by direct diff comparison); serve_at() still forwards Some(budget) into Budget::for_duration via the new serve_with_budget_at() shim. cargo check -p aida-cli-lib (no test cfg) builds clean, no errors.
+
+    (2) No budget-exceeded/fallback test is silently defanged: history_cache::serve() (the only fn with the #[cfg(test)] unbounded branch) is called from production only in history.rs, and in tests only via with_index_on() in task_1508_history_source_tests.rs (2 call sites: task_1508_index_answer_reports_source_and_tip and task_1508_unusable_index_falls_back_with_footer, neither of which exercises a budget timeout -- the latter fails at HistoryCache::open on a pre-corrupted path, before ensure_fresh's budget check runs). Every budget/fallback-timing test in task_1507_history_cache_tests.rs and bug_1635_history_event_modes_tests.rs calls serve_at() directly with an explicit Duration (GENEROUS, Duration::ZERO, Duration::from_millis(1)), which is untouched by this change.
+
+    (3) The None/unbounded path can't hang: Budget::unbounded() pre-dates this fix (already on origin/main, already used by test_support::index and other tests) and both catch_up() and backfill_chunks() bound their loops on a finite commit list materialized from git rev-list (total / order), not on budget alone -- termination depends on store size, and tests use tiny throwaway stores.
+
+    (4) Ran targeted filters only, CARGO_BUILD_JOBS=3, one at a time (no full suite, no parallel cargo builds): --lib task_1508 (8 passed), --lib bug_1635 (9 passed), --lib task_1507 (59 passed, 1 pre-existing ignore), --lib history (147 passed), --lib task_1508_mcp (1 passed). 0 failures across all. Worktree left clean (git status clean after all runs).
+
+    Nit (trivial, style only): the doc comment on serve() ('catching it up inline within the configured budget') is now only accurate for the non-test build; the trace:BUG-1643 comment right below already explains the test-cfg exception, so this is cosmetic, not a fix-blocker.
+
+    No changes requested.
+  created_at: 2026-09-26T12:56:51.324037866Z
+  modified_at: 2026-09-26T12:56:51.324037866Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
   branch: main
