@@ -1,0 +1,35 @@
+id: 01a0df63-4f7b-7f73-978c-021f632a0bd8
+spec_id: BUG-1675
+agreed_id: BUG-1675
+title: The disk-headroom guard runs the full doctor store load for a single statvfs, taking 44 s under load and timing out at 120 s into a false CronJobFailed disk trip
+description: |
+  Found while handling disk-headroom-guard-route (advisor, 2026-09-26).
+
+  OBSERVED: the store ledger schedule/disk-headroom-guard.yaml records `last_run: 2026-09-26T20:09:59Z result: failed:124`. The runs at 19:01 and 19:33 were ok, and disk is healthy (about 163 GB free against the 60 GiB floor). Exit 124 is the scheduler's kill-on-timeout sentinel (maintenance_schedule.rs run_with_kill_timeout, SCHEDULED_COMMAND_TIMEOUT = 120 s). It was not a headroom finding. A timeout still mints a failure trip and a CronJobFailed, so disk-headroom-guard-route wakes the advisor with "free disk space dropped below the floor" when nothing is wrong with the disk.
+
+  ROOT CAUSE: `aida doctor check disk-headroom` takes the full doctor_multi_agent path: Storage::load() of the whole store plus collect_doctor_findings (parent-tag-drift, id-collisions, lease listing, live-session probing). The category filter then throws all of that away, and the check itself is a single statvfs on the project root (scan_disk_headroom). Measured 2026-09-26 13:22 local, load average 16.3 on this host: `doctor check disk-headroom --fail-on-findings` took 43.8 s and 47.8 s. `doctor check runaway-seats`, which has TASK-1473's light entry path, took 0.10 s. Under heavier contention the full path goes past 120 s. This job runs every 30 m, the most often of any guard.
+
+  ## Acceptance
+  - `aida doctor check disk-headroom` (single category, no --all) takes a light entry path like doctor_check_runaway_seats_light (TASK-1473). It reads [doctor.disk_headroom] config and runs scan_disk_headroom with no Storage::load() and no collect_doctor_findings. Output shape and --fail-on-findings exit gating stay identical to the full path.
+  - A test pins that the light path does not load the store. Follow TASK-1473's test pattern, for example a project whose store is unloadable or locked still gets a correct headroom verdict.
+  - Measured on this repo at normal dogfood load: the check completes in under 2 s. Paste the timing as a comment.
+  - Say whether the same light path applies to the other scheduled single-category guards (remote-drift, performance), and file a follow-up if it does. Those guards run every 6 h, so they are lower risk.
+
+  Related: TASK-1473 (the light-path precedent), STORY-1367 (disk-headroom guard), BUG-1655 (route over-firing; a timeout trip here makes that worse).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T20:23:42.715664058Z
+modified_at: 2026-09-26T20:23:42.715664058Z
+req_type: Bug
+tags:
+- performance schedule
+filed_at:
+  code_sha: b13b2c611e810a2ba044efb50b32070667d4b37a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
