@@ -568,12 +568,26 @@ fn findings_promote_reason_comment(
     ))
 }
 
+/// BUG-1647: what `aida findings promote --auto-complete`'s write did.
+// trace:BUG-1647 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PromoteAutoComplete {
+    /// The finding moved into Completed.
+    Completed,
+    /// It was already Completed; nothing was changed.
+    AlreadyCompleted,
+}
+
 /// BUG-1638: `aida findings promote --auto-complete`'s write (TASK-579): the
 /// audit comments and the caller-authored move into Completed, applied to the
 /// copy re-read under the store lock and written as that one spec, so an edit
 /// made after `req` was read is kept. Fails without writing when the finding
 /// was deleted meanwhile.
-// trace:TASK-579 trace:STORY-1418 trace:BUG-1637 trace:BUG-1638 | ai:claude
+///
+/// BUG-1647: a finding already Completed under the lock gets no second audit
+/// comment, history entry or ship record ([`PromoteAutoComplete::AlreadyCompleted`]);
+/// one Rejected or Superseded is refused without writing.
+// trace:TASK-579 trace:STORY-1418 trace:BUG-1637 trace:BUG-1638 trace:BUG-1647 | ai:claude
 pub(crate) fn findings_promote_auto_complete_write(
     backend: &aida_core::CachedGitBackend,
     req: &Requirement,
@@ -582,7 +596,7 @@ pub(crate) fn findings_promote_auto_complete_write(
     subject: &str,
     reason: Option<&str>,
     now: chrono::DateTime<chrono::Utc>,
-) -> Result<()> {
+) -> Result<PromoteAutoComplete> {
     let display_id = req.display_id();
     let mut comments = vec![findings_audit_comment(
         format!(
@@ -593,7 +607,7 @@ pub(crate) fn findings_promote_auto_complete_write(
         now,
     )];
     comments.extend(findings_promote_reason_comment(reason, now));
-    let written = completion::transition_to_completed_atomically(
+    let outcome = completion::transition_to_completed_atomically(
         backend,
         req,
         Some(project_root),
@@ -605,20 +619,29 @@ pub(crate) fn findings_promote_auto_complete_write(
             record_promote_completion(r, prior, now);
         },
     )?;
-    if written.is_none() {
-        anyhow::bail!(
+    match outcome {
+        completion::AtomicCompletion::Completed => Ok(PromoteAutoComplete::Completed),
+        completion::AtomicCompletion::AlreadyCompleted => Ok(PromoteAutoComplete::AlreadyCompleted),
+        completion::AtomicCompletion::Gone => anyhow::bail!(
             "{display_id} no longer exists: it was deleted while promoting, so nothing was \
              changed."
-        );
+        ),
+        completion::AtomicCompletion::Refused(status) => anyhow::bail!(
+            "{display_id} is now {status}, a final status, so it was not auto-completed; \
+             nothing was changed."
+        ),
     }
-    Ok(())
 }
 
 /// BUG-1638: `aida findings promote`'s Approved write: the optional rationale
 /// comment and the caller-authored move to Approved, applied to the copy
 /// re-read under the store lock and written as that one spec. Fails without
 /// writing when the finding was deleted meanwhile.
-// trace:BUG-231 trace:BUG-1637 trace:BUG-1638 | ai:claude
+///
+/// BUG-1647: also fails without writing when the copy read under the lock is
+/// in a final status ("is now X"). The error says why the write did not land;
+/// the caller says what else was (or was not) undone.
+// trace:BUG-231 trace:BUG-1637 trace:BUG-1638 trace:BUG-1647 | ai:claude
 pub(crate) fn findings_promote_approve_write(
     backend: &aida_core::CachedGitBackend,
     req: &Requirement,
@@ -626,7 +649,12 @@ pub(crate) fn findings_promote_approve_write(
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<()> {
     let comment = findings_promote_reason_comment(reason, now);
+    let mut terminal = None;
     let written = backend.update_spec_atomically(req, |r| {
+        if aida_core::conflict::is_terminal_status(&r.status) {
+            terminal = Some(r.status.clone());
+            return;
+        }
         r.comments.extend(comment);
         let from = std::mem::replace(&mut r.status, RequirementStatus::Approved);
         record_caller_status_transition(r, &from);
@@ -634,8 +662,115 @@ pub(crate) fn findings_promote_approve_write(
     })?;
     if written.is_none() {
         anyhow::bail!(
-            "{} no longer exists: it was deleted while promoting, so nothing was changed.",
+            "{} no longer exists: it was deleted while promoting",
             req.display_id()
+        );
+    }
+    if let Some(status) = terminal {
+        anyhow::bail!(
+            "{} is now {status}, a final status, so it was not promoted",
+            req.display_id()
+        );
+    }
+    Ok(())
+}
+
+/// BUG-1647: `aida findings promote --to work`: add the finding to the role's
+/// work queue (BUG-231: queue first, so a queue failure leaves it a clean,
+/// retryable draft), then write Approved. When the status write does not land
+/// (the finding was deleted or reached a final status meanwhile, or the write
+/// failed), the queue entry is withdrawn (any entry the spec had before is put
+/// back as it was) so the error can say nothing was changed; when the
+/// withdrawal also fails, the error says the entry remains and how to remove
+/// it. Returns the role it was queued for.
+// trace:BUG-231 trace:BUG-1638 trace:BUG-1647 | ai:claude
+pub(crate) fn findings_promote_to_work(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    req: &Requirement,
+    display_id: &str,
+    for_role: Option<&str>,
+    reason: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<String> {
+    let user_id = current_user_id(None);
+    let storage = Storage::new(store_path);
+    // `queue_add` upserts, so remember the entry it may replace.
+    let prior_entry = storage
+        .queue_list(&user_id, true)
+        .ok()
+        .and_then(|entries| entries.into_iter().find(|e| e.requirement_id == req.id));
+    let role = queue_promoted_finding(store_path, req.id, display_id, for_role)?;
+    // The race-test seam between the queue add and the status write.
+    status_write_race_seam(store_path);
+    if let Err(write_err) = findings_promote_approve_write(backend, req, reason, now) {
+        let undo = match &prior_entry {
+            Some(prior) => storage.queue_add(prior.clone()),
+            None => storage.queue_remove_for_role(&user_id, &req.id, Some(&role)),
+        };
+        match undo {
+            Ok(()) => anyhow::bail!(
+                "{write_err:#}. Its {role} queue entry was withdrawn, so nothing was changed."
+            ),
+            Err(undo_err) => anyhow::bail!(
+                "{write_err:#}. It had already been added to the {role} queue, and that entry \
+                 could not be withdrawn ({undo_err:#}); remove it with \
+                 `aida queue remove {display_id} --for {role}`."
+            ),
+        }
+    }
+    Ok(role)
+}
+
+/// BUG-1647: `aida findings dismiss`: the dismissal audit comment and the
+/// caller-authored move to Rejected, applied to the copy re-read under the
+/// store lock and written as that one spec (like promote since BUG-1638), so
+/// an edit made after the finding was read is kept. Fails without writing
+/// when the finding was deleted meanwhile.
+// trace:TASK-404 trace:BUG-1637 trace:BUG-1647 | ai:claude
+pub(crate) fn findings_dismiss(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    id: &str,
+    reason: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<()> {
+    let req = backend
+        .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let tags: Vec<String> = req.tags.iter().cloned().collect();
+    if !findings::is_finding(&tags) {
+        anyhow::bail!(
+            "{id} is not a finding (no `from-review:`/`from-implementer:`/`from-advisor:` tag) — \
+             `aida findings` only triages real findings. \
+             Use `aida edit {id} --status rejected` for a general status change."
+        );
+    }
+    // TASK-404: the bare "Dismissed" marker said nothing about *why*, so
+    // rationale used to require a separate `aida comment add` — which most
+    // dismissals skipped. With `--reason`, the rationale lands in the same
+    // audit comment in one command.
+    let content = match reason.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(text) => format!(
+            "Dismissed by {author} {date}: {text}",
+            author = get_default_author(),
+            date = now.format("%Y-%m-%d")
+        ),
+        None => "Dismissed by advisor during findings triage.".to_string(),
+    };
+    let comment = findings_audit_comment(content, now);
+    // The race-test seam between the read and the write.
+    status_write_race_seam(store_path);
+    let written = backend.update_spec_atomically(&req, |r| {
+        r.comments.push(comment);
+        // BUG-1637: caller-authored.
+        let from = std::mem::replace(&mut r.status, RequirementStatus::Rejected);
+        record_caller_status_transition(r, &from);
+        r.modified_at = now;
+    })?;
+    if written.is_none() {
+        anyhow::bail!(
+            "{id} no longer exists: it was deleted while dismissing, so nothing was changed."
         );
     }
     Ok(())
@@ -6689,47 +6824,14 @@ fn handle_findings_command(
         }
 
         FindingsCommand::Dismiss { id, reason } => {
-            let mut req = backend
-                .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
-                .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
-            let tags: Vec<String> = req.tags.iter().cloned().collect();
-            if !findings::is_finding(&tags) {
-                anyhow::bail!(
-                    "{id} is not a finding (no `from-review:`/`from-implementer:`/`from-advisor:` tag) — \
-                     `aida findings` only triages real findings. \
-                     Use `aida edit {id} --status rejected` for a general status change."
-                );
-            }
-            let now = chrono::Utc::now();
-            let author = get_default_author();
-            // TASK-404: the bare "Dismissed" marker said nothing about *why*,
-            // so rationale used to require a separate `aida comment add` —
-            // which most dismissals skipped. With `--reason`, the rationale
-            // lands in the same audit comment in one command.
-            let content = match reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-                Some(text) => format!(
-                    "Dismissed by {author} {date}: {text}",
-                    date = now.format("%Y-%m-%d")
-                ),
-                None => "Dismissed by advisor during findings triage.".to_string(),
-            };
-            req.comments.push(Comment {
-                id: Uuid::now_v7(),
-                content,
-                author,
-                created_at: now,
-                modified_at: now,
-                parent_id: None,
-                replies: Vec::new(),
-                reactions: Vec::new(),
-                session_id: resolve_current_session_id(), // trace:TASK-330
-                relayed_from: None,
-            });
-            // BUG-1637: caller-authored. trace:BUG-1637 | ai:claude
-            let from = std::mem::replace(&mut req.status, RequirementStatus::Rejected);
-            record_caller_status_transition(&mut req, &from);
-            req.modified_at = now;
-            backend.update_requirement(&req)?;
+            // BUG-1647: one per-spec atomic write. trace:BUG-1647 | ai:claude
+            findings_dismiss(
+                backend,
+                store_path,
+                id,
+                reason.as_deref(),
+                chrono::Utc::now(),
+            )?;
             println!("Dismissed finding {id} — status → Rejected.");
         }
 
@@ -6822,7 +6924,7 @@ fn handle_findings_command(
                     let display_id = req.display_id();
                     // BUG-1638: one per-spec atomic write, so an edit made
                     // since the finding was read is kept. trace:BUG-1638 | ai:claude
-                    findings_promote_auto_complete_write(
+                    let outcome = findings_promote_auto_complete_write(
                         backend,
                         &req,
                         project_root,
@@ -6831,6 +6933,15 @@ fn handle_findings_command(
                         reason.as_deref(),
                         chrono::Utc::now(),
                     )?;
+                    // BUG-1647: a re-promote of a Completed finding changes
+                    // nothing and says so. trace:BUG-1647 | ai:claude
+                    if outcome == PromoteAutoComplete::AlreadyCompleted {
+                        println!(
+                            "Finding {id} is already Completed — origin-ID fix already merged \
+                             ({sha}); nothing was changed."
+                        );
+                        return Ok(());
+                    }
                     record_role_activity(&display_id, "auto-complete");
                     println!(
                         "Promoted finding {id} — origin-ID fix already merged ({sha}), \
@@ -6854,12 +6965,20 @@ fn handle_findings_command(
             // exits non-zero with the finding still draft (cleanly retryable),
             // and the success message names the role it routed to.
             // trace:BUG-231 | ai:claude
+            // BUG-1638: one per-spec atomic write. BUG-1647: a status write
+            // that does not land withdraws the queue entry it follows.
+            // trace:BUG-1638 trace:BUG-1647 | ai:claude
             let display_id = req.spec_id.as_deref().unwrap_or(id.as_str());
-            let role = queue_promoted_finding(store_path, req.id, display_id, r#for.as_deref())?;
+            let role = findings_promote_to_work(
+                backend,
+                store_path,
+                &req,
+                display_id,
+                r#for.as_deref(),
+                reason.as_deref(),
+                chrono::Utc::now(),
+            )?;
             record_role_activity(display_id, "queue-add");
-
-            // BUG-1638: one per-spec atomic write. trace:BUG-1638 | ai:claude
-            findings_promote_approve_write(backend, &req, reason.as_deref(), chrono::Utc::now())?;
             println!("Promoted finding {id} — status → Approved, queued for {role}.");
             // STORY-1428: at/above the threshold, promoting to work is not
             // silent about the other destination. trace:STORY-1428 | ai:claude
@@ -46850,8 +46969,10 @@ pub(crate) enum Phase1RestoreOutcome {
 }
 
 /// BUG-1638: the orchestrator's line for a phase-1 restore outcome. It says
-/// "status restored" only for [`Phase1RestoreOutcome::Restored`].
-// trace:BUG-1638 | ai:claude
+/// "status restored" only for [`Phase1RestoreOutcome::Restored`]. BUG-1647:
+/// statuses read as the CLI shows them ("Needs Attention"), the same form the
+/// refusal reason uses.
+// trace:BUG-1638 trace:BUG-1647 | ai:claude
 pub(crate) fn phase1_restore_outcome_message(
     outcome: &Phase1RestoreOutcome,
     display_id: &str,
@@ -46859,12 +46980,12 @@ pub(crate) fn phase1_restore_outcome_message(
 ) -> String {
     match outcome {
         Phase1RestoreOutcome::Restored => format!(
-            "phase-1 startup failed before acquiring a lease — status restored to {prior:?} \
+            "phase-1 startup failed before acquiring a lease — status restored to {prior} \
              (re-queueable); no work was stranded"
         ),
         Phase1RestoreOutcome::Refused(reason) => format!(
             "phase-1 startup failed before acquiring a lease — {display_id}'s status was not \
-             restored to {prior:?}: {reason}"
+             restored to {prior}: {reason}"
         ),
     }
 }
@@ -74719,6 +74840,12 @@ mod bug_1637_status_writer_tests;
 #[path = "tests/bug_1638_race_seam_tests.rs"]
 mod bug_1638_race_seam_tests;
 
+// BUG-1647: atomic findings dismiss and the findings promote edge cases.
+// trace:BUG-1647 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1647_findings_atomic_tests.rs"]
+mod bug_1647_findings_atomic_tests;
+
 // BUG-1633: pull/push follow-ups to BUG-1625 and BUG-1626. trace:BUG-1633 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_1633_pull_push_followups_tests.rs"]
@@ -94192,12 +94319,16 @@ fn run_auto_complete(
                                 );
                             }
                         }
+                        // BUG-1647: the refusal honours --json like the
+                        // restore does. trace:BUG-1647 | ai:claude
                         Ok(outcome @ Phase1RestoreOutcome::Refused(_)) => {
-                            eprintln!(
-                                "  {} {}",
-                                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                                phase1_restore_outcome_message(&outcome, display_id, prior)
-                            );
+                            if !json {
+                                eprintln!(
+                                    "  {} {}",
+                                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                                    phase1_restore_outcome_message(&outcome, display_id, prior)
+                                );
+                            }
                         }
                         Err(e) => {
                             eprintln!(
