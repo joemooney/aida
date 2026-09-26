@@ -353,7 +353,7 @@ fn repo_commit_count(root: &Path) -> usize {
 /// Resolve `~/.aida/rule-violations.jsonl`. `None` when the home dir can't be
 /// located (treat as "off" — never error out).
 pub fn log_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("rule-violations.jsonl"))
+    crate::home_dir().map(|h| h.join(".aida").join("rule-violations.jsonl"))
 }
 
 /// Append events as JSONL. Best-effort: errors are swallowed — instrumentation

@@ -49,7 +49,7 @@ pub struct UsageEvent {
 /// Resolve `~/.aida/usage.jsonl`. Returns `None` when the home dir
 /// can't be located (treat as "telemetry off" — never error out).
 pub fn log_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("usage.jsonl"))
+    crate::home_dir().map(|h| h.join(".aida").join("usage.jsonl"))
 }
 
 /// Check whether telemetry is enabled. Resolution order:

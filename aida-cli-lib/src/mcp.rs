@@ -759,7 +759,7 @@ fn project_roles_dir(project_root: &Path) -> PathBuf {
 }
 
 fn global_roles_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("roles"))
+    crate::home_dir().map(|h| h.join(".aida").join("roles"))
 }
 
 /// List all roles for the project (and any global roles), newest-active first,

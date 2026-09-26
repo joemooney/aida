@@ -813,7 +813,7 @@ fn truncate(s: &str, max: usize) -> String {
 const LAUNCH_LOG_REL: &str = ".aida/session-launches.log";
 
 fn launch_log_path() -> Result<PathBuf> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate launches log")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate launches log")?;
     Ok(home.join(LAUNCH_LOG_REL))
 }
 
@@ -2477,7 +2477,7 @@ pub(crate) fn os_wrapped_program_and_args(
     bwrap_preflight()?;
     let store = worktree_root.join(".aida-store");
     let mut rw_paths = vec![store];
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = crate::home_dir() {
         // Cargo/npm registry + build caches must stay writable or cargo/npm fail
         // mid-build; `~/.claude` + `~/.claude.json` hold Claude Code's session
         // state and auth, which it writes during a run.
@@ -3123,7 +3123,7 @@ fn claude_entries_for_cwd(cwd: &Path) -> Result<Vec<SessionLogEntry>> {
 }
 
 fn codex_entries() -> Result<Vec<SessionLogEntry>> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate Codex sessions")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate Codex sessions")?;
     let root = home.join(".codex").join("sessions");
     if !root.is_dir() {
         return Ok(Vec::new());
@@ -3153,7 +3153,7 @@ fn codex_entries() -> Result<Vec<SessionLogEntry>> {
 }
 
 fn antigravity_entries() -> Result<Vec<SessionLogEntry>> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate Antigravity sessions")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate Antigravity sessions")?;
     let candidates = [
         home.join(".antigravity").join("sessions"),
         home.join(".config").join("Antigravity").join("sessions"),
@@ -3179,10 +3179,10 @@ pub(crate) fn claude_project_dir(cwd: &Path) -> Result<PathBuf> {
     #[cfg(test)]
     let home = std::env::var_os("AIDA_TEST_HOME")
         .map(PathBuf::from)
-        .or_else(dirs::home_dir)
+        .or_else(crate::home_dir)
         .context("HOME not set; cannot locate Claude project dir")?;
     #[cfg(not(test))]
-    let home = dirs::home_dir().context("HOME not set; cannot locate Claude project dir")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate Claude project dir")?;
     Ok(home.join(".claude/projects").join(encoded))
 }
 
@@ -3237,7 +3237,7 @@ pub fn list_role_sessions(role: &str, limit: usize) -> Result<Vec<SessionMeta>> 
 }
 
 fn collect_global_project_sessions(limit: usize) -> Result<impl Iterator<Item = SessionMeta>> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate sessions")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate sessions")?;
     let projects = home.join(".claude").join("projects");
     let mut entries: Vec<SessionLogEntry> = Vec::new();
     if projects.is_dir() {
@@ -3417,9 +3417,9 @@ fn claude_session_jsonl_path_by_id(session_id: &str) -> Option<PathBuf> {
     #[cfg(test)]
     let home = std::env::var_os("AIDA_TEST_HOME")
         .map(PathBuf::from)
-        .or_else(dirs::home_dir)?;
+        .or_else(crate::home_dir)?;
     #[cfg(not(test))]
-    let home = dirs::home_dir()?;
+    let home = crate::home_dir()?;
     let projects = home.join(".claude").join("projects");
     let dirs = std::fs::read_dir(projects).ok()?;
     let filename = format!("{session_id}.jsonl");

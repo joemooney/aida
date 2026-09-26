@@ -602,7 +602,7 @@ fn install_terminator_plugin() -> Result<()> {
     let body = aida_core::templates::EMBEDDED_TEMPLATES
         .get(TERMINATOR_TEMPLATE_KEY)
         .ok_or_else(|| anyhow::anyhow!("embedded Terminator plugin template is missing"))?;
-    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("could not determine home dir"))?;
+    let home = crate::home_dir().ok_or_else(|| anyhow::anyhow!("could not determine home dir"))?;
     let dir = home.join(".config").join("terminator").join("plugins");
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     let dest = dir.join("aida_terminator.py");

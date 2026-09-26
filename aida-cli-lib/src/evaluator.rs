@@ -210,7 +210,7 @@ impl JevEvaluator {
         }
 
         // Try reading ~/.env
-        if let Some(home) = dirs::home_dir() {
+        if let Some(home) = crate::home_dir() {
             let env_path = home.join(".env");
             if env_path.exists() {
                 if let Ok(content) = std::fs::read_to_string(&env_path) {

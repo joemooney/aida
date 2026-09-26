@@ -641,7 +641,7 @@ fn aida_home_dir() -> Option<PathBuf> {
     if let Some(home) = std::env::var_os("AIDA_TEST_HOME") {
         return Some(PathBuf::from(home));
     }
-    dirs::home_dir()
+    crate::home_dir()
 }
 
 #[cfg(test)]

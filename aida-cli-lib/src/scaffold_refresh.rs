@@ -384,7 +384,7 @@ fn agents_md_block_refresh(
 fn codex_prompts_refresh(dest: Option<&Path>) -> Option<PackRefresh> {
     let dir = match dest {
         Some(d) => d.to_path_buf(),
-        None => dirs::home_dir()?.join(".codex").join("prompts"),
+        None => crate::home_dir()?.join(".codex").join("prompts"),
     };
     if !dir.is_dir() {
         return None;

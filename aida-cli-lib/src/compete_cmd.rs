@@ -996,7 +996,7 @@ fn compete_worktree_dir(project_root: &std::path::Path, branch: &str) -> std::pa
 // trace:BUG-575 | ai:claude
 fn compete_log_dir(project_root: &std::path::Path, branch: &str) -> std::path::PathBuf {
     let run_slug = branch.replace('/', "-");
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = crate::home_dir() {
         return home.join(".aida").join("compete").join(run_slug);
     }
     project_root
