@@ -12,7 +12,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T08:15:09.245084901Z
-modified_at: 2026-09-26T00:27:02.833905607Z
+modified_at: 2026-09-26T00:35:43.948149784Z
 req_type: Task
 tags:
 - cache
@@ -53,6 +53,12 @@ comments:
     - cargo test -p aida-cli-lib --lib: task_1508 6/6, task_1507 54 ok (1 ignored), history 118 ok, mcp 165 ok, doctor 156 ok.
   created_at: 2026-09-26T00:27:02.833905607Z
   modified_at: 2026-09-26T00:27:02.833905607Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0db23-aecc-7ec0-a80d-d2a374f1cfd2
+  author: joe
+  content: 'Orchestrator delta check (1339769622): APPROVE. The fix is what the reviewer prescribed: the agent-mode gate moved into the pure fallback_footer_text, pinned by 2 tests (deleting the gate now fails 2 of 8). The doctor line now has a switched-off state. Integrating with BUG-1632 in batch 79.'
+  created_at: 2026-09-26T00:35:43.948149784Z
+  modified_at: 2026-09-26T00:35:43.948149784Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
