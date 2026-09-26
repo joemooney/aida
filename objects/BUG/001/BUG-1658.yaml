@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:31:55.695978208Z
-modified_at: 2026-09-26T16:35:29.222495486Z
+modified_at: 2026-09-26T17:46:55.258863688Z
 req_type: Bug
 comments:
 - id: 01a0de58-b867-7b53-aad3-2a8f3fb870d8
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-09-26T15:32:31.463159704Z
   modified_at: 2026-09-26T15:32:31.463159704Z
   session_id: 156a4900-9e60-4f0b-9739-948c3b0efd27
+- id: 01a0ded3-c39a-7ad2-81a7-7adfe72852b8
+  author: joe
+  content: 'Root cause: test env race, not a Windows product bug. The promote queue tests resolved the queue owner via current_user_id() (reads AIDA_USER) without ENV_LOCK; parallel tests setting AIDA_USER under EnvVarGuard flipped the identity mid-test, so a different user''s empty queue was read (Windows line 180, macOS line 173). Reproduced on Linux with an AIDA_USER flipper (2/3 fail); fixed by pin_queue_user() (EnvVarGuard holds ENV_LOCK, fixed AIDA_USER) in the BUG-1651 and BUG-1647 promote queue tests, assertions unchanged. Commit 6895a1a56a on claude/bug-1658; cross-platform run 36257612130 green on windows-latest and macos-latest; local 20x under CPU load 0 failures.'
+  created_at: 2026-09-26T17:46:55.258863688Z
+  modified_at: 2026-09-26T17:46:55.258863688Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de58-7a24-7bf1-a80c-4fe525539a13
   author: joe
