@@ -1,0 +1,32 @@
+id: 01a0defe-0cf4-75e0-856b-e20c2aeacfbd
+spec_id: PRIN-9
+agreed_id: PRIN-9
+title: 'Corpus sufficiency: work is not done until the store holds the intent, the acceptance criteria, and the criterion-to-test trace a future agent would need to rebuild it'
+description: |
+  Work is not done until the store holds what a future agent would need to rebuild it: the intent, the acceptance criteria, and the trace from each criterion to a test. A change that leaves the store less able to explain the system than the code is a regression.
+
+  SOURCE: SPIKE-86 report section 7.2, adopted by OPERATOR DECISION on SPIKE-86 (Joe, 2026-09-26). This is the "done-rule" follow-up; it states the VIS-2 north star as a rule new work can be tested against, the way PRIN-6 and PRIN-7 test surfaces.
+
+  WHERE IT BITES TODAY (SPIKE-86 measurements, main 9154924fd2): commit level 88.9% of 90-day commits carry a SPEC-ID trailer; spec level 42.1% of recently authored specs carry parseable acceptance criteria; criterion level 27 criterion-to-test traces across 10 specs.
+
+  ENFORCEMENT LEVEL: advisory at filing (PROXY DECISION, orchestrator for Joe: SPIKE-86 section 8 item 6 left advisory / graded / gate open, and advisory is the default-first choice under PRIN-2). Raising it to graded (PRIN-8's distil-the-rule rung) or to a gate is a separate operator decision once the capture-coverage surface can measure it.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:33:06.548818823Z
+modified_at: 2026-09-26T18:33:06.548818823Z
+req_type: Principle
+tags:
+- from-spike:SPIKE-86
+- north-star
+- principle
+- reconstitution
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
