@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:58:05.809657428Z
-modified_at: 2026-09-26T21:17:32.174837862Z
+modified_at: 2026-09-26T21:39:37.395196019Z
 req_type: Task
 comments:
 - id: 01a0de70-506d-7fd2-8e0a-fc36654d12bb
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-09-26T15:58:17.708992844Z
   modified_at: 2026-09-26T15:58:17.708992844Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0dfa8-cf33-7a62-ab9e-ba8ad2e2c8f3
+  author: joe
+  content: 'DRAFT (uncompiled) on claude/task-1518 @ 2e01ffe4ab: new aida-cli-lib/src/drain_signal.rs — SignalSource trait (mpsc::Receiver for tests, signal-hook HookSource in prod polling pending() so the grace deadline is honoured), run_handler(source, ctx, exit): first SIGTERM -> on_first_term = drain_cmd::write_stop_request(mode ''sigterm'') + mark_in_flight_leases_interrupted (leases with creator_pid == drain pid get interrupted_at/interrupted_reason via generic toml key insert, manual_enter_at pattern, no SessionLease struct change) + release via dropping the DrainGuard from a shared GuardSlot (Arc<Mutex<Option<DrainGuard>>>) with drain_lock::release_lock_if_ours fallback; then waits up to AIDA_DRAIN_TERM_GRACE_SECS (default 30, under systemd TimeoutStopSec=60) for a second SIGTERM or the deadline, then exit(143). queue_cmd auto-complete arm wraps _drain_guard in the slot and installs the handler (advisory); auto_complete''s two stop-request returns use drain_signal::stop_exit_code(DRIVE_EXIT_CLEAN) so a cooperative wind-down after SIGTERM still exits 143; docs/autonomous-drain.md exit grid + SIGTERM paragraph. Decisions (conservative): leases matched by creator_pid only; the handler does NOT signal in-flight vendor children (systemd kills the cgroup anyway; for a manual kill the child keeps running and the next tick reaps — left for the implementer to decide); drain-state file untouched (probe reports Stale as today); exit code 143 = 128+15. Uncertain: the heartbeat-stopping drop of DrainGuard from a non-main thread (should be fine, all fields Send); single-spec (non-batch) routes exit only via the forced deadline. Tests: task_1518_drain_sigterm_tests.rs — first_term_marks_only_this_drains_leases_and_keeps_unknown_keys, first_term_writes_stop_request_and_releases_lock_file, first_term_never_removes_a_lock_it_does_not_own, first_term_drops_the_guard_in_the_slot (real acquire_drain_lock in a temp root), second_sigterm_forces_exit_after_bookkeeping (channel-driven, recording exit), grace_deadline_forces_exit, other_signals_are_ignored, no_signal_means_no_change, grace_env_parses_and_falls_back, real_sigterm_releases_lock_and_marks_leases (unix: install() + libc::kill(self, SIGTERM), 1h grace). Compile risks to check first: signal_hook Signals::wait()/pending()/is_closed() usage in HookSource; DrainLock field list in the test fixture matches the struct exactly;  in the child test module picking up the parent''s imports; the real-SIGTERM test shares the process with other tests (signal-hook keeps SIGTERM caught afterwards, but any sibling test registering SIGTERM would also see it).'
+  created_at: 2026-09-26T21:39:37.395196019Z
+  modified_at: 2026-09-26T21:39:37.395196019Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0de70-412f-71b2-a0d8-b5ceffefddc0
   author: joe
