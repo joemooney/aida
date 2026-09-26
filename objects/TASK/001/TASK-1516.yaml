@@ -3,12 +3,12 @@ spec_id: TASK-1516
 agreed_id: TASK-1516
 title: Remove internal spec IDs embedded in prose of user-facing clap help (~20 /// lines in cli.rs) and tighten the help guard
 description: 'From BUG-1652: the existing guards (cli.rs source_doc_comments_carry_no_spec_id_provenance, BUG-629) reject only bare SPEC-IDs or trace markers on /// lines. SPEC-IDs inside descriptive prose are allowed by design, so user-facing --help still shows internal IDs at cli.rs ~909 (TASK-5), 1151 (STORY-711/BUG-637), 1539 (TASK-489), 2800-2804 (STORY-716/742/714), 2820 (STORY-88), 3649 (DOC-3), 4738 (STORY-21), 9610 (TASK-1), 9650 (ADR-3/ADR-7), 11517 (STORY-720), 11588 (TASK-123), 13025 and 13627 (STORY-42), 14000 (TASK-0424), 14170/14199 (TASK-1055). Reword each, keeping IDs that name real user-visible artefacts only if explicitly for developers/operators, and extend the guard to prose-embedded IDs, with an allowlist for deliberate developer-facing help.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T14:04:12.230277346Z
-modified_at: 2026-09-26T16:15:50.130224955Z
+modified_at: 2026-09-26T16:51:45.357437721Z
 req_type: Task
 tags:
 - docs:impacted
@@ -64,6 +64,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0dea1-422b-73d3-9c33-0b54e0acb996
+  author: aida-auto-bump
+  timestamp: 2026-09-26T16:51:45.323508367Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0dea1-424d-7550-9613-8e842c4ec382
+  timestamp: 2026-09-26T16:51:45.357435689Z
+  agent: implementer
+  commit_sha: 7c6faed6902114a6d1cf1b7843df6e1ef2175da5
+  summary: Completed via merge 7c6faed6
 filed_at:
   code_sha: 9beb57f86dd6c8d779c1b3afa03a02b753fc61c5
   branch: main
@@ -72,3 +85,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T16:51:45.323496334Z
+  completion_sha: 7c6faed6902114a6d1cf1b7843df6e1ef2175da5
