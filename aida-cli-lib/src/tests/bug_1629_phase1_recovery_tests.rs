@@ -323,3 +323,223 @@ fn bug_1629_retry_and_race_decisions() {
     assert!(!super::phase1_fresh_branch_raced(true, false));
     assert!(!super::phase1_fresh_branch_raced(false, true));
 }
+
+/// Stub fragment for the first launch: create the pinned worktree on the
+/// pinned branch (as a child that got that far would), then lose all
+/// coordination state.
+#[cfg(unix)]
+const CREATE_WORKTREE_THEN_LOSE: &str = r#"branch=""; wt=""; prev=""
+for arg in "$@"; do
+  if [ "$prev" = "--branch" ]; then branch="$arg"; fi
+  if [ "$prev" = "--path" ]; then wt="$arg"; fi
+  prev="$arg"
+done
+git -c user.name=t -c user.email=t@example.invalid worktree add -q -b "$branch" "$wt" >/dev/null 2>&1
+"#;
+
+/// A lease held by ANOTHER session on the worktree the first launch created,
+/// with its path canonicalized the way `session start` stores it.
+#[cfg(unix)]
+const OTHER_SESSION_LEASES_IT: &str = r#"canon="$(cd "$wt" && pwd -P)"
+cat > ".aida/sessions/019e9999-other.toml" <<LEASE
+id = "019e9999-other"
+scope = "STORY-52"
+slug = "story-52"
+owner = "someone-else"
+worktree_path = "$canon"
+branch = "$branch"
+started_at = "2026-09-24T00:00:00Z"
+hostname = "test"
+LEASE
+"#;
+
+/// Blocker 1(a): the pinned worktree exists on the pinned branch and no lease
+/// holds it, so the replacement re-enters it with `--force-claim`.
+#[cfg(unix)]
+#[test]
+fn bug_1629_replacement_force_claims_an_unleased_pinned_worktree() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = git_project(&temp);
+    let first = format!("{CREATE_WORKTREE_THEN_LOSE}exit 1");
+    let stub = stub(&root, &first, "exit 1");
+    let mut d = driver(&root, "NFR-56", stub);
+
+    let _ = d.run_implementer().unwrap_err();
+    let runs = attempts(&root);
+    assert_eq!(runs.len(), 2, "{runs:?}");
+    assert!(!runs[0].contains("--force-claim"), "{}", runs[0]);
+    assert!(
+        runs[1].contains("--force-claim"),
+        "an unleased pinned worktree is re-entered: {}",
+        runs[1]
+    );
+    assert!(runs[1].contains("--branch nfr-56 "), "{}", runs[1]);
+}
+
+/// Blocker 1(b): the same worktree is held by another session's lease, so the
+/// replacement does not pass `--force-claim` and the lease survives.
+#[cfg(unix)]
+#[test]
+fn bug_1629_replacement_never_force_claims_a_worktree_another_lease_holds() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = git_project(&temp);
+    let first = format!("{CREATE_WORKTREE_THEN_LOSE}{OTHER_SESSION_LEASES_IT}exit 1");
+    let stub = stub(&root, &first, "exit 1");
+    let mut d = driver(&root, "NFR-56", stub);
+
+    let _ = d.run_implementer().unwrap_err();
+    let runs = attempts(&root);
+    assert_eq!(runs.len(), 2, "{runs:?}");
+    assert!(
+        !runs[1].contains("--force-claim"),
+        "a leased worktree must not be taken over: {}",
+        runs[1]
+    );
+    let leases: Vec<String> = list_leases(&root).into_iter().map(|l| l.id).collect();
+    assert_eq!(leases, vec!["019e9999-other".to_string()]);
+}
+
+/// Blocker 2: the project root is reached through a symlink, so the pinned
+/// path is not canonical while the lease path is. The lease still matches.
+#[cfg(unix)]
+#[test]
+fn bug_1629_symlinked_project_root_still_matches_the_canonical_lease() {
+    let temp = tempfile::tempdir().unwrap();
+    let real = temp.path().join("real");
+    let real_root = real.join("proj");
+    std::fs::create_dir_all(real_root.join(".aida").join("sessions")).unwrap();
+    git(&real_root, &["init", "-q", "-b", "main"]);
+    git(&real_root, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    let link = temp.path().join("link");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let root = link.join("proj");
+
+    let first = format!("{CREATE_WORKTREE_THEN_LOSE}{OTHER_SESSION_LEASES_IT}exit 1");
+    let stub = stub(&root, &first, "exit 1");
+    let mut d = driver(&root, "NFR-56", stub);
+
+    let _ = d.run_implementer().unwrap_err();
+    let runs = attempts(&root);
+    assert_eq!(runs.len(), 2, "{runs:?}");
+    let pinned = link.join("proj-nfr-56");
+    assert!(
+        runs[1].contains(&format!("--path {}", pinned.display())),
+        "the pin is the non-canonical symlinked path: {}",
+        runs[1]
+    );
+    let leases = list_leases(&root);
+    assert_eq!(leases.len(), 1);
+    assert_ne!(
+        leases[0].worktree_path, pinned,
+        "fixture: the lease path must differ textually from the pin"
+    );
+    assert!(
+        !runs[1].contains("--force-claim"),
+        "the canonical lease holds the symlinked pin: {}",
+        runs[1]
+    );
+}
+
+/// Blocker 2, fail safe: a path that cannot be canonicalized counts as leased.
+#[test]
+fn bug_1629_uncanonicalizable_paths_count_as_leased() {
+    let temp = tempfile::tempdir().unwrap();
+    let present = temp.path().join("present");
+    std::fs::create_dir_all(&present).unwrap();
+    let missing = temp.path().join("missing");
+    assert!(super::worktree_is_unleased(&present, &[]));
+    assert!(!super::worktree_is_unleased(&missing, &[]));
+    assert!(!super::worktree_is_unleased(&present, &[missing]));
+    assert!(!super::worktree_is_unleased(&present, &[present.clone()]));
+}
+
+/// Should-fix: the replacement leaves a durable trace, a `SpecRetried`
+/// event with cause `lost-child-state`.
+#[cfg(unix)]
+#[test]
+fn bug_1629_replacement_launch_emits_a_retry_event() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(crate::events::EVENTS_DISABLE_ENV, None)]);
+    let temp = tempfile::tempdir().unwrap();
+    let root = project(&temp);
+    let stub = stub(&root, "exit 1", "exit 1");
+    let mut d = driver(&root, "NFR-56", stub);
+
+    let _ = d.run_implementer().unwrap_err();
+    let retried: Vec<_> = crate::events::read_all(&root)
+        .into_iter()
+        .filter_map(|event| match event.kind {
+            crate::events::EventKind::SpecRetried {
+                phase,
+                cause,
+                attempt,
+                max,
+                detail,
+                ..
+            } => Some((phase, cause, attempt, max, detail)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(retried.len(), 1, "exactly one replacement: {retried:?}");
+    let (phase, cause, attempt, max, detail) = &retried[0];
+    assert_eq!(phase, "implementer");
+    assert_eq!(cause, "lost-child-state");
+    assert_eq!((*attempt, *max), (2, 2));
+    assert!(
+        detail
+            .as_deref()
+            .is_some_and(|d| d.contains("nothing to resume")),
+        "{detail:?}"
+    );
+}
+
+/// Should-fix: a child that refused at preflight has its real reason in the
+/// final failure, not "lost its state the same way".
+#[cfg(unix)]
+#[test]
+fn bug_1629_final_failure_names_the_childs_real_refusal() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = project(&temp);
+    let refuse = r#"printf 'spec NFR-56 is Draft; approve it first\n' > "${AIDA_ORCHESTRATED_LEASE_RECEIPT%.json}.refusal.txt"
+exit 1"#;
+    let stub = stub(&root, refuse, refuse);
+    let mut d = driver(&root, "NFR-56", stub);
+
+    let err = d.run_implementer().unwrap_err();
+    assert_eq!(err.kind, FailureKind::LaunchRefused);
+    assert!(
+        err.reason
+            .contains("the child refused: spec NFR-56 is Draft; approve it first"),
+        "{}",
+        err.reason
+    );
+    assert!(err.reason.contains("was refused"), "{}", err.reason);
+    assert!(
+        !err.reason.contains("lost its state the same way"),
+        "{}",
+        err.reason
+    );
+    let handoffs = root.join(".aida").join("orchestrator-handoffs");
+    let leftovers: Vec<_> = std::fs::read_dir(&handoffs)
+        .map(|rd| rd.flatten().map(|e| e.file_name()).collect())
+        .unwrap_or_default();
+    assert!(
+        leftovers.is_empty(),
+        "refusal files are consumed: {leftovers:?}"
+    );
+}
+
+#[test]
+fn bug_1629_refusal_summary_is_the_first_line_bounded() {
+    assert_eq!(
+        super::orchestrated_child_refusal_summary("\n  first line \nCaused by:\n  x"),
+        "first line"
+    );
+    assert_eq!(
+        super::orchestrated_child_refusal_summary(&"y".repeat(1000)).len(),
+        400
+    );
+    assert_eq!(
+        super::orchestrated_child_refusal_path(std::path::Path::new("h/abc.json")),
+        std::path::PathBuf::from("h/abc.refusal.txt")
+    );
+}

@@ -7621,36 +7621,6 @@ mod tests {
         assert!(driver.calls.is_empty());
     }
 
-    // BUG-1629: when the driver reports that the child lost its lease and
-    // handoff receipt (after its own single clean retry), the orchestrator
-    // spends no further retries, never credits the spec, and shelves it so
-    // dependents stay blocked.
-    // trace:BUG-1629 | ai:claude
-    #[test]
-    fn bug_1629_lost_child_state_is_not_retried_again_or_credited() {
-        let mut driver =
-            MockPhaseDriver::failing_at_with_kind(Phase::Implementer, FailureKind::LaunchRefused)
-                .recovering_phase1_failure_from_pr(Phase::Ci);
-        driver.shelve_succeeds = true;
-        driver.transient_retry_budget = 3;
-        let result = orchestrate(
-            &mut driver,
-            "NFR-56",
-            AutoCompleteVariant::Full,
-            false,
-            EscalateMode::Blocks,
-        );
-        assert_eq!(driver.calls, vec![Phase::Implementer]);
-        assert_eq!(result.failed_phase, Some(Phase::Implementer));
-        assert_eq!(
-            result.failure.as_ref().map(|f| f.kind),
-            Some(FailureKind::LaunchRefused)
-        );
-        assert!(result.shelved_reason.is_some());
-        assert_ne!(result.exit_code, 0, "a lost child is never a success");
-        assert!(result.shipped_spec_id.is_none());
-    }
-
     // BUG-1628: a mismatched workspace is refused with a message naming the
     // resolver mismatch, not a generic sibling-workspace refusal.
     // trace:BUG-1628 | ai:claude

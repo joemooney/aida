@@ -653,6 +653,8 @@ pub fn main_entry() {
         Err(err) => {
             record_ambiguous_id_refusal(&err);
             let msg = format!("{:?}", err);
+            // trace:BUG-1629 | ai:claude
+            record_orchestrated_child_refusal(&msg);
             // TASK-972 (AXI #6): agents read STDOUT. An error printed to stderr
             // with a human `Error:` prefix is invisible to the agent loop,
             // forcing blind retries. In AGENT MODE emit the error as a
@@ -100303,6 +100305,88 @@ fn phase1_branch_race_reason(spec: &str, branch: &str) -> String {
     )
 }
 
+/// BUG-1629: retry cause recorded for the phase-1 replacement launch.
+// trace:BUG-1629 | ai:claude
+const PHASE1_LOST_CHILD_STATE_CAUSE: &str = "lost-child-state";
+
+/// BUG-1629: is `worktree` free of every lease? Lease paths are stored
+/// canonicalized while a pinned path may not be (a symlinked checkout, macOS
+/// `/var`), so both sides are canonicalized before comparing. Fail safe: if
+/// either side cannot be canonicalized, the worktree counts as leased, so
+/// the replacement never passes `--force-claim` over a path it cannot prove
+/// is free.
+// trace:BUG-1629 | ai:claude
+fn worktree_is_unleased(
+    worktree: &std::path::Path,
+    lease_worktrees: &[std::path::PathBuf],
+) -> bool {
+    let Ok(pinned) = worktree.canonicalize() else {
+        return false;
+    };
+    lease_worktrees
+        .iter()
+        .all(|leased| leased.canonicalize().is_ok_and(|leased| leased != pinned))
+}
+
+/// BUG-1629: where `queue work` records its own refusal for an orchestrated
+/// launch — a sibling of the handoff receipt, keyed by the same session id.
+// trace:BUG-1629 | ai:claude
+fn orchestrated_child_refusal_path(receipt: &std::path::Path) -> std::path::PathBuf {
+    receipt.with_extension("refusal.txt")
+}
+
+/// BUG-1629: called on the error path of every `aida` invocation. When this
+/// process is an orchestrated phase-1 `queue work` child that failed before
+/// publishing its handoff receipt, record the refusal next to the receipt so
+/// the parent can name the real reason. Best-effort; never overwrites, and
+/// never fires for a child that got as far as its receipt.
+// trace:BUG-1629 | ai:claude
+fn record_orchestrated_child_refusal(message: &str) {
+    let Ok(receipt) = std::env::var(ORCHESTRATED_LEASE_RECEIPT_ENV) else {
+        return;
+    };
+    let args: Vec<String> = std::env::args().skip(1).take(2).collect();
+    if args != ["queue", "work"] {
+        return;
+    }
+    let receipt = std::path::PathBuf::from(receipt);
+    let refusal = orchestrated_child_refusal_path(&receipt);
+    if receipt.exists() || refusal.exists() {
+        return;
+    }
+    let summary = orchestrated_child_refusal_summary(message);
+    if !summary.is_empty() {
+        let _ = write_atomic(&refusal, &summary);
+    }
+}
+
+/// BUG-1629: the first non-empty line of an error, bounded for a message.
+// trace:BUG-1629 | ai:claude
+fn orchestrated_child_refusal_summary(message: &str) -> String {
+    let line = message
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or_default();
+    line.chars().take(400).collect()
+}
+
+/// BUG-1629: read and remove the refusal a phase-1 child recorded.
+// trace:BUG-1629 | ai:claude
+fn take_orchestrated_child_refusal(
+    project_root: &std::path::Path,
+    session_uuid: &str,
+) -> Option<String> {
+    let path = orchestrated_child_refusal_path(&orchestrated_lease_receipt_path(
+        project_root,
+        session_uuid,
+    ));
+    let body = std::fs::read_to_string(&path).ok();
+    let _ = std::fs::remove_file(&path);
+    body.map(|body| body.trim().to_string())
+        .filter(|body| !body.is_empty())
+}
+
 /// BUG-1629: the precise recovery state when a phase-1 child kept neither its
 /// session lease nor its handoff receipt.
 // trace:BUG-1629 | ai:claude
@@ -100398,6 +100482,8 @@ fn prepare_orchestrated_lease_receipt(
         let _ = std::fs::create_dir_all(parent);
     }
     let _ = std::fs::remove_file(&receipt);
+    // trace:BUG-1629 | ai:claude
+    let _ = std::fs::remove_file(orchestrated_child_refusal_path(&receipt));
     cmd.env(ORCHESTRATED_LEASE_RECEIPT_ENV, &receipt);
     receipt
 }
@@ -102534,6 +102620,13 @@ impl RealPhaseDriver {
     /// through the BUG-908 retry pin; otherwise it launches fresh on the same
     /// pinned workspace. A second loss is final: the typed `LaunchRefused`
     /// failure shelves the spec, so dependents stay blocked.
+    ///
+    /// Launch budget: this replacement is the only launch this method adds.
+    /// Each launch (first or replacement) can still spend the separate
+    /// BUG-826 zero-byte-log budget (two relaunches in total per phase 1
+    /// run), so the total number of child launches can exceed two. Both
+    /// counters live on the driver and are never reset, so the total stays
+    /// bounded.
     // trace:BUG-1629 | ai:claude
     fn recover_lost_child_state(
         &mut self,
@@ -102548,14 +102641,24 @@ impl RealPhaseDriver {
             &self.project_root,
             session_uuid,
         ));
-        let state = lost_child_state_reason(session_uuid, exit, elapsed);
+        // The child's own refusal (a preflight/lease refusal printed on its
+        // stderr), when `queue work` recorded one for this session.
+        let refusal = take_orchestrated_child_refusal(&self.project_root, session_uuid);
+        let mut state = lost_child_state_reason(session_uuid, exit, elapsed);
+        if let Some(refusal) = &refusal {
+            state.push_str(&format!("; the child refused: {refusal}"));
+        }
         if !phase1_lost_child_retry_allowed(self.lost_child_state_retries_used) {
+            let how = if refusal.is_some() {
+                "was refused"
+            } else {
+                "lost its state the same way"
+            };
             return Err(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::LaunchRefused,
                 format!(
-                    "{state}. The single clean replacement launch already ran and lost its \
-                     state the same way; no session lease was left behind and {} was not \
-                     advanced",
+                    "{state}. The single clean replacement launch already ran and {how}; no \
+                     session lease was left behind and {} was not advanced",
                     self.spec
                 ),
             ));
@@ -102563,25 +102666,78 @@ impl RealPhaseDriver {
         self.lost_child_state_retries_used += 1;
         if self.retry_implementer_worktree.is_none() {
             if let Some(pin) = &self.phase1_workspace {
-                let leases = list_leases(&self.project_root);
+                let lease_worktrees: Vec<std::path::PathBuf> = list_leases(&self.project_root)
+                    .into_iter()
+                    .map(|lease| lease.worktree_path)
+                    .collect();
                 if pin.worktree.exists()
                     && current_branch_at(&pin.worktree).as_deref() == Some(pin.branch.as_str())
-                    && !leases
-                        .iter()
-                        .any(|lease| lease.worktree_path == pin.worktree)
+                    && worktree_is_unleased(&pin.worktree, &lease_worktrees)
                 {
                     self.retry_implementer_worktree = Some(pin.worktree.clone());
                     self.retry_implementer_branch = Some(pin.branch.clone());
                 }
             }
         }
-        if !self.json {
+        self.record_lost_child_replacement(&state);
+        auto_complete::PhaseDriver::run_implementer(self)
+    }
+
+    /// BUG-1629: leave a durable trace of the replacement launch — the drain
+    /// retry ledger, a `SpecRetried` event (cause `lost-child-state`), and a
+    /// `retrying` line under `--json` — the same channels
+    /// `record_transient_retry` uses, without its model escalation.
+    // trace:BUG-1629 | ai:claude
+    fn record_lost_child_replacement(&self, state: &str) {
+        let phase = auto_complete::Phase::Implementer;
+        drain_state::append_phase_retry(
+            &self.project_root,
+            &self.spec,
+            &format!("{} ({})", phase.index(), phase.slug()),
+            PHASE1_LOST_CHILD_STATE_CAUSE,
+            2,
+            2,
+        );
+        let (_, run_uuid) = drain_state::current_context(&self.project_root);
+        events::emit(
+            &self.project_root,
+            &events::Event::new(
+                Some(self.spec.clone()),
+                run_uuid,
+                events::EventKind::SpecRetried {
+                    phase: phase.slug().to_string(),
+                    cause: PHASE1_LOST_CHILD_STATE_CAUSE.to_string(),
+                    attempt: 2,
+                    max: 2,
+                    model_before: None,
+                    model_after: None,
+                    detail: Some(state.to_string()),
+                },
+            ),
+        );
+        if self.json {
+            println!(
+                "{}",
+                auto_complete::phase_event(
+                    phase.slug(),
+                    "retrying",
+                    &self.spec,
+                    0,
+                    None,
+                    &[
+                        ("kind", PHASE1_LOST_CHILD_STATE_CAUSE),
+                        ("attempt", "2"),
+                        ("max", "2"),
+                        ("detail", state),
+                    ],
+                )
+            );
+        } else {
             eprintln!(
                 "  {} {state}; launching one clean replacement (attempt 2/2)",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),
             );
         }
-        auto_complete::PhaseDriver::run_implementer(self)
     }
 
     /// BUG-826: after an empty-log phase-1 vendor death, release only the lease
