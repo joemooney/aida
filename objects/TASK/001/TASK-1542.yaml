@@ -8,13 +8,20 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:55:59.770844599Z
-modified_at: 2026-09-26T22:56:02.418498776Z
+modified_at: 2026-09-26T23:23:04.228049299Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0de70-21f1-7b40-9f6b-8bc8dcbe7b2a
   created_at: 2026-09-26T22:56:02.418175485Z
   created_by: joe
+comments:
+- id: 01a0e007-84a4-7a30-8a78-27b4930e5c84
+  author: joe
+  content: 'Caveat carried over from TASK-1518 (strict review): the SIGTERM handler stamps only leases whose creator_pid is the drain process itself. In the pipelined batch route the implementer/reviewer phases run as child processes (queue work <spec> re-exec with AIDA_DRAIN_BORROW), so a lease minted by such a child records the child''s pid, not the drain''s, and is NOT stamped interrupted_at on a wave stop — it falls back to the plain dead-process reading in aida ps. When forwarding SIGTERM to in-flight children here, either have the child stamp its own leases on the forwarded signal or widen the drain''s match to leases whose creator is a descendant of the drain pid.'
+  created_at: 2026-09-26T23:23:04.228049299Z
+  modified_at: 2026-09-26T23:23:04.228049299Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: b9a986e9fbe3912a0415963c8344ddca4830b700
   branch: main
