@@ -534,6 +534,113 @@ pub(crate) fn record_promote_completion(
     req.modified_at = now;
 }
 
+/// BUG-1638: a caller-authored findings audit comment dated `now`.
+// trace:BUG-1638 | ai:claude
+fn findings_audit_comment(content: String, now: chrono::DateTime<chrono::Utc>) -> Comment {
+    Comment {
+        id: Uuid::now_v7(),
+        content,
+        author: get_default_author(),
+        created_at: now,
+        modified_at: now,
+        parent_id: None,
+        replies: Vec::new(),
+        reactions: Vec::new(),
+        session_id: resolve_current_session_id(), // trace:TASK-330
+        relayed_from: None,
+    }
+}
+
+/// TASK-404: the optional "Promoted by" rationale comment for `reason`.
+// trace:TASK-404 trace:BUG-1638 | ai:claude
+fn findings_promote_reason_comment(
+    reason: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<Comment> {
+    let text = reason.map(str::trim).filter(|s| !s.is_empty())?;
+    Some(findings_audit_comment(
+        format!(
+            "Promoted by {author} {date}: {text}",
+            author = get_default_author(),
+            date = now.format("%Y-%m-%d")
+        ),
+        now,
+    ))
+}
+
+/// BUG-1638: `aida findings promote --auto-complete`'s write (TASK-579): the
+/// audit comments and the caller-authored move into Completed, applied to the
+/// copy re-read under the store lock and written as that one spec, so an edit
+/// made after `req` was read is kept. Fails without writing when the finding
+/// was deleted meanwhile.
+// trace:TASK-579 trace:STORY-1418 trace:BUG-1637 trace:BUG-1638 | ai:claude
+pub(crate) fn findings_promote_auto_complete_write(
+    backend: &aida_core::CachedGitBackend,
+    req: &Requirement,
+    project_root: &std::path::Path,
+    sha: &str,
+    subject: &str,
+    reason: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<()> {
+    let display_id = req.display_id();
+    let mut comments = vec![findings_audit_comment(
+        format!(
+            "Auto-completed on promote {date}: origin-ID fix already \
+             merged ({sha} \"{subject}\"). No fresh work to queue.",
+            date = now.format("%Y-%m-%d")
+        ),
+        now,
+    )];
+    comments.extend(findings_promote_reason_comment(reason, now));
+    let written = completion::transition_to_completed_atomically(
+        backend,
+        req,
+        Some(project_root),
+        &display_id,
+        sha,
+        "promote",
+        |r, prior| {
+            r.comments.extend(comments);
+            record_promote_completion(r, prior, now);
+        },
+    )?;
+    if written.is_none() {
+        anyhow::bail!(
+            "{display_id} no longer exists: it was deleted while promoting, so nothing was \
+             changed."
+        );
+    }
+    Ok(())
+}
+
+/// BUG-1638: `aida findings promote`'s Approved write: the optional rationale
+/// comment and the caller-authored move to Approved, applied to the copy
+/// re-read under the store lock and written as that one spec. Fails without
+/// writing when the finding was deleted meanwhile.
+// trace:BUG-231 trace:BUG-1637 trace:BUG-1638 | ai:claude
+pub(crate) fn findings_promote_approve_write(
+    backend: &aida_core::CachedGitBackend,
+    req: &Requirement,
+    reason: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<()> {
+    let comment = findings_promote_reason_comment(reason, now);
+    let written = backend.update_spec_atomically(req, |r| {
+        r.comments.extend(comment);
+        let from = std::mem::replace(&mut r.status, RequirementStatus::Approved);
+        record_caller_status_transition(r, &from);
+        r.modified_at = now;
+    })?;
+    if written.is_none() {
+        anyhow::bail!(
+            "{} no longer exists: it was deleted while promoting, so nothing was changed.",
+            req.display_id()
+        );
+    }
+    Ok(())
+}
+
 /// BUG-1637: record a legacy `aida edit`'s field changes under `author`: the
 /// non-status fields as one history entry, the status change through
 /// `aida_core::conflict::record_status_transition` (the one status-history
@@ -6635,7 +6742,7 @@ fn handle_findings_command(
             to,
             detectable,
         } => {
-            let mut req = backend
+            let req = backend
                 .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
             let tags: Vec<String> = req.tags.iter().cloned().collect();
@@ -6712,58 +6819,17 @@ fn handle_findings_command(
 
             if let Some((sha, subject)) = &already_merged {
                 if *auto_complete {
-                    let now = chrono::Utc::now();
-                    let author = get_default_author();
                     let display_id = req.display_id();
-                    req.comments.push(Comment {
-                        id: Uuid::now_v7(),
-                        content: format!(
-                            "Auto-completed on promote {date}: origin-ID fix already \
-                             merged ({sha} \"{subject}\"). No fresh work to queue.",
-                            date = now.format("%Y-%m-%d")
-                        ),
-                        author: author.clone(),
-                        created_at: now,
-                        modified_at: now,
-                        parent_id: None,
-                        replies: Vec::new(),
-                        reactions: Vec::new(),
-                        session_id: resolve_current_session_id(), // trace:TASK-330
-                        relayed_from: None,
-                    });
-                    if let Some(text) = reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-                        req.comments.push(Comment {
-                            id: Uuid::now_v7(),
-                            content: format!(
-                                "Promoted by {author} {date}: {text}",
-                                date = now.format("%Y-%m-%d")
-                            ),
-                            author,
-                            created_at: now,
-                            modified_at: now,
-                            parent_id: None,
-                            replies: Vec::new(),
-                            reactions: Vec::new(),
-                            session_id: resolve_current_session_id(), // trace:TASK-330
-                            relayed_from: None,
-                        });
-                    }
-                    // STORY-1418: route through the into-Completed seam so this
-                    // path emits the ship record like every other completion
-                    // (it was silent before). trace:STORY-1418 | ai:claude
-                    completion::transition_to_completed(
-                        &mut req,
-                        Some(project_root),
-                        &display_id,
+                    // BUG-1638: one per-spec atomic write, so an edit made
+                    // since the finding was read is kept. trace:BUG-1638 | ai:claude
+                    findings_promote_auto_complete_write(
+                        backend,
+                        &req,
+                        project_root,
                         sha,
-                        "promote",
-                        |req, prior| {
-                            // BUG-1637: caller-authored, through the one
-                            // shared history helper. trace:BUG-1637 | ai:claude
-                            record_promote_completion(req, prior, now);
-                            backend.update_requirement(req)?;
-                            Ok(())
-                        },
+                        subject,
+                        reason.as_deref(),
+                        chrono::Utc::now(),
                     )?;
                     record_role_activity(&display_id, "auto-complete");
                     println!(
@@ -6792,33 +6858,8 @@ fn handle_findings_command(
             let role = queue_promoted_finding(store_path, req.id, display_id, r#for.as_deref())?;
             record_role_activity(display_id, "queue-add");
 
-            let now = chrono::Utc::now();
-            // TASK-404: parallel to dismiss — capture the *why* in the same
-            // command. The queue note already records the bare promotion;
-            // an audit comment with rationale survives alongside the spec.
-            if let Some(text) = reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-                let author = get_default_author();
-                req.comments.push(Comment {
-                    id: Uuid::now_v7(),
-                    content: format!(
-                        "Promoted by {author} {date}: {text}",
-                        date = now.format("%Y-%m-%d")
-                    ),
-                    author,
-                    created_at: now,
-                    modified_at: now,
-                    parent_id: None,
-                    replies: Vec::new(),
-                    reactions: Vec::new(),
-                    session_id: resolve_current_session_id(), // trace:TASK-330
-                    relayed_from: None,
-                });
-            }
-            // BUG-1637: caller-authored. trace:BUG-1637 | ai:claude
-            let from = std::mem::replace(&mut req.status, RequirementStatus::Approved);
-            record_caller_status_transition(&mut req, &from);
-            req.modified_at = now;
-            backend.update_requirement(&req)?;
+            // BUG-1638: one per-spec atomic write. trace:BUG-1638 | ai:claude
+            findings_promote_approve_write(backend, &req, reason.as_deref(), chrono::Utc::now())?;
             println!("Promoted finding {id} — status → Approved, queued for {role}.");
             // STORY-1428: at/above the threshold, promoting to work is not
             // silent about the other destination. trace:STORY-1428 | ai:claude
@@ -9070,6 +9111,9 @@ fn ensure_spec_done_after_pr(
         let Some(req) = backend.get_requirement_unambiguous(spec)? else {
             return Ok(false);
         };
+        // BUG-1638: the race-test seam between the read and the write.
+        // trace:BUG-1638 | ai:claude
+        status_write_race_seam(&store_path);
         // BUG-1637: the status check runs on the copy read under the store
         // lock; a refused flip writes nothing. trace:BUG-1637 | ai:claude
         let mut flipped = false;
@@ -12974,6 +13018,11 @@ mod task_1508_history_source_tests;
 #[cfg(test)]
 #[path = "tests/bug_1631_history_spec_id_tests.rs"]
 mod bug_1631_history_spec_id_tests;
+
+// trace:BUG-1635 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1635_history_event_modes_tests.rs"]
+mod bug_1635_history_event_modes_tests;
 
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
@@ -31546,6 +31595,9 @@ fn bump_spec_in_progress_at_lease_take(project_root: &std::path::Path, scope: &s
         let Some(req) = backend.get_requirement_unambiguous(&spec_id)? else {
             return Ok(false);
         };
+        // BUG-1638: the race-test seam between the read and the write.
+        // trace:BUG-1638 | ai:claude
+        status_write_race_seam(&store_root);
         // BUG-1637: the status check runs on the copy read under the store
         // lock; a refused bump writes nothing. trace:BUG-1637 | ai:claude
         let mut bumped = false;
@@ -46747,6 +46799,76 @@ pub(crate) fn apply_phase1_restore(r: &mut Requirement, prior: &RequirementStatu
     true
 }
 
+// BUG-1638: race-test seam for the self-reading status writers
+// (`ensure_spec_done_after_pr`, `bump_spec_in_progress_at_lease_take`,
+// `restore_phase1_status_on_lease_failure`). Each reads the spec, then writes
+// it through `update_spec_atomically`; a test arms a one-shot hook that runs
+// between the read and the write, so it can make a concurrent change there and
+// pin that the write re-checks the copy read under the store lock. Compiled
+// out of non-test builds. trace:BUG-1638 | ai:claude
+#[cfg(test)]
+type StatusWriteRaceHook = Box<dyn FnOnce(&std::path::Path)>;
+
+#[cfg(test)]
+thread_local! {
+    static STATUS_WRITE_RACE_HOOK: std::cell::RefCell<Option<StatusWriteRaceHook>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// BUG-1638: arm the one-shot hook [`status_write_race_seam`] runs on this
+/// thread. The hook receives the store root the writer resolved.
+// trace:BUG-1638 | ai:claude
+#[cfg(test)]
+pub(crate) fn inject_status_write_race(hook: impl FnOnce(&std::path::Path) + 'static) {
+    STATUS_WRITE_RACE_HOOK.with(|h| *h.borrow_mut() = Some(Box::new(hook)));
+}
+
+/// BUG-1638: called by each self-reading status writer between its read and
+/// its atomic write. A no-op outside tests.
+// trace:BUG-1638 | ai:claude
+fn status_write_race_seam(store_root: &std::path::Path) {
+    #[cfg(test)]
+    {
+        let hook = STATUS_WRITE_RACE_HOOK.with(|h| h.borrow_mut().take());
+        if let Some(hook) = hook {
+            hook(store_root);
+        }
+    }
+    #[cfg(not(test))]
+    let _ = store_root;
+}
+
+/// BUG-1638: what [`restore_phase1_status_on_lease_failure`] did, so the
+/// orchestrator reports a restore only when one happened.
+// trace:BUG-1638 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Phase1RestoreOutcome {
+    /// The pre-bump status was written back.
+    Restored,
+    /// Nothing was written; the reason says why.
+    Refused(String),
+}
+
+/// BUG-1638: the orchestrator's line for a phase-1 restore outcome. It says
+/// "status restored" only for [`Phase1RestoreOutcome::Restored`].
+// trace:BUG-1638 | ai:claude
+pub(crate) fn phase1_restore_outcome_message(
+    outcome: &Phase1RestoreOutcome,
+    display_id: &str,
+    prior: &RequirementStatus,
+) -> String {
+    match outcome {
+        Phase1RestoreOutcome::Restored => format!(
+            "phase-1 startup failed before acquiring a lease — status restored to {prior:?} \
+             (re-queueable); no work was stranded"
+        ),
+        Phase1RestoreOutcome::Refused(reason) => format!(
+            "phase-1 startup failed before acquiring a lease — {display_id}'s status was not \
+             restored to {prior:?}: {reason}"
+        ),
+    }
+}
+
 /// TASK-133: undo the orchestrator parent's pre-spawn phase-1 status bump.
 ///
 /// `prepare_auto_complete_phase1_status` flips a spec Approved/Planned/Draft →
@@ -46833,7 +46955,7 @@ fn restore_phase1_status_on_lease_failure(
     project_root: &std::path::Path,
     spec: &str,
     prior: &aida_core::RequirementStatus,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Phase1RestoreOutcome> {
     // BUG-479: before resetting, probe child-side reality. The caller gates on
     // the PARENT-side `implementer_lease` field, which is only set after a CLEAN
     // child exit — so a child that acquired a lease + worktree + committed and
@@ -46845,35 +46967,49 @@ fn restore_phase1_status_on_lease_failure(
     // for triage. Conservative: any doubt → don't restore. trace:BUG-479 | ai:claude
     let (has_lease, has_worktree, has_unmerged_commits) =
         probe_child_side_work_for_spec(project_root, spec);
+    // BUG-1638: every early exit is a refusal the caller reports, never a
+    // silent Ok that reads as "restored". trace:BUG-1638 | ai:claude
     if child_side_work_exists(has_lease, has_worktree, has_unmerged_commits) {
-        eprintln!(
-            "  {} phase-1 failed but a lease/worktree/commits exist for {} — leaving it \
-             shelved for triage, not resetting (run `aida findings list`).",
-            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-            spec
-        );
-        return Ok(());
+        return Ok(Phase1RestoreOutcome::Refused(format!(
+            "a lease, worktree or commits exist for {spec}, so it stays shelved for triage \
+             (run `aida findings list`)"
+        )));
     }
 
     let Some(store_path) = detect_distributed_store_from(project_root) else {
-        return Ok(());
+        return Ok(Phase1RestoreOutcome::Refused(
+            "no AIDA store was found for this project".to_string(),
+        ));
     };
     let dispenser = load_dispenser(&store_path)?;
     let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
     let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
 
+    let gone = || Phase1RestoreOutcome::Refused(format!("{spec} no longer exists"));
     // trace:TASK-1468 | ai:claude
     let Some(req) = backend.get_requirement_unambiguous(spec)? else {
-        return Ok(());
+        return Ok(gone());
     };
+    // BUG-1638: the race-test seam between the read and the write.
+    // trace:BUG-1638 | ai:claude
+    status_write_race_seam(&store_path);
     // BUG-1637: the restore and its terminal-status refusal run on the copy
     // read under the store lock; a refused restore writes nothing.
     // trace:BUG-1637 | ai:claude
-    backend.update_spec_atomically(&req, |r| {
-        apply_phase1_restore(r, prior);
+    let mut applied = false;
+    let mut seen = req.status.clone();
+    let written = backend.update_spec_atomically(&req, |r| {
+        seen = r.status.clone();
+        applied = apply_phase1_restore(r, prior);
     })?;
-    Ok(())
+    Ok(match (written, applied) {
+        (None, _) => gone(),
+        (Some(_), true) => Phase1RestoreOutcome::Restored,
+        (Some(_), false) => Phase1RestoreOutcome::Refused(format!(
+            "it is now {seen}, a final status, so it was left as is"
+        )),
+    })
 }
 
 /// TASK-358 tests — the `--escalate-blocks` worktree cleanup.
@@ -74576,6 +74712,13 @@ mod bug_1632_status_writer_tests;
 #[path = "tests/bug_1637_status_writer_tests.rs"]
 mod bug_1637_status_writer_tests;
 
+// BUG-1638: race seams for the self-reading status writers, the phase-1
+// restore outcome, zen's deleted-spec message, and the atomic findings
+// promote. trace:BUG-1638 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1638_race_seam_tests.rs"]
+mod bug_1638_race_seam_tests;
+
 // BUG-1633: pull/push follow-ups to BUG-1625 and BUG-1626. trace:BUG-1633 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_1633_pull_push_followups_tests.rs"]
@@ -94037,16 +94180,24 @@ fn run_auto_complete(
                     // restoring to a clean un-started status would orphan it.
                 }
                 auto_complete::Phase1FailureRecovery::RestoreUnstarted => {
+                    // BUG-1638: report the restore only when it happened.
+                    // trace:BUG-1638 | ai:claude
                     match restore_phase1_status_on_lease_failure(&project_root, spec, prior) {
-                        Ok(()) => {
+                        Ok(outcome @ Phase1RestoreOutcome::Restored) => {
                             if !json {
                                 eprintln!(
-                                    "  {} phase-1 startup failed before acquiring a lease — \
-                                     status restored to {:?} (re-queueable); no work was stranded",
+                                    "  {} {}",
                                     "↩".cyan(),
-                                    prior
+                                    phase1_restore_outcome_message(&outcome, display_id, prior)
                                 );
                             }
+                        }
+                        Ok(outcome @ Phase1RestoreOutcome::Refused(_)) => {
+                            eprintln!(
+                                "  {} {}",
+                                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                                phase1_restore_outcome_message(&outcome, display_id, prior)
+                            );
                         }
                         Err(e) => {
                             eprintln!(
@@ -99084,11 +99235,19 @@ fn zen_auto_approve(
     // no autopilot execution is recorded for it. trace:BUG-1637 | ai:claude
     let mut approved = false;
     let mut seen = req.status.clone();
-    backend.update_spec_atomically(req, |r| {
+    let written = backend.update_spec_atomically(req, |r| {
         seen = r.status.clone();
         approved =
             zen_auto_approve_authorized(&r.status, has_advisor_authority) && zen_approve_flip(r);
     })?;
+    // BUG-1638: a spec deleted meanwhile is reported as gone, not as "is now
+    // Draft, not Draft" (the closure never ran). trace:BUG-1638 | ai:claude
+    if written.is_none() {
+        anyhow::bail!(
+            "{} no longer exists: it was deleted while auto-approving, so nothing was changed.",
+            req.display_id()
+        );
+    }
     if !approved {
         anyhow::bail!(
             "{} is now {}, not Draft: it changed while auto-approving, so nothing was changed.",
