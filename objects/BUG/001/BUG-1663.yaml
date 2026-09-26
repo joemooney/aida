@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:34.548951365Z
-modified_at: 2026-09-26T16:50:51.374651055Z
+modified_at: 2026-09-26T18:37:30.719610970Z
 req_type: Bug
 comments:
 - id: 01a0dea0-6f6e-78a3-ae49-563b56513f63
@@ -25,6 +25,7 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+execution_mode: drive
 filed_at:
   code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
   branch: main
