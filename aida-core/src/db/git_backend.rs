@@ -985,10 +985,14 @@ impl GitBackend {
     }
 
     // Serialize a queue-file read-modify-write (registry/queues/<user>.yaml)
-    // with every other store writer. Hold the returned guard from before the
-    // queue file is read until after its auto-commit, so no lock-respecting
-    // writer (another queue command, a spec save, a bulk import) can land
-    // between the read and the write-back and have its entries dropped.
+    // with every other store writer. Every queue-file writer (`queue_add`,
+    // `queue_remove_for_role`, `queue_reorder`, `queue_clear`,
+    // `queue_remove_many`) holds the returned guard from before the queue file
+    // is read until after its auto-commit, so no lock-respecting writer
+    // (another queue command, a spec save, a bulk import) can land between the
+    // read and the write-back and have its entries dropped. The write-back
+    // itself is temp+rename (`fs_atomic::write_atomic`), so a lock-free reader
+    // (`queue_list`) sees either the old file or the new one, never a torn one.
     //
     // Lock order: the store write lock is the ONLY lock a queue writer takes.
     // Nothing else is acquired inside it: `read_queue_file`, `get_requirement`
@@ -1819,7 +1823,9 @@ impl DatabaseBackend for GitBackend {
         entries.push(entry);
         entries.sort_by_key(|e| e.position);
         let yaml = serde_yaml::to_string(&entries)?;
-        std::fs::write(&path, yaml)?;
+        // Temp+rename so a lock-free reader never sees a torn file.
+        // trace:BUG-1677 | ai:claude
+        crate::fs_atomic::write_atomic(&path, yaml)?;
         self.auto_commit_paths(
             "update queue",
             &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
@@ -1869,7 +1875,9 @@ impl DatabaseBackend for GitBackend {
             }
         });
         let yaml = serde_yaml::to_string(&entries)?;
-        std::fs::write(&path, yaml)?;
+        // Temp+rename so a lock-free reader never sees a torn file.
+        // trace:BUG-1677 | ai:claude
+        crate::fs_atomic::write_atomic(&path, yaml)?;
         self.auto_commit_paths(
             "update queue",
             &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
@@ -1878,7 +1886,9 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn queue_reorder(&self, user_id: &str, items: &[(uuid::Uuid, i64)]) -> Result<()> {
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // Held across the read-modify-write AND the commit below.
+        // trace:BUG-1677 | ai:claude
+        let _lock = self.lock_queue_write()?;
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
         let path = queue_file_path(&self.root, &user_id);
@@ -1894,7 +1904,9 @@ impl DatabaseBackend for GitBackend {
         }
         entries.sort_by_key(|e| e.position);
         let yaml = serde_yaml::to_string(&entries)?;
-        std::fs::write(&path, yaml)?;
+        // Temp+rename so a lock-free reader never sees a torn file.
+        // trace:BUG-1677 | ai:claude
+        crate::fs_atomic::write_atomic(&path, yaml)?;
         self.auto_commit_paths(
             "reorder queue",
             &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
@@ -1959,7 +1971,9 @@ impl DatabaseBackend for GitBackend {
             std::fs::remove_file(&path)?;
         } else {
             let yaml = serde_yaml::to_string(&kept)?;
-            std::fs::write(&path, yaml)?;
+            // Temp+rename so a lock-free reader never sees a torn file.
+            // trace:BUG-1677 | ai:claude
+            crate::fs_atomic::write_atomic(&path, yaml)?;
         }
 
         self.auto_commit_paths(
@@ -1975,7 +1989,9 @@ impl DatabaseBackend for GitBackend {
     // spec archived/Completed/Rejected) from the cache, so this stays a dumb
     // set-membership prune. trace:TASK-1052 | ai:claude
     fn queue_remove_many(&self, user_id: &str, ids: &[uuid::Uuid]) -> Result<Vec<QueueEntry>> {
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // Held across the read-modify-write AND the commit below.
+        // trace:BUG-1677 | ai:claude
+        let _lock = self.lock_queue_write()?;
         if ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -2004,7 +2020,9 @@ impl DatabaseBackend for GitBackend {
             std::fs::remove_file(&path)?;
         } else {
             let yaml = serde_yaml::to_string(&kept)?;
-            std::fs::write(&path, yaml)?;
+            // Temp+rename so a lock-free reader never sees a torn file.
+            // trace:BUG-1677 | ai:claude
+            crate::fs_atomic::write_atomic(&path, yaml)?;
         }
         self.auto_commit_paths(
             "gc dead queue entries",
@@ -4663,40 +4681,69 @@ mod tests {
             .is_empty());
     }
 
-    // trace:BUG-1677 | ai:claude — the queue writers are read-modify-write on
-    // one file; without the store lock two of them interleave (both read the
-    // same entries, the later write drops the earlier writer's change). The
-    // tests below use the git backend on a plain directory, where each writer
-    // opens its own lock descriptor, so threads contend exactly as processes
-    // do under flock(2).
+    // trace:BUG-1677 | ai:claude — every queue writer is a read-modify-write
+    // on one file; without the store lock two of them interleave (both read
+    // the same entries, the later write drops the earlier writer's change),
+    // and without an atomic write-back a lock-free reader sees a torn file.
+    // The tests below use the git backend on a plain directory, where each
+    // writer opens its own lock descriptor, so threads contend exactly as
+    // processes do under flock(2).
 
     fn bug1677_backend(root: &Path) -> GitBackend {
         GitBackend::new(root).unwrap()
     }
 
+    fn bug1677_seed(backend: &GitBackend, user: &str, n: usize, base: i64) -> Vec<uuid::Uuid> {
+        (0..n)
+            .map(|i| {
+                let e = sample_queue_entry(user, base + (i as i64 + 1) * 1000);
+                let id = e.requirement_id;
+                backend.queue_add(e).unwrap();
+                id
+            })
+            .collect()
+    }
+
+    // Writer mix: queue_add (new entries), queue_remove_for_role and
+    // queue_remove_many (each draining its own seeded set), queue_reorder
+    // (each thread repositions its own stable subset), plus lock-free readers
+    // that must always parse the file and always see every stable entry.
     #[test]
-    fn bug_1677_concurrent_queue_adds_and_removes_lose_nothing() {
+    fn bug_1677_concurrent_queue_writers_lose_nothing_and_readers_see_no_torn_file() {
+        use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::{Arc, Barrier};
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
         let backend = bug1677_backend(&root);
         let user = "carol";
 
-        // Seed entries that the remover threads will drain concurrently.
-        const REMOVERS: usize = 4;
+        const REMOVERS: usize = 3;
         const REMOVES_EACH: usize = 10;
-        const ADDERS: usize = 4;
+        const MANY_REMOVERS: usize = 2;
+        const MANY_CALLS_EACH: usize = 4;
+        const MANY_IDS_PER_CALL: usize = 3;
+        const REORDERERS: usize = 3;
+        const REORDER_IDS_EACH: usize = 5;
+        const REORDER_ROUNDS: usize = 8;
+        const ADDERS: usize = 3;
         const ADDS_EACH: usize = 25;
-        let mut seeded: Vec<uuid::Uuid> = Vec::new();
-        for i in 0..(REMOVERS * REMOVES_EACH) {
-            let e = sample_queue_entry(user, (i as i64 + 1) * 1000);
-            seeded.push(e.requirement_id);
-            backend.queue_add(e).unwrap();
-        }
-        assert_eq!(backend.queue_list(user, false).unwrap().len(), seeded.len());
+        const READERS: usize = 2;
 
-        let barrier = Arc::new(Barrier::new(ADDERS + REMOVERS));
-        let mut handles = Vec::new();
+        let to_remove = bug1677_seed(&backend, user, REMOVERS * REMOVES_EACH, 0);
+        let to_remove_many = bug1677_seed(
+            &backend,
+            user,
+            MANY_REMOVERS * MANY_CALLS_EACH * MANY_IDS_PER_CALL,
+            100_000,
+        );
+        let stable = bug1677_seed(&backend, user, REORDERERS * REORDER_IDS_EACH, 200_000);
+        let seeded_total = to_remove.len() + to_remove_many.len() + stable.len();
+        assert_eq!(backend.queue_list(user, false).unwrap().len(), seeded_total);
+
+        let writers = ADDERS + REMOVERS + MANY_REMOVERS + REORDERERS;
+        let barrier = Arc::new(Barrier::new(writers + READERS));
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut handles: Vec<std::thread::JoinHandle<Result<()>>> = Vec::new();
         let mut expected_added: Vec<uuid::Uuid> = Vec::new();
         for _ in 0..ADDERS {
             let entries: Vec<QueueEntry> = (0..ADDS_EACH)
@@ -4704,7 +4751,7 @@ mod tests {
                 .collect();
             expected_added.extend(entries.iter().map(|e| e.requirement_id));
             let (root, barrier) = (root.clone(), Arc::clone(&barrier));
-            handles.push(std::thread::spawn(move || -> Result<()> {
+            handles.push(std::thread::spawn(move || {
                 let backend = bug1677_backend(&root);
                 barrier.wait();
                 for e in entries {
@@ -4713,10 +4760,10 @@ mod tests {
                 Ok(())
             }));
         }
-        for chunk in seeded.chunks(REMOVES_EACH) {
+        for chunk in to_remove.chunks(REMOVES_EACH) {
             let ids: Vec<uuid::Uuid> = chunk.to_vec();
             let (root, barrier) = (root.clone(), Arc::clone(&barrier));
-            handles.push(std::thread::spawn(move || -> Result<()> {
+            handles.push(std::thread::spawn(move || {
                 let backend = bug1677_backend(&root);
                 barrier.wait();
                 for id in &ids {
@@ -4725,47 +4772,160 @@ mod tests {
                 Ok(())
             }));
         }
+        for chunk in to_remove_many.chunks(MANY_CALLS_EACH * MANY_IDS_PER_CALL) {
+            let ids: Vec<uuid::Uuid> = chunk.to_vec();
+            let (root, barrier) = (root.clone(), Arc::clone(&barrier));
+            handles.push(std::thread::spawn(move || {
+                let backend = bug1677_backend(&root);
+                barrier.wait();
+                for call in ids.chunks(MANY_IDS_PER_CALL) {
+                    let removed = backend.queue_remove_many("carol", call)?;
+                    anyhow::ensure!(
+                        removed.len() == call.len(),
+                        "queue_remove_many removed {} of {}",
+                        removed.len(),
+                        call.len()
+                    );
+                }
+                Ok(())
+            }));
+        }
+        // Each reorderer owns a distinct subset of the stable ids and moves it
+        // REORDER_ROUNDS times; the LAST round's positions must be on disk.
+        let mut expected_positions: Vec<(uuid::Uuid, i64)> = Vec::new();
+        for (t, chunk) in stable.chunks(REORDER_IDS_EACH).enumerate() {
+            let ids: Vec<uuid::Uuid> = chunk.to_vec();
+            let final_round = (REORDER_ROUNDS - 1) as i64;
+            for (i, id) in ids.iter().enumerate() {
+                expected_positions.push((
+                    *id,
+                    1_000_000 + (t as i64) * 100_000 + final_round * 1_000 + i as i64,
+                ));
+            }
+            let (root, barrier) = (root.clone(), Arc::clone(&barrier));
+            handles.push(std::thread::spawn(move || {
+                let backend = bug1677_backend(&root);
+                barrier.wait();
+                for round in 0..REORDER_ROUNDS as i64 {
+                    let items: Vec<(uuid::Uuid, i64)> = ids
+                        .iter()
+                        .enumerate()
+                        .map(|(i, id)| {
+                            (
+                                *id,
+                                1_000_000 + (t as i64) * 100_000 + round * 1_000 + i as i64,
+                            )
+                        })
+                        .collect();
+                    backend.queue_reorder("carol", &items)?;
+                }
+                Ok(())
+            }));
+        }
+        let mut readers = Vec::new();
+        for _ in 0..READERS {
+            let (root, barrier, stop) = (root.clone(), Arc::clone(&barrier), Arc::clone(&stop));
+            let stable = stable.clone();
+            readers.push(std::thread::spawn(move || -> Result<usize> {
+                let backend = bug1677_backend(&root);
+                barrier.wait();
+                let mut reads = 0usize;
+                while !stop.load(Ordering::Relaxed) {
+                    let seen = backend
+                        .queue_list("carol", false)
+                        .map_err(|e| anyhow::anyhow!("reader hit a torn queue file: {e}"))?;
+                    let missing = stable
+                        .iter()
+                        .filter(|id| !seen.iter().any(|e| e.requirement_id == **id))
+                        .count();
+                    anyhow::ensure!(
+                        missing == 0,
+                        "reader saw a torn queue file: {missing} stable entries missing \
+                         (read {} entries)",
+                        seen.len()
+                    );
+                    reads += 1;
+                }
+                Ok(reads)
+            }));
+        }
+
         let mut errors = Vec::new();
         for h in handles {
             if let Err(e) = h.join().expect("queue writer thread panicked") {
                 errors.push(e.to_string());
             }
         }
-        assert!(errors.is_empty(), "queue writers failed: {errors:?}");
+        stop.store(true, Ordering::Relaxed);
+        let mut total_reads = 0;
+        for r in readers {
+            match r.join().expect("reader thread panicked") {
+                Ok(n) => total_reads += n,
+                Err(e) => errors.push(e.to_string()),
+            }
+        }
+        assert!(
+            errors.is_empty(),
+            "queue writers/readers failed: {errors:?}"
+        );
+        assert!(total_reads > 0, "readers never ran");
 
-        let mut remaining: Vec<uuid::Uuid> = backend
-            .queue_list(user, false)
-            .unwrap()
-            .into_iter()
-            .map(|e| e.requirement_id)
-            .collect();
+        let final_entries = backend.queue_list(user, false).unwrap();
+        let mut remaining: Vec<uuid::Uuid> =
+            final_entries.iter().map(|e| e.requirement_id).collect();
         remaining.sort();
-        expected_added.sort();
-        let lost = expected_added
+        let mut expected: Vec<uuid::Uuid> = expected_added
+            .iter()
+            .chain(stable.iter())
+            .copied()
+            .collect();
+        expected.sort();
+        let lost_added = expected_added
             .iter()
             .filter(|id| !remaining.contains(id))
             .count();
-        let unremoved = seeded.iter().filter(|id| remaining.contains(id)).count();
+        let lost_stable = stable.iter().filter(|id| !remaining.contains(id)).count();
+        let unremoved = to_remove
+            .iter()
+            .chain(to_remove_many.iter())
+            .filter(|id| remaining.contains(id))
+            .count();
         assert_eq!(
-            (lost, unremoved),
-            (0, 0),
-            "lost {lost} added entries and {unremoved} removals; {} entries remain",
+            (lost_added, lost_stable, unremoved),
+            (0, 0, 0),
+            "lost {lost_added} added and {lost_stable} stable entries, {unremoved} removals \
+             undone; {} entries remain",
             remaining.len()
         );
-        assert_eq!(remaining, expected_added);
-        let positions: Vec<i64> = backend
-            .queue_list(user, false)
-            .unwrap()
+        assert_eq!(remaining, expected);
+        let stale_reorders: Vec<_> = expected_positions
             .iter()
-            .map(|e| e.position)
+            .filter(|(id, pos)| {
+                final_entries
+                    .iter()
+                    .find(|e| e.requirement_id == *id)
+                    .is_none_or(|e| e.position != *pos)
+            })
             .collect();
         assert!(
-            positions.iter().all(|p| *p != i64::MAX),
+            stale_reorders.is_empty(),
+            "{} reorders were overwritten by a concurrent writer: {stale_reorders:?}",
+            stale_reorders.len()
+        );
+        assert!(
+            final_entries.iter().all(|e| e.position != i64::MAX),
             "the append sentinel must be resolved under the lock"
+        );
+        assert!(
+            std::fs::read_dir(root.join("registry/queues"))
+                .unwrap()
+                .flatten()
+                .all(|d| d.path().extension().and_then(|x| x.to_str()) == Some("yaml")),
+            "atomic-write staging files must not be left behind"
         );
     }
 
-    // Each of the three writers blocks while ANOTHER thread holds the store
+    // Each of the five writers blocks while ANOTHER thread holds the store
     // lock and proceeds once it is released: the lock is really taken.
     #[test]
     fn bug_1677_queue_writers_block_while_another_thread_holds_the_store_lock() {
@@ -4774,9 +4934,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
         let backend = bug1677_backend(&root);
-        let seeded = sample_queue_entry("dan", 1000);
-        let seeded_id = seeded.requirement_id;
-        backend.queue_add(seeded).unwrap();
+        let seeded = bug1677_seed(&backend, "dan", 3, 0);
+        let (id_a, id_b, id_c) = (seeded[0], seeded[1], seeded[2]);
 
         type Writer = Box<dyn FnOnce(&GitBackend) -> Result<()> + Send>;
         let writers: Vec<(&str, Writer)> = vec![
@@ -4785,8 +4944,16 @@ mod tests {
                 Box::new(|b: &GitBackend| b.queue_add(sample_queue_entry("dan", i64::MAX))),
             ),
             (
+                "queue_reorder",
+                Box::new(move |b: &GitBackend| b.queue_reorder("dan", &[(id_c, 5)])),
+            ),
+            (
                 "queue_remove_for_role",
-                Box::new(move |b: &GitBackend| b.queue_remove_for_role("dan", &seeded_id, None)),
+                Box::new(move |b: &GitBackend| b.queue_remove_for_role("dan", &id_a, None)),
+            ),
+            (
+                "queue_remove_many",
+                Box::new(move |b: &GitBackend| b.queue_remove_many("dan", &[id_b]).map(|_| ())),
             ),
             (
                 "queue_clear",
@@ -4834,11 +5001,12 @@ mod tests {
             let b = bug1677_backend(&root);
             let run = || -> Result<usize> {
                 let _outer = b.lock_store()?;
-                let e = sample_queue_entry("erin", i64::MAX);
-                let id = e.requirement_id;
-                b.queue_add(e)?;
+                let ids = bug1677_seed(&b, "erin", 3, 0);
                 b.queue_add(sample_queue_entry("erin", i64::MAX))?;
-                b.queue_remove_for_role("erin", &id, None)?;
+                b.queue_reorder("erin", &[(ids[2], 5)])?;
+                b.queue_remove_for_role("erin", &ids[0], None)?;
+                let removed = b.queue_remove_many("erin", &[ids[1]])?;
+                anyhow::ensure!(removed.len() == 1);
                 let after_remove = b.queue_list("erin", false)?.len();
                 b.queue_clear("erin", false)?;
                 assert!(b.queue_list("erin", false)?.is_empty());
@@ -4854,6 +5022,6 @@ mod tests {
             .recv_timeout(Duration::from_secs(30))
             .expect("queue writers deadlocked against the caller's own store lock");
         handle.join().unwrap();
-        assert_eq!(result.unwrap(), 1);
+        assert_eq!(result.unwrap(), 2);
     }
 }
