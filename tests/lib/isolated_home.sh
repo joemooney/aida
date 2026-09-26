@@ -33,7 +33,21 @@
 # Set AIDA_HOME_GUARD_STRICT=1 (automatic when CI=true) to compare the whole
 # snapshot instead.
 #
+# roles/*.toml in the default mode: live sessions rewrite their role file all
+# the time (`last_active_at` and the `[[activity]]` log), so an mtime compare
+# flakes. The default mode therefore compares each role file by a hash of its
+# stable content (volatile `last_active_at` line, empty `activity = []`, and
+# `[[activity]]` tables stripped; blank lines, including those inside
+# multi-line strings, are ignored) plus the presence of every non-transient entry in roles/. A new or
+# deleted role file, or a changed name / purpose / system_prompt /
+# working_directory / global, still fails.
+# Strict mode keeps comparing every mtime, roles/ included: it runs where no
+# other session is live (CI), and a test that reached the real roles/ through
+# a role-touching command may change nothing BUT the volatile fields, so that
+# signal is only safe to drop when concurrent sessions make it noise.
+#
 # trace:BUG-1634 | ai:claude
+# trace:BUG-1640 | ai:claude
 
 # Emits "<relative path>\t<mtime>" per entry below $1 (the root itself is
 # excluded). Never fails: another session may remove a file between readdir and
@@ -46,6 +60,42 @@ _aida_home_snapshot() {
     return 0
 }
 
+# Hash stdin: sha256sum, else shasum -a 256, else POSIX cksum.
+# trace:BUG-1640 | ai:claude
+_aida_hash() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum | cut -d' ' -f1
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 | cut -d' ' -f1
+    else
+        cksum | tr ' ' ':'
+    fi
+}
+
+# Emits "roles/<file>\t<hash of stable content>" per roles/*.toml below $1.
+# Stable content = the file minus the `last_active_at` line, the empty
+# `activity = []` line (a role with no activity yet; the first entry replaces
+# it with a table), every `[[activity]]` table, and blank lines (appending the
+# first activity entry adds a separator line). Blank lines inside multi-line
+# strings are ignored too, so a blank-line-only edit there is not detected.
+# Never fails, like _aida_home_snapshot.
+# trace:BUG-1640 | ai:claude
+_aida_roles_digest() {
+    local dir="$1/roles" f
+    [ -d "$dir" ] || return 0
+    for f in "$dir"/*.toml; do
+        [ -f "$f" ] || continue
+        printf 'roles/%s\t%s\n' "${f##*/}" "$(
+            { awk '/^[[:space:]]*(last_active_at|activity)[[:space:]]*=/ { next }
+                   /^[[:space:]]*\[\[[[:space:]]*activity[[:space:]]*\]\][[:space:]]*$/ { skip = 1; next }
+                   /^[[:space:]]*\[/ { skip = 0 }
+                   skip || /^[[:space:]]*$/ { next }
+                   { print }' "$f" 2>/dev/null || true; } | _aida_hash
+        )"
+    done | LC_ALL=C sort
+    return 0
+}
+
 aida_isolate_home() {
     AIDA_TEST_REAL_HOME="${HOME:?HOME must be set}"
     export AIDA_TEST_REAL_HOME
@@ -54,6 +104,7 @@ aida_isolate_home() {
 
     AIDA_TEST_GUARD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/aida-home-guard.XXXXXX")
     _aida_home_snapshot "$AIDA_TEST_REAL_HOME/.aida" >"$AIDA_TEST_GUARD_DIR/before"
+    _aida_roles_digest "$AIDA_TEST_REAL_HOME/.aida" >"$AIDA_TEST_GUARD_DIR/before.roles"
 
     AIDA_TEST_FAKE_HOME=$(mktemp -d "${TMPDIR:-/tmp}/aida-test-home.XXXXXX")
     export HOME="$AIDA_TEST_FAKE_HOME"
@@ -151,15 +202,25 @@ aida_home_guard_check() {
         _aida_filter() {
             # Every top-level entry is always listed (presence only), so a new
             # or removed direct child of ~/.aida is caught in this mode too.
+            # roles/ (BUG-1640): presence only here (atomic-rename temp
+            # files `.<name>.tmp-<uuid>` skipped); content is compared by
+            # the stable-content digest appended below.
             awk -F'\t' 'NR==FNR { w[$0]=1; next }
                  { p=$1; top=p; sub(/\/.*/, "", top)
                    if (p !~ /\// && p !~ /^\.tmp|\.tmp$|\.lock$/) print "entry\t" p
                    if (!((p in w) || (top in w))) next
+                   if (top == "roles") {
+                       base=p; sub(/.*\//, "", base)
+                       if (p != "roles" && base !~ /^\.|\.tmp$|\.lock$/) print "present\t" p
+                       next
+                   }
                    if (p ~ /\.(jsonl|log)$/) { print p; next }
-                   print }' "$watch" "$1" | LC_ALL=C sort -u
+                   print }' "$watch" "$1"
+            cat "$2"
         }
-        _aida_filter "$before" >"$AIDA_TEST_GUARD_DIR/before.f"
-        _aida_filter "$after" >"$AIDA_TEST_GUARD_DIR/after.f"
+        _aida_roles_digest "$AIDA_TEST_REAL_HOME/.aida" >"$AIDA_TEST_GUARD_DIR/after.roles"
+        _aida_filter "$before" "$AIDA_TEST_GUARD_DIR/before.roles" | LC_ALL=C sort -u >"$AIDA_TEST_GUARD_DIR/before.f"
+        _aida_filter "$after" "$AIDA_TEST_GUARD_DIR/after.roles" | LC_ALL=C sort -u >"$AIDA_TEST_GUARD_DIR/after.f"
         b="$AIDA_TEST_GUARD_DIR/before.f"
         a="$AIDA_TEST_GUARD_DIR/after.f"
     fi
