@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:27.770511448Z
-modified_at: 2026-09-24T16:29:19.885790522Z
+modified_at: 2026-09-26T18:34:08.442814073Z
 req_type: Epic
 tags:
 - deferred:stabilization-first
@@ -83,5 +83,11 @@ comments:
   content: 'PANEL-REVIEW AMENDMENTS (2026-06-12, run wf_dbf6c0f0-a7d): the panel mis-targeted (BUG-509 — placeholder target; the plan prose itself is still unreviewed) but adversarially audited the CLAIMS FOUNDATION under ADR-4. Three refutations force amendments, all resolved as MAKE-THE-CLAIM-TRUE slices rather than softening: (1) ''enforced traces'' is advisory-by-default today (warn-only hook, disabled pre-commit, no CI gate) → STORY-579; (2) history: arrays on ~11% of objects → audit claim scoped + backfill evaluated, STORY-579; (3) orchestrator hardcodes claude -p → the multi-vendor LEAD is coordination-layer-only today → STORY-578 (highest strategic priority — it is the credibility of the chosen headline). ALSO confirmed by reproduction: the structural differentiation (typed graph, transitive queries, MCP 57 tools, git-canonical store, auto-bump) all real and running — the engine survives adversarial review; the adjectives didn''t. WS1/WS2 acceptance rule: until 578/579 land, copy scopes those claims honestly in the same sentence. Also: vs-spec-kit.md is stale-at-birth (Spec Kit Issues integration + workflow engine shipped) — folded into WS2 (STORY-573) scope.'
   created_at: 2026-06-12T21:58:13.072105138Z
   modified_at: 2026-06-12T21:58:13.072105138Z
+- id: 01a0defe-feba-7861-9e34-0604bb14a320
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): superseded with its parent ADR-4 by VIS-2 per Joe''s OPERATOR DECISION on SPIKE-86 (2026-09-26). It had 0 children, so no work is orphaned.'
+  created_at: 2026-09-26T18:34:08.442814073Z
+  modified_at: 2026-09-26T18:34:08.442814073Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 archived: true
 archived_at: 2026-06-13T01:48:34.570938033Z
