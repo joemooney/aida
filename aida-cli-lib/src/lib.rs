@@ -13019,6 +13019,11 @@ mod task_1508_history_source_tests;
 #[path = "tests/bug_1631_history_spec_id_tests.rs"]
 mod bug_1631_history_spec_id_tests;
 
+// trace:BUG-1635 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1635_history_event_modes_tests.rs"]
+mod bug_1635_history_event_modes_tests;
+
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
 ///
