@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T04:15:44.659622628Z
-modified_at: 2026-09-26T09:34:24.976401278Z
+modified_at: 2026-09-26T09:37:49.970394128Z
 req_type: Doc
 tags:
 - batch:groom-2026-09-25
@@ -86,6 +86,25 @@ comments:
   content: 'Doc written at docs/explanations/feature-lanes.md (commit 43dfc5d78f on claude/doc-5), linked from docs/README.md and docs/SUMMARY.md. Remaining acceptance item NOT done by this session (scope limited to DOC-5): STORY-1481, STORY-1482 and STORY-1483 each still need a note to update docs/explanations/feature-lanes.md when they land.'
   created_at: 2026-09-26T09:34:24.976401278Z
   modified_at: 2026-09-26T09:34:24.976401278Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd13-fd92-79a2-a589-b06848570705
+  author: joe
+  content: |-
+    Review: REQUEST CHANGES — independent review of 43dfc5d78f against origin/main 8238ac82.
+
+    BLOCKING (acceptance: shipped commands must run as described):
+    1. docs/explanations/feature-lanes.md:45-47 says aida list, aida status and aida queue list 'show only the epic and the specs under it'. False for aida status: git_backend_cmd.rs:1206-1230 only prints a 'focused: EPIC-N — N items in subtree' banner, then calls handle_status_command_distributed with no focus argument (status_cmd.rs has no focus filtering). Verified: AIDA_FOCUS=EPIC-74 aida status prints the banner and then '2812 total active'. Fix: say list and queue list are scoped (with a header), and status shows a focus banner but still reports the whole project. The table row at :187 inherits this; 'Read commands scoped' is OK if the prose is fixed.
+
+    NON-BLOCKING (accurate enough, optional tightening):
+    2. :112-114 'aida pull moves a spec from Done to Completed' is true but narrow: auto_bump_eligible_status (lib.rs:71014, lifecycle::git_merge_completes) also completes Approved/Planned/In Progress specs named by a trailer on main. Consider 'moves a spec to Completed'.
+    3. :96-101 drain selection: batch drains (--batch) pick QUEUED specs tagged batch:<name>, and the shift picks queued explicit-drain specs. The advice (keep them unqueued, untagged, not drain-mode) is correct and conservative, so this is wording only.
+    4. :37-38 'moves your shell into it' needs the aida() shell wrapper (enter warns otherwise); :43 default path is ~/ai/aida-<slug> regardless of project, so 'next to the main one' holds only for a checkout at ~/ai/aida.
+
+    VERIFIED OK: worktree enter/exit/list behaviour and flags (--branch, --path); default branch epic-n-work (worktree.rs:57) and path ~/ai/aida-<slug> (worktree.rs:65, epic74 slug); cut from origin default branch; idempotent reuse; (wt:EPIC-N) prompt marker; [focus] out_of_scope warn default / block + --force (focus.rs:33-58, lib.rs:17395); aida ship rebases onto origin/main (ship.rs:154) and aida pr ship creates PRs against the default branch (pr_cmd.rs:3194-3199); squash-body trailer advice matches the scanner; Completed = merged to default branch (lifecycle.md:29,104). Planned section is clearly fenced as not shipped, and matches STORY-1481/1482/1483; aida lane does not exist. Tone is plain and professional, terms are defined. Links resolve (../autonomous-drain.md, ../lifecycle.md, ../commit-trailer-convention.md, ../session-lifecycle.md; README and SUMMARY entries). external-prose-classifiers --check exit 0; glyph-lint --block OK.
+
+    ACCEPTANCE GAP (store, not branch): STORY-1481/1482/1483 still lack the 'update docs/explanations/feature-lanes.md when this lands' note, as the author flagged.
+  created_at: 2026-09-26T09:37:49.970394128Z
+  modified_at: 2026-09-26T09:37:49.970394128Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
 filed_at:
