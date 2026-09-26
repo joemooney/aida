@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T06:48:17.077993220Z
-modified_at: 2026-09-26T07:35:29.417349703Z
+modified_at: 2026-09-26T07:45:19.355545067Z
 req_type: Bug
 comments:
 - id: 01a0dc79-0ac8-7c13-b476-2c53c632ff47
@@ -16,6 +16,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved, medium; preflight reliability.'
   created_at: 2026-09-26T06:48:35.272151719Z
   modified_at: 2026-09-26T06:48:35.272151719Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dcac-fbfb-75b3-b89f-e30fcb8ceaee
+  author: joe
+  content: 'Review: REQUEST CHANGES — one real false alarm on a shape the CLI actually writes. The fix is one line. (1) BLOCKING, tests/lib/isolated_home.sh:85-89 (_aida_roles_digest awk): Role.activity is #[serde(default)] with no skip_serializing_if, so a role that has never recorded activity is saved as ''activity = []''. The real ~/.aida/roles/integrator.toml line 6 has that shape. The first activity a live session records rewrites it to a [[activity]] table. The filter keeps the ''activity = []'' line, so the digest changes and the guard fails. That is exactly the flake this spec targets, and it breaks acceptance (''a concurrent aida command touching the role passes'') once per role. The self-test fixture hides it: in tests/test_isolated_home_guard.sh:26-34, advisor.toml has no ''activity = []'' line, so append-first-activity (:91) does not model the real transition. Fix: make the first awk pattern /^[[:space:]]*(last_active_at|activity)[[:space:]]*=/ { next }, and add ''activity = []'' to one fixture role plus a case for the empty-array-to-first-table transition. I checked this fix in a throwaway copy: the new case passes and all 14 existing cases still pass. (2) Documented limits, non-blocking. All of these are masked, and all are contrived or TOML-consistent: a blank-line-only edit inside a multi-line system_prompt; a literal line ''[[activity]]'' inside a multi-line string, which hides the rest of that string; a key hand-appended after the last [[activity]], which in TOML belongs to that entry anyway. A header with a trailing comment (''[[activity]] # c'') false-alarms, but the serializer never writes one. Comment changes, key reorders, quoted ''last_active_at'' keys, [activity.x] subtables, name/scope_tags changes, truncation, and CRLF churn all behave correctly. It would help to add ''blank lines inside multi-line strings are ignored'' to the header comment at :36-46. (3) Strict mode (:182-183) compares all mtimes: correct for CI, where nothing else runs concurrently and an activity-only leak is a real signal. That signal is real: BUG-1642 already tracks cargo tests (queue_rework_tests, AIDA_SESSION_ROLE=advisor) writing BUG-9107/9112/9113 activity into the real ~/.aida/roles/advisor.toml. It confirms the header''s point that default mode deliberately trades that signal away. (4) CI step, .github/workflows/ci.yml:230-235: safe. Every case uses a mktemp HOME under a mktemp TMPDIR and clears CI/AIDA_HOME_GUARD_STRICT for the default-mode cases (test:62), so CI=true does not flip them to strict. It never reads the runner''s HOME. It runs in about 1.6s, is gated on full_ci like its neighbours, and sits in the required Build job, which is Linux-only per the TASK-257 matrix. (5) Portability, nit: sha256sum, then shasum -a 256 (present on macOS), then cksum is fine and deterministic. The self-test itself is GNU-only: touch -d ''2026-01-01 00:00:00'' (:50), the one-line sed ''i'' (:94), and an empty "${ci[@]}" under set -u (:62), which fails on bash 3.2. The helper already needs GNU find -printf, and CI is Linux-only, so this is not blocking. Evidence: bash tests/test_isolated_home_guard.sh gives 14/14 pass. With origin/main''s helper swapped into a throwaway copy, the 5 volatile/temp-file cases fail and the 9 leak/strict cases still pass as expected. The real ~/.aida was only read, never used as the guard''s target, and never modified.'
+  created_at: 2026-09-26T07:45:19.355545067Z
+  modified_at: 2026-09-26T07:45:19.355545067Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 63ba7573152fb98eb674bb8570e649997f64dd10
