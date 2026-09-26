@@ -23,6 +23,7 @@ use super::*;
 /// Write a trivial "vendor" mock at `dir/mock-agent.sh` that appends each of
 /// its argv[1..] to `capture`, one per line, then exits 0.
 // trace:BUG-1607 | ai:claude
+#[cfg(unix)] // trace:BUG-1646 | ai:claude
 fn write_argv_capture_mock(dir: &std::path::Path, capture: &std::path::Path) -> std::path::PathBuf {
     let script = dir.join("mock-agent.sh");
     std::fs::write(
@@ -41,6 +42,7 @@ fn write_argv_capture_mock(dir: &std::path::Path, capture: &std::path::Path) -> 
     script
 }
 
+#[cfg(unix)] // trace:BUG-1646 | ai:claude
 fn read_captured_argv(capture: &std::path::Path) -> Vec<String> {
     std::fs::read_to_string(capture)
         .unwrap_or_default()
@@ -78,6 +80,10 @@ fn codex_only_project(tmp: &std::path::Path) -> (std::path::PathBuf, std::path::
 /// asserts the mock "codex" was spawned with exactly `codex_session_args`'
 /// argv — after the worktree already existed.
 // trace:BUG-1607 | ai:claude
+// The mock is a `#!/bin/sh` script, which Windows cannot spawn (os error
+// 193); same unix gating as the other shell-mock launch tests.
+// trace:BUG-1646 | ai:claude
+#[cfg(unix)]
 #[test]
 fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree_exists() {
     let tmp = tempfile::tempdir().unwrap();
@@ -146,6 +152,10 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
 /// re-implemented stand-in for it — `handle_review_spec` itself cannot run
 /// here because it gates on a real interactive TTY.
 // trace:BUG-1607 | ai:claude
+// The mock is a `#!/bin/sh` script, which Windows cannot spawn (os error
+// 193); same unix gating as the other shell-mock launch tests.
+// trace:BUG-1646 | ai:claude
+#[cfg(unix)]
 #[test]
 fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
     let tmp = tempfile::tempdir().unwrap();

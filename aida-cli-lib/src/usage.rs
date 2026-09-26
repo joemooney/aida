@@ -48,8 +48,14 @@ pub struct UsageEvent {
 
 /// Resolve `~/.aida/usage.jsonl`. Returns `None` when the home dir
 /// can't be located (treat as "telemetry off" — never error out).
+///
+/// Resolves home through `crate::aida_home_dir()` so the `AIDA_HOME`
+/// override is honoured on every platform: on Windows `dirs::home_dir()`
+/// ignores `HOME`/`USERPROFILE`, so a fixture home could not otherwise be
+/// injected and tests would read the real profile's usage log.
+// trace:BUG-1646 | ai:claude
 pub fn log_path() -> Option<PathBuf> {
-    crate::home_dir().map(|h| h.join(".aida").join("usage.jsonl"))
+    crate::aida_home_dir().map(|h| h.join(".aida").join("usage.jsonl"))
 }
 
 /// Check whether telemetry is enabled. Resolution order:

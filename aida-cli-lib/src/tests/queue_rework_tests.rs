@@ -1810,9 +1810,14 @@ fn rework_ignores_unparseable_lease_for_another_spec() {
 fn write_mcp_claim(root: &std::path::Path, spec: &str, worktree: &str) {
     let dir = root.join(".aida").join("sessions");
     std::fs::create_dir_all(&dir).unwrap();
+    // Encode the path as a real TOML string: a Windows path (`C:\Users\...`)
+    // interpolated raw into a basic string is an invalid escape. Production
+    // `claim_task` serializes with `toml::to_string`, so this matches it.
+    // trace:BUG-1646 | ai:claude
+    let worktree = toml::Value::String(worktree.to_string());
     let body = format!(
         "id = \"0196aaaabbbb\"\nscope = \"{spec}\"\nslug = \"{spec}\"\nowner = \"agent\"\n\
-         worktree_path = \"{worktree}\"\nbranch = \"main\"\n\
+         worktree_path = {worktree}\nbranch = \"main\"\n\
          started_at = \"2026-09-24T01:02:03.456789+00:00\"\nhostname = \"h\"\n\
          role = \"implementer\"\nmcp_claim = true\n"
     );
@@ -1821,6 +1826,27 @@ fn write_mcp_claim(root: &std::path::Path, spec: &str, worktree: &str) {
         body,
     )
     .unwrap();
+}
+
+/// BUG-1646: a Windows-shaped worktree path (backslashes) survives the
+/// `write_mcp_claim` fixture and parses back as a lease. Runs on every
+/// platform, so a raw-interpolation regression is caught on Linux too.
+// trace:BUG-1646 | ai:claude
+#[test]
+fn mcp_claim_fixture_round_trips_backslash_worktree_path() {
+    let tmp = tempfile::tempdir().unwrap();
+    let windows_path = r"C:\Users\runneradmin\AppData\Local\Temp\.tmpAbC\wt";
+    write_mcp_claim(tmp.path(), "BUG-9120", windows_path);
+    let leases = crate::list_leases_strict(tmp.path(), &["BUG-9120"]).unwrap();
+    assert_eq!(
+        leases.len(),
+        1,
+        "a backslash path must not break the lease TOML"
+    );
+    assert_eq!(
+        leases[0].worktree_path.to_string_lossy(),
+        windows_path.to_string()
+    );
 }
 
 /// Review round 2: the requeue gate reads `mcp-claim.*` claims the way the
