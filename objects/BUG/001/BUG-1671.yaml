@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:05:13.973900512Z
-modified_at: 2026-09-26T19:54:52.931964782Z
+modified_at: 2026-09-26T21:28:13.680511696Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -28,6 +28,46 @@ comments:
   content: 'Scope addition (from BUG-1670): when re-working the sweeps, give opportunistic_queue_gc, archive_sweep and maybe_auto_archive_sweep the ''// cache-tolerant-read: <YAML re-validation>'' allow comment and remove their hard-coded exemptions from the BUG-1670 lint.'
   created_at: 2026-09-26T19:54:52.931964782Z
   modified_at: 2026-09-26T19:54:52.931964782Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0df9e-6070-70d0-88c1-320d7798b009
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; claude/integrate-101 noted): re-check each sweep candidate INSIDE the store lock, make queue removal locked, never abort a sweep on one unreadable spec, and retire the BUG-1670 lint exemptions.
+
+    FILES/SYMBOLS (origin/main 2e01ffe4ab)
+    - aida-core/src/db/git_backend.rs: queue_remove_many :1948 (reads+writes the queue file with NO lock_store(); only update_*/bulk_update/add/delete take it; see lock_store :983, bulk_update :951, update_spec_atomically_with_subject :1244). queue_add :1761, queue_remove_for_role :1814 and queue_clear :1887 are also unlocked (see BUG NOTE).
+    - aida-core/src/db/cached_git_backend.rs: bulk_update :850 (write-through, no CAS), update_spec_atomically_with_subject :881 (takes inner.lock_store(), CAS, one cache row), queue_remove_many :1152 (delegate). traits.rs: queue_remove_many :529 default, update_spec_atomically :142.
+    - aida-cli-lib/src/archive_cmd.rs: archive_sweep :210; dry-run re-check :303 (get_requirement(&s.id)? aborts); write loop :370 (`let Some(mut req) = backend.get_requirement(&s.id)? else` is the acceptance-3 abort site), :394 bulk_update(&to_archive, "chore(archive)") (single commit, BUG-425), archive_sweep_still_eligible :195, print_sweep_skipped_note :407.
+    - aida-cli-lib/src/lib.rs: maybe_auto_archive_sweep :17981; per-spec update_requirement :18031 (no re-check under lock).
+    - aida-cli-lib/src/queue_cmd.rs: opportunistic_queue_gc :1173, revalidate_dead_queue_entries :1153, queue_target_still_dead :1137, QueueCommand::Gc :4220 (removal at :4357), dead_queue_entries :984.
+    - integrate-101: aida-cli-lib/src/tests/bug_1670_stale_cache_callers_tests.rs EXEMPT_FUNCTIONS :437-441 (delete), ALLOW_MARKER :433 ("cache-tolerant-read:"; the line must also contain "YAML", see allowed() :612-616).
+
+    APPROACH
+    1. New core primitive on GitBackend: bulk_update_atomically(&self, targets: &[Requirement], commit_subject: &str, keep: impl FnMut(&mut Requirement) -> bool) -> Result<BulkAtomicReport { written, skipped_changed, skipped_missing, skipped_unreadable }>. Body = ensure_store_write_safe + ONE lock_store(); per target: object_store::read_object (NotFound -> skipped_missing; parse/io error -> skipped_unreadable, continue), uuid identity check (mismatch -> skipped_changed), run keep(&mut fresh) (re-checks eligibility on the FRESH object and mutates only when it returns true), stage_requirement_update for kept ones, then one auto_commit_paths (same message shape as bulk_update). This is update_spec_atomically N times under one lock and one commit: the "or equivalent" in acceptance 1 that preserves BUG-425's single commit. CachedGitBackend wrapper mirrors bulk_update :850 (pre_write_head, upsert each written row, refresh_epics_then_restamp) holding inner.lock_store() across both, as :881 does (the lock is re-entrant per thread).
+    2. archive_sweep write path: replace the loop at :370-394 with candidates -> bulk_update_atomically(&candidates, "chore(archive)", |req| if archive_sweep_still_eligible(req, &statuses, cutoff) { req.archived = true; archived_at/modified_at = now; true } else { false }). Progress ticks inside the closure. record_role_activity only for written ids. Skipped = changed + missing + unreadable via print_sweep_skipped_note, extended to name the unreadable count separately ("could not read N spec(s)"). Dry-run at :303: a get_requirement error counts as unreadable, no `?`.
+    3. maybe_auto_archive_sweep :18001-18035: same call replacing the per-spec update_requirement loop (also collapses N commits per pull into 1).
+    4. Queue sweeps: add lock_store() to queue_remove_many :1948 (after ensure_store_write_safe) and a new trait method queue_remove_many_if(&self, user_id, ids: &[Uuid], still_dead: &dyn Fn(&Uuid) -> bool) -> Result<Vec<QueueEntry>> (traits.rs default filters then delegates; GitBackend: take the store lock, read the file, filter `dead` by still_dead INSIDE the lock, write, commit). CachedGitBackend delegates. opportunistic_queue_gc and the Gc arm pass |id| queue_target_still_dead(&backend, id) (object read; the cache only resolves uuid->spec_id; SQLite lock stays innermost, no cycle). Keep the pre-lock revalidation pass for the "kept N entries" message; the in-lock pass is the guard. The BUG-1512 merged-PR ids (:4357) go through the same method with a closure that re-confirms the review row's target is still terminal/archived.
+    5. Lint: add `// cache-tolerant-read: candidates are re-validated on the YAML object under the store lock before any write` inside opportunistic_queue_gc, archive_sweep, maybe_auto_archive_sweep; delete EXEMPT_FUNCTIONS and its use in lint_source. Add `// trace:BUG-1671 | ai:<tool>` beside each.
+
+    EDGE CASES / FAIL-SAFE
+    - Reopen between selection and write: the closure sees the fresh object -> false -> not written. Spec deleted: skipped_missing, counted. Unreadable/parse error: skipped_unreadable, counted, exit 0 (sweeps are best-effort; the single `archive <ID>` path is unchanged). uuid mismatch (spec_id reused) is skipped, not an error. Zero eligible after re-check -> no commit, "Archived: 0", skipped note printed. Dry-run uses the same predicate so its preview count <= cache count (accepted on BUG-1664).
+    - queue_remove_many with the lock: an unparsable queue file still aborts before any write (TASK-712 preserved).
+
+    TESTS (extend aida-cli-lib/src/tests/bug_1664_stale_sweep_tests.rs Fixture: add, enqueue, freshen_cache, external_edit, hold_foreign_writer, authoritative; tempdir store, fake HOME via the test_home fence, crate::test_env::env_lock() wherever AIDA_* is set)
+    - Seam: a #[cfg(test)] pub(crate) static SWEEP_BETWEEN_SELECT_AND_WRITE: Mutex<Option<Box<dyn Fn() + Send>>> hook invoked once after candidate selection/pre-lock re-check and before the locked write, in archive_sweep, maybe_auto_archive_sweep, opportunistic_queue_gc and the Gc arm. The hook body runs fx.external_edit(id, |r| r.status = InProgress) through a second GitBackend (the store lock is not held at that point).
+    - archive_older_than_keeps_spec_reopened_between_select_and_write; post_pull_sweep_keeps_spec_reopened_between_select_and_write; queue_gc_keeps_entry_reopened_before_remove; queue_list_self_heal_keeps_entry_reopened_before_remove: assert the authoritative status is still InProgress / the entry is still queued, and the skipped note.
+    - archive_older_than_skips_unreadable_spec_and_counts: overwrite one candidate's object file with `: not yaml` after selection (same hook); the other candidate is archived, exit Ok, note says 1 unreadable.
+    - archive_sweep_writes_one_commit (git log count; BUG-425 guarantee); bulk_update_atomically_skips_uuid_mismatch (aida-core unit test).
+    - The integrate-101 lint test destructive_callers_do_not_use_tolerant_cache_reads must still pass with the allow comments and no exemption list.
+
+    OVERLAP / ORDERING
+    - Branch from main AFTER integrate-101 lands (the lint file and lib.rs hunks; BUG-1670 touched run_worker_gc and the focus guard near, not inside, maybe_auto_archive_sweep; low conflict). TASK-1526 keeps sweeps strict and adds labels to readers only; it does not touch these functions. BUG-1512's review-PR queue-gc branch is covered by step 4.
+
+    BUG NOTE (main, not filed): every queue-file write (queue_add :1761, queue_remove_for_role :1814, queue_remove_many :1948, queue_clear :1887) is an unlocked read-modify-write of registry/queues/<user>.yaml; two concurrent queue add/work/gc in one store can drop each other's entry (last writer wins). Step 4 fixes queue_remove_many; adding lock_store() to the other three is the same pattern and can ride in this PR (say so in the PR body) or be filed.
+
+    VERDICT: READY. Acceptance 1 names update_spec_atomically; the batched variant above is the "or equivalent", required to keep one commit per sweep. Strict review (store writes).
+  created_at: 2026-09-26T21:28:13.680511696Z
+  modified_at: 2026-09-26T21:28:13.680511696Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
