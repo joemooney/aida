@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:29:48.596407578Z
-modified_at: 2026-09-26T08:48:37.909463989Z
+modified_at: 2026-09-26T08:59:20.607625638Z
 req_type: Task
 tags:
 - antigravity
@@ -65,6 +65,20 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): accept fail-closed for legacy packs. Every missing skill in a pre-manifest pack is recorded as opted out, recoverable by deleting its line in .aida-delivered, which the header documents. Never resurrecting a user''s deletion outranks auto-delivering new skills to old installs. Consider a doctor hint later.'
   created_at: 2026-09-26T08:48:37.909463989Z
   modified_at: 2026-09-26T08:48:37.909463989Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dcf0-c09f-7893-a6a7-550af33833d1
+  author: joe
+  content: |-
+    Strict review: REQUEST CHANGES — reviewed 4bcf703f08. Tests are green: aida-core scaffold 147/147; aida-cli-lib --lib scaffold 59, refresh 28, skill 27, init 97, doctor 158; make check-templates OK. The tests catch a real fault: commenting out opted_out.insert in settled() fails 6 tests. No manifest was written to ~/.claude, ~/.codex, ~/.aida or the repo's .claude. Three throwaway probe tests confirmed these defects:
+    (1) HIGH, a deleted folder-form skill comes back. aida-core/src/scaffolding/mod.rs:2691-2692 withholds only <pack>/<name>/SKILL.md. After the user deletes .claude/skills/aida-pr, the next init or upgrade writes aida-pr/examples/pr-description-template.md. settled() (refresh.rs:237) then sees the directory and records aida-pr as delivered, and the following init or upgrade recreates SKILL.md. Probe: after the 1st reapply SKILL.md=false, examples=true, opted_out=false; after the 2nd reapply SKILL.md=true. Fix: withhold every artifact under a withheld skill's directory, and make skill_present require SKILL.md (or the flat <name>.md) rather than any directory.
+    (2) HIGH, moving from the memory-lane footprint to the full one delivers nothing. init_cmd.rs:987-1041 writes aida-capture and aida-learn into .claude/skills and .codex/skills with no manifest. A later full init sees a legacy pack (refresh.rs:330 counts a pack as fresh only when every shipped skill is missing), withholds about 55 skills and records them as permanent opt-outs. Probe: .claude/skills held 5 entries after a full apply, and aida-req was missing. A re-run of the memory-lane init also bypasses the manifest and resurrects a deleted aida-capture or aida-learn, so the acceptance line about re-running init is only partly met.
+    (3) MEDIUM (policy, needs the proxy to confirm), explicit install commands lose delivery for existing projects. For a pack with no manifest, init and scaffold upgrade (Install mode) now create nothing and record every missing skill as opted out. Doctor stops flagging missing skills, so its hint to run 'aida scaffold upgrade' (doctor_cmd.rs:842) never fires. Every pack installed before this change therefore loses the only path that delivered new skills. The acceptance only requires the first *refresh* to create nothing. Before this change, upgrade and init delivered missing skills, so Install mode on a legacy pack could keep that behaviour, then record the manifest, with no regression. If the 2026-09-26 proxy decision is meant to cover explicit upgrade and init as well, re-confirm it knowing this effect.
+    (4) LOW, a failed apply can strand a pack. apply_with_options returns early on any IO error (the ? calls) before record_skill_deliveries (mod.rs ~2836). A pack partly written on first init then has no manifest, so later runs treat it as legacy and withhold the rest permanently.
+    (5) LOW, a misplaced doc comment. mod.rs:263-273: resolve_artifact_path's doc comment and its trace:BUG-1094 now sit above plan_skill_packs, leaving resolve_artifact_path (line 318) undocumented.
+    (6) LOW, a manual 'aida scaffold refresh' or init in the AIDA checkout writes an untracked .claude/skills/.aida-delivered (the directory is real and holds symlinked SKILL.md files). It does not interfere with sync-templates or check-templates. Consider a .gitignore entry or skipping packs made of symlinked masters.
+    Sound: the v2 format and parsing, unreadable-manifest and symlinked-pack fail-closed, atomic writes (a race between refreshes can only lose an update, never corrupt the file), manifest recorded before files on refresh, and the per-directory design (works for .agents/skills). Removing REFRESH_DELIVERED_SKILLS delivers nothing init would not: refresh uses the same preview plus the persisted agent selection, and config-excluded skills come only from --no-skills, which removes whole packs. A fresh install delivers everything, matching the old init. The .claude/commands exclusion is justified: flat command files are not a skill pack, and refresh still never creates them. Must fix before merge: (1) and (2). (3) needs either the fix or explicit re-approval.
+  created_at: 2026-09-26T08:59:20.607625638Z
+  modified_at: 2026-09-26T08:59:20.607625638Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
