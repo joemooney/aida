@@ -19,8 +19,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T10:49:48.354461550Z
-modified_at: 2026-09-26T10:50:10.903876854Z
+modified_at: 2026-09-26T10:50:16.351101765Z
 req_type: Bug
+comments:
+- id: 01a0dd56-4f9f-7042-8d4e-09802099fbec
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved and queued. Windows-nightly follow-up from BUG-1646. BUG-1649 is a real user-facing bug on Windows.'
+  created_at: 2026-09-26T10:50:16.351101765Z
+  modified_at: 2026-09-26T10:50:16.351101765Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
   branch: main
