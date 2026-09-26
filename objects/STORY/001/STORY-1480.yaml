@@ -32,16 +32,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:47:18.546002720Z
-modified_at: 2026-09-26T05:25:02.972594228Z
+modified_at: 2026-09-26T05:26:22.689475096Z
 req_type: Story
 tags:
 - aida:history
 - aida:metrics
+- needs-sketch
 - observability
 relationships:
 - rel_type: Child
   target_id: 01a0db2d-92d8-71c2-8c97-2612958bd010
   created_at: 2026-09-26T00:47:28.709943268Z
+execution_mode: drive
 filed_at:
   code_sha: 193a7c9769995ddd7b643b626af8fdb576bbf20b
   branch: main
