@@ -14,8 +14,10 @@
 
 use std::path::{Path, PathBuf};
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use aida_core::scaffolding::refresh::{
-    delivered_skills, delivery_tracked_skill, record_delivered_skill, refresh_file, RefreshOutcome,
+    is_file_of_skill, plan_skill_pack, refresh_file, skill_in_pack, ManifestMode, RefreshOutcome,
     RefreshReport,
 };
 use colored::Colorize;
@@ -38,83 +40,146 @@ const PROJECT_PACKS: &[(&str, &str)] = &[
     (".antigravity/skills/", "Antigravity skills"),
 ];
 
-/// Deliver an allow-listed skill
-/// ([`aida_core::scaffolding::refresh::REFRESH_DELIVERED_SKILLS`]) into an
-/// installed Codex/Antigravity pack, at most once per pack.
+/// Decide, per installed skill pack, which newly shipped skills this refresh
+/// delivers. The manifest is first brought up to date WITHOUT the new names
+/// (recording opt-outs and seeding a legacy pack); if that write fails the
+/// pack receives nothing. The new names are recorded only after their files
+/// are written ([`record_refresh_deliveries`]), so a failed write is retried
+/// next time instead of becoming a permanent opt-out.
 ///
-/// Returns `None` (the caller keeps `Missing`) when the path is not an
-/// allow-listed skill, the pack is not installed, the pack's delivered
-/// manifest already records the name (it was delivered and the user deleted
-/// it), or the skill directory exists. Fails closed: an unreadable manifest,
-/// or a failure to record the name, returns `Some(Err)` and writes nothing.
-/// The name is recorded BEFORE `SKILL.md` is written.
-// trace:STORY-1475 | ai:claude
-fn install_new_pack_skill(
+/// A skill is delivered only when the pack's manifest has never recorded its
+/// name; a delivered skill that is now missing is recorded as an opt-out and
+/// stays deleted. A pack without a complete manifest (installed before it
+/// existed) is seeded from the directories on disk and receives nothing this
+/// pass. An unreadable manifest fails closed with a warning. A pack directory
+/// that does not exist is never created.
+// trace:TASK-1503 | ai:claude
+fn plan_refresh_deliveries(
     project_root: &Path,
-    artifact_path: &Path,
-    content: &str,
-) -> Option<std::io::Result<()>> {
-    install_new_pack_skill_with(project_root, artifact_path, content, record_delivered_skill)
-}
-
-/// [`install_new_pack_skill`] with the recorder injected, so a test can prove
-/// a failed record leaves no `SKILL.md` behind.
-// trace:STORY-1475 | ai:claude
-fn install_new_pack_skill_with(
-    project_root: &Path,
-    artifact_path: &Path,
-    content: &str,
-    record: impl Fn(&Path, &str) -> std::io::Result<()>,
-) -> Option<std::io::Result<()>> {
-    let (pack, name) = delivery_tracked_skill(artifact_path)?;
-    let pack_dir = project_root.join(pack);
-    if !pack_dir.is_dir() {
-        return None;
-    }
-    let delivered = match delivered_skills(&pack_dir) {
-        Ok(names) => names,
-        Err(e) => {
-            return Some(Err(std::io::Error::new(
-                e.kind(),
-                format!("delivered-skills manifest in {pack} is unreadable ({e}); nothing created"),
-            )))
+    preview: &aida_core::scaffolding::ScaffoldPreview,
+) -> BTreeMap<PathBuf, BTreeSet<String>> {
+    let mut deliveries = BTreeMap::new();
+    for install_plan in &preview.skill_packs {
+        if !project_root.join(&install_plan.pack).is_dir() {
+            continue;
         }
-    };
-    if delivered.contains(&name) {
-        return None;
+        let plan = plan_skill_pack(
+            project_root,
+            &install_plan.pack,
+            install_plan.shipped.clone(),
+            ManifestMode::Refresh,
+        );
+        if let Some(warning) = &plan.warning {
+            eprintln!("  {} {}", "Warning:".yellow(), warning);
+            continue;
+        }
+        let deliver = plan.deliverable(project_root);
+        let unconfirmed = plan
+            .settled(project_root, &BTreeSet::new())
+            .map_or(0, |m| m.unconfirmed.len());
+        if unconfirmed > 0 {
+            println!(
+                "  {} {}: {} skill(s) missing since before delivery tracking were not created; run `aida scaffold upgrade` to install them once",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                plan.pack.display(),
+                unconfirmed
+            );
+        }
+        if let Err(e) = plan.record(project_root, &BTreeSet::new()) {
+            eprintln!(
+                "  {} could not record delivered skills in {} ({}); nothing created",
+                "Warning:".yellow(),
+                plan.pack.display(),
+                e
+            );
+            continue;
+        }
+        if !deliver.is_empty() {
+            deliveries.insert(plan.pack.clone(), deliver);
+        }
     }
-    let dest = project_root.join(artifact_path);
-    let skill_dir = dest.parent()?;
-    if skill_dir.symlink_metadata().is_ok() {
-        // Present in some form the user owns: remember it, never write it.
-        let _ = record(&pack_dir, &name);
-        return None;
-    }
-    if let Err(e) = record(&pack_dir, &name) {
-        return Some(Err(std::io::Error::new(
-            e.kind(),
-            format!("could not record delivery in {pack} ({e}); nothing created"),
-        )));
-    }
-    Some(std::fs::create_dir_all(skill_dir).and_then(|()| std::fs::write(&dest, content)))
+    deliveries
 }
 
-/// A refresh that finds an allow-listed skill installed records it as
-/// delivered, so deleting it later sticks even for a pack written before the
-/// manifest existed. An unreadable manifest is left untouched.
-// trace:STORY-1475 | ai:claude
-fn note_present_delivered_skill(project_root: &Path, artifact_path: &Path) {
-    if let Some((pack, name)) = delivery_tracked_skill(artifact_path) {
-        let _ = record_delivered_skill(&project_root.join(pack), &name);
+/// After refresh wrote newly shipped skills, record the ones whose `SKILL.md`
+/// is now on disk as delivered.
+// trace:TASK-1503 | ai:claude
+fn record_refresh_deliveries(
+    project_root: &Path,
+    preview: &aida_core::scaffolding::ScaffoldPreview,
+    deliveries: &BTreeMap<PathBuf, BTreeSet<String>>,
+) {
+    for install_plan in &preview.skill_packs {
+        if !deliveries.contains_key(&install_plan.pack) {
+            continue;
+        }
+        let plan = plan_skill_pack(
+            project_root,
+            &install_plan.pack,
+            install_plan.shipped.clone(),
+            ManifestMode::Refresh,
+        );
+        if let Err(e) = plan.record(project_root, &BTreeSet::new()) {
+            eprintln!(
+                "  {} could not record delivered skills in {} ({})",
+                "Warning:".yellow(),
+                plan.pack.display(),
+                e
+            );
+        }
     }
+}
+
+/// The delivered skill (if any) that `path` is a file of.
+// trace:TASK-1503 | ai:claude
+fn delivery_for<'a>(
+    deliveries: &'a BTreeMap<PathBuf, BTreeSet<String>>,
+    path: &Path,
+) -> Option<&'a str> {
+    deliveries.iter().find_map(|(pack, names)| {
+        names
+            .iter()
+            .find(|n| is_file_of_skill(path, pack, n))
+            .map(String::as_str)
+    })
+}
+
+/// Install one file of a newly delivered skill, reporting the outcome.
+// trace:TASK-1503 | ai:claude
+fn install_outcome(
+    dest: &Path,
+    artifact: &aida_core::scaffolding::ScaffoldArtifact,
+) -> RefreshOutcome {
+    match install_new_skill(dest, &artifact.content) {
+        Ok(()) => RefreshOutcome::Installed,
+        Err(e) => {
+            eprintln!(
+                "  {} could not install {}: {}",
+                "Warning:".yellow(),
+                artifact.path.display(),
+                e
+            );
+            RefreshOutcome::Missing
+        }
+    }
+}
+
+/// Write a newly shipped skill file into an installed pack.
+// trace:TASK-1503 | ai:claude
+fn install_new_skill(dest: &Path, content: &str) -> std::io::Result<()> {
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(dest, content)
 }
 
 /// Refresh every installed agent pack under `project_root`. Only files that already exist are
 /// touched — installing a pack the project opted out of stays `aida init`'s
 /// job, so a Claude-only project never grows a `.codex/` tree from a refresh.
-/// The one exception: an installed Codex or Antigravity pack receives each
-/// skill in [`aida_core::scaffolding::refresh::REFRESH_DELIVERED_SKILLS`] once, tracked by the pack's
-/// [`aida_core::scaffolding::refresh::DELIVERED_MANIFEST`]; a delivered skill the user deletes stays deleted.
+/// The one exception: an installed skill pack receives each skill AIDA has
+/// started shipping since the pack was installed, once, tracked by the pack's
+/// [`aida_core::scaffolding::refresh::DELIVERED_MANIFEST`]; a delivered skill
+/// the user deletes stays deleted (TASK-1503).
 ///
 /// `codex_prompts_dest` overrides the machine-global `~/.codex/prompts`
 /// location for the deprecation notice (mirrors `scaffold codex-prompts --dest`).
@@ -162,6 +227,22 @@ fn refresh_agent_packs_at(
     let store = aida_core::RequirementsStore::default();
     let preview = scaffolder.preview(&store);
 
+    // A memory-lane or minimal footprint project never grows skills from a
+    // refresh, and its manifests are left alone (the same gate `aida init
+    // --refresh` applies). trace:TASK-1503 | ai:claude
+    let full_footprint = !matches!(
+        crate::init_cmd::read_init_footprint(project_root),
+        Some(crate::cli::InitFootprint::Minimal | crate::cli::InitFootprint::MemoryLane)
+    );
+    let deliveries = if full_footprint {
+        plan_refresh_deliveries(project_root, &preview)
+    } else {
+        BTreeMap::new()
+    };
+
+    // A delivered skill's SKILL.md is written after its supporting files, so
+    // a skill counts as present only once it is whole.
+    let mut deferred = Vec::new();
     for artifact in &preview.artifacts {
         let rel = artifact.path.to_string_lossy().replace('\\', "/");
         let Some(idx) = PROJECT_PACKS.iter().position(|(p, _)| rel.starts_with(p)) else {
@@ -169,28 +250,20 @@ fn refresh_agent_packs_at(
         };
         let dest = project_root.join(&artifact.path);
         match refresh_file(&dest, &artifact.content, false) {
-            // trace:STORY-1475 | ai:claude
+            // trace:TASK-1503 | ai:claude
             Ok(RefreshOutcome::Missing) => {
-                let outcome =
-                    match install_new_pack_skill(project_root, &artifact.path, &artifact.content) {
-                        None => RefreshOutcome::Missing,
-                        Some(Ok(())) => RefreshOutcome::Installed,
-                        Some(Err(e)) => {
-                            eprintln!(
-                                "  {} could not install {}: {}",
-                                "Warning:".yellow(),
-                                artifact.path.display(),
-                                e
-                            );
-                            RefreshOutcome::Missing
-                        }
-                    };
-                packs[idx].report.record(&artifact.path, outcome);
+                if delivery_for(&deliveries, &artifact.path).is_none() {
+                    packs[idx]
+                        .report
+                        .record(&artifact.path, RefreshOutcome::Missing);
+                } else if skill_in_pack(&artifact.path).is_some() {
+                    deferred.push((idx, artifact));
+                } else {
+                    let outcome = install_outcome(&dest, artifact);
+                    packs[idx].report.record(&artifact.path, outcome);
+                }
             }
-            Ok(outcome) => {
-                note_present_delivered_skill(project_root, &artifact.path);
-                packs[idx].report.record(&artifact.path, outcome)
-            }
+            Ok(outcome) => packs[idx].report.record(&artifact.path, outcome),
             Err(e) => eprintln!(
                 "  {} could not refresh {}: {}",
                 "Warning:".yellow(),
@@ -199,6 +272,12 @@ fn refresh_agent_packs_at(
             ),
         }
     }
+    for (idx, artifact) in deferred {
+        let outcome = install_outcome(&project_root.join(&artifact.path), artifact);
+        packs[idx].report.record(&artifact.path, outcome);
+    }
+    // trace:TASK-1503 | ai:claude
+    record_refresh_deliveries(project_root, &preview, &deliveries);
 
     if let Some(agents) = agents_md_block_refresh(project_root, &preview) {
         packs.push(agents);
@@ -623,55 +702,68 @@ global = true
         assert!(!root.join(".antigravity").exists());
     }
 
-    /// A refresh delivers a newly shipped skill (the portable aida-orchestrate)
-    /// into installed Codex and Antigravity packs, never touches a skill
-    /// directory that already exists, and never creates an uninstalled pack.
-    // trace:STORY-1475 | ai:claude
+    use aida_core::scaffolding::refresh::{
+        read_skill_manifest, write_skill_manifest, DELIVERED_MANIFEST,
+    };
+
+    const SKILL_PACKS: [(&str, &str); 3] = [
+        (".claude/skills", "Claude skills"),
+        (".codex/skills", "Codex skills"),
+        (".antigravity/skills", "Antigravity skills"),
+    ];
+
+    /// `aida init` / `scaffold apply` into an empty project.
+    fn install_all_packs(root: &Path) {
+        let mut scaffolder = aida_core::scaffolding::Scaffolder::new(
+            root.to_path_buf(),
+            aida_core::scaffolding::ScaffoldConfig::default(),
+        );
+        let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
+        scaffolder.apply(&preview).expect("apply");
+    }
+
+    /// Make `name` look like a skill AIDA started shipping after `pack` was
+    /// installed: absent on disk and never recorded in the manifest.
+    fn forget_delivery(pack_dir: &Path, name: &str) {
+        std::fs::remove_dir_all(pack_dir.join(name)).unwrap();
+        let mut m = read_skill_manifest(pack_dir).unwrap().unwrap();
+        assert!(m.delivered.remove(name), "{name} was delivered by apply");
+        write_skill_manifest(pack_dir, &m).unwrap();
+    }
+
+    fn installed_in<'a>(packs: &'a [PackRefresh], label: &str) -> &'a [PathBuf] {
+        packs
+            .iter()
+            .find(|p| p.label == label)
+            .map(|p| p.report.installed.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// A skill new since the pack was installed is delivered on refresh into
+    /// the Claude, Codex and Antigravity packs, and recorded in each pack's
+    /// own manifest; a second refresh installs nothing.
+    // trace:TASK-1503 | ai:claude
     #[test]
-    fn refresh_delivers_new_skill_into_installed_vendor_packs() {
+    fn refresh_delivers_skill_new_since_install_into_every_skill_pack() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        std::fs::create_dir_all(root.join(".codex/skills")).unwrap();
-        std::fs::create_dir_all(root.join(".antigravity/skills")).unwrap();
-        // A skill directory the user already has (even emptied) is left alone.
-        std::fs::create_dir_all(root.join(".codex/skills/aida-req")).unwrap();
+        install_all_packs(root);
+        for (pack, _) in SKILL_PACKS {
+            forget_delivery(&root.join(pack), "aida-orchestrate");
+        }
 
         let packs = refresh_agent_packs_at(root, None, None);
-        let portable = aida_core::templates::EMBEDDED_TEMPLATES
-            .get("skills-portable/aida-orchestrate.md")
-            .expect("portable body embedded");
-        // The scaffold header lands inside the frontmatter, so compare bodies.
-        let portable = portable.split_once("\n---\n").map_or(*portable, |(_, b)| b);
-        for (pack, label) in [
-            (".codex/skills", "Codex skills"),
-            (".antigravity/skills", "Antigravity skills"),
-        ] {
-            let installed = root.join(pack).join("aida-orchestrate/SKILL.md");
-            let body = std::fs::read_to_string(&installed)
-                .unwrap_or_else(|_| panic!("{pack} should receive aida-orchestrate"));
-            assert!(body.contains(portable), "{pack} got the portable body");
-            let report = &packs
-                .iter()
-                .find(|p| p.label == label)
-                .expect("pack reported")
-                .report;
-            assert!(report
-                .installed
-                .contains(&PathBuf::from(format!("{pack}/aida-orchestrate/SKILL.md"))));
+        for (pack, label) in SKILL_PACKS {
+            let rel = PathBuf::from(pack).join("aida-orchestrate/SKILL.md");
+            assert!(root.join(&rel).is_file(), "{pack} receives the new skill");
+            assert_eq!(installed_in(&packs, label), [rel], "{pack}");
+            let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
+            assert!(
+                m.complete && m.delivered.contains("aida-orchestrate"),
+                "{pack}"
+            );
         }
-        assert!(!root.join(".codex/skills/aida-req/SKILL.md").exists());
-        // Only the allow-listed skill is delivered: nothing else is created.
-        for pack in [".codex/skills", ".antigravity/skills"] {
-            let entries: Vec<_> = std::fs::read_dir(root.join(pack))
-                .unwrap()
-                .map(|e| e.unwrap().file_name().into_string().unwrap())
-                .filter(|n| n != "aida-req" && !n.starts_with('.'))
-                .collect();
-            assert_eq!(entries, vec!["aida-orchestrate".to_string()], "{pack}");
-        }
-        assert!(!root.join(".claude").exists(), "no Claude pack is created");
 
-        // Second run: the delivered file is now pristine and current.
         let again = refresh_agent_packs_at(root, None, None);
         assert!(
             again.iter().all(|p| p.report.installed.is_empty()),
@@ -679,141 +771,360 @@ global = true
         );
     }
 
-    /// Once delivered, a deleted aida-orchestrate stays deleted: the pack's
-    /// delivered manifest records it, so the next refresh does not recreate it.
-    // trace:STORY-1475 | ai:claude
+    /// A delivered skill the user deletes stays deleted, and the deletion is
+    /// recorded in the manifest as an opt-out.
+    // trace:TASK-1503 | ai:claude
     #[test]
-    fn refresh_does_not_recreate_deleted_delivered_skill() {
+    fn refresh_keeps_deleted_skill_deleted_and_records_the_opt_out() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        std::fs::create_dir_all(root.join(".codex/skills")).unwrap();
+        install_all_packs(root);
+        for (pack, _) in SKILL_PACKS {
+            std::fs::remove_dir_all(root.join(pack).join("aida-commit")).unwrap();
+        }
 
-        refresh_agent_packs_at(root, None, None);
-        let skill_dir = root.join(".codex/skills/aida-orchestrate");
-        assert!(
-            skill_dir.join("SKILL.md").exists(),
-            "first refresh delivers"
-        );
-        assert!(delivered_skills(&root.join(".codex/skills"))
-            .unwrap()
-            .contains(&"aida-orchestrate".to_string()));
-
-        std::fs::remove_dir_all(&skill_dir).unwrap();
         let packs = refresh_agent_packs_at(root, None, None);
-        assert!(
-            !skill_dir.exists(),
-            "a deleted delivered skill is not recreated"
-        );
         assert!(packs.iter().all(|p| p.report.installed.is_empty()));
+        for (pack, _) in SKILL_PACKS {
+            let dir = root.join(pack);
+            assert!(!dir.join("aida-commit").exists(), "{pack}: not resurrected");
+            let m = read_skill_manifest(&dir).unwrap().unwrap();
+            assert!(
+                m.opted_out.contains("aida-commit"),
+                "{pack}: opt-out recorded"
+            );
+            assert!(!m.delivered.contains("aida-commit"), "{pack}");
+            assert!(m.delivered.contains("aida-req"), "{pack}");
+        }
     }
 
-    /// `aida init` / `scaffold apply` records the delivery too, so a user who
-    /// deletes the skill right after init is not overridden by refresh.
-    // trace:STORY-1475 | ai:claude
+    /// `aida init` / `scaffold apply` writes one manifest per pack directory,
+    /// and a re-run of apply (the init / upgrade path) never recreates a
+    /// delivered skill the user deleted.
+    // trace:TASK-1503 | ai:claude
     #[test]
-    fn apply_records_delivery_so_refresh_respects_deletion() {
+    fn apply_writes_one_manifest_per_pack_and_reapply_respects_deletion() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        let mut scaffolder = aida_core::scaffolding::Scaffolder::new(
-            root.to_path_buf(),
-            aida_core::scaffolding::ScaffoldConfig::default(),
-        );
-        let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
-        scaffolder.apply(&preview).expect("apply");
-        for pack in [".codex/skills", ".antigravity/skills"] {
+        install_all_packs(root);
+        for (pack, _) in SKILL_PACKS {
             let dir = root.join(pack);
-            assert!(delivered_skills(&dir)
-                .unwrap()
-                .contains(&"aida-orchestrate".to_string()));
-            assert!(dir
-                .join(aida_core::scaffolding::refresh::DELIVERED_MANIFEST)
-                .is_file());
+            assert!(dir.join(DELIVERED_MANIFEST).is_file(), "{pack}");
+            let m = read_skill_manifest(&dir).unwrap().unwrap();
+            assert!(
+                m.complete && m.delivered.contains("aida-orchestrate"),
+                "{pack}"
+            );
             std::fs::remove_dir_all(dir.join("aida-orchestrate")).unwrap();
         }
+        let manifests = walkdir_manifests(root);
+        assert_eq!(manifests.len(), SKILL_PACKS.len(), "{manifests:?}");
+
+        install_all_packs(root);
         refresh_agent_packs_at(root, None, None);
-        for pack in [".codex/skills", ".antigravity/skills"] {
-            assert!(!root.join(pack).join("aida-orchestrate").exists(), "{pack}");
+        for (pack, _) in SKILL_PACKS {
+            let dir = root.join(pack);
+            assert!(!dir.join("aida-orchestrate").exists(), "{pack}");
+            let m = read_skill_manifest(&dir).unwrap().unwrap();
+            assert!(m.opted_out.contains("aida-orchestrate"), "{pack}");
         }
     }
 
-    /// An unreadable delivered manifest fails closed: refresh creates nothing
-    /// and leaves the manifest untouched.
-    // trace:STORY-1475 | ai:claude
+    fn walkdir_manifests(dir: &Path) -> Vec<PathBuf> {
+        let mut out = Vec::new();
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            if entry.file_type().unwrap().is_dir() {
+                out.extend(walkdir_manifests(&path));
+            } else if entry.file_name() == DELIVERED_MANIFEST {
+                out.push(path);
+            }
+        }
+        out
+    }
+
+    /// A pack installed before the manifest existed (no manifest, or a
+    /// STORY-1475 allow-list manifest) fails closed under refresh: the first
+    /// refresh seeds the manifest from the skill directories on disk and
+    /// creates nothing, and the next refresh creates nothing either. An
+    /// explicit install then delivers the missing skills once.
+    // trace:TASK-1503 | ai:claude
     #[test]
-    fn unreadable_delivered_manifest_creates_nothing() {
+    fn legacy_pack_is_seeded_from_disk_and_refresh_creates_nothing() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let codex = root.join(".codex/skills");
-        std::fs::create_dir_all(&codex).unwrap();
-        let manifest = codex.join(aida_core::scaffolding::refresh::DELIVERED_MANIFEST);
-        std::fs::write(&manifest, [0xff, 0xfe, 0x00]).unwrap();
-        // A directory in the manifest's place fails closed too.
-        let agy = root.join(".antigravity/skills");
-        std::fs::create_dir_all(agy.join(aida_core::scaffolding::refresh::DELIVERED_MANIFEST))
-            .unwrap();
-
-        let packs = refresh_agent_packs_at(root, None, None);
-        assert!(!codex.join("aida-orchestrate").exists());
-        assert!(!agy.join("aida-orchestrate").exists());
-        assert!(packs.iter().all(|p| p.report.installed.is_empty()));
-        assert_eq!(std::fs::read(&manifest).unwrap(), vec![0xff, 0xfe, 0x00]);
-    }
-
-    /// The delivery is recorded before `SKILL.md` is written: if recording
-    /// fails, nothing is created.
-    // trace:STORY-1475 | ai:claude
-    #[test]
-    fn failed_delivery_record_writes_no_skill() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        std::fs::create_dir_all(root.join(".codex/skills")).unwrap();
-        let rel = Path::new(".codex/skills/aida-orchestrate/SKILL.md");
-        let outcome = install_new_pack_skill_with(root, rel, "body", |_, _| {
-            Err(std::io::Error::other("simulated record failure"))
-        });
-        assert!(matches!(outcome, Some(Err(_))), "{outcome:?}");
-        assert!(!root.join(".codex/skills/aida-orchestrate").exists());
-
-        // With a working recorder the same call delivers and records.
-        let outcome = install_new_pack_skill(root, rel, "body");
-        assert!(matches!(outcome, Some(Ok(()))), "{outcome:?}");
-        assert!(root.join(rel).is_file());
-        assert!(delivered_skills(&root.join(".codex/skills"))
-            .unwrap()
-            .contains(&"aida-orchestrate".to_string()));
-    }
-
-    /// A skill the user deleted from an installed vendor pack stays deleted:
-    /// refresh only creates allow-listed skills (TASK-1170 contract).
-    // trace:STORY-1475 | ai:claude
-    #[test]
-    fn refresh_does_not_recreate_deleted_vendor_pack_skill() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        let codex = root.join(".codex/skills");
-        // An installed pack whose aida-commit skill the user deleted.
         let req = wrap_with_aida_header(
             Path::new(".codex/skills/aida-req/SKILL.md"),
             "---\nname: aida-req\n---\n# Req\n",
         );
         std::fs::create_dir_all(codex.join("aida-req")).unwrap();
         std::fs::write(codex.join("aida-req/SKILL.md"), &req).unwrap();
+        // An Antigravity pack carrying a STORY-1475 allow-list manifest.
+        let agy = root.join(".antigravity/skills");
+        std::fs::create_dir_all(agy.join("aida-req")).unwrap();
+        std::fs::write(agy.join("aida-req/SKILL.md"), &req).unwrap();
+        std::fs::write(
+            agy.join(DELIVERED_MANIFEST),
+            "# Skills AIDA has delivered into this pack.\naida-orchestrate\n",
+        )
+        .unwrap();
+        // An emptied pack with no manifest at all.
+        std::fs::create_dir_all(root.join(".claude/skills")).unwrap();
+
+        for _ in 0..2 {
+            let packs = refresh_agent_packs_at(root, None, None);
+            assert!(
+                packs.iter().all(|p| p.report.installed.is_empty()),
+                "a legacy pack receives nothing"
+            );
+        }
+        for dir in [&codex, &agy] {
+            let entries: Vec<_> = std::fs::read_dir(dir)
+                .unwrap()
+                .map(|e| e.unwrap().file_name().into_string().unwrap())
+                .filter(|n| !n.starts_with('.'))
+                .collect();
+            assert_eq!(entries, vec!["aida-req".to_string()], "{}", dir.display());
+            let m = read_skill_manifest(dir).unwrap().unwrap();
+            assert!(m.complete);
+            assert_eq!(m.delivered.iter().collect::<Vec<_>>(), ["aida-req"]);
+            assert!(m.unconfirmed.contains("aida-commit"), "{m:?}");
+        }
+        // The STORY-1475 manifest's name was delivered, then deleted.
+        let m = read_skill_manifest(&agy).unwrap().unwrap();
+        assert!(m.opted_out.contains("aida-orchestrate"), "{m:?}");
+        let claude: Vec<_> = std::fs::read_dir(root.join(".claude/skills"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        assert_eq!(claude, vec![DELIVERED_MANIFEST.to_string()]);
+
+        // Revised policy: an explicit `aida init` / `scaffold upgrade`
+        // delivers the missing skills ONCE, except a known opt-out.
+        install_all_packs(root);
+        for dir in [&codex, &agy, &root.join(".claude/skills")] {
+            assert!(
+                dir.join("aida-commit/SKILL.md").is_file(),
+                "{}",
+                dir.display()
+            );
+            let m = read_skill_manifest(dir).unwrap().unwrap();
+            assert!(m.unconfirmed.is_empty(), "{m:?}");
+        }
+        assert!(codex.join("aida-orchestrate/SKILL.md").is_file());
+        assert!(!agy.join("aida-orchestrate").exists(), "opt-out honoured");
+        // After that run, deletions are opt-outs.
+        std::fs::remove_dir_all(codex.join("aida-commit")).unwrap();
+        install_all_packs(root);
+        refresh_agent_packs_at(root, None, None);
+        assert!(!codex.join("aida-commit").exists());
+    }
+
+    fn skill_names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .filter(|n| !n.starts_with('.'))
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// `init --footprint memory-lane` then `aida scaffold refresh` creates
+    /// nothing: the memory-lane manifest is never complete (a partial plan),
+    /// and refresh honours the persisted footprint.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn memory_lane_then_refresh_creates_nothing() {
+        for persist_footprint in [true, false] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let store = aida_core::RequirementsStore::default();
+            if persist_footprint {
+                std::fs::create_dir_all(root.join(".aida")).unwrap();
+                crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::MemoryLane)
+                    .unwrap();
+            }
+            crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false)
+                .unwrap();
+            for pack in [".claude/skills", ".codex/skills"] {
+                let m = read_skill_manifest(&root.join(pack)).unwrap().unwrap();
+                assert!(!m.complete, "{pack}: a partial plan never completes");
+            }
+            for _ in 0..2 {
+                let packs = refresh_agent_packs_at(root, None, None);
+                assert!(
+                    packs.iter().all(|p| p.report.installed.is_empty()),
+                    "persist={persist_footprint}"
+                );
+            }
+            for pack in [".claude/skills", ".codex/skills"] {
+                assert_eq!(
+                    skill_names(&root.join(pack)),
+                    ["aida-capture", "aida-learn"],
+                    "{pack} persist={persist_footprint}"
+                );
+            }
+        }
+    }
+
+    /// A pre-manifest full pack where the user deleted aida-req, then a
+    /// memory-lane re-run, then refresh: aida-req is not resurrected.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn legacy_full_pack_memory_lane_rerun_then_refresh_keeps_deletion() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        for (pack, _) in SKILL_PACKS {
+            std::fs::remove_file(root.join(pack).join(DELIVERED_MANIFEST)).unwrap();
+            std::fs::remove_dir_all(root.join(pack).join("aida-req")).unwrap();
+        }
+        let store = aida_core::RequirementsStore::default();
+        crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert!(packs.iter().all(|p| p.report.installed.is_empty()));
+        for (pack, _) in SKILL_PACKS {
+            assert!(!root.join(pack).join("aida-req").exists(), "{pack}");
+        }
+    }
+
+    /// Refresh delivers a new folder-form skill whole (SKILL.md and its
+    /// supporting files).
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn refresh_delivers_whole_folder_form_skill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        let pr = root.join(".claude/skills/aida-pr");
+        let before = skill_names(&pr);
+        forget_delivery(&root.join(".claude/skills"), "aida-pr");
+        refresh_agent_packs_at(root, None, None);
+        assert_eq!(skill_names(&pr), before, "examples/ arrives with SKILL.md");
+    }
+
+    /// A delivery whose write fails is not recorded, so the next refresh
+    /// retries it instead of treating it as an opt-out.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn failed_refresh_write_is_not_recorded_as_delivered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        let codex = root.join(".codex/skills");
+        forget_delivery(&codex, "aida-orchestrate");
+        // A plain file where the skill directory would go: the write fails.
+        std::fs::write(codex.join("aida-orchestrate"), "blocker").unwrap();
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert!(installed_in(&packs, "Codex skills").is_empty());
+        let m = read_skill_manifest(&codex).unwrap().unwrap();
+        assert!(!m.knows("aida-orchestrate"), "{m:?}");
+        assert!(!m.unconfirmed.contains("aida-orchestrate"), "{m:?}");
+
+        std::fs::remove_file(codex.join("aida-orchestrate")).unwrap();
+        refresh_agent_packs_at(root, None, None);
+        assert!(codex.join("aida-orchestrate/SKILL.md").is_file());
+    }
+
+    /// Deleting a folder-form skill with supporting files (aida-pr ships
+    /// `examples/`) sticks: no supporting file is re-written into its
+    /// directory, so neither re-apply nor refresh resurrects SKILL.md.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn deleted_folder_skill_with_supporting_files_stays_deleted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        let pr = root.join(".claude/skills/aida-pr");
+        assert!(pr.join("SKILL.md").is_file());
+        let supporting = std::fs::read_dir(&pr).unwrap().count();
+        assert!(supporting > 1, "aida-pr ships supporting files");
+        std::fs::remove_dir_all(&pr).unwrap();
+
+        install_all_packs(root);
+        install_all_packs(root);
+        refresh_agent_packs_at(root, None, None);
+        assert!(!pr.exists(), "nothing of aida-pr reappears");
+        let m = read_skill_manifest(&root.join(".claude/skills"))
+            .unwrap()
+            .unwrap();
+        assert!(m.opted_out.contains("aida-pr"), "{m:?}");
+    }
+
+    /// An unreadable delivered manifest fails closed: refresh creates nothing
+    /// and leaves the manifest untouched.
+    // trace:STORY-1475 | ai:claude
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn unreadable_delivered_manifest_creates_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        let codex = root.join(".codex/skills");
+        forget_delivery(&codex, "aida-orchestrate");
+        let manifest = codex.join(DELIVERED_MANIFEST);
+        std::fs::write(&manifest, [0xff, 0xfe, 0x00]).unwrap();
+        // A directory in the manifest's place fails closed too.
+        let agy = root.join(".antigravity/skills");
+        forget_delivery(&agy, "aida-orchestrate");
+        std::fs::remove_file(agy.join(DELIVERED_MANIFEST)).unwrap();
+        std::fs::create_dir_all(agy.join(DELIVERED_MANIFEST)).unwrap();
 
         let packs = refresh_agent_packs_at(root, None, None);
-        assert!(
-            !codex.join("aida-commit").exists(),
-            "a deleted skill must not be resurrected"
-        );
-        let report = &packs
-            .iter()
-            .find(|p| p.label == "Codex skills")
-            .expect("codex pack reported")
-            .report;
-        assert!(report
-            .installed
-            .iter()
-            .all(|p| p.ends_with("aida-orchestrate/SKILL.md")));
-        assert!(report.missing > 0, "other missing skills stay Missing");
+        assert!(!codex.join("aida-orchestrate").exists());
+        assert!(!agy.join("aida-orchestrate").exists());
+        assert!(installed_in(&packs, "Codex skills").is_empty());
+        assert!(installed_in(&packs, "Antigravity skills").is_empty());
+        assert_eq!(std::fs::read(&manifest).unwrap(), vec![0xff, 0xfe, 0x00]);
+    }
+
+    /// The delivery is recorded before `SKILL.md` is written: if the manifest
+    /// cannot be written, nothing is created.
+    // trace:STORY-1475 | ai:claude
+    // trace:TASK-1503 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn failed_delivery_record_writes_no_skill() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        let codex = root.join(".codex/skills");
+        forget_delivery(&codex, "aida-orchestrate");
+        std::fs::set_permissions(&codex, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let probe = codex.join("probe");
+        let writable = std::fs::write(&probe, "x").is_ok();
+        let packs = refresh_agent_packs_at(root, None, None);
+        std::fs::set_permissions(&codex, std::fs::Permissions::from_mode(0o755)).unwrap();
+        if writable {
+            return; // running as root: permissions are not enforced
+        }
+        assert!(!codex.join("aida-orchestrate").exists());
+        assert!(installed_in(&packs, "Codex skills").is_empty());
+    }
+
+    /// A symlinked skill directory the user owns is never written through,
+    /// and counts as installed (recorded as delivered).
+    // trace:TASK-1503 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_skill_is_left_untouched_by_refresh() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        install_all_packs(root);
+        let codex = root.join(".codex/skills");
+        forget_delivery(&codex, "aida-orchestrate");
+        let target = root.join("my-orchestrate");
+        std::fs::create_dir_all(&target).unwrap();
+        std::os::unix::fs::symlink(&target, codex.join("aida-orchestrate")).unwrap();
+
+        let packs = refresh_agent_packs_at(root, None, None);
+        assert!(installed_in(&packs, "Codex skills").is_empty());
+        assert_eq!(std::fs::read_dir(&target).unwrap().count(), 0);
+        let m = read_skill_manifest(&codex).unwrap().unwrap();
+        assert!(m.delivered.contains("aida-orchestrate"));
     }
 
     #[test]
