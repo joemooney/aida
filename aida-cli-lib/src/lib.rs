@@ -16348,13 +16348,8 @@ fn add_pending_brief(
     // convention used everywhere else. `Path::display()` emits `\` on Windows,
     // which broke task_492_brief_tests on the cross-platform runner.
     // trace:BUG-466 | ai:claude
-    let rel = brief_path
-        .strip_prefix(project_root)
-        .unwrap_or(brief_path)
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/");
+    // trace:BUG-1648 | ai:claude — shared with the plan-path writer.
+    let rel = plan_rel_path(brief_path, project_root);
     let mut entries = read_pending_briefs(&pending_path);
     if !entries.iter().any(|e| e == &rel) {
         entries.push(rel);
@@ -23841,12 +23836,23 @@ fn collect_doctor_findings(
 
     let cache_path =
         aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
-    let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
     // TASK-1484: owner liveness is PID-reuse aware (process start identity) and
     // fails closed when the identity cannot be read. A dead owner's record past
     // the age threshold is a safe heal; a LIVE owner past its expected duration
     // is diagnostic evidence only (never healed). trace:TASK-1484 | ai:claude
-    if let Some(obs) = aida_core::observe_cache_lock(&cache_path)? {
+    // BUG-1644: the sidecar is resolved from the SHARED (symlink-resolved)
+    // cache location; an unshared sidecar an older binary left beside the
+    // symlinked cache path is checked too, and reported even when its owner
+    // is alive (its arm precedes the generic overrun arm so a live, overdue
+    // stray keeps its explanation). trace:BUG-1644 | ai:claude
+    let stray_lock_info = aida_core::stray_cache_lock_info_path(&cache_path);
+    let lock_info_paths = std::iter::once(aida_core::cache_lock_info_path(&cache_path))
+        .chain(stray_lock_info.clone());
+    for lock_info_path in lock_info_paths {
+        let is_stray = stray_lock_info.as_ref() == Some(&lock_info_path);
+        let Some(obs) = aida_core::observe_lock_info_file(&lock_info_path)? else {
+            continue;
+        };
         let stale_secs = std::env::var("AIDA_CACHE_LOCK_STALE_SECS")
             .ok()
             .and_then(|v| v.parse::<i64>().ok())
@@ -23875,6 +23881,25 @@ fn collect_doctor_findings(
                     ),
                     action: format!("remove stale lock-info file {}", lock_info_path.display()),
                     safe_heal: true,
+                });
+            }
+            _ if is_stray && obs.owner.presumed_alive() => {
+                push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!(
+                        "unshared lock-info beside a symlinked cache, from live pid {} ({}); current binaries read the sidecar at the resolved cache location, so this record is ignored{}",
+                        obs.info.pid,
+                        command,
+                        obs.overrun_note()
+                            .map(|note| format!("; {note}"))
+                            .unwrap_or_default()
+                    ),
+                    action: format!(
+                        "upgrade the aida binary that pid {} runs; the file is removed once its owner exits",
+                        obs.info.pid
+                    ),
+                    safe_heal: false,
                 });
             }
             _ if obs.live_overrun().is_some() => {
@@ -36876,44 +36901,9 @@ fn session_start(
     // etc. live in main's tree), so a whole-dir symlink would skip when
     // git checks out those tracked files. Instead, ensure .aida/ exists
     // and symlink only the gitignored runtime subdirs into it.
-    // trace:BUG-52 | ai:claude
+    // trace:BUG-52 trace:BUG-1644 | ai:claude
     #[cfg(unix)]
-    {
-        let store_src = project_root.join(".aida-store");
-        let store_dst = worktree_path.join(".aida-store");
-        if store_src.exists() && !store_dst.exists() {
-            std::os::unix::fs::symlink(&store_src, &store_dst).with_context(|| {
-                format!(
-                    "symlink {} -> {} failed",
-                    store_dst.display(),
-                    store_src.display()
-                )
-            })?;
-        }
-
-        let parent_aida = project_root.join(".aida");
-        let worktree_aida = worktree_path.join(".aida");
-        if parent_aida.exists() {
-            std::fs::create_dir_all(&worktree_aida)?;
-            for runtime in &[
-                "sessions",
-                "agents",
-                "roles",
-                "cache.db",
-                "cache.db-shm",
-                "cache.db-wal",
-                "pgdata",
-            ] {
-                let src = parent_aida.join(runtime);
-                let dst = worktree_aida.join(runtime);
-                if src.exists() && !dst.exists() {
-                    std::os::unix::fs::symlink(&src, &dst).with_context(|| {
-                        format!("symlink {} -> {} failed", dst.display(), src.display())
-                    })?;
-                }
-            }
-        }
-    }
+    link_worktree_runtime_state(&project_root, &worktree_path)?;
 
     // STORY-248: when an explicit `--base` was passed (queue work
     // --stack / --base, or session start --base), capture the
@@ -41661,20 +41651,7 @@ fn session_end(
         if store_link.is_symlink() {
             let _ = std::fs::remove_file(&store_link);
         }
-        let aida_dir = target.worktree_path.join(".aida");
-        for runtime in &[
-            "sessions",
-            "roles",
-            "cache.db",
-            "cache.db-shm",
-            "cache.db-wal",
-            "pgdata",
-        ] {
-            let p = aida_dir.join(runtime);
-            if p.is_symlink() {
-                let _ = std::fs::remove_file(&p);
-            }
-        }
+        unlink_worktree_aida_runtime(&target.worktree_path.join(".aida"));
     }
 
     // BUG-67: refuse to nuke a worktree that has real uncommitted work.
@@ -44364,9 +44341,17 @@ fn parse_extracted_plans_from_marker(comment: &str) -> Vec<String> {
     };
     paths
         .split(',')
-        .map(|p| p.trim().to_string())
+        .map(|p| normalize_recorded_plan_path(p.trim()))
         .filter(|p| !p.is_empty())
         .collect()
+}
+
+/// A plan path read back from a followup marker or a `followup-src:` tag, in
+/// the `/` form [`plan_rel_path`] now writes. Versions before BUG-1648 wrote
+/// `docs/plans\x.md` on Windows; normalizing on read keeps those dedup-able.
+// trace:BUG-1648 | ai:claude
+fn normalize_recorded_plan_path(recorded: &str) -> String {
+    recorded.replace('\\', "/")
 }
 
 /// BUG-656: the cross-store stable signature. Given the relative plan paths a
@@ -44413,7 +44398,6 @@ fn followup_filed_in_store(
     bullet: &str,
     source_plan: &str,
 ) -> bool {
-    let plan_tag = format!("{FOLLOWUP_SRC_TAG_PREFIX}{source_plan}");
     use aida_core::models::RelationshipType;
     let want = bullet.trim().to_ascii_lowercase();
     let child_ids: std::collections::HashSet<uuid::Uuid> = store
@@ -44428,7 +44412,13 @@ fn followup_filed_in_store(
         .unwrap_or_default();
     store.requirements.iter().any(|r| {
         r.title.trim().to_ascii_lowercase() == want
-            && (child_ids.contains(&r.id) || r.tags.iter().any(|t| *t == plan_tag))
+            && (child_ids.contains(&r.id)
+                || r.tags.iter().any(|t| {
+                    // Tags written before BUG-1648 may carry `\`.
+                    // trace:BUG-1648 | ai:claude
+                    t.strip_prefix(FOLLOWUP_SRC_TAG_PREFIX)
+                        .is_some_and(|p| normalize_recorded_plan_path(p) == source_plan)
+                }))
     })
 }
 
@@ -44726,13 +44716,8 @@ fn discover_plan_context(
         let Ok(content) = std::fs::read_to_string(plan_file) else {
             continue;
         };
-        rels.push(
-            plan_file
-                .strip_prefix(project_root)
-                .unwrap_or(plan_file)
-                .display()
-                .to_string(),
-        );
+        // `/`-separated on every OS, like the followup marker. trace:BUG-1648 | ai:claude
+        rels.push(plan_rel_path(plan_file, project_root));
         for c in parse_plan_critical_files(&content) {
             if !critical_files.contains(&c) {
                 critical_files.push(c);
@@ -45200,6 +45185,23 @@ fn capture_test_plan(
     Ok(())
 }
 
+/// A plan's project-relative path in the form the store records it: `/`
+/// separated on every OS. The followup marker, the plan-path dedup set and
+/// the `followup-src:` tag compare these strings, so a Windows clone that
+/// wrote `docs/plans\x.md` would neither match what a Unix clone filed nor
+/// the `docs/plans/x.md` shape everything else uses. The agent-brief
+/// `.pending` sentinel (BUG-466) stores its keys the same way.
+// trace:BUG-1648 | ai:claude
+fn plan_rel_path(path: &std::path::Path, project_root: &std::path::Path) -> String {
+    let Ok(rel) = path.strip_prefix(project_root) else {
+        return path.display().to_string();
+    };
+    rel.components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// Extract the Followups section of any plan owned by `spec_id` and file
 /// the accepted bullets as child TASKs. Idempotent via [`FOLLOWUPS_MARKER`].
 ///
@@ -45251,12 +45253,7 @@ fn extract_plan_followups(
         .collect();
     let owned_rel_paths: Vec<String> = plan_files
         .iter()
-        .map(|p| {
-            p.strip_prefix(project_root)
-                .unwrap_or(p)
-                .display()
-                .to_string()
-        })
+        .map(|p| plan_rel_path(p, project_root))
         .collect();
     let pending: std::collections::HashSet<String> =
         plans_pending_extraction(&owned_rel_paths, &already_extracted)
@@ -45269,14 +45266,7 @@ fn extract_plan_followups(
     }
     let plan_files: Vec<std::path::PathBuf> = plan_files
         .into_iter()
-        .filter(|p| {
-            let rel = p
-                .strip_prefix(project_root)
-                .unwrap_or(p)
-                .display()
-                .to_string();
-            pending.contains(&rel)
-        })
+        .filter(|p| pending.contains(&plan_rel_path(p, project_root)))
         .collect();
 
     // BUG-655: content-level dedup set — the `(parent_spec, title)` of every
@@ -45349,7 +45339,15 @@ fn extract_plan_followups(
             r.tags
                 .iter()
                 .filter_map(|t| t.strip_prefix(FOLLOWUP_SRC_TAG_PREFIX))
-                .map(move |plan| (plan.to_string(), title.clone(), id.clone(), terminal))
+                // trace:BUG-1648 | ai:claude
+                .map(move |plan| {
+                    (
+                        normalize_recorded_plan_path(plan),
+                        title.clone(),
+                        id.clone(),
+                        terminal,
+                    )
+                })
         })
         .collect();
 
@@ -45366,11 +45364,7 @@ fn extract_plan_followups(
         if parsed.is_empty() {
             continue;
         }
-        let rel = path
-            .strip_prefix(project_root)
-            .unwrap_or(path)
-            .display()
-            .to_string();
+        let rel = plan_rel_path(path, project_root);
         sources.push(rel.clone());
         for f in parsed {
             if !followups.iter().any(|(b, _)| b == &f) {
@@ -50739,6 +50733,98 @@ fn queue_at_filing_refusal(
         Some(QueueAtFilingRefusal::Downgraded)
     } else {
         Some(QueueAtFilingRefusal::NotApproved)
+    }
+}
+
+/// Link the parent checkout's runtime AIDA state into a new worktree
+/// (BUG-52). `.aida-store/` is gitignored so a whole-directory symlink works.
+/// `.aida/` is partially tracked, so only its gitignored runtime entries are
+/// linked. `cache.db.lock-info` is deliberately NOT linked (BUG-1644).
+// trace:BUG-52 trace:BUG-1644 | ai:claude
+#[cfg(unix)]
+fn link_worktree_runtime_state(
+    project_root: &std::path::Path,
+    worktree_path: &std::path::Path,
+) -> Result<()> {
+    let store_src = project_root.join(".aida-store");
+    let store_dst = worktree_path.join(".aida-store");
+    if store_src.exists() && !store_dst.exists() {
+        std::os::unix::fs::symlink(&store_src, &store_dst).with_context(|| {
+            format!(
+                "symlink {} -> {} failed",
+                store_dst.display(),
+                store_src.display()
+            )
+        })?;
+    }
+
+    let parent_aida = project_root.join(".aida");
+    let worktree_aida = worktree_path.join(".aida");
+    if parent_aida.exists() {
+        std::fs::create_dir_all(&worktree_aida)?;
+        for runtime in &[
+            "sessions",
+            "agents",
+            "roles",
+            "cache.db",
+            "cache.db-shm",
+            "cache.db-wal",
+            "pgdata",
+        ] {
+            let src = parent_aida.join(runtime);
+            let dst = worktree_aida.join(runtime);
+            if src.exists() && !dst.exists() {
+                std::os::unix::fs::symlink(&src, &dst).with_context(|| {
+                    format!("symlink {} -> {} failed", dst.display(), src.display())
+                })?;
+            }
+        }
+        // BUG-1644: `cache.db.lock-info` is deliberately NOT linked. Its
+        // path derives from the shared (symlink-resolved) cache location
+        // (`aida_core::cache_lock_info_path`), so a reader here and a
+        // writer in the main checkout already meet at one sidecar, and a
+        // not-yet-created parent cache needs no dangling link. A reused
+        // worktree may still hold an older binary's per-worktree sidecar;
+        // retire it when its owner is dead. trace:BUG-1644 | ai:claude
+        retire_stray_worktree_lock_info(&worktree_aida);
+    }
+    Ok(())
+}
+
+/// Strip the runtime symlinks `link_worktree_runtime_state` created inside a
+/// worktree's `.aida/` (BUG-52), so `git worktree remove` doesn't count them
+/// as untracked files. `.aida/` itself holds tracked content and stays.
+// trace:BUG-52 trace:BUG-1644 | ai:claude
+fn unlink_worktree_aida_runtime(aida_dir: &std::path::Path) {
+    // BUG-1644: retire an older binary's per-worktree lock-info sidecar
+    // (dead owner only) while `cache.db` is still a symlink, i.e. while
+    // it is still distinguishable from the shared sidecar.
+    // trace:BUG-1644 | ai:claude
+    retire_stray_worktree_lock_info(aida_dir);
+    for runtime in &[
+        "sessions",
+        "roles",
+        "cache.db",
+        "cache.db-shm",
+        "cache.db-wal",
+        "pgdata",
+    ] {
+        let p = aida_dir.join(runtime);
+        if p.is_symlink() {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+}
+
+/// Remove a per-worktree `cache.db.lock-info` that a pre-BUG-1644 binary left
+/// beside the worktree's SYMLINKED `cache.db`, but only when its recorded owner
+/// is provably dead (the TASK-1484 compare-and-delete). A live owner's file is
+/// left for `aida doctor` to report. No-op when `cache.db` is not a symlink:
+/// the sidecar there IS the shared one.
+// trace:BUG-1644 | ai:claude
+fn retire_stray_worktree_lock_info(worktree_aida: &std::path::Path) {
+    if let Some(stray) = aida_core::stray_cache_lock_info_path(&worktree_aida.join("cache.db")) {
+        let _ = aida_core::reclaim_dead_lock_info(&stray);
     }
 }
 

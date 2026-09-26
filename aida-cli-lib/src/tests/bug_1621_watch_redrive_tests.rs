@@ -871,9 +871,12 @@ fn watch_pass_dry_run_queues_nothing_and_execute_requeues() {
     std::fs::create_dir_all(home.join(".aida")).unwrap();
     std::fs::write(
         home.join(".aida").join("shift-local.toml"),
+        // The key is TOML-quoted: a Windows repo key in a basic string
+        // (`"C:\Users..."`) reads `\U` as an escape and the layer fails to
+        // parse. trace:BUG-1648 | ai:claude
         format!(
-            "[repo.\"{}\"]\nredrive = true\n",
-            crate::shift::repo_key(&root)
+            "[repo.{}]\nredrive = true\n",
+            toml::Value::String(crate::shift::repo_key(&root))
         ),
     )
     .unwrap();
