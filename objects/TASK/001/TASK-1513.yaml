@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T08:49:06.684815058Z
-modified_at: 2026-09-26T18:37:25.944236109Z
+modified_at: 2026-09-26T21:33:03.510863485Z
 req_type: Task
 comments:
 - id: 01a0dce7-9ea7-7a40-bce7-57caaaa1113f
@@ -17,6 +17,39 @@ comments:
   created_at: 2026-09-26T08:49:22.087079775Z
   modified_at: 2026-09-26T08:49:22.087079775Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dfa2-cc96-7bb2-9060-d6be267e9815
+  author: joe
+  content: |
+    PLAN (planner, origin/main 2e01ffe4ab; claude/integrate-101 noted for test_env.rs): finish the BUG-1642 fence follow-ups, item by item.
+
+    FILES/SYMBOLS
+    - aida-cli-lib/src/test_home.rs: install :113, install_nested :182, create_test_home :203, REDIRECT_HOME_BEFORE_MAIN link_section attrs :77-93, `extern "C" { fn atexit }` :95, no_direct_dirs_home_dir_in_crate :365.
+    - aida-cli-lib/src/lib.rs home_dir :49285 (the not(test) arm calls dirs::home_dir()).
+    - aida-core dirs::home_dir sites: user_prefs.rs:40, liveness.rs:398, agents_config.rs:281/295/314/330, registry.rs:141. dirs::config_dir sites: registry.rs:160, templates.rs:175/190, integrations/jira/config.rs:178, github/config.rs:148, gitlab/config.rs:91. Direct env reads: git_ops.rs:2620 (already AIDA_TEST_HOME-aware), ai/client.rs:131.
+    - aida-cli-lib dirs::config_dir: scaffold_cmd.rs:400, remote_create.rs:879. Direct HOME: init_cmd.rs:72 user_home_dir, reconstitute.rs:605 dirs_home (advisor.rs:876 is a test pair list, not a read).
+    - Cargo: workspace edition 2021, rustc 1.92; `dirs` is optional in aida-core under feature `native`; `libc` is already a cfg(unix) dep of aida-cli-lib.
+
+    APPROACH
+    (3) New aida-core/src/home.rs (no feature gate): pub fn home_dir() -> Option<PathBuf> = non-empty HOME, else non-empty USERPROFILE, else #[cfg(feature = "native")] dirs::home_dir(). pub fn config_dir(): on windows non-empty APPDATA else dirs; elsewhere dirs::config_dir() unchanged (already $HOME/XDG-derived, keeps macOS Application Support). Replace the 12 aida-core sites and the two cli-lib config_dir sites; crate::home_dir's not(test) arm delegates to aida_core::home::home_dir() (same answer on unix; Windows now honours the redirect). Convert init_cmd.rs user_home_dir and reconstitute.rs dirs_home to crate::home_dir() (keep the temp_dir fallback in reconstitute).
+    (4) Widen the scan needles to dirs::config_dir, var_os("HOME"), var("HOME"), "USERPROFILE"; keep the allow-direct-home-dir marker; add a sibling cfg(test) scan in aida-core (no_direct_dirs_or_home_env_outside_home_module) allowing only home.rs and git_ops.rs:2620 (marker).
+    (5) install_nested: extend real_homes with the passwd home via libc::getpwuid_r(libc::getuid()) (cfg(unix), already a dep, no new crate); non-unix keeps today's list. A bogus inherited AIDA_LIB_TEST_REAL_HOMES no longer disables the fence.
+    (6) In install (top-level only), before create_test_home: read temp_dir(), match aida-lib-test-home-<pid>, skip own pid, libc::kill(pid, 0) == -1 && errno == ESRCH (unix; skip on other platforms), remove_dir_all best-effort, cap 64 entries, never fail install.
+    (7) Adopt now: `unsafe extern "C" { fn atexit(..); }` and #[cfg_attr(.., unsafe(link_section = ".."))]: both stable since 1.82 and accepted on edition 2021, so no cfg is needed.
+    Operator cleanup (not code): NOT done. /home/joe/.aida/roles/advisor.toml currently holds 10 [[activity]] rows (STORY-52, NFR-56, BUG-9102/9107/9112/9113/9115/9117/9119, BUG-13110), all stamped 2026-09-26T17:40-17:41Z, i.e. re-appended AFTER batch 89 by an unfenced lib test binary from a stale worktree target dir. Put a paste-ready one-liner in the PR body (python/awk that drops [[activity]] blocks whose spec_id matches the fixture list, with a backup) and state that stale worktree target dirs must be rebuilt or removed first, or the rows come back.
+
+    EDGE CASES / FAIL-SAFE
+    - HOME set but empty -> treated as unset (existing non_empty_env). Sweep errors are ignored; a live pid's dir is never removed; pid recycling is covered by the existing remove-on-create. getpwuid_r failure -> no extra entry, fence unchanged.
+
+    TESTS
+    - windows_home_resolver_honours_home_env (aida-core; cfg(windows) compile-only, plus a unix variant asserting HOME wins), config_dir_follows_home_override_on_unix, source_scan_flags_dirs_config_dir_and_home_env_outside_resolver (cli-lib), core_source_scan_flags_direct_dirs_calls, install_nested_rejects_bogus_real_homes_list (call install_nested with a fake list under EnvVarsGuard::snapshot(&["HOME"]); assert the passwd home is fenced), stale_test_home_dirs_are_swept_for_dead_pids (create aida-lib-test-home-4000000000, run the sweep fn, assert gone; a dir for the own pid survives), atexit_and_link_section_use_unsafe_forms (compiling is the test).
+
+    OVERLAP / ORDERING
+    - Touches test_home.rs only on the test side; TASK-1532 touches test_env.rs and test files: land TASK-1513 first (smaller), then TASK-1532 rebases trivially and allow-lists test_home.rs by path. The BUG-1667 branch adds a stdout_is_terminal seam in test_env.rs; no conflict.
+
+    VERDICT: READY.
+  created_at: 2026-09-26T21:33:03.510863485Z
+  modified_at: 2026-09-26T21:33:03.510863485Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 execution_mode: drain
 filed_at:
   code_sha: bfd3e867c051f0c0a1696dc6839b1b17c6b7c00b
