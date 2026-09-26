@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T10:49:57.059093421Z
-modified_at: 2026-09-26T10:53:41.382509577Z
+modified_at: 2026-09-26T10:54:21.080995693Z
 req_type: Bug
 comments:
 - id: 01a0dd56-6b2c-7181-b2be-ea825ad27ebe
@@ -16,6 +16,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved and queued. Windows-nightly follow-up from BUG-1646. BUG-1649 is a real user-facing bug on Windows.'
   created_at: 2026-09-26T10:50:23.404610693Z
   modified_at: 2026-09-26T10:50:23.404610693Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd5a-0b99-7f00-abbd-08756c205199
+  author: joe
+  content: 'Scope added from the BUG-1646 review: aida-core/src/workspace.rs:236 has the same pattern. Also route rule_violation.rs:356, auto_complete_telemetry.rs:103 and field_study.rs:91 through aida_home_dir().'
+  created_at: 2026-09-26T10:54:21.080995693Z
+  modified_at: 2026-09-26T10:54:21.080995693Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
