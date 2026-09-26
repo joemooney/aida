@@ -40,6 +40,8 @@ mod config_edit;
 mod context_prompt;
 mod coordination;
 mod criteria;
+// trace:STORY-1487 | ai:claude
+mod criteria_coverage;
 mod criteria_gate;
 mod criteria_red_run;
 mod db_cmd;
@@ -5673,11 +5675,29 @@ fn run() -> Result<()> {
                 &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
         }
-        Command::Criteria { spec, json } => {
+        Command::Criteria {
+            spec,
+            json,
+            window_days,
+        } => {
             let store = storage.load()?;
             let project_root = find_project_root()
                 .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
-            criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
+            // `coverage` / `gap` is the project-wide report, never a spec id.
+            // trace:STORY-1487 | ai:claude
+            match criteria_coverage::resolve_target(spec) {
+                criteria_coverage::CriteriaTarget::Coverage => {
+                    criteria_coverage::handle_criteria_coverage(
+                        &project_root,
+                        &store,
+                        *window_days,
+                        *json,
+                    )?;
+                }
+                criteria_coverage::CriteriaTarget::Spec(id) => {
+                    criteria::handle_criteria_command(&project_root, &store, &id, *json)?;
+                }
+            }
         }
         Command::Reconstitute {
             spec,
