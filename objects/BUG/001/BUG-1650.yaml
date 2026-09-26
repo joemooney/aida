@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T11:07:23.472847865Z
-modified_at: 2026-09-26T12:41:56.927084421Z
+modified_at: 2026-09-26T13:02:57.275898829Z
 req_type: Bug
 comments:
 - id: 01a0dd66-3bfd-7c20-9540-d625513f4b1d
@@ -22,6 +22,24 @@ comments:
   content: 'Scope added from the BUG-1649 strict review (orchestrator proxy): (a) remote_create.rs:143-164: the TOML path ignores a string ssh_port like "2222" that the old parser accepted, and the next save silently drops the port. Accept both int and string forms. The line fallback at :197 must strip single quotes too, and the stale doc comment at :134 needs updating. (b) mcp_translate.rs:168,181: quote the table name mcp_servers.<name> and the env keys (bare keys only when [A-Za-z0-9_-]+). (c) Add the three telemetry .jsonl files to the AIDA_HOME row in docs/environment-variables.md:197. (d) Move the misplaced trace comment at aida-core/src/lib.rs:144 onto pub mod toml_quote. Readers: parse with the toml crate first, then fall back to the line scan (covers multi-line and triple-quoted forms).'
   created_at: 2026-09-26T11:16:28.905277330Z
   modified_at: 2026-09-26T11:16:28.905277330Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ddcf-c8fb-7312-ad9f-92c2737ff78f
+  author: joe
+  content: |-
+    Review (fresh strict Opus reviewer): REQUEST CHANGES on 3073b195e5.
+    Verified: aida-core --lib (store_locate/toml_quote/mcp_translate/bug_1650/workspace) 35 pass; aida-cli-lib --lib (remote_create/bug_1649/bug_1650/project_capabilities/forge::/init_cmd/story_781/store_walkup/detect_store) 214 pass; aida-tui store_path 2 pass; check-portability and --check-allowlist-growth origin/main both rc=0; the new rule does fire on a probe with ' = \"{x}\"', ' = {x:?}' and '{k} = \"{}\"' (probe reverted). Old-vs-new reader diff over 26 config shapes: identical for all 3 real writer shapes (worktree head, sibling head, workspace member config), CRLF, BOM-before-[deployment], duplicate keys (invalid TOML, so the fallback keeps first-wins), and single-quoted Windows paths. toml_string on every enum token (forge provider, capabilities class/ci/forge_*, ci_config items, counter_scope 'global') is byte-identical. toml_key leaves [A-Za-z0-9_-] names unchanged, so Codex config for 'aida' and AIDA_AGENT_OUTPUT is unchanged.
+    Findings:
+    1 (MEDIUM, must fix) aida-core/src/store_locate.rs:333-351, the precedence is untested. Mutation: I inserted the any-table lookup ahead of [deployment]. All 14 store_locate tests and all 66 cli store_walkup/detect_store/bug_1650/init_cmd tests still PASS. Fix: add a test with store_path in [deployment] AND in another table on both sides (e.g. [aaa] before and [zzz] after), plus a top-level key before [deployment]. Assert that [deployment] wins, then top-level wins over other tables.
+    2 (MEDIUM, must fix or explicitly accept) This is a store-location regression for legacy Windows configs. Pre-BUG-1649 writers wrote store_path = "<raw>" unescaped, and the old reader returned the raw text. When every backslash in such a path starts a valid TOML escape (for example ..\team-store, D:\repos\new, ..\foo-store; \t \n \r \f \b are all valid), the file now parses as valid TOML and store_path_value returns TAB/NEWLINE characters. The store is then not found, and the walk-up continues to a PARENT config's store. (Paths with \U or \a still fail to parse and fall back correctly.) Fix: in the three resolvers (store_locate.rs:298, aida-tui store.rs:874, lib.rs detect_store_path), when the toml-derived path does not resolve, also try the legacy raw line-scan value before giving up. Expose it as, say, store_path_candidates(&str) -> Vec<String> [toml value, raw legacy value, deduped]. That also restores the old loop's behaviour of trying more than one candidate. Add a test for a raw "..\\team-store" body with that directory present.
+    3 (LOW) store_locate.rs:299 changes behaviour for an empty store_path = "". The old resolver joined "" and returned the project dir itself as the store (wrong, but local). The new one treats it as absent and keeps walking up, so it can adopt an enclosing project's store. The TUI already behaved this way, but the CLI did not. Either stop the walk at a config that has an empty or unresolvable store_path, or accept this with a test and a doc note.
+    4 (LOW) The any-table fallback (store_locate.rs:347-350) iterates toml::Table as a BTreeMap, so the order is ALPHABETICAL, not file order as in the old reader. It also now ignores [remote.x] and [[array]] store_path keys that the old reader honoured, and it newly honours dotted and inline forms (deployment.store_path, deployment = {...}). No writer emits any of these today. Prefer dropping the any-table fallback entirely, since every writer uses [deployment] and top-level covers the test fixtures. A store_path in an unrelated table is exactly the redirect the store must never follow. Otherwise document the order.
+    5 (LOW) remote_create.rs:211-217: an invalid string ssh_port ("22a", "70000") maps to None. It does not become 0, but it is still silently dropped on the next serialize_known_hosts save. Either warn on stderr when a present ssh_port cannot be parsed, or keep the raw value and write it back unchanged.
+    6 (NIT) doctor_cmd.rs:3102-3116: liveness/stage are diagnostic messages, not TOML writers. toml_string now renders an odd value as a literal ('a\b', 'q"x'), which changes user-facing text. A '// toml-ok:' opt-out would be more honest than a conversion.
+    7 (NIT) The toml-value-interpolation regex misses '= \"{a}/x\"', '= \"{a}{b}\"', '= '{x}'' and raw-string forms. These are acceptable coverage gaps, but note them in the allowlist comment.
+    8 (NIT) The line fallback in store_path_from_line (store_locate.rs:354) trims quotes asymmetrically (trim_matches '"' then '\''), so it has the same leniency as the old reader. That is fine; just noting it.
+    Tree left clean; no aida run against real stores.
+  created_at: 2026-09-26T13:02:57.275898829Z
+  modified_at: 2026-09-26T13:02:57.275898829Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
