@@ -455,12 +455,25 @@ CLOSURE-PENDING (+trigger); known flakes.
 EOF
 ```
 
-**Rotating out** (context ceiling or restart): dispatch nothing new; stop or let
+**The context ceiling is a soft limit.** Do not stop the loop because the
+conversation is getting long. Rely on the harness's automatic compaction; the
+handoff you refresh after every batch is what survives it, so a full context
+costs nothing the substrate does not already hold. After a compaction, re-read
+the handoff (`aida session handoff --seat orchestrator --show`), the open list
+and `aida ps`, then carry on with the next batch. If nobody is around, the open
+list keeps growing; a session that parks itself at an advisory ceiling stops
+all work until a human notices.
+
+**Rotating out** is reserved for two cases: the operator asks for it, or the
+session is genuinely broken (tools failing repeatedly, state you cannot
+reconcile with the substrate, a harness that will not compact). It hands off to
+a successor rather than stopping the loop: dispatch nothing new; stop or let
 finish every child session, background job and waiter until none is running;
-clear any standing goal; write the handoff **last**; then exit and stop every
-background task. Do not background the session: a backgrounded orchestrator
-keeps driving the loop. If a session was backgrounded anyway, find it in the
-harness's session list and stop it with the harness's stop command.
+clear any standing goal; write the handoff **last**; then ask the operator to
+start the successor, and exit this session while stopping every background
+task. Do not background the session: a backgrounded orchestrator keeps driving
+the loop. If a session was backgrounded anyway, find it in the harness's
+session list and stop it with the harness's stop command.
 
 **Taking over:** before acting on the handoff, check for a live predecessor
 (`aida ps`, plus the harness's own session list). If one is still running,
