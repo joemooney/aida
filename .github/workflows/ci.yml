@@ -98,7 +98,7 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap
+          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2

@@ -3,6 +3,9 @@ set -euo pipefail
 
 # trace:STORY-1028 | ai:codex
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# A missing rg must fail the check, not read as "no matches".
+# trace:BUG-1665 | ai:claude
+command -v rg >/dev/null 2>&1 || { echo "check-removed-flags: ripgrep (rg) is required but not installed" >&2; exit 2; }
 cd "$root"
 
 common_rg=(
