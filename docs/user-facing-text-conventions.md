@@ -90,11 +90,11 @@ Grep user-facing string sites for SPEC-ID patterns:
 
 ```bash
 # println/eprintln/format! output
-rg -nE '(per|see) (TASK|BUG|STORY|EPIC|SPIKE|FR)-[0-9]' aida-cli/src aida-tui/src
+rg -n '(per|see) (TASK|BUG|STORY|EPIC|SPIKE|FR)-[0-9]' aida-cli/src aida-tui/src
 
 # clap doc comments — any SPEC-ID at all (bare, trace:, or prose-embedded);
 # same criterion `doc_comment_is_provenance_leak` and its unit tests enforce
-rg -nE '^\s*///.*(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+' aida-cli-lib/src/cli.rs
+rg -n '^\s*///([^/]|$).*(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+' aida-cli-lib/src/cli.rs
 ```
 
 Any hit inside a `println!` / `eprintln!` / `format!` that reaches a
