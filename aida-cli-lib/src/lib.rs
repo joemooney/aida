@@ -35281,6 +35281,48 @@ fn resolve_session_branch(
     )
 }
 
+/// BUG-1628: the default worktree path of an ordinary pickup — a sibling of
+/// the project root named `<repo>-<slug>`. `session_start`, the `queue work
+/// --dry-run` preview, and the auto-complete phase-1 fallback all derive the
+/// path here, so they cannot drift apart again.
+// trace:BUG-1628 | ai:claude
+pub(crate) fn pickup_worktree_path(
+    project_root: &std::path::Path,
+    slug: &str,
+) -> Result<std::path::PathBuf> {
+    let repo_name = project_root
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("project");
+    Ok(project_root
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("project root has no parent"))?
+        .join(format!("{}-{}", repo_name, slug)))
+}
+
+/// BUG-1628: the branch + worktree an ordinary pickup (`aida queue work
+/// <spec>` with no `--branch`/`--path`) would create for `scope`. This is the
+/// single resolver; the auto-complete phase-1 fallback calls it instead of the
+/// epic-worktree defaults (`aida-<slug>` / `<id>-work`), which produced paths
+/// outside the project naming convention for IDs such as `SPEC-016`.
+// trace:BUG-1628 | ai:claude
+pub(crate) fn resolve_pickup_workspace(
+    project_root: &std::path::Path,
+    scope: &str,
+    branch_style: &str,
+) -> Result<(std::path::PathBuf, String)> {
+    let slug = slugify(scope);
+    if slug.is_empty() {
+        anyhow::bail!(
+            "scope `{}` slugifies to empty — pick something with letters/digits",
+            scope
+        );
+    }
+    let branch = resolve_session_branch(project_root, &slug, branch_style)?;
+    let path = pickup_worktree_path(project_root, &slug)?;
+    Ok((path, branch))
+}
+
 /// Best-effort PID of the shell that invoked `aida session start`. The
 /// `aida` shell wrapper is a function (not a forked process) so the
 /// binary's parent IS the user's interactive shell. Goes through sysinfo
@@ -35767,19 +35809,12 @@ fn session_start(
         (_, Some(b)) => b.to_string(),
         (None, None) => resolve_session_branch(&project_root, &slug, branch_style)?,
     };
-    let repo_name = project_root
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("project")
-        .to_string();
     // STORY-714: `mut` because the warm-pool flow reassigns this to an
     // acquired pool tree (../aida-pool-<slug>-N) in the default creation path.
+    // trace:BUG-1628 | ai:claude — the shared pickup resolver.
     let mut worktree_path = match explicit_path {
         Some(p) => std::path::PathBuf::from(p),
-        None => project_root
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("project root has no parent"))?
-            .join(format!("{}-{}", repo_name, slug)),
+        None => pickup_worktree_path(&project_root, &slug)?,
     };
     let reuse_existing_worktree_path = explicit_path.is_some()
         && force_claim
@@ -103958,6 +103993,101 @@ mod forge_seam_tests {
     }
 }
 
+/// BUG-1628: auto-complete phase 1 and ordinary pickup resolve the same
+/// branch + worktree for a custom-prefix requirement. Temp repos only.
+// trace:BUG-1628 | ai:claude
+#[cfg(test)]
+mod bug_1628_pickup_resolver_tests {
+    use super::*;
+
+    fn temp_project(name: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join(name);
+        std::fs::create_dir_all(&root).unwrap();
+        let status = std::process::Command::new("git")
+            .arg("init")
+            .arg("-q")
+            .arg(&root)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        (temp, root)
+    }
+
+    fn driver_for(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
+        RealPhaseDriver::new(
+            root.to_path_buf(),
+            spec.into(),
+            "test".into(),
+            None,
+            true,
+            None,
+            AutonomyMode::Default,
+            "test-token".into(),
+            false,
+            false,
+            false,
+            false,
+            auto_complete::LifecycleSkip::none(),
+            auto_complete::AutoCompleteVariant::ThroughCi,
+        )
+    }
+
+    #[test]
+    fn bug_1628_auto_complete_resolves_same_workspace_as_pickup_for_custom_prefix() {
+        let (temp, root) = temp_project("qci");
+        let driver = driver_for(&root, "SPEC-016");
+
+        let (auto_path, auto_branch) = auto_complete::PhaseDriver::implementer_workspace(&driver)
+            .expect("resolver succeeds")
+            .expect("a workspace is resolved");
+        // Ordinary pickup (`queue work` / `session_start`) resolver.
+        let (pickup_path, pickup_branch) =
+            resolve_pickup_workspace(&root, "SPEC-016", "auto").unwrap();
+
+        assert_eq!(auto_path, pickup_path.display().to_string());
+        assert_eq!(auto_branch, pickup_branch);
+        // Project slug kept, ID separator kept, no epic `-work` branch.
+        assert_eq!(pickup_path, temp.path().join("qci-spec-016"));
+        assert_eq!(pickup_branch, "spec-016");
+        assert!(!auto_path.contains("aida-spec016"), "{auto_path}");
+        assert!(!auto_branch.ends_with("-work"), "{auto_branch}");
+        assert!(crate::workflow_hints::branch_belongs_to_spec(
+            &auto_branch,
+            "SPEC-016"
+        ));
+    }
+
+    #[test]
+    fn bug_1628_pickup_resolver_skips_a_taken_branch_for_both_paths() {
+        let (_temp, root) = temp_project("qci");
+        let git = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])
+                .args(args)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?}");
+        };
+        git(&["commit", "-q", "--allow-empty", "-m", "init"]);
+        git(&["branch", "spec-016"]);
+
+        let driver = driver_for(&root, "SPEC-016");
+        let (_, auto_branch) = auto_complete::PhaseDriver::implementer_workspace(&driver)
+            .unwrap()
+            .unwrap();
+        let (_, pickup_branch) = resolve_pickup_workspace(&root, "SPEC-016", "auto").unwrap();
+        assert_eq!(auto_branch, pickup_branch);
+        assert_eq!(pickup_branch, "spec-016-2");
+        assert!(crate::workflow_hints::branch_belongs_to_spec(
+            &auto_branch,
+            "SPEC-016"
+        ));
+    }
+}
+
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
         self.phase_done_pr = self.pr_number;
@@ -103973,35 +104103,47 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     // The initial driver cwd is diagnostic until the phase lease is minted;
     // retries/resumes carry the exact selected worktree and branch here.
     // trace:BUG-1244 | ai:codex
-    fn implementer_workspace(&self) -> Option<(String, String)> {
+    // BUG-1628: with no retry pin and no live lease, fall back to the SAME
+    // resolver an ordinary pickup uses (`resolve_pickup_workspace`), not the
+    // epic-worktree defaults, which synthesized `~/ai/aida-<slug>` on a
+    // `<id>-work` branch outside the project naming convention.
+    // trace:BUG-1628 | ai:claude
+    fn implementer_workspace(&self) -> Result<Option<(String, String)>, String> {
         match (
             &self.retry_implementer_worktree,
             &self.retry_implementer_branch,
         ) {
             (Some(worktree), Some(branch)) => {
-                Some((worktree.display().to_string(), branch.clone()))
+                Ok(Some((worktree.display().to_string(), branch.clone())))
             }
-            _ => list_leases(&self.project_root)
-                .into_iter()
-                .filter(|lease| lease.scope.eq_ignore_ascii_case(&self.spec))
-                .max_by_key(|lease| lease.started_at)
-                .map(|lease| {
-                    (
+            _ => {
+                if let Some(lease) = list_leases(&self.project_root)
+                    .into_iter()
+                    .filter(|lease| lease.scope.eq_ignore_ascii_case(&self.spec))
+                    .max_by_key(|lease| lease.started_at)
+                {
+                    return Ok(Some((
                         lease.worktree_path.display().to_string(),
                         lease.branch.clone(),
-                    )
-                })
-                .or_else(|| {
-                    dirs::home_dir().map(|home| {
-                        (
-                            crate::worktree::default_worktree_path(&home, &self.spec)
-                                .display()
-                                .to_string(),
-                            crate::worktree::default_branch(&self.spec),
-                        )
-                    })
-                }),
+                    )));
+                }
+                resolve_pickup_workspace(&self.project_root, &self.spec, "auto")
+                    .map(|(path, branch)| Some((path.display().to_string(), branch)))
+                    .map_err(|err| format!("{err:#}"))
+            }
         }
+    }
+
+    // trace:BUG-1628 | ai:claude
+    fn known_spec_prefixes(&self) -> Vec<String> {
+        // Read-only and rooted at the driven project: never the legacy
+        // cwd/env store lookup. A missing store degrades to built-ins plus
+        // the target's own prefix.
+        detect_distributed_store_from(&self.project_root)
+            .and_then(|store_path| aida_core::GitBackend::new(&store_path).ok())
+            .and_then(|backend| aida_core::DatabaseBackend::load(&backend).ok())
+            .map(|store| crate::workflow_hints::configured_spec_prefixes(&store))
+            .unwrap_or_default()
     }
     /// BUG-770: the real driver already knows the project it is driving, so it
     /// hands the orchestrator that root rather than letting the escalation
@@ -104241,7 +104383,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             .unwrap_or(false);
         // BUG-1244: pin even the first attempt to the selected spec workspace.
         // Leaving these unset let queue-work inherit a sibling's live cwd/lease.
-        let intended_workspace = self.implementer_workspace();
+        // BUG-1628: orchestrate already refused a resolver failure; here only
+        // a resolved workspace pins the child. trace:BUG-1628 | ai:claude
+        let intended_workspace = self.implementer_workspace().ok().flatten();
         let intended_path = intended_workspace
             .as_ref()
             .map(|(path, _)| std::path::Path::new(path));
