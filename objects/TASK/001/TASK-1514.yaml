@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:26.874770461Z
-modified_at: 2026-09-26T18:52:12.598858191Z
+modified_at: 2026-09-26T18:52:13.971352371Z
 req_type: Task
 tags:
 - cache
@@ -38,6 +38,12 @@ comments:
   created_at: 2026-09-26T09:53:41.629319017Z
   modified_at: 2026-09-26T09:53:41.629319017Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0df0f-8f13-77c0-8c61-a47102dbb1bf
+  author: joe
+  content: 'Per the STORY-1484 advisor signoff: now blocked by TASK-1526 (slice B) instead of STORY-1484, and must add the acceptance that MCP read tools carry the stale label once they use the read-tolerant path.'
+  created_at: 2026-09-26T18:52:13.971352371Z
+  modified_at: 2026-09-26T18:52:13.971352371Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
   branch: claude/spike-90
