@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T20:31:17.082914486Z
-modified_at: 2026-09-26T06:27:05.860001554Z
+modified_at: 2026-09-26T06:59:44.670307121Z
 req_type: Bug
 tags:
 - batch:groom-2026-09-25
@@ -55,6 +55,25 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): drain-ready. Mode drive (orchestrator lease/handoff path, high severity). Acceptance already sharp. BUG-1638 is serialized behind it (both touch phase-1 lease/status restore). Watch for overlap with in-flight BUG-1628 (auto-complete).'
   created_at: 2026-09-26T05:28:49.751649993Z
   modified_at: 2026-09-26T05:28:49.751649993Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc83-419e-7380-8d81-83eba109bb3f
+  author: joe
+  content: |-
+    Strict review: REQUEST CHANGES — d931b9904b. Mostly sound; one blocking test gap on the anti-steal guard, plus hardening.
+
+    VERIFIED OK: tests pass for bug_1629 (12), auto_complete (277), real_phase_driver (50), queue (498), workflow_hints (48). Mutations: reinstating the .ok().flatten() re-resolve makes 3 tests fail (resolver_failure_never_launches, launch_uses_the_pinned_workspace, fresh_branch_created_after_resolution). Allowing a 2nd replacement (retries_used < 2) makes 3 tests fail (lost_lease_and_receipt_retries_once gets 3 launches). The replacement cannot run twice: the counter lives on the driver and is never reset, so recursion is bounded. Cleanup is keyed only to the lost session: release_empty_launch_lease finds the lease by that session's uuid, and the receipt path is by that uuid. The retry pin winning over the phase-1 pin is correct: orchestrate's check calls implementer_workspace(), which returns the retry pin first, so the checked value equals the launched value. No floor bypass or false credit: the final failure is LaunchRefused, which shelves with no PR recovery, same as BUG-1524. --force-claim does not bypass the drain execution-mode or release-operator floors, and queue work never reaps a live same-scope lease. read_metadata_only is truly read-only: no create_dir_all, missing metadata gives the default. The test covers a missing store with no objects/. The tests use tempdirs and a stub aida only.
+
+    BLOCKING:
+    1. lib.rs:102566-102571 (recover_lost_child_state): the 'unleased' condition that decides whether to pass --force-claim has no test. Mutation: replacing the !leases.iter().any(...) check with true leaves all bug_1629 and real_phase_driver tests green. Add two stub tests: (a) the pinned worktree exists on the pinned branch with no lease, so the replacement argv contains --force-claim; (b) the same worktree is held by another session's lease, so there is no --force-claim.
+    2. lib.rs:102571: lease.worktree_path == pin.worktree is a raw PathBuf compare. Lease paths are canonicalized at write time (lib.rs:36669-36671), but the pin comes from pickup_worktree_path(project_root) and is not. With a non-canonical project root (symlinked checkout, macOS /var), a leased worktree reads as unleased and gets --force-claim. queue work then reuses an existing registered worktree (reuse_existing_worktree_path) and only refuses a same-scope live lease. Canonicalize both sides.
+
+    SHOULD-FIX (non-blocking):
+    3. lib.rs:102580: the replacement is only an eprintln, silenced under --json. No SpecRetried event or ledger record, unlike record_transient_retry at ~107597. A replacement that succeeds leaves no trace that the child lost its state. The acceptance asks for an emitted retry/recovery state.
+    4. lib.rs:102556: when the child refused at preflight (Draft, Done, Blocked, and so on), the final reason says the replacement 'lost its state the same way' and hides the real refusal, which only appears in child stderr. Surface or point to the child's refusal.
+    5. auto_complete.rs:7630 bug_1629_lost_child_state_is_not_retried_again_or_credited duplicates the BUG-1524 LaunchRefused shelve test (~9845) and passes without this change. It is not new coverage.
+    6. Note: the replacement launch can still spend the separate BUG-826 zero-byte-log budget, so total launches can exceed 2. That is bounded and intended, but the docs should say so.
+  created_at: 2026-09-26T06:59:44.670307121Z
+  modified_at: 2026-09-26T06:59:44.670307121Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
