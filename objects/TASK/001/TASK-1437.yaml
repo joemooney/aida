@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T16:06:55.248003750Z
-modified_at: 2026-09-26T18:23:16.101867573Z
+modified_at: 2026-09-26T18:23:18.904051081Z
 req_type: Task
 tags:
 - epic-72
@@ -44,6 +44,12 @@ comments:
   created_at: 2026-09-26T05:29:33.689810719Z
   modified_at: 2026-09-26T05:29:33.689810719Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0def5-1578-7120-9cae-b911bd0dcb1b
+  author: joe
+  content: 'OPERATOR DECISION (Joe, 2026-09-26, ''accept all'' on the orchestrator''s groom recommendations): rejected: no agent can supply real human participants; the tooling has shipped and the benchmark is optional.'
+  created_at: 2026-09-26T18:23:18.904051081Z
+  modified_at: 2026-09-26T18:23:18.904051081Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0def5-0a85-77f3-bd4b-8f2fb890520d
   author: joe
