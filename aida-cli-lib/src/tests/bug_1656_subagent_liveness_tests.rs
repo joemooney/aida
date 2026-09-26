@@ -445,3 +445,133 @@ fn bug_1656_adoption_stamps_harness_pid_and_keeps_unknown_keys() {
     let again = adopt_spec_lease_for_subagent(root, &wt, Some(pid));
     assert_eq!(again, None);
 }
+
+// --- porcelain parsing and the recency filter -----------------------------------
+
+/// A committed single-file repo for the porcelain probes.
+fn one_file_repo() -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.email", "t@example.invalid"]);
+    git(&["config", "user.name", "t"]);
+    git(&["config", "commit.gpgsign", "false"]);
+    std::fs::write(root.join("a.txt"), "one\n").unwrap();
+    git(&["add", "a.txt"]);
+    git(&["commit", "-qm", "init"]);
+    tmp
+}
+
+/// Regression: a single unstaged ` M` edit is the FIRST (and only) porcelain
+/// record, whose leading space a trimmed read used to strip — cutting the
+/// path to `.txt` so the recency check never fired.
+#[test]
+fn bug_1656_single_unstaged_modify_is_recent_movement() {
+    let tmp = one_file_repo();
+    let root = tmp.path();
+    std::fs::write(root.join("a.txt"), "two\n").unwrap();
+    assert_eq!(
+        crate::dispatch_health_ps::dirty_paths(root),
+        vec![root.join("a.txt")]
+    );
+    let probe = crate::dispatch_health_ps::probe_worktree(root);
+    assert!(probe.dirty);
+    assert!(
+        probe.dirty_newest_mtime_age_secs.is_some_and(|a| a < 60),
+        "{:?}",
+        probe.dirty_newest_mtime_age_secs
+    );
+    assert!(dirty_movement_is_fresh(
+        probe.dirty_newest_mtime_age_secs,
+        DEFAULT_DIRTY_MOVEMENT_FRESH_SECS
+    ));
+}
+
+/// A single unstaged ` D` delete: the path parses intact, but a gone file has
+/// no mtime, so it is dirty yet never "recent" — the crashed-session
+/// salvage verdict is kept.
+#[test]
+fn bug_1656_single_unstaged_delete_is_dirty_but_not_recent() {
+    let tmp = one_file_repo();
+    let root = tmp.path();
+    std::fs::remove_file(root.join("a.txt")).unwrap();
+    assert_eq!(
+        crate::dispatch_health_ps::dirty_paths(root),
+        vec![root.join("a.txt")]
+    );
+    let probe = crate::dispatch_health_ps::probe_worktree(root);
+    assert!(probe.dirty);
+    assert_eq!(probe.dirty_newest_mtime_age_secs, None);
+}
+
+#[test]
+fn bug_1656_parse_porcelain_z_handles_leading_space_and_renames() {
+    use crate::dispatch_health_ps::parse_porcelain_z;
+    let out = " M a.txt\0R  new name.rs\0old name.rs\0?? dir/u.txt\0 D gone.rs\0";
+    assert_eq!(
+        parse_porcelain_z(out),
+        vec![
+            (" M".to_string(), "a.txt".to_string()),
+            ("R ".to_string(), "new name.rs".to_string()),
+            ("??".to_string(), "dir/u.txt".to_string()),
+            (" D".to_string(), "gone.rs".to_string()),
+        ]
+    );
+    assert!(parse_porcelain_z("").is_empty());
+}
+
+#[test]
+fn bug_1656_swap_and_hidden_untracked_files_do_not_count_as_movement() {
+    use crate::dispatch_health_ps::counts_toward_recent_movement as counts;
+    // Tracked changes always count, whatever their name.
+    assert!(counts(" M", "src/lib.rs"));
+    assert!(counts("M ", ".github/ci.yml"));
+    assert!(counts("R ", "b.rs"));
+    // Ordinary untracked files count.
+    assert!(counts("??", "src/new.rs"));
+    // Editor swap / backup / lock names never count.
+    assert!(!counts("??", "src/.lib.rs.swp"));
+    assert!(!counts("??", "src/lib.rs~"));
+    assert!(!counts("??", "src/.#lib.rs"));
+    // Anything under a hidden directory, or a hidden file, never counts.
+    assert!(!counts("??", ".codegraph/index.db"));
+    assert!(!counts("??", "sub/.cache/x"));
+    assert!(!counts("??", ".envrc"));
+    // Ignored never counts.
+    assert!(!counts("!!", "target/x"));
+}
+
+#[test]
+fn bug_1656_untracked_swap_file_alone_is_not_recent_movement() {
+    let tmp = one_file_repo();
+    let root = tmp.path();
+    std::fs::write(root.join(".a.txt.swp"), "swap").unwrap();
+    std::fs::create_dir_all(root.join(".codegraph")).unwrap();
+    std::fs::write(root.join(".codegraph").join("idx"), "x").unwrap();
+    let probe = crate::dispatch_health_ps::probe_worktree(root);
+    assert!(probe.dirty, "untracked files still make the tree dirty");
+    assert_eq!(probe.dirty_newest_mtime_age_secs, None);
+}
+
+#[test]
+fn bug_1656_future_mtime_is_unknown_not_recent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let f = tmp.path().join("future.rs");
+    std::fs::write(&f, "x").unwrap();
+    // "now" an hour before the file was written: its mtime is in the future.
+    let past_now = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    assert_eq!(newest_mtime_age_secs(&[f], past_now), None);
+}

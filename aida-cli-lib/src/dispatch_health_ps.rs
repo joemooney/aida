@@ -267,29 +267,86 @@ pub(crate) fn dirty_movement_is_fresh(newest_age_secs: Option<u64>, fresh_secs: 
     newest_age_secs.is_some_and(|age| age < fresh_secs)
 }
 
-/// BUG-1656: the paths `git status --porcelain` reports as changed or
-/// untracked, relative to `worktree`. Renames yield the destination path.
-/// Empty when the probe fails.
+/// BUG-1656: the paths `git status --porcelain -z` reports as changed or
+/// untracked, relative to `worktree`, that count toward "the tree is still
+/// changing". Renames and copies yield the destination path. Empty when the
+/// probe fails.
+///
+/// The output is read raw (never trimmed) and NUL-separated: trimming strips
+/// the leading space of an unstaged ` M` / ` D` record and shifts every
+/// column, which silently cut the first character off the path.
 // trace:BUG-1656 | ai:claude
 pub(crate) fn dirty_paths(worktree: &Path) -> Vec<std::path::PathBuf> {
-    let Some(out) = git_stdout(
-        worktree,
-        &["status", "--porcelain", "--untracked-files=all"],
-    ) else {
+    let Ok(out) = Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["status", "--porcelain", "-z", "--untracked-files=all"])
+        .output()
+    else {
         return Vec::new();
     };
-    out.lines()
-        .filter(|l| l.len() > 3)
-        .map(|l| {
-            let rest = &l[3..];
-            let path = rest.rsplit(" -> ").next().unwrap_or(rest);
-            worktree.join(path.trim_matches('"'))
-        })
+    if !out.status.success() {
+        return Vec::new();
+    }
+    parse_porcelain_z(&String::from_utf8_lossy(&out.stdout))
+        .into_iter()
+        .filter(|(xy, path)| counts_toward_recent_movement(xy, path))
+        .map(|(_, path)| worktree.join(path))
         .collect()
 }
 
+/// BUG-1656: parse `git status --porcelain -z` into `(XY, path)` records.
+/// Each record is `XY<space>path\0`; a rename or copy (`R` / `C` in either
+/// status column) is followed by one extra `\0`-terminated field holding the
+/// ORIGINAL path, which is consumed and dropped — the first path is the
+/// destination, the file that exists now.
+// trace:BUG-1656 | ai:claude
+pub(crate) fn parse_porcelain_z(out: &str) -> Vec<(String, String)> {
+    let mut records = Vec::new();
+    let mut fields = out.split('\0');
+    while let Some(field) = fields.next() {
+        if field.len() < 4 || !field.is_char_boundary(2) || !field.is_char_boundary(3) {
+            continue;
+        }
+        let xy = &field[..2];
+        let path = &field[3..];
+        if xy.contains('R') || xy.contains('C') {
+            let _original = fields.next();
+        }
+        records.push((xy.to_string(), path.to_string()));
+    }
+    records
+}
+
+/// BUG-1656: does this porcelain record count toward "recent movement"?
+// The exact rule: every TRACKED change (any XY other than `??` untracked and
+// `!!` ignored) counts; an UNTRACKED file (`??`) counts only when no path
+// component is hidden (starts with `.`) and its file name is not editor
+// swap/backup/lock style (`.*.swp`, `*~`, `.#*`). Ignored files never count.
+// So an editor swap file or an unignored tool directory (`.codegraph/`, ...)
+// cannot keep an abandoned worktree looking active forever.
+// trace:BUG-1656 | ai:claude
+pub(crate) fn counts_toward_recent_movement(xy: &str, path: &str) -> bool {
+    match xy {
+        "!!" => false,
+        "??" => {
+            let path = path.trim_end_matches('/');
+            let hidden = path.split('/').any(|c| c.starts_with('.'));
+            let name = path.rsplit('/').next().unwrap_or(path);
+            let swap = (name.starts_with('.') && name.ends_with(".swp"))
+                || name.ends_with('~')
+                || name.starts_with(".#");
+            !hidden && !swap
+        }
+        _ => true,
+    }
+}
+
 /// BUG-1656: age in seconds of the newest file among `paths`, relative to
-/// `now`. Deleted paths (dirty because they are gone) are skipped.
+/// `now`. Deleted paths (dirty because they are gone) are skipped, and so is
+/// a modification time in the FUTURE (clock skew, a restored archive): it is
+/// unknown, never "recent" — a future stamp would otherwise read as age 0
+/// and keep the tree looking active indefinitely.
 // trace:BUG-1656 | ai:claude
 pub(crate) fn newest_mtime_age_secs(
     paths: &[std::path::PathBuf],
@@ -298,7 +355,7 @@ pub(crate) fn newest_mtime_age_secs(
     paths
         .iter()
         .filter_map(|p| std::fs::metadata(p).ok()?.modified().ok())
-        .map(|m| now.duration_since(m).map(|d| d.as_secs()).unwrap_or(0))
+        .filter_map(|m| now.duration_since(m).ok().map(|d| d.as_secs()))
         .min()
 }
 
