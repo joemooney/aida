@@ -1,0 +1,20 @@
+id: 01a0dfcb-874b-78a2-996e-09bcc1423085
+spec_id: TASK-1539
+agreed_id: TASK-1539
+title: 'Slice 2b: extract aida-cli-base (LAYER-0, cli.rs first), keep only if measured faster (STORY-1488 T3)'
+description: 'Per the ADVISOR SIGNOFF on STORY-1488: publishable crate listed in scripts/publish.sh, cross-crate items pub + doc(hidden); keep only if both the lib.rs-edit rebuild and the unit-test --no-run beat post-slice-1 by more than the 3-run spread.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T22:17:32.747189591Z
+modified_at: 2026-09-26T22:17:32.747189591Z
+req_type: Task
+filed_at:
+  code_sha: b9a986e9fbe3912a0415963c8344ddca4830b700
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
