@@ -44,9 +44,14 @@ use crate::history::{self, CommitMeta, Event, EventKind, HistoryOpts};
 /// fork point included) replaces `merge_ties`.
 /// v5: `merge_paths` is gone. The `--id` walk uses `--full-history`, so it
 /// no longer simplifies merged side branches away and needs no routing.
+/// v6: `events.is_ship` means "a transition into Completed from any other
+/// status" (BUG-1636), not only `Done → Completed`. `--shipped` narrows on
+/// that column in SQL before the Rust re-check, so a v5 file would silently
+/// drop every `InProgress → Completed` ship; the new file name retires it.
 // trace:TASK-1507 | ai:claude
 // trace:BUG-1620 | ai:claude
-pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 5;
+// trace:BUG-1636 | ai:claude
+pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 6;
 
 /// Bump whenever `decode_into_events`, `diff_modified` or `EventKind`
 /// changes meaning or serialized shape. A bump gives the index a new file
@@ -1638,6 +1643,10 @@ impl HistoryCache {
                    AND (?4 IS NULL OR e.commit_ts <= ?4)
                    AND (?5 IS NULL OR e.path = ?5)",
             );
+            // `is_ship` is written from `history::is_ship_event`, the same
+            // predicate the Rust re-check uses, so this narrowing and the
+            // git walk agree on `--shipped` (BUG-1636).
+            // trace:BUG-1636 | ai:claude
             if opts.shipped_only {
                 sql.push_str(" AND e.is_ship = 1");
             }
