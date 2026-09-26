@@ -2423,7 +2423,10 @@ enabled = true
 # The routing job keys on CronJobFailed, which the tick emits when a SUBSTRATE
 # job exits non-zero. That is the chain end to end: --fail-on-findings makes
 # the check exit non-zero, the non-zero exit emits CronJobFailed, and the seat
-# job turns that event into a due item in `aida awaiting`. The substrate run is
+# job turns that event into a due item in `aida awaiting`. The route binds to
+# its own guard with `on = ["CronJobFailed:<guard-job>"]`: a bare
+# "CronJobFailed" matches EVERY substrate job's failure, so one guard's trip
+# would wake every route with that one guard's evidence. The substrate run is
 # ledgered at schedule/<job>.yaml independently, so a trip is BOTH durable and
 # noticed — either alone reproduces some version of the defect this closes.
 #
@@ -2439,7 +2442,7 @@ enabled = true
 # [[schedule.jobs]]
 # name = "performance-guard-route"
 # seats = ["advisor"]
-# on = ["CronJobFailed"]
+# on = ["CronJobFailed:performance-guard"]
 # prompt = "A performance budget was breached. Use the routed trip evidence and its matching entry at .aida-store/schedule/performance-guard.yaml to confirm the budget in force, then decide: real regression, or a budget that needs changing deliberately."
 # enabled = false
 
@@ -2512,7 +2515,7 @@ enabled = true
 # [[schedule.jobs]]
 # name = "hub-drift-guard-route"
 # seats = ["advisor"]
-# on = ["CronJobFailed"]
+# on = ["CronJobFailed:hub-drift-guard"]
 # prompt = "A tracked branch (main or aida-store) differs across hubs. Use the routed trip evidence and `aida remote status` to reconcile — never force-push a shared branch."
 # enabled = false
 #
@@ -2525,7 +2528,7 @@ enabled = true
 # [[schedule.jobs]]
 # name = "stranded-branches-guard-route"
 # seats = ["advisor"]
-# on = ["CronJobFailed"]
+# on = ["CronJobFailed:stranded-branches-guard"]
 # prompt = "One or more remote branches carry commits with no open PR. Review each: open a PR, or delete by hand — never auto-delete a Keep-flagged branch."
 # enabled = false
 #
@@ -2541,7 +2544,7 @@ enabled = true
 # [[schedule.jobs]]
 # name = "disk-headroom-guard-route"
 # seats = ["advisor"]
-# on = ["CronJobFailed"]
+# on = ["CronJobFailed:disk-headroom-guard"]
 # prompt = "Free disk space dropped below the configured floor. Reclaim space (stale worktrees via `aida session reap`, `cargo clean`) or raise [doctor.disk_headroom] min_free_gib deliberately."
 # enabled = false
 #
@@ -2569,7 +2572,7 @@ enabled = true
 # [[schedule.jobs]]
 # name = "watchdog-route"
 # seats = ["advisor"]
-# on = ["CronJobFailed"]
+# on = ["CronJobFailed:watchdog"]
 # prompt = "A seat tripped the runaway-seat watchdog. Use the routed trip evidence (session, rule, measured value, threshold) to stop the tick or loop that is waking it, or hand off and restart a seat past its context ceiling. Never answer by adding another poll."
 # enabled = false
 #
