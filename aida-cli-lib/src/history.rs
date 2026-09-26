@@ -466,10 +466,18 @@ pub struct EventRecords {
 }
 
 /// The dim footer a human sees when the fast path could not answer and the
-/// slower full read did. `None` when the index answered, or when it was
-/// switched off on purpose (then the slow read is expected, not news).
+/// slower full read did. `None` when the index answered, when it was
+/// switched off on purpose (then the slow read is expected, not news), or
+/// for agent/piped output (`agent_mode`), which stays script-clean like the
+/// other `(...)` hints; MCP reports `source` instead.
 // trace:TASK-1508 | ai:claude
-pub(crate) fn fallback_footer_text(source: &HistorySource) -> Option<&'static str> {
+pub(crate) fn fallback_footer_text(
+    source: &HistorySource,
+    agent_mode: bool,
+) -> Option<&'static str> {
+    if agent_mode {
+        return None;
+    }
     match source {
         HistorySource::GitWalk { fallback: true } => Some(
             "(answered from the full change history, not the faster saved copy — this can take longer)",
@@ -478,14 +486,10 @@ pub(crate) fn fallback_footer_text(source: &HistorySource) -> Option<&'static st
     }
 }
 
-/// Print [`fallback_footer_text`] on stderr for a human terminal only;
-/// agent/piped output stays script-clean like the other `(...)` hints.
+/// Print [`fallback_footer_text`] on stderr (human terminal only).
 // trace:TASK-1508 | ai:claude
 fn print_fallback_footer(source: &HistorySource) {
-    if crate::agent_output_mode() {
-        return;
-    }
-    if let Some(msg) = fallback_footer_text(source) {
+    if let Some(msg) = fallback_footer_text(source, crate::agent_output_mode()) {
         eprintln!("{}", msg.dimmed());
     }
 }

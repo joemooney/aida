@@ -8963,9 +8963,18 @@ fn doctor_scrub_collisions() -> Result<()> {
 }
 
 /// The one-line history index freshness summary `aida doctor fsck` prints
-/// under cache freshness. Pure, so the wording is testable.
+/// under cache freshness. Pure, so the wording is testable. `enabled` is
+/// whether `AIDA_HISTORY_CACHE` leaves the index switched on.
 // trace:TASK-1508 | ai:claude
-pub(crate) fn history_index_doctor_line(st: &crate::history_cache::HistoryCacheStatus) -> String {
+pub(crate) fn history_index_doctor_line(
+    st: &crate::history_cache::HistoryCacheStatus,
+    enabled: bool,
+) -> String {
+    if !enabled {
+        return "history index switched off (AIDA_HISTORY_CACHE=0) — `aida history` reads \
+                git directly and does not build or update it."
+            .to_string();
+    }
     let running = if st.indexer_running {
         " (indexing now)"
     } else {
@@ -9146,7 +9155,12 @@ fn doctor_fsck() -> Result<()> {
         println!(
             "  {} {}",
             "·".dimmed(),
-            history_index_doctor_line(&crate::history_cache::status(&store_path))
+            history_index_doctor_line(
+                &crate::history_cache::status(&store_path),
+                crate::history_cache::cache_enabled_from(
+                    std::env::var("AIDA_HISTORY_CACHE").ok().as_deref()
+                ),
+            )
         );
     }
     println!();

@@ -55,6 +55,11 @@ fn store_with_history(tmp: &Path) -> PathBuf {
     store
 }
 
+/// The doctor line with the index switched on (the default).
+fn history_index_doctor_line_on(st: &HistoryCacheStatus) -> String {
+    history_index_doctor_line(st, true)
+}
+
 fn opts() -> HistoryOpts {
     HistoryOpts {
         limit: 50,
@@ -106,7 +111,7 @@ fn task_1508_index_answer_reports_source_and_tip() {
     );
     assert_eq!(served.source.as_str(), "history-cache");
     assert_eq!(served.source.index_tip(), Some(head.as_str()));
-    assert_eq!(fallback_footer_text(&served.source), None);
+    assert_eq!(fallback_footer_text(&served.source, false), None);
 
     // Same events either way: provenance is additive, never a new answer.
     let walked = collect_event_records(&store, &opts()).unwrap();
@@ -128,7 +133,7 @@ fn task_1508_switched_off_index_is_a_walk_without_footer() {
     assert_eq!(rec.source.as_str(), "git-walk");
     assert_eq!(rec.source.index_tip(), None);
     assert_eq!(
-        fallback_footer_text(&rec.source),
+        fallback_footer_text(&rec.source, false),
         None,
         "switching the index off on purpose is not news to the user"
     );
@@ -152,7 +157,12 @@ fn task_1508_unusable_index_falls_back_with_footer() {
     assert_eq!(rec.source.index_tip(), None);
     assert!(!rec.events.is_empty(), "the walk still answers");
 
-    let footer = fallback_footer_text(&rec.source).expect("a fallback owes a footer");
+    let footer = fallback_footer_text(&rec.source, false).expect("a fallback owes a footer");
+    assert_eq!(
+        fallback_footer_text(&rec.source, true),
+        None,
+        "agent/piped output never gets the footer; MCP reports `source` instead"
+    );
     // Worded for users: no internal nouns.
     for internal in ["index", "cache", "git", "walk", "sqlite", "history.db"] {
         assert!(
@@ -175,7 +185,7 @@ fn task_1508_doctor_line_states() {
         ..Default::default()
     };
 
-    let missing = history_index_doctor_line(&HistoryCacheStatus {
+    let missing = history_index_doctor_line_on(&HistoryCacheStatus {
         exists: false,
         ..Default::default()
     });
@@ -185,7 +195,7 @@ fn task_1508_doctor_line_states() {
         "{missing}"
     );
 
-    let unreadable = history_index_doctor_line(&HistoryCacheStatus {
+    let unreadable = history_index_doctor_line_on(&HistoryCacheStatus {
         error: Some("file is not a database".into()),
         ..base.clone()
     });
@@ -195,12 +205,12 @@ fn task_1508_doctor_line_states() {
         "{unreadable}"
     );
 
-    let fresh = history_index_doctor_line(&base.clone());
+    let fresh = history_index_doctor_line_on(&base.clone());
     assert!(fresh.contains("up to date"), "{fresh}");
     assert!(fresh.contains("7 event(s)"), "{fresh}");
     assert!(fresh.contains("whole store history"), "{fresh}");
 
-    let filling = history_index_doctor_line(&HistoryCacheStatus {
+    let filling = history_index_doctor_line_on(&HistoryCacheStatus {
         complete: false,
         floor_commit_at: Some("2026-09-20T10:00:00Z".into()),
         ..base.clone()
@@ -212,7 +222,7 @@ fn task_1508_doctor_line_states() {
     );
     assert!(filling.contains("still filling"), "{filling}");
 
-    let behind = history_index_doctor_line(&HistoryCacheStatus {
+    let behind = history_index_doctor_line_on(&HistoryCacheStatus {
         head: Some("def".into()),
         indexer_running: true,
         ..base.clone()
@@ -231,12 +241,12 @@ fn task_1508_doctor_line_reads_a_real_index() {
         .join(history_cache::history_db_file_name());
     std::fs::create_dir_all(db.parent().unwrap()).unwrap();
 
-    let before = history_index_doctor_line(&history_cache::status_at(&store, &db));
+    let before = history_index_doctor_line_on(&history_cache::status_at(&store, &db));
     assert!(before.contains("not built yet"), "{before}");
     assert!(!db.exists(), "the doctor line never creates the index");
 
     history_cache::rebuild_full_at(&store, &db).unwrap();
-    let fresh = history_index_doctor_line(&history_cache::status_at(&store, &db));
+    let fresh = history_index_doctor_line_on(&history_cache::status_at(&store, &db));
     assert!(fresh.contains("up to date"), "{fresh}");
     assert!(fresh.contains("whole store history"), "{fresh}");
 
@@ -247,6 +257,39 @@ fn task_1508_doctor_line_reads_a_real_index() {
     )
     .unwrap();
     git(&store, &["commit", "-qam", "retitle"]);
-    let behind = history_index_doctor_line(&history_cache::status_at(&store, &db));
+    let behind = history_index_doctor_line_on(&history_cache::status_at(&store, &db));
     assert!(behind.contains("behind the store"), "{behind}");
+}
+
+#[test]
+fn task_1508_footer_is_off_for_agent_output_in_every_source() {
+    let sources = [
+        HistorySource::GitWalk { fallback: true },
+        HistorySource::GitWalk { fallback: false },
+        HistorySource::Index { tip: "abc".into() },
+    ];
+    for src in &sources {
+        assert_eq!(fallback_footer_text(src, true), None, "{src:?}");
+    }
+    assert!(fallback_footer_text(&sources[0], false).is_some());
+}
+
+#[test]
+fn task_1508_doctor_line_switched_off() {
+    let built = HistoryCacheStatus {
+        exists: true,
+        tip: Some("abc".into()),
+        head: Some("abc".into()),
+        complete: true,
+        ..Default::default()
+    };
+    for st in [HistoryCacheStatus::default(), built] {
+        let line = history_index_doctor_line(&st, false);
+        assert!(line.contains("switched off"), "{line}");
+        assert!(line.contains("AIDA_HISTORY_CACHE=0"), "{line}");
+        assert!(
+            !line.contains("builds it as it goes") && !line.contains("up to date"),
+            "{line}"
+        );
+    }
 }
