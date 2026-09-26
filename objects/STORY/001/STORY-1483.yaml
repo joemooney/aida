@@ -1,0 +1,35 @@
+id: 01a0db6c-a0d3-7141-b2ed-ed0bc919c4e9
+spec_id: STORY-1483
+agreed_id: STORY-1483
+title: Lane sync with main, drift warning, and aida lane land (one reviewed lane→main PR)
+description: |
+  Keep the lane close to main, and land it as one reviewed unit.
+
+  - `aida lane sync [EPIC-N]` brings main into the lane branch. The default is a merge, which is safe for a shared branch; `--rebase` is available when the lane is single-user. Conflicts stop the command with guidance, and nothing is auto-resolved.
+  - A drift signal: `aida status` in the lane, and `aida lane list`, show commits-behind-main. A warning appears above a configurable threshold (`[lane] drift_warn_commits`, with a sensible default).
+  - `aida lane land EPIC-N` opens a single lane→main PR. It goes through normal advisor review and CI, and cannot be self-merged by the implementer. When that PR merges, every Done-in-lane spec is promoted to Completed and the lane is closed. The lane branch is deleted only after the merge is verified.
+
+  ## Acceptance
+  - `lane sync` merges main into the lane, and tests cover both the clean case and the conflict case.
+  - Lane drift above the threshold shows a warning on `aida status` inside the lane.
+  - `lane land` opens the PR against main. Its merge flips all of the lane's Done specs to Completed and removes the lane record; a test covers this promotion.
+  - If the land PR is closed without merging, the lane stays open and its specs stay Done-in-lane.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T01:55:24.499361019Z
+modified_at: 2026-09-26T01:55:24.499361019Z
+req_type: Story
+tags:
+- lanes
+- orchestrator
+- worktree
+filed_at:
+  code_sha: 979c3137dbe68423d036015b4fb3f6caaa0e3863
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: claude
+  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
