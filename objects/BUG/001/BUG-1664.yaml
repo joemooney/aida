@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:41.976532939Z
-modified_at: 2026-09-26T18:48:35.569887967Z
+modified_at: 2026-09-26T18:49:29.950568730Z
 req_type: Bug
 comments:
 - id: 01a0dea0-83d9-7411-a92c-03b338a22c1e
@@ -34,6 +34,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): implementer design questions accepted as routine — queue sweeps keep the entry on a read error (deleted-spec entries stay with queue prune --orphaned); archive dry-run does the same re-check, so its preview count may be lower than the cache alone shows; one stored-spec read per dead-looking candidate on queue list is acceptable, subject to the strict reviewer''s performance check.'
   created_at: 2026-09-26T18:48:35.569887967Z
   modified_at: 2026-09-26T18:48:35.569887967Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0df0d-0e5e-7e41-a51e-b75e3d697599
+  author: joe
+  content: 'Advisor (STORY-1484 review): main exposure CONFIRMED by code reading. ensure_cache_fresh_for_read serves the stale snapshot whenever a lock-info record names a live or Unknown foreign owner, and every with_cache_write (including single-row write-through and ladder waiters, which do not bring the cache current) writes that record. So queue gc, queue list auto-gc and the archive sweeps are exposed on main today, not only on the TASK-1515 branch. Sibling callers outside this bug''s scope are filed as BUG-1670.'
+  created_at: 2026-09-26T18:49:29.950568730Z
+  modified_at: 2026-09-26T18:49:29.950568730Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0dea0-73c7-7152-b2a2-38b2b6faa2df
