@@ -58,7 +58,7 @@ Most agent-collaboration tooling is a queue, a swarm orchestrator, or a one-shot
 3. **Trace-comment enforcement** — code knows its spec and specs know their code; `// trace:TASK-289` is a checked link, not a decorative note.
 4. **Discipline-first** — AIDA scaffolds the vocabulary, workflow patterns, and starter memories alongside the tools, so a project inherits the habits.
 5. **Lifecycle-based roles** — implementer, reviewer, and advisor are distinct seats with deterministic handoffs, not one agent wearing every hat.
-6. **Trojan-horse surface** — simple on first sight (a TUI over Claude Code sessions); the depth — graph, IDs, traces, MCP — compounds through use.
+6. **Humble first surface** — `aida why <file:line>` and the memory lane are the front door; the depth — graph, IDs, traces, MCP, the control plane that keeps the store true — is discovered through the store, not through a front-end. (The earlier "Trojan-horse" framing, with the TUI as the product's face, was superseded on 2026-09-26; the TUI is a view onto the control plane.)
 7. **Git-native** — per-session worktree isolation, orphan-branch storage for the graph, trace comments in source; no external database, no SaaS account.
 8. **Single-user-first** — built for solo developers and small teams, not enterprise federation; the whole graph lives in your repo.
 
