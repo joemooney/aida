@@ -226,7 +226,7 @@ pub(crate) const HERMETIC_TEST_USER: &str = "bug-1618-hermetic-test-user";
 ///
 /// This guard pins every one of those inputs for its lifetime:
 /// - the project root to `root` (a per-thread override, no global `chdir`),
-/// - stdin to "not a terminal",
+/// - stdin and stdout to "not a terminal",
 /// - `AIDA_USER` to a fixed test identity absent from any roster,
 /// - `AIDA_ROLE_INSTANCE`, `AIDA_AUTO_COMPLETE`, `AIDA_AUTO_COMPLETE_TOKEN`
 ///   cleared, and `AIDA_SESSION_ROLE` set to `role` (or cleared on `None`).
@@ -253,6 +253,7 @@ impl AmbientGuard {
         let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
             project_root: root.to_path_buf(),
             stdin_is_terminal: false,
+            stdout_is_terminal: false, // trace:BUG-1667 | ai:claude
         }));
         Self { prev, _env: env }
     }
@@ -342,6 +343,7 @@ mod tests {
         let outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
             project_root: tmp.path().to_path_buf(),
             stdin_is_terminal: false,
+            stdout_is_terminal: false, // trace:BUG-1667 | ai:claude
         }));
 
         // Positive control: clear the role inputs (not the identity), resolve
@@ -388,6 +390,7 @@ mod tests {
                 assert!(std::env::var_os(key).is_none(), "{key} must be unset");
             }
             assert_eq!(crate::test_ambient::stdin_is_terminal(), Some(false));
+            assert_eq!(crate::test_ambient::stdout_is_terminal(), Some(false)); // trace:BUG-1667 | ai:claude
             assert_eq!(
                 crate::test_ambient::project_root().as_deref(),
                 Some(tmp.path())
