@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T23:05:05.919232561Z
-modified_at: 2026-09-26T04:57:30.302076587Z
+modified_at: 2026-09-26T04:57:55.957473625Z
 req_type: Bug
 comments:
 - id: 01a0dad1-6517-7663-abb8-8321e942bcc6
@@ -40,6 +40,12 @@ comments:
   content: 'Strict re-review: APPROVE — reviewed 43169ed331 (delta 49a5aa6f91..43169ed331). Filters all pass (bug_1633 10, pull 64, followup 31, auto_bump 79); fmt clean; no new clippy warnings in the touched code; with a fake HOME the tests wrote nothing outside temp dirs. (1) FIXED: auto_bump_done_to_completed_with now returns (flips, scanned). scanned=false for no default branch (lib.rs:72512), HEAD off the default branch (72515) and git log failure (72561). Auto-bump disabled leaves scanned=false (70330), and a later error propagates as Err. The base is cleared only when scanned is true (70394). The public wrapper auto_bump_done_to_completed (72466) maps to .0, so its callers are unchanged (git_backend_cmd.rs:7371 and about 35 tests). MUTATION: forcing an unconditional clear makes bug_1633_pull_reconcile_base_survives_a_feature_branch_pull fail at tests:288. (2) FIXED: drain_pending_followups (70244) removes only the filed IDs and keeps the IDs whose extraction returned Err. MUTATION: removing all pending IDs makes bug_1633_followup_drain_keeps_failed_and_concurrent_ids fail at tests:538. (3) ACCEPTABLE, NO LOCK: update_pending_followups (70228) re-reads right before a temp-file-plus-rename write. The lost-update window shrinks from the whole filing run to microseconds. Two concurrent pulls in the same worktree would already collide on the git index lock and the rebase, so this is not a realistic path. The residual risk is one lost pending ID, which means a skipped followup filing, not a store corruption. (4) DOCUMENTED: 70154-70160 covers per-worktree placement, the worktree-remove loss and recovery through reconcile-status --since. (5) FIXED: 68371-68378 compares against origin/<current store branch> via ahead_behind_vs_ref. There is no regression test for a store branch other than aida-store (non-blocking). (6) FIXED: the doc comment is back on aida_subcmd_add_followup_task (44372). NON-BLOCKING NITS: while auto-bump is disabled, a persisted base stays indefinitely. That is intended, since it resumes when auto-bump is re-enabled, and a rewritten base is dropped by the is-ancestor check. A spec whose extraction errors every time stays pending and warns on each pull; the only Err source is storage.load(), so this is self-healing.'
   created_at: 2026-09-26T04:57:30.302076587Z
   modified_at: 2026-09-26T04:57:30.302076587Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc13-bbf5-7633-a41a-5b75246305d1
+  author: joe
+  content: 'Correction to the re-review comment (per the reviewer): extract_plan_followups can also fail via a bail! at about lib.rs:45286, not only through a store read. If that error repeats, the spec stays pending and warns on every pull. Nothing is lost, so the verdict stands.'
+  created_at: 2026-09-26T04:57:55.957473625Z
+  modified_at: 2026-09-26T04:57:55.957473625Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
