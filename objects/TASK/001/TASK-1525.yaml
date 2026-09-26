@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:40.268656790Z
-modified_at: 2026-09-26T21:58:30.059007596Z
+modified_at: 2026-09-26T21:59:52.742155495Z
 req_type: Task
 tags:
 - architecture
@@ -45,6 +45,12 @@ comments:
   content: 'Review: APPROVE (independent reviewer). Read docs/architecture/control-plane-vs-durable-execution-and-merge-queues.md in full + the OVERVIEW.md link. Verified: all cited AIDA module files (events.rs, drain_state.rs, drain_resume.rs, network_retry.rs, process_retry.rs, merge_hold.rs, pr_rebase.rs, review_verdict.rs, burndown.rs, supervisor.rs, last_drain.rs, queue_recover.rs, session_liveness.rs, session_reap.rs, integrate.rs, integrate_checkout.rs, pr_ship.rs, merge_lock.rs, drain_lock.rs, worktree_lease.rs, requeue.rs, event_wait.rs) exist with the described responsibility (spot-checked retry_transient in auto_complete.rs, ETXTBSY handling in process_retry.rs, --resume-drain in drain_cmd.rs); all cited spec IDs (PRIN-4/5/6/7, ADR-7/9/10/26/37, BUG-1290/538/286/1517, STORY-491/492/975/333/730/384/1051/520, TASK-1169, TERM-5, VIS-2) exist and match the doc''s characterization; the 50.9% figure and P1 gap wording match docs/positioning/2026-09-24-spike-86-positioning-from-engineering.md and docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md verbatim. General-level claims about Temporal (event history/replay/checkpointing/activities), Bors (batch-test onto target branch), Zuul (speculative/optimistic batching), Mergify/Aviator/GitHub merge queue are accurate and fairly characterized. No hype: doc explicitly disclaims market comparison, isn''t added to docs/positioning/, and the ''deliberately does not want'' sections keep the tone sober. All 5 acceptance criteria met, including the OVERVIEW.md link into the architecture section. No blockers.'
   created_at: 2026-09-26T21:58:30.059007596Z
   modified_at: 2026-09-26T21:58:30.059007596Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfbb-5aa6-7aa3-a1ee-ec2504da695b
+  author: joe
+  content: 'Review: APPROVE. New doc docs/architecture/control-plane-vs-durable-execution-and-merge-queues.md satisfies all 5 acceptance points: lives under docs/architecture/ (not positioning/), covers durable-execution engines and merge queues each with a 3-column has/lacks/deliberately-doesn''t-want table, names gap P1 ''resumable orchestrator checkpointing'' verbatim from the round-2 moat doc and gives a reasoned answer on whether durable-execution properties close it, links TERM-5 and VIS-2, and is linked from OVERVIEW.md''s architecture section (new paragraph after the resilient-drain/EPIC-28 paragraph). Explicitly disclaims a market claim and is not under docs/positioning/. Spot-checked code attributions: all 27 referenced modules/files exist (events.rs has PhaseEntered/SpecRetried variants, event_wait.rs has wait_for_actionable/wait_for_queue_drained, drain_resume.rs matches the resume-decision claims, merge_hold.rs''s fail-closed behavior matches its own doc comments) and all 4 cited PRIN-4..7 titles match the doc''s paraphrases closely (esp. PRIN-6 ''present evidence is not necessarily current evidence'' and PRIN-7''s two-predicate conjunction, quoted near verbatim). The P1 quote matches the round-2 moat doc exactly. All cross-linked docs (one-orchestration-engine.md, one-engine-invariant.md, autonomy-and-escalation.md, autonomous-drain.md, the round-2 moat doc, the SPIKE-86 deep-dive) exist. General claims about Temporal (event history, deterministic replay, activity retries, heartbeats, child workflows/signals, versioning) and merge queues (Bors/Zuul/Mergify/Aviator/GitHub queue admission-gate model, Zuul/GitHub speculative batching) are accurate at the stated general level; framing is hedged throughout (''Yes, modestly'', ''Marginal'', ''Low value'') rather than overclaiming, and each ''deliberately does not want'' rationale is tied to the concrete reason (non-deterministic LLM workers) rather than asserted as superiority. No blockers.'
+  created_at: 2026-09-26T21:59:52.742155495Z
+  modified_at: 2026-09-26T21:59:52.742155495Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df93-cb8f-7c72-8c5c-5e433d4003a5
