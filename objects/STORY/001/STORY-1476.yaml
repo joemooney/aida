@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T17:29:11.789280036Z
-modified_at: 2026-09-26T21:16:55.820815414Z
+modified_at: 2026-09-26T21:26:43.233836991Z
 req_type: Story
 comments:
 - id: 01a0d99d-4d51-7640-aa9b-fb5291e204a8
@@ -139,6 +139,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): ADVISOR SIGNOFF: APPROVED with A1-A8 posted; queued for implementation as amended. Drive lane: it changes what unattended review executes, so the PR is left open for Joe to merge.'
   created_at: 2026-09-26T18:44:20.118474845Z
   modified_at: 2026-09-26T18:44:20.118474845Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0df9c-ff21-75d1-bbe6-e16888c40afe
+  author: joe
+  content: 'DRAFT (uncompiled) on claude/story-1476 @ 0167a1bc27: AcceptanceCommandPolicy (+permits, permissive()), CriterionStatus::NotRun, GradedReviewVerdict.not_run_count (serde default), execute_graded_review(.., policy) gate with NotRun escalation ahead of BOTH approve branches (A1) and no evaluator calls once anything is refused; refused chars = ; & | $ ` < > ( ) \ '' " + all C0/DEL except TAB (A3); exact word match, trailing-* opts into args (A2); reviewer prompt emits NOT RUN section whenever not_run_count>0 with do-not-execute wording (A4/A5); summary names count + repo-optin-ignored line (A6); loader acceptance_command_policy_global (crate::home_dir only, stderr notice once per review) + pure acceptance_command_policy_from_toml -> Result (Err = denied reason) + display-only repo_review_optin_present (local + TASK-969 trusted copy); config_cmd KnobSpecs run_acceptance_commands/acceptance_command_allow ReadOnly + [review] rows; story_1424 tests pass permissive() unchanged assertions; docs: autonomous-drain.md [review] section with migration notes (A7), config-trust-boundary.md row. Deviations: from_toml returns Result<Policy,String> instead of bare Policy so the fail-closed reason is testable; no CHANGELOG edit (file is generated). Tests: story_1476_acceptance_trust_tests.rs — default_policy_does_not_run_spec_command, all_notrun_with_evaluator_never_auto_approves, mixed_passed_and_notrun_escalates, failed_plus_notrun_stays_rejected, notrun_not_sent_to_evaluator (RecordingEvaluator wrapper), enabled_allowlisted_command_runs, metachar_chained_command_refused_under_prefix, word_prefix_not_string_prefix, exact_match_refuses_arguments_unless_trailing_star, star_allows_metachars, quotes_and_control_chars_refused, disabled_or_empty_policy_denies, repo_config_optin_ignored (real git + origin), repo_without_optin_has_no_notice, malformed_global_config_fails_closed, enabled_but_empty_allow_denies, missing_global_config_denies, policy_from_toml_pure, prompt_lists_notrun_as_manual (zero-pass case), record_without_not_run_count_deserializes. Compile risks to check first: RecordingEvaluator must implement every EvaluatorEngine required method (evaluate_score signature); config_cmd every_rendered_knob_has_a_declaration/policy_registry tests with the two new [review] rows; is_some_and MSRV; repo_config test calls default_branch_of which shells to gh (slow, should fail over to main).'
+  created_at: 2026-09-26T21:26:43.233836991Z
+  modified_at: 2026-09-26T21:26:43.233836991Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0def4-fc93-7511-9f30-c80d96061f8f
