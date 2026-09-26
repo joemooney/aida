@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T04:47:41.715373320Z
-modified_at: 2026-09-26T05:09:46.956085563Z
+modified_at: 2026-09-26T05:11:40.095580744Z
 req_type: Bug
 tags:
 - antigravity
@@ -92,6 +92,17 @@ comments:
     Current test state: .agents/skills/aida-handoff/SKILL.md is a HARD LINK to the master (same inode 41943280). It works for both vendors today but is fragile per point 3.
   created_at: 2026-09-26T05:09:46.956085563Z
   modified_at: 2026-09-26T05:09:46.956085563Z
+  session_id: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
+- id: 01a0dc20-4f3f-7f92-9d20-d558efd8b920
+  author: joe
+  content: |-
+    Single-location option for Claude (2026-09-25, operator question):
+    Claude Code discovers only .claude/skills/ (plus ~/.claude/skills, plugins, and --add-dir), not .agents/skills/. SKILL.md has no documented @-include mechanism; imports are a CLAUDE.md feature. Claude DOES follow a symlinked SKILL.md in practice: every AIDA skill in this repo loads through one today, although the docs do not say so. The symlinks run in the opposite direction from the Codex case, so:
+    - DOWNSTREAM layout: the only real file is .agents/skills/aida-X/SKILL.md (Codex requires a real file there). .claude/skills/aida-X/SKILL.md is a relative symlink to it. That leaves one copy of the content per project, read by all three vendors. Where symlinks are unavailable (Windows without developer mode, some filesystems), fall back to a second copy that scaffold status drift-checks.
+    - Rejected: a textual stub (.claude SKILL.md whose body says 'read .agents/skills/X/SKILL.md'). It still has to duplicate the frontmatter (name, description, allowed-tools drive discovery and permissions), it adds a Read call on every invocation, and it is a second file format to maintain. The symlink gives the same single source without either cost.
+    - DEV REPO: the master must stay in aida-core/templates for build.rs embedding and crate packaging, so exactly one generated copy (.agents/skills, drift-checked) is unavoidable. .claude/skills can keep linking straight to the master.
+  created_at: 2026-09-26T05:11:40.095580744Z
+  modified_at: 2026-09-26T05:11:40.095580744Z
   session_id: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
 filed_at:
   code_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
