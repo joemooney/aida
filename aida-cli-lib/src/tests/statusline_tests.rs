@@ -5670,12 +5670,10 @@ fn parse_session_env_handles_unquoted_value() {
 #[test]
 fn apply_session_env_to_process_sets_env() {
     const VAR: &str = "AIDA_TEST_TASK_63_APPLIED";
-    // SAFETY: scoped to this test; not racing with anything that
-    // reads VAR.
-    #[allow(unused_unsafe)]
-    unsafe {
-        std::env::remove_var(VAR);
-    }
+    // Clearing VAR mutates the process env, which races any concurrent env
+    // read regardless of key; hold the shared env lock for the whole test.
+    // trace:BUG-1666 | ai:claude
+    let _env = crate::test_env::EnvVarGuard::unset(VAR);
     let body = format!("export {}='hello world'\n", VAR);
     let applied = apply_session_env_to_process(&body);
     assert!(applied.is_empty(), "{applied:?}");

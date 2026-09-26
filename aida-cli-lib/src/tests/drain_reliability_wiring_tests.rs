@@ -501,8 +501,10 @@ exit 1
         std::fs::set_permissions(&fake_gh, perms).unwrap();
     }
 
-    let prev = std::env::var("AIDA_TEST_GH_BINARY").ok();
-    std::env::set_var("AIDA_TEST_GH_BINARY", &fake_gh);
+    // The guard holds the shared env lock for the rest of the test (every
+    // probe below spawns the fake gh) and restores the prior value on drop.
+    // trace:BUG-1666 | ai:claude
+    let _gh = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", &fake_gh);
     let (facts, branch, pr) = probe_resume_facts(root, &storage, "TASK-4", None);
 
     assert_eq!(pr, Some(3));
@@ -558,10 +560,6 @@ exit 1
         !facts.reviewed,
         "same-head opposing spec evidence must resume at reviewer"
     );
-    match prev {
-        Some(value) => std::env::set_var("AIDA_TEST_GH_BINARY", value),
-        None => std::env::remove_var("AIDA_TEST_GH_BINARY"),
-    }
 }
 
 #[test]

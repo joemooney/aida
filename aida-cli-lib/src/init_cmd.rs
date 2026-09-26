@@ -3645,9 +3645,11 @@ mod task_631_init_self_commit_tests {
         std::fs::write(root.join(".claude/skills/foo.md"), "x").unwrap();
 
         // Force the auto-commit branch (env override beats the TTY heuristic).
-        std::env::set_var("AIDA_INIT_COMMIT_SCAFFOLD", "1");
+        // The guard holds the shared env lock and restores the prior value.
+        // trace:BUG-1666 | ai:claude
+        let env = crate::test_env::EnvVarGuard::set("AIDA_INIT_COMMIT_SCAFFOLD", "1");
         let committed = commit_init_scaffolding(root, crate::cli::InitFootprint::Full).unwrap();
-        std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
+        drop(env);
 
         // The remainder was committed → onboarding task is de-stranded.
         assert!(
@@ -3811,8 +3813,9 @@ mod task_631_init_self_commit_tests {
     #[test]
     fn bootstrap_clone_init_no_tty_does_not_autocommit() {
         // Belt-and-suspenders: even if some env tried to force auto-commit, the
-        // bootstrap-clone suppression must win.
-        std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
+        // bootstrap-clone suppression must win. Held for the whole test.
+        // trace:BUG-1666 | ai:claude
+        let _env = crate::test_env::EnvVarGuard::unset("AIDA_INIT_COMMIT_SCAFFOLD");
         let tmp = TempDir::new().unwrap();
         let (root, head_before) = setup_clone_like_repo(&tmp);
 
@@ -3830,7 +3833,8 @@ mod task_631_init_self_commit_tests {
     // trace:BUG-570 | ai:claude
     #[test]
     fn genuinely_new_init_still_commits_scaffolding() {
-        std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
+        // trace:BUG-1666 | ai:claude
+        let _env = crate::test_env::EnvVarGuard::unset("AIDA_INIT_COMMIT_SCAFFOLD");
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         git_in(root, &["init", "-q", "-b", "main"]);

@@ -187,14 +187,11 @@ mod tests {
     #[test]
     fn register_pane_no_op_when_tmux_pane_unset() {
         let dir = tempfile::tempdir().unwrap();
-        // Guard the env var so the test is self-contained regardless of the
-        // ambient shell.
-        let prev = std::env::var("TMUX_PANE").ok();
-        std::env::remove_var("TMUX_PANE");
+        // Clear TMUX_PANE under the shared env lock for the whole test so it is
+        // self-contained regardless of the ambient shell; restored on drop.
+        // trace:BUG-1666 | ai:claude
+        let _env = crate::test_env::EnvVarGuard::unset("TMUX_PANE");
         let got = register_pane_from_env(dir.path()).unwrap();
-        if let Some(p) = prev {
-            std::env::set_var("TMUX_PANE", p);
-        }
         assert_eq!(got, None);
         assert!(read_pane(dir.path()).is_none());
         assert!(!advisor_pane_path(dir.path()).exists());

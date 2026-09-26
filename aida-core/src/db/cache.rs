@@ -2749,12 +2749,14 @@ mod tests {
     use crate::models::{
         ImplementationInfo, RequirementPriority, RequirementStatus, RequirementType,
     };
-    use std::sync::{Mutex as StdMutex, OnceLock};
+    use std::sync::Mutex as StdMutex;
     use tempfile::tempdir;
 
+    // Delegates to the crate-wide test env lock so these swaps also serialise
+    // against env-mutating tests in other aida-core modules.
+    // trace:BUG-1666 | ai:claude
     fn env_lock() -> &'static StdMutex<()> {
-        static LOCK: OnceLock<StdMutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| StdMutex::new(()))
+        &crate::TEST_ENV_LOCK
     }
 
     fn sample_req(spec_id: &str, title: &str) -> Requirement {

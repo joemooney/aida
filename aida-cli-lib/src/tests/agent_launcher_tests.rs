@@ -2620,8 +2620,6 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
     assert_eq!(views.len(), 1);
     assert_eq!(views[0].status, agent_registry::AgentStatus::Stale);
     assert!(views[0].ended_at.is_some());
-    std::env::remove_var("AIDA_TEST_ENV_OUT");
-    std::env::remove_var("AIDA_TEST_ARGV_OUT");
 }
 
 #[cfg(unix)]
@@ -2727,8 +2725,6 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
     assert_eq!(views.len(), 1);
     assert_eq!(views[0].status, agent_registry::AgentStatus::Stale);
     assert!(views[0].ended_at.is_some());
-    std::env::remove_var("AIDA_TEST_ENV_OUT");
-    std::env::remove_var("AIDA_TEST_ARGV_OUT");
 }
 
 #[test]
