@@ -479,6 +479,25 @@ fn kind_name(kind: &EventKind) -> &'static str {
     }
 }
 
+/// The stored `kind` names a query's event-kind selectors admit, or empty
+/// when none is set (every kind passes). A superset of what
+/// `history::event_passes_filters` keeps, so narrowing on it in SQL never
+/// drops an event the git walk would return.
+// trace:TASK-1512 | ai:claude
+fn history_kind_selection(opts: &HistoryOpts) -> Vec<&'static str> {
+    let mut kinds = Vec::new();
+    if opts.status_changes_only || history::has_transition_filter(opts) {
+        kinds.push("status_change");
+    }
+    if opts.comments_only {
+        kinds.push("comments_added");
+    }
+    if opts.opened_only {
+        kinds.push("added");
+    }
+    kinds
+}
+
 // ---------------------------------------------------------------------------
 // Batched decoder: one `git log --raw` stream + one `git cat-file --batch`
 // ---------------------------------------------------------------------------
@@ -1652,6 +1671,16 @@ impl HistoryCache {
             }
             if opts.exclude_meta {
                 sql.push_str(" AND e.is_meta = 0");
+            }
+            // The event-kind selectors (`--status-changes`, `--comments`,
+            // `--opened`, `--to`/`--from`) narrow on the stored `kind`
+            // column; `--to`/`--from` themselves are re-checked in Rust by
+            // `event_passes_filters`, the same predicate the git walk uses.
+            // trace:TASK-1512 | ai:claude
+            let kinds = history_kind_selection(opts);
+            if !kinds.is_empty() {
+                let list: Vec<String> = kinds.iter().map(|k| format!("'{k}'")).collect();
+                sql.push_str(&format!(" AND e.kind IN ({})", list.join(", ")));
             }
             sql.push_str(" ORDER BY e.commit_ts DESC, e.commit_seq DESC, e.ordinal ASC");
             let mut stmt = tx.prepare(&sql)?;

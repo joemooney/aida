@@ -7776,6 +7776,9 @@ pub(crate) fn handle_git_backend_command(
             status_changes,
             kind,
             shipped,
+            to,
+            from,
+            opened,
             comments,
             oneline,
             json,
@@ -7823,6 +7826,21 @@ pub(crate) fn handle_git_backend_command(
                     *events || *full
                 }
             };
+            // TASK-1512: `--to`/`--from` take the status spellings `aida
+            // edit --status` does; an unknown one fails before any git walk.
+            // They and `--opened` are event selectors like `--shipped`:
+            // always the events feed, on the 250-commit default window.
+            // trace:TASK-1512 | ai:claude
+            let to_status = to
+                .as_deref()
+                .map(|raw| history::resolve_status_filter("--to", raw))
+                .transpose()?;
+            let from_status = from
+                .as_deref()
+                .map(|raw| history::resolve_status_filter("--from", raw))
+                .transpose()?;
+            let event_selector =
+                *shipped || *opened || to_status.is_some() || from_status.is_some();
             // BUG-1635: per-event flags (`--status-changes`, `--comments`,
             // `--oneline`, `--json`) switch a multi-spec query to the events
             // feed instead of being silently ignored by the digest; with a
@@ -7831,7 +7849,7 @@ pub(crate) fn handle_git_backend_command(
             let events = history::resolve_events_mode(
                 explicit_events,
                 requested_id.is_some(),
-                *shipped,
+                event_selector,
                 *status_changes,
                 *comments,
                 *oneline,
@@ -7848,7 +7866,7 @@ pub(crate) fn handle_git_backend_command(
                 explicit_events,
                 requested_id.is_some(),
                 json,
-                *shipped,
+                event_selector,
                 *status_changes,
                 *comments,
                 *oneline,
@@ -7982,6 +8000,10 @@ pub(crate) fn handle_git_backend_command(
                 until: until.clone(),
                 status_changes_only,
                 shipped_only: *shipped,
+                // trace:TASK-1512 | ai:claude
+                to_status,
+                from_status,
+                opened_only: *opened,
                 comments_only: *comments,
                 oneline: *oneline,
                 archived_specs,
