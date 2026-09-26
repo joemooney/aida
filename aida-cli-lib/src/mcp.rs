@@ -7410,7 +7410,7 @@ pub fn tool_descriptors() -> Value {
                     },
                     "shipped": {
                         "type": "boolean",
-                        "description": "Only Done->Completed ship transitions, newest first — the 'did my ship register?' view (mirrors `aida history --shipped`). Implies events mode; composes with since/until/limit.",
+                        "description": "Only transitions into Completed (merged to the default branch), from any prior status, newest first — the 'did my ship register?' view (mirrors `aida history --shipped`). Implies events mode; composes with since/until/limit.",
                         "default": false,
                         "example": true
                     },
