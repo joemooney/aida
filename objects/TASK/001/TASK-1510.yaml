@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:49:03.555549390Z
-modified_at: 2026-09-26T05:32:39.062587325Z
+modified_at: 2026-09-26T15:54:24.810636582Z
 req_type: Task
 tags:
 - batch:groom-2026-09-25
@@ -39,6 +39,89 @@ comments:
   created_at: 2026-09-26T05:28:55.713132907Z
   modified_at: 2026-09-26T05:28:55.713132907Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de6c-c2aa-71e2-a95f-e42bfb006136
+  author: joe
+  content: |-
+    SKETCH (awaiting advisor signoff): TASK-1510, a per-wave transient unit under the systemd driver
+
+    1. OWNER AND TRIGGER
+    - Owner: the night-shift tick (shift.rs tick_core step 5, "record intent, tag, spawn, record pid"). There is no new trigger or entry point. The only thing that changes is how ShiftExec::spawn_wave starts a wave that tick_core has already decided to launch, after every guard has passed.
+    - Selection gate: the transient path is used only when ALL of these hold: (a) the process runs under the systemd driver, AIDA_SCHEDULE_INVOKER=systemd, read through the same resolver as usage.rs; (b) DriverHost::systemd_supported(); (c) the new shift config switch wave_unit is not "off". Otherwise the code runs the current wave_command path byte for byte: setsid, KillMode=process. That covers the cron driver, a manual `aida shift tick`, macOS and Windows. Nothing in the cron path changes.
+
+    2. SURFACE
+    - No new CLI verb or flag, no new MCP tool, no new file under ~/.config/systemd/user. The committed and local [shift] config gets three optional keys: wave_unit = "auto"|"off" (default auto), wave_memory_high and wave_memory_max (see section 5). Doctor and `shift status` get read-only additions: the last wave's unit name and its state.
+    - Unit name: aida-wave-<hex8>-<YYYYMMDD-HHMMSS>-<tickpid>.service, where hex8 is the same 4-byte sha as unit_stem(repo), so the tick and wave units of one repo sort together. The name is only [a-z0-9-], so it needs no escaping and can never contain '%'.
+    - Invocation, fixed argv with no shell:
+      systemd-run --user --unit=<name> --collect --no-ask-password --quiet --service-type=exec
+        --working-directory=<repo> -E PATH=<tick PATH> -E AIDA_SCHEDULE_INVOKER=systemd
+        -p StandardOutput=append:<wave log> -p StandardError=append:<wave log> [the -p limits below]
+        --description="AIDA drain wave batch:<batch> for <repo>" -- <aida exe> <build_wave_argv...>
+      --service-type=exec makes an exec failure fail the start job, so we never get a false "started". --collect garbage-collects failed units, which stops orphans from piling up. Environment is an ALLOWLIST: a transient unit gets the manager env plus -E only, so SCRUBBED_ENV (AIDA_DRAIN_FORCE and the rest), AIDA_PANES and TMUX cannot leak in. That is stricter than today and never looser. Per-wave journal: `journalctl --user -u <name>`. The wave log file is also kept, so shift status and the log path are unchanged.
+    - How the tick learns the unit and the pid: the tick chooses the name itself before the spawn and writes it into the intent record (WaveRecord gets a new `unit: Option<String>` with #[serde(default)], so old state files still load). After systemd-run exits 0, the tick runs `systemctl --user show -p MainPID -p ActiveState --value <name>` through DriverHost and records pid and pid_start exactly as today. That way last_wave_is_alive, settle_last_wave, waves_in_day and TASK-1497 adoption keep their pid semantics.
+
+    3. RACES AND FAIL-CLOSED
+    - systemd absent (macOS, Windows, no systemd-run binary): the selection gate is false, so the current path runs with no attempt. That is not a fallback, so nothing is logged beyond the report line "wave launched detached (no systemd)".
+    - Fallback rule. The acceptance says to fall back and log why. The danger is a DOUBLE LAUNCH when systemd-run fails AFTER the unit started, for example on a bus timeout. So the tick falls back to the setsid path ONLY when the failure proves nothing started. Those cases are: the spawn Err (ENOENT), or a non-zero exit plus a stderr match on the no-bus class ("Failed to connect to bus", "No medium found", "$DBUS_SESSION_BUS_ADDRESS"). The same PURE classifier as systemd_driver_status_with / B1 does this. It must be non-zero exit AND a matching stderr; an unrecognised stderr never takes the fallback. For every other failure the tick probes `systemctl --user show -p LoadState,ActiveState <name>`. If that shows active or activating, it adopts the unit and records the pid. If it shows not-found, it falls back. If the probe itself is Unknown, it leaves the pid-less intent (A4) and returns Err (exit non-zero, CronJobFailed). The next tick adopts the intent through its drain-lock holder, as TASK-1497 does today, or reuses the batch. Every fallback records the reason in TickReport.wave_isolation, and that reaches the ShiftTick event and the report. It is never silent.
+    - Unit-name collision: the name includes second resolution plus the tick pid, and the tick holds .aida/shift.lock, so a collision needs clock reuse. If systemd-run reports "already exists", that is NOT a fallback case, because it could be a live wave. The tick probes it: active means adopt it, anything else means Err with the intent kept. It never starts a second copy.
+    - Orphans: --collect removes units that failed or finished. A wave unit can only outlive the tick by design, the same as the setsid wave today. settle_last_wave keeps using pid death. When the recorded unit is still active but its MainPID has changed or died (it should not with Type=exec), it is reported as "unit alive, pid gone" in shift status and doctor. It is NOT auto-stopped: the tick never stops a unit it did not start in this tick. Linger off means the user manager stops the unit on logout, which is the same exposure as the timer, and the existing linger reminder already covers it.
+    - Timeout and kill semantics:
+      (a) The scheduler's 120s killpg and the tick's TimeoutStartSec=15min no longer reach the wave, because it is in another cgroup. The tick .service keeps KillMode=process, because the fallback path still needs it. The build_systemd_units output does NOT change, so no reinstall and no A12 re-sign are needed.
+      (b) The wave unit sets RuntimeMaxSec = max_runtime + grace (grace defaults to 30m; this is Q2). --max-runtime stops between specs, so a spec can overrun, and RuntimeMaxSec is the hard backstop.
+      (c) Stop: the default KillMode=control-group, KillSignal=SIGTERM, TimeoutStopSec=60s then SIGKILL on the WHOLE cgroup. Unlike setsid, this includes grandchildren: vendor phases, cargo, and a tmux server the wave itself started. Leases, locks and worktrees left behind are handled by the existing reap and stale-lock paths on the next tick. That is the same recovery class as a crash today. Caveat: an implementer hosted in a PRE-EXISTING tmux server escapes the cgroup. The wave env has no TMUX/AIDA_PANES, so pane_host picks Background. This needs a test.
+      (d) OOM: OOMPolicy=stop is the default (Q3). An OOM inside the wave kills only the wave unit. It no longer takes the operator's terminal scope, which is the 2026-09-25 oomd class.
+    - Resource limits (only now safe, because A12 forbade them in the SHARED tick cgroup): -p MemoryHigh=<wave_memory_high> -p MemoryMax=<wave_memory_max> -p TasksMax=4096 -p CPUWeight=50 -p IOWeight=50. The memory defaults are a fraction of MemTotal: High 50% and Max 65%, so 35G and 45G on this 70G box. They are overridable in config and parsed and validated as a byte size or a percentage. An invalid value REFUSES the launch through a guard ("wave-limits"); it never runs without limits. Delegation check: if the user manager does not delegate "memory" (read /sys/fs/cgroup/.../user@UID.service/cgroup.controllers through DriverHost), systemd accepts the property but does nothing. Doctor warns, and the report says the limits are not enforced. This is the one advisory item and it does not block the launch (Q4).
+
+    4. AUTHORITY BOUNDARY (no autonomous scheduling). Each of these is a BLOCKER if violated:
+    - B-a: the argv MUST NOT carry --on-calendar, --on-active, --on-boot, --on-unit-*, --timer-property, --path-property or --socket-property. Any of these makes systemd-run create a transient TIMER, which is a new scheduled run. A pure test asserts the argv against an allowlist of flags.
+    - B-b: no Restart=, and no --remain-after-exit that could be restarted. A failed wave is never relaunched by systemd. Only the next guarded tick can launch a wave.
+    - B-c: the transient path is reachable ONLY from tick_core's launch branch, after all guards pass, with the shift enabled through the local layer. No other caller: no queue work flag, no MCP tool, no `aida schedule` job type, and no helper that is pub outside shift.rs and schedule_driver.rs. The helper takes the already-built wave argv and cannot take arbitrary commands. A grep test checks that the function has exactly one call site.
+    - B-d: the wave argv, its caps, and the env allowlist are unchanged: build_wave_argv output is identical on both paths. The tests assert equality.
+    - B-e: never `systemctl enable`, `start` of a named unit, `link` or `daemon-reload` from this path, and no unit files are written. Stop and kill are not exposed either. A future `aida shift stop-wave` would be a separate spec with the TTY/human gate. Q5.
+    - B-f: the existing agent exposure is unchanged: an agent that runs `aida shift tick` by hand on a shift-enabled clone can already launch a wave. This spec must not widen that. A manual tick is invoker=manual, so it uses the setsid path, not a unit. An agent that exports AIDA_SCHEDULE_INVOKER=systemd only changes isolation and gains no new launch power. It is noted, not a blocker.
+
+    5. FILES BY SYMBOL
+    - schedule_driver.rs: DriverHost gains `fn systemd_run_user(&mut self, args:&[&str]) -> Result<CommandOutput>` (the real one is cfg(test)-refused like real_systemctl_user; the non-Linux one bails) and `fn user_manager_controllers(&self) -> Option<String>`. New PURE functions: `wave_unit_name(repo, now, tick_pid)`, `build_wave_unit_argv(inv, unit, log, argv, limits) -> Vec<String>`, `classify_systemd_run_failure(&CommandOutput) -> RunFailure {NotStarted(reason), Ambiguous(reason), Exists}`, `parse_show_mainpid`.
+    - shift.rs: WaveRecord.unit; ShiftConfig.wave_unit/wave_memory_high/wave_memory_max plus build_config parsing; `WaveIsolation {Unit{name}, Detached{reason: Option<String>}}` on TickReport and the ShiftLaunch event; ShiftExec::spawn_wave returns a `WaveSpawn {pid, pid_start, unit}` struct instead of the tuple; RealExec::spawn_wave takes the `&mut dyn DriverHost` seam and holds the selection plus fallback logic; a "wave-limits" guard in evaluate_guards (only when the unit path is selected); render_report and status_command gain the unit line.
+    - events.rs: ShiftLaunch gains optional `unit` and `isolation_note` (serde default).
+    - maintenance_schedule.rs (doctor): a read-only memory-delegation finding and a "wave unit alive, pid gone" finding.
+    - No change to build_systemd_units, the cron line, build_wave_argv or queue work.
+
+    6. NAMED TESTS (FakeHost / recording ShiftExec; never real systemd-run or systemctl)
+    task_1510_wave_unit_tests.rs:
+      wave_unit_argv_has_no_timer_or_restart_flags (B-a, B-b allowlist)
+      wave_unit_argv_env_is_allowlist_only_no_scrubbed_or_tmux_vars
+      wave_argv_identical_on_unit_and_detached_paths (B-d)
+      wave_unit_name_is_unit_safe_and_repo_prefixed
+      cron_invoker_never_calls_systemd_run
+      manual_invoker_uses_detached_path
+      non_linux_host_uses_detached_path_without_attempt
+      no_bus_failure_falls_back_and_reports_reason
+      missing_systemd_run_binary_falls_back
+      ambiguous_failure_with_active_unit_adopts_pid_no_second_spawn
+      ambiguous_failure_with_unknown_probe_keeps_intent_and_errs
+      unit_exists_collision_never_falls_back
+      mainpid_zero_after_start_records_unit_and_settles_next_tick
+      invalid_memory_limit_refuses_launch_via_wave_limits_guard
+      percent_memory_limits_resolve_against_memtotal
+      undelegated_memory_controller_reports_not_enforced
+      legacy_state_without_unit_field_loads
+      wave_unit_helper_has_single_call_site (source grep, B-c)
+      real_host_refuses_systemd_run_under_cfg_test
+    story_1218_shift_tick_tests.rs: the existing launch tests are updated for WaveSpawn and must stay green unchanged in behaviour.
+
+    7. OUT OF SCOPE
+    Stopping or killing a wave from the CLI; cron-driver isolation (cgroups without systemd); applying limits to manual `aida queue work` drains; changing CARGO_BUILD_JOBS or other wave behaviour; TASK-1511 cold-boot (it may reuse the helper later, under its own sketch and signoff); per-phase units; Persistent= or linger changes.
+
+    8. OPEN QUESTIONS
+    Q1 pid source: `systemctl show MainPID` after start (one extra bus call, and MainPID=0 when the wave already exited) versus making liveness unit-based (systemctl is-active in gather_probes, which adds bus calls to every tick). I propose MainPID plus a unit fallback only when pid is None.
+    Q2 RuntimeMaxSec grace over max_runtime: 30m, 1x max_runtime, or none (rely on --max-runtime only)?
+    Q3 OOMPolicy: stop (the whole wave ends, and settle_last_wave counts zero progress) or continue (the drain sees the phase die and records a failure)? I lean towards stop, for predictability.
+    Q4 Memory defaults: 50%/65% of MemTotal, or absolute values (for example High=24G Max=32G)? And should an undelegated memory controller REFUSE the unit path (fall back) rather than warn?
+    Q5 The acceptance says "stopping the unit stops the wave cleanly", but queue work has no SIGTERM handler; recovery relies on reap and stale-lock. Is kill-then-next-tick-reaps acceptable as "clean", or is a drain SIGTERM handler (release lock, mark the lease) in scope?
+    Q6 Should the ambiguous-failure Err (exit non-zero, CronJobFailed) wake a seat, or should it be a notify through the shift-breaker rule?
+  created_at: 2026-09-26T15:54:24.810636582Z
+  modified_at: 2026-09-26T15:54:24.810636582Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 execution_mode: drive
 filed_at:
   code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
