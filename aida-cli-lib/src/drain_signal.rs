@@ -20,15 +20,18 @@
 //! 2. stamps `interrupted_at` / `interrupted_reason = "sigterm"` on every
 //!    lease this drain created (`creator_pid` == the drain pid) — an
 //!    *interrupted* lease, not an abandoned one, so `aida ps` and the reaper
-//!    can tell a stopped wave from a crashed one;
-//! 3. releases the drain lock by dropping the guard the dispatch arm handed
-//!    it (heartbeat stopped, shared claim released, local file removed only
-//!    when it still records our pid).
+//!    can tell a stopped wave from a crashed one.
 //!
 //! It then waits up to a grace window for the drain to finish on its own
 //! (the in-flight phase may land, and the batch loop then returns through
-//! the stop request with [`SIGTERM_EXIT_CODE`]). A SECOND SIGTERM, or the
-//! end of the grace window, forces `process::exit(SIGTERM_EXIT_CODE)`.
+//! the stop request with [`SIGTERM_EXIT_CODE`]). The drain lock is HELD for
+//! that whole window: the in-flight phase may be integrating on `main`, and
+//! a freed lock would let another driver (`queue integrate --watch`,
+//! `burndown run`, a manual `queue work`) take it and double-drive the tree
+//! — the BUG-538 hole the lock exists to close. A SECOND SIGTERM, or the end
+//! of the grace window, releases the lock (guard dropped: heartbeat stopped,
+//! shared claim released, local file removed only when it still records our
+//! pid) and immediately forces `process::exit(SIGTERM_EXIT_CODE)`.
 //!
 //! Without a signal nothing here runs: installing the handler only spawns a
 //! parked thread. Unix only; on Windows [`install`] is a documented no-op
@@ -49,10 +52,16 @@ pub(crate) const SIGTERM_EXIT_CODE: i32 = 143;
 
 /// How long the first SIGTERM waits for the drain to finish on its own
 /// before the handler forces the exit. Override with
-/// `AIDA_DRAIN_TERM_GRACE_SECS`. Kept under systemd's default
-/// `TimeoutStopSec=60s` so the bookkeeping and the forced exit both land
-/// before the SIGKILL.
+/// `AIDA_DRAIN_TERM_GRACE_SECS`, clamped to [`MAX_GRACE_SECS`]. Both sit
+/// under systemd's default `TimeoutStopSec` of 90 s (the transient wave unit
+/// sets none, so the default applies) so the lock release and the forced
+/// exit both land before the SIGKILL.
 pub(crate) const DEFAULT_GRACE_SECS: u64 = 30;
+
+/// Upper bound on the grace window, whatever the env says: past this the
+/// held drain lock would outlive systemd's stop timeout and the SIGKILL
+/// would leave it for the next tick's stale-reclaim after all.
+pub(crate) const MAX_GRACE_SECS: u64 = 60;
 
 const GRACE_ENV: &str = "AIDA_DRAIN_TERM_GRACE_SECS";
 
@@ -86,14 +95,15 @@ pub(crate) fn stop_exit_code_for(term_flag: &AtomicBool, default: i32) -> i32 {
     }
 }
 
-/// The grace window, from `AIDA_DRAIN_TERM_GRACE_SECS` or the default. A
-/// non-numeric value falls back to the default; `0` means "exit as soon as
-/// the bookkeeping is done".
+/// The grace window, from `AIDA_DRAIN_TERM_GRACE_SECS` or the default,
+/// clamped to [`MAX_GRACE_SECS`]. A non-numeric value falls back to the
+/// default; `0` means "exit as soon as the bookkeeping is done".
 pub(crate) fn grace_from_env() -> Duration {
     let secs = std::env::var(GRACE_ENV)
         .ok()
         .and_then(|v| v.trim().parse::<u64>().ok())
-        .unwrap_or(DEFAULT_GRACE_SECS);
+        .unwrap_or(DEFAULT_GRACE_SECS)
+        .min(MAX_GRACE_SECS);
     Duration::from_secs(secs)
 }
 
@@ -117,8 +127,6 @@ pub(crate) struct TermReport {
     pub(crate) stop_requested: bool,
     /// Lease ids stamped `interrupted_at`.
     pub(crate) leases_marked: Vec<String>,
-    /// The drain lock was released (guard dropped and/or file removed).
-    pub(crate) lock_released: bool,
 }
 
 /// Everything the handler needs; built by the dispatch arm.
@@ -216,10 +224,12 @@ pub(crate) fn install(_ctx: DrainTermContext) -> anyhow::Result<()> {
 /// The signal number this handler acts on.
 const SIGTERM_NUM: i32 = 15;
 
-/// The handler loop: the FIRST SIGTERM runs the bookkeeping and arms the
-/// grace deadline; a SECOND SIGTERM, or the deadline, calls `exit` with
-/// [`SIGTERM_EXIT_CODE`]. Signals other than SIGTERM are ignored. Generic
-/// over the source and the exit so a test can drive it in-process.
+/// The handler loop: the FIRST SIGTERM runs the bookkeeping (stop request,
+/// lease stamps) and arms the grace deadline; a SECOND SIGTERM, or the
+/// deadline, releases the drain lock and calls `exit` with
+/// [`SIGTERM_EXIT_CODE`]. The lock is held across the grace window on
+/// purpose — see the module docs. Signals other than SIGTERM are ignored.
+/// Generic over the source and the exit so a test can drive it in-process.
 // trace:TASK-1518 | ai:claude
 pub(crate) fn run_handler<S, F>(mut source: S, ctx: DrainTermContext, exit: F)
 where
@@ -237,17 +247,12 @@ where
     }
 
     ctx.term_flag.store(true, Ordering::SeqCst);
-    let report = on_first_term(&ctx.project_root, ctx.drain_pid, &ctx.guard);
+    let report = on_first_term(&ctx.project_root, ctx.drain_pid);
     eprintln!(
-        "  {} SIGTERM: stop requested; {} lease(s) marked interrupted; drain lock {}; \
-         exiting {} within {}s (a second SIGTERM exits now)",
+        "  {} SIGTERM: stop requested; {} lease(s) marked interrupted; drain lock held \
+         while the in-flight phase finishes; exiting {} within {}s (a second SIGTERM exits now)",
         crate::glyph(crate::glyphs::Glyph::Warning),
         report.leases_marked.len(),
-        if report.lock_released {
-            "released"
-        } else {
-            "not held"
-        },
         SIGTERM_EXIT_CODE,
         ctx.grace.as_secs()
     );
@@ -266,35 +271,43 @@ where
             None => break,
         }
     }
+
+    // The window is over: release the lock LAST, immediately before the
+    // exit, so no other driver can take it while this drain may still be
+    // integrating (BUG-538).
+    let released = release_drain_lock(&ctx.project_root, &ctx.guard);
+    eprintln!(
+        "  {} SIGTERM: drain lock {}; exiting {}",
+        crate::glyph(crate::glyphs::Glyph::Warning),
+        if released { "released" } else { "not held" },
+        SIGTERM_EXIT_CODE
+    );
     exit(SIGTERM_EXIT_CODE);
 }
 
-/// The first SIGTERM's bookkeeping, pure over the filesystem and the guard
-/// slot: stop request, lease stamps, lock release. Every step is
-/// best-effort and independent so a failure in one never skips the others.
+/// The first SIGTERM's bookkeeping, pure over the filesystem: stop request
+/// and lease stamps. Deliberately NOT the lock release — that is
+/// [`release_drain_lock`], run just before the exit. Every step is
+/// best-effort and independent so a failure in one never skips the other.
 // trace:TASK-1518 | ai:claude
-pub(crate) fn on_first_term(
-    project_root: &Path,
-    drain_pid: u32,
-    guard: &GuardHandle,
-) -> TermReport {
+pub(crate) fn on_first_term(project_root: &Path, drain_pid: u32) -> TermReport {
     let stop_requested =
         crate::drain_cmd::write_stop_request(project_root, REASON_SIGTERM, Some(drain_pid)).is_ok();
     let leases_marked = mark_in_flight_leases_interrupted(project_root, drain_pid);
-    let lock_released = release_drain_lock(project_root, guard);
     TermReport {
         stop_requested,
         leases_marked,
-        lock_released,
     }
 }
 
-/// Drop the guard if the slot is still alive and still holds it (the proper
-/// release), then remove a local lock file that still records our pid
-/// (covers a borrowed or already-taken slot). Idempotent: a second call finds
-/// an empty slot and no file of ours. True when either step released
-/// something. Never touches a lock recorded for another pid.
-fn release_drain_lock(project_root: &Path, guard: &GuardHandle) -> bool {
+/// The release step, run immediately before the forced exit: drop the guard
+/// if the slot is still alive and still holds it (the proper release), then
+/// remove a local lock file that still records our pid (covers a borrowed or
+/// already-taken slot). Idempotent: a second call finds an empty slot and no
+/// file of ours. True when either step released something. Never touches a
+/// lock recorded for another pid.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn release_drain_lock(project_root: &Path, guard: &GuardHandle) -> bool {
     let dropped = match guard.upgrade() {
         Some(slot) => {
             let taken = match slot.lock() {
@@ -330,6 +343,10 @@ pub(crate) fn mark_in_flight_leases_interrupted(
     };
     let now = chrono::Utc::now().to_rfc3339();
     let mut marked = Vec::new();
+    // Read-modify-write per lease: a concurrent writer (the session's own
+    // `session end`, a `worktree enter` re-stamp) landing in the microseconds
+    // between our read and our atomic write loses its update. Accepted: the
+    // drain is stopping and every other lease writer is idempotent.
     for entry in entries.filter_map(|e| e.ok()) {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("toml") {

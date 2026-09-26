@@ -1232,12 +1232,13 @@ relationship at file-time.
 | Stopped by SIGTERM (systemd `RuntimeMaxSec` / `OOMPolicy=stop`, `aida drain stop --now`, a manual kill) | `143` |
 
 **SIGTERM.** The drain catches SIGTERM: the first one writes the cooperative
-stop request (no further head is picked up), stamps `interrupted_at` /
+stop request (no further head is picked up) and stamps `interrupted_at` /
 `interrupted_reason = "sigterm"` on every lease this drain created (an
-*interrupted* lease, not an abandoned one), and releases the drain lock. It
-then waits up to `AIDA_DRAIN_TERM_GRACE_SECS` (default 30) for the in-flight
-phase to land; a second SIGTERM or the end of that window forces the exit
-with `143`. `aida ps` reads the mark: a marked lease with no live process and
+*interrupted* lease, not an abandoned one). It then waits up to
+`AIDA_DRAIN_TERM_GRACE_SECS` (default 30, at most 60) for the in-flight
+phase to land, holding the drain lock the whole time so no other driver can
+take it while this one may still be integrating on `main`; a second SIGTERM
+or the end of that window releases the lock and forces the exit with `143`. `aida ps` reads the mark: a marked lease with no live process and
 a clean worktree shows as `stopped` (worktree intact; resume with the usual
 `aida queue work <spec>`) rather than as a dead agent. Without a signal
 nothing changes. Unix only; on Windows the stop paths are unchanged
