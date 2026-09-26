@@ -7839,6 +7839,12 @@ pub(crate) fn handle_git_backend_command(
                 .as_deref()
                 .map(|raw| history::resolve_status_filter("--from", raw))
                 .transpose()?;
+            history::validate_transition_pair(
+                from_status.as_deref(),
+                to_status.as_deref(),
+                "--from",
+                "--to",
+            )?;
             let event_selector =
                 *shipped || *opened || to_status.is_some() || from_status.is_some();
             // BUG-1635: per-event flags (`--status-changes`, `--comments`,

@@ -182,6 +182,31 @@ fn transition_matches(from: &str, to: &str, opts: &HistoryOpts) -> bool {
     to_ok && from_ok
 }
 
+/// Refuse `--from X --to X`: a transition always changes the status, so
+/// the pair could never match anything. `from`/`to` are canonical names
+/// from [`resolve_status_filter`]; the flag names are how the caller
+/// spells them (`--from`/`--to` on the CLI, `from`/`to` over MCP). The
+/// message starts with `invalid combination:` so MCP reports it as an
+/// invalid argument.
+// trace:TASK-1512 | ai:claude
+pub(crate) fn validate_transition_pair(
+    from: Option<&str>,
+    to: Option<&str>,
+    from_flag: &str,
+    to_flag: &str,
+) -> Result<()> {
+    if let (Some(f), Some(t)) = (from, to) {
+        if status_key(f) == status_key(t) {
+            anyhow::bail!(
+                "invalid combination: {from_flag} and {to_flag} are both `{t}`; a transition \
+                 always changes the status, so nothing can match. Use {to_flag} alone for \
+                 transitions into it, or {from_flag} alone for transitions out of it"
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Resolve a `--to`/`--from` value to its canonical status name. Accepts
 /// the spellings `aida edit --status` accepts (`in-progress`,
 /// `in_progress`, `InProgress`, any case), plus `accepted` for Approved

@@ -2556,12 +2556,21 @@ impl<'a> McpServer<'a> {
             .transpose()
             .map_err(|e| e.to_string())?;
         let opened_only = bool_arg("opened");
+        // Both refusals start with `invalid ` so `McpErrorCode::classify`
+        // reports them as `invalid_arg`, not `internal`.
         if shipped_only && (to_status.is_some() || opened_only) {
             return Err(
-                "`shipped` is the same as `to: completed`; it cannot be combined with `to` or `opened`"
+                "invalid combination: `shipped` is the same as `to: completed`; it cannot be combined with `to` or `opened`"
                     .to_string(),
             );
         }
+        history::validate_transition_pair(
+            from_status.as_deref(),
+            to_status.as_deref(),
+            "from",
+            "to",
+        )
+        .map_err(|e| e.to_string())?;
         // `--shipped` implies events mode, mirroring the CLI. The MCP default has
         // always been events mode (the structured ledger), so `events` defaults
         // true here and a caller passing `events: false` only matters for the
@@ -7441,7 +7450,7 @@ pub fn tool_descriptors() -> Value {
                     },
                     "to": {
                         "type": "string",
-                        "description": "Only status transitions into this status (mirrors `aida history --to`). Accepts the spellings `aida edit --status` does (`approved`, `in-progress`, `needs-attention`, any case) plus `accepted` for approved; an unknown status is an error listing the valid set. With `from`, both ends must match. With `status_changes` it narrows the transitions; with `comments` or `opened` the result is the union. Cannot be combined with `shipped` (which is `to: completed`).",
+                        "description": "Only status transitions into this status (mirrors `aida history --to`). Accepts the spellings `aida edit --status` does (`approved`, `in-progress`, `needs-attention`, any case) plus `accepted` for approved; an unknown status is an error listing the valid set. With `from`, both ends must match; `from` and `to` naming the same status is refused. With `status_changes` it narrows the transitions; with `comments` or `opened` the result is the union. Cannot be combined with `shipped` (which is `to: completed`).",
                         "example": "approved"
                     },
                     "from": {
@@ -8913,6 +8922,30 @@ mod tests {
             .tool_history(&json!({"shipped": true, "opened": true}))
             .unwrap_err();
         assert!(err.contains("shipped"), "{err}");
+        let err = server
+            .tool_history(&json!({"from": "approved", "to": "accepted"}))
+            .unwrap_err();
+        assert!(err.contains("both `Approved`"), "{err}");
+
+        // Every refusal reaches the client as `invalid_arg`, not `internal`.
+        for args in [
+            json!({"shipped": true, "opened": true}),
+            json!({"shipped": true, "to": "approved"}),
+            json!({"from": "in-progress", "to": "in_progress"}),
+            json!({"to": "nope"}),
+        ] {
+            let resp = server.handle_tools_call(
+                &json!(1),
+                &json!({"name": "history", "arguments": args.clone()}),
+            );
+            let result = resp.result.expect("tools/call returns a result");
+            assert_eq!(result["isError"], json!(true), "{args}");
+            assert_eq!(
+                result["structuredError"]["code"],
+                json!("invalid_arg"),
+                "{args}: {result}"
+            );
+        }
     }
 
     /// TASK-1505 slice 2: the `history` tool reports where its answer came

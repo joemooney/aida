@@ -12933,7 +12933,14 @@ pub enum Command {
         /// window. Honors --since/--until/--limit; `--author me` narrows to
         /// what YOU tried to do and could not.
         // trace:STORY-1436 | ai:claude
-        #[clap(long, global = true, value_name = "KIND")]
+        // trace:TASK-1512 | ai:claude — the event feed has no status
+        // transitions, so the transition/creation selectors conflict.
+        #[clap(
+            long,
+            global = true,
+            value_name = "KIND",
+            conflicts_with_all = ["to", "from", "opened"]
+        )]
         kind: Option<String>,
 
         /// Only transitions into Completed (merged to the default branch),
@@ -12964,6 +12971,8 @@ pub enum Command {
         /// in-progress --to approved` for work sent back from in progress.
         /// Alone it matches any transition leaving that status. Same
         /// spellings and combination rules as --to; implies events mode.
+        /// `--from X --to X` is refused, since a transition always changes
+        /// the status.
         // trace:TASK-1512 | ai:claude
         #[clap(long, global = true, value_name = "STATUS")]
         from: Option<String>,

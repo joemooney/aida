@@ -62,9 +62,10 @@ fn commit(store: &Path, msg: &str) {
 /// 4. TASK-1 Approved → In Progress; TASK-2 gets a comment.
 /// 5. TASK-1 In Progress → Approved (bounced back).
 /// 6. BUG-3 Approved → In Progress.
-/// 7. BUG-3 In Progress → Completed.
+/// 7. BUG-3 respelled `In Progress` → `InProgress` (not a real transition).
+/// 8. BUG-3 In Progress → Completed.
 ///
-/// Five transitions, three creations, one comment event.
+/// Five transitions plus the respelling, three creations, one comment event.
 fn store(tmp: &Path) -> PathBuf {
     let store = tmp.join("store");
     std::fs::create_dir_all(&store).unwrap();
@@ -84,8 +85,10 @@ fn store(tmp: &Path) -> PathBuf {
     commit(&store, "start 1, comment 2");
     write_spec(&store, "TASK-1", "Task", "Approved", &[]);
     commit(&store, "bounce 1");
-    write_spec(&store, "BUG-3", "Bug", "InProgress", &[]);
+    write_spec(&store, "BUG-3", "Bug", "In Progress", &[]);
     commit(&store, "start 3");
+    write_spec(&store, "BUG-3", "Bug", "InProgress", &[]);
+    commit(&store, "respell 3");
     write_spec(&store, "BUG-3", "Bug", "Completed", &[]);
     commit(&store, "ship 3");
     store
@@ -299,6 +302,58 @@ fn opened_combined_with_to_or_from_is_the_union() {
             t("TASK-1", "Draft", "Approved"),
         ]
     );
+}
+
+/// A respelling (`In Progress` → `InProgress`) is recorded as a status
+/// event, but it is not a transition: `--to`/`--from` exclude it, while
+/// `--status-changes` still lists it.
+#[test]
+fn respelling_is_not_a_transition() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store(tmp.path());
+    let respell = t("BUG-3", "In Progress", "InProgress");
+
+    let all = walk(
+        &store,
+        &HistoryOpts {
+            status_changes_only: true,
+            ..base()
+        },
+    );
+    assert!(shape(&all).contains(&respell), "{:?}", shape(&all));
+    assert_eq!(all.len(), 6);
+
+    let into = walk(&store, &sel(Some("in-progress"), None, false));
+    assert_eq!(
+        shape(&into),
+        vec![
+            t("BUG-3", "Approved", "In Progress"),
+            t("TASK-1", "Approved", "In Progress")
+        ]
+    );
+    let out_of = walk(&store, &sel(None, Some("in-progress"), false));
+    assert!(!shape(&out_of).contains(&respell), "{:?}", shape(&out_of));
+    assert_eq!(out_of.len(), 2);
+}
+
+#[test]
+fn from_and_to_the_same_status_is_refused() {
+    use crate::history::validate_transition_pair;
+    let same = |f: &str, t: &str| {
+        validate_transition_pair(
+            Some(&resolve_status_filter("--from", f).unwrap()),
+            Some(&resolve_status_filter("--to", t).unwrap()),
+            "--from",
+            "--to",
+        )
+    };
+    let err = same("approved", "accepted").unwrap_err().to_string();
+    assert!(err.starts_with("invalid combination:"), "{err}");
+    assert!(err.contains("--from") && err.contains("--to"), "{err}");
+    assert!(same("in-progress", "InProgress").is_err());
+    assert!(same("in-progress", "approved").is_ok());
+    assert!(validate_transition_pair(Some("Approved"), None, "--from", "--to").is_ok());
+    assert!(validate_transition_pair(None, Some("Approved"), "--from", "--to").is_ok());
 }
 
 #[test]
@@ -578,6 +633,16 @@ fn cli_parses_to_from_opened_and_the_created_alias() {
     }
     // Global, like the other filters: they parse after `events` too.
     assert!(Cli::try_parse_from(["aida", "history", "events", "--to", "approved"]).is_ok());
+    // `--kind` reads the local event feed, which has no transitions.
+    for extra in [
+        ["--to", "approved"],
+        ["--from", "draft"],
+        ["--opened", "--all"],
+    ] {
+        let mut argv = vec!["aida", "history", "--kind", "gate-held"];
+        argv.extend(extra);
+        assert!(Cli::try_parse_from(&argv).is_err(), "{argv:?}");
+    }
     // `--shipped` is `--to completed`; combining it with --to or --opened
     // is refused rather than silently intersected.
     assert!(Cli::try_parse_from(["aida", "history", "--shipped", "--to", "approved"]).is_err());
