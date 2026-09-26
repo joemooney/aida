@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:40.268656790Z
-modified_at: 2026-09-26T21:16:40.207563724Z
+modified_at: 2026-09-26T21:25:30.454348024Z
 req_type: Task
 tags:
 - architecture
@@ -33,6 +33,12 @@ comments:
   content: 'OPERATOR DECISION (Joe, 2026-09-26 12:08, accepting the orchestrator''s recommendation): queue the SPIKE-86 work items.'
   created_at: 2026-09-26T19:10:04.596334763Z
   modified_at: 2026-09-26T19:10:04.596334763Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0df9b-e2d6-7d71-82d6-ef47f1078d5e
+  author: joe
+  content: 'DRAFT (uncompiled) on claude/task-1525 @ 9ad39c86c1: new docs/architecture/control-plane-vs-durable-execution-and-merge-queues.md — two families (durable-execution: Temporal-style history/replay/checkpoint/retries; merge queues: Bors/Zuul/Mergify/Aviator/GitHub), each with has/lacks/deliberately-declines tables citing the module or command (events.rs, drain_state.rs, drain_resume.rs + --resume-drain, network_retry.rs, merge_hold.rs, review_verdict.rs, pr_ship.rs, integrate.rs, drain_lock.rs, supervisor.rs, burndown classify); section 3 names round-2 gap P1 ''resumable orchestrator checkpointing'', says the step-resumable half is closed by STORY-491/492 and that deterministic replay would not close the rest, and that the remaining slice is a store-keyed checkpoint needing its own sketch. Links TERM-5, VIS-2, PRIN-4..7; linked from OVERVIEW.md Architecture (Autonomy & escalation paragraph). No market claim; nothing added to docs/positioning. Docs-only: complete. No tests. Uncertain: a few module attributions (session_liveness vs heartbeat wording, whether a verdict-gate server check is already planned) deserve a reviewer''s eye; note OVERVIEW link hunk is separate from TASK-1524''s OVERVIEW edits so both should merge cleanly.'
+  created_at: 2026-09-26T21:25:30.454348024Z
+  modified_at: 2026-09-26T21:25:30.454348024Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df93-cb8f-7c72-8c5c-5e433d4003a5
