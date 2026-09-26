@@ -38,11 +38,27 @@
 
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
-/// Bounded retry budget for [`read_atomic`]. ~200 ms total at 1 ms backoff;
-/// the Windows transient rename-race window closes in microseconds, so this
-/// is multiple orders of magnitude more than required. Exhausting it means
-/// the error is real, not transient. trace:TASK-346
+/// Wall-clock retry budget for [`read_atomic`]. The Windows transient
+/// rename-race window closes in microseconds, so this is multiple orders of
+/// magnitude more than required. Exhausting it means the error is real, not
+/// transient.
+//
+// BUG-1654: the budget used to be an attempt count (200 × 1 ms). On a loaded
+// runner every `thread::sleep` overshoots, so 200 "1 ms" sleeps took over
+// 2 s. The primary bound is now this deadline, measured from the first
+// attempt; the attempt cap below is only a secondary ceiling.
+// trace:TASK-346 | ai:claude
+// trace:BUG-1654 | ai:claude
+const READ_ATOMIC_BUDGET: Duration = Duration::from_millis(200);
+
+/// Backoff between [`read_atomic`] retries.
+const READ_ATOMIC_BACKOFF: Duration = Duration::from_millis(1);
+
+/// Secondary ceiling on [`read_atomic`] attempts, so a clock that never
+/// advances (or sleeps that return early) still terminates.
+// trace:BUG-1654 | ai:claude
 const READ_ATOMIC_MAX_ATTEMPTS: u32 = 200;
 
 /// Process-global counter making every staging temp name unique, so two
@@ -88,13 +104,26 @@ pub fn write_atomic(path: &Path, content: impl AsRef<[u8]>) -> std::io::Result<(
 /// Linux / macOS those errors don't occur on a contended-but-existing path,
 /// so this is a no-op there.
 ///
-/// A genuinely missing file still surfaces as `NotFound` — the retry budget
-/// is bounded (200 attempts × 1 ms ≈ 200 ms), so an exhausted retry
-/// returns the last error and callers' existing missing-file handling
-/// works unchanged.
+/// A genuinely missing file still surfaces as `NotFound` — the retry is
+/// bounded by a wall-clock deadline (about 200 ms, plus at most one sleep's
+/// overshoot) and a secondary attempt cap, so an exhausted retry returns
+/// the last error and callers' existing missing-file handling works
+/// unchanged.
 ///
 /// trace:TASK-346 | ai:claude
 pub fn read_atomic(path: &Path) -> std::io::Result<String> {
+    read_atomic_with(path, Instant::now, std::thread::sleep)
+}
+
+/// [`read_atomic`] with an injectable clock and sleep, so the wall-clock
+/// budget can be tested deterministically against overshooting sleeps.
+// trace:BUG-1654 | ai:claude
+fn read_atomic_with(
+    path: &Path,
+    mut now: impl FnMut() -> Instant,
+    mut sleep: impl FnMut(Duration),
+) -> std::io::Result<String> {
+    let deadline = now() + READ_ATOMIC_BUDGET;
     let mut attempts = 0u32;
     loop {
         match std::fs::read_to_string(path) {
@@ -106,10 +135,11 @@ pub fn read_atomic(path: &Path) -> std::io::Result<String> {
                 ) =>
             {
                 attempts += 1;
-                if attempts >= READ_ATOMIC_MAX_ATTEMPTS {
+                let remaining = deadline.saturating_duration_since(now());
+                if remaining.is_zero() || attempts >= READ_ATOMIC_MAX_ATTEMPTS {
                     return Err(e);
                 }
-                std::thread::sleep(std::time::Duration::from_millis(1));
+                sleep(READ_ATOMIC_BACKOFF.min(remaining));
             }
             Err(e) => return Err(e),
         }
@@ -118,7 +148,11 @@ pub fn read_atomic(path: &Path) -> std::io::Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_atomic, write_atomic};
+    use super::{
+        read_atomic, read_atomic_with, write_atomic, READ_ATOMIC_BACKOFF, READ_ATOMIC_BUDGET,
+        READ_ATOMIC_MAX_ATTEMPTS,
+    };
+    use std::cell::Cell;
     use std::collections::HashSet;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
@@ -167,7 +201,8 @@ mod tests {
     // A genuinely missing file still surfaces NotFound after the retry
     // budget exhausts — the helper bounds its waiting, then returns the
     // last error so callers' existing missing-file handling works.
-    // ~200 ms (200 × 1 ms) is the cap; the test gives generous slack.
+    // ~200 ms wall-clock is the cap; the test gives generous slack. The
+    // deterministic overshoot case is `bug_1654_*` below.
     #[test]
     fn read_atomic_returns_notfound_when_missing() {
         let dir = tempfile::tempdir().unwrap();
@@ -184,6 +219,105 @@ mod tests {
             elapsed < std::time::Duration::from_secs(2),
             "retry budget should be bounded, got {elapsed:?}"
         );
+    }
+
+    // BUG-1654: the budget is wall-clock, not an attempt count. A fake clock
+    // whose every "1 ms" sleep actually advances 50 ms (a badly loaded
+    // runner) must stop at the deadline — a handful of attempts — instead of
+    // running all 200 attempts (10 s of virtual time). Deterministic: no real
+    // sleeping, no dependence on the host's scheduler.
+    // trace:BUG-1654 | ai:claude
+    #[test]
+    fn bug_1654_budget_holds_when_sleeps_overshoot() {
+        const OVERSHOOT: std::time::Duration = std::time::Duration::from_millis(50);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("does-not-exist");
+        let start = std::time::Instant::now();
+        let virtual_elapsed = Cell::new(std::time::Duration::ZERO);
+        let sleeps = Cell::new(0u32);
+        let err = read_atomic_with(
+            &path,
+            || start + virtual_elapsed.get(),
+            |requested| {
+                assert!(
+                    requested <= READ_ATOMIC_BACKOFF,
+                    "backoff grew: {requested:?}"
+                );
+                sleeps.set(sleeps.get() + 1);
+                virtual_elapsed.set(virtual_elapsed.get() + OVERSHOOT);
+            },
+        )
+        .expect_err("missing file must error");
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+        // Bounded by the deadline plus at most one overshooting sleep.
+        assert!(
+            virtual_elapsed.get() <= READ_ATOMIC_BUDGET + OVERSHOOT,
+            "wall-clock budget exceeded: {:?}",
+            virtual_elapsed.get()
+        );
+        // 200 ms / 50 ms per sleep = 4 sleeps, not 199.
+        assert_eq!(sleeps.get(), 4, "retry should stop at the deadline");
+    }
+
+    // BUG-1654: with an accurate clock the full nominal budget is still
+    // spent retrying (backoff semantics unchanged), and a clock that never
+    // advances still terminates at the secondary attempt cap.
+    // trace:BUG-1654 | ai:claude
+    #[test]
+    fn bug_1654_accurate_and_frozen_clocks_keep_backoff_semantics() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("does-not-exist");
+        let start = std::time::Instant::now();
+
+        // Accurate clock: each sleep advances exactly what was requested.
+        let elapsed = Cell::new(std::time::Duration::ZERO);
+        let sleeps = Cell::new(0u32);
+        let err = read_atomic_with(
+            &path,
+            || start + elapsed.get(),
+            |d| {
+                sleeps.set(sleeps.get() + 1);
+                elapsed.set(elapsed.get() + d);
+            },
+        )
+        .expect_err("missing file must error");
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+        assert_eq!(sleeps.get(), READ_ATOMIC_MAX_ATTEMPTS - 1);
+        assert!(elapsed.get() <= READ_ATOMIC_BUDGET);
+
+        // Frozen clock: the attempt cap is the backstop.
+        let frozen_sleeps = Cell::new(0u32);
+        let err = read_atomic_with(
+            &path,
+            || start,
+            |_| frozen_sleeps.set(frozen_sleeps.get() + 1),
+        )
+        .expect_err("missing file must error");
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+        assert_eq!(frozen_sleeps.get(), READ_ATOMIC_MAX_ATTEMPTS - 1);
+    }
+
+    // BUG-1654: a file that appears mid-retry (the Windows transient window
+    // closing) is read successfully through the injected path.
+    // trace:BUG-1654 | ai:claude
+    #[test]
+    fn bug_1654_transient_missing_file_is_read_after_retry() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("appears.toml");
+        let start = std::time::Instant::now();
+        let elapsed = Cell::new(std::time::Duration::ZERO);
+        let got = read_atomic_with(
+            &path,
+            || start + elapsed.get(),
+            |d| {
+                elapsed.set(elapsed.get() + d);
+                if elapsed.get() >= std::time::Duration::from_millis(3) {
+                    write_atomic(&path, "ok").unwrap();
+                }
+            },
+        )
+        .expect("file appears within the budget");
+        assert_eq!(got, "ok");
     }
 
     // Concurrent-writer storm against read_atomic — the helper itself, not
