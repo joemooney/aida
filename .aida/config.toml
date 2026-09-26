@@ -257,3 +257,9 @@ seats = ["advisor"]
 on = ["CronJobFailed"]
 prompt = "A seat tripped the runaway-seat watchdog. Use the routed trip evidence (session, rule, measured value, threshold) to stop the tick or loop that is waking it, or hand off and restart a seat past its context ceiling. Never answer by adding another poll."
 enabled = true
+
+[[schedule.jobs]]
+name = "night-shift"
+command = "shift tick"
+every = "10m"
+enabled = true
