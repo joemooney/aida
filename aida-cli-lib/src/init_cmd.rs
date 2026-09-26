@@ -351,21 +351,22 @@ fn init_scaffold_commit_paths(
     paths
 }
 
-/// AIDA's own entries in the shared `.agents/skills/` directory: each
-/// `aida-*` skill directory and the delivered-skills manifest. Never the
-/// whole directory, which may hold other tools' skills the operator has not
-/// chosen to commit.
+/// AIDA's own entries in the shared `.agents/skills/` directory: each skill
+/// directory AIDA ships (the portable inventory) and the delivered-skills
+/// manifest. Never the whole directory, which may hold other tools' skills,
+/// nor a user-authored `aida-*` skill AIDA does not ship.
 // trace:BUG-1639 | ai:claude
 fn portable_pack_commit_paths(root: &std::path::Path) -> Vec<String> {
-    use aida_core::scaffolding::inventory::{AIDA_SKILL_PREFIX, PORTABLE_PACK};
+    use aida_core::scaffolding::inventory::{portable_skill_inventory, PORTABLE_PACK};
     use aida_core::scaffolding::refresh::DELIVERED_MANIFEST;
     let Ok(entries) = std::fs::read_dir(root.join(PORTABLE_PACK)) else {
         return Vec::new();
     };
+    let shipped = portable_skill_inventory(&ScaffoldConfig::default());
     let mut names: Vec<String> = entries
         .flatten()
         .filter_map(|e| e.file_name().into_string().ok())
-        .filter(|n| n.starts_with(AIDA_SKILL_PREFIX) || n == DELIVERED_MANIFEST)
+        .filter(|n| shipped.contains_key(n) || n == DELIVERED_MANIFEST)
         .collect();
     names.sort();
     names
@@ -5467,8 +5468,11 @@ fn sibling_init_marker_exists(project_root: &std::path::Path) -> bool {
 
 #[cfg(test)]
 mod task_1503_memory_lane_manifest_tests {
-    use super::{init_scaffold_commit_paths, write_memory_lane_scaffolding};
+    use super::{
+        init_scaffold_commit_paths, portable_pack_commit_paths, write_memory_lane_scaffolding,
+    };
     use aida_core::scaffolding::refresh::read_skill_manifest;
+    use aida_core::scaffolding::refresh::DELIVERED_MANIFEST;
 
     fn full_install(root: &std::path::Path) {
         let mut scaffolder = aida_core::scaffolding::Scaffolder::new(
@@ -5496,6 +5500,29 @@ mod task_1503_memory_lane_manifest_tests {
             assert!(root.join(manifest).is_file(), "{manifest} written");
             assert!(paths.iter().any(|p| p == manifest), "{manifest}: {paths:?}");
         }
+    }
+
+    /// A full init's commit stages only the portable skills AIDA ships and
+    /// its manifest, never another tool's skill or a user-authored `aida-*`
+    /// skill in the shared `.agents/skills`.
+    // trace:BUG-1639 | ai:claude
+    #[test]
+    fn portable_pack_commit_paths_stage_only_shipped_skills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let pack = root.join(".agents/skills");
+        for name in ["aida-handoff", "aida-my-own", "typesafe-ai"] {
+            std::fs::create_dir_all(pack.join(name)).unwrap();
+            std::fs::write(pack.join(name).join("SKILL.md"), "x\n").unwrap();
+        }
+        std::fs::write(pack.join(DELIVERED_MANIFEST), "x\n").unwrap();
+        assert_eq!(
+            portable_pack_commit_paths(root),
+            [
+                ".agents/skills/.aida-delivered",
+                ".agents/skills/aida-handoff"
+            ]
+        );
     }
 
     /// BUG-1645 review: memory-lane never writes through a symlinked skill
