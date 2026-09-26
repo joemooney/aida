@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T05:29:48.596407578Z
-modified_at: 2026-09-26T08:47:47.087919812Z
+modified_at: 2026-09-26T08:48:37.909463989Z
 req_type: Task
 tags:
 - antigravity
@@ -59,6 +59,12 @@ comments:
   content: 'Implemented at 4bcf703f08 (claude/task-1503). Design: one v2 .aida-delivered manifest per skill pack DIRECTORY (any <pack>/<name>/SKILL.md whose pack ends in ''skills'', so .agents/skills works unchanged for BUG-1639), with a delivered section and an ''# opted-out'' section. Scaffolder::preview plans every skill pack and drops withheld skills (known to the manifest + missing), so init, scaffold apply/upgrade and doctor all respect opt-outs; they record deliveries after writing. Refresh plans in Refresh mode and records before writing. Legacy packs (no manifest, or a STORY-1475 manifest without the v2 marker) are seeded from disk; the missing shipped names are recorded as opt-outs, so neither the first nor later refreshes create anything. A fresh install (no manifest, no AIDA skill on disk) under init/apply delivers everything. An unreadable manifest or symlinked pack dir fails closed with a warning. Covers Claude, Codex and Antigravity skill packs; .claude/commands is excluded because it is a command pack, not a skill pack, and refresh still never creates files there. REFRESH_DELIVERED_SKILLS and DELIVERY_TRACKED_PACKS were removed.'
   created_at: 2026-09-26T08:47:47.087919812Z
   modified_at: 2026-09-26T08:47:47.087919812Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dce6-f215-7682-bd4b-1ef5e865cdf1
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): accept fail-closed for legacy packs. Every missing skill in a pre-manifest pack is recorded as opted out, recoverable by deleting its line in .aida-delivered, which the header documents. Never resurrecting a user''s deletion outranks auto-delivering new skills to old installs. Consider a doctor hint later.'
+  created_at: 2026-09-26T08:48:37.909463989Z
+  modified_at: 2026-09-26T08:48:37.909463989Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
