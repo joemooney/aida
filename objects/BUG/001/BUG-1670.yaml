@@ -1,0 +1,43 @@
+id: 01a0df0c-abd9-70d2-8964-97d37ec73d00
+spec_id: BUG-1670
+agreed_id: BUG-1670
+title: Mutating and gating callers outside BUG-1664 (worker gc, completion findings, focus guard, write-path ID ambiguity check, rules sync) act on a stale cache snapshot whenever any other process holds the
+description: |
+  Found by the STORY-1484 advisor review (verified against origin/main 4407b94716).
+
+  Root cause on main: CachedGitBackend::ensure_cache_fresh_for_read (aida-core/src/db/cached_git_backend.rs) returns WITHOUT refreshing whenever the cache is stale and foreign_writer_holds_lock_at() sees a lock-info record whose owner is Alive or Unknown. That record is written by EVERY with_cache_write call (cache.rs with_cache_write -> write_lock_info_at), including a single-row write-through upsert and a writer still waiting in the retry ladder. Neither brings the cache current (the TASK-712 restamp guard deliberately leaves it stale), so the BUG-664 comment "the foreign writer is itself bringing the cache current" does not hold: a reader can act on a snapshot that is arbitrarily many commits old for as long as other processes keep writing. The tolerant path covers the with_inner constructor plus list_summaries, search, degrees, descendant_ids, id_candidates, id_collisions and pending_decision_count.
+
+  Mutating or gating callers that consume that snapshot today and are NOT covered by BUG-1664 (which owns queue gc, `queue list` auto-gc, archive --older-than and the post-pull archive sweep):
+  1. lib.rs WorkerCommand::Gc (`aida worker gc`): builds dead_ids from list_summaries and rewrites the worker directive file, pruning directives whose target LOOKS archived/Completed/Rejected. A reopened spec's directive is deleted.
+  2. lib.rs try_emit_nonblocking_findings_on_completion: the idempotency set (already-filed finding-hash tags) comes from list_summaries; a snapshot missing a just-filed successor files a DUPLICATE finding spec.
+  3. lib.rs focus_scope_guard (write-path gate): descendant_ids on a stale snapshot can Block a legitimate write to a newly added child, or permit an out-of-scope write for a re-parented one.
+  4. CachedGitBackend::get_requirement_unambiguous via id_candidates, on write paths (edit, assign, link/rel, import-plan, ...): a stale snapshot that misses an externally committed colliding spec_id/agreed_id returns one candidate, so the write silently picks one object instead of refusing as ambiguous (BUG-1535's guarantee). The cache-said-ambiguous direction is already re-confirmed on YAML; only the miss direction is exposed.
+  5. rules_sync.rs sync / sync_review_md (`aida rules sync`): writes and DELETES .claude/rules/aida-specs and .aida/review fragments by cached status.
+  Checked and NOT exposed: session reap decides spec_finished via finished_scopes -> get_requirement_by_spec_id (authoritative YAML); the tolerant summaries only feed the unshipped-work report.
+
+  ## Acceptance
+  - Callers 1, 2, 3 and 5 use a strict freshness entry point (new list_summaries_strict / descendant_ids_strict, or ensure_cache_fresh before the read), OR re-validate every destructive candidate against the authoritative YAML (status, archived) before acting. Worker gc must re-validate each pruned target on YAML regardless.
+  - get_requirement_unambiguous takes strict freshness when called from a write path (a strict variant or a parameter); `aida show` and other read-only callers keep the tolerant check.
+  - Tests, each with a deliberately stale cache AND a live foreign lock-info sidecar (the exact main trigger): worker_gc_keeps_directive_for_reopened_spec; completion_findings_not_duplicated_on_stale_snapshot; focus_guard_uses_fresh_subtree; unambiguous_write_resolution_sees_external_collision_under_foreign_lock; rules_sync_keeps_rule_for_spec_approved_after_snapshot.
+  - A regression test pins that session reap's spec_finished comes from YAML (reap_skips_lease_whose_spec_reopened).
+  - A test-side lint over aida-cli-lib fails when a function whose name contains gc, sweep, prune, reap or emit_findings calls a tolerant cache method (list_summaries, descendant_ids, id_candidates) without a *_strict suffix or an explicit allow comment naming the YAML re-validation.
+  - busy_timeout, DEFAULT_CACHE_RETRY_DELAYS_MS and the read-only commands' latency are unchanged (read-only callers stay tolerant).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:49:04.729043893Z
+modified_at: 2026-09-26T18:49:04.729043893Z
+req_type: Bug
+tags:
+- cache
+- from:STORY-1484
+- locking
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
