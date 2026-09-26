@@ -480,10 +480,19 @@ pub struct ShiftLaunch {
     pub batch: String,
     /// Member specs, in queue order.
     pub specs: Vec<String>,
-    /// Pid of the detached `aida queue work` process.
+    /// Pid of the `aida queue work` process; 0 when the wave ran in its own
+    /// unit and had already exited before its pid was read.
     pub pid: u32,
     /// The exact argv handed to `aida`.
     pub argv: Vec<String>,
+    /// The transient systemd unit the wave runs in, when it has one.
+    // trace:TASK-1510 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    /// Why the wave was launched detached although its own unit was
+    /// wanted, or why its pid is missing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub isolation_note: Option<String>,
 }
 
 impl EventKind {

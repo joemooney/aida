@@ -121,10 +121,16 @@ impl ShiftExec for Mock {
         self.tags.push((batch.to_string(), specs.to_vec()));
         Ok(())
     }
-    fn spawn_wave(&mut self, argv: &[String], _log: &Path) -> Result<(u32, Option<String>)> {
+    // trace:TASK-1510 | ai:claude
+    fn spawn_wave(&mut self, argv: &[String], _log: &Path) -> Result<WaveSpawn> {
         self.calls.push("spawn".into());
         self.spawns.push(argv.to_vec());
-        Ok((4242, Some("start-4242".into())))
+        Ok(WaveSpawn {
+            pid: Some(4242),
+            pid_start: Some("start-4242".into()),
+            unit: None,
+            isolation: WaveIsolation::Detached { reason: None },
+        })
     }
     fn save_state(&mut self, state: &ShiftState) -> Result<()> {
         self.calls.push("save".into());
@@ -211,6 +217,7 @@ fn launched_wave(at: DateTime<Utc>, specs: &[&str]) -> WaveRecord {
         pid: Some(7),
         pid_start: None,
         log: None,
+        unit: None,
         outcome: None,
     }
 }
@@ -612,6 +619,7 @@ fn shift_killed_between_tag_and_spawn_reuses_batch() {
             pid: None,
             pid_start: None,
             log: None,
+            unit: None,
             outcome: None,
         }],
         ..Default::default()
@@ -1379,7 +1387,7 @@ fn shift_deadline_rechecked_after_reap_before_spawn() {
         fn tag_batch(&mut self, b: &str, s: &[String]) -> Result<()> {
             self.0.tag_batch(b, s)
         }
-        fn spawn_wave(&mut self, a: &[String], l: &Path) -> Result<(u32, Option<String>)> {
+        fn spawn_wave(&mut self, a: &[String], l: &Path) -> Result<WaveSpawn> {
             self.0.spawn_wave(a, l)
         }
         fn save_state(&mut self, s: &ShiftState) -> Result<()> {
@@ -1446,6 +1454,7 @@ fn shift_killed_between_spawn_and_pid_record_is_held_by_the_drain_lock() {
             pid: None,
             pid_start: None,
             log: None,
+            unit: None,
             outcome: None,
         }],
         ..Default::default()
@@ -1488,7 +1497,7 @@ fn shift_deadline_rechecked_between_tag_and_spawn() {
             std::thread::sleep(StdDuration::from_millis(400));
             self.0.tag_batch(b, s)
         }
-        fn spawn_wave(&mut self, a: &[String], l: &Path) -> Result<(u32, Option<String>)> {
+        fn spawn_wave(&mut self, a: &[String], l: &Path) -> Result<WaveSpawn> {
             self.0.spawn_wave(a, l)
         }
         fn save_state(&mut self, s: &ShiftState) -> Result<()> {
@@ -2555,10 +2564,7 @@ fn shift_redrive_real_cap_branch_from_the_tick() {
     p.redrive_history = history;
     let mut c = ctx();
     c.optional_allowed = false;
-    let mut exec = RealExec {
-        project_root: tmp.path().to_path_buf(),
-        backend: &backend,
-    };
+    let mut exec = RealExec::new(tmp.path(), &backend, &cfg, now());
     let mut state = ShiftState::default();
     let r = tick_core(&cfg, &p, &mut state, &c, &mut exec).unwrap();
     assert_eq!(r.reclassified, vec!["TASK-9"]);
