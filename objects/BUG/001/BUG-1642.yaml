@@ -3,12 +3,12 @@ spec_id: BUG-1642
 agreed_id: BUG-1642
 title: Rust lib tests write role activity into the real ~/.aida/roles/<role>.toml
 description: 'Found during BUG-1640. The operator''s real ~/.aida/roles/advisor.toml contains [[activity]] entries for BUG-9107, BUG-9112, BUG-9113 and NFR-56 (rework and queue-add, written 2026-09-26T07:40Z during test runs). Those spec IDs are fixtures in aida-cli-lib/src/tests/queue_rework_tests.rs (e.g. line ~1389, rework_as(... ''BUG-9107'' ...)). The role-activity recorder resolves the global roles dir (global_roles_dir(), under the real HOME / AIDA_HOME) even under cfg(test), so any test that exercises rework or queue-add pollutes the operator''s role file. Tests must never touch ~/.aida. Fix: under cfg(test), make the global roles dir resolve to a per-test temp dir (via the AmbientGuard / test_env seam, or a cfg(test) override that errors if unset), and audit other global ~/.aida writers reachable from lib tests (usage.jsonl, presence, turn-clock, schedule). Add a guard test that fails if any lib test writes under the real ~/.aida, for example a test-harness check comparing a snapshot of ~/.aida before and after, or a cfg(test) panic in the global-dir resolver when no override is set. Acceptance: after running cargo test -p aida-cli-lib --lib queue_rework, the real ~/.aida/roles is unchanged. Also remove the fixture activity entries from the operator''s advisor.toml (a one-time cleanup, or document it).'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T07:42:31.353173540Z
-modified_at: 2026-09-26T07:42:31.353173540Z
+modified_at: 2026-09-26T07:42:44.086458621Z
 req_type: Bug
 filed_at:
   code_sha: 17f92c9c064d6477c103366e19fc999b5e57555c
