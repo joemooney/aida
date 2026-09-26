@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T10:49:57.059093421Z
-modified_at: 2026-09-26T11:14:58.159965236Z
+modified_at: 2026-09-26T11:16:37.765497755Z
 req_type: Bug
 comments:
 - id: 01a0dd56-6b2c-7181-b2be-ea825ad27ebe
@@ -38,6 +38,12 @@ comments:
     No blocker. Readers audited: scripts/, tests/*.sh, the templates/hooks and every trim_matches('"') config reader; no other consumer of store_path, branch, workspace, origin_host, remotes.toml or the codex config breaks.
   created_at: 2026-09-26T11:14:58.159965236Z
   modified_at: 2026-09-26T11:14:58.159965236Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd6e-7105-7fb2-901e-1a1ab3efee8a
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): strict review APPROVE WITH NITS accepted. Integrate AFTER BUG-1646 (the doc comments assume usage::log_path uses aida_home_dir). Findings 1, 2, 3, 5 and 6 and the doc row from 4 were moved into BUG-1650.'
+  created_at: 2026-09-26T11:16:37.765497755Z
+  modified_at: 2026-09-26T11:16:37.765497755Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
