@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:37:34.819007356Z
-modified_at: 2026-09-25T08:03:12.656552145Z
+modified_at: 2026-09-26T05:29:28.399850310Z
 req_type: Task
 tags:
 - agent-launch
@@ -22,6 +22,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): left as a draft for Joe. It changes agent permission posture (authority), which a proxy must not approve. A decision question was recorded.'
   created_at: 2026-09-25T08:03:12.656552145Z
   modified_at: 2026-09-25T08:03:12.656552145Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc30-9c4f-7993-9123-7d6597b89e69
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): re-checked, still Joe''s. It sets the agent permission posture at init. Recommended default: approve with prompt-before-YOLO ON by default and non-interactive init never enabling YOLO.'
+  created_at: 2026-09-26T05:29:28.399850310Z
+  modified_at: 2026-09-26T05:29:28.399850310Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
