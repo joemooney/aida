@@ -3844,9 +3844,9 @@ pub(crate) fn branch_content_fully_landed(
 }
 
 /// Per-path proof that everything `branch` changed since its merge-base with
-/// `default_ref` is already on `default_ref`, byte for byte: for every path the
-/// branch touched, the default branch holds the same blob id and mode, or the
-/// branch deleted the path and the default branch lacks it too. This is the
+/// `default_ref` is already on `default_ref`, byte for byte: for every path ANY
+/// branch commit touched, the default branch holds the same blob id and mode
+/// as the branch tip, or both lack the path. This is the
 /// batched-integration complement to [`branch_content_fully_landed`]: when an
 /// integration branch folds several specs' work into ONE squash commit, no
 /// patch-id matches anything on the default side, yet every change the branch
@@ -3906,15 +3906,36 @@ pub(crate) fn branch_paths_match_default(
         ])?;
         parse_raw_diff_paths(&raw)
     };
-    // Paths the branch's own work touched, and paths where the default
-    // branch's tree differs from the branch tip. Nothing the branch changed
-    // may appear in the second set.
-    let Some(touched) = changed_paths(&merge_base, branch) else {
+    // Every path ANY branch commit touched — the union over each commit's own
+    // diff, not the net merge-base..tip diff, which would miss a path changed
+    // and then changed back (a deletion or revert made after an integration
+    // batch picked up an earlier tip). Merge commits are diffed against each
+    // parent (`-m`), which can only widen the set.
+    let range = format!("{merge_base}..{branch}");
+    let Some(log_raw) = run(&[
+        "log",
+        "--raw",
+        "-z",
+        "-m",
+        "--no-renames",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--ignore-submodules=none",
+        "--format=",
+        git_arg_guard::END_OF_OPTIONS,
+        &range,
+        "--",
+    ]) else {
+        return false;
+    };
+    let Some(touched) = parse_raw_diff_paths(&log_raw) else {
         return false;
     };
     if touched.is_empty() {
         return false;
     }
+    // Paths where the default branch's tree differs from the branch tip
+    // (blob id or mode). Nothing the branch touched may appear here.
     let Some(differs) = changed_paths(default_ref, branch) else {
         return false;
     };

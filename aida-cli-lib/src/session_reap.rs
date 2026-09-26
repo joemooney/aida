@@ -489,6 +489,7 @@ pub(crate) fn gather_merge_facts(
                 .arg("-C")
                 .arg(project_root)
                 .args(["rev-list", "--count", &format!("{default_ref}..{branch}")])
+                .stderr(std::process::Stdio::null())
                 .output()
                 .ok()
                 .filter(|o| o.status.success())
@@ -503,8 +504,13 @@ pub(crate) fn gather_merge_facts(
             count_known = n.is_some();
             (n == Some(0), n.unwrap_or(u32::MAX))
         }
-        // Without a resolvable default ref merged-ness cannot be proven.
-        (false, None) => (false, 0),
+        // Without a resolvable default ref merged-ness cannot be proven, and
+        // no signal (not even a forge-merged PR) may make it removable.
+        // trace:BUG-1657 | ai:claude
+        (false, None) => {
+            count_known = false;
+            (false, u32::MAX)
+        }
     };
     let worth_probing = worth_probing && count_known && !ancestor_of_main && !dirty;
     // BUG-1657: a spec landed through a batched integration PR has no merge

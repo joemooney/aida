@@ -454,3 +454,129 @@ fn bug_1657_worktree_off_its_session_branch_is_kept() {
         ReapVerdict::Skip(_)
     ));
 }
+
+/// Land `files` on main as one batch squash naming `spec` and a sibling.
+fn land_batch(root: &Path, files: &[(&str, &str)], spec: &str, pr: u32) {
+    git(root, &["checkout", "-q", "main"]);
+    for (file, content) in files {
+        std::fs::write(root.join(file), content).unwrap();
+        git(root, &["add", file]);
+    }
+    std::fs::write(root.join(format!("sibling-{pr}.txt")), "sibling\n").unwrap();
+    git(root, &["add", &format!("sibling-{pr}.txt")]);
+    git(
+        root,
+        &[
+            "commit",
+            "-q",
+            "-m",
+            &format!("[AI:claude] chore(integrate): batch {pr} - {spec} BUG-9099 (#{pr})"),
+            "-m",
+            &format!("The spec work ({spec})\nSibling work (BUG-9099)"),
+        ],
+    );
+}
+
+/// Regression: the batch picked up an earlier tip that added d.txt; the
+/// branch then dropped d.txt. The net merge-base..tip diff no longer mentions
+/// d.txt, but the deletion never shipped — keep the session.
+#[test]
+fn bug_1657_deletion_after_the_batch_is_kept() {
+    let (_tmp, root) = batched_repo();
+    git(&root, &["checkout", "-q", "-b", "spec-h", "main"]);
+    commit_file(&root, "h.txt", "h\n", "fix(h): change (BUG-9010)");
+    commit_file(&root, "d.txt", "d\n", "fix(h): add d (BUG-9010)");
+    land_batch(&root, &[("h.txt", "h\n"), ("d.txt", "d\n")], "BUG-9010", 50);
+    git(&root, &["checkout", "-q", "spec-h"]);
+    git(&root, &["rm", "-q", "d.txt"]);
+    git(
+        &root,
+        &["commit", "-q", "-m", "fix(h): drop d.txt (BUG-9010)"],
+    );
+    git(&root, &["checkout", "-q", "main"]);
+
+    assert!(!crate::doctor_cmd::branch_paths_match_default(
+        &root, "main", "spec-h"
+    ));
+    for forge in [false, true] {
+        let facts = gather_merge_facts(
+            &root,
+            Some("main"),
+            "spec-h",
+            "BUG-9010",
+            false,
+            true,
+            |_| forge,
+        );
+        assert!(!facts.content_fully_landed, "{facts:?}");
+        assert!(matches!(reap_verdict(facts, true), ReapVerdict::Skip(_)));
+    }
+    // A forge-only signal (no trailer on main) reaches the same probe.
+    let facts = gather_merge_facts(
+        &root,
+        Some("main"),
+        "spec-h",
+        "BUG-7777",
+        false,
+        true,
+        |_| true,
+    );
+    assert!(facts.pr_merged && !facts.content_fully_landed, "{facts:?}");
+    assert!(matches!(reap_verdict(facts, true), ReapVerdict::Skip(_)));
+}
+
+/// Regression: the batch landed a README.md edit; the branch then reverted
+/// README.md. Net diff is empty for README.md, but the revert never shipped.
+#[test]
+fn bug_1657_revert_after_the_batch_is_kept() {
+    let (_tmp, root) = batched_repo();
+    git(&root, &["checkout", "-q", "-b", "spec-i", "main"]);
+    commit_file(
+        &root,
+        "README.md",
+        "base\nedited\n",
+        "fix(i): edit readme (BUG-9011)",
+    );
+    commit_file(&root, "i.txt", "i\n", "fix(i): add i (BUG-9011)");
+    land_batch(
+        &root,
+        &[("README.md", "base\nedited\n"), ("i.txt", "i\n")],
+        "BUG-9011",
+        51,
+    );
+    git(&root, &["checkout", "-q", "spec-i"]);
+    commit_file(
+        &root,
+        "README.md",
+        "base\n",
+        "fix(i): revert readme (BUG-9011)",
+    );
+    git(&root, &["checkout", "-q", "main"]);
+
+    assert!(!crate::doctor_cmd::branch_paths_match_default(
+        &root, "main", "spec-i"
+    ));
+    let facts = gather_merge_facts(
+        &root,
+        Some("main"),
+        "spec-i",
+        "BUG-9011",
+        false,
+        true,
+        |_| true,
+    );
+    assert!(!facts.content_fully_landed, "{facts:?}");
+    assert!(matches!(reap_verdict(facts, true), ReapVerdict::Skip(_)));
+}
+
+/// Without a resolvable default branch nothing can be proven merged — not
+/// even a forge-reported merged PR makes the session removable.
+#[test]
+fn bug_1657_unresolved_default_ref_fails_closed() {
+    let (_tmp, root) = batched_repo();
+    let facts = gather_merge_facts(&root, None, "spec-a", "BUG-9001", false, true, |_| {
+        panic!("no forge lookup without a default branch")
+    });
+    assert!(!facts.pr_merged && !facts.ancestor_of_main, "{facts:?}");
+    assert!(matches!(reap_verdict(facts, true), ReapVerdict::Skip(_)));
+}
