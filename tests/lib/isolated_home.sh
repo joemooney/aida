@@ -15,8 +15,17 @@
 #   6. on EXIT re-snapshots the real ~/.aida and fails the script loudly if
 #      anything the test could plausibly have written changed.
 #
+# EXIT traps: the guard owns the EXIT trap. An EXIT trap that existed before
+# `aida_isolate_home`, and any `trap ... EXIT` the script sets afterwards, is
+# chained (run first, in a subshell, with the script's exit status in $?)
+# rather than replacing the guard: `trap` is wrapped by a shell function for
+# the top-level shell. Subshells still get the plain builtin. Defining
+# `aida_test_cleanup` is the other supported hook.
+#
 # "Plausibly written" = every path the run created under the temporary
-# ~/.aida (i.e. what the CLI wrote to its home dir) plus roles/. Other live
+# ~/.aida (i.e. what the CLI wrote to its home dir) plus roles/, and in every
+# mode any top-level entry of ~/.aida appearing or disappearing (transient
+# atomic-write names like .tmp*/*.tmp/*.lock excepted). Other live
 # agent sessions on the same machine legitimately touch unrelated files
 # (presence.toml, usage.jsonl, ...) mid-run, so those are ignored by default.
 # Shared append-only logs (*.jsonl, *.log) are checked for existence only in
@@ -26,11 +35,15 @@
 #
 # trace:BUG-1634 | ai:claude
 
+# Emits "<relative path>\t<mtime>" per entry below $1 (the root itself is
+# excluded). Never fails: another session may remove a file between readdir and
+# stat, and that must not abort a `set -euo pipefail` caller.
 _aida_home_snapshot() {
     local dir="$1"
     if [ -d "$dir" ]; then
-        find "$dir" -maxdepth 2 -printf '%P %T@\n' 2>/dev/null | sort
+        { find "$dir" -mindepth 1 -maxdepth 2 -printf '%P\t%T@\n' 2>/dev/null || true; } | LC_ALL=C sort
     fi
+    return 0
 }
 
 aida_isolate_home() {
@@ -57,16 +70,60 @@ aida_isolate_home() {
     # (etc.) changes gate outcomes the tests assert. Scripts that need a role
     # set it per command. AIDA_DEV_* and build paths are left alone.
     local v
+    # AIDA_STORE could point the CLI at a real store; GIT_DIR /
+    # GIT_CONFIG_GLOBAL would leak in when a test runs from a git hook.
     unset AIDA_SESSION_ROLE AIDA_SESSION_PURPOSE AIDA_ROLE_INSTANCE \
         AIDA_PERMISSION_MODE AIDA_SESSION_PROJECT AIDA_USER \
-        AIDA_AUTO_COMPLETE AIDA_AUTO_COMPLETE_TOKEN AIDA_AGENT_OUTPUT
+        AIDA_AUTO_COMPLETE AIDA_AUTO_COMPLETE_TOKEN AIDA_AGENT_OUTPUT \
+        AIDA_STORE AIDA_AGENT_TYPE AIDA_AGENT_NAME AIDA_HEADLESS \
+        GIT_DIR GIT_CONFIG_GLOBAL
     for v in $(compgen -e); do
         case "$v" in
             AIDA_SESSION_* | AIDA_ROLE*) unset "$v" ;;
         esac
     done
 
-    trap 'aida_home_guard_exit' EXIT
+    # Chain, don't replace, a pre-existing EXIT trap.
+    _AIDA_USER_EXIT_TRAP=""
+    local existing
+    existing=$(builtin trap -p EXIT)
+    if [ -n "$existing" ]; then
+        eval "set -- $existing"
+        _AIDA_USER_EXIT_TRAP="$3"
+    fi
+    _AIDA_GUARD_SUBSHELL="$BASH_SUBSHELL"
+    builtin trap 'aida_home_guard_exit' EXIT
+}
+
+# Wrapper so a later `trap '...' EXIT` in the (top-level) script is chained in
+# front of the guard instead of silently replacing it.
+trap() {
+    if [ -z "${_AIDA_GUARD_SUBSHELL+x}" ] || [ "$BASH_SUBSHELL" != "$_AIDA_GUARD_SUBSHELL" ]; then
+        builtin trap "$@"
+        return
+    fi
+    local args=("$@")
+    [ "${args[0]:-}" = "--" ] && args=("${args[@]:1}")
+    case "${args[0]:-}" in
+        -p | -l | "") builtin trap "$@"; return ;;
+    esac
+    if [ "${#args[@]}" -lt 2 ]; then
+        builtin trap "$@"
+        return
+    fi
+    local action="${args[0]}" sig rest=()
+    for sig in "${args[@]:1}"; do
+        case "$sig" in
+            EXIT | exit | SIGEXIT | 0)
+                if [ "$action" = "-" ]; then _AIDA_USER_EXIT_TRAP=""; else _AIDA_USER_EXIT_TRAP="$action"; fi
+                ;;
+            *) rest+=("$sig") ;;
+        esac
+    done
+    if [ "${#rest[@]}" -gt 0 ]; then
+        builtin trap -- "$action" "${rest[@]}"
+    fi
+    return 0
 }
 
 # Compare the real ~/.aida before/after. Prints a diff and returns 1 on change.
@@ -85,18 +142,21 @@ aida_home_guard_check() {
         local watch="$AIDA_TEST_GUARD_DIR/watch"
         {
             echo "roles"
-            _aida_home_snapshot "$AIDA_TEST_FAKE_HOME/.aida" | awk '{print $1}'
+            _aida_home_snapshot "$AIDA_TEST_FAKE_HOME/.aida" | cut -f1
         } | awk 'NF' | sort -u >"$watch"
         # Shared append-only logs (usage.jsonl, *.log) are appended to every
         # few seconds by other live sessions, so their mtime is noise here: the
         # lenient guard watches their presence, not their mtime. Strict mode
         # (CI, no concurrent sessions) still compares their mtimes.
         _aida_filter() {
-            awk 'NR==FNR { w[$1]=1; next }
+            # Every top-level entry is always listed (presence only), so a new
+            # or removed direct child of ~/.aida is caught in this mode too.
+            awk -F'\t' 'NR==FNR { w[$0]=1; next }
                  { p=$1; top=p; sub(/\/.*/, "", top)
+                   if (p !~ /\// && p !~ /^\.tmp|\.tmp$|\.lock$/) print "entry\t" p
                    if (!((p in w) || (top in w))) next
                    if (p ~ /\.(jsonl|log)$/) { print p; next }
-                   print }' "$watch" "$1"
+                   print }' "$watch" "$1" | LC_ALL=C sort -u
         }
         _aida_filter "$before" >"$AIDA_TEST_GUARD_DIR/before.f"
         _aida_filter "$after" >"$AIDA_TEST_GUARD_DIR/after.f"
@@ -114,7 +174,16 @@ aida_home_guard_check() {
 
 aida_home_guard_exit() {
     local rc=$?
-    # Run any script-specific cleanup registered by the caller first.
+    # Chained script EXIT trap first, in a subshell so an `exit` inside it
+    # cannot skip the guard; it sees the script's exit status in $?.
+    if [ -n "${_AIDA_USER_EXIT_TRAP:-}" ]; then
+        (
+            builtin trap - EXIT
+            (exit "$rc")
+            eval "$_AIDA_USER_EXIT_TRAP"
+        ) || true
+    fi
+    # Then any script-specific cleanup registered by the caller.
     if declare -F aida_test_cleanup >/dev/null; then
         aida_test_cleanup || true
     fi
