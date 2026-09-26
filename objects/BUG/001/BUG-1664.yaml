@@ -3,13 +3,21 @@ spec_id: BUG-1664
 agreed_id: BUG-1664
 title: Mutating sweeps (queue list auto-gc, queue gc, archive --older-than, post-pull archive sweep) act on the cache snapshot without re-validating the spec, so a stale snapshot can delete live queue entrie
 description: 'From TASK-1515''s round-3 strict review, reproduced on a 4,528-spec store copy with a branch build: with a stale snapshot, ''aida queue gc'' committed ''gc dead queue entries'' and deleted a live, reopened entry; the archive paths re-read the spec but only check the archived flag, not status or age, so they would archive a reopened spec. On main a lock error fails these commands, but main also serves stale snapshots under the foreign-writer skip (ensure_cache_fresh_for_read), so VERIFY whether main is exposed through that path. Fix regardless: before each destructive sweep action, re-validate against the authoritative object (status, archived flag, age), or require a strict freshness check and skip with a note when stale. Acceptance: tests with a deliberately stale snapshot (lock held or foreign-writer sidecar) prove queue gc keeps a reopened entry and archive skips a reopened or recent spec; the main-exposure check result is recorded on the spec.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:41.976532939Z
-modified_at: 2026-09-26T16:50:41.976532939Z
+modified_at: 2026-09-26T16:50:52.487682524Z
 req_type: Bug
+history:
+- id: 01a0dea0-73c7-7152-b2a2-38b2b6faa2df
+  author: joe
+  timestamp: 2026-09-26T16:50:52.487680414Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
   branch: main
