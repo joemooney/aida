@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:33.930129334Z
-modified_at: 2026-09-26T05:28:39.327944755Z
+modified_at: 2026-09-26T09:34:49.570004629Z
 req_type: Story
 tags:
 - lanes
@@ -37,6 +37,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): APPROVED, mode guided, tag needs-sketch. EPIC-74 changes drain selection, PR base selection and Completed semantics, so it needs a sketch, advisor signoff and an ADR before code (the epic says so). Guided, not drain. The integrity floor is untouched: lane land is a normal reviewed PR the implementer cannot self-merge.'
   created_at: 2026-09-26T05:28:39.327944755Z
   modified_at: 2026-09-26T05:28:39.327944755Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd11-3ce2-71f0-89d2-489230b67c2c
+  author: joe
+  content: 'When this lands, update docs/explanations/feature-lanes.md (DOC-5): move this slice from ''Planned (not shipped)'' to ''Shipped'' and refresh the shipped-vs-planned table.'
+  created_at: 2026-09-26T09:34:49.570004629Z
+  modified_at: 2026-09-26T09:34:49.570004629Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: guided
 filed_at:
