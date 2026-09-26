@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T13:48:58.178656696Z
-modified_at: 2026-09-26T16:36:03.125608976Z
+modified_at: 2026-09-26T16:36:42.524241905Z
 req_type: Bug
 comments:
 - id: 01a0ddfa-2332-79e0-a81d-1ecc15894d89
@@ -47,6 +47,12 @@ comments:
     The rest is good to land once finding 1 is fixed: lane init writes header-wrapped bytes identical to the full scaffold, and the header-less migration is correct. Scratch worktree removed.
   created_at: 2026-09-26T16:36:03.125608976Z
   modified_at: 2026-09-26T16:36:03.125608976Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0de93-7b9c-78b3-be64-3290a1275c66
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe) on the strict review (REQUEST CHANGES): keep the header-less migration (reviewed OK). REVERT the doctor lane-drift hint to the manual restore/refresh-by-copy wording from BUG-1645 (don''t point lane projects at ''aida scaffold refresh''). Replace bug_1653_doctor_memory_lane_drift_points_at_refresh with a test asserting the lane hint does NOT recommend ''aida scaffold refresh'' or ''upgrade''. The refresh flood on lane projects is filed as BUG-1662; the hint can move to refresh once that lands. Then an orchestrator delta check.'
+  created_at: 2026-09-26T16:36:42.524241905Z
+  modified_at: 2026-09-26T16:36:42.524241905Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de4a-3d07-7e31-a2cf-072b48d6e33c
