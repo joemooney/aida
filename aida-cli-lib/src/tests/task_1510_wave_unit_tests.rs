@@ -336,13 +336,30 @@ fn wave_unit_helper_has_single_call_site() {
     let end = start + shift[start..].find("fn save_state").unwrap();
     assert!(shift[start..end].contains("launch_wave_isolated("));
     // No other source file calls systemd-run or the launch helper.
+    // Recursive over src/, skipping the test files (they drive the helper
+    // through fakes).
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    for entry in std::fs::read_dir(&src).unwrap() {
-        let path = entry.unwrap().path();
-        if path.extension().is_none_or(|e| e != "rs") {
-            continue;
+    let mut files = Vec::new();
+    let mut dirs = vec![src.clone()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n != "tests") {
+                    dirs.push(path);
+                }
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                files.push(path);
+            }
         }
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
+    }
+    assert!(files.len() > 10, "scanned {} files", files.len());
+    for path in files {
+        let name = path
+            .strip_prefix(&src)
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         let body = std::fs::read_to_string(&path).unwrap();
         if name != "shift.rs" {
             assert!(!body.contains("launch_wave_isolated"), "{name}");
@@ -803,6 +820,22 @@ fn missing_systemd_run_binary_falls_back() {
     }
 }
 
+/// Assert an ambiguous launch was recorded as a pid-less unit, never
+/// relaunched detached.
+fn assert_recorded_ambiguous(l: Launched, what: &str) {
+    assert_eq!(l.detached, 0, "{what}: never a detached fallback");
+    let spawn = l.result.unwrap_or_else(|e| panic!("{what}: {e:#}"));
+    let unit = wave_unit_name(REPO, now(), TICK_PID);
+    assert_eq!(spawn.pid, None, "{what}");
+    assert_eq!(spawn.unit.as_deref(), Some(unit.as_str()), "{what}");
+    match spawn.isolation {
+        WaveIsolation::Unit { note: Some(n), .. } => {
+            assert!(n.contains("ambiguous start"), "{what}: {n}")
+        }
+        other => panic!("{what}: {other:?}"),
+    }
+}
+
 #[test]
 fn timeout_is_ambiguous_never_not_started() {
     assert!(matches!(
@@ -812,8 +845,62 @@ fn timeout_is_ambiguous_never_not_started() {
     let mut host = WaveHost::systemd().with_show(vec![BoundedRun::TimedOut]);
     host.run = BoundedRun::TimedOut;
     let l = launch(&mut host, Some("systemd"));
-    assert_eq!(l.detached, 0, "a timeout never takes the fallback blind");
-    assert!(l.result.is_err());
+    assert_recorded_ambiguous(l, "timeout, probe timed out");
+}
+
+#[test]
+fn timeout_then_not_found_never_falls_back() {
+    // The start job may still be queued, or a short-lived unit already
+    // collected: "not found" proves nothing after a timeout.
+    let mut host = WaveHost::systemd().with_show(vec![show_not_found()]);
+    host.run = BoundedRun::TimedOut;
+    let l = launch(&mut host, Some("systemd"));
+    assert_eq!(host.runs.len(), 1, "one systemd-run, never a retry");
+    assert_recorded_ambiguous(l, "timeout, not found");
+}
+
+#[test]
+fn unrecognised_error_then_not_found_never_falls_back() {
+    for run in [
+        exited(false, "", "Job failed"),
+        exited(false, "", ""),
+        exited(false, "", "Transport endpoint is not connected"),
+    ] {
+        for show in [
+            show_not_found(),
+            exited(
+                true,
+                "LoadState=loaded\nActiveState=failed\nMainPID=0\n",
+                "",
+            ),
+            BoundedRun::TimedOut,
+        ] {
+            let mut host = WaveHost::systemd().with_show(vec![show.clone()]);
+            host.run = run.clone();
+            let l = launch(&mut host, Some("systemd"));
+            assert_recorded_ambiguous(l, &format!("{run:?} then {show:?}"));
+        }
+    }
+}
+
+#[test]
+fn recognised_no_bus_error_still_falls_back() {
+    for stderr in [
+        "Failed to connect to bus: No medium found",
+        "Failed to connect to user scope bus via local transport: $DBUS_SESSION_BUS_ADDRESS \
+         and $XDG_RUNTIME_DIR not defined",
+        "Failed to get D-Bus connection: Operation not permitted",
+    ] {
+        let mut host = WaveHost::systemd();
+        host.run = exited(false, "", stderr);
+        let l = launch(&mut host, Some("systemd"));
+        assert_eq!(l.detached, 1, "{stderr}");
+        assert!(host.shows.is_empty(), "{stderr}");
+        assert!(matches!(
+            l.result.unwrap().isolation,
+            WaveIsolation::Detached { reason: Some(_) }
+        ));
+    }
 }
 
 #[test]
@@ -839,25 +926,9 @@ fn ambiguous_failure_with_active_unit_adopts_pid_no_second_spawn() {
 }
 
 #[test]
-fn ambiguous_failure_with_unknown_unit_that_systemd_does_not_know_falls_back() {
-    let mut host = WaveHost::systemd().with_show(vec![show_not_found()]);
-    host.run = exited(false, "", "Job failed");
-    let l = launch(&mut host, Some("systemd"));
-    assert_eq!(l.detached, 1);
-    match l.result.unwrap().isolation {
-        WaveIsolation::Detached { reason: Some(r) } => {
-            assert!(
-                r.contains("Job failed") && r.contains("does not know"),
-                "{r}"
-            )
-        }
-        other => panic!("{other:?}"),
-    }
-}
-
-#[test]
-fn ambiguous_failure_with_unknown_probe_keeps_intent_and_errs() {
+fn ambiguous_failure_is_counted_launched_and_never_relaunched() {
     for show in [
+        show_not_found(),
         BoundedRun::TimedOut,
         exited(false, "", "Failed to connect to bus"),
         exited(
@@ -870,19 +941,24 @@ fn ambiguous_failure_with_unknown_probe_keeps_intent_and_errs() {
         host.run = BoundedRun::TimedOut;
         let mut exec = TickExec::new(host);
         let mut state = ShiftState::default();
-        let err = tick_core(&cfg_on(), &probes(), &mut state, &ctx(), &mut exec)
-            .expect_err("an ambiguous launch is an error (CronJobFailed)");
-        assert!(format!("{err:#}").contains("left pending"), "{err:#}");
+        let r = tick_core(&cfg_on(), &probes(), &mut state, &ctx(), &mut exec).unwrap();
         assert_eq!(exec.detached, 0, "{show:?}: never a second launch");
-        // The intent was saved before the spawn; nothing after it.
-        assert_eq!(exec.saves.len(), 1);
-        let intent = exec.saves[0].waves.last().unwrap();
-        assert!(intent.pid.is_none() && intent.unit.is_none());
+        let launched = r.launched.clone().expect("recorded as launched");
+        assert_eq!(launched.pid, 0);
+        assert!(launched.unit.is_some());
+        assert!(launched
+            .isolation_note
+            .as_deref()
+            .is_some_and(|n| n.contains("ambiguous start")));
+        let wave = state.waves.last().unwrap();
+        assert!(wave.pid.is_none() && wave.unit.is_some() && wave.launched());
+        assert_eq!(state.waves_in_day(now()), 1, "counts toward the daily cap");
         assert!(
-            state.pending_intent().is_some(),
-            "the next tick adopts or reuses it"
+            state.pending_intent().is_none(),
+            "never relaunched as an intent"
         );
-        assert!(exec.events.is_empty() && exec.notifies == 0);
+        assert!(!last_wave_is_alive(&state), "settles on the next tick");
+        assert!(render_report(&r).contains("pid unknown"));
     }
 }
 

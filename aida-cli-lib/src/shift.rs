@@ -1366,9 +1366,12 @@ struct WaveLaunch<'a> {
 /// driver (the invoker tag AND `/proc/self/cgroup` inside this repo's tick
 /// unit, A4), systemd is supported, and `wave_unit` is not `off`. Otherwise,
 /// and whenever `systemd-run` provably started nothing, the wave launches
-/// detached through `detached`. A failure that may have started the unit is
-/// probed: a live unit is adopted; an unknown answer is an error that leaves
-/// the pid-less intent for the next tick. Never a second launch.
+/// detached through `detached`. Only a spawn failure or a recognised
+/// no-user-manager error takes that fallback. After an ambiguous outcome (a
+/// timeout, an unrecognised error) the unit is recorded as launched whatever
+/// the probe says (pid when it is running), so it counts toward the daily
+/// cap and settles next tick. A name collision adopts a running unit and is
+/// otherwise an error that leaves the pending intent. Never a second launch.
 // trace:TASK-1510 | ai:claude
 fn launch_wave_isolated(
     host: &mut dyn crate::schedule_driver::DriverHost,
@@ -1476,21 +1479,51 @@ fn launch_wave_isolated(
             UnitProbe::Unknown(why) => adopted(None, Some(format!("pid not read: {why}"))),
         });
     };
-    let (why, exists) = match &failure {
-        RunFailure::Exists(why) => (why.clone(), true),
-        RunFailure::Ambiguous(why) | RunFailure::NotStarted(why) => (why.clone(), false),
-    };
-    match probe {
-        UnitProbe::Active { main_pid } => Ok(adopted(
-            main_pid,
-            Some(format!("adopted the running unit after: {why}")),
-        )),
-        UnitProbe::NotFound if !exists => go_detached(Some(format!(
-            "{why}; systemd does not know {unit}, so nothing started"
-        ))),
-        UnitProbe::NotFound => Err(pending(&unit, &why, "not found")),
-        UnitProbe::Inactive(state) => Err(pending(&unit, &why, &state)),
-        UnitProbe::Unknown(u) => Err(pending(&unit, &why, &format!("unknown ({u})"))),
+    match failure {
+        // A unit with our name already exists: it could be a live wave, and
+        // it may not be ours to count. Adopt it only when it is running;
+        // otherwise leave the pending intent. Never a detached copy.
+        RunFailure::Exists(why) => match probe {
+            UnitProbe::Active { main_pid } => Ok(adopted(
+                main_pid,
+                Some(format!("adopted the running unit after: {why}")),
+            )),
+            UnitProbe::NotFound => Err(pending(&unit, &why, "not found")),
+            UnitProbe::Inactive(state) => Err(pending(&unit, &why, &state)),
+            UnitProbe::Unknown(u) => Err(pending(&unit, &why, &format!("unknown ({u})"))),
+        },
+        // Ambiguous (a timeout or an unrecognised error): the start job may
+        // still be queued, or a short-lived unit may already be collected,
+        // so "not found" proves nothing. Never fall back: record the unit so
+        // it counts toward the daily cap, is never relaunched as an intent,
+        // and settles on the next tick.
+        RunFailure::Ambiguous(why) | RunFailure::NotStarted(why) => Ok(match probe {
+            UnitProbe::Active { main_pid } => adopted(
+                main_pid,
+                Some(format!("adopted the running unit after: {why}")),
+            ),
+            UnitProbe::NotFound => adopted(
+                None,
+                Some(format!(
+                    "ambiguous start ({why}); systemd does not know the unit now, so it is \
+                     counted as launched and settled on the next check"
+                )),
+            ),
+            UnitProbe::Inactive(state) => adopted(
+                None,
+                Some(format!(
+                    "ambiguous start ({why}); the unit is {state}, so it is counted as \
+                     launched and settled on the next check"
+                )),
+            ),
+            UnitProbe::Unknown(u) => adopted(
+                None,
+                Some(format!(
+                    "ambiguous start ({why}); its state is unknown ({u}), so it is counted as \
+                     launched and settled on the next check"
+                )),
+            ),
+        }),
     }
 }
 
@@ -3096,7 +3129,12 @@ pub(crate) fn render_report(r: &TickReport) -> String {
             "  launched batch:{} ({} specs, pid {})\n",
             l.batch,
             l.specs.len(),
-            l.pid
+            // trace:TASK-1510 | ai:claude
+            if l.pid == 0 && l.unit.is_some() {
+                "unknown".to_string()
+            } else {
+                l.pid.to_string()
+            }
         ));
         // trace:TASK-1510 | ai:claude
         match &r.wave_isolation {
