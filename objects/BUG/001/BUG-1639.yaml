@@ -1,0 +1,38 @@
+id: 01a0dc0a-5c93-75b1-8704-cdacd85b64ce
+spec_id: BUG-1639
+agreed_id: BUG-1639
+title: 'Codex/Antigravity packs have no aida-handoff: vendor skill lists are a hand-maintained allow-list that drifts from the Claude set'
+description: |
+  Codex has no `aida-handoff` skill. The Codex pack (`.codex/skills/`) and the Antigravity pack (`.antigravity/skills/`) are generated from a **hand-maintained allow-list** of 23 skills (`codex_skill_defs` / `antigravity_skill_defs` in `aida-core/src/scaffolding/mod.rs`). `aida-handoff` was added later (STORY-1006) and never made it onto either list. The legacy `~/.codex/prompts/` pack has no handoff prompt either, and Codex ≥0.142 does not discover that directory anyway (BUG-1095).
+
+  This matters because seat rotation (STORY-1464) depends on a seat handing off before it exits, and Codex holds seats too.
+
+  The `aida-handoff` master (`aida-core/templates/skills/aida-handoff.md`) uses no Claude-only harness tools, so it can ship to Codex as it is. No `skills-portable/` variant is needed.
+
+  The underlying defect is that the allow-list drifts by default: every new skill silently misses the other vendors unless someone remembers to add it. Other skills are missing from those lists as well (e.g. `aida-human-audit`, `aida-fleet-watch`, `aida-grill`, `aida-triage`).
+
+  ## Acceptance
+  - `aida-handoff` is scaffolded into `.codex/skills/aida-handoff/SKILL.md` and `.antigravity/skills/aida-handoff/SKILL.md`, and delivered to existing installs by `aida scaffold refresh`.
+  - The Codex and Antigravity pack lists are **derived** from the Claude skill set minus an explicit, commented exclusion list (skills that are Claude-only and have no `skills-portable/` body), rather than hand-listed.
+  - A test fails when a Claude skill master exists that is neither shipped to Codex/Antigravity nor on the exclusion list, so future skills cannot silently miss the other vendors.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T04:47:41.715373320Z
+modified_at: 2026-09-26T04:47:41.715373320Z
+req_type: Bug
+tags:
+- antigravity
+- codex
+- parity
+- scaffolding
+- skills
+filed_at:
+  code_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: claude
+  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
