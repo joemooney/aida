@@ -16,9 +16,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T09:49:03.555549390Z
-modified_at: 2026-09-26T05:28:55.713132907Z
+modified_at: 2026-09-26T05:32:39.062587325Z
 req_type: Task
 tags:
+- batch:groom-2026-09-25
 - needs-sketch
 relationships:
 - rel_type: Supersedes
