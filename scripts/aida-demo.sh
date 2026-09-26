@@ -507,7 +507,7 @@ echo
 note_box --title "What was just scaffolded" \
   "  .aida/config.toml + orphan branch 'aida-store' + worktree .aida-store/" \
   "  .claude/skills/ + commands/ + hooks/ (Claude Code integration)" \
-  "  .codex/skills/ (Codex integration)" \
+  "  .agents/skills/ (Codex and Antigravity integration)" \
   "  CLAUDE.md + AGENTS.md + .mcp.json" \
   "  .aida/discipline/ + docs/plans/" \
   "  META requirements + auto-enqueued onboarding task"
