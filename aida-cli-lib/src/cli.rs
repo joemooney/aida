@@ -12944,6 +12944,14 @@ pub enum Command {
         #[clap(long, global = true)]
         oneline: bool,
 
+        /// Emit the event feed as JSON (same shape as the MCP history
+        /// tool): `count`, `events` (each with its `spec_id`),
+        /// `window_exhausted`, `source`, `index_tip`. Implies the full
+        /// event feed. `--format json` is the same.
+        // trace:BUG-1631 | ai:claude
+        #[clap(long, global = true)]
+        json: bool,
+
         /// Include archived AND deferred requirements (everything-escape-hatch).
         /// Symmetric with `aida list --all`. By default `aida history`
         /// surfaces every active spec (including freshly-Completed ships) but

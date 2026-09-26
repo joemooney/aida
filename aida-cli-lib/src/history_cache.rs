@@ -52,8 +52,13 @@ pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 5;
 /// changes meaning or serialized shape. A bump gives the index a new file
 /// name, so the old one is simply ignored (and pruned by an explicit
 /// rebuild).
+/// v2: `RelationshipsChange` records the changed `edges` (BUG-1631).
+/// v3: every stored `rel_type` form decodes to one key, so a format
+/// rewrite is not an edge change; v2 files could hold false removals.
+/// v4: edges diff as a multiset, so a changed duplicate is counted.
 // trace:TASK-1507 | ai:claude
-pub(crate) const HISTORY_DECODER_VERSION: u32 = 1;
+// trace:BUG-1631 | ai:claude
+pub(crate) const HISTORY_DECODER_VERSION: u32 = 4;
 
 /// Default cap on inline indexing work per query, in milliseconds.
 const DEFAULT_INDEX_BUDGET_MS: u64 = 1500;

@@ -153,7 +153,77 @@ pub(crate) enum EventKind {
     RelationshipsChange {
         added: usize,
         removed: usize,
+        /// BUG-1631: the edges that changed, so the feed can show
+        /// `STORY-1 → child TASK-2` instead of only a count. Empty on an
+        /// event decoded before edges were recorded.
+        // trace:BUG-1631 | ai:claude
+        #[serde(default)]
+        edges: Vec<RelEdge>,
     },
+}
+
+/// One relationship edge added to or removed from a spec, as stored on the
+/// spec's YAML (`rel_type` + the target's UUID). `target` is the target's
+/// spec ID, filled in after the events are collected (see
+/// [`resolve_edge_targets`]); the history index stores it unresolved.
+// trace:BUG-1631 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub(crate) struct RelEdge {
+    pub(crate) added: bool,
+    pub(crate) rel_type: String,
+    pub(crate) target_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) target: Option<String>,
+}
+
+impl RelEdge {
+    /// The target as a reader should see it: its spec ID when known, else
+    /// the first 8 characters of its UUID (a since-deleted target).
+    // trace:BUG-1631 | ai:claude
+    pub(crate) fn target_label(&self) -> String {
+        match &self.target {
+            Some(t) => t.clone(),
+            None => self.target_id.chars().take(8).collect(),
+        }
+    }
+
+    /// The edge from `source`'s side, e.g. `STORY-1 → child TASK-2`.
+    /// Stored `rel_type` names the source's role toward the target
+    /// (`Parent` on the parent), so `Parent`/`Child` read as the target's
+    /// role: STORY-1 `Parent` TASK-2 means TASK-2 is STORY-1's child.
+    // trace:BUG-1631 | ai:claude
+    pub(crate) fn describe(&self, source: &str) -> String {
+        format!(
+            "{source} \u{2192} {} {}",
+            rel_label(&self.rel_type),
+            self.target_label()
+        )
+    }
+}
+
+/// Reader-facing label for a stored `rel_type`: `Parent` → `child`,
+/// `Child` → `parent`, other variants kebab-cased (`BlockedBy` →
+/// `blocked-by`), custom names unchanged.
+// trace:BUG-1631 | ai:claude
+fn rel_label(rel_type: &str) -> String {
+    match rel_type {
+        "Parent" => "child".to_string(),
+        "Child" => "parent".to_string(),
+        other => {
+            let mut out = String::new();
+            for (i, ch) in other.chars().enumerate() {
+                if ch.is_ascii_uppercase() {
+                    if i > 0 {
+                        out.push('-');
+                    }
+                    out.push(ch.to_ascii_lowercase());
+                } else {
+                    out.push(ch);
+                }
+            }
+            out
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -344,7 +414,10 @@ where
     }
 }
 
-pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
+/// `json` selects the JSON projection of the events feed (`--json` /
+/// `--format json`); the caller also sets `opts.events_mode` for it.
+// trace:BUG-1631 | ai:claude
+pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
     if !store_path.is_dir() {
         anyhow::bail!(
             "Not a git-canonical AIDA store: {}\n\
@@ -358,7 +431,9 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     let (resolved_opts, since_at, until_at) =
         resolve_history_window(opts, chrono::Utc::now(), &chrono::Local)?;
     let opts = &resolved_opts;
-    if !crate::agent_output_mode() {
+    // BUG-1631: `--json` stdout is pure JSON, even at a human terminal.
+    // trace:BUG-1631 | ai:claude
+    if show_window_line(json, crate::agent_output_mode()) {
         if let Some(line) = format_resolved_window(since_at, until_at, &chrono::Local) {
             println!("{}", line.dimmed());
         }
@@ -378,6 +453,14 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
 
     let (filtered, hidden_archived, window_exhausted, source) =
         collect_filtered_events_sourced(store_path, opts)?;
+
+    // BUG-1631: the JSON projection mirrors the MCP history tool's shape;
+    // every record carries its `spec_id`.
+    if json {
+        let payload = events_json(&filtered, window_exhausted, &source);
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
 
     if filtered.is_empty() {
         eprintln!("{}", "(no events match the filter)".dimmed());
@@ -399,30 +482,28 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         for e in &filtered {
             println!("{}", format_oneline(e));
         }
+    } else if crate::agent_output_mode() {
+        // BUG-1631: agents get a TOON table with an `id` column, not the
+        // human blocks. trace:BUG-1631 | ai:claude
+        println!("{}", render_events_toon(&filtered));
     } else {
-        // Group by sha so commits with multiple events get one header.
-        let mut last_sha: Option<String> = None;
-        for e in &filtered {
-            if Some(&e.sha) != last_sha.as_ref() {
-                if last_sha.is_some() {
-                    println!();
-                }
-                println!(
-                    "{} {}  {}",
-                    "commit".yellow(),
-                    e.sha[..8].yellow(),
-                    format!("({}, by {})", e.timestamp, e.author).dimmed()
-                );
-                last_sha = Some(e.sha.clone());
-            }
-            println!("  {}", format_event_body(e));
-        }
+        print!(
+            "{}",
+            render_events_human(&filtered, opts.id_filter.is_none())
+        );
     }
 
     print_window_exhausted_notice(opts, window_exhausted, filtered.len());
     print_fallback_footer(&source);
 
     Ok(())
+}
+
+/// Whether `run` prints the human `Window: …` line on stdout: never for
+/// `--json` (its stdout must parse as JSON) nor for agent output.
+// trace:BUG-1631 | ai:claude
+pub(crate) fn show_window_line(json: bool, agent_mode: bool) -> bool {
+    !json && !agent_mode
 }
 
 /// Where a history answer came from. MCP reports it as `source` (plus
@@ -718,9 +799,140 @@ fn collect_filtered_events(
     Ok((events, hidden, exhausted))
 }
 
-/// [`collect_filtered_events`] plus where the answer came from.
+/// [`collect_filtered_events`] plus where the answer came from, with
+/// relationship edge targets resolved to spec IDs (BUG-1631).
 // trace:TASK-1508 | ai:claude
+// trace:BUG-1631 | ai:claude
 fn collect_filtered_events_sourced(
+    store_path: &Path,
+    opts: &HistoryOpts,
+) -> Result<(Vec<Event>, usize, bool, HistorySource)> {
+    let (mut events, hidden, exhausted, source) =
+        collect_filtered_events_unresolved(store_path, opts)?;
+    resolve_edge_targets(store_path, &mut events);
+    Ok((events, hidden, exhausted, source))
+}
+
+/// Fill in each relationship edge's `target` spec ID. Runs after
+/// filtering, and only when an edge needs it. The requirements cache's
+/// uuid→spec_id rows answer first (one indexed lookup per target), but
+/// only while the cache reflects the store's current HEAD: a spec's ID
+/// can change for the same UUID (duplicate repair, renumbering, agreed-id
+/// promotion), and a long-lived caller such as the MCP server can hold a
+/// cache that has not caught up. With no readable cache, or a stale one,
+/// the object files are scanned instead. A target the source cannot name (a
+/// since-deleted spec) keeps `target: None` and renders as its short UUID.
+// trace:BUG-1631 | ai:claude
+pub(crate) fn resolve_edge_targets(store_path: &Path, events: &mut [Event]) {
+    use std::collections::{HashMap, HashSet};
+
+    let mut wanted: HashSet<String> = HashSet::new();
+    for e in events.iter() {
+        if let EventKind::RelationshipsChange { edges, .. } = &e.kind {
+            for edge in edges {
+                if edge.target.is_none() {
+                    wanted.insert(edge.target_id.clone());
+                }
+            }
+        }
+    }
+    if wanted.is_empty() {
+        return;
+    }
+    let found: HashMap<String, String> = edge_targets_from_cache(store_path, &wanted)
+        .unwrap_or_else(|| edge_targets_from_objects(store_path, &wanted));
+    for e in events.iter_mut() {
+        if let EventKind::RelationshipsChange { edges, .. } = &mut e.kind {
+            for edge in edges.iter_mut() {
+                if edge.target.is_none() {
+                    edge.target = found.get(&edge.target_id).cloned();
+                }
+            }
+        }
+    }
+}
+
+/// uuid→spec_id from the project's requirements cache, opened read-only.
+/// `None` when there is no cache, it cannot be read, or its recorded
+/// `source_head_sha` is not the store's current HEAD (stale).
+// trace:BUG-1631 | ai:claude
+fn edge_targets_from_cache(
+    store_path: &Path,
+    wanted: &std::collections::HashSet<String>,
+) -> Option<std::collections::HashMap<String, String>> {
+    use rusqlite::{Connection, OpenFlags, OptionalExtension};
+    let path = aida_core::CachedGitBackend::default_cache_path(store_path);
+    if !path.is_file() {
+        return None;
+    }
+    let conn = Connection::open_with_flags(
+        &path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .ok()?;
+    let recorded: String = conn
+        .query_row(
+            "SELECT value FROM cache_meta WHERE key = 'source_head_sha'",
+            [],
+            |row| row.get(0),
+        )
+        .ok()?;
+    let head = aida_core::git_ops::head_sha(store_path).ok()?;
+    if recorded.trim().is_empty() || recorded.trim() != head.trim() {
+        return None;
+    }
+    let mut stmt = conn
+        .prepare("SELECT spec_id FROM requirements_cache WHERE id = ?1")
+        .ok()?;
+    let mut found = std::collections::HashMap::new();
+    for uuid in wanted {
+        let row: Option<Option<String>> = stmt
+            .query_row([uuid], |row| row.get::<_, Option<String>>(0))
+            .optional()
+            .ok()?;
+        if let Some(Some(spec_id)) = row {
+            found.insert(uuid.clone(), spec_id);
+        }
+    }
+    Some(found)
+}
+
+/// uuid→spec_id by reading the `id:` line near the top of each object
+/// file: the fallback when no cache is readable.
+// trace:BUG-1631 | ai:claude
+fn edge_targets_from_objects(
+    store_path: &Path,
+    wanted: &std::collections::HashSet<String>,
+) -> std::collections::HashMap<String, String> {
+    use std::io::BufRead;
+    let mut found = std::collections::HashMap::new();
+    let Ok(objects) = aida_core::object_store::list_objects(&store_path.join("objects")) else {
+        return found;
+    };
+    for (spec_id, path) in objects {
+        if found.len() == wanted.len() {
+            break;
+        }
+        let Ok(file) = std::fs::File::open(&path) else {
+            continue;
+        };
+        for line in std::io::BufReader::new(file).lines().take(8) {
+            let Ok(line) = line else { break };
+            if let Some(uuid) = line.strip_prefix("id:") {
+                let uuid = uuid.trim().trim_matches(|c| c == '\'' || c == '"');
+                if wanted.contains(uuid) {
+                    found.insert(uuid.to_string(), spec_id.clone());
+                }
+                break;
+            }
+        }
+    }
+    found
+}
+
+/// The index-or-walk answer before edge targets are resolved.
+// trace:TASK-1508 | ai:claude
+fn collect_filtered_events_unresolved(
     store_path: &Path,
     opts: &HistoryOpts,
 ) -> Result<(Vec<Event>, usize, bool, HistorySource)> {
@@ -1655,12 +1867,100 @@ fn diff_modified(
         }));
     }
 
-    let rb = yaml_array_len(before, "relationships");
-    let ra = yaml_array_len(after, "relationships");
-    if ra != rb {
-        let added = ra.saturating_sub(rb);
-        let removed = rb.saturating_sub(ra);
-        out.push(mk(EventKind::RelationshipsChange { added, removed }));
+    // BUG-1631: a multiset diff on (rel_type, target) so the event names
+    // the edges that changed, not just how many. Every entry counts, a
+    // duplicate once per copy and an unreadable one as `unknown`, so
+    // [X, X] → [X, Y] is +Y and -X, and the totals always match the
+    // entries that really changed.
+    let edges_before = yaml_edge_counts(before);
+    let edges_after = yaml_edge_counts(after);
+    let mut edges: Vec<RelEdge> = Vec::new();
+    for ((rel_type, target_id), n_after) in &edges_after {
+        let n_before = edges_before
+            .get(&(rel_type.clone(), target_id.clone()))
+            .copied()
+            .unwrap_or(0);
+        for _ in n_before..*n_after {
+            edges.push(RelEdge {
+                added: true,
+                rel_type: rel_type.clone(),
+                target_id: target_id.clone(),
+                target: None,
+            });
+        }
+    }
+    for ((rel_type, target_id), n_before) in &edges_before {
+        let n_after = edges_after
+            .get(&(rel_type.clone(), target_id.clone()))
+            .copied()
+            .unwrap_or(0);
+        for _ in n_after..*n_before {
+            edges.push(RelEdge {
+                added: false,
+                rel_type: rel_type.clone(),
+                target_id: target_id.clone(),
+                target: None,
+            });
+        }
+    }
+    if !edges.is_empty() {
+        let added = edges.iter().filter(|e| e.added).count();
+        let removed = edges.len() - added;
+        out.push(mk(EventKind::RelationshipsChange {
+            added,
+            removed,
+            edges,
+        }));
+    }
+}
+
+/// How many times each `(rel_type, target_id)` pair appears in a spec's
+/// `relationships` array. Every entry counts: an unreadable `rel_type` keys
+/// as `unknown`, a missing `target_id` as `?`.
+// trace:BUG-1631 | ai:claude
+fn yaml_edge_counts(v: &Value) -> std::collections::BTreeMap<(String, String), usize> {
+    let mut counts = std::collections::BTreeMap::new();
+    let Some(seq) = v.get("relationships").and_then(Value::as_sequence) else {
+        return counts;
+    };
+    for key in seq.iter().map(|rel| {
+        let rel_type = rel
+            .get("rel_type")
+            .map(rel_type_key)
+            .unwrap_or_else(|| UNKNOWN_REL.to_string());
+        let target = rel
+            .get("target_id")
+            .and_then(Value::as_str)
+            .unwrap_or("?")
+            .to_string();
+        (rel_type, target)
+    }) {
+        *counts.entry(key).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// Label for an edge whose `rel_type` cannot be read at all.
+// trace:BUG-1631 | ai:claude
+const UNKNOWN_REL: &str = "unknown";
+
+/// One canonical key per relationship type, whatever its stored form:
+/// a bare string (`Parent`, or a custom `implemented-by`), the legacy
+/// tagged `!Custom name`, or the current mapping `{custom: name}`. Parsed
+/// through `RelationshipType`'s own deserializer, so a store-wide rewrite
+/// from one form to another yields the same key and no false edge events.
+/// Standard types key as their stored variant name (`Parent`), custom ones
+/// as their name.
+// trace:BUG-1631 | ai:claude
+fn rel_type_key(v: &Value) -> String {
+    use aida_core::models::RelationshipType;
+    match serde_yaml::from_value::<RelationshipType>(v.clone()) {
+        Ok(RelationshipType::Custom(name)) => name,
+        Ok(rt) => serde_json::to_value(&rt)
+            .ok()
+            .and_then(|j| j.as_str().map(str::to_string))
+            .unwrap_or_else(|| rt.to_string()),
+        Err(_) => UNKNOWN_REL.to_string(),
     }
 }
 
@@ -1752,6 +2052,107 @@ pub(crate) fn human_timestamp(iso: &str) -> String {
         .to_string()
 }
 
+/// Human block rendering of the events feed. Events are grouped under a
+/// `commit <sha>` header. In a multi-spec feed (`multi_spec`) the header
+/// also names the spec and a new block starts for each spec a commit
+/// touched, so every event reads with its spec ID (BUG-1631). The
+/// single-spec view keeps the ID implicit.
+// trace:BUG-1631 | ai:claude
+pub(crate) fn render_events_human(events: &[Event], multi_spec: bool) -> String {
+    let mut out = String::new();
+    let mut last: Option<(&str, &str)> = None;
+    for e in events {
+        let key = (
+            e.sha.as_str(),
+            if multi_spec { e.spec_id.as_str() } else { "" },
+        );
+        if last != Some(key) {
+            if last.is_some() {
+                out.push('\n');
+            }
+            let meta = format!("({}, by {})", e.timestamp, e.author).dimmed();
+            let sha = &e.sha[..e.sha.len().min(8)];
+            if multi_spec {
+                out.push_str(&format!(
+                    "{} {}  {}  {}\n",
+                    "commit".yellow(),
+                    sha.yellow(),
+                    e.spec_id.bold(),
+                    meta
+                ));
+            } else {
+                out.push_str(&format!(
+                    "{} {}  {}\n",
+                    "commit".yellow(),
+                    sha.yellow(),
+                    meta
+                ));
+            }
+            last = Some(key);
+        }
+        out.push_str(&format!("  {}\n", format_event_body(e)));
+    }
+    out
+}
+
+/// TOON rendering of the events feed for agent callers: one row per
+/// event, each with its spec ID.
+// trace:BUG-1631 | ai:claude
+pub(crate) fn render_events_toon(events: &[Event]) -> String {
+    let rows: Vec<Vec<String>> = events
+        .iter()
+        .map(|e| {
+            let r = event_record(e);
+            vec![
+                r.sha.chars().take(8).collect(),
+                r.timestamp,
+                r.author,
+                r.spec_id,
+                r.kind,
+                r.summary,
+            ]
+        })
+        .collect();
+    format!(
+        "view: history-events\ncount: {}\n{}",
+        rows.len(),
+        crate::toon::table_raw(
+            "events",
+            &["sha", "when", "author", "id", "kind", "summary"],
+            &rows
+        )
+    )
+}
+
+/// JSON projection of the events feed, the same shape the MCP history
+/// tool returns.
+// trace:BUG-1631 | ai:claude
+pub(crate) fn events_json(
+    events: &[Event],
+    window_exhausted: bool,
+    source: &HistorySource,
+) -> JsonValue {
+    let records: Vec<HistoryEventRecord> = events.iter().map(event_record).collect();
+    records_json(&records, window_exhausted, source)
+}
+
+/// The history JSON document for already-built records; shared by the CLI
+/// (`--json`) and the MCP history tool so the two cannot drift.
+// trace:BUG-1631 | ai:claude
+pub(crate) fn records_json(
+    records: &[HistoryEventRecord],
+    window_exhausted: bool,
+    source: &HistorySource,
+) -> JsonValue {
+    json!({
+        "count": records.len(),
+        "events": records,
+        "window_exhausted": window_exhausted,
+        "source": source.as_str(),
+        "index_tip": source.index_tip(),
+    })
+}
+
 fn format_oneline(e: &Event) -> String {
     let head = format!(
         "{} {} {}",
@@ -1763,7 +2164,7 @@ fn format_oneline(e: &Event) -> String {
 }
 
 pub(crate) fn event_record(e: &Event) -> HistoryEventRecord {
-    let (kind, summary, detail) = event_kind_record(&e.kind);
+    let (kind, summary, detail) = event_kind_record(&e.kind, &e.spec_id);
     HistoryEventRecord {
         sha: e.sha.clone(),
         timestamp: e.timestamp.clone(),
@@ -1776,7 +2177,7 @@ pub(crate) fn event_record(e: &Event) -> HistoryEventRecord {
     }
 }
 
-fn event_kind_record(kind: &EventKind) -> (String, String, JsonValue) {
+fn event_kind_record(kind: &EventKind, spec_id: &str) -> (String, String, JsonValue) {
     match kind {
         EventKind::Added {
             title,
@@ -1856,11 +2257,50 @@ fn event_kind_record(kind: &EventKind) -> (String, String, JsonValue) {
                 json!({ "count": count, "author": author }),
             )
         }
-        EventKind::RelationshipsChange { added, removed } => (
-            "relationships_change".to_string(),
-            format!("relationships: +{added} added, -{removed} removed"),
-            json!({ "added": added, "removed": removed }),
-        ),
+        // trace:BUG-1631 | ai:claude
+        EventKind::RelationshipsChange {
+            added,
+            removed,
+            edges,
+        } => {
+            let summary = if edges.is_empty() {
+                format!("relationships: +{added} added, -{removed} removed")
+            } else {
+                let mut parts: Vec<String> = edges
+                    .iter()
+                    .map(|edge| {
+                        let sign = if edge.added { '+' } else { '-' };
+                        format!("{sign}{}", edge.describe(spec_id))
+                    })
+                    .collect();
+                let (more_added, more_removed) = unnamed_edge_counts(*added, *removed, edges);
+                if more_added > 0 {
+                    parts.push(format!("+{more_added} more"));
+                }
+                if more_removed > 0 {
+                    parts.push(format!("-{more_removed} more"));
+                }
+                format!("relationships: {}", parts.join(", "))
+            };
+            let edge_detail: Vec<JsonValue> = edges
+                .iter()
+                .map(|edge| {
+                    json!({
+                        "op": if edge.added { "added" } else { "removed" },
+                        "from": spec_id,
+                        "rel_type": edge.rel_type,
+                        "label": rel_label(&edge.rel_type),
+                        "to": edge.target,
+                        "target_id": edge.target_id,
+                    })
+                })
+                .collect();
+            (
+                "relationships_change".to_string(),
+                summary,
+                json!({ "added": added, "removed": removed, "edges": edge_detail }),
+            )
+        }
     }
 }
 
@@ -1931,7 +2371,34 @@ fn format_event_body(e: &Event) -> String {
                 format!("{} {}{}", "comments added".bold(), count, by)
             }
         }
-        EventKind::RelationshipsChange { added, removed } => {
+        // BUG-1631: name each changed edge when it is known.
+        // trace:BUG-1631 | ai:claude
+        EventKind::RelationshipsChange {
+            edges,
+            added,
+            removed,
+        } if !edges.is_empty() => {
+            let mut parts: Vec<String> = edges
+                .iter()
+                .map(|edge| {
+                    let text = edge.describe(&e.spec_id);
+                    if edge.added {
+                        format!("+{text}").green().to_string()
+                    } else {
+                        format!("-{text}").red().to_string()
+                    }
+                })
+                .collect();
+            let (more_added, more_removed) = unnamed_edge_counts(*added, *removed, edges);
+            if more_added > 0 {
+                parts.push(format!("+{more_added} more").green().to_string());
+            }
+            if more_removed > 0 {
+                parts.push(format!("-{more_removed} more").red().to_string());
+            }
+            format!("{}: {}", "relationships".bold(), parts.join(", "))
+        }
+        EventKind::RelationshipsChange { added, removed, .. } => {
             let mut parts = Vec::new();
             if *added > 0 {
                 parts.push(format!("+{} added", added).green().to_string());
@@ -1942,6 +2409,17 @@ fn format_event_body(e: &Event) -> String {
             format!("{}: {}", "relationships".bold(), parts.join(", "))
         }
     }
+}
+
+/// Changed edges counted in `added`/`removed` but not named in `edges`.
+// trace:BUG-1631 | ai:claude
+fn unnamed_edge_counts(added: usize, removed: usize, edges: &[RelEdge]) -> (usize, usize) {
+    let named_added = edges.iter().filter(|e| e.added).count();
+    let named_removed = edges.len() - named_added;
+    (
+        added.saturating_sub(named_added),
+        removed.saturating_sub(named_removed),
+    )
 }
 
 fn maybe_dash(s: &str) -> String {
