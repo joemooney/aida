@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:13:30.973906114Z
-modified_at: 2026-09-26T02:17:33.401517215Z
+modified_at: 2026-09-26T02:56:44.061517258Z
 req_type: Bug
 comments:
 - id: 01a0db10-005c-7da3-afd4-a3255820e41b
@@ -22,6 +22,30 @@ comments:
   content: 'Scope additions from BUG-1632''s strict review: (a) the orchestrator phase-1 bump (lib.rs ~97921) is already listed; it can regress Rejected to InProgress. (b) loop_guard_park (queue_cmd.rs ~7701) doesn''t refuse to leave a terminal status inside its atomic write, unlike shelve and punt. Add that check.'
   created_at: 2026-09-26T00:24:22.916495045Z
   modified_at: 2026-09-26T00:24:22.916495045Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dba4-c61d-7213-8ce0-bea3d27de1be
+  author: joe
+  content: |-
+    Strict review: REQUEST CHANGES — claude/bug-1637 @ 14ddf4c6a0. The classification, merge rule and tests are sound. Two gaps remain against the review brief and the acceptance criterion.
+
+    BLOCKERS
+    1. The phase-1 restore and the zen approve re-checks are not inside the locked write. restore_phase1_status_on_lease_failure (lib.rs:46710, write at ~46748-46757) and zen_auto_approve (lib.rs:98570, flip at ~98590) both read with get_requirement_unambiguous or a caller clone, run phase1_status_restore or zen_approve_flip on that pre-lock copy, and then do a blind backend.update_requirement (GitBackend::update_requirement takes the lock but has no compare-and-swap). A spec completed or rejected between the read and the write is still overwritten, so the TOCTOU window the commit message says is closed is still open. zen_auto_approve also ignores zen_approve_flip's return value and writes the object even on refusal, so a refusal does not write nothing. Fix: route both through update_spec_atomically with the flip inside the closure, as prepare_auto_complete_phase1_status and loop_guard_park now do, and skip the write and the follow-on steps when the flip refuses.
+    2. A missed status writer. 'aida findings promote --auto-complete' (lib.rs:~6729, completion::transition_to_completed with closure 'promote') moves the spec to Completed with no status-history entry; the closure only sets modified_at and writes. The acceptance says every status write path records history with the right author class. Record the transition under the caller (record_status_transition(req, &author, prior)) in that closure, the same way handle_done_command and queue done do.
+
+    NON-BLOCKING
+    3. Same pre-lock-read plus blind-write shape in ensure_spec_done_after_pr (lib.rs:~9040-9050, InProgress->Done) and bump_spec_in_progress_at_lease_take (lib.rs:~31509-31516). Neither leaves a terminal status by design, but a local concurrent Completed between the read and the write is overwritten. Worth moving onto update_spec_atomically while you are fixing item 1.
+    4. docs/aida/doctor.md:30 still lists 're-opening a completed spec' as a destructive heal. Since the completed-without-commit heal now only reports, update that sentence. Nothing else relies on the old heal: I checked the skills/templates, the orchestrator and the lib.rs:80018 pointer. The finding's action text and the rewritten test both point at 'aida edit <ID> --status done --force'. I accept the behaviour change and agree with the reasoning (a stale clone looks the same as missing work).
+    5. prepare_auto_complete_phase1_status returns the 'current' it read before the lock as the restore prior. When the spec moved between Draft, Approved and Planned in between, the restore target is stale. Minor.
+
+    VERIFIED
+    - Author classes. Each of the six new automated authors only moves forward or sideways between non-terminal statuses: pr-open InProgress->Done; lease-take and session-start Approved->InProgress; zen Draft->Approved (the authority gate admits only Draft); phase-1 Draft/Approved/Planned->InProgress, with the restore refusing a terminal source; doctor Approved<->InProgress. None has a legitimate need to leave a terminal status. aida-rest is correctly treated as human (not in the list). Human writers record get_default_author() / current_user_id / the gRPC author, so a human write after an automated one leaves mixed history, and the core and cli tests prove the human wins.
+    - No double recording. The distributed edit records under the caller only in the not-leaving-NeedsAttention branch (git_backend_cmd.rs:5877); return_to_flight owns the NeedsAttention exit. The history list survives write_edit_atomically's sequence merge. The CLI and MCP queue rework record only in the non-NeedsAttention branch. The gRPC service moved the status change out of 'changes' into one helper call. The legacy edit splits status out through record_edit_changes. The remaining raw status assignments I found are creations (add, findings add, tracker import, doc, init, schedule, report, file_finding), projections and tests, apply_resolution_token (covered by finalize_answer's recording), the BUG-1632 writers, and the one miss in item 2.
+    - History value form. Every reader (metrics is_completion_status, health/health_vitals/find_uncovered 'Completed' compares, contradictions lowercase, protocol_gate and lifecycle from_filter_str/from_status_str normalization, web activity-utils) either normalizes or compares 'Completed', which is identical in both forms. Web activity-utils matched 'inprogress' and never 'in progress', so the enum form improves it. The auto-bump already wrote the enum form. Not a blocker.
+    - Atomic re-checks that are correct: the phase-1 bump (inside update_spec_atomically; refusal returns Ok(None)) and loop_guard_park (inside the closure; the caller prints and returns before the note or escalation). A no-op closure writes nothing on the git store (the serialized-equality short-circuit).
+    - Mutation checks (throwaway worktree, since removed). Removing the six authors from AUTOMATED_STATUS_AUTHORS fails 6 bug_1637 merge tests plus doctor_status_heal_records_automated_author_and_keeps_terminal_on_merge; with the is_automated pre-assert disabled, the merge assertion itself fails (for example left [Done,Done] right [Completed,Completed]). Making loop_guard_park skip its terminal check fails loop_guard_park_refuses_a_terminal_status_inside_the_atomic_write. The tests are in memory or use a tempdir and never touch ~/.aida.
+    - Green: aida-core conflict 68. aida-cli-lib --lib: bug_1637 10, doctor 157, queue 497, mcp 166, orchestr 103, history 120, digest 34. aida-server 16.
+  created_at: 2026-09-26T02:56:44.061517258Z
+  modified_at: 2026-09-26T02:56:44.061517258Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 193a7c9769995ddd7b643b626af8fdb576bbf20b
