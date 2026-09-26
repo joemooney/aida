@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T23:05:05.919232561Z
-modified_at: 2026-09-26T04:04:04.090783074Z
+modified_at: 2026-09-26T04:37:03.900817981Z
 req_type: Bug
 comments:
 - id: 01a0dad1-6517-7663-abb8-8321e942bcc6
@@ -28,6 +28,12 @@ comments:
   content: 'Scope addition from BUG-1626''s re-review: (a) with multiple remote.origin.url entries, the push skip can suppress a needed push to a lagging second URL; require exactly one fetch URL before skipping. (b) When the branch is behind origin, the push summary should say ''nothing to push'', not ''already up to date''.'
   created_at: 2026-09-26T01:34:43.358914409Z
   modified_at: 2026-09-26T01:34:43.358914409Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc00-a11c-72d3-81cc-c69dcad3ad18
+  author: joe
+  content: 'Strict review: REQUEST CHANGES — reviewed 49a5aa6f91. All filters pass (bug_1633 8, pull 62, push 82, followup 29, reconcile 46, auto_bump 79). Mutations are caught: disabling load_pending_reconcile_base fails the retry test, and forcing --code-only to extract fails the deferral test. Under a fake HOME the tests write nothing outside temp dirs. BLOCKING: (1) lib.rs:70332 plus lib.rs:72448: the persisted scan start is cleared whenever auto-bump returns Ok, but auto-bump returns Ok(empty) without scanning when HEAD is not on the default branch (or when auto-bump is disabled, or git log fails). So after a store failure on main, a successful pull from a feature branch drops the base, and the later pull on main falls back to the 50-commit window. That is exactly the gap this spec closes, and it breaks ''cleared only on success''. Fix: have auto_bump_done_to_completed_with report whether it actually scanned (or record the branch with the base and clear only after a default-branch scan), and add a test. (2) lib.rs:70264-70267: the deferred-followup drain discards extract_plan_followups errors (storage.load()? can fail) and clears the pending file anyway, so a transient store read error loses the followups permanently. Keep the IDs whose extraction returned Err. This is safe because extraction is idempotent via the marker. NON-BLOCKING: (3) lib.rs:70284 and lib.rs:70193: the pending file is an unlocked read-modify-write done with a plain fs::write. A --code-only pull racing a full pull can lose an ID when the full pull clears the file after the other pull appended. Consider a temp file plus rename, or removing only the drained IDs. (4) The git-path files are per-worktree (verified: .git/worktrees/<name>/...). That is acceptable because auto-bump only acts on the default branch, which only one worktree can have checked out, but git worktree remove discards pending state; document this. (5) lib.rs:68371: the dry-run store leg fetches current_branch(store) but orphan_branch_sync_state compares against a hardcoded origin/aida-store (pre-existing mismatch). (6) lib.rs:44364-44371: the new cfg(test) hook was inserted between aida_subcmd_add_followup_task''s doc comment and the function, so that doc now attaches to the type alias. VERIFIED OK: followup_filed_in_store is only consulted after a failed add, so the tighter plan-tag match cannot cause duplicate filings; legacy untagged followups behave as before, and a moved plan path is at worst labelled ''declined''. The multi-URL skip is correct (fetch.len()==1 && fetch==push). push --dry-run fetches only refs/remotes/origin/<branch> with --no-tags under one 20s deadline and does not push. The ''nothing to push'' wording is right. The add hook is cfg(test)-only (type, thread_local and call site), so release builds cannot reach it. A stale or rewritten base is rejected by the is-ancestor check. The rescan is bounded by base..HEAD and guarded by the Done status check. A failed follow-up pull keeps the pending file.'
+  created_at: 2026-09-26T04:37:03.900817981Z
+  modified_at: 2026-09-26T04:37:03.900817981Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 6bc585906bca666437b6b354354199ee1e09d0fd
