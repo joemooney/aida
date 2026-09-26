@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:37:34.819007356Z
-modified_at: 2026-09-26T18:41:29.954126019Z
+modified_at: 2026-09-26T18:46:30.259430228Z
 req_type: Task
 tags:
 - agent-launch
@@ -131,6 +131,55 @@ comments:
     Q6. Where may `false` come from: trusted default-branch project copy plus user config (proposed), or user config only? A committed project `false` would switch the prompt off for teammates.
   created_at: 2026-09-26T18:41:29.954126019Z
   modified_at: 2026-09-26T18:41:29.954126019Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0df0a-5073-7a30-9215-9e20bc63a307
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF: APPROVED (with binding amendments A1-A12; Q1 is an OPERATOR QUESTION and does not block implementation, since the default is the fail-closed choice)
+
+    VERIFIED AGAINST CODE (main 4407b94)
+    - The bypass knob lives in ~/.aida/agents.toml and .aida/agents.toml. The project file is read after the user file, so the project value wins (load_agents_bypass). It is read from the branch-local copy, not the trusted copy. The confirm prompt therefore has to catch knob-derived bypass. The sketch does this.
+    - apply_agent_default_flags injects tool_bypass_flags only when !explicit_permission && per_tool.is_empty(). agent new --bg forces --permission-mode bypassPermissions and sets explicit=true (lib.rs ~27612).
+    - resolve_interactive_launch_mode_for_root (session new / start --launch, lib.rs 25767/25802) returns bypassPermissions from the knob. Its callers are pure and tested.
+    - handle_queue_work resolves the permission mode BEFORE it branches into no_human / auto_complete. Its sources are the flag, AIDA_PERMISSION_MODE, the branch-local [behavior] permission_mode, and the knob.
+    - maybe_prompt_agent_posture is gated on the ~/.aida/agents.toml file being absent plus raw is_terminal (not injectable). It writes to USER scope.
+    - CONFIG_KNOBS: [agents] bypass is already ReadOnly. But [permissions] claude/codex are EditSafety::Enum {native, contained, bypass}, so the TUI config menu can write bypass. BUG-1667 AC4 covers that.
+    - handle_config_permissions_command Set prints only a WARNING. apply_permission_posture ALSO writes .codex/config.toml / ~/.codex/config.toml (native danger-full-access). No launch-time confirm can see that write.
+    - templates/settings.json allowlists Bash(aida *). Confirmed.
+    - orchestrator::detect (a run token checked against the drain-state file) is the existing unforgeable "orchestrated" signal. has_integrity_floor_authority / authority_stdin_is_terminal is the existing injectable human-at-TTY seam.
+
+    SELF-AUTHORIZATION PROBE (can an agent or non-TTY path set confirm_bypass=false or otherwise self-authorize bypass?)
+    - Under the sketch as written, false cannot be set through init, config edit/menu (ReadOnly), or env. But (a) a project-scope false in the trusted default-branch copy can arrive through any PR that gets merged. (b) A direct file write to ~/.aida/config.toml by the agent's Edit tool is a residual. Claude's native posture prompts for writes outside the project; document this.
+    - Holes the sketch missed: bypass injected through per-tool [agents.<tool>] default_flags (project agents.toml, which a branch can commit), extra_flags, or codex/agy --bypass-sandbox. The sketch keys only on the knob and the explicit flag. Fixed in A4.
+    - Today `aida agent new claude --bg` from an agent's Bash already spawns a bypass child with an arbitrary prompt. A6 closes this when confirm is on.
+    - `config permissions set bypass` is a real hole. BUG-1667 owns it (A1).
+    - Out of scope and needing a follow-up: headless spawners that hard-code bypass and can be reached through Bash(aida *), namely compete arms/judges (compete.rs), intake assess (lib.rs ~56130) and burndown run (~56625). Verify which of them lack a dispatch-authority gate (A10).
+
+    BINDING AMENDMENTS
+    A1. SCOPE BOUNDARY: BUG-1667 owns the `aida config permissions set bypass` gate and the [permissions] config-menu path to bypass. Remove them from TASK-1500, and move the tests config_permissions_set_bypass_refused_without_tty_when_confirm_on and config_permissions_set_native_allowed_without_tty to BUG-1667. Record the dependency: TASK-1500 depends on BUG-1667 (aida deps add). TASK-1500 may merge first only if BUG-1667 is approved and queued. The confirm prompt alone is not a complete story while `set bypass` stays ungated.
+    A2. SCOPE RESOLUTION (replaces the strictest-wins rule in sketch section 2): `confirm_bypass = false` is honoured ONLY from the user config ~/.aida/config.toml, because it is a per-human consent. Project .aida/config.toml, read only from the trusted default-branch copy via trusted_config, may only REQUIRE the prompt (true). A project `false` is ignored, and `permissions show` reports it as "project false ignored". Effective value = on, unless user=false and trusted-project != true. Read or parse errors mean on.
+    A3. INIT WRITES (replaces sketch section 3, non-TTY init): non-TTY init writes NOTHING, because an absent key already means on. The sketch had non-TTY init write an explicit project `true`. Under strictest-wins that project true would override a user `false` in every project, which breaks the Q1 escape hatch. Visibility comes from the init summary line instead. The interactive prompt is a machine-level question like maybe_prompt_agent_posture. It is shown only when the USER-scope key is absent, it writes the answer to ~/.aida/config.toml through config_edit::set_kv, and it never re-prompts. The TTY check must go through an injectable seam (stdin AND stdout), not raw is_terminal. EOF or an unrecognised answer writes nothing. Rename the tests to match, e.g. init_non_tty_writes_nothing_confirm_defaults_on and init_tty_prompt_writes_user_scope.
+    A4. BYPASS DETECTION ON THE FINAL ARGV: the gate runs AFTER apply_agent_default_flags, alongside guard_interactive_claude_dontask. It detects bypass by scanning the assembled config.default_args with the existing nuclear_permission_flag set (bypassPermissions, --dangerously-bypass-approvals-and-sandbox, --dangerously-skip-permissions), for every vendor. Detection must not look only at the knob or the explicit flag. DowngradeNative strips those flags, plus the value paired with --permission-mode. Required tests: a per-tool [agents.claude] default_flags bypass in the project agents.toml, non-TTY, gets downgraded; a codex knob bypass with a non-TTY launch drops --dangerously-bypass-approvals-and-sandbox from the argv.
+    A5. ORCHESTRATED EXEMPTION (answers Q3, part 1): in handle_queue_work the gate applies only to a human interactive launch (no auto_complete, not no_human, not plan_only). A drain or batch child (RealBatchDriver / RealNextNDriver pass --permission-mode through) and a pane_host tmux-hosted implementer both PROCEED without prompting when orchestrator::detect(root) == Orchestrated. Dispatch authority already approved the drain when it started. pane_host panes DO have a pty but no human at them, so a prompt there would hang the drain. No new marker is minted. The exemption reuses the run-token corroboration, and the mere presence of an env var grants nothing. Tests: queue_work_orchestrated_child_bypass_not_prompted, and queue_work_uncorroborated_auto_complete_env_still_gated.
+    A6. --bg (answers Q3, part 2): agent new --bg forced bypass is its own source ("--bg forced"). When confirm is on and there is no TTY, REFUSE. Do not downgrade, because a native detached child hangs on its first prompt, which is why bypass is forced in the first place. At a TTY, N also refuses, with the hint "pass --permission-mode <mode>". An explicit --permission-mode bypassPermissions with no TTY is refused, as the sketch says. I found no in-tree caller that passes an explicit bypass flag to `agent new` / `session new` / `session start --launch`. pane_host wraps `queue work` children (A5), and orchestrator.rs / pane_host.rs inject no permission mode. The known legitimate break is the aida-orchestrate skill's documented `aida agent new claude --bg` from a harness shell. Update aida-core/templates/skills-portable/aida-orchestrate.md and templates/docs/agents/per-agent-config.md (then make sync-templates) to point at headless `queue work --no-human` (gated by dispatch authority) or an operator-run launch. Test: agent_new_bg_non_tty_refused_when_confirm_on.
+    A7. PURITY: resolve_interactive_launch_mode_for_root, resolve_queue_work_permission_mode and apply_agent_default_flags stay non-interactive. Apply decide() and prompt at the callers: session dispatch at lib.rs ~25767/25802, agent_new_with_config, agent_new_bg_dispatch, and handle_queue_work. That keeps the existing resolver tests valid.
+    A8. --noexec / --show-context never read stdin. The preview prints the decision it WOULD take (prompt / downgrade / refuse) along with its source. Test: agent_new_noexec_never_prompts.
+    A9. The launch prompt reads stdin, and EOF or a read error counts as N. The TTY gate requires stdin AND stdout to be terminals, checked through the injectable seam (extend test_ambient or add a stdout seam next to authority_stdin_is_terminal).
+    A10. RESIDUALS: in docs/cli/06-roles-sessions.md, document the fake-pty limit, an agent already running in bypass, and direct Edit-tool writes to ~/.aida/config.toml. The orchestrator files ONE follow-up bug: headless bypass spawners reachable through Bash(aida *) without dispatch authority (compete, intake assess, burndown run). Verify each before filing. Not in this spec.
+    A11. VISIBILITY: the `permissions show` row carries its value and source (default | ~/.aida/config.toml | trusted project require | project false ignored). The CONFIG_KNOBS entry is ReadOnly, as in the sketch.
+    A12. The trusted_config fallback to a local default branch when no origin exists is acceptable here, because the project scope can only tighten (A2). Add a one-line comment saying so.
+
+    Q ANSWERS
+    Q1. OPERATOR QUESTION (Joe). After upgrade, machines that already set [agents] bypass = true get a [y/N] prompt on every interactive launch until Joe adds `[agents] confirm_bypass = false` to each machine's ~/.aida/config.toml. Linked to this: with confirm on, an orchestrator session's `aida agent new claude --bg` is refused (A6). Advisor recommendation: accept both. It is fail-closed, the escape is one line per machine, and the --bg refusal is exactly the agent self-escalation this setting exists to stop. Implementation proceeds on the fail-closed default. If Joe instead wants "absent + pre-existing bypass = off with a one-time notice", that is a small follow-up.
+    Q2. DECIDED: default N. N downgrades to native, except for --bg and an explicit flag, which refuse (A6).
+    Q3. DECIDED: see A5 (orchestrated children are exempt through orchestrator::detect, and pane_host must never prompt) and A6 (--bg and explicit-flag launches with no TTY are refused; update the orchestrate skill). No new "operator-dispatched" marker. An env-var marker would be forgeable by the very agent the gate exists to stop.
+    Q4. DECIDED: BUG-1667 owns it, and the gate is UNCONDITIONAL, independent of confirm_bypass. `set bypass` also writes the native codex danger-full-access config, which no launch-time confirm can see. TASK-1500 excludes it (A1).
+    Q5. DECIDED: no env var at all. Force-on is already available through user or project `true`, and fewer knobs means less attack surface.
+    Q6. DECIDED: `false` only from the user config. The project scope may only require (A2).
+
+    Lane after amendments: drive (Joe merges), per the proxy note. Queue for implementer once BUG-1667 is approved.
+  created_at: 2026-09-26T18:46:30.259430228Z
+  modified_at: 2026-09-26T18:46:30.259430228Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0def5-4d13-79c1-96d9-dea3179e63f7
