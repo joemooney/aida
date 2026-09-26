@@ -69,6 +69,19 @@ pub(crate) fn handle_doctor_command(
             {
                 return doctor_check_runaway_seats_light(*json, *fail_on_findings);
             }
+            // BUG-1675: the disk-headroom guard is a single statvfs on the
+            // project root, scheduled every 30 minutes. Same shape, same
+            // reasoning: skip the store load + collect_doctor_findings pass
+            // the category filter would discard anyway (measured 44 s under
+            // load, past the 120 s scheduler kill on a busy host — a false
+            // CronJobFailed disk trip). trace:BUG-1675 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(DISK_HEADROOM_CATEGORY)
+            {
+                return doctor_check_disk_headroom_light(*json, *fail_on_findings);
+            }
             doctor_multi_agent(DoctorRunOptions {
                 heal: false,
                 yes,
@@ -700,6 +713,47 @@ fn doctor_check_runaway_seats_light(json: bool, fail_on_findings: bool) -> Resul
     Ok(())
 }
 
+/// BUG-1675: the light entry path for `aida doctor check disk-headroom`,
+/// mirroring [`doctor_check_runaway_seats_light`]. Reads
+/// `[doctor.disk_headroom]` off the project root and runs the disk probe —
+/// no `Storage::load()`, no `collect_doctor_findings`, no other category.
+/// Output shape (report fields, `--fail-on-findings` exit gating) matches
+/// the full path so the scheduler cannot tell which path ran.
+// trace:BUG-1675 | ai:claude
+fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Result<()> {
+    let project_root = main_worktree_root_from(&find_project_root()?);
+    let report = disk_headroom_light_report(&project_root);
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        render_doctor_report(&report, false)?;
+    }
+
+    // Mirrors the `--fail-on-findings` gate in `doctor_multi_agent`.
+    if fail_on_findings && !report.findings.is_empty() {
+        anyhow::bail!(
+            "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
+            report.findings.len()
+        );
+    }
+    Ok(())
+}
+
+/// The whole of the light path's work, pure over `project_root`: config read
+/// + disk probe → report. Split out so a fixture can pin that it never needs
+/// a loadable store.
+// trace:BUG-1675 | ai:claude
+pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> DoctorReport {
+    let cfg = crate::read_project_config_value(project_root);
+    let min_free_gib = disk_headroom_min_free_gib(cfg.as_ref());
+    DoctorReport::from_findings(scan_disk_headroom(project_root, min_free_gib))
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1675_disk_headroom_light_tests.rs"]
+mod bug_1675_disk_headroom_light_tests;
+
 /// TASK-1124: which deployed Codex prompts in `dir` (normally `~/.codex/prompts`)
 /// have drifted from the current source templates. A prompt that EXISTS but
 /// whose content differs from `expected_codex_prompts()` is rot (a stale
@@ -1064,6 +1118,10 @@ pub(crate) fn performance_policy(cfg: Option<&toml::Value>) -> PerformancePolicy
 /// have surfaced it hours earlier).
 // trace:STORY-1367 | ai:claude
 const DEFAULT_DISK_HEADROOM_MIN_FREE_GIB: u64 = 60;
+
+/// The doctor category name the disk-headroom job is dispatched under.
+// trace:BUG-1675 | ai:claude
+pub(crate) const DISK_HEADROOM_CATEGORY: &str = "disk-headroom";
 
 /// Read `[doctor.disk_headroom] min_free_gib`, falling back to the default
 /// floor. A project on a smaller or larger disk than the measured incident
