@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T13:55:45.638264382Z
-modified_at: 2026-09-26T09:31:39.496488615Z
+modified_at: 2026-09-26T09:48:02.916780957Z
 req_type: Spike
 tags:
 - architecture
@@ -43,6 +43,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): drain-ready. Added an Acceptance section (report path, explicit GO/NO-GO, follow-ups as drafts, no production code). Mode drive so the advisor reviews the recommendation before merge.'
   created_at: 2026-09-26T05:29:03.688838186Z
   modified_at: 2026-09-26T05:29:03.688838186Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd1d-57e4-7000-a09b-24696e68e233
+  author: joe
+  content: 'Spike report: NO-GO on a separate immutable cache snapshot. Report: docs/research/spike-90-stale-cache-snapshot.md (branch claude/spike-90, 07e67d107f). WAL already gives readers a lock-free committed snapshot: 0.04 s even while a write lock is held. The measured 29-53 s stalls, some ending in exit 1, come from readers refreshing inline and queueing on the writer ladder twice (incremental, then full), with no single-flight or re-check under the lock. Two more causes: the lock-info sidecar is resolved per worktree, so the BUG-664 guard never fires in worktrees (52.9 s, then exit 1), and read commands that go through load() refresh strictly (graph tree: 51.5 s, then exit 1). A snapshot would add 3-8 s of VACUUM INTO per publish, 30-44 MB of disk, a third freshness state and immutable=1 hazards, and it would not fix any of these. Cheaper alternative: stale-while-revalidate on the live WAL cache. Readers never enter the write ladder. A single-flight refresh runs under an flock, backed by a durable refresh request and a detached worker. Readers that lose the race get a bounded wait, then a labelled stale read. busy_timeout=0 and the ladder are unchanged. Follow-up drafts, each referencing SPIKE-90: BUG-1644 (worktree sidecar), STORY-1484 (single-flight refresher; needs a sketch and advisor signoff), TASK-1514 (tolerant load() for read commands; blocked by STORY-1484), TASK-1515 (atomic freshness stamping and migration). The report is at docs/research/ as dispatched; the acceptance text named docs/architecture/, so the advisor may want it moved.'
+  created_at: 2026-09-26T09:48:02.916780957Z
+  modified_at: 2026-09-26T09:48:02.916780957Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drive
 filed_at:
