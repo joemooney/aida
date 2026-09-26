@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T16:38:32.393127411Z
-modified_at: 2026-09-25T16:46:34.001091436Z
+modified_at: 2026-09-26T05:32:41.825875348Z
 req_type: Spike
 tags:
 - architecture
@@ -185,6 +185,12 @@ comments:
   content: 'Fact-check: APPROVE (fresh reviewer). Its integer counts reproduce exactly or within drift. Both corrections were applied in 3f73c169f7: the Beads claim is narrowed and the measurement scripts are committed and pinned. Queued for batch 60. The six operator decisions in section 8 are Joe''s.'
   created_at: 2026-09-25T01:41:56.850921182Z
   modified_at: 2026-09-25T01:41:56.850921182Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc33-8fe1-7792-9773-6d324edeee78
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): re-checked 2026-09-25. The spike is Completed and not on the open board, but its six positioning decisions (successor vision wording / VIS-1 superseded; Trojan-horse successor decision; ADR-4 and EPIC-39 disposition; intent-vs-control effort rebalancing target; STORY-1425''s comparative measure as the north-star check; corpus-sufficiency PRIN wording) are product calls, so they stay Joe''s. Recommended default: adopt the report''s section 7 texts as proposed.'
+  created_at: 2026-09-26T05:32:41.825875348Z
+  modified_at: 2026-09-26T05:32:41.825875348Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 history:
 - id: 01a0d63e-e915-7de3-b047-6b2ef216fec3
