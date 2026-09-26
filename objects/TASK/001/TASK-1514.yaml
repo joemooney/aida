@@ -1,0 +1,31 @@
+id: 01a0dd1b-e0ba-76b0-bdc8-68a087fa9ac5
+spec_id: TASK-1514
+agreed_id: TASK-1514
+title: Read commands that call load() or list_requirements() use the strict refresh and can stall ~51 s behind a writer; give them the read-tolerant path
+description: |
+  From SPIKE-90 (case C2). `CachedGitBackend::with_inner` runs the read-tolerant freshness check, but `load()` and `list_requirements()` then call the strict `ensure_cache_fresh`, which refreshes and enters the ~25.6 s write ladder. Measured on a copy with a stale cache and a live, visible foreign writer: `aida search`/`status`/`queue list`/`show`/`history` returned in 0.02-0.48 s, but `aida graph tree EPIC-62` took 51.5 s and exited 1. aida-cli-lib has roughly 300 `.load()` call sites in 35 files.
+
+  ## Acceptance
+  - The backend exposes an explicit strict-vs-read freshness entry point; read-only commands (at minimum graph/tree, digest, burndown/fleet views, MCP read tools) use the read path, and mutating commands keep strict.
+  - A test: stale cache + live foreign writer, `aida graph tree <EPIC>` completes in < 2 s and exits 0 (labelled stale once the SPIKE-90 refresh story lands).
+  - Call-site classification is recorded in the PR; no mutating path is moved to the tolerant read.
+  - Depends on the SPIKE-90 single-flight refresh story's reader protocol for the final wiring.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T09:46:26.874770461Z
+modified_at: 2026-09-26T09:46:26.874770461Z
+req_type: Task
+tags:
+- cache
+- from:SPIKE-90
+- locking
+filed_at:
+  code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
+  branch: claude/spike-90
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
