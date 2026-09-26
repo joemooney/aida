@@ -1,0 +1,44 @@
+id: 01a0db2e-4812-7643-a970-9072d8614ccb
+spec_id: STORY-1480
+agreed_id: STORY-1480
+title: Close cycle-time instrumentation gaps and publish per-spec timing records across machines
+description: |
+  Close the gaps that leave `unknown` spans in timelines, and make the event data visible across machines.
+
+  ## Gaps to instrument
+  - Interactive sessions and `aida integrate` batches emit the same phase events that drains emit (implementer start/end, PR opened, CI terminal, merge). Today TASK-1507 shows only UnshippedWorkDetected → SpecCompleted.
+  - A "waiting since" / parked marker is written whenever work parks on a human or the advisor (NeedsAttention, a punt, a held gate) and cleared on resume, so that wait time is attributed and not reported as unknown.
+  - A planning phase event (plan written or verified) and a compile/build span separate from the rest of the implementer phase.
+
+  ## Decision (advisor sign-off + ADR before implementation): where the cross-machine event record lives
+  `.aida/events.jsonl` is per-clone, so work done on another machine is invisible. Options:
+  - **A. Make the store the live event log.** Every phase event becomes a store commit. Rejected as the default: it puts a commit on the drain hot path, contends with lease and status writes, and inflates the store history.
+  - **B. Recommended: keep the live log local, and publish a per-spec timing record to the store when the spec reaches a terminal state.** The record is the finished span list, filtered to lifecycle kinds, with no mail or cron noise. It is written alongside the existing completion commit, is one small file per spec, and is conflict-free. Any machine can then build timelines and aggregates for completed work, and the local log stays authoritative for in-flight detail.
+  - **C. A separate telemetry orphan branch** (e.g. `aida-events`) holding per-node, per-day shard files synced by `aida db sync`. This gives a full raw history across machines while keeping the spec store clean. It is worth it if in-flight, cross-machine visibility turns out to be needed.
+  - Whichever option is chosen, only lifecycle events are published. MailReceived, ShiftTick and cron events stay local.
+
+  ## Acceptance
+  - An ADR records the chosen option.
+  - After this story, a spec completed on machine X shows a full timeline on machine Y after `aida pull`.
+  - Interactive and integrate paths emit phase events; tests cover them.
+  - A parked spec's wait is attributed as `shelved`/`parked` in the timeline, not reported as `unknown`.
+  - Re-running the drained-spec comparison from the timeline story reports ≤10% unknown time for specs completed through any path.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T00:47:18.546002720Z
+modified_at: 2026-09-26T00:47:18.546002720Z
+req_type: Story
+tags:
+- aida:history
+- aida:metrics
+- observability
+filed_at:
+  code_sha: 193a7c9769995ddd7b643b626af8fdb576bbf20b
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: claude
+  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
