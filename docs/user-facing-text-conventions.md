@@ -44,8 +44,15 @@ project-internal noise (TASK-1516). The fix is to keep the id as a plain `//`
 comment above the item (still a developer artifact, still a code comment)
 and reword the `///` doc comment so its prose doesn't need to name the id at
 all. `aida-cli-lib/src/cli.rs`'s `doc_comment_is_provenance_leak` enforces
-this — including the prose case — with a reviewed, per-line allowlist for the
-rare help text that's deliberately developer-/operator-facing.
+this in CI — including the prose case — with a reviewed, per-line allowlist
+for the rare help text that's deliberately developer-/operator-facing.
+
+The pre-commit hook template (`aida-core/templates/hooks/aida-pre-commit.sh`)
+is deliberately narrower: it ships to every scaffolded project and scans every
+staged `*.rs` file, where ordinary rustdoc legitimately cites a project's own
+ids (`/// See ADR-12 for the rationale`), so it only blocks a bare id or a
+`trace:` marker on a `///` line. Both use the same id pattern, with a leading
+word boundary so `DEBUG-2` or `SCR-4` is not read as `BUG-2` or `CR-4`.
 
 ## Worked example — the `per TASK-85` wart
 
@@ -87,7 +94,7 @@ rg -nE '(per|see) (TASK|BUG|STORY|EPIC|SPIKE|FR)-[0-9]' aida-cli/src aida-tui/sr
 
 # clap doc comments — any SPEC-ID at all (bare, trace:, or prose-embedded);
 # same criterion `doc_comment_is_provenance_leak` and its unit tests enforce
-rg -nE '^\s*///.*\b(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN)-[0-9]+' aida-cli-lib/src/cli.rs
+rg -nE '^\s*///.*(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+' aida-cli-lib/src/cli.rs
 ```
 
 Any hit inside a `println!` / `eprintln!` / `format!` that reaches a

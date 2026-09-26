@@ -1148,15 +1148,13 @@ pub enum TriageCommand {
     },
 }
 
-/// Advisor-directed worktree lock (an early slice of a broader locking
-/// model; generalizes an earlier, narrower lock).
+/// Advisor-directed worktree lock.
 ///
 /// Binds a worktree to an authorizing advisor by stamping `authorized_by` on
-/// the session lease that covers it (extends the existing lease registry —
-/// no new lock directory). This slice is a MANUAL bouncer: nothing today
-/// refuses automatically on a mismatched lock — an agent (or a script) opts
-/// in by running `aida lock verify` itself and branching on the exit code.
-/// The automatic pre-work gate is a later slice, a separate change.
+/// the session lease that covers it (it reuses the existing lease registry —
+/// no new lock directory). The lock is a manual check: nothing refuses
+/// automatically on a mismatched lock — an agent (or a script) opts in by
+/// running `aida lock verify` itself and branching on the exit code.
 // trace:STORY-711 | ai:claude
 // trace:BUG-637 | ai:claude
 #[derive(Subcommand, Debug)]
@@ -1538,8 +1536,8 @@ pub enum SessionCommand {
     End {
         /// Session id (8-char prefix accepted) to end. Omit to end the
         /// session matching the current cwd. Also accepts a SPEC-ID
-        /// (treated as `--spec`) or a branch name (its lowercased,
-        /// dash-joined form, treated as `--branch`) when the lease
+        /// (e.g. `TASK-<n>` — treated as `--spec`) or a branch name
+        /// (e.g. `task-<n>` — treated as `--branch`) when the lease
         /// covering cwd isn't the one you want to end.
         // trace:TASK-489 | ai:claude
         id: Option<String>,
@@ -14602,10 +14600,14 @@ mod tests {
     // found ~20 real leaks that carve-out let through, so TASK-1516 removed it —
     // a SPEC-ID on a `///` line is rejected full stop, with a per-line
     // `PROSE_SPEC_ID_ALLOWLIST` opt-out for the rare deliberately developer-/
-    // operator-facing case. The discriminator is `doc_comment_is_provenance_leak`,
-    // mirrored verbatim by the fast grep-based pre-commit hook (TASK-903) so the
-    // gate and CI agree. (This comment uses `//`, not `///`, so it isn't itself
-    // scanned.)
+    // operator-facing case. The discriminator is `doc_comment_is_provenance_leak`.
+    // This stricter prose rule is deliberately CI-only and cli.rs-only: the
+    // pre-commit hook template (TASK-903) ships to every scaffolded project and
+    // scans every `*.rs` file, where ordinary rustdoc legitimately cites a
+    // project's own ids, so the hook keeps the narrower BUG-629 criterion (bare
+    // ids and `trace:` markers only). The two share the id pattern
+    // `SPEC_ID_PATTERN` verbatim. (This comment uses `//`, not `///`, so it
+    // isn't itself scanned.)
     #[test]
     fn source_doc_comments_carry_no_spec_id_provenance() {
         let src = include_str!("cli.rs");
@@ -14649,18 +14651,25 @@ mod tests {
     // or mentioned in descriptive prose), UNLESS the exact trimmed line is in
     // `PROSE_SPEC_ID_ALLOWLIST`.
     //
-    // Mirror any change here into aida-core/templates/hooks/aida-pre-commit.sh
-    // (its `__aida_doc_is_provenance_leak` / allowlist) so the fast gate and CI
-    // stay in lockstep.
+    // The hook's `__aida_doc_is_provenance_leak` intentionally does NOT mirror
+    // this prose rule (see the test comment above); only `SPEC_ID_PATTERN` is
+    // shared with it.
     fn doc_comment_is_provenance_leak(line: &str) -> bool {
         doc_comment_is_provenance_leak_against(line, PROSE_SPEC_ID_ALLOWLIST)
     }
 
     // Same discriminator, parameterized on the allowlist so tests can exercise
     // the carve-out without mutating the shared `PROSE_SPEC_ID_ALLOWLIST` const.
+    // TASK-903 / TASK-1516: the SPEC-ID pattern, byte-for-byte identical to
+    // `SPEC_ID_RE` in aida-core/templates/hooks/aida-pre-commit.sh (same
+    // prefixes, same explicit leading word boundary — POSIX ERE has no `\b`).
+    // The boundary keeps `DEBUG-2` / `SCR-4` from matching as `BUG-2` / `CR-4`.
+    // Change both together; `spec_id_pattern_matches_the_hook_template` checks.
+    const SPEC_ID_PATTERN: &str =
+        r"(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+";
+
     fn doc_comment_is_provenance_leak_against(line: &str, allowlist: &[&str]) -> bool {
-        let spec_id =
-            regex::Regex::new(r"\b(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN)-[0-9]+").unwrap();
+        let spec_id = regex::Regex::new(SPEC_ID_PATTERN).unwrap();
         // No SPEC-ID at all → nothing to leak.
         if !spec_id.is_match(line) {
             return false;
@@ -14708,8 +14717,32 @@ mod tests {
             "/// Spec the verdict applies to (e.g. TASK-5)."
         ));
 
+        // REJECT — DOC is a spec prefix too.
+        assert!(doc_comment_is_provenance_leak("/// see DOC-3"));
+
         // ALLOW — no SPEC-ID at all.
         assert!(!doc_comment_is_provenance_leak("/// Mark a spec done"));
+        // ALLOW — an id-shaped substring of a longer word is not a SPEC-ID
+        // (the leading word boundary).
+        assert!(!doc_comment_is_provenance_leak(
+            "/// Log at DEBUG-2 verbosity"
+        ));
+        assert!(!doc_comment_is_provenance_leak(
+            "/// Handles the SCR-4 screen"
+        ));
+    }
+
+    // TASK-903 / TASK-1516: the CI guard and the pre-commit hook template must
+    // share one SPEC-ID pattern so they agree on what counts as an id.
+    #[test]
+    fn spec_id_pattern_matches_the_hook_template() {
+        let hook = include_str!("../../aida-core/templates/hooks/aida-pre-commit.sh");
+        let expected = format!("SPEC_ID_RE='{SPEC_ID_PATTERN}'");
+        assert!(
+            hook.lines().any(|l| l.trim() == expected),
+            "aida-pre-commit.sh must define `{expected}` to stay in lockstep \
+             with the cli.rs guard"
+        );
     }
 
     // TASK-1516: an explicitly allowlisted line is excused even though it
