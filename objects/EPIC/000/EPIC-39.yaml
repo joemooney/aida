@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:27.770511448Z
-modified_at: 2026-09-26T18:34:08.442814073Z
+modified_at: 2026-09-26T18:34:25.967101197Z
 req_type: Epic
 tags:
 - deferred:stabilization-first
@@ -88,6 +88,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): superseded with its parent ADR-4 by VIS-2 per Joe''s OPERATOR DECISION on SPIKE-86 (2026-09-26). It had 0 children, so no work is orphaned.'
   created_at: 2026-09-26T18:34:08.442814073Z
   modified_at: 2026-09-26T18:34:08.442814073Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0deff-432f-7af0-8954-8ce8a2eaadfc
+  author: joe
+  content: 'CORRECTION (orchestrator): the status change was refused because an epic''s status is a rollup of its children (EPIC-39 has none), and --force is reserved for recovery, so it remains Draft (still tagged deferred). Its parent ADR-4 is Superseded by VIS-2. Joe: archive it, or approve an explicit --force to Superseded.'
+  created_at: 2026-09-26T18:34:25.967101197Z
+  modified_at: 2026-09-26T18:34:25.967101197Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 archived: true
 archived_at: 2026-06-13T01:48:34.570938033Z
