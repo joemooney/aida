@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:37.880863719Z
-modified_at: 2026-09-26T15:42:57.875002212Z
+modified_at: 2026-09-26T15:46:52.114820025Z
 req_type: Story
 tags:
 - needs-sketch
@@ -18,6 +18,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved, tagged needs-sketch. Architecture-class, so a sketch and advisor signoff come before queueing. Skill-side fix: BUG-1659.'
   created_at: 2026-09-26T15:42:57.875002212Z
   modified_at: 2026-09-26T15:42:57.875002212Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0de65-da52-7f10-bdb6-77092811f007
+  author: joe
+  content: 'SCOPE ADDITION (operator request, 2026-09-26 08:46): add a takeover path so a new session can claim the seat. ACCEPTANCE: (1) Default: a second session is warned or refused and shown the holder (session, harness, pid, since) and how to stop or attach it. (2) --force = graceful takeover. Message the holder to stop dispatching, write its handoff and stand down; wait a bounded grace period (configurable, default ~2 min) for its ''safe to stop'' ack or its lease release; then transfer the lease. A demoted holder''s later seat actions (handoff --write, seat-scoped dispatch) are refused or flagged as ''not the seat holder''. (3) --force --kill = hard takeover after the grace period. Stop the holder (claude stop <id> for backgrounded Claude sessions; a pid signal for other harnesses), then scan its leased worktrees for uncommitted work and REPORT it (never discard it). (4) Authority: --kill requires a human at the TTY or explicit operator config; an agent may request a takeover but cannot kill a peer on its own authority (this prevents mutual kills between two orchestrators). (5) Every takeover is recorded in the ledger/events (from, to, mode, what was in flight) and shows in aida history. (6) A dead-pid holder is taken over silently, with no flag needed. Tests: live holder + no flag -> refused; --force with an acking holder -> transfer; --force with a silent holder -> times out, no kill; --force --kill with no TTY from an agent -> refused; dead holder -> silent takeover.'
+  created_at: 2026-09-26T15:46:52.114820025Z
+  modified_at: 2026-09-26T15:46:52.114820025Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de62-2749-7593-84f9-480aecbeeb7e
