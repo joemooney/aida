@@ -2,13 +2,24 @@ id: 01a0d6d4-2360-76a0-85d7-09f92ea11aae
 spec_id: TASK-1499
 agreed_id: TASK-1499
 title: Make aida scaffold portable across local binary installations
-description: 'Extend aida scaffold and agent-launch diagnostics so projects using a locally built AIDA binary work across machines without hard-coded checkout paths. Resolve the effective aida executable from an explicit override when configured, otherwise from the running executable or PATH; verify it is executable before launch; and report the resolved path in --no-exec --verbose output. Scaffold project integration and permission metadata without committing machine-specific absolute paths. The generated launch profile should distinguish the consumer project''s writable source, .git, .aida, .aida-store, cache, and build roots from the AIDA source/build checkout, which should remain read-only unless AIDA itself is being developed. Include the seat-based Git policy: normal development seats get Git-write by default, guest seats are Git-read-only, and --git-read-only can downgrade any seat. Routine AIDA commands should run without Codex approval prompts under the trusted development profile; remote and destructive operations remain separately gated. Acceptance: a scaffolded project resolves a locally built AIDA binary on at least two different filesystem layouts; diagnostics show the actual binary path and effective access policy; no generated project file contains a machine-specific absolute AIDA checkout path; and guest/read-only policy is visible before agent execution.'
+description: |
+  SCOPE (operator decision 2026-09-26, "Portability only"): binary resolution and launch diagnostics ONLY. The permission-profile half (writable-root/read-only-root launch profile, seat-based Git-write policy, guest read-only seats, --git-read-only, suppressing Codex approval prompts for routine commands, and which build directories scaffolding authorizes) moved to a separate spec (see the TASK-1499 comment naming it). Do not implement any of it here.
+
+  Extend aida scaffold and agent-launch diagnostics so projects using a locally built AIDA binary work across machines without hard-coded checkout paths. Resolve the effective aida executable from an explicit override when configured, otherwise from the running executable or PATH; verify it is executable before launch; and report the resolved path in --no-exec --verbose output. Scaffold project integration without committing machine-specific absolute paths. Support local build-profile detection (target/release versus target/debug, with an explicit override), with defined precedence and stale-build behavior rather than silently choosing an unexpected binary.
+
+  Acceptance:
+  1. A scaffolded project resolves a locally built AIDA binary on at least two different filesystem layouts (test fixture with two checkout locations).
+  2. Resolution precedence is explicit override > running executable > PATH, and is covered by a test for each branch; a non-executable candidate is rejected with a clear error.
+  3. --no-exec --verbose diagnostics show the resolved binary path and the selected build profile (debug/release).
+  4. When both target/debug and target/release exist, the documented precedence and stale-build rule decide which runs, and a test covers the stale case.
+  5. No generated project file contains a machine-specific absolute AIDA checkout path (test greps the scaffold output).
+  6. No change to agent permission settings, seat Git policy, or approval-prompt behavior (out of scope; separate spec).
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-26T18:30:38.297872520Z
+modified_at: 2026-09-26T18:31:05.420887553Z
 req_type: Task
 tags:
 - agent-launch
