@@ -8,12 +8,12 @@ description: |-
   2. queue_rework_tests::requeue_gate_reads_mcp_claims_like_pickup (:1823): the lease mcp-claim.*.toml fails to parse because worktree_path is written into a TOML basic string with raw backslashes ('invalid unicode 8-digit hex code' at C:\Users\...). First find out whether the production writer or only the test fixture builds lease TOML by string formatting. If production does it, that is a real Windows bug: serialize with toml/serde.
   3. usage_cmd::usage_timeline_tests::timeline_reads_fixture_usage_log_not_real_home (usage_cmd.rs:647): 0 rows instead of 2. On Windows the fixture home redirect isn't honoured (HOME vs USERPROFILE / crate::home_dir()).
   Acceptance: all four pass on windows-latest (confirm with a workflow_dispatch of Cross-platform (nightly) on the branch); the portability ratchet gains a rule for the class if feasible.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:56:37.565291972Z
-modified_at: 2026-09-26T09:57:22.624284967Z
+modified_at: 2026-09-26T09:57:50.429189967Z
 req_type: Bug
 comments:
 - id: 01a0dd25-e240-7871-b98a-f4abd07d3cf3
