@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T04:47:41.715373320Z
-modified_at: 2026-09-26T05:04:30.366168289Z
+modified_at: 2026-09-26T05:04:42.946415669Z
 req_type: Bug
 tags:
 - antigravity
@@ -45,6 +45,18 @@ comments:
     4. .agents/ is currently untracked in this repo and holds a third-party skill (typesafe-ai, MIT). Decide whether that directory is tracked, and whether third-party skills belong in it or in a gitignored local area.
   created_at: 2026-09-26T04:59:41.162430675Z
   modified_at: 2026-09-26T04:59:41.162430675Z
+  session_id: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
+- id: 01a0dc19-f1c2-7000-a0a7-4622fdc4c9b7
+  author: joe
+  content: |-
+    Refinements from Codex review (2026-09-25), folded into acceptance:
+    - Test matrix, recorded with exact client versions and whether /skills lists the skill AND $aida-handoff invokes it: Codex × .agents/skills × {regular file, symlink}; Antigravity × .agents/skills × {regular file, symlink}; plus the existing .codex/skills and .antigravity/skills as compatibility cases. OpenAI's current migration guidance maps Claude skills to .agents/skills/<name>/SKILL.md, so that is the leading candidate for the canonical path — but the matrix decides it.
+    - Namespace ownership: AIDA manages ONLY aida-* entries under .agents/skills/. It must never create, prune, or refresh anything else there (e.g. the existing third-party typesafe-ai skill, or local/). Test: scaffold apply/refresh/prune leaves a non-aida skill directory byte-identical.
+    - Likely target (confirm after the matrix): .agents/skills/ = canonical portable pack; .codex/skills/ and .antigravity/skills/ kept only as compatibility paths if a supported vendor version still needs them.
+    - ONE derived manifest (the Claude skill set minus a commented Claude-only exclusion list, portable body preferred) feeds the scaffolder, scaffold refresh, and make sync-templates/check-templates. No second hand-kept list.
+    - Sequencing: run the one-skill aida-handoff test first. Do NOT link the full pack until the matrix results are recorded here.
+  created_at: 2026-09-26T05:04:42.946415669Z
+  modified_at: 2026-09-26T05:04:42.946415669Z
   session_id: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
 filed_at:
   code_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
