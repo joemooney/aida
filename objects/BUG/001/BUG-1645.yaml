@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:47:43.331275848Z
-modified_at: 2026-09-26T13:48:28.734268348Z
+modified_at: 2026-09-26T13:49:14.479574598Z
 req_type: Bug
 comments:
 - id: 01a0dd1d-84eb-7b53-a9c2-5265cdd9a6d0
@@ -28,6 +28,12 @@ comments:
   content: 'Review round 2 (strict Opus reviewer): REQUEST CHANGES (narrow: one item) on 5655f68461. Verified: aida-cli-lib --lib filters (scaffold/init/task_1503/bug_1645/doctor_/refresh/skill) 337 pass; aida-core --lib scaffold|bug_1645|report 169 pass; check-portability exit 0; make check-templates ''All templates OK!''. Mutation: disabling the new report.rs symlink-as-user-owned check is killed by bug_1645_doctor_treats_symlinked_skill_dir_as_user_owned; reverted, tree clean. Round-1 items: #1 fixed and tested (lane-skill opt-out stays memory-lane, no nag); #3 fixed (write_memory_lane_artifact refuses, also under --force, check placed after the exists/!force skip); #4 fixed; #6 remedy text is clear; #7 the ancestor walk is correct for skill files (flat legacy <pack>/<name>.md and non-skill files are documented gaps, acceptable); #8 markers are sound (memory-lane never writes .claude/AIDA.md or .claude/commands). #2 hint verified with a probe: extract writes <out>/skills/<name>.md header-wrapped (list_templates keys over EMBEDDED_TEMPLATES, e.g. skills/aida-learn.md), and copying it to .codex/skills/aida-learn/SKILL.md makes that file match in doctor, so the hint is correct and usable. OPEN: (1) MEDIUM init_cmd.rs ~1570-1590 (item 5 behaviour change): for AGENTS.md -> CLAUDE.md, init now skips AGENTS.md SILENTLY (exists && !force), and nothing else delivers the AIDA-AUTOGEN block. Init''s existing-file branch skips a real CLAUDE.md without --force. Scaffolder::apply''s CLAUDE.md path merges only the @.claude/AIDA.md import and the memory-reflex block, not the AGENTS block. Refresh (agents_md_block_refresh) and apply/upgrade (BUG-718) already skip a symlinked AGENTS.md. Before this branch, init was the one path that merged the block into CLAUDE.md through the link. So in this common layout Codex (which reads AGENTS.md, i.e. CLAUDE.md, and does not follow @-imports) loses the AIDA guidance on a fresh init, with no message. The file-level check in init was also beyond L5''s skill-dir scope. Fix (either): (a) exempt AGENTS.md from the file-level link check in init when the link resolves to a regular file inside the project root that is not under aida-core/templates, and merge the block into the resolved target (restores the old behaviour, keeps BUG-718 master protection); or (b) keep the skip but always print a one-line notice that the AIDA block was not added because AGENTS.md is a link, naming the target and the remedy. Add a test for the AGENTS.md -> CLAUDE.md case either way. NITS / follow-ups (non-blocking): (2) a fresh memory-lane project already shows scaffold-drift/project ''4 drifted'', because write_memory_lane_scaffolding writes the raw embedded template while doctor expects the header-wrapped artifact. That predates this branch, but the lane action now makes users copy extract output to clear it. Better follow-up: have memory-lane write wrap_with_aida_header(template), which also makes lane skills refreshable. (3) MEMORY_LANE_SKILL_ACTION says ''Restore'' but is also used for the drift finding; say ''restore or refresh''. Approve once (1) is resolved.'
   created_at: 2026-09-26T13:48:28.734268348Z
   modified_at: 2026-09-26T13:48:28.734268348Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0ddfa-296f-7fe3-8375-e615cf95dbad
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe) on round-2 finding 5: option (a). Exempt an in-project AGENTS.md link (not under template masters) and merge the block into its target, restoring the prior init behaviour. Other symlinks keep skip and warn. The hint wording becomes ''Restore or refresh''. The memory-lane header-drift follow-up is filed as BUG-1653.'
+  created_at: 2026-09-26T13:49:14.479574598Z
+  modified_at: 2026-09-26T13:49:14.479574598Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
