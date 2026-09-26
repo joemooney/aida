@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T04:47:41.715373320Z
-modified_at: 2026-09-26T05:31:33.883438081Z
+modified_at: 2026-09-26T15:55:27.046752485Z
 req_type: Bug
 tags:
 - antigravity
@@ -129,6 +129,88 @@ comments:
   created_at: 2026-09-26T05:28:01.215785517Z
   modified_at: 2026-09-26T05:28:01.215785517Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0de6d-b5c6-72f1-915a-dcb5cb283168
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): BUG-1639 one derived portable skill pack at .agents/skills
+
+    Grounding: the vendor behaviour is taken from the 22:09 matrix comment (Codex 0.157.0 and agy 1.2.11 both discover .agents/skills; Codex silently skips a symlinked SKILL.md but loads a regular file, a hard link, or a symlinked skill DIR that holds a regular SKILL.md) and from docs/agents/porting-claude-code-to-codex.md §A.1 (line ~751). I found nothing in the repo that says whether either vendor still reads .codex/skills or .antigravity/skills; see the open questions.
+
+    ## Current state (code read at main 12138a0403)
+    - aida-core/src/scaffolding/mod.rs, Scaffolder::preview: the hand lists `codex_skill_defs` and `antigravity_skill_defs` (23 names each; they omit aida-handoff, aida-human-audit, aida-fleet-watch, aida-grill, aida-triage and ~30 others) write `.codex/skills/<n>/SKILL.md` and `.antigravity/skills/<n>/SKILL.md` through `generate_codex_skill` (skills-portable/<n>.md wins over skills/<n>.md). The Claude catch-all loop (BUG-386) already derives from EMBEDDED_TEMPLATES via `classify_skill_key`. It skips the TASK-1441 trio (aida-advise, aida-assess, aida-intent) and applies the two memory flags.
+    - Hard-coded pack lists: scaffold_refresh.rs `PROJECT_PACKS`; init_cmd.rs memory-lane writer (`[".claude/skills", ".codex/skills"]`, ~L1154) and footprint detection (~L875); doctor_cmd.rs `is_vendor_prompt_or_skill` plus the `scaffold-drift/codex-skills-missing` finding (BUG-1117); lib.rs `detect_obe_aida_scaffold_files`, which is prune and covers only .claude/.
+    - The TASK-1503 manifest (refresh.rs `plan_skill_pack`, `.aida-delivered` per pack) already works for any `*/skills` root, `.agents/skills` included (test `manifest_works_for_an_arbitrary_pack_root`). Two behaviours matter here: refresh never creates a pack directory that does not exist, and a pack with no manifest fails closed (refresh creates nothing).
+    - The Makefile targets `sync-templates` and `check-templates` handle only .claude/ symlinks. In this repo, .agents/ is untracked but NOT gitignored (`git status` shows `?? .agents/`). It holds 24 hand-copied aida-* dirs plus typesafe-ai/ and local/.
+
+    ## Owner and trigger
+    - Owner: the scaffolder (aida-core scaffolding) owns the downstream pack; `make sync-templates` owns the dev-repo copy. Both read ONE inventory.
+    - Triggers: `aida init` / `scaffold apply` / `scaffold upgrade` (Install mode) and `aida scaffold refresh` / `init --refresh` (Refresh mode) when Codex or Antigravity is selected or a legacy vendor pack exists; `make sync-templates` in the dev repo.
+
+    ## Design
+    1. Inventory data file, the single source: `aida-core/templates/skill-inventory.toml`, embedded by build.rs. It holds `[[claude_only]] name = "..." reason = "..."` entries, one per line pair and commented, so a shell script can parse it with grep. It also holds `[[not_a_skill]]` for the TASK-1441 trio, which moves out of the hard-coded `matches!` in the Claude loop.
+    2. `pub fn portable_skill_inventory(config: &ScaffoldConfig) -> BTreeMap<String, PortableSkill>` in a new `aida-core/src/scaffolding/inventory.rs`. It takes every `classify_skill_key` prompt entry, subtracts not_a_skill, claude_only and the memory-flag opt-outs, and records the source key for each skill (skills-portable/<n>.md, else the master; a folder-form skill such as aida-pr also carries its helper keys). The Claude loop uses the same enumeration minus not_a_skill, so the two sets differ ONLY by claude_only.
+    3. Downstream layout: ONE pack, `.agents/skills/<n>/SKILL.md`, as regular files with the usual checksum header. It is written when `generate_codex_skills || generate_antigravity_skills` (the existing vendor-selection fields keep their meaning). The two vendor blocks and both hand lists are deleted. New installs never write .codex/skills or .antigravity/skills.
+    4. Namespace: AIDA plans, writes, refreshes and prunes only `aida-*` names under .agents/skills. It writes `.agents/skills/.aida-delivered` only when the pack is AIDA-owned (see fail-closed rules below).
+    5. Migration for existing installs (Refresh and Install): the .agents/skills pack counts as "installed" if it has a manifest, or holds an aida-* skill, or a legacy `.codex/skills` or `.antigravity/skills` pack with AIDA skills exists. When it has no manifest but a legacy pack exists, its manifest is SEEDED from the legacy manifests. A name present in any legacy pack is delivered. A name opted out in every legacy pack that knows it is an opt-out. A name no legacy manifest knows (aida-handoff etc.) is new and is delivered when the legacy manifest is complete. Legacy packs stay on disk and are no longer written or refreshed. `scaffold status` reports them as `legacy (superseded by .agents/skills)`.
+    6. Doctor: the new finding `scaffold-drift/agents-skill-symlink` covers any `.agents/skills/*/SKILL.md` (aida-* or not) whose own file type is a symlink. It warns only and has no safe_heal. A symlinked skill DIR whose SKILL.md is a regular file is not flagged. The BUG-1117 codex-skills-missing finding is retargeted to .agents/skills.
+    7. Dev repo: a new `scripts/sync-portable-skills.sh {sync|check|list}` is called from `sync-templates` and `check-templates`. For each inventory name it copies the source (portable, else master; the whole folder for folder-form) to `.agents/skills/<n>/` as REGULAR files via temp-then-mv. It removes aida-* dirs that are not in the inventory and never enters non-aida entries. `check` fails on a missing copy, a byte difference (cmp), a symlinked SKILL.md, or a stale aida-* dir. No hard links. Add `/.agents/` to .gitignore. The BUG-917 dogfood exemption in report.rs `check_scaffold_status` gains a branch: in the AIDA source repo, .agents/skills copies are compared byte-for-byte with their source instead of the rendered artifact. `plan_skill_pack` treats the dev-repo .agents pack as a template mirror (extend `is_template_mirror_pack` to "project has aida-core/templates AND pack == .agents/skills"), so no manifest lands in the checkout.
+
+    ## Surface users see
+    - No new flags. `aida init --codex/--antigravity` and `aida scaffold apply|upgrade|refresh` now write `.agents/skills/aida-*/SKILL.md`. `--no-skills` covers it too.
+    - scaffold status adds a "legacy pack" line. aida doctor adds the symlink finding. The existing codex-missing finding now names .agents/skills.
+    - `scaffold apply --prune` also removes stale aida-* dirs from .agents/skills (it never touches symlinks or non-aida entries). Removing the legacy packs is a printed manual hint, not automatic.
+    - Help and prose that change: cli.rs strings (~L707, L765, L12272), scaffold_cmd.rs codex-prompts notes (~L482, L505), codex_prompts.rs module doc and L43, init_cmd.rs output (~L1842-1853).
+
+    ## Races and fail-closed behaviour
+    - If .agents/skills exists and holds only non-aida dirs (typesafe-ai, local/) with no manifest and no legacy pack, it is NOT an AIDA pack. Refresh writes nothing there: no manifest and no skills. Only an explicit Install for a Codex or Antigravity selection adopts it.
+    - An unreadable legacy manifest, or a legacy pack without a complete manifest, puts the .agents pack in fail-closed seeding: everything is withheld as unconfirmed, and the existing "run `aida scaffold upgrade`" hint is printed.
+    - A symlinked .agents or .agents/skills dir is left untracked and nothing is written (the existing `symlink_target` and `symlink_blocking_write` path).
+    - The manifest is written via write_atomic before delivery, and names are recorded only after their files land (the existing TASK-1503 ordering), so a crash in the middle of a refresh retries instead of recording an opt-out.
+    - Two concurrent refreshes: last atomic manifest write wins, the same as today; delivery is idempotent because a skill already present is never re-created.
+    - Dev repo: sync writes temp-then-rename per file, so an interrupted sync leaves old or new bytes and never a partial file. check-templates is the drift alarm.
+
+    ## Files to change (by symbol)
+    - aida-core/templates/skill-inventory.toml (new); aida-core/build.rs (embed it).
+    - aida-core/src/scaffolding/inventory.rs (new): `portable_skill_inventory`, `claude_only_skills`, `not_a_skill`.
+    - aida-core/src/scaffolding/mod.rs: `Scaffolder::preview` (delete the codex_skill_defs and antigravity_skill_defs blocks, add the .agents/skills block, make the Claude loop use not_a_skill); rename `generate_codex_skill` to `generate_portable_skill`; `plan_skill_packs` (legacy seeding hook); module docs.
+    - aida-core/src/scaffolding/refresh.rs: `plan_skill_pack` / new `seed_from_legacy_packs`; `is_template_mirror_pack` (copy-mirror case); `LEGACY_PORTABLE_PACKS` const.
+    - aida-core/src/report.rs: `check_scaffold_status` (dogfood copy branch, legacy-pack reporting).
+    - aida-cli-lib/src/scaffold_refresh.rs: `PROJECT_PACKS`, `plan_refresh_deliveries` (AIDA-owned pack test instead of `is_dir`).
+    - aida-cli-lib/src/init_cmd.rs: memory-lane writer pack list, `effective_init_footprint` pack scan, output lines.
+    - aida-cli-lib/src/doctor_cmd.rs: `is_vendor_prompt_or_skill`, codex-skills-missing retarget, new agents-skill-symlink finding.
+    - aida-cli-lib/src/lib.rs: `detect_obe_aida_scaffold_files` also scans .agents/skills against the portable inventory.
+    - aida-cli-lib/src/cli.rs and scaffold_cmd.rs: help and notes.
+    - Makefile (`sync-templates`, `check-templates`); scripts/sync-portable-skills.sh (new); .gitignore.
+    - Docs: docs/agents/seat-parity.md (the matrix with versions), porting-claude-code-to-codex.md, codex-mcp-setup.md, antigravity-mcp-setup.md, cross-agent-onboarding.md (template master aida-core/templates/docs/agents/ and then make sync-templates), docs/cli/07-project-setup.md. A correcting comment on BUG-1117.
+
+    ## Named tests
+    - inventory.rs: `every_skill_master_is_portable_or_claude_only` (the acceptance guard), `claude_only_entries_name_real_masters_and_have_reasons`, `portable_inventory_prefers_skills_portable_body`, `portable_inventory_includes_aida_handoff`.
+    - mod.rs: `codex_or_antigravity_selection_writes_agents_skills_only` (no .codex/skills or .antigravity/skills artifact), `agents_pack_skill_md_is_regular_file_with_header`, `folder_form_skill_ships_helpers_to_agents_pack` (aida-pr), `no_vendor_selected_writes_no_agents_pack`.
+    - refresh.rs: `agents_pack_seeded_from_complete_legacy_codex_manifest_delivers_new_skill`, `agents_pack_honours_opt_out_shared_by_all_legacy_packs`, `agents_pack_with_legacy_pack_lacking_manifest_fails_closed`, `unreadable_legacy_manifest_withholds_everything`, `non_aida_only_agents_dir_is_not_an_aida_pack`.
+    - scaffold_refresh.rs: `refresh_migrates_codex_install_to_agents_skills_and_freezes_legacy`, `apply_refresh_prune_leave_non_aida_skill_dir_byte_identical` (typesafe-ai and local/ hashed before and after), `claude_only_project_refresh_never_creates_agents_pack`.
+    - doctor_cmd.rs: `doctor_flags_symlinked_agents_skill_md`, `doctor_accepts_symlinked_skill_dir_with_regular_skill_md`.
+    - report.rs: `status_reports_legacy_codex_pack`, `dogfood_status_compares_agents_copies_byte_for_byte`.
+    - Dev repo: `sync_portable_skills_script_matches_rust_inventory` (runs `scripts/sync-portable-skills.sh list` in a tempdir and diffs it against `portable_skill_inventory`), `check_templates_script_fails_on_drift_and_symlink` (tempdir fixture; no real make invocation of the whole repo).
+
+    ## Slices (slice 1 first)
+    1. Inventory, data file and completeness test; new installs write .agents/skills (the vendor blocks and hand lists are deleted); namespace guard; init memory-lane and footprint lists; doc matrix in seat-parity and porting. This delivers aida-handoff and the others to NEW installs and to installs that already have a manifested .agents/skills pack.
+    2. Existing-install migration: legacy seeding, the AIDA-owned-pack rule for refresh, status legacy reporting, prune over .agents/skills, doctor symlink finding and retarget, the BUG-1117 correction.
+    3. Dev repo: scripts/sync-portable-skills.sh, the Makefile targets, .gitignore, the dogfood status and mirror-pack exemptions, the remaining docs and help text.
+
+    ## Out of scope
+    - The Claude "single-location" layout (.claude/skills/aida-X/SKILL.md as a symlink into .agents/skills). The 22:28 proxy decision carved this out for Joe; .claude/skills is unchanged here.
+    - Deleting legacy .codex/skills and .antigravity/skills automatically; the ~/.codex/prompts pack (BUG-1095); writing new skills-portable bodies for Claude-only skills; tracking .agents/ in git; third-party skill management.
+
+    ## Open questions
+    1. UNRESOLVED operator decision: the single-location option (22:11 comment). The recorded default (22:28 proxy) is out of scope and .claude/skills is unchanged. This sketch assumes that default. Joe to decide separately; if adopted, it would reuse the inventory from slice 1.
+    2. Not grounded: do Codex 0.157 and agy 1.2.11 still discover .codex/skills and .antigravity/skills? Those compatibility cells were never run. If they do, a frozen legacy pack alongside .agents/skills may produce duplicate or stale listings. The proposed default (freeze, report, manual removal hint) depends on this answer.
+    3. Not grounded: Antigravity also reads .claude/skills (BUG-1135). Its behaviour when the same aida-X name appears in both .claude/skills and .agents/skills (duplicate listing, precedence) is untested. Whether Codex reads .claude/skills at all is also unknown.
+    4. The claude_only contents need advisor review. Masters that call Claude-only tools include aida-burndown and aida-solo (Agent worktree fan-out), aida-guided-implement, aida-decide, aida-clarify and aida-derisk (AskUserQuestion as the core mechanic), and aida-review (7 hits, but it already ships to Codex today). Proposed default: exclude only aida-burndown and aida-solo, and ship everything else (it degrades to prose questions). Confirm or adjust.
+    5. The legacy opt-out merge rule when .codex and .antigravity disagree (proposed: present in either pack means delivered).
+    6. Should .agents/skills/.aida-delivered (a dotfile in a directory shared with other tools) be acceptable, or should the manifest for this pack live under .aida/ instead?
+  created_at: 2026-09-26T15:55:27.046752485Z
+  modified_at: 2026-09-26T15:55:27.046752485Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 execution_mode: drive
 filed_at:
   code_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
