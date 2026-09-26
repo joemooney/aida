@@ -1,0 +1,36 @@
+id: 01a0deff-ff18-7be3-91e4-382e8b28c388
+spec_id: TASK-1523
+agreed_id: TASK-1523
+title: 'North-star check: run STORY-1425''s two-arm reconstitution measure on aida-monitor and publish the AIDA-vs-no-AIDA delta as VIS-2''s executable test'
+description: |
+  From SPIKE-86 section 8 item 5, resolved by OPERATOR DECISION on SPIKE-86 (Joe, 2026-09-26): STORY-1425's comparative measure becomes the north star's executable check, run on aida-monitor (a project that used AIDA from its first commit), NOT on aida-hub and not on AIDA's own corpus. Without it VIS-2 is asserted rather than measured.
+
+  Depends on STORY-1425 (two-arm reconstitution measure: arm B = store context, arm A = what a non-AIDA project keeps: git log subjects, README, file and symbol names; plus the coverage denominator reported alongside recall).
+
+  Acceptance:
+  1. A documented, repeatable command runs the STORY-1425 two-arm measure against ~/ai/aida-monitor at a pinned commit and pinned store head, over a stated spec sample (all specs with acceptance criteria, or a fixed seeded sample if cost requires it).
+  2. The output reports per spec and in aggregate: arm A score, arm B score, and the delta (B minus A), plus the coverage figures from STORY-1487 for the same project; never arm B alone.
+  3. The first run's results are committed as a dated snapshot (for example docs/positioning/YYYY-MM-DD-north-star-check-aida-monitor.md) with the exact commands, pins and model used, and linked from VIS-2 by comment.
+  4. The check states its pass condition in the snapshot: VIS-2 is supported when the aggregate delta is positive and exceeds the run-to-run variance measured by at least two repeated runs.
+  5. Re-running with the same pins reproduces the aggregate delta within the stated variance.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:35:14.072123334Z
+modified_at: 2026-09-26T18:35:14.072123334Z
+req_type: Task
+tags:
+- aida-monitor
+- from-spike:SPIKE-86
+- measurement
+- north-star
+- reconstitution
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
