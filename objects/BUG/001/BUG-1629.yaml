@@ -18,12 +18,12 @@ description: |-
   - The orchestrator emits a precise retry/recovery state and no orphan lease.
   - A retry can either resume a valid child or start a clean replacement exactly once.
   - Parent drain dependency handling does not treat the failed child as completed or unlock dependents.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T20:31:17.082914486Z
-modified_at: 2026-09-26T07:28:20.678460404Z
+modified_at: 2026-09-26T08:13:31.271001132Z
 req_type: Bug
 tags:
 - batch:groom-2026-09-25
@@ -107,6 +107,20 @@ comments:
   created_at: 2026-09-26T07:28:20.678460404Z
   modified_at: 2026-09-26T07:28:20.678460404Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0dcc6-ccfd-72a1-baa6-18114ec84c26
+  author: aida-auto-bump
+  timestamp: 2026-09-26T08:13:31.261505370Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0dcc6-cd06-7713-8652-ee0c0add43aa
+  timestamp: 2026-09-26T08:13:31.270999641Z
+  agent: implementer
+  commit_sha: f3a00639f786420ed1486f874f7ec79838e73bd4
+  summary: Completed via merge f3a00639
 execution_mode: drive
 filed_at:
   code_sha: 99698621ba5890d30a9d128655537987cfd239d4
@@ -115,3 +129,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 1df2e0445e
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T08:13:31.261501628Z
+  completion_sha: f3a00639f786420ed1486f874f7ec79838e73bd4
