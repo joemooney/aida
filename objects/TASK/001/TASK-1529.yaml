@@ -3,13 +3,21 @@ spec_id: TASK-1529
 agreed_id: TASK-1529
 title: 'Pre-flight guard: retract the published PR when the post-publication pre-flight guard fails'
 description: 'Implements the operator''s decision on TASK-1289 (option B, retract on failure; recorded 2026-09-26). TASK-1289 completed with the boundary still advisory. Acceptance: 1. When the pre-flight guard fails after an agent-opened PR is accepted, AIDA converts the PR to draft (or closes it) and comments the failing guard output; the spec returns to in-progress for the same implementer. 2. A passing guard leaves the PR untouched. 3. The retraction is idempotent and never touches a PR the agent did not open. 4. Tests with a fake forge cover fail, pass and not-ours cases.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:40.554193021Z
-modified_at: 2026-09-26T19:10:40.554193021Z
+modified_at: 2026-09-26T21:16:08.991045401Z
 req_type: Task
+history:
+- id: 01a0df93-519f-7082-8697-0c3ea16f6b85
+  author: aida-session-start
+  timestamp: 2026-09-26T21:16:08.991044735Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
   branch: main
