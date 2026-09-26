@@ -1,0 +1,65 @@
+id: 01a0dbed-1c13-7862-9c54-4c47103d8ac2
+spec_id: DOC-1-176
+title: 'Human explanation: feature lanes — working on the side without touching main'
+description: |
+  The question that started this: "I want to work on some feature on the side, and I'd like a role or seat targeted at that feature, so I know I'm not interfering with the main branch."
+
+  ## What AIDA already does
+
+  `aida worktree enter EPIC-N` creates a separate checkout next to the main one, on its own branch (`epic-n-work`). It also sets a *focus*, so `aida list`, `aida status` and `aida queue list` inside that checkout only show the epic and its children. Your commits land on the side branch, and nothing reaches `main` until someone opens a pull request.
+
+  That covers most of the day-to-day need. The isolation depends on everyone remembering the arrangement, though; nothing enforces it.
+
+  ## Where it breaks down
+
+  1. **The scoping only works in one direction.** Inside the side checkout you see only the feature. The main-line machinery (autonomous drains, `aida integrate`, `aida groom`, the shared queue) still sees everything. If one of the feature's specs is approved and queued, a main-line drain treats it like any other work and ships it to `main`.
+  2. **There is nowhere for the feature's work to merge.** The implementer's pull requests go to `main` by default. AIDA's "Completed" status means "merged to the default branch", so work merged into the side branch has no honest status to be in.
+  3. **Side branches fall behind.** EPIC-72 is the example. It was built on a long-running branch (`feat/jev-integration`), and bringing it home took a separate task, TASK-1470, to pick the relevant changes onto a fresh branch cut from current `main`. The longer a side branch runs without catching up, the more expensive landing it becomes.
+
+  ## The idea: a feature lane
+
+  A *lane* is a side feature that AIDA knows about and enforces, bound to one epic.
+
+  - **Opening a lane** (`aida lane open EPIC-N`) records on the epic that it lives in a lane, and which branch the lane uses. The record lives in the shared requirements store, so every machine and every agent sees it. The session working in the lane gets a lane seat: its scope, target branch and statusline label come from that record, not from whatever the shell happens to remember.
+  - **Main-line tools skip lane work, and say so.** Drains, integrate, groom and the queue leave out the epic's specs and print one line, such as "EPIC-N: 4 specs in a feature lane (excluded)", so nothing disappears silently. Pointing a main-line command directly at a lane spec is refused, with a message telling you how to enter the lane.
+  - **Work inside the lane merges into the lane.** Pull requests target the lane branch. When one merges there, the spec moves to *Done (in lane)*, not Completed. Completed keeps its meaning of "on main".
+  - **The lane keeps up with main.** `aida lane sync` brings main's changes into the lane branch. AIDA warns when the lane has fallen too far behind, so conflicts show up while they are still small.
+  - **Landing is one deliberate, reviewed step.** `aida lane land EPIC-N` opens a single pull request from the lane into `main`, reviewed by the advisor like any other change. When it merges, every Done-in-lane spec becomes Completed and the lane closes.
+
+  ## How the work is sliced
+
+  - **STORY-1481: the lane record, the lane seat, and the main-line exclusion.** This slice alone delivers "I cannot interfere with main", so it comes first.
+  - **STORY-1482: pull requests target the lane branch, and the Done-in-lane status.**
+  - **STORY-1483: sync, the drift warning, and landing the lane.**
+
+  The change touches how drains choose work, where pull requests go, and what Completed means. So it needs a design sketch and advisor sign-off, recorded as an architecture decision, before implementation starts.
+
+  ## Until lanes exist
+
+  - Use `aida worktree enter EPIC-N` for the side checkout.
+  - Keep the epic's children in Draft, or approved but *not queued*, so main-line drains never pick them up.
+  - Open pull requests against `epic-n-work` by hand.
+  - Merge `main` into the side branch regularly, rather than once at the end.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T04:15:44.659622628Z
+modified_at: 2026-09-26T04:15:44.659622628Z
+req_type: Doc
+tags:
+- exposition
+- human
+- lanes
+- worktree
+filed_at:
+  code_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: claude
+  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
+custom_fields:
+  audience: user,developer
+  scenario: side feature work
