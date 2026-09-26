@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T17:29:11.789280036Z
-modified_at: 2026-09-26T18:40:52.537832792Z
+modified_at: 2026-09-26T18:43:48.570511480Z
 req_type: Story
 comments:
 - id: 01a0d99d-4d51-7640-aa9b-fb5291e204a8
@@ -105,6 +105,34 @@ comments:
     Q5. Should a repo be able to NARROW the machine allowlist (its trusted default-branch copy may only remove entries, never add)? Recommendation: defer.
   created_at: 2026-09-26T18:40:52.537832792Z
   modified_at: 2026-09-26T18:40:52.537832792Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0df07-d8da-7102-8beb-4b2f5f6a5120
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF: APPROVED (independent advisor; did not author the sketch)
+
+    Verified against code: execute_graded_review (graded_review.rs:277) spawns bash -c for every Executable criterion with no permission check; prepare_graded_review (lib.rs:104843) is the only production caller, reached from RealPhaseDriver::run_reviewer (lib.rs:106942), and returns the verdict straight to the orchestrator when !escalated_to_seat. worktree_pool_global_hooks (lib.rs:63338) reads code-exec config only from crate::home_dir()/.aida/config.toml and fails closed on missing/unparseable file. crate::home_dir is dirs::home_dir in prod and the hermetic test home under cfg(test), so fake-HOME tests are safe. The evaluator fast-pass gap is real: with no prose, min_probability stays 1.0 and evaluator.is_some() yields "approved". Trust-source exclusion of the TASK-969 default-branch copy is correct: an unattended-drain PR could merge a repo config that switches the gate on. No env/CLI/spec/repo/merge path can enable execution under the sketch. Default is fail-closed.
+
+    Binding amendments:
+    A1. NotRun guard covers BOTH approve branches, not only the evaluator fast-pass. With NotRun excluded from machine_verified_count, a spec with one permitted passing command plus one NotRun command and no prose hits the Rung-2 branch (prose_count == 0 && machine_verified_count > 0) and auto-approves. Check not_run_count > 0 immediately after the Rung-2 veto: Failed + NotRun stays "rejected" (fail-closed reject is fine); otherwise any NotRun means "escalated", escalated_to_seat = true, before the Rung-2 and ADR-55 fast-pass branches. Add test story_1476_mixed_passed_and_notrun_escalates.
+    A2. Argument injection under word-prefix matching. The metachar refusal stops chaining but not arguments to the allowed program: "cargo test --config target.x86_64-unknown-linux-gnu.runner=/tmp/x" or "make check-templates SHELL=/tmp/x -f /tmp/evil" pass the "cargo test"/"make check-templates" prefix and execute arbitrary programs. Decision: an allow entry matches the EXACT word sequence by default; an entry whose last word is * (e.g. "cargo test *") permits any trailing words. Docs and the config comment must state that a trailing-* entry lets the spec author choose arguments, including arguments that run other programs. Test: allow ["cargo test"] refuses "cargo test --config x=y"; allow ["cargo test *"] permits it.
+    A3. Fix the sketch's example allowlist: "tests/" can never match under whole-word matching (the word is "tests/foo.sh"). Either drop it or define a separate, explicit path-entry form; do not ship an example that silently does nothing. Also extend the refused set to all ASCII control characters (CR, tab-as-separator is fine to split on but refuse other C0 chars) in addition to ; & | $ ` < > ( ) \ newline, and add ' and " (quotes let the checker's whitespace split disagree with bash's word split). Allow entries themselves containing refused characters invalidate the whole policy (denied), same as a non-string array element: any wrong type anywhere in [review] => Default denied, never "skip the bad element".
+    A4. The NotRun list must reach the Phase 3 seat unconditionally. generate_graded_reviewer_prompt only emits its context block when machine_passed_count > 0, and run_reviewer derives AIDA_GRADED_REVIEW_CONTEXT via prompt.split_once("\n\n"); with zero passes the NotRun section would be dropped. Emit the NotRun section whenever not_run_count > 0, independent of passes. Extend story_1476_prompt_lists_notrun_as_manual to the zero-passes case.
+    A5. Prompt wording: the Phase 3 seat is itself an unattended agent with a shell. Replace "inspect the command before running it" with an explicit instruction NOT to execute the listed commands; judge those criteria from the diff and the already-observed CI result, and request changes / escalate to a human if they cannot be judged that way. Otherwise the gate is bypassed one hop later.
+    A6. Record not_run_count and the per-criterion NotRun results in .aida/review-verdicts/PR-N-graded.json (additive, serde default), and the summary line names the count ("N spec-authored command(s) not run: not permitted by ~/.aida/config.toml [review]"), plus the "repo-level opt-in ignored" line when applicable. Reading the repo config for that notice is display-only and must never feed the policy.
+    A7. Migration note must add: (a) the policy is read from the HOME of the reviewing process; drain waves launched in systemd-run transient units (4407b94) or containers with a different/unset HOME fail closed; (b) an allowlist trusts the spec author's CHOICE of command, not the PR's code: permitted commands (cargo test, make ...) still execute PR-head code (build.rs, Makefile, test bodies).
+    A8. Tests use fake HOME via test_home + EnvVarsGuard as stated; the policy loader must be pure-parse-testable (acceptance_command_policy_from_toml) and the I/O wrapper only does home_dir + read + parse, mirroring worktree_pool_global_hooks. Existing story_1424 tests pass an explicit permissive policy; do not change their assertions.
+
+    Open questions:
+    Q1. Allowlist now (with A2 exact-match default and trailing-* opt-in). Agree with recommendation.
+    Q2. Separate bug, filed: BUG-1668 (approved). Do not widen this story.
+    Q3. No for v1. Threat model is cross-node/cross-branch; a local agent that can write ~/.aida already has local exec. Revisit only if worktree discipline stops forbidding ~/.aida writes.
+    Q4. No for v1. The default is already off, so ephemeral/CI nodes without the file are safe; an env force-off adds surface without closing a hole. No env var of any value may enable execution.
+    Q5. Defer. If ever built, the repo copy may only narrow (intersect), read via TASK-969 trusted default branch, never widen.
+
+    Lane: drive (Joe merges), as the proxy decision said. Queue after these amendments are reflected in the implementer's plan; no re-sketch needed.
+  created_at: 2026-09-26T18:43:48.570511480Z
+  modified_at: 2026-09-26T18:43:48.570511480Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0def4-fc93-7511-9f30-c80d96061f8f
