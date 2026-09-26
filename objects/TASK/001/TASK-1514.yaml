@@ -10,12 +10,12 @@ description: |
   - A test: stale cache + live foreign writer, `aida graph tree <EPIC>` completes in < 2 s and exits 0 (labelled stale once the SPIKE-90 refresh story lands).
   - Call-site classification is recorded in the PR; no mutating path is moved to the tolerant read.
   - Depends on the SPIKE-90 single-flight refresh story's reader protocol for the final wiring.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:26.874770461Z
-modified_at: 2026-09-26T09:47:39.846785437Z
+modified_at: 2026-09-26T09:52:17.134231180Z
 req_type: Task
 tags:
 - cache
