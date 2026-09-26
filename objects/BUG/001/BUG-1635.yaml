@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:02:32.910302194Z
-modified_at: 2026-09-26T10:00:23.427130296Z
+modified_at: 2026-09-26T10:13:35.200990350Z
 req_type: Bug
 tags:
 - aida:history
@@ -54,6 +54,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): APPROVED, mode drain, blocked-by BUG-1636. Chose the open forks: --oneline implies events mode, and a JSON projection is required rather than a better refusal (appended to the description).'
   created_at: 2026-09-26T05:28:16.473327369Z
   modified_at: 2026-09-26T05:28:16.473327369Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd34-b961-7983-99e0-12a474c94866
+  author: joe
+  content: 'Review (fresh Opus reviewer): REQUEST CHANGES (two small fixes, then approvable). Reviewed 09f8439e87. Behaviour matches acceptance. Tests pass: bug_1635 8/8, --lib history 146, task_1507 59, task_1508 8, bug_1502_format_json_audit 8/8. Parity test is real: swapping StatusChange from/to only on the index decode path (history_cache.rs, the serve_at row decode) made index_serves_the_same_answer... fail with ''[--status-changes] events differ''. Reverted; tree clean. No index version bump needed, confirmed: stored columns and kind_json come from EventKind, which is unchanged, and id/ts/from/to are derived at render time in event_record. Help text adds no SPEC IDs (BUG-588 and BUG-1474 in --id help were already there). JSON contract: no consumer in templates, scripts, MCP (it has its own builder) or tests reads ''history <ID> --json'' or the old agent-mode digest row for a SPEC-ID. The audit script uses ''history --full''. FINDINGS: (1) MEDIUM git_backend_cmd.rs:7849 ''let shallow = explicit_events || (json && requested_id.is_none())''. The output format changes the commit window. ''aida history --status-changes'' (human/TOON) walks 250 commits, but ''aida history --status-changes --json'' walks 5x limit = 100. On a real store the JSON can return fewer transitions than the TOON output, which breaks the ''formats agree'' goal. --help (cli.rs:12843) says both ''multi-spec --json -> 5x'' and ''--status-changes -> 250'', which contradict each other for this combination. Fix: pick the window from the mode, not the format: shallow = explicit_events || (json && requested_id.is_none() && !(*shipped || *status_changes || *comments || *oneline)). Note: --shipped --json was already shallow before this change; this fix makes it 250, which is consistent. Then rephrase the help and docs as ''a bare --json''. Add a unit test on a small helper (e.g. history::default_max_commits(...)) asserting that json does not change the window when a filter flag is set. (2) MEDIUM-LOW stale doc: aida-core/templates/.aida/discipline/machinery-glossary.md:349 (and its mirror .aida/discipline/machinery-glossary.md) still says ''Agent/piped callers keep getting the pre-existing single-row digest TOON table for a SPEC-ID, unchanged'', which is now false. Edit the template master, drop that sentence (or say that every format shows the progression), then run make sync-templates and make check-templates. (3) NIT docs/cli/08-reporting.md:91 Gotchas: ''events mode bounds its walk ... (default (limit*5).max(50))'' under the heading ''A short events/--full/--shipped result''. --shipped, and now --status-changes/--comments/--oneline, default to 250. Say ''default (limit*5).max(50) for --full/events, 250 for the filter-implied feed''. (4) NIT history.rs:577 render_events_feed: the ''HistoryOutput::Human | HistoryOutput::Json'' arm silently renders human text for Json. Callers never reach it, but make it unreachable!/debug_assert, or document why. (5) NIT mcp.rs:7374: the spec_id param says it ''mirrors aida history --id'', but CLI ''--id X --json'' is now the oldest-first status progression while MCP returns the full newest-first trail. Say it mirrors ''aida history events --id'' / ''--full''.'
+  created_at: 2026-09-26T10:13:35.200990350Z
+  modified_at: 2026-09-26T10:13:35.200990350Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 execution_mode: drain
 filed_at:
