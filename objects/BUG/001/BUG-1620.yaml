@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:30:03.452544442Z
-modified_at: 2026-09-26T03:50:43.414071743Z
+modified_at: 2026-09-26T03:51:11.790096318Z
 req_type: Bug
 comments:
 - id: 01a0d88b-c720-7070-b64e-6aab426521a5
@@ -61,6 +61,12 @@ comments:
     VERDICT: the correctness bar is met. I found 0 wrong answers, so I do NOT recommend restoring the conservative --id fallback. Add the T5 octopus fixture. A re-review can be limited to that test.
   created_at: 2026-09-26T03:50:43.414071743Z
   modified_at: 2026-09-26T03:50:43.414071743Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dbd6-a2ae-7c01-ab95-95c34e0f6926
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): keep the relaxed --id serving. The strict review found 0 mismatches across about 264k answers and does not recommend restoring the fallback. The only blocker is the T5 octopus third-parent test (plus a doc clarification), both requested.'
+  created_at: 2026-09-26T03:51:11.790096318Z
+  modified_at: 2026-09-26T03:51:11.790096318Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
