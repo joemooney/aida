@@ -1,0 +1,20 @@
+id: 01a0de6b-e83f-76d0-846c-d1b8fb53a18d
+spec_id: BUG-1660
+agreed_id: BUG-1660
+title: read_atomic retries NotFound/PermissionDenied on Unix, where rename is atomic, so every read of a genuinely missing file waits ~200 ms
+description: 'From BUG-1654''s review. The retry exists for Windows transient opens during an atomic rename. On Unix, rename(2) is atomic, so NotFound/PermissionDenied are never transient there, yet read_atomic waits its ~200 ms budget before surfacing them. Callers that don''t pre-check existence pay this on every absent-file read: git_ops.rs:122, dispenser.rs:207, node.rs:828, registry.rs:30, stacks.rs:90, session_manifest.rs:140. Fix: make the NotFound/PermissionDenied retry cfg(windows)-only (Unix returns immediately), keep the Windows budget, and update the docs and tests. Also demote the pre-existing trace marker in read_atomic''s /// doc comment to a plain // line. Acceptance: (1) on non-Windows, a missing file errors with NotFound in under 5 ms (test); (2) the Windows path keeps the BUG-1654 budget tests (cfg-gated or via the injectable helper); (3) no /// trace lines in fs_atomic.rs.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T15:53:28.895586926Z
+modified_at: 2026-09-26T15:53:28.895586926Z
+req_type: Bug
+filed_at:
+  code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: b331809ce7
+  vendor: antigravity
+  session: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
