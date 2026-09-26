@@ -2784,6 +2784,92 @@ mod sweep {
     // trace:TASK-1507 | ai:claude
 
     #[test]
+    fn bug_1620_octopus_merge_touch_from_the_third_parent_only() {
+        // T5: an octopus merge M(a1, s1, s2) keeps root's FR-1, which only
+        // s2 changed. M differs from its THIRD parent alone, so
+        // `git log --full-history -- FR-1` lists M (no events: its combined
+        // diff is empty) and counts it against `--max-commits`. The index
+        // must record that touch from every parent, not just the first two.
+        // trace:BUG-1620 | ai:claude
+        let mut d = Dag::new();
+        let mut st = State::new();
+        st.insert("FR-1", Spec::new("FR-1", "Functional", "fr"));
+        st.insert("BUG-3", Spec::new("BUG-3", "Bug", "b"));
+        let root = d.write_commit(&[], st.clone(), BASE_TS, "root");
+        let mut a = st.clone();
+        a.get_mut("BUG-3").unwrap().status = "Approved".into();
+        let a1 = d.write_commit(&[root.clone()], a.clone(), BASE_TS + 10, "a1");
+        let mut s1s = st.clone();
+        s1s.insert("TASK-4", Spec::new("TASK-4", "Task", "t"));
+        let s1 = d.write_commit(&[root.clone()], s1s.clone(), BASE_TS + 20, "s1");
+        let mut s2s = st.clone();
+        s2s.get_mut("FR-1").unwrap().status = "Done".into();
+        let s2 = d.write_commit(&[root.clone()], s2s, BASE_TS + 30, "s2");
+        let mut ms = a.clone();
+        ms.insert("TASK-4", s1s["TASK-4"].clone());
+        let m = d.write_commit(&[a1.clone(), s1, s2], ms.clone(), BASE_TS + 40, "octopus");
+        let mut zs = ms.clone();
+        zs.get_mut("FR-1").unwrap().description = "z1".into();
+        let z1 = d.write_commit(&[m], zs, BASE_TS + 50, "z1");
+        d.set_head(&z1);
+        let fx = &d.fx;
+
+        let commits = commit_times(fx).len();
+        let mut probes = Vec::new();
+        for n in 0..=6 {
+            let mut o = opts();
+            o.id_filter = Some("FR-1".into());
+            o.limit = n;
+            probes.push((format!("--id FR-1 -n {n}"), o));
+        }
+        for max in 0..=commits + 1 {
+            let mut o = opts();
+            o.id_filter = Some("FR-1".into());
+            o.max_commits = max;
+            o.max_commits_explicit = true;
+            probes.push((format!("--id FR-1 --max-commits {max}"), o));
+        }
+        let walks = walk_all(fx, &probes);
+
+        // The pinned example: M fills the second slot of the window.
+        let two = probes
+            .iter()
+            .position(|(l, _)| l == "--id FR-1 --max-commits 2")
+            .unwrap();
+        let shas: Vec<&str> = walks[two].0.iter().map(|e| e.sha.as_str()).collect();
+        assert!(
+            shas.iter().all(|s| *s == z1),
+            "walk --max-commits 2 is [z1]"
+        );
+        assert!(!shas.is_empty());
+        assert!(walks[two].1, "walk --max-commits 2 is window-exhausted");
+
+        let check = |tag: &str| {
+            for ((label, o), walk) in probes.iter().zip(&walks) {
+                let got = test_support::query_only(&fx.store, &fx.db, o)
+                    .unwrap()
+                    .unwrap_or_else(|| panic!("[{tag}: {label}] did not serve"));
+                assert_same(&got, walk, &format!("{tag}: {label}"));
+            }
+        };
+        // (i) a complete index.
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        check("complete");
+        // (ii) an index built at a1 and caught up across the octopus.
+        fx.drop_index();
+        d.set_head(&a1);
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        d.set_head(&z1);
+        history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS).unwrap();
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(z1.as_str())
+        );
+        check("catch-up");
+        fx.drop_index();
+    }
+
+    #[test]
     fn task_1507_id_plus_one_probe_below_an_ours_merge() {
         // T3: an ours-merge drops the side commit that added FR-1; a later
         // main commit adds FR-1. `--id FR-1 --max-commits 1` has no merge
