@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:30:03.452544442Z
-modified_at: 2026-09-26T01:19:04.878973477Z
+modified_at: 2026-09-26T03:50:43.414071743Z
 req_type: Bug
 comments:
 - id: 01a0d88b-c720-7070-b64e-6aab426521a5
@@ -16,6 +16,51 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved. Lean toward --full-history, so that --id matches the full event trail. Land it after TASK-1507, so the index''s N1b routing can be simplified to match.'
   created_at: 2026-09-25T12:30:34.272453641Z
   modified_at: 2026-09-25T12:30:34.272453641Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dbd6-33d6-7ea3-8ab8-0c4a9f46b67a
+  author: joe
+  content: |-
+    Strict review: REQUEST CHANGES (test only; no code defect) — I reviewed 08ef094764 as an independent reviewer in a throwaway worktree, which I have since removed. I found NO wrong served answer. Removing the conservative --id fallback is sound. One load-bearing path has no pinning test.
+
+    EQUIVALENCE (theory, confirmed empirically)
+    - git log --full-history without parent rewriting sets simplify_history=0. Every parent of every merge is queued, exactly as in the unfiltered walk, so the date-priority queue and its order are identical.
+    - A commit is shown iff it is !TREESAME to at least one relevant parent. A root is shown iff it holds the path. With no negative refs, every parent is relevant. --since/--until do not set revs->limited, so no parent becomes UNINTERESTING (irrelevant).
+    - -n counts shown commits only. TREESAME uses a pathspec tree diff with no rename detection and compares mode and oid, so mode-only changes count. That matches --raw --no-renames for single-parent and root commits, and matches diff-tree -r --no-renames per parent for merges (history_cache.rs:907).
+
+    EMPIRICAL CHECKS
+    - Git-level check, independent of aida (rev1620_probe.rs). For every path, git log --full-history -- p equals the unfiltered walk restricted to commits where git diff --quiet parent..c -- p fails for ANY parent (a root: ls-tree holds p). Checked plain, with every -n, and with --since/--until at +-1 around every commit time, on 20 random DAGs (including skew) and 3 hand shapes: 5,000+ checks, 0 bad.
+    - Index touches check. touches(p) == indexed ∩ touched(p) in every state: complete; every partial chunk of 1-3; every zero-budget catch-up step from every main commit (from full and partial starts); and catch-up plus back-fill. 9,500+ checks, 0 bad.
+    - The --id walk equals unfiltered events filtered by spec: 0 bad.
+    - The schema bump changes the file name (history-v5-*.db, history_cache.rs:198), so a fresh build is forced. No merge_paths references remain.
+
+    PARITY SWEEPS: 0 mismatches, 0 errors
+    - rev4, 360 DAGs (seeds 0..120, 10000..10120, 20000..20120 with skew): 67,561 answers served.
+    - rev5, --id-heavy, 180 fresh DAGs (seeds 30200.., 40200.. with skew, 50200..): 160,668 answers served.
+    - Hand shapes, run exhaustively across complete, partial and catch-up states: B5 evil side merge; T3 +1 probe; octopus-ours; rename/delete; mode-only change on a discarded side and on main; a second unrelated root merged -s ours; an evil octopus with delete and re-add; and an octopus whose path differs only from its 3rd parent. About 36,000 answers served, 0 bad.
+    - Total: about 264k served answers compared exactly (events, order and window_exhausted), 0 mismatches.
+
+    SUITES: task_1507 + bug_1620 + history: 121 passed, 1 ignored. The ignored random_dag_sweep passes (45 s).
+
+    MUTANTS (branch suite)
+    - Removing --full-history (history.rs:813): KILLED, 5 tests.
+    - diff-tree loop off: KILLED, 2 tests.
+    - First parent only: KILLED, 2 tests.
+    - Skip first parent: KILLED, 1 test.
+    - take(2), meaning octopus parents 3 and later ignored: SURVIVES. It survives the branch suite, the ignored sweep, 30 rev5 DAGs and my random probes.
+
+    BLOCKER (test gap) T5
+    Nothing pins merge touches from the 3rd and later octopus parents. I added a fixture: root; main a1 edits BUG-3; s1 adds TASK-4; s2 sets FR-1 Done; M = octopus(a1, s1, s2) keeping root's FR-1; z1 edits FR-1. M differs from s2 only.
+    - On the branch: 3,681 served, 0 bad.
+    - Under the take(2) mutant: FR-1's touches miss M, and 28 wrong answers are served. For example, --id FR-1 --max-commits 2 served [z1, root], but the walk gives [z1] (exh=true).
+    Add this fixture, or an equivalent, as a test so a future parent-loop refactor cannot silently break --max-commits and window_exhausted for octopus merges.
+
+    NON-BLOCKING
+    (a) docs/cli/08-reporting.md:82 says --id shows "exactly the events plain history events shows for that spec". That holds for unbounded walks. Under the default max_commits window, --id counts touched commits while plain events counts all commits. Suggest: "...the same events, once both walks reach far enough back".
+    (b) Product note, accepted by the proxy decision: the status-progression view now includes side-branch status changes that an -s ours merge discarded. They are real history, but they never reached HEAD.
+
+    VERDICT: the correctness bar is met. I found 0 wrong answers, so I do NOT recommend restoring the conservative --id fallback. Add the T5 octopus fixture. A re-review can be limited to that test.
+  created_at: 2026-09-26T03:50:43.414071743Z
+  modified_at: 2026-09-26T03:50:43.414071743Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: f9c900b6fff916e105816e9d2ebc332dc5bfe56b
