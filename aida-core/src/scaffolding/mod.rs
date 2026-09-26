@@ -260,6 +260,85 @@ pub fn symlink_target(path: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Group the skill artifacts in `artifacts` by pack directory and plan each
+/// pack's deliveries (TASK-1503).
+// trace:TASK-1503 | ai:claude
+pub fn plan_skill_packs(
+    project_root: &Path,
+    artifacts: &[ScaffoldArtifact],
+    mode: refresh::ManifestMode,
+) -> Vec<refresh::SkillPackPlan> {
+    let mut packs: std::collections::BTreeMap<PathBuf, std::collections::BTreeSet<String>> =
+        std::collections::BTreeMap::new();
+    for artifact in artifacts {
+        if let Some((pack, name)) = refresh::skill_in_pack(&artifact.path) {
+            packs.entry(pack).or_default().insert(name);
+        }
+    }
+    packs
+        .into_iter()
+        .map(|(pack, shipped)| refresh::plan_skill_pack(project_root, &pack, shipped, mode))
+        .collect()
+}
+
+/// After `aida init` / `scaffold apply` / `scaffold upgrade` wrote a
+/// preview, record in each skill pack's manifest which skills it now holds
+/// (and which delivered ones the user deleted). Returns warnings to print;
+/// a failure here never blocks the install, and a pack left without a
+/// manifest is later treated as legacy, which creates nothing.
+// trace:TASK-1503 | ai:claude
+pub fn record_skill_deliveries(project_root: &Path, preview: &ScaffoldPreview) -> Vec<String> {
+    let mut warnings = Vec::new();
+    for plan in &preview.skill_packs {
+        if let Some(w) = &plan.warning {
+            warnings.push(w.clone());
+            continue;
+        }
+        if !project_root.join(&plan.pack).is_dir() {
+            continue;
+        }
+        if let Err(e) = plan.record(project_root, &std::collections::BTreeSet::new()) {
+            warnings.push(format!(
+                "could not record delivered skills in {} ({e})",
+                plan.pack.display()
+            ));
+        }
+    }
+    warnings
+}
+
+/// Records skill deliveries (see [`record_skill_deliveries`]) when dropped,
+/// so an install that fails partway still records whatever it wrote instead
+/// of stranding the pack without a manifest. Warnings go to stderr.
+// trace:TASK-1503 | ai:claude
+pub struct SkillDeliveryRecorder<'a> {
+    project_root: &'a Path,
+    preview: &'a ScaffoldPreview,
+    armed: bool,
+}
+
+impl<'a> SkillDeliveryRecorder<'a> {
+    /// Arm a recorder; `armed = false` (a dry run) records nothing.
+    pub fn new(project_root: &'a Path, preview: &'a ScaffoldPreview, armed: bool) -> Self {
+        Self {
+            project_root,
+            preview,
+            armed,
+        }
+    }
+}
+
+impl Drop for SkillDeliveryRecorder<'_> {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        for warning in record_skill_deliveries(self.project_root, self.preview) {
+            eprintln!("warning: {warning}");
+        }
+    }
+}
+
 /// Resolve where a scaffold artifact actually lives on disk.
 ///
 /// Git hook artifacts are displayed as `.git/hooks/<name>` because that is the
@@ -998,6 +1077,11 @@ pub struct ScaffoldPreview {
     pub modified_files: Vec<PathBuf>,
     /// Files with older AIDA versions (safe to upgrade)
     pub upgradeable_files: Vec<PathBuf>,
+    /// Per skill-pack delivery plans. Skills a plan withholds (delivered
+    /// then deleted, or unknowable in a legacy pack) are already filtered
+    /// out of `artifacts` / `new_files`, so no writer can resurrect them.
+    // trace:TASK-1503 | ai:claude
+    pub skill_packs: Vec<refresh::SkillPackPlan>,
 }
 
 /// Options for applying scaffolding
@@ -2621,6 +2705,27 @@ aida show <SPEC-ID>
             .filter(|d| !self.project_root.join(d).exists())
             .collect();
 
+        // TASK-1503: never (re-)create a skill the pack's delivered-skills
+        // manifest says was delivered and then deleted.
+        // trace:TASK-1503 | ai:claude
+        let skill_packs = plan_skill_packs(
+            &self.project_root,
+            &artifacts,
+            refresh::ManifestMode::Install,
+        );
+        // Every file of a withheld skill is held back, not just SKILL.md: a
+        // supporting file (e.g. `aida-pr/examples/`) written into a deleted
+        // skill's directory would otherwise re-create that directory.
+        let withheld = |path: &Path| {
+            skill_packs.iter().any(|p| {
+                p.withheld
+                    .iter()
+                    .any(|name| refresh::is_file_of_skill(path, &p.pack, name))
+            })
+        };
+        artifacts.retain(|a| !withheld(&a.path));
+        new_files.retain(|p| !withheld(p));
+
         ScaffoldPreview {
             artifacts,
             overwrites,
@@ -2628,6 +2733,7 @@ aida show <SPEC-ID>
             new_dirs,
             modified_files,
             upgradeable_files,
+            skill_packs,
         }
     }
 
@@ -2645,6 +2751,9 @@ aida show <SPEC-ID>
     ) -> Result<Vec<PathBuf>, ScaffoldError> {
         let mut written_files = Vec::new();
         let mut skipped_files = Vec::new();
+        // Record deliveries on every exit, including an early IO error.
+        // trace:TASK-1503 | ai:claude
+        let _recorder = SkillDeliveryRecorder::new(&self.project_root, preview, true);
 
         // Create directories first
         for dir in &preview.new_dirs {
@@ -2742,19 +2851,6 @@ aida show <SPEC-ID>
                 path: full_path.clone(),
                 message: e.to_string(),
             })?;
-
-            // Record a refresh-deliverable skill as delivered, so a later
-            // refresh never re-creates it after the user deletes it.
-            // trace:STORY-1475 | ai:claude
-            if let Some((pack, name)) = refresh::delivery_tracked_skill(&artifact.path) {
-                let pack_dir = resolve_artifact_path(&self.project_root, Path::new(pack));
-                refresh::record_delivered_skill(&pack_dir, &name).map_err(|e| {
-                    ScaffoldError::IoError {
-                        path: pack_dir.join(refresh::DELIVERED_MANIFEST),
-                        message: e.to_string(),
-                    }
-                })?;
-            }
 
             // Make git hooks and Claude Code hooks executable on Unix
             #[cfg(unix)]

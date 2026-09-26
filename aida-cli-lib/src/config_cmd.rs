@@ -3206,7 +3206,10 @@ fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str)
     );
     let store = aida_core::RequirementsStore::default();
     let preview = scaffolder.preview(&store);
-    for artifact in preview.artifacts {
+    // Record skill deliveries on every exit. trace:TASK-1503 | ai:claude
+    let _skill_recorder =
+        aida_core::scaffolding::SkillDeliveryRecorder::new(project_root, &preview, true);
+    for artifact in &preview.artifacts {
         let rel = artifact.path.to_string_lossy().replace('\\', "/");
         let wanted = match profile {
             "claude" => rel == "CLAUDE.md" || rel == ".mcp.json" || rel.starts_with(".claude/"),
@@ -3224,7 +3227,7 @@ fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str)
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(dest, artifact.content)?;
+        std::fs::write(dest, &artifact.content)?;
     }
     Ok(())
 }
