@@ -3,12 +3,12 @@ spec_id: BUG-1641
 agreed_id: BUG-1641
 title: 'Metadata merge follow-ups after BUG-1613: config migrate counter reset, friendly conflict wording, BulkWriter reassign, no-write test'
 description: From BUG-1613's strict review. (1) 'aida config migrate' resets counters and then save() keeps the higher on-disk counters (the per-prefix max), so the reset is silently ignored and new IDs skip numbers. Either route the migration through an explicit, documented counter-reset path or document that behaviour. Removing a prefix_counters key through save() is also dropped. update_atomically still writes metadata wholesale; make it consistent. (2) The conflict message shows internal field names ('type_definitions setting'); use user-facing wording. (3) BulkWriter::finish refuses the whole import when one assigned ID collides; re-assign the colliding IDs under the lock instead. (4) Add a test that a spec-only save neither writes nor commits metadata.yaml.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T07:02:15.516176238Z
-modified_at: 2026-09-26T07:02:15.516176238Z
+modified_at: 2026-09-26T07:02:25.339138319Z
 req_type: Bug
 filed_at:
   code_sha: 63ba7573152fb98eb674bb8570e649997f64dd10
