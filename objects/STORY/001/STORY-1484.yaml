@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-09-26T16:50:59.053579521Z
+modified_at: 2026-09-26T18:44:48.129427595Z
 req_type: Story
 tags:
 - cache
@@ -64,6 +64,113 @@ comments:
   created_at: 2026-09-26T16:50:59.053579521Z
   modified_at: 2026-09-26T16:50:59.053579521Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0df08-c181-7530-b249-2740141c2a0b
+  author: joe
+  content: |-
+    SKETCH (awaiting advisor signoff): single-flight cache refresh + labelled stale reads, with every mutating reader kept strict.
+
+    Basis: origin/claude/task-1515 @ 3d56853e55 (round-4 approved, batch 99, not yet on main). Line refs below are from that tree. Design follows SPIKE-90 section 4 (docs/architecture/2026-09-26-spike-90-stale-cache-snapshot.md) plus the orchestrator corrections on this spec and the TASK-1515 review history.
+
+    == 1. Owner and trigger ==
+    Owner: aida-core cache layer (CachedGitBackend + Cache + cache_lock), with CLI surfaces in aida-cli-lib (cache_cmd, mcp, output emitters, maintenance_schedule).
+    Trigger: any read that finds cache.source_head_sha != store HEAD. Today that reader becomes an inline writer (7-41 s with 4 readers, 29-52 s on a full rebuild; no single-flight, no double-check). Separately, a correctness hazard exists TODAY on main: the BUG-664 foreign-writer shortcut (ensure_cache_fresh_for_read, cached_git_backend.rs:391) already serves a stale snapshot, and several MUTATING callers consume it (section 5). That hazard is fixed first (slice A), before any new stale serving is introduced.
+
+    == 2. Surface ==
+    New / changed:
+    - Freshness classes on CachedGitBackend. Two explicit entry points replace the implicit one:
+      * freshen_for_read(budget: ReadBudget) -> Result<Freshness>  (tolerant; may return Freshness::Stale(StaleServe)). Replaces ensure_cache_fresh_for_read. Never calls with_cache_write when the flock is lost; never enters the SQLite retry ladder.
+      * ensure_cache_fresh() (strict; unchanged ladder; writers, gates, mutating readers).
+      Tolerant methods keep their names (list_summaries, search, degrees, descendant_ids, id_collisions, pending_decision_count). Strict siblings are added for mutating readers: list_summaries_strict, descendant_ids_strict. get_requirement_unambiguous becomes strict-by-delta (below). The constructor with_inner uses freshen_for_read.
+    - StaleServe { cache_head, store_head, built_at, refreshing: RefreshState } recorded per backend instance; CachedGitBackend::take_stale_serve() drains it. RefreshState = WorkerRunning (refresh flock held) | WriterBusy (SQLite write lock held, no refresh running) | Requested (request filed, worker spawned).
+    - Stale label: stderr once per CLI command, from ONE emit point. Wording by RefreshState (fixes TASK-1515 r2 finding 4(ii), "refresh in progress" can be false):
+      WorkerRunning/Requested: "note: showing results cached at <local time>; the cache is refreshing. Re-run in a few seconds for current data."
+      WriterBusy: "note: showing results cached at <local time>; another aida process is updating the cache. Re-run shortly for current data."
+      No SPEC IDs. Exit code unchanged. --json / TOON: top-level "cache": {stale, cache_head, store_head, built_at, refreshing}. MCP read tools: the same object in the tool result, re-armed PER tools/call (not once per process; fixes r2 4(i) / r3 finding 4).
+    - Refresh lock: kernel flock (fs2 try_lock_exclusive) on <canonical cache path>.refresh.lock, same shape as history_cache::IndexLock, derived from the canonical path Cache already resolves for lock_info_path (BUG-1644), so all worktrees sharing the cache see one lock.
+    - Refresh request: <canonical cache path>.refresh-request (JSON: target_head, requested_at, requester pid, hostname, pid_ns, binary path/version), written tmp+rename. It is a HINT, not the source of truth: "needs refresh" is always re-derivable from is_stale(HEAD). A lost request only delays to the next reader/tick.
+    - Worker: `aida cache refresh --worker` (hidden) and `aida cache refresh --if-requested` (schedule job). Spawned detached from current_exe(): setsid via pre_exec on unix; CREATE_NEW_PROCESS_GROUP|DETACHED_PROCESS on Windows; stdin null; stdout/stderr appended to <canonical cache>.refresh.log (rotated at ~1 MB). Env AIDA_CACHE_WORKER=1 forbids a worker from spawning a worker. Runtime cap: max(120 s, 2x last full-rebuild duration) via a watchdog thread that exits nonzero (txn rolls back under WAL, flock released, request stays). Opt-out AIDA_CACHE_NO_DETACH=1 (CI, tests): a stale reader refreshes inline strictly, today's behaviour.
+    - `aida cache status` (and MCP cache_status): cache head, store head, built_at, pending request (target, age), refresh-lock holder (flock held y/n + lock-info record), SQLite write-lock owner.
+    - Lock-info records (CacheLockInfo, cache_lock.rs:38) gain optional hostname and pid_ns (/proc/self/ns/pid inode on Linux). classify_lock_owner returns Unknown (record kept) on host or namespace mismatch; retire_stray_worktree_lock_info (lib.rs:50830), post-write dead-owner cleanup and doctor heal honour it. (Scope note from the BUG-1644 review.)
+
+    Reader protocol (freshen_for_read):
+      1. fresh -> serve.
+      2. migration_pending() -> never serve the old-schema snapshot: take the strict path (unchanged TASK-1515 rule).
+      3. stale + try_lock(refresh.lock) WON -> double-check is_stale under the flock; if still stale, refresh inline with FAST-FAIL on the SQLite lock (set_fast_fail_cache, one attempt, no ladder). A lock error there (CacheLockExhausted) does NOT escalate to a full rebuild (orchestrator correction 2; TASK-1515 restored main's escalation, so this point is NOT done yet): file the request, spawn the worker, release the flock, serve stale (WriterBusy).
+         Inline refresh is allowed only for the incremental path; if a full rebuild is required, file the request, spawn the worker, then do step 4's bounded wait (see open question Q1).
+      4. stale + flock HELD -> poll source_head_sha every 100 ms up to the budget (default 1500 ms, AIDA_CACHE_READ_WAIT_MS; 0 for --notice/statusline/awaiting --notice); fresh -> serve; timeout -> serve last committed snapshot labelled (WorkerRunning).
+      5. stale + request present + flock FREE at the end of the wait (holder died) -> spawn a worker (at most once per process), serve labelled.
+      6. cache missing/unreadable -> unchanged BUG-683 / BUG-1097 strict paths.
+
+    Worker protocol: acquire flock (try; exit 0 if held) -> re-check is_stale(current HEAD); fresh -> clear satisfied request, exit -> otherwise ensure_cache_fresh with the full ladder, where an incremental lock error RETRIES the incremental under the ladder instead of escalating to a full rebuild -> stamp the HEAD it actually loaded (TASK-1515 re-capture rule) -> clear the request only if request.target_head is an ancestor-or-equal of the stamped head (compare-then-delete under the flock; a request written after the read survives or is re-derived).
+
+    == 3. Races and fail-closed behaviour ==
+    - Lock holder crash (worker or inline reader): kernel drops the flock; the IMMEDIATE txn rolls back (WAL) so the previous committed cache stays readable; request stays; the next reader (step 5) or the schedule tick re-spawns. Leftover lock-info sidecar: existing TASK-1484 compare-and-delete.
+    - Stale lock: a flock cannot outlive its holder on a local fs. A hung holder is bounded by the worker cap; readers wait <= budget and are labelled. doctor heal stale-locks reports a request older than 10 min with no flock holder.
+    - NFS / no flock: try_lock errors other than WouldBlock (ENOLCK, EOPNOTSUPP, EINVAL) mean single-flight is unverifiable. Fail closed: no stale serving, no worker spawn; fall back to today's strict inline refresh through the SQLite ladder, and `cache status` says "refresh lock unsupported on this filesystem". (SQLite WAL on NFS is already unsupported per SPIKE-90's revisit trigger.)
+    - Cross-host / cross-container sharing a mounted .aida: flock may be host-local; host/pid_ns in lock-info makes the record Unknown (kept, treated as busy) rather than dead. No unprotected write is possible: SQLite's own lock still arbitrates writes.
+    - Concurrent writers: writers do NOT take the refresh flock (no new lock ordering; store lock -> SQLite write lock is unchanged, so no deadlock with a worker that holds flock -> SQLite). Write-through + restamp_head (TASK-712 guard, empty stamp while migration pending) stays as is. The refresh txn re-reads source_head_sha INSIDE the IMMEDIATE txn and skips if already at/after target (also removes TASK-1515 r4 nit 3's redundant refill).
+    - Store HEAD moves during refresh: unchanged TASK-1515 decline/retry (3 incrementals, then rebuild at the re-captured HEAD). The ABA ghost-row case stays BUG-1663.
+    - Two readers spawn: spawn guard = "request exists AND flock held -> no spawn"; extra workers lose try_lock and exit 0.
+    - Mixed binaries: the worker is current_exe() of the requester; TASK-1478 schema ordering applies; a pending migration is never served stale.
+
+    == 4. Files by symbol ==
+    aida-core/src/db/cached_git_backend.rs: ensure_cache_fresh_for_read -> freshen_for_read(ReadBudget); with_inner; list_summaries/search/degrees/descendant_ids/id_collisions/pending_decision_count (record StaleServe); new list_summaries_strict, descendant_ids_strict, take_stale_serve; ensure_cache_fresh (worker mode: incremental lock error retries, no escalation); get_requirement_unambiguous + id_candidates (strict-by-delta: snapshot rows minus rows whose file is in changed_object_files(recorded, HEAD), plus those files re-read; full scan only when recorded is empty, not an ancestor, or migration pending; meets the 1 s show budget, TASK-1515 r3 finding 2); try_incremental_update + refresh_parent_epic_status_in (pre-resolve ancestor epic statuses before the txn, read inside only on a miss; TASK-1515 r1 finding 3 / r4 nit 4).
+    aida-core/src/db/cache.rs: rebuild_from_store (skip refill under the txn when !schema_migration_needed and head == target; r4 nit 3); source_head_sha doc: raw cache_meta readers (statusline_cmd.rs:84, history.rs BUG-1631, older binaries) do not see pending and must query only id/spec_id (r1 nit 6); CacheLockExhausted / is_cache_lock_error claimed here (r4 E: drop the dead_code allow).
+    aida-core/src/db/cache_lock.rs: CacheLockInfo (+hostname, pid_ns), classify_lock_owner; new RefreshLock {try_acquire, acquire_blocking_until, is_held}, RefreshRequest {read, write_atomic, clear_if_satisfied}, refresh_lock_path / refresh_request_path from the canonical cache path.
+    aida-cli-lib/src/cache_cmd.rs: CacheCommand::Refresh {worker, if_requested}; CacheCommand::Status fields; spawn_detached_refresh_worker.
+    aida-cli-lib/src/maintenance_schedule.rs: substrate job `cache refresh --if-requested`.
+    aida-cli-lib/src/mcp.rs: attach the cache object per tools/call for read tools; tool_cache_status fields.
+    CLI emit point: the list/search/status/queue-list JSON and TOON emitters (git_backend_cmd.rs, status_cmd.rs, queue_cmd.rs) take the drained StaleServe; stderr note from one helper.
+    Mutating readers (section 5): queue_cmd.rs opportunistic_queue_gc + QueueCommand::Gc arm; archive_cmd.rs archive_sweep; lib.rs maybe_auto_archive_sweep, try_emit_nonblocking_findings_on_completion, focus_scope_guard, WorkerCommand::Gc arm, retire_stray_worktree_lock_info; session_reap.rs requirement_summaries / reap_one; rules_sync.rs sync, sync_review_md; doctor_cmd.rs heal stale-locks.
+
+    == 5. Mutating-reader table (every caller of the read-tolerant path, classified) ==
+    Read-tolerant path today = CachedGitBackend::with_inner (constructor) + list_summaries / search / degrees / descendant_ids / id_candidates / id_collisions / pending_decision_count / with_inner_cache_snapshot. load(), list_requirements(), spec_id_collisions() are strict; get_requirement / get_requirement_by_spec_id read the YAML (authoritative).
+
+    MUST NEVER GET A STALE READ (strict freshness AND, for destructive actions, per-candidate re-validation against the authoritative YAML: status, archived, modified_at):
+    | caller (symbol) | what it mutates on the snapshot | rule |
+    | queue_cmd.rs opportunistic_queue_gc (1137, runs on every `queue list`) | removes queue entries whose target looks Completed/Rejected/archived | best-effort: if not fresh after strict-fast check -> SKIP the sweep silently; plus YAML re-validate each dead candidate (BUG-1664) |
+    | queue_cmd.rs QueueCommand::Gc (4187) | same removal, explicit command | strict (ladder, fail with clear error) + YAML re-validate (BUG-1664) |
+    | archive_cmd.rs archive_sweep (248 then 329) | archives by stale status + modified_at; re-read checks only `archived` | strict + re-check status and age on the re-read object (BUG-1664) |
+    | lib.rs maybe_auto_archive_sweep (18001, after `aida pull`) | same | skip when not fresh + re-check status and age (BUG-1664) |
+    | lib.rs WorkerCommand::Gc (92945) | prunes worker directives whose target looks archived/terminal | strict + YAML re-validate each pruned target (NEW, not in BUG-1664) |
+    | session_reap.rs requirement_summaries -> scan_reapable -> reap_one (reap_quiet from shift.rs:1200) | removes a session worktree when spec_finished (from summaries) AND merged AND clean AND exited | spec_finished re-read from the lease spec's YAML before reap_one; the scan itself may stay tolerant (it also feeds the maintenance snapshot count) |
+    | lib.rs try_emit_nonblocking_findings_on_completion (14346) | idempotency set from summaries; stale -> duplicate finding filed | list_summaries_strict |
+    | lib.rs focus_scope_guard (17808; callers git_backend_cmd.rs:5337, lib.rs:17860) | gate that BLOCKS/permits a write by focus subtree | descendant_ids_strict (it is already on a write path) |
+    | cached_git_backend.rs get_requirement_unambiguous via id_candidates (~40 mutating call sites: assign, edit, link, import-plan, lib.rs, git_backend_cmd.rs) | stale snapshot misses a collision from an external commit -> silent pick | strict-by-delta resolver (section 4); also used by `aida show`, within budget |
+    | rules_sync.rs sync (76) / sync_review_md (211) via rules_cmd.rs | writes and DELETES .claude/rules and .aida/review fragments by status | list_summaries_strict (explicit command, cost acceptable) |
+    | cache_cmd.rs handle_cache_verify --fix, rebuild_cache | cache writers | strict (unchanged) |
+    Already strict and must STAY strict (TASK-1514 must not convert these): `aida add` spec_id_collisions; validate / complete / merge gates; `aida integrate --run` (queue_cmd.rs handle_queue_integrate, reads via Storage::load / YAML); lease and claim; every write path's reads inside the store lock; `aida cache rebuild/status`.
+
+    STALE-ALLOWED (read-only, labelled):
+    git_backend_cmd.rs relabel_ambiguous_list_rows (id_collisions), show_cached_context, status focus banner (1213), list (1979-2075, 2315-2350), show degrees (4138), findings triage count (6423; the rework loop re-reads), search (6617), history archive/defer sets (7915-7955); lib.rs handle_findings_command (6689, 6714; NA rows re-read YAML), handle_advisor_dashboard, handle_fasttrack_status, print_status_findings_section, integrate dashboard view (65320-65462), running_work_spec_index, print_status_presence_consumers, print_status_json, all_requirement_summaries (awaiting unshipped rows; merge-hold flags at 33890 are flag-only), collect_awaiting_report_inner, build_status_store_from_cache, known_spec_ids_for_suggestion; status_cmd.rs (607, 738); focus_cmd.rs print_focus_rollup; queue_cmd.rs queue list views (1444, 1480, 1574) and build_focus_display_subtree; report_cmd.rs maybe_print_upstream_recheck_notice; protocol_cmd.rs targeted_notice_line_for_scope (wait 0, already stale-checks); statusbar_cmd.rs; aida-tui redesign/store.rs (liveness_inputs, scope_items, spec_graph, open_epics, focus_progress: label per refresh); maintenance_schedule.rs collect_snapshot (trigger-only: the jobs it triggers are themselves strict/re-validating); raw cache_meta readers statusline_cmd.rs:84 and history.rs (BUG-1631).
+    Rule for new code: a caller that deletes, archives, prunes, files, or gates on cache rows uses a *_strict method or re-validates on the YAML. A test-side lint (grep test over aida-cli-lib) flags new tolerant calls inside functions named *gc*/*sweep*/*reap*/*prune*.
+
+    == 6. Named tests ==
+    Acceptance: single_flight_four_readers_one_refresh (refresh counter via the worker log/test hook; every reader < 2 s); losing_reader_past_wait_prints_stale_note_and_json_flag_exit_0 (CLI integration); killed_worker_leaves_previous_cache_and_request; next_reader_respawns_worker_after_crash; schedule_if_requested_respawns_worker; reader_path_never_calls_with_cache_write (thread-local assertion hook); existing busy_timeout/ladder tests unchanged; cache_status_shows_heads_request_and_lock_holder.
+    Protocol: lock_winner_rechecks_is_stale_and_skips_work; reader_incremental_lock_error_does_not_full_rebuild; worker_incremental_lock_error_retries_incremental; flock_unsupported_falls_back_to_strict_refresh (inject ENOLCK); migration_pending_reader_never_serves_old_schema; no_detach_env_refreshes_inline; worker_never_spawns_worker; request_cleared_only_when_head_reached; mcp_read_tool_result_carries_cache_object_each_call; stale_note_wording_matches_refresh_state.
+    Lock records: lock_info_foreign_host_is_unknown_and_kept; lock_info_foreign_pidns_is_unknown_and_kept.
+    Mutating readers: queue_gc_keeps_reopened_entry_on_stale_snapshot (held lock and live foreign sidecar); opportunistic_gc_skips_when_stale; archive_older_than_skips_reopened_and_recent_spec; auto_archive_sweep_skips_reopened_spec; worker_gc_keeps_directive_for_reopened_spec; reap_skips_lease_whose_spec_reopened; completion_findings_not_duplicated_on_stale_snapshot; focus_guard_uses_fresh_subtree; unambiguous_resolution_sees_external_collision_under_held_lock; unambiguous_resolution_is_o_changed_when_stale (show < 1 s on a 4.5k-spec fixture, e2e/ignored); unambiguous_resolution_is_stale_err_takes_full_scan (TASK-1515 r3 M1).
+    TASK-1515 nits: head_recapture_after_incremental_err_break_stamps_current_head (r4 nit 2 / M2'); second_process_skips_refill_after_migration_committed (r4 nit 3); epic_status_preresolved_before_incremental_txn (r1 finding 3). Nit 1 (name BUG-1663 in the rebuild comment at cached_git_backend.rs:159-168) folded in as a one-line edit.
+
+    == 7. Out of scope ==
+    TASK-1514 (load()/list_requirements() tolerant for read commands; depends on this reader protocol). BUG-1663 (ghost row after revert during load; worker loading from the commit tree). An immutable snapshot (SPIKE-90 NO-GO). A --strict-fresh flag. Windows CI leg beyond compile + one spawn smoke test. Changing busy_timeout, DEFAULT_CACHE_RETRY_DELAYS_MS, or WAL.
+
+    == 8. Open questions ==
+    Q1. Full rebuild needed (no recorded head, force-push, 500-file diff) and the reader WON the flock: refresh inline (13 s, today's read-after-pull behaviour) or spawn the worker and serve a possibly very old snapshot labelled? Proposal: inline for interactive TTY, worker + label for --json/MCP/notice.
+    Q2. Pending migration and the flock is held: the old schema cannot be served. Block on the flock up to the worker cap, or fail fast with "cache is being upgraded, re-run shortly"? Proposal: block up to the read budget x 10 (15 s), then fail with that message.
+    Q3. Best-effort sweeps (opportunistic queue gc, post-pull auto-archive) when not fresh: skip silently (proposal) or run strict and pay the ladder inside `queue list`?
+    Q4. Is the refresh-request file worth keeping given staleness is re-derivable from is_stale? Proposal: keep it (acceptance names it; it carries requester and target for `cache status` and doctor) but treat it as a hint, never as truth.
+    Q5. Session reap: re-validate spec_finished on the YAML only (proposal), or also make scan_reapable strict? It feeds the maintenance snapshot count, which is fine stale.
+    Q6. Should BUG-1664 absorb WorkerCommand::Gc, session reap and findings emit, or should slice A own them? Proposal: slice A owns them; BUG-1664 keeps queue gc + archive.
+
+    == 9. Proposed slice split (heft 2 is too large for one PR) ==
+    A. Strict-reader classification (fixes today's hazard; lands first; depends on BUG-1664 merging): *_strict methods, strict-by-delta unambiguous resolver, convert every row in the MUST-NEVER table, lint test, TASK-1515 nits 2-4.
+    B. Single-flight + reader protocol + label: RefreshLock, double-check, fast-fail inline refresh with no lock-error escalation, bounded wait, StaleServe + stderr/JSON/TOON/MCP label, lock-info hostname/pid_ns, NFS fail-closed.
+    C. Durable request + detached worker: RefreshRequest, `cache refresh --worker/--if-requested`, spawn/detach, runtime cap, log rotation, schedule job, `cache status` fields, doctor report, AIDA_CACHE_NO_DETACH.
+    Then TASK-1514 on top of B. Each slice is independently reviewable; A needs no advisor signoff beyond this sketch since it only tightens.
+  created_at: 2026-09-26T18:44:48.129427595Z
+  modified_at: 2026-09-26T18:44:48.129427595Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
   branch: claude/spike-90
