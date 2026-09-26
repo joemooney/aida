@@ -3,13 +3,21 @@ spec_id: BUG-1656
 agreed_id: BUG-1656
 title: aida ps/awaiting flag Agent-tool subagents' live spec work as orphaned/abandoned and suggest a salvage-commit into the worktree they are editing
 description: 'Observed 2026-09-26: the orchestrator dispatched Claude Code Agent-tool subagents into existing leased worktrees (wt-task-1515, wt-bug-1641). The subagents hold only a generic harness-worktree lease on the main checkout, so aida ps showed the spec lease as dead, ''salvageable: nothing running, uncommitted work'', and recommended ''git add -A && git commit -m wip: salvage'' in the worktree the live agent was editing mid-change. aida awaiting listed both as ''orphaned In-Progress: abandoned''. Following the advice would commit half-written work under the agent and race its edits. Fix: (1) treat recent file movement in the worktree (dirty mtime within N minutes) as liveness, and never recommend salvage while the dirty tree is still changing; (2) give Agent-tool subagents a way to adopt the spec lease (e.g. aida worktree enter/adopt from within the subagent, or the dispatcher records the harness session against the spec lease); (3) the awaiting item should say ''possibly worked by a subagent'' when a live harness lease exists in the same repo. Acceptance: a test with a dead spec-lease pid plus fresh dirty-file mtimes gives no salvage advice and no ''abandoned'' awaiting row.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:09:46.732993537Z
-modified_at: 2026-09-26T15:09:46.732993537Z
+modified_at: 2026-09-26T15:10:20.151007487Z
 req_type: Bug
+history:
+- id: 01a0de44-67f6-7c70-907e-9af7fb4e3e10
+  author: joe
+  timestamp: 2026-09-26T15:10:20.151005611Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b331809ce75b22e67d4bd86b4ab16500f4b41217
   branch: main
