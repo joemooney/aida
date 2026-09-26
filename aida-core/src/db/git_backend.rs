@@ -484,6 +484,22 @@ impl GitBackend {
         Ok(self.assemble_store(meta, Vec::new()))
     }
 
+    /// BUG-1629: [`Self::load_metadata_only`] for a store at `root`, strictly
+    /// read-only. Unlike [`Self::new`] it never creates `objects/`, so a
+    /// probe of a missing or partial store has no filesystem side effect.
+    // trace:BUG-1629 | ai:claude
+    pub fn read_metadata_only(root: &Path) -> Result<RequirementsStore> {
+        let backend = Self {
+            root: root.to_path_buf(),
+            objects_root: root.join("objects"),
+            metadata_path: root.join("metadata.yaml"),
+            dispenser: None,
+            auto_commit: false,
+            oplog_enabled: false,
+        };
+        backend.load_metadata_only()
+    }
+
     /// Save metadata to the metadata.yaml file.
     fn save_metadata(&self, meta: &StoreMetadata) -> Result<()> {
         let content = serde_yaml::to_string(meta)?;

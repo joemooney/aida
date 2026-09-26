@@ -4904,11 +4904,15 @@ pub(crate) fn handle_queue_command(
             if let Ok(root) = find_project_root() {
                 if let Some(branch) = current_branch_at(&root) {
                     let commit_evidence = queue_done_commit_evidence(&root, &branch);
+                    // BUG-1629: the same configured prefixes auto-complete
+                    // phase 1 checks with. trace:BUG-1629 | ai:claude
+                    let configured_prefixes = workflow_hints::project_spec_prefixes(&root);
                     match workflow_hints::queue_done_ownership(
                         &branch,
                         display_id,
                         commit_evidence.as_ref(),
                         *force,
+                        &configured_prefixes,
                     ) {
                         workflow_hints::QueueDoneOwnership::Proceed => {}
                         workflow_hints::QueueDoneOwnership::Refuse(reason) => {

@@ -1506,6 +1506,13 @@ pub(crate) trait PhaseDriver {
     fn known_spec_prefixes(&self) -> Vec<String> {
         Vec::new()
     }
+    /// BUG-1629: phase 1 hands the workspace it resolved and checked back to
+    /// the driver, which launches exactly that workspace. The driver never
+    /// re-resolves between the check and the launch, so a resolver failure
+    /// or a changed answer in that window cannot launch an unpinned
+    /// implementer (BUG-1244).
+    // trace:BUG-1629 | ai:claude
+    fn pin_implementer_workspace(&mut self, _worktree: &str, _branch: &str) {}
     /// Phase 2 — wait for CI to go terminal, then end the implementer session
     /// (which auto-queues the `Review PR-N` item for the reviewer).
     fn finish_ci(&mut self) -> Result<(), PhaseFailure>;
@@ -3834,6 +3841,9 @@ pub(crate) fn orchestrate_with_resume(
                     durations,
                 );
             }
+            // BUG-1629: the checked value is the launched value.
+            // trace:BUG-1629 | ai:claude
+            driver.pin_implementer_workspace(&worktree, &branch);
         }
         driver.begin_rework_guard();
         // BUG-1522: the rework no-op guard was consulted on only ONE of the
@@ -6592,6 +6602,11 @@ mod tests {
         /// exercise the cross-spec isolation gate.
         workspace: Option<(String, String)>,
         workspace_error: Option<String>,
+        /// BUG-1629: how many times phase 1 asked for the workspace, and the
+        /// workspace it pinned for the launch.
+        // trace:BUG-1629 | ai:claude
+        workspace_resolutions: std::cell::Cell<usize>,
+        pinned_workspace: Option<(String, String)>,
         /// BUG-1244: run-local phase-1 PR marker; `suppress_phase_done_pr`
         /// models the recurrence where branch lookup found a sibling PR but
         /// this run never emitted PhaseDonePr.
@@ -6649,6 +6664,8 @@ mod tests {
                 already_merged: None,
                 workspace: None,
                 workspace_error: None,
+                workspace_resolutions: std::cell::Cell::new(0),
+                pinned_workspace: None,
                 phase_done_pr: None,
                 suppress_phase_done_pr: false,
             }
@@ -6938,10 +6955,15 @@ mod tests {
             self.suppress_phase_done_pr
         }
         fn implementer_workspace(&self) -> Result<Option<(String, String)>, String> {
+            self.workspace_resolutions
+                .set(self.workspace_resolutions.get() + 1);
             match &self.workspace_error {
                 Some(err) => Err(err.clone()),
                 None => Ok(self.workspace.clone()),
             }
+        }
+        fn pin_implementer_workspace(&mut self, worktree: &str, branch: &str) {
+            self.pinned_workspace = Some((worktree.to_string(), branch.to_string()));
         }
         fn rework_no_op_failure(&mut self) -> Option<PhaseFailure> {
             self.rework_no_op.then(|| {
@@ -7548,6 +7570,85 @@ mod tests {
             driver.calls.contains(&Phase::Implementer),
             "the implementer must run in the spec's own pickup workspace"
         );
+    }
+
+    // BUG-1629: phase 1 resolves the workspace exactly once and pins the
+    // value it checked, instead of re-resolving before the launch.
+    // trace:BUG-1629 | ai:claude
+    #[test]
+    fn bug_1629_phase_one_resolves_once_and_pins_the_checked_workspace() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let checked = (
+            std::env::temp_dir()
+                .join("qci-spec-016")
+                .display()
+                .to_string(),
+            "spec-016".to_string(),
+        );
+        driver.workspace = Some(checked.clone());
+        let result = orchestrate(
+            &mut driver,
+            "SPEC-016",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_ne!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(driver.workspace_resolutions.get(), 1);
+        assert_eq!(driver.pinned_workspace, Some(checked));
+    }
+
+    // BUG-1629: a refused workspace is never pinned.
+    // trace:BUG-1629 | ai:claude
+    #[test]
+    fn bug_1629_phase_one_never_pins_a_refused_workspace() {
+        let mut driver = MockPhaseDriver::all_ok();
+        driver.workspace = Some((
+            std::env::temp_dir()
+                .join("qci-spec-017")
+                .display()
+                .to_string(),
+            "spec-017".to_string(),
+        ));
+        let _ = orchestrate(
+            &mut driver,
+            "SPEC-016",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(driver.pinned_workspace, None);
+        assert!(driver.calls.is_empty());
+    }
+
+    // BUG-1629: when the driver reports that the child lost its lease and
+    // handoff receipt (after its own single clean retry), the orchestrator
+    // spends no further retries, never credits the spec, and shelves it so
+    // dependents stay blocked.
+    // trace:BUG-1629 | ai:claude
+    #[test]
+    fn bug_1629_lost_child_state_is_not_retried_again_or_credited() {
+        let mut driver =
+            MockPhaseDriver::failing_at_with_kind(Phase::Implementer, FailureKind::LaunchRefused)
+                .recovering_phase1_failure_from_pr(Phase::Ci);
+        driver.shelve_succeeds = true;
+        driver.transient_retry_budget = 3;
+        let result = orchestrate(
+            &mut driver,
+            "NFR-56",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::LaunchRefused)
+        );
+        assert!(result.shelved_reason.is_some());
+        assert_ne!(result.exit_code, 0, "a lost child is never a success");
+        assert!(result.shipped_spec_id.is_none());
     }
 
     // BUG-1628: a mismatched workspace is refused with a message naming the
