@@ -12,12 +12,12 @@ description: |-
   4. The config menu / 'config edit' path to the same tier gets the same gate (no second door).
   5. MCP tools cannot reach the bypass write.
   6. Tests with a fake HOME and the injectable terminal check prove 1-5 and that nothing is written on refusal.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:42:06.841300658Z
-modified_at: 2026-09-26T21:26:37.672722543Z
+modified_at: 2026-09-26T21:42:43.849727026Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -75,6 +75,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0dfab-a6a8-7773-a55f-18635ef14d9c
+  author: aida-auto-bump
+  timestamp: 2026-09-26T21:42:43.624557799Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0dfab-a789-7832-babe-b0d2bb9eaade
+  timestamp: 2026-09-26T21:42:43.849725480Z
+  agent: implementer
+  commit_sha: b9a986e9fbe3912a0415963c8344ddca4830b700
+  summary: Completed via merge b9a986e9
 filed_at:
   code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
   branch: main
@@ -83,6 +96,10 @@ filed_at:
   aida_build_sha: 7c6faed690
   vendor: antigravity
   session: 71dca616-6150-461d-b64f-18c8288c6e1c
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T21:42:43.624524963Z
+  completion_sha: b9a986e9fbe3912a0415963c8344ddca4830b700
 decision_request:
   question: Approve the human-at-TTY gate on 'config permissions set bypass' (closes agent self-escalation)?
   choices:
