@@ -34608,6 +34608,18 @@ pub(crate) fn authority_stdin_is_terminal() -> bool {
     std::io::stdin().is_terminal()
 }
 
+/// Whether stdout is an interactive terminal, through the same test seam as
+/// [`authority_stdin_is_terminal`]. A human-at-terminal gate checks both: an
+/// agent that pipes stdout (or stdin) is not a person at a terminal.
+// trace:BUG-1667 | ai:claude
+pub(crate) fn authority_stdout_is_terminal() -> bool {
+    #[cfg(test)]
+    if let Some(tty) = test_ambient::stdout_is_terminal() {
+        return tty;
+    }
+    std::io::stdout().is_terminal()
+}
+
 /// BUG-1618: test-only, per-thread override of the ambient inputs the
 /// authority checks read (project root discovered from cwd, stdin TTY-ness).
 /// Thread-local, so a test pinning it never leaks into a sibling test running
@@ -34623,6 +34635,8 @@ pub(crate) mod test_ambient {
     pub(crate) struct Ambient {
         pub(crate) project_root: PathBuf,
         pub(crate) stdin_is_terminal: bool,
+        // trace:BUG-1667 | ai:claude
+        pub(crate) stdout_is_terminal: bool,
     }
 
     thread_local! {
@@ -34640,6 +34654,11 @@ pub(crate) mod test_ambient {
 
     pub(crate) fn stdin_is_terminal() -> Option<bool> {
         AMBIENT.with(|a| a.borrow().as_ref().map(|x| x.stdin_is_terminal))
+    }
+
+    // trace:BUG-1667 | ai:claude
+    pub(crate) fn stdout_is_terminal() -> Option<bool> {
+        AMBIENT.with(|a| a.borrow().as_ref().map(|x| x.stdout_is_terminal))
     }
 }
 
