@@ -3,12 +3,12 @@ spec_id: BUG-1677
 agreed_id: BUG-1677
 title: Queue file writes (queue_add, queue_remove_for_role, queue_clear) read-modify-write registry/queues/<user>.yaml without the store lock, so concurrent queue commands drop each other's entries
 description: 'Found by the planner reading git_backend.rs on main (queue_add ~1761, queue_remove_for_role ~1814, queue_clear ~1887; queue_remove_many ~1948 is fixed by BUG-1671). Each does ensure_store_write_safe but no lock_store(). Acceptance: 1. All four queue writers take lock_store() around the read-modify-write. 2. A concurrency test (threads or processes on a fixture store) adding/removing distinct entries loses none. 3. No lock-order inversion with callers that already hold the store lock (document the order).'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:31.845994217Z
-modified_at: 2026-09-26T21:43:53.155891978Z
+modified_at: 2026-09-26T22:24:30.505747065Z
 req_type: Bug
 history:
 - id: 01a0dfac-b643-7391-abd2-9048fefe3a9a
@@ -18,6 +18,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0dfd1-e729-72e1-b352-a9878df01eb7
+  author: joe
+  timestamp: 2026-09-26T22:24:30.505745648Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 2e01ffe4ab06c30ac99d44d18438a1b156ef455d
   branch: main
