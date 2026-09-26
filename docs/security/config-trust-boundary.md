@@ -43,7 +43,6 @@ applies. The branch-local copy is *never* used as a fallback.
 | `auto_release_dormant_leases`, `stale_lease_threshold_minutes` | `[orchestrator]` | No (toggle / threshold) | Branch-local |
 | `strategy` | `[integrate]` | No (merge-strategy enum) | Branch-local |
 | `workflow_hints` | `[hints]` | No (display toggle) | Branch-local |
-
 | `run_acceptance_commands`, `acceptance_command_allow` | `[review]` | **Yes** — gate on the spec-authored commands graded review runs via `bash -c` | **Machine-global `~/.aida/config.toml` only** (repo copy — branch-local and default-branch — ignored; fail-closed to denied) |
 
 `[pr-rebase] smoke_check` is the **only** `.aida/config.toml` field that AIDA's

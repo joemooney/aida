@@ -412,6 +412,9 @@ fn not_run_summary_suffix(policy: &AcceptanceCommandPolicy, not_run_count: usize
 /// machine-verified, and forces the verdict to escalate (STORY-1476).
 // trace:STORY-1424 | ai:antigravity
 // trace:STORY-1476 | ai:claude
+// The trust policy is the eighth parameter; the STORY-1424 signature is
+// otherwise unchanged so its callers and tests keep their shape.
+#[allow(clippy::too_many_arguments)]
 pub fn execute_graded_review(
     spec_id: &str,
     spec_title: &str,
