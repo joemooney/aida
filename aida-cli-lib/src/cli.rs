@@ -906,7 +906,7 @@ pub enum ReviewCommand {
     /// Record `--verdict approved` after a follow-up review to clear it.
     // trace:BUG-775 | ai:claude
     Record {
-        /// Spec the verdict applies to (e.g. TASK-5).
+        /// Spec the verdict applies to.
         spec: String,
 
         /// The verdict: approved, request-changes, or rejected.
@@ -1148,15 +1148,15 @@ pub enum TriageCommand {
     },
 }
 
-/// Advisor-directed worktree lock (STORY-711 slice 1, generalizes BUG-637).
+/// Advisor-directed worktree lock.
 ///
 /// Binds a worktree to an authorizing advisor by stamping `authorized_by` on
-/// the session lease that covers it (extends the existing lease registry —
-/// no new lock directory). Slice 1 is a MANUAL bouncer: nothing today refuses
+/// the session lease that covers it (it reuses the existing lease registry —
+/// no new lock directory). The lock is a manual check: nothing refuses
 /// automatically on a mismatched lock — an agent (or a script) opts in by
-/// running `aida lock verify` itself and branching on the exit code. The
-/// automatic pre-work gate is slice 2, a separate change.
+/// running `aida lock verify` itself and branching on the exit code.
 // trace:STORY-711 | ai:claude
+// trace:BUG-637 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum LockCommand {
     /// Authorize a worktree: stamp `authorized_by = <advisor>` on the session
@@ -1536,8 +1536,8 @@ pub enum SessionCommand {
     End {
         /// Session id (8-char prefix accepted) to end. Omit to end the
         /// session matching the current cwd. Also accepts a SPEC-ID
-        /// (e.g. `TASK-489` — treated as `--spec`) or a branch name
-        /// (e.g. `task-489` — treated as `--branch`) when the lease
+        /// (e.g. `TASK-<n>` — treated as `--spec`) or a branch name
+        /// (e.g. `task-<n>` — treated as `--branch`) when the lease
         /// covering cwd isn't the one you want to end.
         // trace:TASK-489 | ai:claude
         id: Option<String>,
@@ -2795,16 +2795,18 @@ pub enum CacheCommand {
     },
 }
 
-/// Scoped git-worktree management — the EPIC-55 workspace layer, mirroring
-/// `git worktree`. Create-or-enter a per-epic workspace auto-scoped via
-/// `aida focus` (STORY-716), or a per-spec workspace that ALSO takes the
-/// implementer lease so a single spec can be worked by hand in one command,
-/// no agent launched (STORY-742).
+/// Scoped git-worktree management, mirroring `git worktree`. Create-or-enter
+/// a per-epic workspace auto-scoped via `aida focus`, or a per-spec
+/// workspace that ALSO takes the implementer lease so a single spec can be
+/// worked by hand in one command, no agent launched.
 ///
-/// STORY-714's warm-pool surface (`aida worktree pool status`) and tiered
-/// removal (`aida worktree remove`) land as sibling variants under this enum
-/// later — the surface is shaped to leave room for them.
-// trace:STORY-716 trace:STORY-742 | ai:claude
+/// A planned warm-pool surface (`aida worktree pool status`) and tiered
+/// removal (`aida worktree remove`) are expected to land as sibling variants
+/// under this enum later — the surface is shaped to leave room for them.
+// trace:EPIC-55 | ai:claude
+// trace:STORY-716 | ai:claude
+// trace:STORY-742 | ai:claude
+// trace:STORY-714 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum WorktreeCommand {
     /// Create a git worktree off origin/main and auto-scope it via `aida focus`.
@@ -2816,8 +2818,8 @@ pub enum WorktreeCommand {
     /// `git worktree add`). Idempotent: an existing worktree/lease is reported +
     /// its focus re-affirmed, not re-created.
     Add {
-        /// The epic or spec to scope the worktree to (e.g. `EPIC-54`,
-        /// `STORY-88`). Also the basis for the default path slug and branch.
+        /// The epic or spec to scope the worktree to. Also the basis for
+        /// the default path slug and branch.
         #[clap(value_name = "EPIC_OR_SPEC")]
         target: String,
         /// Override the worktree path (default `~/ai/aida-<slug>`).
@@ -3646,9 +3648,9 @@ pub enum DocCommand {
         audience: Option<String>,
     },
 
-    /// Show docs. If <id> is a Doc spec id (e.g., DOC-3), print the entry's
-    /// full detail. Otherwise treat <id> as a referenced spec and print
-    /// every Doc that mentions it via `--about`.
+    /// Show docs. If <id> is a Doc-type spec id, print the entry's full
+    /// detail. Otherwise treat <id> as a referenced spec and print every
+    /// Doc that mentions it via `--about`.
     Show {
         /// Doc spec id, or any other spec id to walk `--about` references.
         id: String,
@@ -4735,8 +4737,8 @@ pub enum RelationshipCommand {
     ///   aida rel add <from> <to> --type child
     ///   aida rel add --from <from> --to <to> --type child
     ///
-    /// Cross-store references such as `other-project#STORY-21` are not local
-    /// graph edges; record them in comments until AIDA has a resolver.
+    /// Cross-store references such as `other-project#<SPEC-ID>` are not
+    /// local graph edges; record them in comments until AIDA has a resolver.
     // trace:TASK-487 | ai:claude
     // trace:BUG-790 | ai:codex
     Add {
@@ -9607,7 +9609,7 @@ pub enum Command {
     /// `edit --status completed` jargon.
     // trace:TASK-727 | ai:claude
     Done {
-        /// The spec to mark done (e.g. TASK-1).
+        /// The spec to mark done.
         spec: String,
     },
 
@@ -9647,7 +9649,8 @@ pub enum Command {
         /// Record the spec that REPLACES this one, as a typed superseded-by
         /// edge (plus the inverse supersedes edge on the successor). Implies
         /// `--status superseded` unless --status says otherwise, so
-        /// `aida edit ADR-3 --superseded-by ADR-7` is the whole move.
+        /// `aida edit <old-spec> --superseded-by <new-spec>` is the whole
+        /// move.
         #[clap(long = "superseded-by", value_name = "SPEC-ID")]
         superseded_by: Option<String>,
 
@@ -11289,9 +11292,9 @@ pub enum Command {
     /// transitive subtree. The kubectl-namespace / gcloud-config pattern for
     /// AIDA's requirement graph.
     ///
-    ///   aida focus EPIC-55     set the focus to EPIC-55 (+ its subtree)
+    ///   aida focus <EPIC-ID>   set the focus to that epic (+ its subtree)
     ///   aida focus             show the current focus + a progress rollup
-    ///   aida focus clear     drop the focus
+    ///   aida focus clear       drop the focus
     ///
     /// With a focus set, `aida list`, `aida status`, and `aida queue list`
     /// scope to the focused subtree and print a loud header naming it; pass
@@ -11514,7 +11517,7 @@ pub enum Command {
     /// after a successful merge.
     Ship {
         /// Spec to finish. When omitted, resolved from the current branch
-        /// name (e.g. `story-720-ship` → STORY-720) or the active session
+        /// name (e.g. `<spec>-ship` → `<SPEC-ID>`) or the active session
         /// lease covering this worktree.
         #[clap(value_name = "SPEC")]
         spec: Option<String>,
@@ -11585,8 +11588,8 @@ pub enum Command {
     // trace:STORY-721 | ai:claude — plain `//` keeps the marker out of `--help`.
     // trace:STORY-725 | ai:claude
     Zen {
-        /// An approved SPEC id to drive (e.g. TASK-123), OR a free-text thought
-        /// to draft into a spec and drive. Free text is drafted into a title +
+        /// An approved SPEC id to drive, OR a free-text thought to draft
+        /// into a spec and drive. Free text is drafted into a title +
         /// description + acceptance criteria, filed as a draft, then routed
         /// through the approve-gate before driving.
         #[clap(value_name = "SPEC")]
@@ -13068,8 +13071,8 @@ pub enum Command {
     /// every spec of that kind. Read-only and deterministic (no LLM call).
     // trace:TASK-0417 | ai:claude
     Lint {
-        /// SPEC-ID to lint (e.g. `STORY-42`). Omit and pass `--scope` to
-        /// sweep a group of specs.
+        /// SPEC-ID to lint. Omit and pass `--scope` to sweep a group of
+        /// specs.
         spec: Option<String>,
 
         /// Lint every spec of this kind instead of a single SPEC-ID. One of
@@ -13670,7 +13673,7 @@ pub enum GateCommand {
         /// Gate name, e.g. `well-formed`.
         name: String,
 
-        /// SPEC-ID to judge, e.g. `STORY-42`.
+        /// SPEC-ID to judge.
         spec: String,
 
         /// Emit the verdict as JSON.
@@ -14043,10 +14046,10 @@ pub enum McpCommand {
     /// drain agent gets AIDA's MCP tools with no hand-editing.
     ///
     /// `aida init` already scaffolds `.codex/config.toml` for a fresh
-    /// project (TASK-0424); this command is for the reverse direction —
-    /// deriving both vendor configs from whatever `.mcp.json` actually says
-    /// today (including a hand-edited command/args/env, or a renamed
-    /// server), and it's the only path that also covers Gemini CLI.
+    /// project; this command is for the reverse direction — deriving both
+    /// vendor configs from whatever `.mcp.json` actually says today
+    /// (including a hand-edited command/args/env, or a renamed server), and
+    /// it's the only path that also covers Gemini CLI.
     ///
     /// Each target file is merged, not clobbered: an existing file without
     /// an aida-shaped entry gets one added; an existing file whose entry
@@ -14055,6 +14058,7 @@ pub enum McpCommand {
     /// `.mcp.json` is absent, or present with no aida server registered,
     /// this reports "nothing to translate" rather than erroring.
     // trace:TASK-1046 | ai:claude
+    // trace:TASK-0424 | ai:claude
     Translate {
         /// Project root directory (defaults to current directory).
         #[clap(long)]
@@ -14213,9 +14217,10 @@ mod tests {
         assert!(Cli::try_parse_from(["aida", "--format", "json", "digest"]).is_ok());
     }
 
-    /// TASK-1055: `--slower-than` accepts a bare number (ms), an explicit `ms`
-    /// suffix, or an `s` suffix (seconds → ms). The help text reads `Nms`,
-    /// which used to reject `500ms` with "invalid digit found in string".
+    // trace:TASK-1055 | ai:claude — `--slower-than` accepts a bare number
+    // (ms), an explicit `ms` suffix, or an `s` suffix (seconds → ms). The
+    // help text reads `Nms`, which used to reject `500ms` with "invalid
+    // digit found in string".
     #[test]
     fn parse_duration_ms_accepts_bare_and_suffixed() {
         assert_eq!(parse_duration_ms("500"), Ok(500));
@@ -14242,8 +14247,9 @@ mod tests {
         ));
     }
 
-    /// TASK-1055: the parser is actually wired onto the clap flag, so
-    /// `usage --slower-than 500ms events` parses to 500 (not a parse error).
+    // trace:TASK-1055 | ai:claude — the parser is actually wired onto the
+    // clap flag, so `usage --slower-than 500ms events` parses to 500 (not a
+    // parse error).
     #[test]
     fn slower_than_flag_accepts_ms_suffix() {
         let cli = Cli::try_parse_from(["aida", "usage", "--slower-than", "500ms", "events"])
@@ -14585,16 +14591,23 @@ mod tests {
         );
     }
 
-    // TASK-287 / BUG-629: a `///` clap doc comment doubles as `--help` text, so
-    // *provenance* on one (a `trace:` marker, or a bare SPEC-ID standing in for
-    // the developer breadcrumb) leaks the id into user-facing output. But a
-    // *descriptive* mention of a SPEC-ID inside prose (e.g. "reuses the
-    // STORY-122 usage log") is legitimate help text, not provenance — BUG-629
-    // tightened the criterion from "any SPEC-ID token" (over-broad; it forced
-    // agents to reword legit prose) down to "provenance only". The discriminator
-    // is `doc_comment_is_provenance_leak`, mirrored verbatim by the fast
-    // grep-based pre-commit hook (TASK-903) so the gate and CI agree. (This
-    // comment uses `//`, not `///`, so it isn't itself scanned.)
+    // TASK-287 / BUG-629 / TASK-1516: a `///` clap doc comment doubles as
+    // `--help` text, so a SPEC-ID on one — provenance (a `trace:` marker, or a
+    // bare SPEC-ID standing in for the developer breadcrumb) OR a *descriptive*
+    // mention inside prose (e.g. "reuses the STORY-122 usage log") — leaks an
+    // internal id into user-facing output either way. BUG-629 had allowed the
+    // prose case (over-correcting the original "any SPEC-ID token" rule); BUG-1652
+    // found ~20 real leaks that carve-out let through, so TASK-1516 removed it —
+    // a SPEC-ID on a `///` line is rejected full stop, with a per-line
+    // `PROSE_SPEC_ID_ALLOWLIST` opt-out for the rare deliberately developer-/
+    // operator-facing case. The discriminator is `doc_comment_is_provenance_leak`.
+    // This stricter prose rule is deliberately CI-only and cli.rs-only: the
+    // pre-commit hook template (TASK-903) ships to every scaffolded project and
+    // scans every `*.rs` file, where ordinary rustdoc legitimately cites a
+    // project's own ids, so the hook keeps the narrower BUG-629 criterion (bare
+    // ids and `trace:` markers only). The two share the id pattern
+    // `SPEC_ID_PATTERN` verbatim. (This comment uses `//`, not `///`, so it
+    // isn't itself scanned.)
     #[test]
     fn source_doc_comments_carry_no_spec_id_provenance() {
         let src = include_str!("cli.rs");
@@ -14609,10 +14622,12 @@ mod tests {
             .collect();
         assert!(
             offenders.is_empty(),
-            "`///` doc comments in cli.rs must not carry SPEC-ID provenance — a \
-             `trace:` marker or a *bare* SPEC-ID (it leaks into `--help`). Move \
-             the id to a `//` trace marker above the item, or reword as prose. A \
-             descriptive prose mention of a SPEC-ID is allowed:\n{}",
+            "`///` doc comments in cli.rs must not carry a SPEC-ID — bare, in a \
+             `trace:` marker, or mentioned in descriptive prose — because clap \
+             pulls `///` into `--help` (TASK-1516). Move the id to a `//` trace \
+             marker above the item, reword the prose without it, or (rare) add \
+             the exact trimmed line to `PROSE_SPEC_ID_ALLOWLIST` when the help \
+             is deliberately developer-/operator-facing:\n{}",
             offenders
                 .iter()
                 .map(|(n, l)| format!("  {n}: {l}"))
@@ -14621,43 +14636,57 @@ mod tests {
         );
     }
 
-    // BUG-629 / TASK-903: the discriminator shared by the CI provenance test
-    // above and the grep-based pre-commit hook. `line` is a `///`-prefixed doc
-    // line (already trimmed). It is a *provenance leak* — and so rejected — when
-    // it carries a `trace:` marker, OR is a *bare* SPEC-ID (the line is
-    // essentially nothing but SPEC-ID token(s) + punctuation, no descriptive
-    // prose words). A descriptive prose mention of a SPEC-ID is NOT a leak.
+    // TASK-1516: exact, trimmed `///` lines that MAY carry a SPEC-ID because the
+    // help they produce is deliberately developer-/operator-facing (not aimed at
+    // an ordinary end user) and reviewed as such. Empty today — TASK-1516's sweep
+    // reworded every prose-embedded id the initial audit found instead of
+    // allowlisting it. Add a line here only for a genuine, reviewed exception;
+    // prefer rewording first.
+    const PROSE_SPEC_ID_ALLOWLIST: &[&str] = &[];
+
+    // BUG-629 / TASK-903 / TASK-1516: the discriminator shared by the CI
+    // provenance test above and the grep-based pre-commit hook. `line` is a
+    // `///`-prefixed doc line (already trimmed). It is a *provenance leak* — and
+    // so rejected — whenever it carries a SPEC-ID at all (bare, `trace:`-marked,
+    // or mentioned in descriptive prose), UNLESS the exact trimmed line is in
+    // `PROSE_SPEC_ID_ALLOWLIST`.
     //
-    // Mirror any change here into aida-core/templates/hooks/aida-pre-commit.sh
-    // and the embedded fallback in aida-core/src/scaffolding/hooks.rs so the
-    // fast gate and CI stay in lockstep.
+    // The hook's `__aida_doc_is_provenance_leak` intentionally does NOT mirror
+    // this prose rule (see the test comment above); only `SPEC_ID_PATTERN` is
+    // shared with it.
     fn doc_comment_is_provenance_leak(line: &str) -> bool {
-        let spec_id =
-            regex::Regex::new(r"\b(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN)-[0-9]+").unwrap();
+        doc_comment_is_provenance_leak_against(line, PROSE_SPEC_ID_ALLOWLIST)
+    }
+
+    // Same discriminator, parameterized on the allowlist so tests can exercise
+    // the carve-out without mutating the shared `PROSE_SPEC_ID_ALLOWLIST` const.
+    // TASK-903 / TASK-1516: the SPEC-ID pattern, byte-for-byte identical to
+    // `SPEC_ID_RE` in aida-core/templates/hooks/aida-pre-commit.sh (same
+    // prefixes, same explicit leading word boundary — POSIX ERE has no `\b`).
+    // The boundary keeps `DEBUG-2` / `SCR-4` from matching as `BUG-2` / `CR-4`.
+    // Change both together; `spec_id_pattern_matches_the_hook_template` checks.
+    const SPEC_ID_PATTERN: &str =
+        r"(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+";
+
+    fn doc_comment_is_provenance_leak_against(line: &str, allowlist: &[&str]) -> bool {
+        let spec_id = regex::Regex::new(SPEC_ID_PATTERN).unwrap();
         // No SPEC-ID at all → nothing to leak.
         if !spec_id.is_match(line) {
             return false;
         }
-        // A `trace:` marker on a `///` line is always provenance.
-        if line.contains("trace:") {
-            return true;
+        // An explicit, reviewed carve-out for deliberately developer-/
+        // operator-facing help that needs to name a real SPEC-ID.
+        if allowlist.contains(&line.trim()) {
+            return false;
         }
-        // Strip the `///` prefix, then remove every SPEC-ID token. What remains
-        // is the surrounding text. If it still contains alphabetic words, this
-        // is a descriptive mention (prose) — allow. If only punctuation /
-        // whitespace / digits remain, the line is a *bare* SPEC-ID — reject.
-        let body = line.trim_start_matches('/').trim();
-        let residual = spec_id.replace_all(body, " ");
-        let has_prose_word = residual.split_whitespace().any(|tok| {
-            // A "word" is a token with two or more ascii-alphabetic chars, so a
-            // stray "a"/"x" or pure punctuation doesn't count as prose.
-            tok.chars().filter(|c| c.is_ascii_alphabetic()).count() >= 2
-        });
-        !has_prose_word
+        // Any other SPEC-ID on a `///` line — bare, `trace:`-marked, or inside
+        // descriptive prose — leaks into `--help`. Reject.
+        true
     }
 
-    // BUG-629: reject only provenance, allow descriptive prose. Reject and allow
-    // cases use the same discriminator the CI scan and the hook share.
+    // BUG-629 / TASK-1516: every SPEC-ID on a `///` line is rejected — bare,
+    // `trace:`-marked, or embedded in otherwise-legitimate prose — unless the
+    // line is explicitly allowlisted.
     #[test]
     fn doc_comment_provenance_leak_discriminates_provenance_from_prose() {
         // REJECT — trace: marker on a `///` line (the --help-leak trap).
@@ -14671,19 +14700,77 @@ mod tests {
         assert!(doc_comment_is_provenance_leak("/// (STORY-122, TASK-903)"));
         assert!(doc_comment_is_provenance_leak("/// FR-0042"));
 
-        // ALLOW — a descriptive prose mention of a SPEC-ID is legitimate help
-        // text, not provenance.
-        assert!(!doc_comment_is_provenance_leak(
+        // REJECT (TASK-1516) — a descriptive prose mention of a SPEC-ID still
+        // leaks the internal id into `--help`, even though it reads as normal
+        // help text. This is the case BUG-629 used to allow and BUG-1652 found
+        // ~20 real instances of.
+        assert!(doc_comment_is_provenance_leak(
             "/// reuses the STORY-122 usage log"
         ));
-        assert!(!doc_comment_is_provenance_leak(
+        assert!(doc_comment_is_provenance_leak(
             "/// reads the SPIKE-67 field-study log"
         ));
-        assert!(!doc_comment_is_provenance_leak(
+        assert!(doc_comment_is_provenance_leak(
             "/// (e.g. `TASK-489` — treated as `--spec`)"
         ));
+        assert!(doc_comment_is_provenance_leak(
+            "/// Spec the verdict applies to (e.g. TASK-5)."
+        ));
+
+        // REJECT — DOC is a spec prefix too.
+        assert!(doc_comment_is_provenance_leak("/// see DOC-3"));
+
         // ALLOW — no SPEC-ID at all.
         assert!(!doc_comment_is_provenance_leak("/// Mark a spec done"));
+        // ALLOW — an id-shaped substring of a longer word is not a SPEC-ID
+        // (the leading word boundary).
+        assert!(!doc_comment_is_provenance_leak(
+            "/// Log at DEBUG-2 verbosity"
+        ));
+        assert!(!doc_comment_is_provenance_leak(
+            "/// Handles the SCR-4 screen"
+        ));
+    }
+
+    // TASK-903 / TASK-1516: the CI guard and the pre-commit hook template must
+    // share one SPEC-ID pattern so they agree on what counts as an id.
+    #[test]
+    fn spec_id_pattern_matches_the_hook_template() {
+        let hook = include_str!("../../aida-core/templates/hooks/aida-pre-commit.sh");
+        let expected = format!("SPEC_ID_RE='{SPEC_ID_PATTERN}'");
+        assert!(
+            hook.lines().any(|l| l.trim() == expected),
+            "aida-pre-commit.sh must define `{expected}` to stay in lockstep \
+             with the cli.rs guard"
+        );
+    }
+
+    // TASK-1516: an explicitly allowlisted line is excused even though it
+    // carries a SPEC-ID (the reviewed developer-/operator-facing carve-out);
+    // an unlisted line with the same SPEC-ID is still rejected.
+    #[test]
+    fn doc_comment_provenance_leak_honors_the_allowlist() {
+        let allowlist: &[&str] = &["/// deliberately developer-facing: STORY-1"];
+        assert!(!doc_comment_is_provenance_leak_against(
+            "/// deliberately developer-facing: STORY-1",
+            allowlist
+        ));
+        // A different SPEC-ID on an otherwise-identical line is NOT excused —
+        // the allowlist matches the exact trimmed line, not a pattern.
+        assert!(doc_comment_is_provenance_leak_against(
+            "/// deliberately developer-facing: STORY-2",
+            allowlist
+        ));
+        // Leading/trailing whitespace differences still match (line is
+        // trimmed before comparison).
+        assert!(!doc_comment_is_provenance_leak_against(
+            "   /// deliberately developer-facing: STORY-1   ",
+            allowlist
+        ));
+        // The real, shared allowlist is empty today (TASK-1516 reworded every
+        // known occurrence instead of allowlisting it), so nothing is excused
+        // through it right now.
+        assert!(PROSE_SPEC_ID_ALLOWLIST.is_empty());
     }
 
     // trace:TASK-0415 — the positional status shortcut parses into the List
