@@ -35,16 +35,21 @@ A few terms used below:
 ## Shipped: what AIDA does today
 
 `aida worktree enter EPIC-N` creates a separate checkout of the repository
-(a git *worktree*) next to the main one and moves your shell into it. It
+(a git *worktree*) and moves your shell into it. The move into the checkout
+needs AIDA's `aida()` shell wrapper to be installed; without it, the command
+warns you and you run `eval "$(aida worktree enter EPIC-N)"` instead. It
 does the following:
 
 - It cuts a new branch off `origin/main`, named `epic-n-work` by default
   (for example `epic-74-work`). `--branch` picks a different name.
 - It places the checkout at `~/ai/aida-<slug>` by default (for example
-  `~/ai/aida-epic74`). `--path` picks a different location.
+  `~/ai/aida-epic74`), whatever the project is and wherever its main
+  checkout lives. `--path` picks a different location.
 - It sets the checkout's focus to the epic. Inside that checkout,
-  `aida list`, `aida status` and `aida queue list` show only the epic and the
-  specs under it, and each scoped output says so in a header.
+  `aida list` and `aida queue list` show only the epic and the specs under
+  it, and each says so in a header. `aida status` is not scoped: it prints a
+  line such as `focused: EPIC-N — 12 items in subtree`, then reports on the
+  whole project.
 - It adds a `(wt:EPIC-N)` marker to your shell prompt, so you can see which
   checkout you are in.
 - If it runs again for the same epic, it reuses the existing checkout rather
@@ -95,10 +100,12 @@ command or setting that exists on `main` today.
 1. **Make the side checkout.** Run `aida worktree enter EPIC-N`.
 2. **Keep the feature's specs away from main-line drains.** Drains that take
    the head of a queue only pick specs that have been added to a queue (with
-   `aida queue add`). Batch drains pick specs tagged `batch:<name>`, and the
-   scheduled shift only picks specs whose execution mode is `drain`. So keep
-   the epic's children in Draft, or approved but not added to any queue, not
-   tagged with a batch, and not in `drain` execution mode.
+   `aida queue add`). Batch drains pick queued specs tagged `batch:<name>`,
+   and the scheduled shift picks queued specs whose execution mode is
+   `drain`. So every drain needs the spec to be queued. Keep the epic's
+   children in Draft, or approved but not added to any queue. Leaving them
+   untagged and out of `drain` execution mode adds a second layer of
+   protection.
 3. **Target the side branch by hand.** AIDA's pull-request tools target
    `main`. In particular, `aida ship` rebases onto `origin/main` and merges
    into `main`, and `aida pr ship`, when it has to create the pull request,
@@ -109,9 +116,9 @@ command or setting that exists on `main` today.
    for example `git fetch origin && git merge origin/main` inside the side
    checkout, rather than once at the end.
 5. **Land deliberately.** When the feature is ready, open one pull request
-   from `epic-n-work` into `main`. `aida pull` moves a spec from Done to
-   Completed when a commit that names it, such as one ending in
-   `(STORY-1481)`, reaches `main` (see
+   from `epic-n-work` into `main`. `aida pull` moves a spec to Completed
+   (from Approved, Planned, In Progress or Done) when a commit that names
+   it, such as one ending in `(STORY-1481)`, reaches `main` (see
    [commit-trailer-convention.md](../commit-trailer-convention.md)). If the
    landing pull request is squash-merged, make sure the squash commit message
    still names every spec the side branch delivered.
