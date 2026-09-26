@@ -20,13 +20,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:06.828604970Z
-modified_at: 2026-09-26T18:35:06.828604970Z
+modified_at: 2026-09-26T18:35:12.124412901Z
 req_type: Task
 tags:
 - criteria
 - from-spike:SPIKE-86
 - measurement
 - north-star
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a0deff-8ed6-7351-a048-6b9f48eceda0
+  created_at: 2026-09-26T18:35:12.124401476Z
+  created_by: joe
 filed_at:
   code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
   branch: main
