@@ -1,0 +1,32 @@
+id: 01a0df00-656c-7f81-90a4-224261e2ad2a
+spec_id: TASK-1525
+agreed_id: TASK-1525
+title: 'Architecture comparison doc: AIDA''s control plane against durable-execution engines (Temporal-style) and merge queues (Bors, Zuul, Mergify)'
+description: |
+  From SPIKE-86 section 6, adopted by OPERATOR DECISION on SPIKE-86 (Joe, 2026-09-26). A whole-word search found 0 mentions of Temporal, Airflow, Argo, Nomad, Zuul, Bors, Mergify or Aviator in docs/positioning/ and docs/competitive-analysis/. That is a gap on the ARCHITECTURE side only: the control plane (about half the engineering) has never been benchmarked against the two families it most resembles. No market-side vs-* page is wanted.
+
+  Acceptance:
+  1. A new contributor-facing doc under docs/architecture/ (not docs/positioning/) compares AIDA's control plane with (a) durable-execution engines (Temporal-style event history, replay, checkpointing, activity retries) and (b) merge queues (Bors, Zuul, Mergify, GitHub merge queue, Aviator).
+  2. For each family it states: which properties AIDA already has (with the AIDA command or module that provides it), which it lacks, and which it deliberately does not want because its workers are non-deterministic LLM agents.
+  3. It names "resumable orchestrator checkpointing" (the round-2 moat document's gap P1) and says whether a durable-execution property would close it.
+  4. It links TERM-5 and VIS-2 and is linked from OVERVIEW.md's architecture section.
+  5. It makes no market claim and is not added to docs/positioning/.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T18:35:40.268656790Z
+modified_at: 2026-09-26T18:35:40.268656790Z
+req_type: Task
+tags:
+- architecture
+- documentation
+- from-spike:SPIKE-86
+filed_at:
+  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
