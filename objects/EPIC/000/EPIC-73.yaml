@@ -1,0 +1,39 @@
+id: 01a0db2d-92d8-71c2-8c97-2612958bd010
+spec_id: EPIC-73
+agreed_id: EPIC-73
+title: 'Cycle-time visibility: where does a spec''s time go (work vs wait, per activity)?'
+description: |
+  We cannot currently answer "why is the burndown slow?". No surface breaks a spec's lifetime into the time spent in each activity (triage, queue wait, implement, CI, review, re-review, rework, parked, merge, build), or separates **work** time from **wait** time.
+
+  Much of the raw data already exists but is never joined:
+  - `.aida/events.jsonl` has drain phase events (PhaseEntered implementer/ci/reviewer/merge/pull/build, CiTerminal, SpecShelved, SpecRetried, RunStarted, PrMerged).
+  - The aida-store git log has status transitions (filed, approved, started, completed).
+  - GitHub has PR and CI timestamps.
+
+  Evidence (2026-09-25): BUG-1424 took 92 minutes end to end. About 17 of those were writing code and 47 were parked (shelved) waiting for a human or the advisor. TASK-1507 has no events between "unshipped work detected" and "completed", a 10.5-hour gap that nothing explains, because work done outside a drain barely emits events.
+
+  Children:
+  1. Per-spec timeline view: `aida history <SPEC> --timeline`.
+  2. Aggregate breakdown: `aida metrics cycle-time`.
+  3. Instrumentation gaps, plus the decision on where the event log lives so it is visible across machines.
+
+  Sequencing: build 1 and 2 on the data that exists today. The blank spans they reveal set the priority order for 3. TASK-1505's history-events cache is the natural read path for fast queries.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T00:46:32.152066505Z
+modified_at: 2026-09-26T00:46:32.152066505Z
+req_type: Epic
+tags:
+- aida:history
+- aida:metrics
+- observability
+filed_at:
+  code_sha: 193a7c9769995ddd7b643b626af8fdb576bbf20b
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: claude
+  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
