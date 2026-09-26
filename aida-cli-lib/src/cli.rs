@@ -12871,10 +12871,11 @@ pub enum Command {
 
         /// Only show entries for this requirement (accepts a SPEC-ID, an
         /// agreed short ID, or the raw UUID `aida show` prints — a UUID
-        /// is resolved to its canonical spec_id; BUG-588). Works both
-        /// before and after the `events` subcommand, e.g. `aida history
-        /// events --id BUG-1474`. The positional SPEC-ID form
-        /// (`aida history <SPEC-ID>`) is shorthand for this same flag.
+        /// is resolved to its canonical spec_id). Works both before and
+        /// after the `events` subcommand, e.g. `aida history events --id
+        /// <ID>`. The positional SPEC-ID form (`aida history <SPEC-ID>`)
+        /// is shorthand for this same flag.
+        // trace:BUG-1652 | ai:claude
         // trace:BUG-1474 | ai:claude — global so it parses after `events`, not
         // just before it, matching the documented invocation.
         // trace:TASK-1480 | ai:claude
