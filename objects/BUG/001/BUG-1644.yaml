@@ -14,12 +14,12 @@ description: |
   - A test with a symlinked cache path and a live foreign sidecar at the canonical location: the read returns the last committed snapshot in < 1 s without entering the write ladder.
   - `aida doctor heal stale-locks` and the lock-error enrichment look at the canonical sidecar; a stray per-worktree sidecar left by older binaries is reported/cleaned.
   - busy_timeout=0 and the retry ladder are unchanged.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:45:55.970714904Z
-modified_at: 2026-09-26T12:19:49.997309782Z
+modified_at: 2026-09-26T13:10:09.251178759Z
 req_type: Bug
 tags:
 - cache
@@ -99,6 +99,20 @@ comments:
   created_at: 2026-09-26T12:19:49.997309782Z
   modified_at: 2026-09-26T12:19:49.997309782Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0ddd6-604a-7353-acd7-3bb2eb4485a3
+  author: aida-auto-bump
+  timestamp: 2026-09-26T13:10:09.226479793Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0ddd6-6063-7bd3-aa00-08f26bcb774c
+  timestamp: 2026-09-26T13:10:09.251177044Z
+  agent: implementer
+  commit_sha: 9beb57f86dd6c8d779c1b3afa03a02b753fc61c5
+  summary: Completed via merge 9beb57f8
 filed_at:
   code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
   branch: claude/spike-90
@@ -107,3 +121,7 @@ filed_at:
   aida_build_sha: f9c900b6ff
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T13:10:09.226400997Z
+  completion_sha: 9beb57f86dd6c8d779c1b3afa03a02b753fc61c5
