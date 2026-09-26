@@ -33,8 +33,9 @@ pub use cache::{
 };
 #[cfg(feature = "native")]
 pub use cache_lock::{
-    classify_lock_owner, observe_cache_lock, observe_lock_info_file, reclaim_dead_lock_info,
-    CacheLockObservation, LockInfoReclaim, LockOwnerState,
+    cache_sidecar_path, classify_lock_owner, observe_cache_lock, observe_lock_info_file,
+    reclaim_dead_lock_info, shared_cache_path, stray_cache_lock_info_path, CacheLockObservation,
+    LockInfoReclaim, LockOwnerState,
 };
 #[cfg(feature = "native")]
 pub use cached_git_backend::CachedGitBackend;

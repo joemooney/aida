@@ -23546,12 +23546,22 @@ fn collect_doctor_findings(
 
     let cache_path =
         aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
-    let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
     // TASK-1484: owner liveness is PID-reuse aware (process start identity) and
     // fails closed when the identity cannot be read. A dead owner's record past
     // the age threshold is a safe heal; a LIVE owner past its expected duration
     // is diagnostic evidence only (never healed). trace:TASK-1484 | ai:claude
-    if let Some(obs) = aida_core::observe_cache_lock(&cache_path)? {
+    // BUG-1644: the sidecar is resolved from the SHARED (symlink-resolved)
+    // cache location; a stray per-worktree sidecar left beside a symlinked
+    // cache by an older binary is checked too, and reported even when its
+    // owner is alive. trace:BUG-1644 | ai:claude
+    let stray_lock_info = aida_core::stray_cache_lock_info_path(&cache_path);
+    let lock_info_paths = std::iter::once(aida_core::cache_lock_info_path(&cache_path))
+        .chain(stray_lock_info.clone());
+    for lock_info_path in lock_info_paths {
+        let is_stray = stray_lock_info.as_ref() == Some(&lock_info_path);
+        let Some(obs) = aida_core::observe_lock_info_file(&lock_info_path)? else {
+            continue;
+        };
         let stale_secs = std::env::var("AIDA_CACHE_LOCK_STALE_SECS")
             .ok()
             .and_then(|v| v.parse::<i64>().ok())
@@ -23595,6 +23605,21 @@ fn collect_doctor_findings(
                     ),
                     action: format!(
                         "check pid {}; the lock clears when it finishes (not removed while the owner is alive)",
+                        obs.info.pid
+                    ),
+                    safe_heal: false,
+                });
+            }
+            _ if is_stray && obs.owner.presumed_alive() => {
+                push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!(
+                        "per-worktree cache lock-info from pid {} ({}) sits beside a shared (symlinked) cache; current binaries never read it",
+                        obs.info.pid, command
+                    ),
+                    action: format!(
+                        "upgrade the aida binary that pid {} runs; the file is removed once its owner exits",
                         obs.info.pid
                     ),
                     safe_heal: false,
@@ -36617,6 +36642,14 @@ fn session_start(
                     })?;
                 }
             }
+            // BUG-1644: `cache.db.lock-info` is deliberately NOT linked. Its
+            // path derives from the shared (symlink-resolved) cache location
+            // (`aida_core::cache_lock_info_path`), so a reader here and a
+            // writer in the main checkout already meet at one sidecar, and a
+            // not-yet-created parent cache needs no dangling link. A reused
+            // worktree may still hold an older binary's per-worktree sidecar;
+            // retire it when its owner is dead. trace:BUG-1644 | ai:claude
+            retire_stray_worktree_lock_info(&worktree_aida);
         }
     }
 
@@ -41367,6 +41400,11 @@ fn session_end(
             let _ = std::fs::remove_file(&store_link);
         }
         let aida_dir = target.worktree_path.join(".aida");
+        // BUG-1644: retire an older binary's per-worktree lock-info sidecar
+        // (dead owner only) while `cache.db` is still a symlink, i.e. while
+        // it is still distinguishable from the shared sidecar.
+        // trace:BUG-1644 | ai:claude
+        retire_stray_worktree_lock_info(&aida_dir);
         for runtime in &[
             "sessions",
             "roles",
@@ -50419,6 +50457,18 @@ fn queue_at_filing_refusal(
         Some(QueueAtFilingRefusal::Downgraded)
     } else {
         Some(QueueAtFilingRefusal::NotApproved)
+    }
+}
+
+/// Remove a per-worktree `cache.db.lock-info` that a pre-BUG-1644 binary left
+/// beside the worktree's SYMLINKED `cache.db`, but only when its recorded owner
+/// is provably dead (the TASK-1484 compare-and-delete). A live owner's file is
+/// left for `aida doctor` to report. No-op when `cache.db` is not a symlink:
+/// the sidecar there IS the shared one.
+// trace:BUG-1644 | ai:claude
+fn retire_stray_worktree_lock_info(worktree_aida: &std::path::Path) {
+    if let Some(stray) = aida_core::stray_cache_lock_info_path(&worktree_aida.join("cache.db")) {
+        let _ = aida_core::reclaim_dead_lock_info(&stray);
     }
 }
 

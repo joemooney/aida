@@ -2137,4 +2137,85 @@ mod tests {
         )
         .unwrap()
     }
+
+    /// BUG-1644 (SPIKE-90 case W): a reader in a sibling worktree whose
+    /// `.aida/cache.db` symlinks to the main checkout's cache must see the
+    /// main writer's live lock-info, and serve the last committed snapshot
+    /// instead of entering the write ladder (~52 s, then failure, before the
+    /// fix). The writer really holds `BEGIN IMMEDIATE` on the shared cache.
+    // trace:BUG-1644 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_worktree_reader_serves_snapshot_behind_main_writer() {
+        use rusqlite::Connection;
+
+        let root = tempdir().unwrap();
+        let store_root = root.path().join("main").join(".aida-store");
+        let main_cache = root.path().join("main").join(".aida").join("cache.db");
+        let wt_aida = root.path().join("wt-sibling").join(".aida");
+        std::fs::create_dir_all(&store_root).unwrap();
+        std::fs::create_dir_all(&wt_aida).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+
+        // Main checkout: build the cache with one committed row.
+        {
+            let main = CachedGitBackend::open(&store_root, &main_cache).unwrap();
+            main.add_requirement(sample_req("BUG-1", "first")).unwrap();
+        }
+        let wt_cache = wt_aida.join("cache.db");
+        for name in ["cache.db", "cache.db-shm", "cache.db-wal"] {
+            let src = main_cache.with_file_name(name);
+            if src.exists() {
+                std::os::unix::fs::symlink(&src, wt_aida.join(name)).unwrap();
+            }
+        }
+
+        // The store moves on without the cache (it is now stale) ...
+        GitBackend::new(&store_root)
+            .unwrap()
+            .add_requirement(sample_req("BUG-2", "second"))
+            .unwrap();
+
+        // ... while a live foreign writer in the main checkout holds the write
+        // lock and has recorded its sidecar beside the REAL cache file.
+        let holder = Connection::open(&main_cache).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let info = super::super::cache::CacheLockInfo {
+            pid: 1,
+            command: "main-checkout-writer".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            user: "test".to_string(),
+            ..Default::default()
+        };
+        std::fs::write(
+            main_cache.with_file_name("cache.db.lock-info"),
+            serde_json::to_string(&info).unwrap(),
+        )
+        .unwrap();
+
+        assert!(
+            CachedGitBackend::with_inner_cache_snapshot(
+                GitBackend::new(&store_root).unwrap(),
+                &wt_cache
+            )
+            .unwrap()
+            .cache_snapshot_is_stale()
+            .unwrap(),
+            "fixture must leave the shared cache behind the store"
+        );
+
+        let started = std::time::Instant::now();
+        let reader = CachedGitBackend::open(&store_root, &wt_cache)
+            .expect("worktree reader must open behind the live writer");
+        let rows = reader.list_summaries(&ListFilter::default()).unwrap();
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < std::time::Duration::from_secs(1),
+            "worktree read entered the write ladder: {elapsed:?}"
+        );
+        assert_eq!(rows.len(), 1, "serves the last committed snapshot");
+        holder.execute_batch("ROLLBACK").unwrap();
+    }
 }

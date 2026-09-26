@@ -318,14 +318,105 @@ impl CacheLockObservation {
     }
 }
 
-pub fn cache_lock_info_path(cache_path: &Path) -> PathBuf {
+/// Maximum symlink hops followed by [`shared_cache_path`] when the kernel
+/// cannot resolve the chain for us (a dangling link). Bounds a link loop.
+const MAX_CACHE_SYMLINK_HOPS: usize = 16;
+
+/// The physical location of the cache database that `cache_path` names.
+///
+/// Sibling worktrees symlink `.aida/cache.db` to the main checkout (BUG-52),
+/// so several lexical cache paths name ONE database. Everything that must be
+/// shared by every process using that database (the lock-info sidecar, and
+/// STORY-1484's refresh lock) derives from this location, never from the
+/// lexical path, or a worktree reader would look beside its own symlink and
+/// never see the main checkout's writer.
+///
+/// - A path that is not a symlink (including one that does not exist yet) is
+///   returned unchanged: the database lives exactly there, or will.
+/// - A symlink is canonicalized.
+/// - A dangling symlink (the target cache has not been created yet) is
+///   followed hop by hop without requiring the target to exist, so the
+///   sidecar lands where the database WILL be created; its parent directory
+///   is canonicalized when it exists.
+// trace:BUG-1644 | ai:claude
+pub fn shared_cache_path(cache_path: &Path) -> PathBuf {
+    let is_link = |p: &Path| {
+        std::fs::symlink_metadata(p)
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false)
+    };
+    if !is_link(cache_path) {
+        return cache_path.to_path_buf();
+    }
+    if let Ok(canonical) = std::fs::canonicalize(cache_path) {
+        return canonical;
+    }
+    let mut current = cache_path.to_path_buf();
+    for _ in 0..MAX_CACHE_SYMLINK_HOPS {
+        if !is_link(&current) {
+            break;
+        }
+        let Ok(target) = std::fs::read_link(&current) else {
+            break;
+        };
+        current = if target.is_absolute() {
+            target
+        } else {
+            match current.parent() {
+                Some(dir) => dir.join(target),
+                None => target,
+            }
+        };
+    }
+    match (
+        current
+            .parent()
+            .and_then(|dir| std::fs::canonicalize(dir).ok()),
+        current.file_name(),
+    ) {
+        (Some(dir), Some(name)) => dir.join(name),
+        _ => current,
+    }
+}
+
+/// A sidecar file named `<cache file name>.<suffix>` beside the SHARED cache
+/// location ([`shared_cache_path`]). The single derivation for every
+/// per-database coordination file: `lock-info` today, STORY-1484's
+/// `refresh.lock` next.
+// trace:BUG-1644 | ai:claude
+pub fn cache_sidecar_path(cache_path: &Path, suffix: &str) -> PathBuf {
+    sidecar_beside(&shared_cache_path(cache_path), suffix)
+}
+
+fn sidecar_beside(cache_path: &Path, suffix: &str) -> PathBuf {
     cache_path.with_file_name(format!(
-        "{}.lock-info",
+        "{}.{suffix}",
         cache_path
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("cache.db")
     ))
+}
+
+/// The lock-info sidecar for the database `cache_path` names, resolved from
+/// the shared (symlink-resolved) cache location so every worktree sharing one
+/// cache reads and writes one sidecar.
+// trace:BUG-1644 | ai:claude
+pub fn cache_lock_info_path(cache_path: &Path) -> PathBuf {
+    cache_sidecar_path(cache_path, "lock-info")
+}
+
+/// A per-worktree lock-info sidecar left beside a SYMLINKED cache path by a
+/// binary that predates BUG-1644 (it derived the sidecar from the lexical
+/// path). `Some` only when that file exists and differs from the shared
+/// sidecar; doctor reports it and dead owners' copies are reclaimed.
+// trace:BUG-1644 | ai:claude
+pub fn stray_cache_lock_info_path(cache_path: &Path) -> Option<PathBuf> {
+    let lexical = sidecar_beside(cache_path, "lock-info");
+    let exists = std::fs::symlink_metadata(&lexical)
+        .map(|m| m.file_type().is_file())
+        .unwrap_or(false);
+    (exists && lexical != cache_lock_info_path(cache_path)).then_some(lexical)
 }
 
 pub fn read_cache_lock_info(cache_path: &Path) -> Result<Option<CacheLockInfo>> {
@@ -857,5 +948,153 @@ mod tests {
         assert!(a.starts_with("linux-starttime:"), "{a}");
         assert_eq!(Some(a), live_start_identity(std::process::id()));
         assert_eq!(live_start_identity(0), None);
+    }
+
+    // BUG-1644: a sibling worktree's `.aida/cache.db` is a symlink to the main
+    // checkout's cache (BUG-52). The lock-info sidecar must resolve to ONE
+    // shared file so a reader in the worktree sees the main writer.
+    // trace:BUG-1644 | ai:claude
+    #[cfg(unix)]
+    fn bug_1644_layout(create_main_cache: bool) -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let root = tempdir().unwrap();
+        let main_aida = root.path().join("main").join(".aida");
+        let wt_aida = root.path().join("wt-sibling").join(".aida");
+        std::fs::create_dir_all(&main_aida).unwrap();
+        std::fs::create_dir_all(&wt_aida).unwrap();
+        let main_cache = main_aida.join("cache.db");
+        if create_main_cache {
+            std::fs::write(&main_cache, b"").unwrap();
+        }
+        let wt_cache = wt_aida.join("cache.db");
+        std::os::unix::fs::symlink(&main_cache, &wt_cache).unwrap();
+        (root, main_cache, wt_cache)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_worktree_reader_sees_main_writer_lock_info() {
+        let (_root, main_cache, wt_cache) = bug_1644_layout(true);
+
+        // The writer runs in the main checkout and records its sidecar there.
+        let writer_sidecar = cache_lock_info_path(&main_cache);
+        let mut info = fixture(1, None); // pid 1: live and foreign on unix
+        info.command = "aida list (main checkout writer)".to_string();
+        std::fs::write(&writer_sidecar, serde_json::to_string(&info).unwrap()).unwrap();
+
+        // The reader in the worktree resolves to the very same file.
+        assert_eq!(cache_lock_info_path(&wt_cache), writer_sidecar);
+        assert_eq!(
+            std::fs::canonicalize(cache_lock_info_path(&wt_cache)).unwrap(),
+            std::fs::canonicalize(main_cache.with_file_name("cache.db.lock-info")).unwrap()
+        );
+        assert!(
+            foreign_writer_holds_lock(&wt_cache),
+            "a worktree reader must see the main checkout's live writer"
+        );
+        let obs = observe_cache_lock(&wt_cache).unwrap().expect("observed");
+        assert_eq!(obs.info.command, "aida list (main checkout writer)");
+        // Nothing was written beside the worktree's symlink.
+        assert!(!wt_cache.with_file_name("cache.db.lock-info").exists());
+        assert_eq!(stray_cache_lock_info_path(&wt_cache), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_worktree_writer_records_sidecar_at_shared_location() {
+        let (_root, main_cache, wt_cache) = bug_1644_layout(true);
+        assert!(write_cache_lock_info(&wt_cache, "test").unwrap());
+        assert!(read_cache_lock_info(&main_cache).unwrap().is_some());
+        assert!(!wt_cache.with_file_name("cache.db.lock-info").exists());
+        remove_cache_lock_info(&wt_cache);
+        assert!(read_cache_lock_info(&main_cache).unwrap().is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_dangling_symlink_resolves_to_future_shared_cache() {
+        // The main checkout's cache has not been created yet: the worktree's
+        // link dangles. The sidecar must still land where the database WILL
+        // be, not beside the link.
+        let (_root, main_cache, wt_cache) = bug_1644_layout(false);
+        assert!(!main_cache.exists());
+        let expected = std::fs::canonicalize(main_cache.parent().unwrap())
+            .unwrap()
+            .join("cache.db.lock-info");
+        assert_eq!(cache_lock_info_path(&wt_cache), expected);
+        assert_eq!(
+            shared_cache_path(&wt_cache),
+            expected.with_file_name("cache.db")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_relative_and_chained_symlinks_resolve() {
+        let (root, main_cache, _wt_cache) = bug_1644_layout(false);
+        let other_aida = root.path().join("wt-other").join(".aida");
+        std::fs::create_dir_all(&other_aida).unwrap();
+        let rel = other_aida.join("cache.db");
+        std::os::unix::fs::symlink("../../main/.aida/cache.db", &rel).unwrap();
+        let chained = other_aida.join("chained.db");
+        std::os::unix::fs::symlink(&rel, &chained).unwrap();
+        let expected = std::fs::canonicalize(main_cache.parent().unwrap())
+            .unwrap()
+            .join("cache.db");
+        // Dangling (no main cache yet), then existing.
+        assert_eq!(shared_cache_path(&rel), expected);
+        assert_eq!(shared_cache_path(&chained), expected);
+        std::fs::write(&main_cache, b"").unwrap();
+        assert_eq!(shared_cache_path(&rel), expected);
+        assert_eq!(shared_cache_path(&chained), expected);
+    }
+
+    #[test]
+    fn bug_1644_missing_or_plain_cache_path_is_unchanged() {
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("nope").join("cache.db");
+        assert_eq!(shared_cache_path(&missing), missing);
+        assert_eq!(
+            cache_lock_info_path(&missing),
+            dir.path().join("nope").join("cache.db.lock-info")
+        );
+        let plain = dir.path().join("cache.db");
+        std::fs::write(&plain, b"").unwrap();
+        assert_eq!(shared_cache_path(&plain), plain);
+        assert_eq!(
+            cache_sidecar_path(&plain, "refresh.lock"),
+            dir.path().join("cache.db.refresh.lock")
+        );
+        assert_eq!(stray_cache_lock_info_path(&plain), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_symlink_loop_terminates() {
+        let dir = tempdir().unwrap();
+        let a = dir.path().join("a.db");
+        let b = dir.path().join("b.db");
+        std::os::unix::fs::symlink(&b, &a).unwrap();
+        std::os::unix::fs::symlink(&a, &b).unwrap();
+        let resolved = shared_cache_path(&a);
+        assert_eq!(
+            resolved.parent(),
+            Some(std::fs::canonicalize(dir.path()).unwrap().as_path())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_stray_per_worktree_sidecar_is_detected_and_dead_one_reclaimed() {
+        let (_root, _main_cache, wt_cache) = bug_1644_layout(true);
+        let stray = wt_cache.with_file_name("cache.db.lock-info");
+        std::fs::write(&stray, serde_json::to_string(&fixture(DEAD, None)).unwrap()).unwrap();
+        assert_eq!(stray_cache_lock_info_path(&wt_cache), Some(stray.clone()));
+        // A stray sidecar is invisible to the shared read path.
+        assert!(read_cache_lock_info(&wt_cache).unwrap().is_none());
+        assert!(matches!(
+            reclaim_dead_lock_info(&stray).unwrap(),
+            LockInfoReclaim::Removed { .. }
+        ));
+        assert_eq!(stray_cache_lock_info_path(&wt_cache), None);
     }
 }
