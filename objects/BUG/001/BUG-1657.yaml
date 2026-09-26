@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:09:52.935348266Z
-modified_at: 2026-09-26T21:05:14.228696247Z
+modified_at: 2026-09-26T23:16:04.307508757Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -33,6 +33,12 @@ comments:
   content: 'Review (strict, d4278e67fb): REQUEST_CHANGES — reproduced false positive: a .gitattributes merge=ours driver makes merge-tree report a no-op for an unshipped edit, so reap would delete the branch. PROXY DECISION: require per-path blob identity for every path the branch changed (merge-tree only as a pre-check); also fail closed on a rev-list error and keep sessions whose worktree HEAD is not on the lease branch. Sent back to the implementer; a new reviewer will re-review.'
   created_at: 2026-09-26T21:05:14.228696247Z
   modified_at: 2026-09-26T21:05:14.228696247Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e001-1c53-7d61-ae0b-ece5fa485901
+  author: joe
+  content: 'Review: APPROVE (round-6 strict, 9726513757) after six rounds: per-commit content proof, pinned delete, moved-check first, unreadable=dirty, tag shadowing closed, never delete a branch checked out in another worktree. Non-blocking notes -> follow-up filed. -> next batch.'
+  created_at: 2026-09-26T23:16:04.307508757Z
+  modified_at: 2026-09-26T23:16:04.307508757Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0de44-a0d8-7d42-9a68-49cfc2739549
