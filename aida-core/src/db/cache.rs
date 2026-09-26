@@ -818,8 +818,11 @@ fn is_sqlite_lock_error(err: &anyhow::Error) -> bool {
 
 /// True when `err` is a cache write-lock failure: a raw SQLite busy/locked
 /// error, or the owner-enriched error the retry ladder returns once it is
-/// exhausted.
+/// exhausted. Today only tests branch on it (the incremental refresh treats
+/// a lock error like any other failure and falls back to a full rebuild);
+/// kept for the planned single-flight refresh, which must tell them apart.
 // trace:TASK-1515 | ai:claude
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn is_cache_lock_error(err: &anyhow::Error) -> bool {
     is_sqlite_lock_error(err)
         || err

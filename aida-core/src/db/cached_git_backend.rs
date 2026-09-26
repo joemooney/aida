@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 use super::cache::{
-    is_cache_lock_error, is_cache_schema_drift_error, ArchiveFilter, Cache, CacheTx, DeferFilter,
-    ListFilter, RequirementSummary,
+    is_cache_schema_drift_error, ArchiveFilter, Cache, CacheTx, DeferFilter, ListFilter,
+    RequirementSummary,
 };
 use super::git_backend::GitBackend;
 use super::traits::{BackendType, DatabaseBackend, UpdateResult};
@@ -24,11 +24,6 @@ pub struct CachedGitBackend {
     inner: GitBackend,
     cache: Cache,
 }
-
-/// Whether the stale-read note has been printed since it was last armed.
-/// See [`CachedGitBackend::rearm_stale_read_note`].
-// trace:TASK-1515 | ai:claude
-static STALE_READ_NOTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 impl CachedGitBackend {
     /// Open an existing git store at `git_root` with a SQLite cache at
@@ -165,9 +160,8 @@ impl CachedGitBackend {
     /// `anyhow::Error`) listing each candidate's unambiguous handle; exactly
     /// one candidate resolves as `get_requirement_by_spec_id` would.
     ///
-    /// If the cache cannot answer, or can only answer from a stale snapshot,
-    /// the check falls back to the authoritative full scan rather than
-    /// skipping it: an unchecked write is the bug.
+    /// If the cache cannot answer, the check falls back to the authoritative
+    /// full scan rather than skipping it: an unchecked write is the bug.
     ///
     /// [`AmbiguousIdError`]: crate::id_collisions::AmbiguousIdError
     // trace:BUG-1535 | ai:claude
@@ -175,20 +169,9 @@ impl CachedGitBackend {
         if let Ok(uuid) = Uuid::parse_str(id.trim()) {
             return self.get_requirement(&uuid);
         }
-        // `id_candidates` uses the read-path freshness check, which may serve
-        // a stale snapshot (another writer holds the cache lock). A write must
-        // never resolve an id from a stale snapshot: a duplicate or agreed-id
-        // collision that an external commit introduced would be missed. So a
-        // stale answer is treated like no answer, and the authoritative full
-        // scan decides.
-        // trace:TASK-1515 | ai:claude
-        let fresh_candidates = self
-            .id_candidates(id)
-            .ok()
-            .filter(|_| matches!(self.cache_snapshot_is_stale(), Ok(false)));
-        let candidates = match fresh_candidates {
-            Some(c) => c,
-            None => {
+        let candidates = match self.id_candidates(id) {
+            Ok(c) => c,
+            Err(_) => {
                 let store = self.inner.load()?;
                 let rows: Vec<crate::id_collisions::IdRow> = store
                     .requirements
@@ -329,18 +312,6 @@ impl CachedGitBackend {
     /// rebuild.
     // trace:BUG-636 | ai:claude
     fn ensure_cache_fresh(&self) -> Result<()> {
-        self.ensure_cache_fresh_inner(false)
-    }
-
-    /// [`Self::ensure_cache_fresh`], with the read-path lock tolerance:
-    /// when `serve_stale_on_lock` is set and a lock error ends the
-    /// incremental refresh, the single refresh transaction has rolled back,
-    /// so the cache is a consistent snapshot at its previous HEAD. A reader
-    /// serves that snapshot (labelled stale on stderr, and still reported
-    /// stale by `cache_snapshot_is_stale`) instead of failing the command.
-    /// Write paths pass `false` and keep the strict lock error.
-    // trace:TASK-1515 | ai:claude
-    fn ensure_cache_fresh_inner(&self, serve_stale_on_lock: bool) -> Result<()> {
         // TASK-1515: an incremental refresh declines when HEAD moves while it
         // reads the changed objects (it cannot stamp one HEAD on rows that may
         // come from a later one). On a busy store that is common, so retry the
@@ -380,22 +351,9 @@ impl CachedGitBackend {
                     }
                     head = now;
                 }
-                // TASK-1515 (SPIKE-90 advisor rule): a LOCK error means
-                // another writer holds the cache and the retry ladder is
-                // already exhausted. The single refresh transaction rolled
-                // back, so the cache is intact at its previous HEAD.
-                // Escalating to a full rebuild would only wait on the same
-                // lock for longer while doing far more work, so surface the
-                // (owner-enriched) lock error instead. A READ path instead
-                // serves that rolled-back snapshot, labelled stale.
-                // trace:TASK-1515 | ai:claude
-                Err(e) if is_cache_lock_error(&e) => {
-                    if serve_stale_on_lock {
-                        self.note_stale_read();
-                        return Ok(());
-                    }
-                    return Err(e);
-                }
+                // Any error, a cache lock error included: fall back to the
+                // full rebuild, which re-enters the lock retry ladder and
+                // fails the command if the lock is still held.
                 Err(e) => {
                     eprintln!("warning: incremental cache update failed ({e}); full rebuild");
                     break;
@@ -404,10 +362,13 @@ impl CachedGitBackend {
         }
         // TASK-1515: re-capture HEAD immediately before the rebuild loads the
         // worktree, so the stamp is never older than a HEAD captured before
-        // the incremental attempts. The load reads at or after this HEAD; if
-        // HEAD moves during the load, the stamp is older than some rows, which
-        // is the self-healing direction (the next refresh re-reads every file
-        // changed since the stamp), never newer rows claimed fresh.
+        // the incremental attempts, and never newer than the rows: the load
+        // reads at or after this HEAD. If HEAD moves DURING the load, the
+        // stamp is older than some rows. That usually heals on the next
+        // incremental (it re-reads every file changed since the stamp), but
+        // not always: a file changed during the load and then reverted shows
+        // no net change in that diff, so its newer (or ghost) row persists
+        // until a full rebuild. Tracked separately as a follow-up bug.
         // trace:TASK-1515 | ai:claude
         let head = self.current_head_sha();
         if !self.cache.is_stale(&head)? {
@@ -442,54 +403,9 @@ impl CachedGitBackend {
         if !self.cache.migration_pending()
             && super::cache::foreign_writer_holds_lock_at(self.cache.lock_info_path())
         {
-            self.note_stale_read();
             return Ok(());
         }
-        self.ensure_cache_fresh_inner(true)
-    }
-
-    /// Re-arm the stale-read note so the next stale read prints it again.
-    /// A one-shot CLI command prints the note at most once per process; a
-    /// long-lived process (the MCP server) calls this at the start of each
-    /// request, so every request that is answered from a stale snapshot is
-    /// labelled, not only the first one.
-    // trace:TASK-1515 | ai:claude
-    pub fn rearm_stale_read_note() {
-        STALE_READ_NOTED.store(false, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    /// The stale-read label: one line on STDERR (never stdout, so `--json`,
-    /// TOON and MCP JSON-RPC payloads are untouched), exit code unchanged,
-    /// at most once until [`Self::rearm_stale_read_note`] (once per process
-    /// for a CLI command). The cache itself stays stamped at its previous
-    /// HEAD, so `cache_snapshot_is_stale` keeps reporting it as stale.
-    // trace:TASK-1515 | ai:claude
-    fn note_stale_read(&self) {
-        if STALE_READ_NOTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
-            return;
-        }
-        eprintln!("{}", self.stale_read_note());
-    }
-
-    /// The text of the stale-read note. It names only what is known: the
-    /// store commit the served snapshot was built from, and that the cache
-    /// is busy (another process holds its write lock).
-    // trace:TASK-1515 | ai:claude
-    fn stale_read_note(&self) -> String {
-        let sha = self
-            .cache
-            .source_head_sha()
-            .ok()
-            .flatten()
-            .filter(|s| !s.is_empty());
-        match sha {
-            Some(sha) => format!(
-                "note: showing cached data from store commit {}; the cache is busy. Re-run shortly for current data.",
-                &sha[..sha.len().min(10)]
-            ),
-            None => "note: showing cached data; the cache is busy. Re-run shortly for current data."
-                .to_string(),
-        }
+        self.ensure_cache_fresh()
     }
 
     /// Full authoritative rebuild: load the whole store and re-project every
@@ -1240,6 +1156,7 @@ impl DatabaseBackend for CachedGitBackend {
 
 #[cfg(test)]
 mod tests {
+    use super::super::cache::is_cache_lock_error;
     use super::*;
     use tempfile::tempdir;
 
@@ -2604,46 +2521,6 @@ mod tests {
         );
     }
 
-    // TASK-1515 (SPIKE-90 advisor rule): a lock error in the incremental
-    // refresh surfaces as a lock error; it must NOT escalate to a full
-    // rebuild, which would only wait on the same lock doing far more work.
-    // Once the lock is free, the same refresh succeeds incrementally.
-    // trace:TASK-1515 | ai:claude
-    #[test]
-    fn task_1515_incremental_lock_error_does_not_escalate_to_full_rebuild() {
-        let dir = tempdir().unwrap();
-        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
-        let built_at = backend.cache().built_at().unwrap();
-        let to = task_1515_external_retitle(&store_root, "gen1");
-
-        let holder = rusqlite::Connection::open(&cache_path).unwrap();
-        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
-        // Thread-local short ladder, so the test stays fast without touching
-        // process-wide env vars other tests read.
-        let prev = super::super::cache::set_fast_fail_cache(true);
-        let result = backend.ensure_cache_fresh();
-        super::super::cache::set_fast_fail_cache(prev);
-        holder.execute_batch("ROLLBACK").unwrap();
-
-        let err = result.unwrap_err();
-        let msg = format!("{err:#}");
-        assert!(is_cache_lock_error(&err), "{msg}");
-        assert!(msg.contains("refresh cache incrementally"), "{msg}");
-        assert!(!msg.contains("rebuild cache"), "escalated: {msg}");
-        assert_eq!(backend.cache().built_at().unwrap(), built_at);
-
-        backend.ensure_cache_fresh().unwrap();
-        assert_eq!(
-            backend.cache().source_head_sha().unwrap().as_deref(),
-            Some(to.as_str())
-        );
-        assert_eq!(
-            backend.cache().built_at().unwrap(),
-            built_at,
-            "the retry is incremental too"
-        );
-    }
-
     /// The on-disk `source_head_sha`, read on a separate connection (what raw
     /// `cache_meta` readers and older binaries see).
     // trace:TASK-1515 | ai:claude
@@ -2709,76 +2586,6 @@ mod tests {
         r.title = "edited".into();
         writer.update_requirement(&r).unwrap();
         assert_eq!(task_1515_raw_head(&cache_path).as_deref(), Some(""));
-    }
-
-    // TASK-1515 review finding 2: a lock error that ends the incremental
-    // refresh on a READ path serves the rolled-back snapshot at the previous
-    // HEAD (still reported stale) instead of failing the command.
-    // trace:TASK-1515 | ai:claude
-    #[test]
-    fn task_1515_read_path_serves_stale_snapshot_on_incremental_lock_error() {
-        let dir = tempdir().unwrap();
-        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
-        let from = backend.cache().source_head_sha().unwrap().unwrap();
-        let built_at = backend.cache().built_at().unwrap();
-        let to = task_1515_external_retitle(&store_root, "gen1");
-
-        let holder = rusqlite::Connection::open(&cache_path).unwrap();
-        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
-        let prev = super::super::cache::set_fast_fail_cache(true);
-        let rows = backend.list_summaries(&ListFilter::default());
-        let reopened = CachedGitBackend::open(&store_root, &cache_path);
-        super::super::cache::set_fast_fail_cache(prev);
-        holder.execute_batch("ROLLBACK").unwrap();
-
-        let rows = rows.expect("a read must be served from the stale snapshot");
-        let title = |id: &str| {
-            rows.iter()
-                .find(|r| r.spec_id.as_deref() == Some(id))
-                .map(|r| r.title.clone())
-        };
-        assert_eq!(title("FR-1-001").as_deref(), Some("gen0"));
-        assert_eq!(title("FR-1-002").as_deref(), Some("gen0"));
-        reopened.expect("the read-path constructor must serve the snapshot too");
-        assert_eq!(
-            backend.cache().source_head_sha().unwrap().as_deref(),
-            Some(from.as_str()),
-            "the snapshot keeps its previous head"
-        );
-        assert!(backend.cache_snapshot_is_stale().unwrap(), "labelled stale");
-        assert_eq!(backend.cache().built_at().unwrap(), built_at);
-
-        // Once the lock is free, the next read catches up incrementally.
-        backend.list_summaries(&ListFilter::default()).unwrap();
-        assert_eq!(
-            backend.cache().source_head_sha().unwrap().as_deref(),
-            Some(to.as_str())
-        );
-        assert!(!backend.cache_snapshot_is_stale().unwrap());
-    }
-
-    // TASK-1515 review finding 2: a WRITE path that needs a fresh cache keeps
-    // failing with the lock error instead of acting on the stale snapshot.
-    // trace:TASK-1515 | ai:claude
-    #[test]
-    fn task_1515_write_path_keeps_strict_lock_error() {
-        let dir = tempdir().unwrap();
-        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
-        task_1515_external_retitle(&store_root, "gen1");
-
-        let holder = rusqlite::Connection::open(&cache_path).unwrap();
-        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
-        let prev = super::super::cache::set_fast_fail_cache(true);
-        let collisions = backend.spec_id_collisions();
-        let listed = backend.list_requirements(false);
-        super::super::cache::set_fast_fail_cache(prev);
-        holder.execute_batch("ROLLBACK").unwrap();
-
-        let err = collisions.unwrap_err();
-        assert!(is_cache_lock_error(&err), "{err:#}");
-        let err = listed.unwrap_err();
-        assert!(is_cache_lock_error(&err), "{err:#}");
-        assert!(backend.cache_snapshot_is_stale().unwrap());
     }
 
     // TASK-1515 review finding 4: if HEAD moved past `to` while the changed
@@ -2914,78 +2721,6 @@ mod tests {
         );
     }
 
-    /// External writer: add `spec_id` claiming `agreed_id` in one store
-    /// commit, behind the cache's back.
-    // trace:TASK-1515 | ai:claude
-    fn task_1515_external_agreed_id_claim(store_root: &Path, spec_id: &str, agreed_id: &str) {
-        let mut claimant = sample_req(spec_id, "claimant");
-        claimant.agreed_id = Some(agreed_id.into());
-        let before = crate::git_ops::head_sha(store_root).unwrap();
-        GitBackend::new(store_root)
-            .unwrap()
-            .add_requirement(claimant)
-            .unwrap();
-        assert_ne!(before, crate::git_ops::head_sha(store_root).unwrap());
-    }
-
-    fn task_1515_assert_ambiguous(result: Result<Option<Requirement>>) {
-        let err = result.expect_err("an ambiguous id must refuse the write");
-        assert!(
-            err.downcast_ref::<crate::id_collisions::AmbiguousIdError>()
-                .is_some(),
-            "{err:#}"
-        );
-    }
-
-    // TASK-1515 round-2 finding 1: write-path id resolution must never be
-    // answered from a stale snapshot. A lock error makes the read path serve
-    // the stale snapshot (which misses an agreed-id collision an external
-    // commit introduced); the resolver must fall back to the full scan.
-    // trace:TASK-1515 | ai:claude
-    #[test]
-    fn task_1515_unambiguous_resolution_ignores_stale_snapshot_on_lock_error() {
-        let dir = tempdir().unwrap();
-        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
-        task_1515_external_agreed_id_claim(&store_root, "FR-2-050", "FR-1-003");
-
-        let holder = rusqlite::Connection::open(&cache_path).unwrap();
-        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
-        let prev = super::super::cache::set_fast_fail_cache(true);
-        let stale_candidates = backend.id_candidates("FR-1-003");
-        let resolved = backend.get_requirement_unambiguous("FR-1-003");
-        super::super::cache::set_fast_fail_cache(prev);
-        holder.execute_batch("ROLLBACK").unwrap();
-
-        assert_eq!(
-            stale_candidates.unwrap().len(),
-            1,
-            "fixture: the stale snapshot does not see the collision"
-        );
-        task_1515_assert_ambiguous(resolved);
-    }
-
-    // TASK-1515 round-2 finding 1, the other stale serve: a live foreign
-    // writer's lock sidecar makes the read path skip the refresh. The write
-    // resolver must still see the collision.
-    // trace:TASK-1515 | ai:claude
-    #[test]
-    fn task_1515_unambiguous_resolution_ignores_stale_snapshot_behind_foreign_writer() {
-        let dir = tempdir().unwrap();
-        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
-        task_1515_external_agreed_id_claim(&store_root, "FR-2-050", "FR-1-003");
-        task_1515_write_foreign_sidecar(&cache_path);
-
-        assert_eq!(
-            backend.id_candidates("FR-1-003").unwrap().len(),
-            1,
-            "fixture: the read path served the stale snapshot"
-        );
-        task_1515_assert_ambiguous(backend.get_requirement_unambiguous("FR-1-003"));
-        // A plain, unambiguous id still resolves through the full scan.
-        let r = backend.get_requirement_unambiguous("FR-1-001").unwrap();
-        assert_eq!(r.unwrap().spec_id.as_deref(), Some("FR-1-001"));
-    }
-
     /// A live (pid 1) foreign writer's lock sidecar beside `cache_path`,
     /// without holding the SQLite lock.
     // trace:TASK-1515 | ai:claude
@@ -3053,23 +2788,54 @@ mod tests {
         .unwrap();
     }
 
-    // TASK-1515 round-2 finding 4: the stale note names the snapshot's store
-    // commit and says only what is known (the cache is busy), not that a
-    // refresh is running.
+    // TASK-1515: a lock error that ends the incremental refresh on a READ
+    // path behaves exactly as before this spec: it falls back to the full
+    // rebuild, whose own lock ladder then fails the command. No stale
+    // snapshot is served, and the cache is left untouched.
     // trace:TASK-1515 | ai:claude
     #[test]
-    fn task_1515_stale_note_names_the_snapshot_commit() {
+    fn task_1515_read_path_lock_error_falls_back_to_full_rebuild_then_fails() {
         let dir = tempdir().unwrap();
-        let (backend, _store_root, _cache_path) = task_1515_backend(dir.path());
-        let sha = backend.cache().source_head_sha().unwrap().unwrap();
-        let note = backend.stale_read_note();
-        assert!(note.starts_with("note: "), "{note}");
-        assert!(note.contains(&sha[..10]), "{note}");
-        assert!(note.contains("the cache is busy"), "{note}");
-        assert!(!note.contains("in progress"), "{note}");
-        assert!(
-            !note.contains("TASK-") && !note.contains("SPIKE-"),
-            "{note}"
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let from = backend.cache().source_head_sha().unwrap().unwrap();
+        let built_at = backend.cache().built_at().unwrap();
+        let to = task_1515_external_retitle(&store_root, "gen1");
+
+        let holder = rusqlite::Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        // Thread-local short ladder, so the test stays fast without touching
+        // process-wide env vars other tests read.
+        let prev = super::super::cache::set_fast_fail_cache(true);
+        let listed = backend.list_summaries(&ListFilter::default());
+        let opened = CachedGitBackend::open(&store_root, &cache_path);
+        super::super::cache::set_fast_fail_cache(prev);
+        holder.execute_batch("ROLLBACK").unwrap();
+
+        for err in [
+            listed.expect_err("a read must fail, not serve a stale snapshot"),
+            opened
+                .err()
+                .expect("the read-path constructor must fail too"),
+        ] {
+            let msg = format!("{err:#}");
+            assert!(is_cache_lock_error(&err), "{msg}");
+            assert!(
+                msg.contains("rebuild cache"),
+                "no full-rebuild fallback: {msg}"
+            );
+        }
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap().as_deref(),
+            Some(from.as_str())
         );
+        assert_eq!(backend.cache().built_at().unwrap(), built_at);
+
+        // Once the lock is free, the next read catches up incrementally.
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap().as_deref(),
+            Some(to.as_str())
+        );
+        assert_eq!(backend.cache().built_at().unwrap(), built_at);
     }
 }

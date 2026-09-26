@@ -1086,11 +1086,6 @@ impl<'a> McpServer<'a> {
     }
 
     fn handle_tools_call(&self, id: &Value, params: &Value) -> JsonRpcResponse {
-        // The server is long-lived: re-arm the one-line stale-cache note (on
-        // stderr, never in the JSON-RPC payload) so each call answered from a
-        // stale snapshot is labelled, not only the first in the process.
-        // trace:TASK-1515 | ai:claude
-        aida_core::CachedGitBackend::rearm_stale_read_note();
         let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let mut arguments = params.get("arguments").cloned().unwrap_or(json!({}));
 
