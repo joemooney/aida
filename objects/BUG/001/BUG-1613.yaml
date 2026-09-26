@@ -9,12 +9,12 @@ description: |-
   - A whole-store save and BulkWriter::finish write metadata.yaml only when a store-level field actually changed, and compare-and-swap it against the copy loaded (refuse with a typed conflict, as object writes do).
   - ID counters are merged monotonically (max of disk and caller), never lowered.
   - Tests: a concurrent feature add and a concurrent counter bump between load and save both survive.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:07:37.946734152Z
-modified_at: 2026-09-26T07:01:50.771510477Z
+modified_at: 2026-09-26T08:13:29.353032480Z
 req_type: Bug
 tags:
 - batch:groom-2026-09-25
@@ -34,6 +34,20 @@ comments:
   created_at: 2026-09-26T07:01:50.771510477Z
   modified_at: 2026-09-26T07:01:50.771510477Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0dcc6-c57f-74a0-9434-e7562e271c7c
+  author: aida-auto-bump
+  timestamp: 2026-09-26T08:13:29.343450716Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0dcc6-c589-7532-a6f8-09330badf512
+  timestamp: 2026-09-26T08:13:29.353030342Z
+  agent: implementer
+  commit_sha: f3a00639f786420ed1486f874f7ec79838e73bd4
+  summary: Completed via merge f3a00639
 execution_mode: drive
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
@@ -43,3 +57,7 @@ filed_at:
   aida_build_sha: c7d35baa35
   vendor: antigravity
   session: 67239b78-62f2-41d8-9600-1eea416800a6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-26T08:13:29.343422965Z
+  completion_sha: f3a00639f786420ed1486f874f7ec79838e73bd4
