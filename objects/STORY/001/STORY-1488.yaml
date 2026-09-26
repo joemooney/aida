@@ -1,0 +1,27 @@
+id: 01a0dfb2-d7e1-7273-9e11-dabe3bf74b86
+spec_id: STORY-1488
+agreed_id: STORY-1488
+title: 'Split aida-cli-lib for build throughput and merge safety: lib.rs (~110k lines) into modules, then the crate into dependency-ordered crates'
+description: |-
+  Operator request (Joe, 2026-09-26): cut lib.rs size to raise throughput. aida-cli-lib is ~406k lines in one crate; lib.rs alone ~110k. Every edit recompiles the whole crate and rebuilds one giant unit-test binary; lib.rs is the top merge-conflict hotspot. Architecture-class: sketch + advisor signoff before code.
+
+  Acceptance:
+  1. Baseline measured: cargo build --timings (clean + incremental after a one-line edit in lib.rs) and the unit-test build time, recorded on this spec.
+  2. Slice 1 (mechanical, no behaviour change): lib.rs split into cohesive modules; no module over ~15k lines; public API and CLI output unchanged; full test suite green; landed in a quiet window with a rebase note for in-flight branches.
+  3. Slice 2+: crate extraction along the measured dependency seams, one crate per slice, each with before/after timings; a split is kept only if it improves incremental build time.
+  4. Template/trace conventions preserved (trace comments move with their code).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T21:50:34.977218919Z
+modified_at: 2026-09-26T21:50:34.977218919Z
+req_type: Story
+filed_at:
+  code_sha: b9a986e9fbe3912a0415963c8344ddca4830b700
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
