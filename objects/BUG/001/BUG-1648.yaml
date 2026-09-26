@@ -14,12 +14,12 @@ description: |-
   - task_1507 history_cache_merge_commit_decodes_like_git_show_cc
   - worktree_handler enter_shell_payload_cd_then_sources_session_env (asserts a /tmp path)
   For each, decide whether it is a test portability bug or a real Windows product bug; fix production where users would hit it. Acceptance: a workflow_dispatch of Cross-platform (nightly) on the branch is green on windows-latest. Extend scripts/portability-rules.json where a rule would have caught the class.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T10:49:48.354461550Z
-modified_at: 2026-09-26T10:50:16.351101765Z
+modified_at: 2026-09-26T10:50:35.456688692Z
 req_type: Bug
 comments:
 - id: 01a0dd56-4f9f-7042-8d4e-09802099fbec
