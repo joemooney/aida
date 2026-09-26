@@ -541,6 +541,15 @@ pub(crate) fn handle_scaffold_command(
             }
             let packs = crate::scaffold_refresh::refresh_agent_packs(&root, dest.as_deref());
             crate::scaffold_refresh::print_refresh_summary(&packs);
+            // A memory-lane project stays a memory lane: no discipline pack,
+            // type protocols, or permission setup. trace:BUG-1662 | ai:claude
+            if crate::scaffold_refresh::is_memory_lane(&root) {
+                println!(
+                    "  {} memory-lane project: refreshed only the memory-lane skills and AGENTS.md block (no discipline pack, type protocols, or permission setup).",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
+                );
+                return Ok(());
+            }
             let seeded = crate::protocol_cmd::seed_missing_protocols(storage)?;
             if seeded > 0 {
                 println!("  {} seeded {seeded} missing type protocol(s)", "+".green());
