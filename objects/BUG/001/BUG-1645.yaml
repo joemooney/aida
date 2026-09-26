@@ -1,0 +1,20 @@
+id: 01a0dd1d-0b63-7543-8f61-d498161c4f13
+spec_id: BUG-1645
+agreed_id: BUG-1645
+title: Skill manifest follow-ups after TASK-1503 (footprint test, pre-STORY-830 memory-lane upgrade nag, partial folder skills, uncommitted manifests, symlinked skill dirs)
+description: 'From TASK-1503''s round-3 strict review. L1: add a test that pins the refresh footprint check (full install, then footprint set to memory-lane, then refresh creates nothing); forcing the check off today leaves the tests green. L2 (medium): a memory-lane project created before STORY-830 has no saved footprint. It gets a complete manifest with about 53 unconfirmed skills, and refresh and doctor then tell the user to run ''aida scaffold upgrade'', which invites the flood. Infer memory-lane from the pack contents, or phrase the hint so it doesn''t encourage a full upgrade. L3: when a supporting file of a folder skill fails to write, SKILL.md is still written last and the skill is recorded; don''t record, or retry. L4: memory-lane init leaves .claude/skills/.aida-delivered and .codex/skills/.aida-delivered uncommitted; add them to the memory-lane commit list (init_cmd.rs ~312-322). L5 (predates this): apply writes through a user-owned symlinked skill directory.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-26T09:47:43.331275848Z
+modified_at: 2026-09-26T09:47:43.331275848Z
+req_type: Bug
+filed_at:
+  code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f9c900b6ff
+  vendor: antigravity
+  session: 67239b78-62f2-41d8-9600-1eea416800a6
