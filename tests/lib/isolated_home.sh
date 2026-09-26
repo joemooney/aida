@@ -10,7 +10,9 @@
 #   3. snapshots the real ~/.aida listing + mtimes,
 #   4. exports a fresh temporary HOME (and AIDA_HOME / XDG_CONFIG_HOME, which
 #      the CLI also consults) and removes it on EXIT,
-#   5. on EXIT re-snapshots the real ~/.aida and fails the script loudly if
+#   5. unsets the ambient session/role env (AIDA_SESSION_*, AIDA_ROLE*, ...)
+#      so tests don't inherit the operator's seat,
+#   6. on EXIT re-snapshots the real ~/.aida and fails the script loudly if
 #      anything the test could plausibly have written changed.
 #
 # "Plausibly written" = every path the run created under the temporary
@@ -50,6 +52,19 @@ aida_isolate_home() {
     export GIT_AUTHOR_EMAIL="${GIT_AUTHOR_EMAIL:-aida-test@example.invalid}"
     export GIT_COMMITTER_NAME="${GIT_COMMITTER_NAME:-aida-test}"
     export GIT_COMMITTER_EMAIL="${GIT_COMMITTER_EMAIL:-aida-test@example.invalid}"
+
+    # Don't inherit the operator's seat: an ambient AIDA_SESSION_ROLE=advisor
+    # (etc.) changes gate outcomes the tests assert. Scripts that need a role
+    # set it per command. AIDA_DEV_* and build paths are left alone.
+    local v
+    unset AIDA_SESSION_ROLE AIDA_SESSION_PURPOSE AIDA_ROLE_INSTANCE \
+        AIDA_PERMISSION_MODE AIDA_SESSION_PROJECT AIDA_USER \
+        AIDA_AUTO_COMPLETE AIDA_AUTO_COMPLETE_TOKEN AIDA_AGENT_OUTPUT
+    for v in $(compgen -e); do
+        case "$v" in
+            AIDA_SESSION_* | AIDA_ROLE*) unset "$v" ;;
+        esac
+    done
 
     trap 'aida_home_guard_exit' EXIT
 }
