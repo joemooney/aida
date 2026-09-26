@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-25T08:03:15.312836590Z
+modified_at: 2026-09-26T05:29:31.032256671Z
 req_type: Task
 tags:
 - agent-launch
@@ -32,6 +32,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): left as a draft for Joe. Part of it shapes the agent permission profile (authority). A decision question was recorded.'
   created_at: 2026-09-25T08:03:15.312836590Z
   modified_at: 2026-09-25T08:03:15.312836590Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dc30-a698-7d61-97a6-04a3ba5484d9
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): re-checked, still Joe''s, but only in part. Binary resolution and the path diagnostics are engineering; the seat Git-write policy and "no Codex approval prompts for routine commands" are permission posture. Recommended: split, approve the portability half now, and decide the permission half separately.'
+  created_at: 2026-09-26T05:29:31.032256671Z
+  modified_at: 2026-09-26T05:29:31.032256671Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
