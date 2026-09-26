@@ -3,13 +3,21 @@ spec_id: BUG-1657
 agreed_id: BUG-1657
 title: aida session reap sees 'no merge signal' for specs landed through batched integration PRs, so finished sessions never reap
 description: 'Observed 2026-09-26: aida session reap --dry-run keeps 59 sessions, nearly all ''no merge signal - operator decision'' for specs that are Completed via batched integration PRs (e.g. BUG-1613, BUG-1650: squash-merged inside ''chore(integrate): batch N'' PRs whose body trailers name the spec). The spec branch is neither an ancestor of main nor has its own merged PR, so reap never sees it as merged, and aida ps carries about 50 hidden stale sessions indefinitely. Fix: accept as a merge signal a Completed spec whose completion came from a merged PR trailer (the store records the completing PR/commit), plus zero branch commits whose patch-id is missing from main. Acceptance: (1) a fixture where a branch is squash-merged via a different integration branch with a (SPEC) trailer is reaped; (2) a branch with a commit not on main is still kept.'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:09:52.935348266Z
-modified_at: 2026-09-26T15:09:52.935348266Z
+modified_at: 2026-09-26T15:10:34.712171659Z
 req_type: Bug
+history:
+- id: 01a0de44-a0d8-7d42-9a68-49cfc2739549
+  author: joe
+  timestamp: 2026-09-26T15:10:34.712165552Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b331809ce75b22e67d4bd86b4ab16500f4b41217
   branch: main
