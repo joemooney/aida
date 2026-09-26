@@ -5,7 +5,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-AIDA="$PROJECT_ROOT/target/debug/aida"
+AIDA="${CARGO_TARGET_DIR:-$PROJECT_ROOT/target}/debug/aida"
+
+# Run under a temporary HOME so the CLI never writes the operator's real
+# ~/.aida (it used to create ~/.aida/roles), and fail if the real one changes.
+# trace:BUG-1634 | ai:claude
+# shellcheck source=lib/isolated_home.sh
+source "$SCRIPT_DIR/lib/isolated_home.sh"
+aida_isolate_home
+
 TEST_DIR=$(mktemp -d)
 
 # Colors
@@ -18,10 +26,10 @@ pass() { echo -e "${GREEN}PASS${NC} $1"; }
 fail() { echo -e "${RED}FAIL${NC} $1"; exit 1; }
 info() { echo -e "${YELLOW}----${NC} $1"; }
 
-cleanup() {
+# Called from the isolated-home EXIT trap before the ~/.aida guard runs.
+aida_test_cleanup() {
     rm -rf "$TEST_DIR"
 }
-trap cleanup EXIT
 
 # Build first
 info "Building aida..."
