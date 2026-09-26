@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T01:20:55.835788652Z
-modified_at: 2026-09-26T18:23:01.947365308Z
+modified_at: 2026-09-26T18:32:17.232193225Z
 req_type: Story
 tags:
 - authority
@@ -39,6 +39,12 @@ comments:
   created_at: 2026-09-26T18:23:01.947365308Z
   modified_at: 2026-09-26T18:23:01.947365308Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0defd-4c50-73f1-8d27-ced54bcaf0ef
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): guided lane, with Joe. Not queued for the drain (it changes seat authority and human-at-TTY floors). execution_mode is already guided; run it with /aida-guided-implement when Joe is at the keyboard.'
+  created_at: 2026-09-26T18:32:17.232193225Z
+  modified_at: 2026-09-26T18:32:17.232193225Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0def4-ce7f-7a71-a26a-0698f546a335
   author: joe
