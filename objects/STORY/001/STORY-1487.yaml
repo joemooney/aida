@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:34:45.334160782Z
-modified_at: 2026-09-26T21:17:41.639274514Z
+modified_at: 2026-09-26T21:51:48.554489110Z
 req_type: Story
 tags:
 - criteria
@@ -41,6 +41,12 @@ comments:
   content: 'OPERATOR DECISION (Joe, 2026-09-26 12:08, accepting the orchestrator''s recommendation): queue the SPIKE-86 work items.'
   created_at: 2026-09-26T19:09:24.955632484Z
   modified_at: 2026-09-26T19:09:24.955632484Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0dfb3-f74a-7783-b834-d01458429035
+  author: joe
+  content: 'DRAFT (uncompiled) on claude/story-1487 @ 2ee9e6c567: new aida-cli-lib/src/criteria_coverage.rs — resolve_target (gap/coverage -> Coverage, else Spec; pure), Share{numerator,denominator} with percent() None on 0 denominators, WindowFigures (window + all time), CoverageReport (serde, --json emits it); (a) git log --no-merges --format=%s [--since] with the shared push_paren_spec_ids_from_line trailer parser; (b) is_work_type (Functional/NonFunctional/ChangeRequest/Bug/Epic/Story/Task/Spike, the corpus.py set) minus is_machine_filed (auto-complete failure title, Review PR-N title, auto-drafted tag, Auto-drafted description) with created_at in window, criteria via criteria::parse_acceptance_criteria; (c) criterion ids matched (uppercased) against criterion-level trace tokens from git grep over all tracked files (report.py pattern), plus criterion_trace_tokens/criterion_traced_specs raw counts; (d) git grep trace:[A-Z]+-[0-9][0-9-]* over *.rs *.ts *.tsx *.py *.sh; filesystem-walk fallback outside a checkout. cli.rs Criteria gains --window-days (default 90); lib.rs dispatch matches resolve_target; docs/cli/08-reporting.md documents the report and the documented check against spike-86-scripts (acceptance 3 handled as a documented check, not a test — needs a build and the pinned commit). Decisions: name is `aida criteria coverage` with `gap` as alias (no new clap subcommand: spec stays a positional so `aida criteria <ID>` is unchanged); trailer detection reuses the AIDA parser (accepts prose after the first id) so a <=1pp drift from the script regex is expected and documented; System/User types excluded like corpus.py. Tests: story_1487_capture_coverage_tests.rs (registered inside criteria_coverage.rs) — gap_and_coverage_are_never_spec_ids, trailer_share_counts_only_trailing_spec_groups, machine_filed_and_non_work_specs_are_excluded, report_figures_have_numerators_and_denominators (pure, incl. JSON fields), no_traces_at_all_reports_zero_of_n (real git repo, handler runs json+human), git_grep_counts_tracked_traces (untracked files excluded, docs tokens counted for (c-raw) only), filesystem_fallback_outside_git, share_percent_is_none_on_empty_denominator. Compile risks to check first: Requirement field names/visibility used by the fixture (spec_id, req_type, created_at, tags: HashSet, title, description) and Requirement::new(String,String); RequirementType variants Principle/Folder; access to the private crate-root fn push_paren_spec_ids_from_line from a child module (allowed by Rust privacy, but verify it is not inside a nested module); Command::Criteria destructuring elsewhere (any other match on Command::Criteria breaks); docs/cli verify-manual/verify-interface-changes checks on the new flag.'
+  created_at: 2026-09-26T21:51:48.554489110Z
+  modified_at: 2026-09-26T21:51:48.554489110Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df94-bb87-78e3-920f-ab77487ad85d
