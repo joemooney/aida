@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:31:55.695978208Z
-modified_at: 2026-09-26T17:47:27.381390380Z
+modified_at: 2026-09-26T18:01:00.403867507Z
 req_type: Bug
 comments:
 - id: 01a0de58-b867-7b53-aad3-2a8f3fb870d8
@@ -28,6 +28,12 @@ comments:
   content: 'Orchestrator correction (proxy for Joe): status reset from completed to done. The branch claude/bug-1658 @ 6895a1a56a is pushed but NOT merged; completion comes from the merge trailer. Fresh review next.'
   created_at: 2026-09-26T17:47:24.960573326Z
   modified_at: 2026-09-26T17:47:24.960573326Z
+  session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0dee0-a8f3-7023-ac16-d111320f2198
+  author: joe
+  content: 'Review (fresh Opus reviewer): APPROVE WITH NITS on 6895a1a56a. (1) Root cause confirmed: current_user_id reads AIDA_USER>USER>USERNAME; every in-crate test setter of those keys goes through EnvVarGuard/EnvVarsGuard/AmbientGuard::hermetic (bug_231, story_1428, story_465, bug_1621, bug670, mailbox_cmd tests), all on the single ENV_LOCK; no raw set_var/remove_var of AIDA_USER/USER/USERNAME anywhere (Command::env calls are child-only). No remaining identity-setter race. (2) pin_queue_user returns EnvVarGuard::set: holds ENV_LOCK for the binding''s lifetime (let _user, not let _), restores prior value on drop before releasing the lock. No nested env guard in the 10 pinned tests or their helpers (project_with, arm_race is a same-thread Rc seam, concurrently_set, open_backend); no hang observed. (3) Diff is additive only (import lines + 10 pin calls + helper); no assertion changed, nothing ignored. (4) Follow-ups, not blockers: task_490_status_in_progress_tests::collect_queue_snapshot_pulls_in_progress_past_display_budget_with_lease resolves current_user_id(None) for the fixture then collect_queue_snapshot re-resolves it, without env_lock (same class); vendor_activity.rs test sets/removes AIDA_CODEX_SESSIONS_DIR with raw set_var outside ENV_LOCK (setenv/getenv data race on POSIX, different key); bug_774/queue_work tests flagged by a crude scan were not individually verified. Nit: pin_queue_user lives in bug_1638_race_seam_tests.rs, a generic helper that arguably belongs in test_env.rs. (5) Run 36257612130 head 6895a1a56a: Build windows-latest success, macos-latest success. Local (Linux, CARGO_BUILD_JOBS=3): bug_1651 7/7 x3, bug_1647 14/14, queue 511/511.'
+  created_at: 2026-09-26T18:01:00.403867507Z
+  modified_at: 2026-09-26T18:01:00.403867507Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 history:
 - id: 01a0de58-7a24-7bf1-a80c-4fe525539a13
