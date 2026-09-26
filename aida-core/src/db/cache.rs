@@ -580,8 +580,11 @@ pub fn fast_fail_cache_enabled() -> bool {
     FAST_FAIL_CACHE.with(|c| c.get())
 }
 
-fn open_connection_with_retry(path: &Path) -> Result<Connection> {
-    match open_connection_inner(path) {
+// BUG-1644: `lock_info_path` is the sidecar `Cache::open` resolved once from
+// the shared cache location; the open's retry ladder observes that same file.
+// trace:BUG-1644 | ai:claude
+fn open_connection_with_retry(path: &Path, lock_info_path: &Path) -> Result<Connection> {
+    match open_connection_inner(path, lock_info_path) {
         Ok(conn) => Ok(conn),
         // BUG-683: a corrupt / non-sqlite `.aida/cache.db` is a no-escape
         // dead-end — every cache-backed read fails, and even `aida cache
@@ -601,7 +604,7 @@ fn open_connection_with_retry(path: &Path) -> Result<Connection> {
             // permissions problem masquerading past the corruption class), fall
             // back to an actionable message rather than the misleading
             // WAL-mode wording.
-            open_connection_inner(path).map_err(|second| {
+            open_connection_inner(path, lock_info_path).map_err(|second| {
                 if is_sqlite_corruption_error(&second) {
                     anyhow::anyhow!(
                         "cache database is unreadable (corrupt?) — delete it to \
@@ -623,8 +626,8 @@ fn open_connection_with_retry(path: &Path) -> Result<Connection> {
 /// the corruption self-heal (BUG-683) can retry the whole open after deleting a
 /// corrupt file.
 // trace:STORY-580 | ai:codex
-fn open_connection_inner(path: &Path) -> Result<Connection> {
-    with_cache_retry(path, "open cache", || {
+fn open_connection_inner(path: &Path, lock_info_path: &Path) -> Result<Connection> {
+    with_cache_retry_observed(lock_info_path, "open cache", false, || {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open cache at {:?}", path))?;
         // AIDA owns retry/backoff timing; rusqlite's default busy handler can
@@ -703,6 +706,7 @@ where
     result
 }
 
+#[cfg(test)]
 fn with_cache_retry<T, F>(cache_path: &Path, action: &str, f: F) -> Result<T>
 where
     F: FnMut() -> Result<T>,
@@ -863,7 +867,7 @@ impl Cache {
         // BUG-1644: resolve the shared lock-info sidecar once for this handle.
         // trace:BUG-1644 | ai:claude
         let lock_info_path = cache_lock_info_path(&path);
-        let conn = open_connection_with_retry(&path)?;
+        let conn = open_connection_with_retry(&path, &lock_info_path)?;
         // Check the recorded schema version BEFORE applying the schema —
         // if the table doesn't exist yet, the meta read silently returns
         // None which falls through to "no migration needed".
@@ -5897,7 +5901,7 @@ mod tests {
         // the file must survive untouched. (No env-var fiddling — that would
         // race sibling tests; the classification is asserted directly by
         // `corruption_detection_excludes_transient_lock_errors`.)
-        let _ = open_connection_with_retry(&cache_path);
+        let _ = open_connection_with_retry(&cache_path, &cache_lock_info_path(&cache_path));
         holder.execute_batch("ROLLBACK").unwrap();
 
         assert!(
@@ -5980,5 +5984,53 @@ mod tests {
             let ids: Vec<&str> = hits.iter().filter_map(|r| r.spec_id.as_deref()).collect();
             assert_eq!(ids, vec!["ADR-3"], "--status {spelling}");
         }
+    }
+
+    /// BUG-1644: a cache write through a sibling worktree's SYMLINKED
+    /// `cache.db` claims the SHARED sidecar beside the main checkout's real
+    /// cache (the path `Cache::open` resolved), never one beside the symlink.
+    /// Built under the canonical temp root (macOS `/var` -> `/private/var`).
+    // trace:BUG-1644 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_with_cache_write_claims_shared_sidecar_through_worktree_symlink() {
+        let root = tempdir().unwrap();
+        let base = std::fs::canonicalize(root.path()).unwrap();
+        let main_aida = base.join("main").join(".aida");
+        let wt_aida = base.join("wt-sibling").join(".aida");
+        std::fs::create_dir_all(&main_aida).unwrap();
+        std::fs::create_dir_all(&wt_aida).unwrap();
+        let main_cache = main_aida.join("cache.db");
+        drop(Cache::open(&main_cache).unwrap());
+        let wt_cache = wt_aida.join("cache.db");
+        std::os::unix::fs::symlink(&main_cache, &wt_cache).unwrap();
+
+        let shared_sidecar = main_aida.join("cache.db.lock-info");
+        let worktree_sidecar = wt_aida.join("cache.db.lock-info");
+        let cache = Cache::open(&wt_cache).unwrap();
+        assert_eq!(cache.lock_info_path(), shared_sidecar.as_path());
+
+        let mut ran = false;
+        with_cache_write(
+            cache.path(),
+            cache.lock_info_path(),
+            "bug-1644 test write",
+            || {
+                ran = true;
+                let info = read_cache_lock_info(&main_cache)?
+                    .expect("the shared sidecar must exist during the write");
+                assert_eq!(info.pid, std::process::id());
+                assert!(
+                    !worktree_sidecar.exists(),
+                    "no sidecar may be written beside the worktree symlink"
+                );
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert!(ran);
+        // Released at the shared location; nothing leaked beside the symlink.
+        assert!(!shared_sidecar.exists());
+        assert!(!worktree_sidecar.exists());
     }
 }
