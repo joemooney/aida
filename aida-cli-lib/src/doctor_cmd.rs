@@ -745,9 +745,22 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
 /// a loadable store.
 // trace:BUG-1675 | ai:claude
 pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> DoctorReport {
+    disk_headroom_light_report_with(project_root, disk_free_bytes)
+}
+
+/// [`disk_headroom_light_report`] with the free-space probe injected, so a
+/// test can pin both verdicts without depending on the host's real disk.
+// trace:BUG-1675 | ai:claude
+fn disk_headroom_light_report_with(
+    project_root: &std::path::Path,
+    free_bytes: impl Fn(&std::path::Path) -> Option<u64>,
+) -> DoctorReport {
     let cfg = crate::read_project_config_value(project_root);
     let min_free_gib = disk_headroom_min_free_gib(cfg.as_ref());
-    DoctorReport::from_findings(scan_disk_headroom(project_root, min_free_gib))
+    DoctorReport::from_findings(disk_headroom_findings(
+        free_bytes(project_root),
+        min_free_gib,
+    ))
 }
 
 #[cfg(test)]
@@ -1172,15 +1185,26 @@ fn disk_headroom_finding(free_bytes: u64, min_free_gib: u64) -> Option<DoctorFin
 /// can't be resolved rather than risk a false positive.
 // trace:STORY-1367 | ai:claude
 fn scan_disk_headroom(project_root: &std::path::Path, min_free_gib: u64) -> Vec<DoctorFinding> {
+    disk_headroom_findings(disk_free_bytes(project_root), min_free_gib)
+}
+
+/// Free bytes on the filesystem holding `project_root` (the longest mount
+/// point that prefixes it), or `None` when no mount resolves.
+// trace:STORY-1367 | ai:claude
+fn disk_free_bytes(project_root: &std::path::Path) -> Option<u64> {
     let disks = sysinfo::Disks::new_with_refreshed_list();
-    let Some(disk) = disks
+    disks
         .iter()
         .filter(|d| project_root.starts_with(d.mount_point()))
         .max_by_key(|d| d.mount_point().as_os_str().len())
-    else {
-        return Vec::new();
-    };
-    disk_headroom_finding(disk.available_space(), min_free_gib)
+        .map(|d| d.available_space())
+}
+
+/// An unresolved filesystem is silent rather than a false positive.
+// trace:BUG-1675 | ai:claude
+fn disk_headroom_findings(free_bytes: Option<u64>, min_free_gib: u64) -> Vec<DoctorFinding> {
+    free_bytes
+        .and_then(|free| disk_headroom_finding(free, min_free_gib))
         .into_iter()
         .collect()
 }
