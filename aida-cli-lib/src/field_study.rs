@@ -87,8 +87,12 @@ const CODE_EXTS: &[&str] = &[
 ];
 
 /// Resolve `~/.aida/field-study.jsonl`. `None` when the home dir is unknown.
+/// Resolves home through `crate::aida_home_dir()` so the `AIDA_HOME` override
+/// is honoured on every platform and agrees with `usage::log_path`; with
+/// `AIDA_HOME` unset it is the same `~/.aida/...` path as before.
+// trace:BUG-1649 | ai:claude
 pub fn log_path() -> Option<PathBuf> {
-    crate::home_dir().map(|h| h.join(".aida").join("field-study.jsonl"))
+    crate::aida_home_dir().map(|h| h.join(".aida").join("field-study.jsonl"))
 }
 
 /// Whether the field study is active. Resolution:
@@ -611,8 +615,10 @@ pub fn summarize(obs: &[RuleObservation]) -> Vec<RuleSummary> {
 
 /// Resolve `~/.aida/auto-complete.jsonl` — the autonomous-drain run log the
 /// drain-vs-interactive join reads. `None` when the home dir is unknown.
+// Same file `auto_complete_telemetry` writes, so resolve it the same way.
+// trace:BUG-1649 | ai:claude
 pub fn auto_complete_path() -> Option<PathBuf> {
-    crate::home_dir().map(|h| h.join(".aida").join("auto-complete.jsonl"))
+    crate::auto_complete_telemetry::log_path()
 }
 
 /// The set of SPEC-IDs that appear as a drained spec in `auto-complete.jsonl`
