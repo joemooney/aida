@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:34:45.334160782Z
-modified_at: 2026-09-26T23:08:03.920235374Z
+modified_at: 2026-09-26T23:38:58.698444407Z
 req_type: Story
 tags:
 - criteria
@@ -53,6 +53,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): (1) acceptance-3 agreement run against spike-86-scripts at a pinned commit -> follow-up after merge (orchestrator-owned, recorded on this spec); (2) add the store head to the cache stamp and (3) carry spec type in SpecCoverage -> TASK-1522 scope; (4) trailer-count drift of <=1 point accepted as documented.'
   created_at: 2026-09-26T23:08:03.920235374Z
   modified_at: 2026-09-26T23:08:03.920235374Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e016-150a-7a22-97e9-f2dcdf4bf82f
+  author: joe
+  content: 'Review: APPROVE (independent, 9c2508d4b0). Acceptance 3 evidence from the review run (HEAD 9c2508d4b0, 90-day window): trailer share 906/1055=85.9% vs spike script 898/1055=85.1% (0.8 pt); authored-specs-with-criteria 446/1316 exact match with corpus.py; all-time trailer 69.6% vs 68.4% (1.2 pt). -> batch 103; polish follow-up filed.'
+  created_at: 2026-09-26T23:38:58.698444407Z
+  modified_at: 2026-09-26T23:38:58.698444407Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df94-bb87-78e3-920f-ab77487ad85d
