@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T10:08:29.309145926Z
-modified_at: 2026-09-26T10:09:01.836817482Z
+modified_at: 2026-09-26T10:24:13.271032783Z
 req_type: Bug
 comments:
 - id: 01a0dd30-8d8c-74e1-a02c-ee3aef034cc2
@@ -16,6 +16,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved and queued. It''s the same class of bug as BUG-1638, and small.'
   created_at: 2026-09-26T10:09:01.836817482Z
   modified_at: 2026-09-26T10:09:01.836817482Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0dd3e-75d7-7521-8ff8-d36d48dba0ae
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): scope expanded with the BUG-1638 strict-review low findings, all in findings promote (lib.rs ~595-622, completion.rs). Acceptance adds: (1) plain promote: if the status write fails after the queue entry was added, remove the entry or report it truthfully, never say ''nothing was changed''. (2) Approved write re-checks status under the lock and refuses when it is terminal (''is now X''). (3) Auto-complete re-promote of an already-Completed spec adds no duplicate comment or history and reports ''already Completed''; refuse on Rejected or Superseded. (4) A committed test pins exactly one ship record per real completion through transition_to_completed_atomically. (5) The --json Refused-line and status-formatting nit at lib.rs ~94160.'
+  created_at: 2026-09-26T10:24:13.271032783Z
+  modified_at: 2026-09-26T10:24:13.271032783Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
 filed_at:
   code_sha: 09a35045a5529f1867b54e5cb974821d0149a832
