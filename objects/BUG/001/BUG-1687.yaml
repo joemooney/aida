@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:44:26.230904362Z
-modified_at: 2026-09-27T14:46:54.050832710Z
+modified_at: 2026-09-27T17:08:01.422889244Z
 req_type: Bug
 tags:
 - reporting cli defer
@@ -36,6 +36,12 @@ comments:
   created_at: 2026-09-27T14:44:42.163730040Z
   modified_at: 2026-09-27T14:44:42.163730040Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e3d6-830e-76b0-8f47-8964d00473e3
+  author: joe
+  content: 'PROXY NOTE (orchestrator, 2026-09-27 10:0x): the orphaned trap-guarded ship script (bug1687-ship-1790526625.sh) completed on its own after the predecessor session stood down: ''restored 4 files'', diff back to 10 files / 344 insertions / 26 deletions, ''ALL DONE''. The worktree /home/joe/ai/wt-bug-1687 therefore holds the UNMODIFIED fix, not sabotaged source -- safe to resume in place. CAVEAT on the red-side proof: PHASE 2 ''RED lib defer'' exited 101 with ''could not compile aida-cli-lib (lib test) due to 2 previous errors'', i.e. the sabotage broke COMPILATION rather than producing a genuinely failing test. A compile error is not proof the tests detect the regression. Before shipping, redo the red side so the sabotaged tree still compiles and the bug_1687/defer tests go RED on assertions.'
+  created_at: 2026-09-27T17:08:01.422889244Z
+  modified_at: 2026-09-27T17:08:01.422889244Z
+  session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
 history:
 - id: 01a0e353-3ff5-7c90-88e4-2cfa5ee01388
   author: joe
