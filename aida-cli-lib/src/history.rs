@@ -1144,6 +1144,25 @@ pub fn collect_event_records(store_path: &Path, opts: &HistoryOpts) -> Result<Ev
     })
 }
 
+// trace:STORY-1477 | ai:codex
+pub(crate) fn render_template_alias(
+    store_path: &Path,
+    opts: &HistoryOpts,
+    oneline: bool,
+) -> Result<String> {
+    let (resolved, _, _) = resolve_history_window(opts, chrono::Utc::now(), &chrono::Local)?;
+    let (events, _, _, _) = collect_filtered_events_sourced(store_path, &resolved)?;
+    Ok(render_events_feed(
+        &events,
+        opts,
+        if oneline {
+            HistoryOutput::Oneline
+        } else {
+            HistoryOutput::Human
+        },
+    ))
+}
+
 /// Returns `(events, archived_hidden_count, window_exhausted)`.
 /// `window_exhausted` is true when the commit walk found at least one more
 /// commit beyond `max_commits` (real history continues past the cap — see

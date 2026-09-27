@@ -97,6 +97,79 @@ Local forms use the offset in effect on that date, so they stay right across a d
 
 ---
 
+#### History layouts and columns
+
+<!-- trace:STORY-1477 | ai:codex -->
+`aida history --since 2h --template '{date:%H:%M} {id} {event}'` prints
+exactly one layout line per event. A value containing `{` is inline; otherwise
+it is a case-sensitive template name. Literal-only strings must be stored as
+named templates in config. `{{` and `}}` escape braces. Custom templates and
+`--fields id,date,event` select the full event feed even for a single SPEC-ID.
+Filters apply first, including `--to`, `--from`, and `--opened`.
+
+Fields/placeholders are `commit,date,author,id,type,priority,title,kind,event,from,to,comment`.
+`commit` is the full SHA; `kind` uses the event ledger names (`status_change`,
+`comments_added`, etc.); `event` is the existing summary. Template dates use
+local time (`{date}` is YYYY-MM-DD HH:MM; `{date:...}` uses validated Chrono
+strftime). The `date` column retains the event's RFC3339 timestamp.
+`title` exists only for Added/Deleted and the new TitleChange value; `priority`
+only for Added and the new PriorityChange value. `comment` is the CommentsAdded
+summary/count, never a body. Other events leave these empty/null. `from`/`to`
+are transition values, including title and priority changes. Nothing is filled
+from today's spec state.
+
+`--fields` preserves caller order in human/TOON columns and JSON `events[]`
+keys, retaining `count`, `window_exhausted`, `source`, and `index_tip`. Unavailable
+values are empty cells or JSON null. It accepts `--full`/`events` and every
+output encoding, but rejects `--oneline`, `--kind`, and `--template`.
+Templates reject `--fields`, `--oneline`, `--full`/`events`, `--kind`, `--json`,
+and explicit TOON/JSON encoding. Pipe capture alone does not prevent a template;
+use `--format human` to override an explicit environment encoding.
+
+Builtins `full` and `oneline` are legacy mode aliases, including headers,
+footers and window selection, byte-identical to their flags when unshadowed.
+`builtin:full` and `builtin:oneline` always bypass shadowing. `compact` and
+`approvals` are ordinary built-in formats; `approvals` does not add a filter
+(use `--to approved`). Unflagged history behavior stays unchanged.
+
+```sh
+aida history --template '{date:%H:%M} {id} {event}' --save-as-template compact
+aida history --template '{id} {from} -> {to}' --to approved --save-as-template project:approvals
+aida history --template project:approvals --to approved
+aida history templates
+aida history templates rm user:compact
+```
+
+User templates live in `~/.aida/config.toml`; project templates in the tracked
+project-root `.aida/config.toml` (the current sibling worktree's file). Both use:
+
+```toml
+[history.templates]
+approvals = "{date:%Y-%m-%d} {id} {event}"
+```
+
+Resolution is user → project → builtin; qualifiers bypass that order. Listing
+shows each scoped name, raw format, and shadowing scope. Template listing and
+removal do not support JSON; `--format json` is refused before config access.
+Save defaults to user; removal requires explicit `user:` or `project:`.
+Builtins are read-only; there is no `global:`. Names use `[A-Za-z][A-Za-z0-9_-]*`, at most 64 ASCII bytes.
+Save requires an inline template on the same run; existing entries in that
+scope require `--force`, which is invalid without save. Validation and successful
+query rendering precede mutation. Project mutations print a commit reminder.
+Unrelated TOML content/comments are preserved; malformed config is an error;
+there is no migration or read-time rewrite. Inline `history = { keep = 1 }`
+tables also support save/overwrite/remove while retaining their other values.
+
+Dates use the feed's existing local minute precision. Formatting does not restore
+discarded seconds or offsets: during an ambiguous local DST hour, wall-clock
+formats still work but offset-dependent directives fail explicitly.
+
+Templates allow up to 4096 bytes, no literal controls/newlines, and rendered
+lines up to 16384 bytes. Substituted controls/newlines are normalized to spaces.
+There are no expressions, environment expansion, recursive expansion, shell
+commands, arbitrary field paths, saved filters, or MCP save/remove operations.
+
+
 ### `aida report`
 
 **One line** — generate a structured project report (currently: AI-integration status).

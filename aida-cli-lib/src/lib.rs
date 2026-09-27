@@ -179,6 +179,7 @@ mod health_cmd;
 mod health_metrics;
 mod health_vitals_cmd;
 mod history;
+mod history_layout;
 // trace:TASK-1507 | ai:claude
 mod history_cache;
 mod human_audit;

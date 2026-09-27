@@ -8108,7 +8108,25 @@ pub enum UpgradeCommand {
 pub enum HistoryCommand {
     /// Switch to per-event chronological mode.
     // trace:STORY-1028 | ai:codex
-    Events,
+    Events {
+        /// Output structured event JSON.
+        // trace:STORY-1477 | ai:codex — JSON belongs to event views, not management.
+        #[clap(long, conflicts_with = "template")]
+        json: bool,
+    },
+    /// List scoped templates and shadowing; builtins full/oneline are legacy mode aliases.
+    // trace:STORY-1477 | ai:codex
+    Templates {
+        #[clap(subcommand)]
+        cmd: Option<HistoryTemplatesCommand>,
+    },
+}
+
+// trace:STORY-1477 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum HistoryTemplatesCommand {
+    /// Remove exactly user:NAME or project:NAME (explicit scope required).
+    Rm { name: String },
 }
 
 // trace:STORY-248 | ai:claude
@@ -12868,6 +12886,30 @@ pub enum Command {
         #[clap(value_name = "SPEC_ID", conflicts_with = "id")]
         spec: Option<String>,
 
+        /// Human event layout: a name (user > project > builtin), or inline when it
+        /// contains `{`. Fields: commit,date[:strftime],author,id,type,priority,title,
+        /// kind,event,from,to,comment. Escape {{/}}. Title is Added/Deleted/TitleChange;
+        /// priority is Added/PriorityChange; otherwise empty. Comment is a count/summary,
+        /// never a body. No literal newlines; max 4096 bytes, rendered line 16384 bytes.
+        // trace:STORY-1477 | ai:codex
+        #[clap(long, global = true, conflicts_with_all = ["fields", "oneline", "full", "events", "kind"])]
+        template: Option<String>,
+
+        /// Ordered event columns: commit,date,author,id,type,priority,title,kind,event,
+        /// from,to,comment. Selects the full feed in human/TOON/JSON. Missing values
+        /// are empty cells or JSON null; title/priority/comment are event-local.
+        #[clap(long, global = true, conflicts_with_all = ["oneline", "kind"])]
+        fields: Option<String>,
+
+        /// Save the inline template as [user:|project:]NAME; user is the default.
+        /// Names: [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing.
+        #[clap(long, global = true, requires = "template")]
+        save_as_template: Option<String>,
+
+        /// Overwrite a template in the selected scope (only with --save-as-template).
+        #[clap(long, global = true, requires = "save_as_template")]
+        force: bool,
+
         /// Number of items to show. In digest mode (default) this caps
         /// the number of distinct requirements; in events mode it
         /// caps the number of decoded events.
@@ -12891,7 +12933,7 @@ pub enum Command {
         /// commit; useful for inspecting one requirement closely with
         /// --id, less useful as a general overview. `--full` is the more
         /// discoverable spelling of the same mode.
-        #[clap(long, hide = true)]
+        #[clap(long, hide = true, global = true)]
         events: bool,
 
         /// The complete edit/event trail — every status change, comment,
@@ -13046,7 +13088,7 @@ pub enum Command {
         /// `--format json` is the same.
         // trace:BUG-1631 | ai:claude
         // trace:BUG-1635 | ai:claude
-        #[clap(long, global = true)]
+        #[clap(long, conflicts_with = "template")]
         json: bool,
 
         /// Include archived AND deferred requirements (everything-escape-hatch).
@@ -15379,7 +15421,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 ..
             }
         ));
@@ -15400,7 +15442,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 id: Some(ref id),
                 ..
             } if id == "BUG-1474"
@@ -15411,7 +15453,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 id: Some(ref id),
                 ..
             } if id == "BUG-1474"
@@ -15431,7 +15473,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 id: Some(ref id),
                 status_changes: true,
                 ..
@@ -15485,7 +15527,7 @@ mod tests {
             cli.command,
             Command::History {
                 spec: None,
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 ..
             }
         ));
