@@ -48,7 +48,8 @@ relationships:
   target_id: 01a09395-1a21-7ca0-b624-e7c61ae1051d
   created_at: 2026-09-12T03:07:06.152012139Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a093a5-680b-7570-85a5-7505dae26e7d
   created_at: 2026-09-12T03:24:50.918464289Z
   created_by: joe

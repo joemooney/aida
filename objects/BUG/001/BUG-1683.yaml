@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:24:57.765790728Z
-modified_at: 2026-09-27T02:12:13.130529465Z
+modified_at: 2026-09-27T02:23:11.630217673Z
 req_type: Bug
 comments:
 - id: 01a0e07a-194d-7082-bb95-7e42ae4b61cc
@@ -112,3 +112,13 @@ comments:
   content: 'First-class verdict persistence confirmed: aida review record succeeded on retry, recording APPROVED for branch bug-1683 at 645c260d6206cbfaaa969d5305bc2eefd3f922cf in .aida/review-verdicts/BUG-1683.json. Detailed independent evidence and validation limits are in the preceding review comment. CI was still pending at the reviewed-head check; no implementation edits or merge.'
   created_at: 2026-09-27T02:12:13.130513991Z
   modified_at: 2026-09-27T02:12:13.130513991Z
+- id: 01a0e0ac-6d0e-74d0-b743-6979dd4a20b0
+  author: mcp
+  content: |-
+    PASS TO BATCH INTEGRATOR — BUG-1683 / PR #2222, post-103 integration batch. Independent advisor merge-readiness gate at head 645c260d6206cbfaaa969d5305bc2eefd3f922cf.
+
+    Verified the live PR head exactly matches the first-class APPROVED review verdict's reviewed_sha and the reviewer's detailed no-blocking-findings comment. The earlier ADVISOR SIGNOFF approved the bounded design with four binding amendments; the independent review verifies their implementation and targeted evidence. GitHub reports PR OPEN, non-draft, MERGEABLE/CLEAN, base main, title "[AI:codex] fix(drain): retain live locks regardless of launch age (BUG-1683)" with the required trailing BUG-1683 trailer. At this exact head, Build (ubuntu-latest) and merge-hold-gate are completed SUCCESS; the release job is intentionally SKIPPED. GitHub has no unresolved review threads or PR comments/labels indicating an open finding.
+
+    PASS TO BATCH INTEGRATOR only. Per Joe's batching preference, HOLD STANDALONE MERGE. Retain this branch for a post-103 integration batch; integrator should recheck head, CI, mergeability, and findings at batch time. This advisor did not merge, edit code, or dispatch.
+  created_at: 2026-09-27T02:23:11.630185488Z
+  modified_at: 2026-09-27T02:23:11.630185488Z
