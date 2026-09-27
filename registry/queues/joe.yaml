@@ -40,3 +40,11 @@
   added_at: 2026-09-27T07:56:14.391569957Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e0a8-e5e6-7530-afce-26cdf3b9c862
+  position: 29000
+  added_by: joe
+  note: Confirmed current-main Git-walk far-future bound bug; acceptance now requires 2100 regression and indexed parity.
+  added_at: 2026-09-27T08:12:15.399387129Z
+  for_role: implementer
+  added_by_machine: imac
