@@ -294,26 +294,24 @@ fn recorded_request_changes_blocks_until_a_commit_lands() {
 /// handshake into the checkout, invisible to the orchestrator. Env mutation →
 /// serialized by the same guard the other env-sensitive tests use.
 // trace:BUG-802 | ai:claude
+// trace:TASK-1532 | ai:agy
 #[test]
 fn drive_root_env_anchor_beats_project_root_discovery() {
-    let _guard = crate::test_env::env_lock();
     let drive = tempfile::tempdir().unwrap();
-    std::env::set_var("AIDA_DRIVE_ROOT", drive.path());
+    let _guard = crate::test_env::EnvVarGuard::set("AIDA_DRIVE_ROOT", drive.path());
     let resolved = crate::drive_root_or_project_root().unwrap();
     assert_eq!(resolved, drive.path());
-    std::env::remove_var("AIDA_DRIVE_ROOT");
 }
 
 #[test]
 fn a_dangling_drive_root_falls_back_rather_than_writing_into_the_void() {
-    let _guard = crate::test_env::env_lock();
-    std::env::set_var("AIDA_DRIVE_ROOT", "/nonexistent/definitely/not/here");
+    let _guard =
+        crate::test_env::EnvVarGuard::set("AIDA_DRIVE_ROOT", "/nonexistent/definitely/not/here");
     // Must not error out or return the bogus path — fall back to discovery.
     let resolved = crate::drive_root_or_project_root();
     if let Ok(p) = resolved {
         assert_ne!(p, std::path::Path::new("/nonexistent/definitely/not/here"));
     }
-    std::env::remove_var("AIDA_DRIVE_ROOT");
 }
 
 /// What `record --pr` writes must be exactly what phase 4 parses.
@@ -757,21 +755,22 @@ fn the_sweep_skips_the_drive_root_and_garbage() {
 /// run `aida review record` from; without it, nothing is appended.
 #[test]
 fn reviewer_prompt_anchor_names_the_absolute_verdict_path() {
-    let _guard = crate::test_env::env_lock();
-    std::env::set_var(
-        "AIDA_REVIEW_VERDICT_FILE",
-        "/home/u/proj/.aida/review-verdicts/PR-7.json",
-    );
-    let suffix = crate::queue_cmd::reviewer_verdict_anchor_suffix().expect("suffix renders");
-    assert!(
-        suffix.contains("/home/u/proj/.aida/review-verdicts/PR-7.json"),
-        "anchor must carry the exact absolute verdict path: {suffix}"
-    );
-    assert!(
-        suffix.contains("from `/home/u/proj`"),
-        "anchor must name the drive root to run `review record` from: {suffix}"
-    );
-    std::env::remove_var("AIDA_REVIEW_VERDICT_FILE");
+    {
+        let _guard = crate::test_env::EnvVarGuard::set(
+            "AIDA_REVIEW_VERDICT_FILE",
+            "/home/u/proj/.aida/review-verdicts/PR-7.json",
+        );
+        let suffix = crate::queue_cmd::reviewer_verdict_anchor_suffix().expect("suffix renders");
+        assert!(
+            suffix.contains("/home/u/proj/.aida/review-verdicts/PR-7.json"),
+            "anchor must carry the exact absolute verdict path: {suffix}"
+        );
+        assert!(
+            suffix.contains("from `/home/u/proj`"),
+            "anchor must name the drive root to run `review record` from: {suffix}"
+        );
+    }
+    let _guard = crate::test_env::EnvVarGuard::unset("AIDA_REVIEW_VERDICT_FILE");
     assert!(
         crate::queue_cmd::reviewer_verdict_anchor_suffix().is_none(),
         "no env, no anchor"
@@ -889,51 +888,56 @@ fn approved_verdict_still_at_the_reviewed_sha_proceeds() {
 
 #[test]
 fn from_pr_reviewer_prompt_names_contract_and_done_is_expected() {
-    let _guard = crate::test_env::env_lock();
-    std::env::set_var("AIDA_FROM_PR_REVIEW", "1");
-    std::env::set_var("AIDA_FROM_PR_NUMBER", "42");
-    std::env::set_var(
-        "AIDA_FROM_PR_HEAD_SHA",
-        "deadbeef0000000000000000000000000000beef",
-    );
-    std::env::set_var(
-        "AIDA_REVIEW_VERDICT_FILE",
-        "/home/u/proj/.aida/review-verdicts/PR-42.json",
-    );
+    {
+        let _guard = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_FROM_PR_REVIEW", "1"),
+            ("AIDA_FROM_PR_NUMBER", "42"),
+            (
+                "AIDA_FROM_PR_HEAD_SHA",
+                "deadbeef0000000000000000000000000000beef",
+            ),
+            (
+                "AIDA_REVIEW_VERDICT_FILE",
+                "/home/u/proj/.aida/review-verdicts/PR-42.json",
+            ),
+        ]);
 
-    let suffix =
-        crate::queue_cmd::reviewer_from_pr_contract_suffix().expect("from-pr suffix renders");
-    assert!(suffix.contains("PR #42"), "{suffix}");
-    assert!(
-        suffix.contains("deadbeef0000000000000000000000000000beef"),
-        "{suffix}"
-    );
-    assert!(
-        suffix.contains("/home/u/proj/.aida/review-verdicts/PR-42.json"),
-        "{suffix}"
-    );
-    assert!(suffix.contains("Done is expected"), "{suffix}");
-    assert!(suffix.contains("do not run `aida queue done`"), "{suffix}");
-    // BUG-1186: the envelope now travels with EVERY drain review, so the seat
-    // rule must be explicit — a rework note is not the reviewer's instruction.
-    assert!(suffix.contains("you never implement"), "{suffix}");
-    assert!(suffix.contains("no pushes to the PR branch"), "{suffix}");
+        let suffix =
+            crate::queue_cmd::reviewer_from_pr_contract_suffix().expect("from-pr suffix renders");
+        assert!(suffix.contains("PR #42"), "{suffix}");
+        assert!(
+            suffix.contains("deadbeef0000000000000000000000000000beef"),
+            "{suffix}"
+        );
+        assert!(
+            suffix.contains("/home/u/proj/.aida/review-verdicts/PR-42.json"),
+            "{suffix}"
+        );
+        assert!(suffix.contains("Done is expected"), "{suffix}");
+        assert!(suffix.contains("do not run `aida queue done`"), "{suffix}");
+        // BUG-1186: the envelope now travels with EVERY drain review, so the seat
+        // rule must be explicit — a rework note is not the reviewer's instruction.
+        assert!(suffix.contains("you never implement"), "{suffix}");
+        assert!(suffix.contains("no pushes to the PR branch"), "{suffix}");
 
-    let mut prompt = "/aida-review --pr 42".to_string();
-    crate::queue_cmd::append_reviewer_prompt_suffixes(&mut prompt);
-    assert!(
-        prompt.starts_with("/aida-review --pr 42\n\nFrom-PR review contract:"),
-        "{prompt}"
-    );
-    assert!(
-        prompt.contains("Verdict anchor (do not relocate)"),
-        "{prompt}"
-    );
+        let mut prompt = "/aida-review --pr 42".to_string();
+        crate::queue_cmd::append_reviewer_prompt_suffixes(&mut prompt);
+        assert!(
+            prompt.starts_with("/aida-review --pr 42\n\nFrom-PR review contract:"),
+            "{prompt}"
+        );
+        assert!(
+            prompt.contains("Verdict anchor (do not relocate)"),
+            "{prompt}"
+        );
+    }
 
-    std::env::remove_var("AIDA_FROM_PR_REVIEW");
-    std::env::remove_var("AIDA_FROM_PR_NUMBER");
-    std::env::remove_var("AIDA_FROM_PR_HEAD_SHA");
-    std::env::remove_var("AIDA_REVIEW_VERDICT_FILE");
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_FROM_PR_REVIEW", None),
+        ("AIDA_FROM_PR_NUMBER", None),
+        ("AIDA_FROM_PR_HEAD_SHA", None),
+        ("AIDA_REVIEW_VERDICT_FILE", None),
+    ]);
     assert!(
         crate::queue_cmd::reviewer_from_pr_contract_suffix().is_none(),
         "without from-pr env, no contract suffix"

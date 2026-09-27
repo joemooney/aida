@@ -134,13 +134,11 @@ fn publish_fixture_receipt(
         .expect("phase child inherits the receipt path");
     assert_eq!(std::path::PathBuf::from(&inherited), receipt);
 
-    let previous = std::env::var_os(ORCHESTRATED_LEASE_RECEIPT_ENV);
-    std::env::set_var(ORCHESTRATED_LEASE_RECEIPT_ENV, &inherited);
-    let result = publish_orchestrated_lease_receipt_from_env(Some(claude_id), lease);
-    match previous {
-        Some(value) => std::env::set_var(ORCHESTRATED_LEASE_RECEIPT_ENV, value),
-        None => std::env::remove_var(ORCHESTRATED_LEASE_RECEIPT_ENV),
-    }
+    let result = {
+        // trace:TASK-1532 | ai:agy
+        let _guard = crate::test_env::EnvVarGuard::set(ORCHESTRATED_LEASE_RECEIPT_ENV, &inherited);
+        publish_orchestrated_lease_receipt_from_env(Some(claude_id), lease)
+    };
     result.unwrap();
     assert!(
         receipt.is_file(),

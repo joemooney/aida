@@ -24,6 +24,7 @@
 //! local mutex. trace:TASK-521 trace:BUG-697 | ai:claude
 
 use std::ffi::{OsStr, OsString};
+use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 /// Global mutex serialising every env-var swap that routes through
@@ -120,6 +121,26 @@ impl EnvVarsGuard {
             _guard: guard,
         }
     }
+
+    pub(crate) fn set_key(&mut self, key: &'static str, value: impl AsRef<OsStr>) {
+        if !self.prev.iter().any(|(k, _)| *k == key) {
+            self.prev.push((key, std::env::var_os(key)));
+        }
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::set_var(key, value);
+        }
+    }
+
+    pub(crate) fn unset_key(&mut self, key: &'static str) {
+        if !self.prev.iter().any(|(k, _)| *k == key) {
+            self.prev.push((key, std::env::var_os(key)));
+        }
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::remove_var(key);
+        }
+    }
 }
 
 impl Drop for EnvVarsGuard {
@@ -193,6 +214,33 @@ impl EnvVarGuard {
         #[allow(unused_unsafe)]
         unsafe {
             std::env::remove_var(self.key);
+        }
+    }
+
+    /// Acquire the crate-wide env lock, prepend `dir` to `PATH`, and restore
+    /// the previous `PATH` on drop. Prepending (instead of overwriting) keeps
+    /// existing PATH binaries reachable from concurrent subprocesses.
+    // trace:TASK-1532 | ai:agy
+    pub(crate) fn prepend_path(dir: impl AsRef<Path>) -> Self {
+        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let prev = std::env::var_os("PATH");
+        let new = match &prev {
+            Some(v) => {
+                let mut s = std::ffi::OsString::from(dir.as_ref().as_os_str());
+                s.push(":");
+                s.push(v);
+                s
+            }
+            None => dir.as_ref().as_os_str().to_os_string(),
+        };
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::set_var("PATH", &new);
+        }
+        Self {
+            key: "PATH",
+            prev,
+            _guard: guard,
         }
     }
 }
@@ -430,4 +478,232 @@ mod tests {
         drop(g);
         assert!(std::env::var(KEY).is_err());
     }
+
+    /// TASK-1532 acceptance 2: A source-scan test fails on any raw
+    /// set_var/remove_var in test code outside the helpers.
+    // trace:TASK-1532 | ai:agy
+    #[test]
+    fn no_raw_env_writes_in_test_code() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut offenders = scan_raw_env_writes_in_dir(&manifest_dir.join("src"));
+        if manifest_dir.join("tests").is_dir() {
+            offenders.extend(scan_raw_env_writes_in_dir(&manifest_dir.join("tests")));
+        }
+        assert!(
+            offenders.is_empty(),
+            "found raw env::set_var / remove_var in test code outside helpers:\n{}",
+            offenders.join("\n")
+        );
+    }
+}
+
+/// Scan `src_dir` for raw `env::set_var` / `env::remove_var` in test code.
+pub(crate) fn scan_raw_env_writes_in_dir(src_dir: &Path) -> Vec<String> {
+    let mut offenders = Vec::new();
+    let mut stack = vec![src_dir.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().is_some_and(|e| e == "rs") {
+                let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if file_name == "test_env.rs" || file_name == "test_home.rs" {
+                    continue;
+                }
+                let is_test_file = p.components().any(|c| c.as_os_str() == "tests");
+                let content = match std::fs::read_to_string(&p) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+
+                let lines: Vec<&str> = content.lines().collect();
+                if is_test_file {
+                    for (i, line) in lines.iter().enumerate() {
+                        let trimmed = line.trim_start();
+                        if trimmed.starts_with("//")
+                            || trimmed.starts_with("*")
+                            || trimmed.starts_with("/*")
+                        {
+                            continue;
+                        }
+                        if line.contains("allow-raw-env-write:") {
+                            continue;
+                        }
+                        if line.contains("env::set_var(") || line.contains("env::remove_var(") {
+                            offenders.push(format!("{}:{}: {}", p.display(), i + 1, line.trim()));
+                        }
+                    }
+                } else {
+                    // Scan #[cfg(...test...)] mod blocks
+                    let mut idx = 0;
+                    while idx < content.len() {
+                        let rest = &content[idx..];
+                        let pos = match rest.find("#[cfg(") {
+                            Some(p) => idx + p,
+                            None => break,
+                        };
+                        let bracket_close = match content[pos..].find(']') {
+                            Some(b) => pos + b,
+                            None => {
+                                idx = pos + "#[cfg(".len();
+                                continue;
+                            }
+                        };
+                        let attr = &content[pos..=bracket_close];
+                        if !attr.contains("test") {
+                            idx = bracket_close + 1;
+                            continue;
+                        }
+                        let after_cfg = bracket_close + 1;
+                        if let Some(brace_at) = find_mod_block_brace(&content, after_cfg) {
+                            if let Some(end_brace) = find_matching_brace(&content, brace_at) {
+                                let block = &content[brace_at..end_brace];
+                                let start_line = content[..brace_at].matches('\n').count() + 1;
+                                for (j, line) in block.lines().enumerate() {
+                                    let trimmed = line.trim_start();
+                                    if trimmed.starts_with("//")
+                                        || trimmed.starts_with("*")
+                                        || trimmed.starts_with("/*")
+                                    {
+                                        continue;
+                                    }
+                                    if line.contains("allow-raw-env-write:") {
+                                        continue;
+                                    }
+                                    if line.contains("env::set_var(")
+                                        || line.contains("env::remove_var(")
+                                    {
+                                        offenders.push(format!(
+                                            "{}:{}: {}",
+                                            p.display(),
+                                            start_line + j,
+                                            line.trim()
+                                        ));
+                                    }
+                                }
+                                idx = end_brace;
+                                continue;
+                            }
+                        }
+                        idx = after_cfg;
+                    }
+                }
+            }
+        }
+    }
+
+    offenders
+}
+
+fn find_mod_block_brace(source: &str, start: usize) -> Option<usize> {
+    let mut i = start;
+    let len = source.len();
+    while i < len {
+        let rest = &source[i..];
+        if let Some(c) = rest.chars().next() {
+            if c.is_whitespace() {
+                i += c.len_utf8();
+                continue;
+            }
+        }
+        if rest.starts_with("//") {
+            i = rest.find('\n').map_or(len, |p| i + p);
+            continue;
+        }
+        if rest.starts_with("/*") {
+            if let Some(p) = rest.find("*/") {
+                i += p + 2;
+                continue;
+            } else {
+                return None;
+            }
+        }
+        if rest.starts_with('#') {
+            if let Some(bracket_open) = rest.find('[') {
+                if let Some(bracket_close) = rest[bracket_open..].find(']') {
+                    i += bracket_open + bracket_close + 1;
+                    continue;
+                }
+            }
+            return None;
+        }
+        if rest.starts_with("mod ") || rest.starts_with("mod\t") || rest.starts_with("mod\n") {
+            let semi = rest.find(';');
+            let brace = rest.find('{');
+            match (semi, brace) {
+                (Some(s), Some(b)) if b < s => return Some(i + b),
+                (None, Some(b)) => return Some(i + b),
+                _ => return None,
+            }
+        }
+        break;
+    }
+    None
+}
+
+fn find_matching_brace(source: &str, open_brace: usize) -> Option<usize> {
+    let mut depth = 0i32;
+    let mut i = open_brace;
+    let len = source.len();
+
+    while i < len {
+        let rest = &source[i..];
+        if rest.starts_with("//") {
+            i = rest.find('\n').map_or(len, |p| i + p);
+            continue;
+        }
+        if rest.starts_with("/*") {
+            if let Some(p) = rest.find("*/") {
+                i += p + 2;
+                continue;
+            } else {
+                return None;
+            }
+        }
+        if rest.starts_with('"') {
+            i += 1;
+            while i < len {
+                if source.as_bytes()[i] == b'\\' {
+                    i += 2;
+                } else if source.as_bytes()[i] == b'"' {
+                    i += 1;
+                    break;
+                } else {
+                    i += 1;
+                }
+            }
+            continue;
+        }
+        if rest.starts_with('\'') {
+            i += 1;
+            while i < len {
+                if source.as_bytes()[i] == b'\\' {
+                    i += 2;
+                } else if source.as_bytes()[i] == b'\'' {
+                    i += 1;
+                    break;
+                } else {
+                    i += 1;
+                }
+            }
+            continue;
+        }
+        let c = rest.chars().next().unwrap();
+        if c == '{' {
+            depth += 1;
+        } else if c == '}' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(i + 1);
+            }
+        }
+        i += c.len_utf8();
+    }
+    None
 }

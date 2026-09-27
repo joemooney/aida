@@ -166,6 +166,9 @@ pub mod yaml_helpers;
 // trace:BUG-1666 | ai:claude
 #[cfg(test)]
 pub(crate) static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+// trace:TASK-1532 | ai:agy
+#[cfg(test)]
+pub(crate) mod test_env;
 
 // Re-export commonly used types
 pub use ai::{

@@ -375,12 +375,10 @@ fn bug_1624_apply_session_env_to_process_ignores_non_allowlisted_names() {
     // Restore every name the hostile body carries even if the allowlist
     // regresses and this test fails, so a leak can't poison later tests.
     // trace:BUG-1627 | ai:claude
-    let _restore =
+    // trace:TASK-1532 | ai:agy
+    let mut _restore =
         crate::test_env::EnvVarsGuard::snapshot(&[VAR, "PATH", "LD_PRELOAD", "PROMPT_COMMAND"]);
-    #[allow(unused_unsafe)]
-    unsafe {
-        std::env::remove_var(VAR);
-    }
+    _restore.unset_key(VAR);
     let before_path = std::env::var_os("PATH");
     let before_preload = std::env::var_os("LD_PRELOAD");
     let applied = apply_session_env_to_process(&format!(

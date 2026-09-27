@@ -3776,11 +3776,11 @@ mod tests {
         assert_eq!(schedule_ledger::load_all(&store).len(), 3);
     }
 
+    // trace:TASK-1532 | ai:agy
     #[test]
     fn min_gap_suppresses_recent_tick() {
         let tmp = tempfile::tempdir().unwrap();
-        let _guard = crate::test_env::env_lock();
-        std::env::set_var("AIDA_HOME", tmp.path());
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         std::fs::write(
             tmp.path().join(".aida/config.toml"),
@@ -3802,7 +3802,6 @@ enabled = true
         };
         save_state(tmp.path(), &state).unwrap();
         let lines = tick(tmp.path(), false, None).unwrap();
-        std::env::remove_var("AIDA_HOME");
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains("suppressed by min-gap"));
     }
@@ -3814,8 +3813,7 @@ enabled = true
     #[test]
     fn bound_global_schedule_log_leaves_small_file_untouched() {
         let tmp = tempfile::tempdir().unwrap();
-        let _guard = crate::test_env::env_lock();
-        std::env::set_var("AIDA_HOME", tmp.path());
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         let log = tmp.path().join(".aida").join("schedule-tick.log");
         std::fs::write(&log, "small content\n").unwrap();
@@ -3823,15 +3821,13 @@ enabled = true
         bound_global_schedule_log();
 
         let body = std::fs::read_to_string(&log).unwrap();
-        std::env::remove_var("AIDA_HOME");
         assert_eq!(body, "small content\n", "well under the cap → untouched");
     }
 
     #[test]
     fn bound_global_schedule_log_truncates_when_over_cap() {
         let tmp = tempfile::tempdir().unwrap();
-        let _guard = crate::test_env::env_lock();
-        std::env::set_var("AIDA_HOME", tmp.path());
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         let log = tmp.path().join(".aida").join("schedule-tick.log");
         // The exact repeated-failure shape BUG-1600 produced: the same
@@ -3849,7 +3845,6 @@ enabled = true
         bound_global_schedule_log();
 
         let after = std::fs::read_to_string(&log).unwrap();
-        std::env::remove_var("AIDA_HOME");
         assert!(
             (after.len() as u64) <= GLOBAL_SCHEDULE_LOG_MAX_BYTES,
             "must be at/under the cap after truncation: {} bytes",
@@ -3870,8 +3865,7 @@ enabled = true
     #[test]
     fn tick_bounds_global_schedule_log_for_timer_but_not_hook_invocation() {
         let tmp = tempfile::tempdir().unwrap();
-        let _guard = crate::test_env::env_lock();
-        std::env::set_var("AIDA_HOME", tmp.path());
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         let log = tmp.path().join(".aida").join("schedule-tick.log");
         let line = "error: unsupported\n";
@@ -3893,7 +3887,6 @@ enabled = true
         // crontab entry uses) bounds it.
         let _ = tick(tmp.path(), false, None).unwrap();
         let after_timer = std::fs::metadata(&log).unwrap().len();
-        std::env::remove_var("AIDA_HOME");
         assert!(
             after_timer <= GLOBAL_SCHEDULE_LOG_MAX_BYTES,
             "a non-hook (timer/cron) tick must bound the log: {after_timer} bytes"
@@ -4921,8 +4914,7 @@ every = "1h"
     #[test]
     fn due_seat_jobs_reads_registry_and_ledger_file_only() {
         let tmp = tempfile::tempdir().unwrap();
-        let _guard = crate::test_env::env_lock();
-        std::env::set_var("AIDA_HOME", tmp.path());
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         std::fs::write(
             tmp.path().join(".aida/config.toml"),
@@ -4972,7 +4964,6 @@ enabled = true
         assert_eq!(due[0].reason, "on QueueDrained");
         // No seat filter → both.
         assert_eq!(due_seat_jobs(tmp.path(), None).len(), 2);
-        std::env::remove_var("AIDA_HOME");
     }
 
     // trace:STORY-1226 | ai:claude
@@ -5319,11 +5310,8 @@ enabled = true
         .unwrap();
         let home = tempfile::tempdir().unwrap();
         let loaded = {
-            let _guard = crate::test_env::env_lock();
-            std::env::set_var("AIDA_HOME", home.path());
-            let loaded = load_registry(tmp.path());
-            std::env::remove_var("AIDA_HOME");
-            loaded
+            let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+            load_registry(tmp.path())
         };
         let mut cfg = loaded
             .expect("one bad route must not fail the registry")
@@ -5495,11 +5483,9 @@ enabled = false
         .unwrap();
         let home = tempfile::tempdir().unwrap();
         let (findings, cfg) = {
-            let _guard = crate::test_env::env_lock();
-            std::env::set_var("AIDA_HOME", home.path());
+            let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
             let findings = scheduler_driver_doctor_findings(tmp.path()).unwrap();
             let cfg = load_registry(tmp.path()).unwrap().unwrap();
-            std::env::remove_var("AIDA_HOME");
             (findings, cfg)
         };
         let find = |id: &str| findings.iter().find(|f| f.id == id).unwrap();

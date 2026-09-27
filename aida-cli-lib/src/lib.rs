@@ -49801,7 +49801,6 @@ mod branch_behind_main_tests;
 mod resolve_gh_binary_tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
-    use std::sync::Mutex;
     use tempfile::TempDir;
 
     // Serialize PATH-mutating tests against each other. Prepending (vs
@@ -49814,27 +49813,9 @@ mod resolve_gh_binary_tests {
     /// duration. Returns an RAII guard that restores PATH on drop.
     /// Prepending (instead of overwriting) keeps system `git` reachable
     /// from any parallel test that spawns subprocesses.
+    // trace:TASK-1532 | ai:agy
     fn scoped_prepend_path(dir: &std::path::Path) -> impl Drop {
-        struct G {
-            _lock: std::sync::MutexGuard<'static, ()>,
-            prev: Option<String>,
-        }
-        impl Drop for G {
-            fn drop(&mut self) {
-                match &self.prev {
-                    Some(v) => std::env::set_var("PATH", v),
-                    None => std::env::remove_var("PATH"),
-                }
-            }
-        }
-        let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
-        let prev = std::env::var("PATH").ok();
-        let new = match &prev {
-            Some(v) => format!("{}:{}", dir.display(), v),
-            None => format!("{}", dir.display()),
-        };
-        std::env::set_var("PATH", &new);
-        G { _lock: lock, prev }
+        crate::test_env::EnvVarGuard::prepend_path(dir)
     }
 
     fn make_executable(path: &std::path::Path) {
