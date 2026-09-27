@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:47:36.637006946Z
-modified_at: 2026-09-27T14:28:44.604239718Z
+modified_at: 2026-09-27T14:54:23.858310980Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -52,6 +52,25 @@ comments:
     Sequence when Joe approves: install the new binary, confirm 'aida schedule status' loads, THEN bind the five routes, then verify with one forced guard failure in a fixture or dry run that only that guard's route becomes due.
   created_at: 2026-09-27T14:28:44.604239718Z
   modified_at: 2026-09-27T14:28:44.604239718Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e35c-2c72-7b00-9a4a-03c9e28550f0
+  author: joe
+  content: |-
+    ORCHESTRATOR DIAGNOSIS (proxy for Joe, 2026-09-27 08:00): the stale-binary precondition this spec is deferred on is doing more damage than this spec alone. Concrete measurement:
+
+    'aida dev activate' is ACTIVE, so every 'aida' call on this host resolves to /home/joe/ai/aida/target/release/aida, built 2026-09-26 09:51 from sha 7c6faed690 — that is batch 98. Main is now at 7201317922 (batch 105). Verified with 'git merge-base --is-ancestor': the active binary PREDATES batches 99 through 105.
+
+    So the tool enforcing the substrate is missing at least these landed fixes: BUG-1676 (keep mirror hubs in sync after forge merges and store pushes), BUG-1675 (light path for the disk-headroom check, which was taking 44 s and timing out into a false CronJobFailed disk trip), BUG-1657 (reap sees no merge signal for specs landed through batched integration PRs, so finished sessions never reap), BUG-1672 (honor the newest verdict across sources), BUG-1683, BUG-1682, BUG-1678, TASK-1518, TASK-1543's area and more.
+
+    That predicts exactly the symptoms observed this morning, and each was confirmed:
+    - GitLab's main had drifted 6 commits behind GitHub across batches 103-105, even though BUG-1676 supposedly fixed mirror sync. It is fixed in the code but not in the running binary. I resolved it by hand with a plain fast-forward 'git push gitlab main' (b9a986e9fb..7201317922, no force) and 'aida remote reconcile --execute'; all hubs are now in sync.
+    - The disk-headroom guard route was due, which is the precise false trip BUG-1675 addresses.
+    - 'aida ps' showed ~20 dormant sessions as 'stalled — resume/rebrief' whose specs were already Completed and landed in batches 102-105, which is BUG-1657 plus BUG-1681.
+    - An advisor and I disagreed about a deferred spec's status, which is the BUG-1687 class.
+
+    RECOMMENDATION FOR JOE, and it is cheap: rebuild and reinstall the dev binary. 'make build-fast' then re-activate, or 'make install'. That alone should silence several of the currently-due guard routes, restore automatic mirror sync and session reaping, and it is step 1 of this spec's own acceptance. Doing it is what un-defers this spec. I did not do it myself because it writes a user-owned binary outside the repo, and because step 2 (binding the five route jobs in .aida/config.toml) must not happen until after the install or the live tick breaks.
+  created_at: 2026-09-27T14:54:23.858310980Z
+  modified_at: 2026-09-27T14:54:23.858310980Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e269-1067-7852-9759-65daff96d2f7
