@@ -12,13 +12,19 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-27T06:25:58.647752766Z
-modified_at: 2026-09-27T06:25:58.647752766Z
+modified_at: 2026-09-27T08:09:05.110784917Z
 req_type: Task
 tags:
 - carried-from:TASK-1535
 - finding-hash:3c45e5dc
 - from-review:TASK-1535
 - kind:carried-forward
+comments:
+- id: 01a0e1e9-1956-7ca2-9c0c-b2a8336ee4f2
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): This is a carried-forward ''Resolved prior finding'', not new work. TASK-1535 is Completed, its approved exact-head review explicitly verifies suffixless failure-notice produces schedule-route-invalid:failure-notice and user-disabled bad routes stay quiet, and the regression test is present on main. Reject this audit placeholder as non-actionable; TASK-1535 remains the shipped source of truth.'
+  created_at: 2026-09-27T08:09:05.110784917Z
+  modified_at: 2026-09-27T08:09:05.110784917Z
 filed_at:
   code_sha: 88f9a8eaabe86108763231ef131b97b4a06d63e0
   branch: main
