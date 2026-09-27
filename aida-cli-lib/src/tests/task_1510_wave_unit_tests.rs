@@ -260,6 +260,13 @@ fn wave_unit_argv_has_no_timer_or_restart_flags() {
             "property {p:?} is not on the allowlist"
         );
     }
+    // The loop above IS the "rejects an unlisted sixth" guard (advisor
+    // amendment A2): it walks every `-p` the production argv emits and fails on
+    // anything outside this list, so a sixth property cannot be added silently.
+    // Asserting that a literal like "Delegate=yes" is absent from a second copy
+    // of the list would be a tautology over test-local data and would guard
+    // nothing.
+    // trace:TASK-1517 | ai:claude
     for banned in [
         "--on-",
         "--timer-property",

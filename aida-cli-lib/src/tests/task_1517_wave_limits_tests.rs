@@ -204,13 +204,20 @@ fn configured_limits_reach_the_unit() {
 
 #[test]
 fn the_local_layer_overrides_the_committed_limits() {
-    let committed: toml::Value = toml::from_str("[shift]\nwave_memory_max = \"60%\"\n").unwrap();
+    let committed: toml::Value = toml::from_str(
+        "[shift]\nwave_memory_high = \"40%\"\nwave_memory_max = \"60%\"\nwave_cpu_weight = 60\nwave_io_weight = 60\nwave_tasks_max = 1024\n",
+    )
+    .unwrap();
     let local: toml::Value = toml::from_str(&format!(
-        "[repo.\"{REPO}\"]\nenabled = true\nwave_memory_max = \"30%\"\n"
+        "[repo.\"{REPO}\"]\nenabled = true\nwave_memory_high = \"20%\"\nwave_memory_max = \"30%\"\nwave_cpu_weight = 20\nwave_io_weight = 10\nwave_tasks_max = 512\n"
     ))
     .unwrap();
     let cfg = build_config(Some(&committed), Some(&local), REPO, "L");
+    assert_eq!(cfg.wave_limits.memory_high, "20%");
     assert_eq!(cfg.wave_limits.memory_max, "30%");
+    assert_eq!(cfg.wave_limits.cpu_weight, 20);
+    assert_eq!(cfg.wave_limits.io_weight, 10);
+    assert_eq!(cfg.wave_limits.tasks_max, 512);
 }
 
 #[test]

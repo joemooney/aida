@@ -1688,12 +1688,35 @@ impl ShiftExec for RealExec<'_> {
             // trace:TASK-1517 | ai:claude
             limits: self.wave_limits.as_ref(),
         };
-        launch_wave_isolated(
+        let delegation_notice = crate::schedule_driver::build_wave_limit_findings(
+            &crate::schedule_driver::real_wave_limit_delegation(),
+        )
+        .into_iter()
+        .next()
+        .map(|finding| format!("WARNING: {}", finding.summary));
+        let mut spawned = launch_wave_isolated(
             self.host.as_mut(),
             &launch,
             &mut detached,
             &crate::process_probe::process_start_identity,
-        )
+        )?;
+        if let Some(notice) = delegation_notice {
+            match &mut spawned.isolation {
+                WaveIsolation::Unit { note, .. } => {
+                    *note = Some(match note.take() {
+                        Some(existing) => format!("{notice}; {existing}"),
+                        None => notice,
+                    });
+                }
+                WaveIsolation::Detached { reason } => {
+                    *reason = Some(match reason.take() {
+                        Some(existing) => format!("{notice}; {existing}"),
+                        None => notice,
+                    });
+                }
+            }
+        }
+        Ok(spawned)
     }
     fn save_state(&mut self, state: &ShiftState) -> Result<()> {
         save_state_to(&state_path(&self.project_root), state)
