@@ -72,7 +72,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:47:18.483837944Z
-modified_at: 2026-09-27T14:52:39.369043977Z
+modified_at: 2026-09-27T14:52:40.788766473Z
 req_type: Decision
 tags:
 - launch-authority
@@ -100,6 +100,18 @@ relationships:
   target_id: 01a0dfa4-a985-7dc1-a589-c47f294dacd5
   created_at: 2026-09-27T14:47:48.618568497Z
   created_by: joe
+comments:
+- id: 01a0e35a-99d4-7c32-8384-abdfd3d3e76d
+  author: joe
+  content: |
+    Recorded as accepted IN PRINCIPLE as design direction only, per operator decision 01a0e10c-66ae-7883-9f98-f422dff413fa on BUG-1669 and independent architecture signoff 01a0e11e-12db-7cd0-a3d1-39df79961a63 with binding amendments M1-M5.
+
+    Set to approved in a separate action from creation, after amendments A2 (BUG-1669 acceptance edit applied) and A3 (terminal loophole struck) landed, per advisor direction 01a0e351-5a7c-78a3-a0fb-bb79f078cb6a amendment A1.
+
+    This ADR's "approved" status means the DECISION is recorded and accepted. It is not implementation dispatch, installation, backend selection, credential migration, deployment or merge authorization, and no protected boundary is deployed. Gates 2 through 5 remain open; gate 4 was never granted.
+  created_at: 2026-09-27T14:52:40.788766473Z
+  modified_at: 2026-09-27T14:52:40.788766473Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e35a-9449-7e63-83ee-c38bcbbb669f
   author: joe
