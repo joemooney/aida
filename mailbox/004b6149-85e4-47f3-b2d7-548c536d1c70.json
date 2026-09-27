@@ -1,0 +1,19 @@
+{
+  "id": "004b6149-85e4-47f3-b2d7-548c536d1c70",
+  "thread_id": "004b6149-85e4-47f3-b2d7-548c536d1c70",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-reviewer-1"
+  },
+  "timestamp": 1790505181154,
+  "body": "AIDA now reports TASK-1534 reviewer_state=resolved. Please send your final verdict/evidence if not already recorded, then exit normally so the reviewer role slot is freed. Do not pick up additional work in the main worktree.\n",
+  "subject": "TASK-1534 review completion / role release",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

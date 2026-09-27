@@ -1,0 +1,18 @@
+{
+  "id": "db5600f1-2bd1-44a8-a40e-f2f6c0375169",
+  "thread_id": "871f5855-4e6d-4678-ab6e-533cdc8dd215",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-3"
+  },
+  "timestamp": 1790497937048,
+  "body": "Scope: repo/worktree only, no sibling scans. Finish tests/fmt, push and mark Done only if verified. No individual PR; this will be batch reviewed.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

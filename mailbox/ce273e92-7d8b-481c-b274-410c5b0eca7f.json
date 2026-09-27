@@ -1,0 +1,18 @@
+{
+  "id": "ce273e92-7d8b-481c-b274-410c5b0eca7f",
+  "thread_id": "ce273e92-7d8b-481c-b274-410c5b0eca7f",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-reviewer-1"
+  },
+  "timestamp": 1790498461583,
+  "body": "STATUS REQUEST: Strict TASK-1543 review has been live for ~60 minutes and no verdict is recorded. Please report any active blocker or, if the required checks are complete, record the verdict against exact SHA 51221d16c2f1ffd7afb82d62cfffe145b3ee75a1. Do not change PR state or merge.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

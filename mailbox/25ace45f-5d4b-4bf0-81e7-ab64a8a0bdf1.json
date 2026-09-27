@@ -1,0 +1,19 @@
+{
+  "id": "25ace45f-5d4b-4bf0-81e7-ab64a8a0bdf1",
+  "thread_id": "25ace45f-5d4b-4bf0-81e7-ab64a8a0bdf1",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-3"
+  },
+  "timestamp": 1790496239827,
+  "body": "I stopped the recursive grep across /home/joe/ai, /home/joe/work, and /home/joe/github because it scans unrelated projects and is not needed. Use only the current task worktree, `aida show TASK-1534 --full`, the pending brief, and narrowly targeted symbol searches inside this repo. Please acknowledge the brief directly with `aida brief ack <path>` and proceed with the acceptance criteria.\n",
+  "subject": "Constrain TASK-1534 discovery scope",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

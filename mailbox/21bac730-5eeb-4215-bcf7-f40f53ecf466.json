@@ -1,0 +1,18 @@
+{
+  "id": "21bac730-5eeb-4215-bcf7-f40f53ecf466",
+  "thread_id": "2807692a-c441-4a3f-8195-c9f1609ad6da",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-4"
+  },
+  "timestamp": 1790497929530,
+  "body": "Stop broad /home scans; work only in the assigned repository. Commit/push and report exact tests/fmt, no individual PR; batch after review.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

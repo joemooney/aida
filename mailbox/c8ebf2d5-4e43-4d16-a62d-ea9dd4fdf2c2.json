@@ -1,0 +1,18 @@
+{
+  "id": "c8ebf2d5-4e43-4d16-a62d-ea9dd4fdf2c2",
+  "thread_id": "233d06fe-8ae6-48ab-b7ea-8159d416c3bf",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-2"
+  },
+  "timestamp": 1790496795846,
+  "body": "Mailbox handoff is pending: please finish by reporting the exact tests and fmt run for commit 04edf3662537addf465246f1f15299229991bb64, set Done only if your checks passed, and end cleanly.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

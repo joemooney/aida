@@ -1,0 +1,18 @@
+{
+  "id": "babc7b55-0d4b-4491-844b-913bf857b9de",
+  "thread_id": "f12d53a0-57fd-4022-a797-5dbc9a0c88c5",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-reviewer-1"
+  },
+  "timestamp": 1790498670169,
+  "body": "Please check your TASK-1543 review status mail and either record the exact-SHA verdict or state the remaining blocker; do not edit or merge.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
