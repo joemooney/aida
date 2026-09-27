@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T08:49:06.684815058Z
-modified_at: 2026-09-27T15:59:33.212267852Z
+modified_at: 2026-09-27T16:11:44.193728987Z
 req_type: Task
 comments:
 - id: 01a0dce7-9ea7-7a40-bce7-57caaaa1113f
@@ -50,6 +50,26 @@ comments:
   created_at: 2026-09-26T21:33:03.510863485Z
   modified_at: 2026-09-26T21:33:03.510863485Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e3a2-fac1-7d92-8268-6d00657cb012
+  author: joe
+  content: |-
+    Implementation complete, independent review dispatched (orchestrator, 2026-09-27 09:12). Branch claude/task-1513 at 5218dcb81b62adea37dff7bd06e33de0a0436ee5, 18 files +544/-58, spec set to done, no PR opened.
+
+    All five criteria implemented, none found already satisfied on main at 7201317922. New resolver aida-core/src/home.rs (home_dir, config_dir) with ~20 call sites rerouted; the source-scan ratchet widened from dirs::home_dir to also catch dirs::config_dir and direct var/var_os reads of HOME, USERPROFILE and APPDATA; nested_real_homes now appends the getpwuid passwd home so a forged or empty inherited AIDA_LIB_TEST_REAL_HOMES cannot disable the fence; a stale-test-home sweep that removes only definitely-dead pids; and edition-2024 prep adopted now (unsafe extern, unsafe(link_section)) rather than deferred.
+    Checks recorded by the implementer, all in its worktree and in the foreground: make build-fast exit 0 (10m14s), cargo fmt --check clean, cargo clippy --workspace exit 0 with no warnings in the changed files, cargo test --workspace exit 0 with ZERO failures (aida-cli-lib 7088 passed, aida-core 1205 passed). The panics visible in that log are expected child-process output from negative-path tests; every 'test result:' line reports 0 failed.
+
+    The implementer volunteered one extra fix worth noting: with %APPDATA% first in config_dir, a Windows test redirecting HOME would still have leaked to the real roaming profile, so the pre-main redirect now also points APPDATA at <test_home>\AppData\Roaming. That is the right instinct — the change would otherwise have opened a new fence hole while closing others.
+
+    Review scope I asked for, because it is the real risk: this reroutes nearly every home lookup in the codebase, so a mistake means tests writing to the operator's real home or ~/.aida, which is precisely what this spec exists to prevent. The reviewer is probing fence escapes at each rerouted site, whether the ratchet's needles can be slipped past, and the delete path in the stale-directory sweep. Per ADR-62 the Windows-specific behaviour will be reasoned about rather than claimed verified.
+
+    Two items deliberately NOT done by the implementer, both correctly left alone:
+    1. aida-server/src/main.rs:302 was not rerouted (outside the spec and both scans). The reviewer is judging whether that is safe or a gap.
+    2. The operator cleanup of ~/.aida/roles/advisor.toml, which still holds 10 activity rows of which 8 are fixture IDs (BUG-9102/9107/9112/9113/9115/9119, NFR-56, STORY-52) and 2 are real (BUG-1667, TASK-1500). That is a user-owned file outside the repo, so it stays for Joe. The implementer left a paste-ready script with a backup on this spec, and its sequencing note is important: run it only after stale worktree target dirs are rebuilt or removed, or an unfenced old test binary will re-append the fixture rows.
+
+    Infrastructure note for the next agent in this repo: the implementer's first 'aida worktree add' failed on a stale, empty /home/joe/ai/aida/.git/config.lock about 8 minutes old with no git process holding it. It removed the lock and re-ran cleanly. If worktree creation fails that way again, check for that lock before assuming contention.
+  created_at: 2026-09-27T16:11:44.193728987Z
+  modified_at: 2026-09-27T16:11:44.193728987Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e334-3bd0-70f1-82b9-c7ec0b360de9
   author: aida-session-start
