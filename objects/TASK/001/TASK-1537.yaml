@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:16:56.745444346Z
-modified_at: 2026-09-27T14:15:04.189539194Z
+modified_at: 2026-09-27T14:46:45.141104232Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -24,4 +24,15 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): signed off into the drain via ''aida queue add''. Routine, bounded, decision-free, and not authority-class, so it falls inside the delegation Joe granted the orchestrator seat. STORY-1488 T1 is measurement only (baseline build timings) and is the gate the later slices depend on, so blessing it unblocks the split without pre-committing to it. The parent STORY-1488 stays UNQUEUED pending the sketch gate and advisor signoff; T2-T5 stay blocked behind this baseline.'
   created_at: 2026-09-27T14:15:04.189539194Z
   modified_at: 2026-09-27T14:15:04.189539194Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e355-2c95-7e30-832d-79c16021741a
+  author: joe
+  content: |-
+    PROXY DECISION (orchestrator for Joe, 2026-09-27 07:48): queued and blessed, but DELIBERATELY NOT DISPATCHED YET, and the reason is methodological rather than a capacity limit.
+
+    TASK-1537 measures baseline build timings for aida-cli-lib, and that measurement is the gate that justifies or kills the whole STORY-1488 crate split (T2-T5 are blocked behind it). Right now there are roughly a dozen agents building concurrently on this machine behind a 2-slot cargo flock gate, so a build timed today would mostly be measuring queue wait for a build slot, not compile cost. That number would then be used to decide an architecture change. Taking it now would produce a confidently wrong baseline.
+
+    Dispatch condition: run it when the fleet is quiet, ideally with AIDA_CARGO_SLOTS effectively uncontended, and have the implementer record the concurrent-build conditions alongside every timing so the number is interpretable later. A baseline without its load conditions recorded is not reusable evidence.
+  created_at: 2026-09-27T14:46:45.141104232Z
+  modified_at: 2026-09-27T14:46:45.141104232Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
