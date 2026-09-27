@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a0de43-e56c-7ff0-a5a8-8a1891477d23
+  position: 41000
+  added_by: role:implementer
+  note: 'Batch 103 portability rework authorized by independent advisor comment 01a0e12d-e9a7-7180-9aa9-6142d4bbdf20; draft PR #2228 held until corrected source branch and fresh exact-head review.'
+  added_at: 2026-09-27T04:45:40.950843834Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a0dea0-4ab8-7aa3-8d67-3255d56278b4
   position: 42000
   added_by: role:implementer
@@ -66,13 +73,6 @@
   position: 324000
   added_by: role:implementer
   added_at: 2026-09-26T15:10:10.275042601Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0de43-e56c-7ff0-a5a8-8a1891477d23
-  position: 325000
-  added_by: role:implementer
-  added_at: 2026-09-26T15:10:26.839169652Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
