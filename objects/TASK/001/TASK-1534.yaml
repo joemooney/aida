@@ -3,12 +3,12 @@ spec_id: TASK-1534
 agreed_id: TASK-1534
 title: 'aida worktree gc: use the landing-commit trailer check so batch-landed branches are no longer ''no merge signal'''
 description: 'Follow-up from BUG-1657. doctor_cmd''s worktree gc always sets spec_trailer_on_main = false. Acceptance: 1. worktree gc computes the field with session_reap''s spec_trailer_landed_on and applies the same content proof (patch-id or merge-tree no-op). 2. Fixture test: a batch-landed branch is reported reclaimable; one with an unshipped commit is not.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:57:18.908583588Z
-modified_at: 2026-09-27T07:58:26.086826253Z
+modified_at: 2026-09-27T07:58:38.146369186Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -83,3 +83,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a0e1df-8842-7cb1-acc4-4ab572d43bde
+  author: aida-session-start
+  timestamp: 2026-09-27T07:58:38.146368741Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
