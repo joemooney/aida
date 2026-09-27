@@ -81,7 +81,7 @@ fn spawn(home: &Path, action: &str, index: usize, pause: &str) -> (Process, Path
     let ctl = home.join(format!("control-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&ctl).unwrap();
     let fence = std::env::var_os("AIDA_LIB_TEST_REAL_HOMES").expect("inherited real-home fence");
-    let mut cmd = Command::new(std::env::current_exe().unwrap());
+    let mut cmd = Command::new(crate::aida_exe_path());
     cmd.args(["--exact", CHILD, "--nocapture", "--test-threads=1"])
         .current_dir(home)
         .env("HOME", home)
