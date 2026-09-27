@@ -395,7 +395,7 @@ pub fn recent_jsonl_in_project(cwd: &Path) -> Option<PathBuf> {
 /// Path to `~/.claude/projects/<encoded-cwd>/` for a given absolute cwd, or
 /// `None` if HOME isn't set or the directory doesn't exist.
 pub fn claude_projects_dir_for_cwd(cwd: &Path) -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
+    let home = crate::home::home_dir()?;
     let encoded = encode_cwd_for_projects(cwd);
     let candidate = home.join(".claude").join("projects").join(encoded);
     if candidate.is_dir() {

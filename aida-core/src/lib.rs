@@ -93,6 +93,8 @@ pub mod fs_atomic;
 #[cfg(feature = "native")]
 pub mod git_ops;
 pub mod graph_walk;
+// trace:TASK-1513 | ai:claude
+pub mod home;
 // trace:BUG-1535 | ai:claude
 pub mod id_collisions;
 pub mod idle;

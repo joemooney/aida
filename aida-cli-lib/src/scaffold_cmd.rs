@@ -397,7 +397,8 @@ pub(crate) fn handle_scaffold_command(
             use aida_core::templates::TemplateLoader;
 
             let dest = output.clone().unwrap_or_else(|| {
-                dirs::config_dir()
+                // trace:TASK-1513 | ai:claude
+                aida_core::home::config_dir()
                     .map(|p| p.join("aida/templates"))
                     .unwrap_or_else(|| std::path::PathBuf::from("templates"))
             });

@@ -2616,15 +2616,15 @@ pub const REDACTED_EMAIL_PLACEHOLDER: &str = "redacted@node.invalid";
 /// environment to stay feature-gate-free.
 // trace:BUG-715 | ai:claude
 fn read_public_identity() -> (Option<String>, Option<String>) {
+    // trace:TASK-1513 | ai:claude
     let home = std::env::var_os("AIDA_TEST_HOME")
-        .or_else(|| std::env::var_os("HOME"))
-        .or_else(|| std::env::var_os("USERPROFILE"));
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(crate::home::home_dir);
     let Some(home) = home else {
         return (None, None);
     };
-    let path = std::path::PathBuf::from(home)
-        .join(".aida")
-        .join("config.toml");
+    let path = home.join(".aida").join("config.toml");
     // TASK-346: read_atomic (not bare fs::read_to_string) on a concurrent config
     // path — retries the Windows transient-open race. Enforced by the
     // fs_atomic guard test. trace:BUG-715 | ai:claude
