@@ -17,11 +17,13 @@ tags:
 - parity
 - scaffolding
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0989f-f79c-7403-9500-cc4f72bac60e
   created_at: 2026-09-13T02:37:01.206468923Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a098b9-e79f-7380-9b69-d63740476d9f
   created_at: 2026-09-13T03:05:22.767023113Z
   created_by: joe
