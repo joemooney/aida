@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T09:41:03.172727931Z
-modified_at: 2026-09-27T14:16:06.317631771Z
+modified_at: 2026-09-27T14:16:08.798344337Z
 req_type: Bug
 tags:
 - vendor:antigravity headless-launch cli-argv
@@ -38,6 +38,12 @@ comments:
   content: 'Additional reproduction: `AIDA_HEADLESS_VENDOR=agy aida research SPIKE-89 --dry-run` previews successfully, but executing `AIDA_HEADLESS_VENDOR=agy aida research SPIKE-89` fails before analysis with Antigravity CLI 1.2.12 reporting that `-p` consumed `--dangerously-skip-permissions` as its prompt and the intended prompt was ignored. Protected AIDA research dispatch wrote no analysis/decision artifacts and made no changes to SPIKE-89. This reproduces the same headless argv-ordering issue on the research lane; no raw-launch workaround used.'
   created_at: 2026-09-27T11:41:03.907126428Z
   modified_at: 2026-09-27T11:41:03.907126428Z
+- id: 01a0e339-275e-70f3-96e4-f35d21fdcace
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): approved and queued. Concrete, bounded and testable — a fixed argv ordering bug in the Antigravity headless launcher, with the observed failure and the CLI version recorded. It also unblocks the agy vendor lane for dispatch, so it is worth doing early. Acceptance must include a test that asserts the argv ORDER (permission flag before -p), not just that the launch succeeds.'
+  created_at: 2026-09-27T14:16:08.798344337Z
+  modified_at: 2026-09-27T14:16:08.798344337Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e339-1dad-7e71-a4ac-ecaf23a54fca
   author: joe
