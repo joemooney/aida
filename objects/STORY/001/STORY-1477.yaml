@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-27T04:19:04.376311750Z
+modified_at: 2026-09-27T06:49:13.685910400Z
 req_type: Story
 tags:
 - aida:history
@@ -318,4 +318,9 @@ comments:
     Operational boundary: no code edits, status/queue edits, lease changes, review approval, or merge. Per operator constraint, do not execute the discipline's usual requeue step in this session; only publish the durable decision and pending implementer brief, verify brief listing, and leave routing mechanics to the authorized seat.
   created_at: 2026-09-27T04:19:04.376311750Z
   modified_at: 2026-09-27T04:19:04.376311750Z
+- id: 01a0e19f-fcd5-73a1-9e13-27fe96a1b508
+  author: joe
+  content: 'PROXY DECISION (product for Joe): operator explicitly directs that optional macOS/Windows checks are not to delay backlog merges until the backlog is drained. Current main protection requires only merge-hold-gate and Build (ubuntu-latest). This resolves the prior open operator choice about sequencing the reported Windows baseline doctor/scaffold failures for STORY-1477; it does not authorize changing protection, waiving Ubuntu failures, bypassing the rework hold, or treating unresolved review acceptance as passed. Keep baseline platform remediation tracked separately and proceed with fresh independent review plus advisor disposition at the current PR head.'
+  created_at: 2026-09-27T06:49:13.685910400Z
+  modified_at: 2026-09-27T06:49:13.685910400Z
 execution_mode: drive
