@@ -825,19 +825,24 @@ fn scan_scaffold_drift(
     let portable_selected = config.generate_codex_skills || config.generate_antigravity_skills;
     let db_path = project_root.join(".aida/cache.db");
     let status = check_scaffold_status(store, project_root, &config, &db_path);
+    // Compare path components so Windows' backslashes do not hide scaffold
+    // drift from doctor. trace:BUG-1685 | ai:codex
     let is_vendor_prompt_or_skill = |p: &std::path::Path| {
-        let s = p.to_string_lossy();
-        s.starts_with(".claude/commands/")
-            || s.starts_with(".claude/skills/")
-            || s.starts_with(".agents/skills/")
-            || s.starts_with(".codex/skills/")
-            || s.starts_with(".antigravity/skills/")
+        [
+            ".claude/commands",
+            ".claude/skills",
+            ".agents/skills",
+            ".codex/skills",
+            ".antigravity/skills",
+        ]
+        .iter()
+        .any(|prefix| p.starts_with(std::path::Path::new(prefix)))
     };
-    let drifted: Vec<String> = status
+    let drifted_count = status
         .modified
         .iter()
-        .filter_map(|(p, _)| is_vendor_prompt_or_skill(p).then(|| p.to_string_lossy().into_owned()))
-        .collect();
+        .filter(|(p, _)| is_vendor_prompt_or_skill(p))
+        .count();
     // trace:BUG-1117 | ai:codex
     // Missing `.agents/skills/*` is scaffold drift too: Codex >=0.142 does not
     // discover the old ~/.codex/prompts pack as `$aida-*`, so absence of the
@@ -859,15 +864,15 @@ fn scan_scaffold_drift(
         }
         _ => true,
     };
-    let missing_vendor_files: Vec<String> = status
+    let missing_vendor_files: Vec<_> = status
         .missing
         .iter()
         .filter(|p| expected_by_footprint(p))
-        .filter_map(|p| is_vendor_prompt_or_skill(p).then(|| p.to_string_lossy().into_owned()))
+        .filter(|p| is_vendor_prompt_or_skill(p))
         .collect();
-    let missing_portable_skill_files: Vec<&String> = missing_vendor_files
+    let missing_portable_skill_files: Vec<_> = missing_vendor_files
         .iter()
-        .filter(|p| portable_selected && p.starts_with(".agents/skills/"))
+        .filter(|p| portable_selected && p.starts_with(std::path::Path::new(".agents/skills")))
         .collect();
     if !missing_portable_skill_files.is_empty() {
         findings.push(DoctorFinding {
@@ -885,13 +890,13 @@ fn scan_scaffold_drift(
             safe_heal: false,
         });
     }
-    if !drifted.is_empty() {
+    if drifted_count > 0 {
         findings.push(DoctorFinding {
             category: "scaffold-drift".to_string(),
             id: "scaffold-drift/project".to_string(),
             summary: format!(
                 "{} deployed vendor prompt/skill file(s) drifted from the source templates (stale scaffolding)",
-                drifted.len()
+                drifted_count
             ),
             action: if lane {
                 MEMORY_LANE_DRIFT_ACTION.to_string()
