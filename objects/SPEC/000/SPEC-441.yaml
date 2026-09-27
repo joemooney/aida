@@ -9,12 +9,12 @@ description: |+
   2. For identical since/until filters, indexed and Git-walk history results match, including the far-future bound.
   3. Ordinary past/future bounds retain existing boundary semantics; use fixture events only and add tests that fail against the current Git-walk behavior.
 
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T02:19:20.422469520Z
-modified_at: 2026-09-27T08:42:15.454166165Z
+modified_at: 2026-09-27T09:02:46.877143151Z
 req_type: Task
 tags:
 - from-implementer:STORY-1477
@@ -41,3 +41,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e21a-425d-7271-90f1-ee01779a47da
+  author: joe
+  timestamp: 2026-09-27T09:02:46.877138292Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
