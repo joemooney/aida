@@ -102949,6 +102949,61 @@ impl RealPhaseDriver {
         }
     }
 
+    /// TASK-1529: the pre-launch snapshot of the branch's open PR, taken
+    /// before the implementer is spawned. Only a PR that appeared during the
+    /// phase is the agent's to retract, so this records what was already
+    /// there. Branch-keyed on purpose (no spec-wide search, no branch
+    /// realignment) and read-only through the forge seam.
+    ///
+    /// Split out of `run_implementer` so a test can drive the snapshot itself
+    /// rather than the child-spawning phase around it.
+    // trace:TASK-1529 | ai:claude
+    fn snapshot_preexisting_phase1_pr(&mut self, branch: &str) {
+        self.preexisting_phase1_pr = match self.project_forge().change_for_branch(branch) {
+            Ok(crate::forge::ChangeLookup::Found(c)) => Some(c.id),
+            _ => None,
+        };
+    }
+
+    /// TASK-1289 / TASK-1529: the publication-guard decision seam. `None` when
+    /// the guards raised no objection — nothing is touched, and no forge call
+    /// is made at all (acceptance 2). `Some` when they refused:
+    ///
+    /// TASK-1289: the guards refused — but the implementer may have ALREADY
+    /// opened the PR, because `/aida-pr` runs inside the implementer phase,
+    /// before the orchestrator regains control. A refusal that leaves that PR
+    /// open is advisory, not a gate: the work the guards rejected sits
+    /// published and mergeable by anyone who never reads this log line, and
+    /// the only thing standing between it and `main` is prose in a skill file.
+    /// Retract it here, so "the guards refused" and "nothing is published"
+    /// are the same state.
+    ///
+    /// TASK-1529 (ADR-51): the retraction is VERIFIED, not attempted — the
+    /// phase failure names whether the PR is observed retracted, and a failed
+    /// retraction leaves a durable marker plus a merge-hold. The branch is
+    /// untouched either way, so no work is lost.
+    ///
+    /// Split out of `run_implementer` so a test can drive BOTH decisions
+    /// against a fake forge.
+    // trace:TASK-1289 trace:TASK-1529 | ai:claude
+    fn preflight_outcome_for(
+        &mut self,
+        branch: &str,
+        results: &[implementer_preflight::GuardResult],
+    ) -> Option<auto_complete::PhaseFailure> {
+        let implementer_preflight::PreflightDecision::Refuse { failed } =
+            implementer_preflight::decide(results)
+        else {
+            return None;
+        };
+        let detail = failed
+            .into_iter()
+            .map(|(name, output)| format!("guard `{name}` failed:\n{output}"))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        Some(self.refused_preflight_failure(branch, &detail))
+    }
+
     /// TASK-1289 / TASK-1529 (ADR-51): the publication guards refused, but the
     /// implementer may already have opened the PR. Retract the change the
     /// agent opened during this phase so "the guards refused" and "nothing is
@@ -105465,28 +105520,63 @@ mod forge_seam_tests {
 
     // TASK-1529 acceptance 2: passing guards touch nothing — no draft, no
     // close, no comment, no marker.
+    //
+    // Driven through the DRIVER's own decision seam (`preflight_outcome_for`),
+    // not through `implementer_preflight::decide` alone: the earlier shape of
+    // this test dropped the driver and then asserted the forge was untouched,
+    // so it never exercised the driver and could not fail. The refusing
+    // decision is exercised on the SAME forge afterwards, which is what makes
+    // the untouched assertions load-bearing — a seam that retracted
+    // unconditionally fails the first half, one that never retracted fails
+    // the second.
     #[test]
     fn task_1529_passing_preflight_leaves_the_open_change_untouched() {
         let tmp = tempfile::tempdir().unwrap();
         let mut forge = RecordingForge::new().with_state(ChangeState::Open);
         forge.open_for_branch = ChangeLookup::Found(change(42, "claude/task-1421"));
-        let driver = driver_with(tmp.path(), &forge);
+        let mut driver = driver_with(tmp.path(), &forge);
 
-        let decision = implementer_preflight::decide(&[
-            implementer_preflight::GuardResult::Passed("fmt".into()),
-            implementer_preflight::GuardResult::Skipped("no clippy configured".into()),
-        ]);
-        assert_eq!(decision, implementer_preflight::PreflightDecision::Open);
-        // The retraction is only ever reached through a Refuse decision; with
-        // Open the driver never calls it. Pin that the forge saw nothing.
-        drop(driver);
-        assert!(forge.drafted().is_empty());
-        assert!(forge.closed().is_empty());
-        assert!(forge.comments().is_empty());
+        let passing = driver.preflight_outcome_for(
+            "claude/task-1421",
+            &[
+                implementer_preflight::GuardResult::Passed("fmt".into()),
+                implementer_preflight::GuardResult::Skipped("no clippy configured".into()),
+            ],
+        );
+
+        assert!(
+            passing.is_none(),
+            "guards that raised no objection are not a phase failure"
+        );
+        assert!(forge.drafted().is_empty(), "nothing was drafted");
+        assert!(forge.closed().is_empty(), "nothing was closed");
+        assert!(forge.comments().is_empty(), "nothing was commented on");
         assert!(!forge.is_draft());
         assert_eq!(forge.current_state(), Some(ChangeState::Open));
         assert!(preflight_retraction::read_record(tmp.path(), 42).is_none());
         assert!(!merge_hold::hold_path(tmp.path(), 42).exists());
+
+        // The same seam, same forge, one failing guard: the retraction DOES
+        // run. Without this the assertions above pass vacuously.
+        let refusing = driver
+            .preflight_outcome_for(
+                "claude/task-1421",
+                &[implementer_preflight::GuardResult::Failed {
+                    name: "fmt".into(),
+                    output: "src/x.rs needs rustfmt".into(),
+                }],
+            )
+            .expect("a refusing guard is a phase failure");
+        assert!(
+            refusing.reason.contains("guard `fmt` failed"),
+            "the failure carries the guard output: {}",
+            refusing.reason
+        );
+        assert_eq!(
+            forge.drafted(),
+            vec![42],
+            "the refusing decision reaches the forge"
+        );
     }
 
     // TASK-1529 acceptance 3: a PR that was already open on the branch before
@@ -105677,6 +105767,165 @@ mod forge_seam_tests {
             1,
             "an already-closed change writes no second record"
         );
+    }
+
+    // TASK-1529 acceptance 3 (B1): the retraction target is resolved through
+    // `detect_phase1_pr`, whose fallback is a full-text spec SEARCH over open
+    // PRs (`gh pr list --search <SPEC>`) — title, body and comments, with no
+    // author, branch or trailer filter. A stranger's PR whose body merely
+    // mentions this spec must never be drafted, closed, commented on or
+    // recorded: the pre-launch snapshot is branch-keyed, so it can never
+    // classify such a PR as pre-existing. Adapted from the salvaged review
+    // probe.
+    #[test]
+    fn task_1529_never_retracts_a_pr_resolved_only_by_a_spec_search() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        // No real forge: `gh` resolves to a stub that fails every call, so the
+        // branch realignment probe cannot reach the network.
+        let bin = tempfile::tempdir().unwrap();
+        let gh = bin.path().join("gh");
+        std::fs::write(
+            &gh,
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'gh fake'; exit 0; fi\nexit 1\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&gh).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&gh, perms).unwrap();
+        let _gh_guard = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", gh.as_os_str());
+
+        let mut forge = RecordingForge::new().with_state(ChangeState::Open);
+        // The implementer opened nothing on our branch...
+        forge.open_for_branch = ChangeLookup::NoChange;
+        // ...but a stranger's open PR mentions this spec in its body.
+        forge.open_for_spec = ChangeLookup::Found(change(99, "someone-else/mentions-the-spec"));
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        let outcome = driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+
+        assert!(
+            forge.drafted().is_empty(),
+            "a PR found only by a spec-text search is not ours to draft: {:?}",
+            forge.drafted()
+        );
+        assert!(
+            forge.closed().is_empty(),
+            "nor to close: {:?}",
+            forge.closed()
+        );
+        assert!(
+            forge.comments().is_empty(),
+            "nor to post our guard output on: {:?}",
+            forge.comments()
+        );
+        assert!(!forge.is_draft(), "the stranger's PR is still ready");
+        assert_eq!(forge.current_state(), Some(ChangeState::Open));
+        assert!(
+            preflight_retraction::read_record(tmp.path(), 99).is_none(),
+            "no marker claims a retraction of someone else's PR"
+        );
+        assert!(
+            !merge_hold::hold_path(tmp.path(), 99).exists(),
+            "no hold on a PR that is not ours"
+        );
+        let _ = outcome;
+    }
+
+    // TASK-1529 (B2): the branch lookup is eventually consistent, so the
+    // change can MERGE between the guards refusing and the retraction reading
+    // its state. That must never be reported as "already a draft or closed":
+    // the refused change is on the base branch, and the report is the only
+    // thing that escalates it.
+    #[test]
+    fn task_1529_reports_a_change_that_merged_before_the_retraction() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new().with_state(ChangeState::Merged);
+        forge.open_for_branch = ChangeLookup::Found(change(42, "claude/task-1421"));
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        let failure = driver.refused_preflight_failure("claude/task-1421", "guard `fmt` failed");
+
+        assert!(
+            forge.drafted().is_empty() && forge.closed().is_empty(),
+            "a merged change is never drafted or closed"
+        );
+        assert!(
+            !failure.reason.contains("already a draft"),
+            "a MERGED change is not 'already a draft or closed': {}",
+            failure.reason
+        );
+        assert!(
+            failure.reason.to_lowercase().contains("merged"),
+            "the report names the merge: {}",
+            failure.reason
+        );
+        assert!(
+            preflight_retraction::read_record(tmp.path(), 42).is_some(),
+            "the merge that beat the guards is recorded durably"
+        );
+    }
+
+    // TASK-1529 (B3): an unreadable forge must not be reported as "no PR was
+    // open". "We could not tell" and "we saw nothing" are different states,
+    // and only the second is safe to act on — the same doctrine this change
+    // already applies to the post-retraction verification.
+    #[test]
+    fn task_1529_an_unreadable_forge_never_claims_no_pr_was_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new().with_state(ChangeState::Open);
+        forge.open_for_branch = ChangeLookup::CliFailed("gh: HTTP 500 from api.github.com".into());
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        let failure = driver.refused_preflight_failure("claude/task-1421", "guard `fmt` failed");
+
+        assert!(
+            !failure.reason.contains("no PR was open"),
+            "an unreadable forge is not an observed absence: {}",
+            failure.reason
+        );
+        assert!(
+            failure.reason.contains("HTTP 500"),
+            "the report carries why the forge could not be read: {}",
+            failure.reason
+        );
+        assert!(forge.drafted().is_empty() && forge.closed().is_empty());
+    }
+
+    // TASK-1529 (B3, the fail-open feeder for B1): when the PRE-LAUNCH
+    // snapshot could not be read, a PR found afterwards must not become
+    // "ours" by default. One `gh` hiccup before the implementer spawns would
+    // otherwise hand the retraction whatever PR the branch carries.
+    #[test]
+    fn task_1529_an_unreadable_pre_launch_snapshot_never_makes_a_found_pr_ours() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Before the implementer spawns, the forge cannot be read.
+        let mut forge = RecordingForge::new().with_state(ChangeState::Open);
+        forge.open_for_branch = ChangeLookup::CliFailed("gh: HTTP 500 from api.github.com".into());
+        let mut before = driver_with(tmp.path(), &forge);
+        before.snapshot_preexisting_phase1_pr("claude/task-1421");
+        let snapshot = before.preexisting_phase1_pr.clone();
+
+        // The implementer runs, the guards refuse, and by now the forge
+        // answers again — with a PR nobody can attribute to this phase.
+        forge.open_for_branch = ChangeLookup::Found(change(42, "claude/task-1421"));
+        let mut driver = driver_with(tmp.path(), &forge);
+        driver.preexisting_phase1_pr = snapshot;
+
+        let outcome = driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+
+        assert!(
+            forge.drafted().is_empty() && forge.closed().is_empty(),
+            "an unreadable pre-launch snapshot is not proof the PR is ours: drafted {:?}, closed {:?}",
+            forge.drafted(),
+            forge.closed()
+        );
+        assert!(
+            forge.comments().is_empty(),
+            "no guard output is posted on a PR we cannot attribute"
+        );
+        assert!(preflight_retraction::read_record(tmp.path(), 42).is_none());
+        let _ = outcome;
     }
 
     // TASK-1529: the Done -> In Progress return is pure and only moves Done.
@@ -106138,11 +106387,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // operator-opened or earlier-round PR is left alone. Branch-keyed on
         // purpose (no spec-wide search, no branch realignment) and read-only
         // through the forge seam. trace:TASK-1529 | ai:claude
-        self.preexisting_phase1_pr = match self.project_forge().change_for_branch(&intended_branch)
-        {
-            Ok(crate::forge::ChangeLookup::Found(c)) => Some(c.id),
-            _ => None,
-        };
+        self.snapshot_preexisting_phase1_pr(&intended_branch);
         let args = build_implementer_phase_args(
             &self.spec,
             &session_uuid,
@@ -106644,31 +106889,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     }
                 }
             }
-            if let implementer_preflight::PreflightDecision::Refuse { failed } =
-                implementer_preflight::decide(&results)
-            {
-                let detail = failed
-                    .into_iter()
-                    .map(|(name, output)| format!("guard `{name}` failed:\n{output}"))
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-                // TASK-1289: the guards refused — but the implementer may have
-                // ALREADY opened the PR, because `/aida-pr` runs inside the
-                // implementer phase, before the orchestrator regains control.
-                // A refusal that leaves that PR open is advisory, not a gate:
-                // the work the guards rejected sits published and mergeable by
-                // anyone who never reads this log line, and the only thing
-                // standing between it and `main` is prose in a skill file.
-                // Retract it here, so "the guards refused" and "nothing is
-                // published" are the same state.
-                //
-                // TASK-1529 (ADR-51): the retraction is VERIFIED, not
-                // attempted — the phase failure names whether the PR is
-                // observed closed, and a failed retraction leaves a durable
-                // marker plus a merge-hold. The branch is untouched either
-                // way, so no work is lost.
-                // trace:TASK-1289 trace:TASK-1529 | ai:claude
-                return Err(self.refused_preflight_failure(&branch, &detail));
+            if let Some(failure) = self.preflight_outcome_for(&branch, &results) {
+                return Err(failure);
             }
         }
 
