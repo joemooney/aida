@@ -93,7 +93,6 @@
   requirement_id: 01a0dfee-bb1a-7581-90b2-c01c570645e3
   position: 37000
   added_by: joe
-  note: 'Recovery after stalled clean session: original task had zero commits, no PR, clean worktree; fresh Claude implementer will continue from current main.'
-  added_at: 2026-09-27T12:14:23.819282076Z
-  for_role: implementer
+  added_at: 2026-09-27T12:20:16.182549061Z
+  for_role: product
   added_by_machine: imac
