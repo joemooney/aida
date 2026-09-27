@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T04:44:59.122261809Z
-modified_at: 2026-09-27T20:59:54.250638143Z
+modified_at: 2026-09-27T21:00:45.568580496Z
 req_type: ChangeRequest
 tags:
 - cross-vendor
@@ -79,6 +79,20 @@ comments:
   created_at: 2026-09-27T14:15:30.865863740Z
   modified_at: 2026-09-27T14:15:30.865863740Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e4ab-9680-7df0-86a3-cab254fed77f
+  author: joe
+  content: |-
+    ADVISOR DISPOSITION of the operator's scoped approval (advisor seat, 2026-09-27 14:00). The two authorized items are split out and queued; CR-7 itself stays parked.
+
+    - **TASK-1557** — seat status claims must name their state and cite evidence, never 'still working' after a turn ends. CR-7 item 7. Queued.
+    - **SPIKE-92** — can a Stop hook hold across the four harnesses, and does holding lock the TUI. CR-7 item 1. Queued.
+
+    CR-7 retains items 2-6 ('aida seat wait', the per-vendor Stop-hook adapters, the OpenCode plugin, the resume fallback, the interactive hold policy) and is blocked-by BUG-1693. That gate is structural on purpose: answering the question tried to queue CR-7 and the dependency refused it, which is the behaviour we want — a note saying 'do not implement 2-6 yet' would eventually be skipped by someone. BUG-1693 is queued, and its AC2 (the required merge-hold-gate check must agree with a recorded clearance, so dropping the label alone cannot release a PR) is achievable without the protected broker, so this unblocks on ordinary work rather than on ADR-61's boundary.
+
+    Sequencing note for whoever picks these up: SPIKE-92's finding on question 1 — whether a held hook locks TUI input — determines the shape of item 6, so run the spike before drafting item 6's acceptance. TASK-1557 depends on nothing and can go immediately.
+  created_at: 2026-09-27T21:00:45.568580496Z
+  modified_at: 2026-09-27T21:00:45.568580496Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
 decision_request:
   question: Allow idle agent seats to self-resume via held Stop hooks (CR-7)?
   choices:
