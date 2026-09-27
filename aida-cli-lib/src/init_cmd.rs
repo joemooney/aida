@@ -5322,9 +5322,19 @@ pub(crate) fn handle_init_distributed_sibling(
         std::fs::write(store_dir.join("objects/.gitkeep"), "")?;
         git_ops::add(&store_dir, &["objects/.gitkeep"])?;
 
-        // Create .gitignore for node-local files
-        let gitignore_content = "# Node-local state (not shared)\n.aida/\n*.lock\n";
-        std::fs::write(store_dir.join(".gitignore"), gitignore_content)?;
+        // Create .gitignore for node-local files.
+        // The staging-file ignores come from `fs_atomic`, which owns the
+        // staging name, so a lock-free `git add -A .` (db sync, auto-push) can
+        // never stage one. They live in the STORE's tracked `.gitignore`, never
+        // the project's `info/exclude`: a store attached as a linked worktree
+        // shares the project's exclude file, so an ignore written there would
+        // hide the user's own files too. Existing stores are TASK-1547.
+        // trace:BUG-1677 | ai:claude
+        let gitignore_content = format!(
+            "# Node-local state (not shared)\n.aida/\n*.lock\n{}",
+            aida_core::fs_atomic::store_staging_ignore_block()
+        );
+        std::fs::write(store_dir.join(".gitignore"), &gitignore_content)?;
         git_ops::add(&store_dir, &[".gitignore"])?;
 
         git_ops::commit(&store_dir, "chore: initialize AIDA distributed store")?;

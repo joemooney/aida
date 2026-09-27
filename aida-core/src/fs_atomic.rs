@@ -95,6 +95,40 @@ pub fn write_atomic(path: &Path, content: impl AsRef<[u8]>) -> std::io::Result<(
     Ok(())
 }
 
+/// `.gitignore` patterns that hide [`write_atomic`] staging files inside a
+/// git requirements store.
+///
+/// One pattern per store subtree an atomic writer actually touches, plus the
+/// store-root oplog. Deliberately NOT a bare `*.tmp.*`: these lines are the
+/// single source for all three store-creation paths (`workspace::init_workspace`,
+/// `aida init --sibling`, and the `aida doctor` repair for an older store), and
+/// keeping them anchored means the rule can only ever describe store content —
+/// a user file named `notes.tmp.txt` stays visible.
+///
+/// Add a line here when a new store subtree starts writing through
+/// [`write_atomic`]; `workspace` has the `git check-ignore` test that proves
+/// the set still covers every staging name.
+// trace:BUG-1677 | ai:claude
+pub const STORE_STAGING_IGNORE_PATTERNS: &[&str] = &[
+    "objects/**/*.tmp.*",
+    "registry/**/*.tmp.*",
+    "schedule/**/*.tmp.*",
+    "mailbox/**/*.tmp.*",
+    "oplog.tmp.*",
+];
+
+/// [`STORE_STAGING_IGNORE_PATTERNS`] as a commented `.gitignore` block, newline
+/// terminated, ready to append to a store's tracked `.gitignore`.
+// trace:BUG-1677 | ai:claude
+pub fn store_staging_ignore_block() -> String {
+    let mut out = String::from("# Atomic-write staging files (temp+rename) — never tracked\n");
+    for pattern in STORE_STAGING_IGNORE_PATTERNS {
+        out.push_str(pattern);
+        out.push('\n');
+    }
+    out
+}
+
 /// Read `path` to a `String`, retrying transient open failures that occur
 /// while a concurrent [`write_atomic`] is replacing the file on Windows.
 ///

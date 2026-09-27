@@ -80,7 +80,13 @@ pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
 /// write lock) from git in a store worktree, so `git add -A` (db sync,
 /// auto-push) can never commit them, even in a store whose `.gitignore`
 /// lacks the pattern. Idempotent; returns whether it wrote anything.
-// trace:BUG-1612 | ai:claude
+///
+/// Only this one anchored pattern belongs here. The store is usually a
+/// linked worktree of the PROJECT repo, so `info/exclude` resolves to the
+/// project's shared common dir: anything written here applies to the user's
+/// whole project, not just the store. Store-scoped ignores (the atomic-write
+/// staging files, for example) go in the store's tracked `.gitignore`.
+// trace:BUG-1612 trace:BUG-1677 | ai:claude
 pub fn ensure_store_lock_excluded(store_root: &Path) -> Result<bool> {
     let exclude_path = resolve_exclude_path(store_root)?;
     append_exclude_entries(&exclude_path, &[".aida/*.lock"])
@@ -119,7 +125,17 @@ fn resolve_exclude_path(worktree: &Path) -> Result<PathBuf> {
 
 // trace:BUG-914 | ai:codex
 fn append_exclude_entries(exclude_path: &Path, entries: &[&str]) -> Result<bool> {
-    let existing = crate::read_atomic(exclude_path).unwrap_or_default();
+    // An absent exclude file is empty; any other read failure is an error,
+    // because this function rewrites the whole file and must never replace a
+    // user's exclude file with only its own entries.
+    // trace:BUG-1677 | ai:claude
+    let existing = match crate::read_atomic(exclude_path) {
+        Ok(existing) => existing,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => {
+            return Err(e).with_context(|| format!("read {}", exclude_path.display()));
+        }
+    };
     let mut contents = existing.clone();
     let mut changed = false;
     for entry in entries {
@@ -3735,6 +3751,24 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    // trace:BUG-1677 | ai:claude — an exclude file that exists but cannot be
+    // read must not be treated as empty and overwritten with only our entries.
+    #[test]
+    fn bug_1677_append_exclude_entries_refuses_an_unreadable_exclude_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exclude_path = tmp.path().join("info").join("exclude");
+        std::fs::create_dir_all(&exclude_path).unwrap();
+        let err = append_exclude_entries(&exclude_path, &[".aida/*.lock"]).unwrap_err();
+        assert!(err.to_string().contains("read "), "{err:#}");
+        assert!(exclude_path.is_dir(), "nothing may be written over it");
+        assert!(std::fs::read_dir(&exclude_path).unwrap().next().is_none());
+
+        // The absent case is still the empty file: entries are appended.
+        let fresh = tmp.path().join("fresh").join("exclude");
+        assert!(append_exclude_entries(&fresh, &[".aida/*.lock"]).unwrap());
+        assert_eq!(std::fs::read_to_string(&fresh).unwrap(), ".aida/*.lock\n");
     }
 
     #[test]
