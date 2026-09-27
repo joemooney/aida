@@ -1,0 +1,46 @@
+id: 01a0e36c-3a71-7381-9d8c-4aef9eb19411
+spec_id: TASK-1551
+agreed_id: TASK-1551
+title: Cheaper compile profile for agent iteration, without slowing the binary the performance budget measures
+description: |
+  Operator suggestion 2026-09-27: "we could reduce the opt-level down to 1 in the rust compile for faster builds". The target is correct and the reasoning below is why it needs a dedicated profile rather than a change to release.
+
+  MEASURED CONTEXT (2026-09-27, ~12 agents in flight): nproc = 6, load average 6.70-9.28, CPU 68-77% user with 1.3-2.8% iowait, so the host is CPU-bound and codegen is the cost. sccache hit rate 41%.
+
+  WHY THE TARGET IS RIGHT: the repository has NO [profile.*] sections, so cargo defaults apply — dev and test at opt-level 0, release at opt-level 3. `make build-fast` runs `cargo build --workspace --release` with RUSTC_WRAPPER cleared and CARGO_INCREMENTAL=1 (BUG-1684's fix). So every agent's most expensive step is a full opt-level-3 release build. Note the corollary: lowering opt-level would NOT speed `cargo test`, which is already opt-level 0.
+
+  WHY NOT SIMPLY LOWER [profile.release]:
+  1. `aida dev activate` hard-codes target/release (dev_cmd.rs:225, 254, 269), so the release binary IS the substrate binary every agent invokes.
+  2. There is a live performance budget in .aida/config.toml: `show = { budget_ms = 1000, ceiling_ms = 5000 }`, and the performance guard tripped this morning.
+  3. BUG-1674 is an OPEN investigation into `aida show` exceeding that 5000 ms ceiling, measured at 24.5 s.
+  A less-optimised release binary would make that investigation measure the wrong thing and could trip the performance guard for a reason unrelated to any regression. Corrupting an active latency investigation to save build minutes is the wrong trade.
+
+  WHY NOT NOW: profile settings are part of cargo's fingerprint, so editing Cargo.toml invalidates every crate for every worktree. With a dozen agents mid-build that forces a dozen concurrent full rebuilds — the exact opposite of the intent. Apply it on a quiet machine.
+
+  Acceptance:
+  1. A dedicated profile (inheriting release, opt-level 1, debug off) exists for agent iteration, and `make build-fast` uses it. [profile.release] is UNCHANGED, so shipping artifacts and every performance measurement keep opt-level 3.
+  2. `aida dev activate`/`build-guard` resolve the new profile's directory, since they currently hard-code target/release. A dev-activated agent must still get a working binary.
+  3. Measured evidence, gathered on a quiet machine: wall-clock `make build-fast` from cold and from warm, at opt-level 3 and at the new profile, with the concurrent-build conditions recorded alongside each number. Keep the change only if the saving is real.
+  4. A named check confirms the performance budget still measures an opt-level-3 binary, so a future profile edit cannot silently degrade it.
+  5. CI is unaffected, or the change to CI is explicit and reviewed.
+
+  Sequence with TASK-1537 (baseline build timings for aida-cli-lib), which is already queued and deliberately held for a quiet machine for the same reason: take TASK-1537's baseline FIRST, then evaluate this against it. Two build-timing measurements taken under different unrecorded load are not comparable.
+
+  Out of scope: changing [profile.release], changing test/dev opt-level, and the STORY-1488 crate split (a separate and larger lever on the same problem).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T15:11:56.017473960Z
+modified_at: 2026-09-27T15:11:56.017473960Z
+req_type: Task
+tags:
+- build throughput profile from:operator
+filed_at:
+  code_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: da36c066-c384-494e-a7cf-abffb3cfe52d
