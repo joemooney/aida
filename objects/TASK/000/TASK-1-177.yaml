@@ -1,0 +1,47 @@
+id: 01a0e10f-17ab-7040-b375-2c7265f49bbf
+spec_id: TASK-1-177
+title: 'PR #2226 strict independent review: request-changes at e63efc3997a85df8cb1ff463…'
+description: |-
+  PR #2226 strict independent review: request-changes at e63efc3997a85df8cb1ff463f48222900ed5f7d6
+
+  Reviewed exact diff 854b7e26f7222c73845064275a18c293c9895283..e63efc3997a85df8cb1ff463f48222900ed5f7d6, AGENTS.md, BUG-1679 full and its product comment, and BUG-1669's authority requirements/operator decisions. Reviewer is not implementer/product/integrator. This is authority-changing and needs an operator-held PR; do not integrate as the product comment's authority-neutral mechanical bug.
+
+  1. P1: Untrusted environment becomes the identity of the coordinating binary. lib.rs:101509-101520 now prefers any executable AIDA_BIN over the known current executable, without provenance. main_entry calls export_coordinating_bin_env before dispatch (lib.rs:1009); lib.rs:101554-101570 then exports the selected value and prepends its directory to PATH. Thus this affects not just AIDA self-spawns but bare vendor selection. Concrete exact-source probe: with original PATH=/usr/bin:/bin and AIDA_BIN=/tmp/aida-review-2226-fixtures/good, export selected that file and prepended /tmp/aida-review-2226-fixtures; Command::new("claude") with --permission-mode bypassPermissions executed the harmless sibling marker script and printed FAKE-VENDOR. The reviewed source has real bare vendor sinks at lib.rs:56206 (intake) and session.rs:1235-1244 (headless vendor, whose drive_path_env at 1125 also derives from this resolver). Other self-spawn/control sinks include solo_cmd.rs:21,75 (including burndown run), shift.rs:1580 (wave), schedule_driver.rs:1307 (persistent tick invocation), maintenance_schedule.rs:2900, and mcp.rs:199 (identity probe/respawn). trusted_session_env at lib.rs:41033 also receives resolve_aida_exe as its supposedly running binary.
+
+  Threat-model distinction: this is demonstrated executable redirection, NOT a demonstrated OS privilege escalation or bypass of an installed BUG-1669 broker. BUG-1669 remains a blocked, unimplemented protected-authority design at this head. Existing PATH/current-executable replacement weaknesses do not establish literal same-user protection either. The new difference is that a supplied AIDA_BIN overrides a valid current executable even with a fixed initial PATH, and propagates that choice to managed launch routes. Executable permissions do not establish launch authority or trusted binary identity. Protect authoritative self/vendor launch identities from this environment override; reconcile the host-wide BUG-1669 perimeter explicitly with an independent architecture/operator decision before accepting this expanded trust boundary. Canonicalizing the path alone will not fix provenance.
+
+  2. P2: The file checked is not necessarily the file executed. lib.rs:101518-101520 returns relative and bare paths unchanged. On Unix the exact-source probe checked ./aida in fixture parent, then Command::new(selected).current_dir(child) executed the different child/aida and printed UNCHECKED-CHILD. For AIDA_BIN=aida, metadata checked parent/aida but Command::new(selected) searched PATH and printed PATH-BINARY from a different directory. Production changes cwd, e.g. maintenance_schedule.rs:2922 and lib.rs:99601. Resolve to an absolute stable path before caching/spawning (or require absolute input); test with different parent/child directories and a competing PATH executable.
+
+  3. P2: is_executable (lib.rs:42708-42725) does not satisfy executable-by-this-process validation. An owned Unix script with mode 0001 is accepted, but spawning it returned EACCES (13); mode 0644 correctly fell back. On non-Unix the helper accepts every regular file. The exact non-Unix branch model accepted plain.txt containing ordinary text. The new test likewise calls a Unix shell script without an executable extension valid on Windows, but never spawns it. Windows metadata compilation passed; no Windows runtime/Wine was available, so no native Windows execution is claimed. Require platform-appropriate executable validation/fallback, with explicit treatment of access/format failures.
+
+  4. P2: Inherited AIDA_BIN breaks test isolation. The existing test deleted_executable_path_uses_replacement_at_clean_path (tests/resolve_aida_exe_tests.rs:125) now calls an ambient-env resolver. test_home.rs:58-65 clears HOME-related overrides, not AIDA_BIN. Running the eight unchanged resolver tests against verbatim extracted production functions passed 8/8 when AIDA_BIN was unset; AIDA_BIN=/bin/true yielded 7 pass / 1 fail: left /bin/true, right fixture/aida. Repeating with the verbatim production test-home constructor/body (excluding its unrelated test module) gave 9/9 including the review HOME probe when unset, and 8/9 with the same failure when set. HOME was redirected to /tmp/aida-lib-test-home-<pid>, while AIDA_BIN remained /bin/true. A directory named fake_home in the newly added test is merely a path fixture; it does not isolate environment. Use injected resolver inputs for existing deterministic tests and clear/pin AIDA_BIN at top-level test startup; verify subprocess fixtures as well. No real-HOME write or protected-child execution was attempted or claimed.
+
+  Additional probe results: executable symlink accepted; symlink to directory and dangling symlink rejected; missing override plus no current falls back to bare aida; OnceLock retains the initial override after env removal. Ordinary 0755 override succeeds. Symlink acceptance alone is not labeled a defect, but supplies no protected identity guarantee.
+
+  Validation method/limits: detached clean scratch worktree /tmp/aida-review-2226 at the exact head; fake HOME /tmp/aida-review-2226-home. Cargo targeted run was requested with separate /tmp target directory but remained waiting for both global build slots; reviewer canceled only that waiting wrapper. Therefore no full crate Cargo test pass is claimed. Instead rustc compiled verbatim extracted resolver/export/helper functions and included the unchanged eight repository tests, linking existing tempfile/dirs dependencies; the constructor probe additionally included the production test_home body. Custom probes were standalone /tmp artifacts, not repository edits. Windows functions were cross-compiled with --target x86_64-pc-windows-gnu --emit=metadata, plus an explicitly labeled non-Unix-branch model on Linux. Evidence artifacts: /tmp/aida-review-2226-extract.py, /tmp/aida-review-2226-hermetic-tests.rs, /tmp/aida-review-2226-probe.rs, /tmp/aida-review-2226-windows-model.rs. No merge, code edits, spec status edits, or privileged service/agent launches.
+
+  PR: https://github.com/joemooney/aida/pull/2226
+
+  Final checks: cargo fmt --all -- --check passed; scratch git status clean; GitHub OPEN/head/branch reverified unchanged immediately before verdict and finding. The CLI required --pr 2226 for a refusing verdict; supplied to protect this PR.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-27T04:10:57.835863554Z
+modified_at: 2026-09-27T04:10:57.835863554Z
+req_type: Task
+tags:
+- exact-head:e63efc3997a85df8cb1ff463f48222900ed5f7d6
+- from-advisor:BUG-1679
+- from-review:PR-2226
+- kind:observation
+- linked:BUG-1669
+- linked:BUG-1679
+- severity:major
+filed_at:
+  code_sha: 854b7e26f7222c73845064275a18c293c9895283
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: codex
