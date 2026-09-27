@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:52.109830507Z
-modified_at: 2026-09-27T05:57:50.379782183Z
+modified_at: 2026-09-27T06:16:57.153222562Z
 req_type: Bug
 comments:
 - id: 01a0e075-dce9-7d13-a5d5-6314b8f958e6
@@ -61,3 +61,8 @@ comments:
     No blocking combined-head finding. CI Ubuntu/macOS/Windows is PENDING and remains a mandatory separate gate. Code APPROVE is not merge readiness. No code, PR, status, or merge action performed by this reviewer.
   created_at: 2026-09-27T05:57:50.379782183Z
   modified_at: 2026-09-27T05:57:50.379782183Z
+- id: 01a0e182-7041-7243-8f44-1b42079fbb81
+  author: joe
+  content: 'PROXY DECISION (product, operator direction 2026-09-26): for batch 104 PR #2229, do not wait for optional macOS/Windows checks before merge-readiness review; required main protection checks are Build (ubuntu-latest) and merge-hold-gate and both passed at 679928a9543e37719d71ca1ff65cc3766d3cfaa5. Keep optional matrix running in background, do not alter branch protection, required checks, or any hold. Independent advisor and integrator still gate the exact-head merge.'
+  created_at: 2026-09-27T06:16:57.153222562Z
+  modified_at: 2026-09-27T06:16:57.153222562Z
