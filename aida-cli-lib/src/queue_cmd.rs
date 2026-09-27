@@ -6148,6 +6148,38 @@ pub(crate) fn handle_queue_command(
                         &drain_lock_command,
                     )?)
                 };
+                // TASK-1518: a stopped wave (systemd RuntimeMaxSec / OOMPolicy=stop,
+                // `aida drain stop --now`, a manual kill) must not leave the lock
+                // and its leases for the next tick to reap. The guard moves into a
+                // shared slot so the SIGTERM handler can release it properly
+                // (heartbeat, shared claim, pid-checked file) and stamp the
+                // in-flight leases before the bounded exit. The handler holds only
+                // a Weak handle, so without a signal the slot behaves exactly like
+                // the plain guard did: dropped at the end of this arm, or left to
+                // the atexit hook on `process::exit`. Advisory install: a failure
+                // to register the handler only means today's kill-then-reap
+                // recovery. trace:TASK-1518 | ai:claude
+                let _drain_guard: crate::drain_signal::GuardSlot =
+                    std::sync::Arc::new(std::sync::Mutex::new(_drain_guard));
+                if !*resume_dry_run {
+                    if let Ok(root) = find_main_worktree_root() {
+                        if let Err(e) =
+                            crate::drain_signal::install(crate::drain_signal::DrainTermContext {
+                                project_root: root,
+                                drain_pid: std::process::id(),
+                                guard: std::sync::Arc::downgrade(&_drain_guard),
+                                grace: crate::drain_signal::grace_from_env(),
+                                term_flag: crate::drain_signal::process_term_flag(),
+                                borrowed: drain_lock::borrow_requested(),
+                            })
+                        {
+                            eprintln!(
+                                "  {} could not install the drain SIGTERM handler ({e:#}); a stopped wave falls back to next-tick reap",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                            );
+                        }
+                    }
+                }
                 // BUG-660: prevent the host from sleeping for the duration of an
                 // unattended drive — a lidded/idle laptop must not suspend
                 // mid-drain. Best-effort (a missing caffeinate / systemd-inhibit

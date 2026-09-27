@@ -119,6 +119,27 @@ fn remove_lock_if_ours(path: &Path) {
     }
 }
 
+/// Remove this project's local drain lock if it still records our pid, and
+/// say whether it did. The SIGTERM handler's fallback when the guard slot was
+/// already empty (a borrowed guard, or a lock written by an older path);
+/// the same ownership rule as `DrainGuard::drop` and the atexit hook.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn release_lock_if_ours(project_root: &Path) -> bool {
+    release_lock_if_pid(project_root, std::process::id())
+}
+
+/// Remove this project's local drain lock if it still records `pid`, and say
+/// whether it did. `aida drain stop --now` uses it once the signalled drain
+/// has exited, so a lock a successor drain has since taken is never removed.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn release_lock_if_pid(project_root: &Path, pid: u32) -> bool {
+    let path = drain_lock_path(project_root);
+    if read_lock(&path).map(|l| l.pid) == Some(pid) {
+        return std::fs::remove_file(&path).is_ok();
+    }
+    false
+}
+
 /// Arm the process-exit cleanup for the just-acquired drain lock (BUG-712).
 fn register_atexit_cleanup(path: &Path) {
     if let Ok(mut slot) = ATEXIT_LOCK_PATH.lock() {

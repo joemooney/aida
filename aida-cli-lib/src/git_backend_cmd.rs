@@ -3975,10 +3975,21 @@ pub(crate) fn handle_git_backend_command(
                 &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
         }
-        Command::Criteria { spec, json } => {
+        Command::Criteria {
+            spec,
+            json,
+            window_days,
+        } => {
             let store = backend.load()?;
             let project_root = find_project_root()?;
-            criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
+            // trace:STORY-1487 | ai:claude
+            crate::criteria_coverage::dispatch_criteria(
+                &project_root,
+                &store,
+                spec,
+                *window_days,
+                *json,
+            )?;
         }
         Command::Reconstitute {
             spec,

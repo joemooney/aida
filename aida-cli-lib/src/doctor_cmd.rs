@@ -69,6 +69,19 @@ pub(crate) fn handle_doctor_command(
             {
                 return doctor_check_runaway_seats_light(*json, *fail_on_findings);
             }
+            // BUG-1675: the disk-headroom guard is a single statvfs on the
+            // project root, scheduled every 30 minutes. Same shape, same
+            // reasoning: skip the store load + collect_doctor_findings pass
+            // the category filter would discard anyway (measured 44 s under
+            // load, past the 120 s scheduler kill on a busy host — a false
+            // CronJobFailed disk trip). trace:BUG-1675 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(DISK_HEADROOM_CATEGORY)
+            {
+                return doctor_check_disk_headroom_light(*json, *fail_on_findings);
+            }
             doctor_multi_agent(DoctorRunOptions {
                 heal: false,
                 yes,
@@ -700,6 +713,60 @@ fn doctor_check_runaway_seats_light(json: bool, fail_on_findings: bool) -> Resul
     Ok(())
 }
 
+/// BUG-1675: the light entry path for `aida doctor check disk-headroom`,
+/// mirroring [`doctor_check_runaway_seats_light`]. Reads
+/// `[doctor.disk_headroom]` off the project root and runs the disk probe —
+/// no `Storage::load()`, no `collect_doctor_findings`, no other category.
+/// Output shape (report fields, `--fail-on-findings` exit gating) matches
+/// the full path so the scheduler cannot tell which path ran.
+// trace:BUG-1675 | ai:claude
+fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Result<()> {
+    let project_root = main_worktree_root_from(&find_project_root()?);
+    let report = disk_headroom_light_report(&project_root);
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        render_doctor_report(&report, false)?;
+    }
+
+    // Mirrors the `--fail-on-findings` gate in `doctor_multi_agent`.
+    if fail_on_findings && !report.findings.is_empty() {
+        anyhow::bail!(
+            "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
+            report.findings.len()
+        );
+    }
+    Ok(())
+}
+
+/// The whole of the light path's work, pure over `project_root`: config read
+/// + disk probe → report. Split out so a fixture can pin that it never needs
+/// a loadable store.
+// trace:BUG-1675 | ai:claude
+pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> DoctorReport {
+    disk_headroom_light_report_with(project_root, disk_free_bytes)
+}
+
+/// [`disk_headroom_light_report`] with the free-space probe injected, so a
+/// test can pin both verdicts without depending on the host's real disk.
+// trace:BUG-1675 | ai:claude
+fn disk_headroom_light_report_with(
+    project_root: &std::path::Path,
+    free_bytes: impl Fn(&std::path::Path) -> Option<u64>,
+) -> DoctorReport {
+    let cfg = crate::read_project_config_value(project_root);
+    let min_free_gib = disk_headroom_min_free_gib(cfg.as_ref());
+    DoctorReport::from_findings(disk_headroom_findings(
+        free_bytes(project_root),
+        min_free_gib,
+    ))
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1675_disk_headroom_light_tests.rs"]
+mod bug_1675_disk_headroom_light_tests;
+
 /// TASK-1124: which deployed Codex prompts in `dir` (normally `~/.codex/prompts`)
 /// have drifted from the current source templates. A prompt that EXISTS but
 /// whose content differs from `expected_codex_prompts()` is rot (a stale
@@ -1072,6 +1139,10 @@ pub(crate) fn performance_policy(cfg: Option<&toml::Value>) -> PerformancePolicy
 // trace:STORY-1367 | ai:claude
 const DEFAULT_DISK_HEADROOM_MIN_FREE_GIB: u64 = 60;
 
+/// The doctor category name the disk-headroom job is dispatched under.
+// trace:BUG-1675 | ai:claude
+pub(crate) const DISK_HEADROOM_CATEGORY: &str = "disk-headroom";
+
 /// Read `[doctor.disk_headroom] min_free_gib`, falling back to the default
 /// floor. A project on a smaller or larger disk than the measured incident
 /// tunes this rather than the check code.
@@ -1121,15 +1192,26 @@ fn disk_headroom_finding(free_bytes: u64, min_free_gib: u64) -> Option<DoctorFin
 /// can't be resolved rather than risk a false positive.
 // trace:STORY-1367 | ai:claude
 fn scan_disk_headroom(project_root: &std::path::Path, min_free_gib: u64) -> Vec<DoctorFinding> {
+    disk_headroom_findings(disk_free_bytes(project_root), min_free_gib)
+}
+
+/// Free bytes on the filesystem holding `project_root` (the longest mount
+/// point that prefixes it), or `None` when no mount resolves.
+// trace:STORY-1367 | ai:claude
+fn disk_free_bytes(project_root: &std::path::Path) -> Option<u64> {
     let disks = sysinfo::Disks::new_with_refreshed_list();
-    let Some(disk) = disks
+    disks
         .iter()
         .filter(|d| project_root.starts_with(d.mount_point()))
         .max_by_key(|d| d.mount_point().as_os_str().len())
-    else {
-        return Vec::new();
-    };
-    disk_headroom_finding(disk.available_space(), min_free_gib)
+        .map(|d| d.available_space())
+}
+
+/// An unresolved filesystem is silent rather than a false positive.
+// trace:BUG-1675 | ai:claude
+fn disk_headroom_findings(free_bytes: Option<u64>, min_free_gib: u64) -> Vec<DoctorFinding> {
+    free_bytes
+        .and_then(|free| disk_headroom_finding(free, min_free_gib))
         .into_iter()
         .collect()
 }
@@ -3322,13 +3404,20 @@ fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
                 category: "remote-drift".to_string(),
                 id: format!("remote-drift-{branch}"),
                 summary: format!("branch `{branch}` differs across remotes: {detail}"),
+                // BUG-1676: a hub that is merely BEHIND origin (a forge-side
+                // merge, a store push from another clone) is fixed by
+                // `aida remote mirror-sync`; only a genuinely diverged hub
+                // needs a reconcile. trace:BUG-1676 | ai:claude
                 action: if branch == "aida-store" {
-                    "run `aida remote reconcile` (dry-run; --execute to union-merge and push every hub); \
-                     never force-push a shared branch to resolve"
+                    "run `aida remote mirror-sync` if a hub is merely behind origin; if the hubs \
+                     diverged, run `aida remote reconcile` (dry-run; --execute to union-merge and \
+                     push every hub); never force-push a shared branch to resolve"
                         .to_string()
                 } else {
-                    "reconcile the divergent tips and push to every remote (see `aida remote status`); \
-                     never force-push a shared branch to resolve"
+                    "run `aida remote mirror-sync` to push origin's tip to every mirror hub (a \
+                     forge-side merge never fires the pre-push mirror hook); if the tips diverged, \
+                     reconcile them by hand (see `aida remote status`); never force-push a shared \
+                     branch to resolve"
                         .to_string()
                 },
                 safe_heal: false,
@@ -3606,6 +3695,14 @@ pub(crate) struct AgentWorktreeFacts {
     /// it false whenever the git probes needed to prove it are inconclusive.
     // trace:BUG-1287 | ai:claude
     pub(crate) content_fully_landed: bool,
+    /// True when the default branch carries a landed commit whose subject or
+    /// body-line trailer names this branch's (finished) spec — the shape a
+    /// batched integration PR leaves behind: the spec's own branch is never
+    /// merged or PR'd directly, so neither `ancestor_of_main` nor `pr_merged`
+    /// can fire. Like `pr_merged` it is only a merge SIGNAL: a positive
+    /// `unique_unmerged_commits` still needs `content_fully_landed` to clear.
+    // trace:BUG-1657 | ai:claude
+    pub(crate) spec_trailer_on_main: bool,
 }
 
 /// Pure squash-aware classification of one agent-managed worktree. No git/forge
@@ -3627,6 +3724,9 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
         Some("branch is an ancestor of origin/main (merged)")
     } else if facts.pr_merged {
         Some("its PR is merged (squash-merged)")
+    } else if facts.spec_trailer_on_main {
+        // trace:BUG-1657 | ai:claude
+        Some("its spec landed on origin/main through an integration merge")
     } else {
         None
     };
@@ -3846,6 +3946,121 @@ pub(crate) fn branch_content_fully_landed(
     default_side_ids.iter().any(|id| id == &branch_patch_id)
 }
 
+/// Per-path proof that everything `branch` changed since its merge-base with
+/// `default_ref` is already on `default_ref`, byte for byte: for every path ANY
+/// branch commit touched, the default branch holds the same blob id and mode
+/// as the branch tip, or both lack the path. This is the
+/// batched-integration complement to [`branch_content_fully_landed`]: when an
+/// integration branch folds several specs' work into ONE squash commit, no
+/// patch-id matches anything on the default side, yet every change the branch
+/// makes is already there.
+///
+/// Deliberately NOT a three-way merge: `git merge-tree` honours
+/// `.gitattributes` merge drivers, so a `merge=ours` path would merge
+/// "cleanly" while dropping an edit that never shipped. Tree-to-tree raw diffs
+/// compare object ids and modes only — no attributes, drivers or textconv.
+///
+/// Conservative on any doubt: a failed git call, an unparsable diff, or any
+/// touched path whose content differs returns `false` (stay KEPT). A change
+/// that landed and was later reverted or edited again on the default branch
+/// also stays KEPT. Read-only.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn branch_paths_match_default(
+    project_root: &std::path::Path,
+    default_ref: &str,
+    branch: &str,
+) -> bool {
+    let run = |args: &[&str]| -> Option<Vec<u8>> {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| o.stdout)
+    };
+    let Some(merge_base) = run(&[
+        "merge-base",
+        git_arg_guard::END_OF_OPTIONS,
+        default_ref,
+        branch,
+    ]) else {
+        return false;
+    };
+    let merge_base = String::from_utf8_lossy(&merge_base).trim().to_string();
+    if merge_base.is_empty() {
+        return false;
+    }
+    let changed_paths = |from: &str, to: &str| -> Option<std::collections::HashSet<Vec<u8>>> {
+        let raw = run(&[
+            "diff",
+            "--raw",
+            "-z",
+            "--no-renames",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--ignore-submodules=none",
+            git_arg_guard::END_OF_OPTIONS,
+            from,
+            to,
+            "--",
+        ])?;
+        parse_raw_diff_paths(&raw)
+    };
+    // Every path ANY branch commit touched — the union over each commit's own
+    // diff, not the net merge-base..tip diff, which would miss a path changed
+    // and then changed back (a deletion or revert made after an integration
+    // batch picked up an earlier tip). Merge commits are diffed against each
+    // parent (`-m`), which can only widen the set.
+    let range = format!("{merge_base}..{branch}");
+    let Some(log_raw) = run(&[
+        "log",
+        "--raw",
+        "-z",
+        "-m",
+        "--no-renames",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--ignore-submodules=none",
+        "--format=",
+        git_arg_guard::END_OF_OPTIONS,
+        &range,
+        "--",
+    ]) else {
+        return false;
+    };
+    let Some(touched) = parse_raw_diff_paths(&log_raw) else {
+        return false;
+    };
+    if touched.is_empty() {
+        return false;
+    }
+    // Paths where the default branch's tree differs from the branch tip
+    // (blob id or mode). Nothing the branch touched may appear here.
+    let Some(differs) = changed_paths(default_ref, branch) else {
+        return false;
+    };
+    touched.is_disjoint(&differs)
+}
+
+/// Parse `git diff --raw -z --no-renames` output into its set of paths. Each
+/// record is a `:`-prefixed metadata field followed by one NUL-terminated
+/// path. Returns `None` on any record that does not fit that shape.
+// trace:BUG-1657 | ai:claude
+fn parse_raw_diff_paths(raw: &[u8]) -> Option<std::collections::HashSet<Vec<u8>>> {
+    let mut paths = std::collections::HashSet::new();
+    let mut fields = raw.split(|b| *b == 0).filter(|f| !f.is_empty());
+    while let Some(meta) = fields.next() {
+        if meta.first() != Some(&b':') {
+            return None;
+        }
+        paths.insert(fields.next()?.to_vec());
+    }
+    Some(paths)
+}
+
 /// BUG-1288: batched sibling of the per-commit `patch_id` closure in
 /// [`branch_content_fully_landed`] — feeds a whole `git log -p` stream (one
 /// commit hash line followed by that commit's diff, repeated) through a
@@ -3995,6 +4210,7 @@ fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFind
             pr_merged,
             unique_unmerged_commits,
             content_fully_landed,
+            spec_trailer_on_main: false,
         };
 
         match classify_agent_worktree(&facts) {
@@ -5710,6 +5926,7 @@ mod story_462_doctor_tests {
             pr_merged: false,
             unique_unmerged_commits: 0,
             content_fully_landed: false,
+            spec_trailer_on_main: false,
         }
     }
 

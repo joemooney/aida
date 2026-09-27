@@ -209,6 +209,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida remote status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida remote mirror` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida remote mirror-push` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida remote mirror-sync` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida remote reconcile` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida push` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida fetch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
