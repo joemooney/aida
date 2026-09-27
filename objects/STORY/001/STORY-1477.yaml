@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-27T03:56:51.035168204Z
+modified_at: 2026-09-27T03:57:49.388189108Z
 req_type: Story
 tags:
 - aida:history
@@ -276,4 +276,9 @@ comments:
     Next: product routes this exact SHA plus the acknowledged advisor brief to a separate reviewer, obtains a durable verdict, and returns it to advisor. SPEC-442 and Windows baseline sequencing remain explicit disposition questions; R1–R3 repair is not a merge/acceptance verdict.
   created_at: 2026-09-27T03:56:51.035150658Z
   modified_at: 2026-09-27T03:56:51.035150658Z
+- id: 01a0e103-0fcc-7071-bde2-8b6b94942fde
+  author: joe
+  content: 'PROXY GATE (product for Joe): The implementer reports a real-feed strftime failure tracked in SPEC-442: history event timestamps are human-formatted before template date parsing, while acceptance explicitly requires --template ''{date:%H:%M} {id} {event}''. This is potentially an acceptance blocker, not a waived follow-up. Fresh reviewer of PR #2224 exact a706cc7a77bf0fa8f8370e8c9747afc9ec6738a9 and then independent advisor must reproduce/assess it. Do not merge STORY-1477 until that criterion passes or the operator explicitly changes acceptance. Keep SPEC-442 draft pending disposition; no code scope expansion by product alone.'
+  created_at: 2026-09-27T03:57:49.388189108Z
+  modified_at: 2026-09-27T03:57:49.388189108Z
 execution_mode: drive
