@@ -3,12 +3,12 @@ spec_id: TASK-1533
 agreed_id: TASK-1533
 title: Bind this repo's guard route jobs to their own guard once the installed aida supports CronJobFailed:<job>
 description: 'Follow-up from BUG-1655. The fix lands the CronJobFailed:<job> binding and the scaffold template, but this repo''s .aida/config.toml keeps the plain form so the live tick keeps working with the currently installed binary (an older binary rejects the bound form at config load). Acceptance: 1. After BUG-1655 merges, rebuild and install aida (make install or equivalent) and confirm ''aida schedule status'' loads. 2. Then change the five route jobs in .aida/config.toml (performance, hub-drift, stranded-branches, disk-headroom, watchdog) to on = ["CronJobFailed:<guard>"]. 3. Verify with ''aida schedule status'' and one forced guard failure in a fixture or dry run that only its route becomes due.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:47:36.637006946Z
-modified_at: 2026-09-27T10:54:23.181572446Z
+modified_at: 2026-09-27T11:04:25.003682600Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -40,3 +40,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e289-9ebe-7e01-9f55-6421a0850b3a
+  author: joe
+  timestamp: 2026-09-27T11:04:25.022457197Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
