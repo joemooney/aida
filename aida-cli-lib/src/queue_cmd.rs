@@ -1185,6 +1185,10 @@ pub(crate) fn opportunistic_queue_gc(
     let Ok(backend) = advance_backend(store_path) else {
         return 0;
     };
+    // cache-tolerant-read: selection only — each candidate's target spec YAML
+    // object is re-read inside the store write lock, right before the removal
+    // (`queue_remove_many_if`).
+    // trace:BUG-1671 | ai:claude
     let summaries = match backend.list_summaries(&queue_dead_target_summary_filter()) {
         Ok(s) => s,
         Err(_) => return 0,
@@ -1198,8 +1202,12 @@ pub(crate) fn opportunistic_queue_gc(
     if dead.is_empty() {
         return 0;
     }
+    crate::sweep_test_hook::fire(store_path);
+    // BUG-1671: the pass above runs outside the store lock, so a reopen could
+    // land between it and the queue write. Re-check each candidate under the
+    // lock the reopen itself needs. trace:BUG-1671 | ai:claude
     storage
-        .queue_remove_many(user_id, &dead)
+        .queue_remove_many_if(user_id, &dead, &|id| queue_target_still_dead(&backend, id))
         .map(|removed| removed.len())
         .unwrap_or(0)
 }
@@ -4228,6 +4236,10 @@ pub(crate) fn handle_queue_command(
             let user_id = get_user(user);
             let entries = storage.queue_list(&user_id, /* include_completed */ true)?;
             let gc_backend = advance_backend(store_path)?;
+            // cache-tolerant-read: selection only — each candidate's YAML
+            // object is re-read inside the store write lock, right before the
+            // removal.
+            // trace:BUG-1671 | ai:claude
             let summaries = gc_backend.list_summaries(&queue_dead_target_summary_filter())?;
             // BUG-1664: the summaries may be a stale snapshot; keep only the
             // candidates whose authoritative spec is still dead.
@@ -4355,18 +4367,34 @@ pub(crate) fn handle_queue_command(
                         .copied()
                         .chain(merged_dead.iter().copied())
                         .collect();
+                    // BUG-1671: the revalidation above ran outside the store
+                    // lock, so re-take the decision under it, right before the
+                    // removal. Only the target-spec rule's candidates are
+                    // re-read: a BUG-1512 review row is dead because its PR
+                    // merged, which no store write can revive.
+                    // trace:BUG-1671 | ai:claude
+                    let still_dead = |id: &Uuid| {
+                        !dead_ids.contains(id) || queue_target_still_dead(&gc_backend, id)
+                    };
+                    crate::sweep_test_hook::fire(store_path);
                     let removed = if r#for.is_none() {
                         let ids: Vec<Uuid> = all_dead.iter().map(|e| e.requirement_id).collect();
-                        storage.queue_remove_many(&user_id, &ids)?.len()
+                        storage
+                            .queue_remove_many_if(&user_id, &ids, &still_dead)?
+                            .len()
                     } else {
+                        let mut removed = 0usize;
                         for e in &all_dead {
-                            storage.queue_remove_for_role(
+                            if storage.queue_remove_for_role_if(
                                 &user_id,
                                 &e.requirement_id,
                                 r#for.as_deref(),
-                            )?;
+                                &still_dead,
+                            )? {
+                                removed += 1;
+                            }
                         }
-                        all_dead.len()
+                        removed
                     };
                     println!(
                         "{} Removed {} dead queue entr{}",

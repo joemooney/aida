@@ -260,6 +260,11 @@ fn archive_sweep(
     // Pull all non-archived rows matching any of the requested statuses,
     // then post-filter by modified_at < cutoff. The cache's status filter
     // is single-value so we do one query per status and merge.
+    //
+    // cache-tolerant-read: selection only — each candidate's YAML object is
+    // re-read and its eligibility re-decided inside the store write lock
+    // (`bulk_update_atomically`) before anything is written.
+    // trace:BUG-1671 | ai:claude
     let mut candidates: Vec<aida_core::RequirementSummary> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for s in &statuses {
@@ -299,11 +304,19 @@ fn archive_sweep(
         // candidate against its authoritative object, as the write path does.
         // trace:BUG-1664 | ai:claude
         let mut would: Vec<aida_core::Requirement> = Vec::with_capacity(eligible.len());
+        let mut unreadable = 0usize;
         for s in &eligible {
-            if let Some(req) = backend.get_requirement(&s.id)? {
-                if archive_sweep_still_eligible(&req, &statuses, cutoff) {
-                    would.push(req);
+            // BUG-1671: one spec whose object will not read is skipped and
+            // counted, never a reason to abort the preview.
+            // trace:BUG-1671 | ai:claude
+            match backend.get_requirement(&s.id) {
+                Ok(Some(req)) => {
+                    if archive_sweep_still_eligible(&req, &statuses, cutoff) {
+                        would.push(req);
+                    }
                 }
+                Ok(None) => {}
+                Err(_) => unreadable += 1,
             }
         }
         println!(
@@ -325,7 +338,7 @@ fn archive_sweep(
                 shorten_text(&req.title, 60)
             );
         }
-        print_sweep_skipped_note(eligible.len() - would.len());
+        print_sweep_skipped_note(eligible.len() - would.len() - unreadable, unreadable);
         return Ok(());
     }
 
@@ -353,7 +366,7 @@ fn archive_sweep(
         statuses.join(",")
     );
     let mut to_archive = Vec::with_capacity(total);
-    let mut skipped = 0usize;
+    let mut unreadable = 0usize;
     let mut last_tick = std::time::Instant::now();
     for (i, s) in eligible.iter().enumerate() {
         let display_id = s
@@ -366,18 +379,22 @@ fn archive_sweep(
         // BUG-1664: `s` came from the cache projection, which may be a stale
         // snapshot, so re-check status and age on the object itself (a spec
         // reopened or edited since then is skipped).
-        // trace:BUG-1664 | ai:claude
-        let Some(mut req) = backend.get_requirement(&s.id)? else {
-            skipped += 1;
-            continue;
+        // BUG-1671: this pass is a cheap pre-filter and the source of the
+        // progress ticks and display ids — the DECIDING re-check happens on
+        // the object read inside the store lock, below. An object that will
+        // not read is skipped and counted, never fatal.
+        // trace:BUG-1664 trace:BUG-1671 | ai:claude
+        let req = match backend.get_requirement(&s.id) {
+            Ok(Some(req)) => req,
+            Ok(None) => continue,
+            Err(_) => {
+                unreadable += 1;
+                continue;
+            }
         };
         if !archive_sweep_still_eligible(&req, &statuses, cutoff) {
-            skipped += 1;
             continue;
         }
-        req.archived = true;
-        req.archived_at = Some(now);
-        req.modified_at = now;
         if verbose {
             eprintln!("  [{}/{}] {display_id}", i + 1, total);
         } else if show_progress
@@ -389,22 +406,55 @@ fn archive_sweep(
             last_tick = std::time::Instant::now();
         }
         to_archive.push(req);
-        record_role_activity(&display_id, "archive");
     }
-    let archived_count = backend.bulk_update(&to_archive, "chore(archive)")?;
+    let selected = to_archive.len();
+    crate::sweep_test_hook::fire(backend.path());
+    // BUG-1671: the eligibility decision is re-taken on each object read INSIDE
+    // the store write lock, so a spec reopened between the pass above and this
+    // write is skipped rather than reverted by the whole-object write. Still
+    // one commit (BUG-425). trace:BUG-1671 | ai:claude
+    let report = backend.bulk_update_atomically(&to_archive, "chore(archive)", |req| {
+        if !archive_sweep_still_eligible(req, &statuses, cutoff) {
+            return false;
+        }
+        req.archived = true;
+        req.archived_at = Some(now);
+        req.modified_at = now;
+        true
+    })?;
+    for req in &report.written {
+        let display_id = req
+            .agreed_id
+            .as_deref()
+            .or(req.spec_id.as_deref())
+            .unwrap_or_default();
+        record_role_activity(display_id, "archive");
+    }
     println!(
-        "{} {archived_count} spec(s) in 1 commit (older than {duration}, status in {})",
+        "{} {} spec(s) in 1 commit (older than {duration}, status in {})",
         "Archived:".cyan().bold(),
+        report.written.len(),
         statuses.join(",")
     );
-    print_sweep_skipped_note(skipped);
+    print_sweep_skipped_note(
+        (total - selected - unreadable) + report.skipped_changed + report.skipped_missing,
+        unreadable + report.skipped_unreadable,
+    );
     Ok(())
 }
 
-/// Name the candidates the sweep left alone because their spec changed since
-/// the cached view it selected them from.
-// trace:BUG-1664 | ai:claude
-fn print_sweep_skipped_note(skipped: usize) {
+/// Name the candidates the sweep left alone: those whose spec changed since the
+/// cached view it selected them from, and (counted apart, because it points at
+/// a damaged store rather than ordinary concurrency) those whose object could
+/// not be read.
+// trace:BUG-1664 trace:BUG-1671 | ai:claude
+fn print_sweep_skipped_note(skipped: usize, unreadable: usize) {
+    if unreadable > 0 {
+        println!(
+            "  {}",
+            format!("could not read {unreadable} spec(s); left them alone").dimmed()
+        );
+    }
     if skipped > 0 {
         println!(
             "  {}",

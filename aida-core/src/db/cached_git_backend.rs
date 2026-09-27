@@ -961,6 +961,52 @@ impl CachedGitBackend {
         Ok(n)
     }
 
+    /// Write-through batched compare-and-swap (see
+    /// [`GitBackend::bulk_update_atomically`]): every eligibility decision is
+    /// taken on the object read inside the store write lock, then the specs
+    /// actually written are upserted into the cache and the HEAD-SHA re-stamped
+    /// once.
+    ///
+    /// The cache upserts run AFTER the store lock is released, exactly as
+    /// `bulk_update` does: the lock closes the re-check/write window and
+    /// nothing else, so other readers do not also wait out the cache writes.
+    // trace:BUG-1671 | ai:claude
+    pub fn bulk_update_atomically<F>(
+        &self,
+        targets: &[Requirement],
+        commit_subject: &str,
+        keep: F,
+    ) -> Result<super::git_backend::BulkAtomicReport>
+    where
+        F: FnMut(&mut Requirement) -> bool,
+    {
+        // Capture HEAD BEFORE the write so restamp_head can tell our own commit
+        // apart from an external pull that moved HEAD underneath us.
+        let pre_write_head = self.current_head_sha();
+        let report = self
+            .inner
+            .bulk_update_atomically(targets, commit_subject, keep)?;
+        let mut cache_ok = true;
+        for req in &report.written {
+            if let Err(e) = self.upsert_requirement_with_schema_retry(req) {
+                eprintln!(
+                    "warning: cache upsert failed during bulk_update_atomically, \
+                     cache marked stale: {}",
+                    e
+                );
+                cache_ok = false;
+                break;
+            }
+        }
+        if cache_ok {
+            let reqs: Vec<&Requirement> = report.written.iter().collect();
+            self.refresh_epics_then_restamp(&reqs, &pre_write_head);
+        } else {
+            let _ = self.cache.set_source_head_sha("");
+        }
+        Ok(report)
+    }
+
     /// Per-spec compare-and-swap with an optional commit subject (see
     /// [`GitBackend::update_spec_atomically_with_subject`]), then that one
     /// cache row. Holds the store write lock across both; never scans the
@@ -1244,6 +1290,28 @@ impl DatabaseBackend for CachedGitBackend {
     // trace:TASK-1052 | ai:claude
     fn queue_remove_many(&self, user_id: &str, ids: &[Uuid]) -> Result<Vec<QueueEntry>> {
         self.inner.queue_remove_many(user_id, ids)
+    }
+
+    // trace:BUG-1671 | ai:claude
+    fn queue_remove_many_if(
+        &self,
+        user_id: &str,
+        ids: &[Uuid],
+        still_dead: &dyn Fn(&Uuid) -> bool,
+    ) -> Result<Vec<QueueEntry>> {
+        self.inner.queue_remove_many_if(user_id, ids, still_dead)
+    }
+
+    // trace:BUG-1671 | ai:claude
+    fn queue_remove_for_role_if(
+        &self,
+        user_id: &str,
+        requirement_id: &Uuid,
+        role: Option<&str>,
+        still_dead: &dyn Fn(&Uuid) -> bool,
+    ) -> Result<bool> {
+        self.inner
+            .queue_remove_for_role_if(user_id, requirement_id, role, still_dead)
     }
 }
 
