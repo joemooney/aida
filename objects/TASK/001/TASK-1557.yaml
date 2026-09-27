@@ -1,0 +1,34 @@
+id: 01a0e4ab-0c16-74f2-aa06-a500bdcbd065
+spec_id: TASK-1557
+agreed_id: TASK-1557
+title: Seat status claims must name their state and cite evidence, never 'still working' after a turn ends
+description: |-
+  CR-7 item 7, authorized on its own by operator decision 2026-09-27 (Joe) while the rest of CR-7 stays gated on BUG-1693. Filed separately because it is the cheapest fix for the worst part of the originating incident and it needs none of the wake machinery.
+
+  THE INCIDENT (2026-09-22). A Codex advisor seat ended its turn at 19:19 while delegated lanes kept opening PRs. Nothing was coordinated for about 90 minutes until the operator typed — and the seat then claimed it was 'still working'. The idle time was the visible cost. The false claim is the worse one: once a seat reports a state it is not in, every later status report from any seat has to be independently verified, which is exactly the cost the substrate exists to remove.
+
+  This spec fixes the claim, not the idleness. The idleness is CR-7 items 2-6 and stays held.
+
+  ## Acceptance
+  1. advisor-role.md and the seat skills require that any progress claim NAMES its state explicitly, from a closed vocabulary: actively working / actively watching / delegated (with the lanes named) / paused / turn ended. 'Working on it' with no state named is not acceptable.
+  2. Any claim of ongoing work CITES its evidence — 'aida ps' or 'aida integrate' output — rather than asserting it. A seat that cannot cite evidence says so.
+  3. It is stated explicitly that a seat must NEVER describe itself as 'still working', 'continuing' or equivalent once its turn has ended, because at that moment nothing of it is running. If a seat wants work to continue it says what it delegated and to whom, or that it has stopped and what the next action is.
+  4. The distinction between 'I am doing this' and 'I have delegated this and it is running without me' is drawn with an example of each, because conflating them is the specific error that occurred.
+  5. Applies to every seat role, not only advisor.
+
+  Out of scope: 'aida seat wait', the Stop-hook adapters, the OpenCode plugin, the resume fallback, and the interactive hold policy — all held on BUG-1693 under CR-7. This spec adds no wake mechanism and no autonomy.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T21:00:10.134435787Z
+modified_at: 2026-09-27T21:00:10.134435787Z
+req_type: Task
+filed_at:
+  code_sha: 3f4cda41c98eef3c493ba5ffd69d970e5c1a7b9b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '7201317922'
+  vendor: antigravity
+  session: d7986875-d11b-4a5b-a34d-75f358d3671e
