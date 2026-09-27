@@ -263,3 +263,11 @@ name = "night-shift"
 command = "shift tick"
 every = "10m"
 enabled = true
+
+# Effort-balance intent-capture target (TASK-1522): advisory floor on the
+# share of newly completed specs with at least one traced test criterion.
+# Reported by `aida criteria coverage` and `aida status`; not enforced.
+#
+# [capture]
+# criterion_test_floor_pct = 50
+

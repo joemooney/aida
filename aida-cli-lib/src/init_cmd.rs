@@ -4581,6 +4581,8 @@ pub(crate) fn handle_init_distributed_worktree(
     let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
+    // TASK-1522: commented [capture] intent-capture floor stub.
+    let config_content = config_content + init_capture_config_section();
     // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
     // commit, so the end-of-init refresh leaves the tracked config clean.
     // trace:STORY-1467 | ai:claude
@@ -4859,6 +4861,8 @@ fn handle_init_post_clone(
     let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
+    // TASK-1522: commented [capture] intent-capture floor stub.
+    let config_content = config_content + init_capture_config_section();
     // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
     // commit, so the end-of-init refresh leaves the tracked config clean.
     // trace:STORY-1467 | ai:claude
@@ -5430,6 +5434,8 @@ pub(crate) fn handle_init_distributed_sibling(
     let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
+    // TASK-1522: commented [capture] intent-capture floor stub.
+    let config_content = config_content + init_capture_config_section();
     // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
     // commit, so the end-of-init refresh leaves the tracked config clean.
     // trace:STORY-1467 | ai:claude
