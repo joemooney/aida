@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:09:52.935348266Z
-modified_at: 2026-09-27T02:03:05.797130740Z
+modified_at: 2026-09-27T05:43:22.189143874Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -62,6 +62,18 @@ comments:
     Dependency: PR #2218 (batch 102) remains OPEN at 18b032192bfb4d76d03572249f42830a68d8b110. PR #2220 (BUG-1685 Windows fix, reviewed head f3d5cd39342a74ea9065fa2804c3c754a77f2b3f) has MERGED into that branch. Manual cross-platform run 36284893922 had Windows build/tests SUCCESS on the fix head; the unrelated GitLab smoke was cancelled. PR #2218's new-head required Ubuntu build is pending as of this handoff; merge-hold is green, and its Windows/macOS reruns are in progress. Batch 103 must wait for #2218 to land on main, then the integrator should revalidate heads, cumulative tests, and gates on the resulting base. No branches, queues, or PRs were changed by this advisor.
   created_at: 2026-09-27T02:03:05.797097989Z
   modified_at: 2026-09-27T02:03:05.797097989Z
+- id: 01a0e163-b14d-7501-a501-cee8e4596442
+  author: codex-independent-advisor
+  content: |
+    INDEPENDENT ADVISOR BATCH103 MERGE-READINESS GATE — PASS at exact PR #2228 head ad3cef0379f0f8f7c8fcd3959650c87bf9da65b8, base main 43c0429198401473e0cfab73267fc413883b3e1b. Advisor is separate from product, implementers, source rework implementers, reviewers, and integrator. No code, status, PR, or merge mutation by this seat.
+
+    PR #2228 was OPEN/DRAFT, MERGEABLE/CLEAN at the exact head and base immediately before this decision. Its title/body cover BUG-1657 BUG-1656 STORY-1487 BUG-1675 BUG-1676 TASK-1518. Git ancestry contains all six original reviewed heads (9726513757ad17cf047008b885a95436edd48454, 13d0daf80dc20134002f96c0e1a1281f143febfc, 9c2508d4b0095361591537d973e79ed39b5220f6, 34f057ad99e3b90591c875658f371c15e138ef57, 108d3dd7f802941ddc401a4d631f624d904857bf, 0e8b4ee714e7282a9cb9f4d248c6468eafb7b5c5) and corrected heads 4a7bc5720dda85efd4a32c81aa4b433da487fc56 and 6d42dc67d8cbb1174d1476b7ce08327ad969c0b0. Merge base equals the PR base. Prior six source approvals are recorded in owning-spec comments and summarized in BUG-1657 comment 01a0e09a-06c5-7100-8d2a-afeacd331a4e; the later test-only source deltas have fresh independent strict APPROVE code reviews at BUG-1656 01a0e13f-75e0-78a2-b562-7f99ec983018 and TASK-1518 01a0e13f-ae9d-76f3-8e29-4acc860014f9. The mechanical fixture assembly was independently APPROVED in BUG-1656 01a0e12d-e7cb-7c52-ba29-7ee81a59f626 and TASK-1518 01a0e12d-cefe-7b01-a4d9-b9c7f150ff45. Rework authorization and bounds are BUG-1656 01a0e12d-e9a7-7180-9aa9-6142d4bbdf20 and TASK-1518 01a0e12e-32e8-7700-937c-d12e85d8c0a7.
+
+    Exact-head GitHub checks: Ubuntu Build SUCCESS (15m33s), macOS Build SUCCESS (14m31s), Windows Build SUCCESS (39m01s), merge-hold-gate SUCCESS; other jobs were skipped, none failed/pending. GitHub check-run API confirms each success belongs to ad3cef0379f0f8f7c8fcd3959650c87bf9da65b8. Native Windows log shows BUG-1656 and TASK-1518 portable fixture tests passing, plus overall test suites with zero failures. Unix real-signal and focused tests, resolver guard, fmt, diff, and portability ratchet are recorded in the strict reviews and PR body. Earlier portability and resolver failures were addressed on corrected source branches; no unresolved test/portability, trace/trailer, conflict, or operator hold was found. PR body still describes the old pending gates and should be treated as historical until the integrator updates readiness.
+
+    I authorize a SEPARATE mechanical integrator to recheck that PR #2228 remains OPEN/DRAFT at this exact head and base with required checks green and no new hold, mark the draft ready, then squash-merge this exact head into main. Preserve all six IDs together in the squash subject: (BUG-1657 BUG-1656 STORY-1487 BUG-1675 BUG-1676 TASK-1518). Verify the landing commit, run the normal post-merge sync, and verify all six spec statuses. Any head/base change or new red gate voids this authorization and returns for a fresh advisor decision.
+  created_at: 2026-09-27T05:43:22.189143874Z
+  modified_at: 2026-09-27T05:43:22.189143874Z
 history:
 - id: 01a0de44-a0d8-7d42-9a68-49cfc2739549
   author: joe
