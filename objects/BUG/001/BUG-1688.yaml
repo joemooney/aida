@@ -16,12 +16,12 @@ description: |
   4. The change claims no protected boundary and does not mark BUG-1669 complete.
 
   Out of scope: the broker, backend selection, installation, credentials, any production launch sink, and any acceptance change to BUG-1669.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:58:26.483962647Z
-modified_at: 2026-09-27T20:59:05.013691833Z
+modified_at: 2026-09-27T21:21:27.946268668Z
 req_type: Bug
 tags:
 - authority security launch scripts from:TASK-1549
