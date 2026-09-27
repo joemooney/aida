@@ -13120,6 +13120,27 @@ pub enum Command {
         #[clap(long, global = true)]
         include_meta: bool,
 
+        /// Where one spec's elapsed time actually went: a chronological list
+        /// of spans, each labelled `work`, `wait` or `unknown`, rebuilt from
+        /// the store's status transitions, the local drain feed, and the
+        /// pull-request and CI timestamps when a forge CLI is available.
+        /// Requires one SPEC-ID. Time that no source accounts for is shown as
+        /// its own `unknown` span and counted separately — it is never folded
+        /// into the span beside it, so the totals cannot overstate how much of
+        /// the window was really measured. Renders human, TOON and JSON; the
+        /// windowing and event-selector flags are refused rather than
+        /// silently producing partial totals that read as complete.
+        // trace:STORY-1478 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(
+            long,
+            conflicts_with_all = [
+                "full", "events", "status_changes", "comments", "oneline",
+                "shipped", "opened", "to", "from", "kind", "since", "until",
+                "max_commits", "type", "author", "all", "archived", "deferred",
+            ]
+        )]
+        timeline: bool,
+
         /// History view. `events` switches to the full chronological feed
         /// (same as `--full`); most day-to-day use never needs it — the
         /// bare command (digest) or a SPEC-ID (status progression) covers

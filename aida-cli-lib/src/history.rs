@@ -1113,6 +1113,13 @@ fn current_snapshot(store_path: &Path, spec_id: &str) -> (Option<String>, String
     }
 }
 
+/// [`current_snapshot`] for callers outside this module — the timeline view
+/// shows the same header facts as the status-progression view.
+// trace:STORY-1478 | ai:claude
+pub(crate) fn current_snapshot_for(store_path: &Path, spec_id: &str) -> (Option<String>, String) {
+    current_snapshot(store_path, spec_id)
+}
+
 /// Collect structured event records using the same filters as
 /// `aida history events`. Intended for MCP and other non-TTY consumers.
 /// Returns the records, `window_exhausted` (see [`collect_filtered_events`];
@@ -2107,7 +2114,8 @@ fn colorize_status(status: &str) -> String {
     crate::status_display::paint_status(status, status).to_string()
 }
 
-fn parse_log_line(line: &str) -> Option<CommitMeta> {
+// trace:STORY-1478 | ai:claude — the timeline collector reuses this walk.
+pub(crate) fn parse_log_line(line: &str) -> Option<CommitMeta> {
     let mut parts = line.split('\t');
     let sha = parts.next()?.to_string();
     let iso_timestamp = parts.next()?.to_string();
@@ -2119,7 +2127,8 @@ fn parse_log_line(line: &str) -> Option<CommitMeta> {
     })
 }
 
-fn run_git(cwd: &Path, args: &[String]) -> Result<String> {
+// trace:STORY-1478 | ai:claude
+pub(crate) fn run_git(cwd: &Path, args: &[String]) -> Result<String> {
     let out = ProcessCommand::new("git")
         .arg("-C")
         .arg(cwd)
@@ -2136,7 +2145,8 @@ fn run_git(cwd: &Path, args: &[String]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
-fn git_show_blob(cwd: &Path, rev: &str, path: &str) -> Result<String> {
+// trace:STORY-1478 | ai:claude
+pub(crate) fn git_show_blob(cwd: &Path, rev: &str, path: &str) -> Result<String> {
     run_git(cwd, &["show".into(), format!("{}:{}", rev, path)])
 }
 
