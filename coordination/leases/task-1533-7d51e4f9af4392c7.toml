@@ -1,0 +1,12 @@
+scope = "TASK-1533"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 1040196
+pid_start_time = "2026-09-27T10:28:36+00:00"
+agent = "implementer"
+started_at = "2026-09-27T10:28:45.514824354+00:00"
+heartbeat_at = "2026-09-27T10:28:45.514824354+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
