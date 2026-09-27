@@ -149,9 +149,10 @@ approvals = "{date:%Y-%m-%d} {id} {event}"
 ```
 
 Resolution is user → project → builtin; qualifiers bypass that order. Listing
-shows each scoped name, raw format, and shadowing scope. Save defaults to user;
-removal requires explicit `user:` or `project:`. Builtins are read-only; there
-is no `global:`. Names use `[A-Za-z][A-Za-z0-9_-]*`, at most 64 ASCII bytes.
+shows each scoped name, raw format, and shadowing scope. Template listing and
+removal do not support JSON; `--format json` is refused before config access.
+Save defaults to user; removal requires explicit `user:` or `project:`.
+Builtins are read-only; there is no `global:`. Names use `[A-Za-z][A-Za-z0-9_-]*`, at most 64 ASCII bytes.
 Save requires an inline template on the same run; existing entries in that
 scope require `--force`, which is invalid without save. Validation and successful
 query rendering precede mutation. Project mutations print a commit reminder.

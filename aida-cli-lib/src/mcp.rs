@@ -7448,10 +7448,12 @@ pub fn tool_descriptors() -> Value {
                 "properties": {
                     "template": {
                         "type": "string",
+                        "example": "{id} {event}",
                         "description": "Opt-in human event text: inline if it contains {, otherwise a scoped template name (user > project > builtin). Fields: commit,date[:strftime],author,id,type,priority,title,kind,event,from,to,comment; escape {{/}}. Title: Added/Deleted/TitleChange new value; priority: Added/PriorityChange new value; absent otherwise. Comment is a CommentsAdded count/summary, never a body. Missing fields are empty. Cannot combine with fields, oneline or explicit events:true. No save/remove API."
                     },
                     "fields": {
                         "type": "string",
+                        "example": "id,date,event",
                         "description": "Ordered CSV event fields: commit,date,author,id,type,priority,title,kind,event,from,to,comment. Returns the existing JSON envelope with only these keys in each events row, in caller order; unavailable event-local values are null. Selects the full event feed. Cannot combine with template or oneline."
                     },
                     "spec_id": {

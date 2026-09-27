@@ -39,6 +39,11 @@ def main():
         original = run(*base, "--full", "--json").stdout
         full_json = json.loads(original)
         assert full_json["count"] > 0
+        for args in [
+            ["--json", "events"], ["events", "--json"],
+            ["--format", "json", "events"], ["events", "--format", "json"],
+        ]:
+            assert json.loads(run(*base, *args).stdout) == full_json
         for extra in [[], ["--id", spec]]:
             for alias in ["full", "oneline"]:
                 expected = run(*base, *extra, "--" + alias).stdout
@@ -92,6 +97,19 @@ def main():
         assert run(*base,"--template","project:mine").stdout != inline
         listing = run("history","templates").stdout
         assert "project:mine\t{id}\tuser" in listing
+        # Unsupported JSON management must refuse before output or mutation.
+        before_configs = (user.read_bytes(), project.read_bytes())
+        for args in [[], ["rm", "user:mine"], ["rm", "project:mine"]]:
+            refused = run("history", "templates", *args, "--format", "json", ok=False)
+            diagnostic = refused.stdout + refused.stderr
+            assert "has no JSON projection" in diagnostic, (args, diagnostic)
+            assert "builtin:full\t" not in diagnostic and "Updated " not in diagnostic
+            assert (user.read_bytes(), project.read_bytes()) == before_configs
+            parent_json = run("history", "--json", "templates", *args, ok=False)
+            diagnostic = parent_json.stdout + parent_json.stderr
+            assert "has no JSON projection" in diagnostic, (args, diagnostic)
+            assert "builtin:full\t" not in diagnostic and "Updated " not in diagnostic
+            assert (user.read_bytes(), project.read_bytes()) == before_configs
         before = user.read_bytes()
         for options in [
             ["--template","{id}","--save-as-template","mine"],
@@ -135,6 +153,22 @@ def main():
             assert descriptor["inputSchema"]["properties"]["fields"]["type"] == "string"
             def history(args):
                 return content_text(client.tool("history",args))
+            # Both descriptor examples must pass the shared parser and CLI/MCP parity.
+            for parameter in ["template", "fields"]:
+                example = descriptor["inputSchema"]["properties"][parameter]["example"]
+                assert isinstance(example, str)
+                mcp_example = history({"limit": 100, parameter: example})
+                cli_args = ["--" + parameter, example]
+                if parameter == "fields":
+                    cli_args += ["--json"]
+                    mcp_rows = json.loads(mcp_example)
+                    cli_rows = json.loads(run(*base, *cli_args).stdout)
+                    assert mcp_rows.keys() == cli_rows.keys()
+                    assert mcp_rows["count"] == cli_rows["count"]
+                    assert mcp_rows["events"] == cli_rows["events"]
+                    assert list(mcp_rows["events"][0]) == example.split(",")
+                else:
+                    assert mcp_example == run(*base, *cli_args).stdout
             # Isolate source selection to compare bytes of the default contract.
             plain = json.loads(history({"limit":100}))
             assert plain["events"] == full_json["events"]

@@ -297,7 +297,7 @@ fn read(path: &Path) -> Result<BTreeMap<String, String>> {
 }
 impl Templates {
     pub fn load(root: &Path) -> Result<Self> {
-        let home = dirs::home_dir().context("cannot find user home for history templates")?;
+        let home = crate::home_dir().context("cannot find user home for history templates")?;
         Self::at(
             home.join(".aida/config.toml"),
             root.join(".aida/config.toml"),
@@ -535,6 +535,43 @@ mod tests {
     fn registry(dir: &Path) -> Templates {
         Templates::at(dir.join("user.toml"), dir.join("project.toml")).unwrap()
     }
+    // trace:STORY-1477 | ai:codex
+    #[test]
+    fn public_loader_uses_hermetic_home_and_preserves_scope() {
+        let home = tempfile::tempdir().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        let _env = crate::test_env::EnvVarGuard::set("HOME", home.path());
+        crate::test_home::assert_hermetic(home.path());
+        let load = || Templates::load(project.path()).unwrap();
+        let templates = load();
+        assert_eq!(templates.user_path, home.path().join(".aida/config.toml"));
+        assert_eq!(
+            templates.project_path,
+            project.path().join(".aida/config.toml")
+        );
+        templates
+            .save("project:mine", "project {id}", false)
+            .unwrap();
+        let project_bytes = std::fs::read(&templates.project_path).unwrap();
+        templates.save("mine", "user {id}", false).unwrap();
+        let event = row(EventKind::Deleted {
+            title: "gone".into(),
+        });
+        let render = |name| match load().resolve(name).unwrap() {
+            Layout::Custom(template) => template.render(&event).unwrap(),
+            _ => panic!("expected custom template"),
+        };
+        assert_eq!(render("mine"), "user TASK-1");
+        assert_eq!(render("project:mine"), "project TASK-1");
+        load().remove("user:mine").unwrap();
+        assert_eq!(render("mine"), "project TASK-1");
+        assert_eq!(
+            std::fs::read(&templates.project_path).unwrap(),
+            project_bytes
+        );
+        load().remove("project:mine").unwrap();
+        assert!(load().resolve("mine").is_err());
+    }
     #[test]
     fn config_save_shadow_remove_and_preserve() {
         let d = tempfile::tempdir().unwrap();
@@ -647,7 +684,7 @@ mod tests {
             c.command,
             Command::History {
                 fields: Some(_),
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 ..
             }
         ));

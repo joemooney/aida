@@ -7798,6 +7798,13 @@ pub(crate) fn handle_git_backend_command(
         } => {
             // trace:STORY-1477 | ai:codex
             use crate::history_layout::{Layout, Templates};
+            // Reject even a parent-position --json before loading or mutating config.
+            if matches!(cmd, Some(HistoryCommand::Templates { .. })) && *json {
+                anyhow::bail!(
+                    "history templates has no JSON projection; use --format human or --format toon"
+                );
+            }
+            let json = &(*json || matches!(cmd, Some(HistoryCommand::Events { json: true })));
             let templates =
                 if template.is_some() || matches!(cmd, Some(HistoryCommand::Templates { .. })) {
                     Some(Templates::load(&crate::find_project_root_from(
@@ -7825,7 +7832,7 @@ pub(crate) fn handle_git_backend_command(
                         crate::output_format_override(),
                         Some(crate::cli::OutputFormat::Json | crate::cli::OutputFormat::Toon)
                     )
-                    || matches!(cmd, Some(HistoryCommand::Events)))
+                    || matches!(cmd, Some(HistoryCommand::Events { .. })))
             {
                 anyhow::bail!("invalid combination: --template requires human output and cannot be combined with events; use --format human and omit events");
             }
@@ -7871,7 +7878,7 @@ pub(crate) fn handle_git_backend_command(
                 );
             }
             let explicit_events = match cmd {
-                Some(HistoryCommand::Events) => true,
+                Some(HistoryCommand::Events { .. }) => true,
                 Some(HistoryCommand::Templates { .. }) => unreachable!(),
                 None => {
                     if *events {
