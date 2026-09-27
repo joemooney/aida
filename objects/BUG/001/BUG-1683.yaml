@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:24:57.765790728Z
-modified_at: 2026-09-27T01:34:43.517832499Z
+modified_at: 2026-09-27T02:03:23.197011156Z
 req_type: Bug
 comments:
 - id: 01a0e07a-194d-7082-bb95-7e42ae4b61cc
@@ -83,3 +83,9 @@ comments:
     Implementation signoff requires the above evidence plus targeted lock/liveness/CLI tests and formatting. No code changed, no tests claimed run, no work dispatched, no merge performed by this advisor.
   created_at: 2026-09-27T01:33:08.854996905Z
   modified_at: 2026-09-27T01:33:08.854996905Z
+- id: 01a0e09a-4abd-7803-8c85-ae2355be6056
+  author: joe
+  content: 'Implemented and pushed bug-1683 at 645c260d6206cbfaaa969d5305bc2eefd3f922cf. PR: https://github.com/joemooney/aida/pull/2222 (base main). Removed local launch-age eviction; shared TTL/heartbeat retained. queue integrate now acquires the main-worktree lock. PASS: 25 drain_lock tests, 46 liveness tests, 2 CLI/wiring tests, cargo fmt --all -- --check, git diff --check. Linux CLI fixture uses an independent live child and actual production kernel start identity, backdated two hours with zero stale override; all 26 main/sibling launch attempts reached holder-specific refusal, preserved lock bytes, and invoked zero worker/merge sentinels. Autoprogress skipped successfully. Explicit wiring covers shelved resume, zen/do, shift and aliases. Sibling fixture attaches only the spec store for burndown queue discovery; runtime lock paths remain separate. Limits: Linux-only process coverage; aliases have wiring evidence rather than full wrapper E2E; existing probe-error/corrupt-record, shared-first ordering, non-exclusive acquisition and PID-only cleanup behavior remain unchanged. Coverage: docs/testing/bug-1683-drain-lock.md. No self-review, merge, lease end, or cleanup performed.'
+  created_at: 2026-09-27T02:03:23.197011156Z
+  modified_at: 2026-09-27T02:03:23.197011156Z
+  session_id: 01a0e0800ba3
