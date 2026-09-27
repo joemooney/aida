@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-27T14:20:59.786511397Z
+modified_at: 2026-09-27T14:29:03.144503855Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -99,6 +99,9 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+deferred: true
+deferred_at: 2026-09-27T14:29:03.144503855Z
+deferred_until: 'BUG-1669''s protected binary-admission architecture is signed off and Joe explicitly releases the operator hold on PR #2226 (operator decision 01a0e11a)'
 failure_reason:
   phase: reviewer
   phase_index: 3
