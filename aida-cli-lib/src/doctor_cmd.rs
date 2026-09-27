@@ -803,11 +803,13 @@ fn codex_ignores_prompt_dir_finding(dir: &std::path::Path) -> Option<DoctorFindi
 // trace:BUG-1645 | ai:claude
 const MEMORY_LANE_SKILL_ACTION: &str = "Memory-lane project: do not run `aida scaffold upgrade` (it installs the full skill set). Restore or refresh the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.agents/skills/aida-capture/SKILL.md`).";
 
-/// The fix for drifted memory-lane skills: a manual restore by copy. Refresh
-/// and upgrade both write far more than a memory-lane project installed, so
-/// neither is suggested here.
+/// The fix for drifted memory-lane skills. Refresh keeps a memory-lane project
+/// a memory lane and updates an unedited skill; an edited one is kept, so the
+/// manual restore by copy stays the fallback. Upgrade installs the full skill
+/// set and is never suggested here.
 // trace:BUG-1653 | ai:claude
-const MEMORY_LANE_DRIFT_ACTION: &str = "Memory-lane project: restore or refresh the skill by hand: `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.agents/skills/aida-capture/SKILL.md`). A skill you edited can be inspected first with `aida scaffold diff`.";
+// trace:BUG-1662 | ai:claude
+const MEMORY_LANE_DRIFT_ACTION: &str = "Memory-lane project: run `aida scaffold refresh` to update unedited skills (it keeps the project a memory lane). A skill you edited is kept: inspect it with `aida scaffold diff`, and to restore it run `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.agents/skills/aida-capture/SKILL.md`).";
 
 fn scan_scaffold_drift(
     project_root: &std::path::Path,
@@ -823,19 +825,24 @@ fn scan_scaffold_drift(
     let portable_selected = config.generate_codex_skills || config.generate_antigravity_skills;
     let db_path = project_root.join(".aida/cache.db");
     let status = check_scaffold_status(store, project_root, &config, &db_path);
+    // Compare path components so Windows' backslashes do not hide scaffold
+    // drift from doctor. trace:BUG-1685 | ai:codex
     let is_vendor_prompt_or_skill = |p: &std::path::Path| {
-        let s = p.to_string_lossy();
-        s.starts_with(".claude/commands/")
-            || s.starts_with(".claude/skills/")
-            || s.starts_with(".agents/skills/")
-            || s.starts_with(".codex/skills/")
-            || s.starts_with(".antigravity/skills/")
+        [
+            ".claude/commands",
+            ".claude/skills",
+            ".agents/skills",
+            ".codex/skills",
+            ".antigravity/skills",
+        ]
+        .iter()
+        .any(|prefix| p.starts_with(std::path::Path::new(prefix)))
     };
-    let drifted: Vec<String> = status
+    let drifted_count = status
         .modified
         .iter()
-        .filter_map(|(p, _)| is_vendor_prompt_or_skill(p).then(|| p.to_string_lossy().into_owned()))
-        .collect();
+        .filter(|(p, _)| is_vendor_prompt_or_skill(p))
+        .count();
     // trace:BUG-1117 | ai:codex
     // Missing `.agents/skills/*` is scaffold drift too: Codex >=0.142 does not
     // discover the old ~/.codex/prompts pack as `$aida-*`, so absence of the
@@ -857,15 +864,15 @@ fn scan_scaffold_drift(
         }
         _ => true,
     };
-    let missing_vendor_files: Vec<String> = status
+    let missing_vendor_files: Vec<_> = status
         .missing
         .iter()
         .filter(|p| expected_by_footprint(p))
-        .filter_map(|p| is_vendor_prompt_or_skill(p).then(|| p.to_string_lossy().into_owned()))
+        .filter(|p| is_vendor_prompt_or_skill(p))
         .collect();
-    let missing_portable_skill_files: Vec<&String> = missing_vendor_files
+    let missing_portable_skill_files: Vec<_> = missing_vendor_files
         .iter()
-        .filter(|p| portable_selected && p.starts_with(".agents/skills/"))
+        .filter(|p| portable_selected && p.starts_with(std::path::Path::new(".agents/skills")))
         .collect();
     if !missing_portable_skill_files.is_empty() {
         findings.push(DoctorFinding {
@@ -883,13 +890,13 @@ fn scan_scaffold_drift(
             safe_heal: false,
         });
     }
-    if !drifted.is_empty() {
+    if drifted_count > 0 {
         findings.push(DoctorFinding {
             category: "scaffold-drift".to_string(),
             id: "scaffold-drift/project".to_string(),
             summary: format!(
                 "{} deployed vendor prompt/skill file(s) drifted from the source templates (stale scaffolding)",
-                drifted.len()
+                drifted_count
             ),
             action: if lane {
                 MEMORY_LANE_DRIFT_ACTION.to_string()
@@ -6708,10 +6715,11 @@ hostname = "localhost"
         }
     }
 
-    /// BUG-1653: the lane drift hint is a manual restore by copy. It never
-    /// recommends `aida scaffold refresh` or `upgrade`, which write far more
-    /// than a memory-lane project installed. Refresh's header-less migration
-    /// still clears the finding for an unedited skill.
+    /// BUG-1653: the lane drift hint never recommends `upgrade`, which
+    /// installs the full skill set. Since BUG-1662 it points at refresh (which
+    /// keeps the project a memory lane) with a manual restore for an edited
+    /// skill. Refresh's header-less migration clears the finding for an
+    /// unedited skill.
     // trace:BUG-1653 | ai:claude
     #[test]
     fn bug_1653_doctor_memory_lane_drift_hint_is_manual_restore() {
@@ -6738,7 +6746,7 @@ hostname = "localhost"
             finding.action
         );
         assert!(
-            !finding.action.contains("aida scaffold refresh"),
+            finding.action.contains("aida scaffold refresh"),
             "{}",
             finding.action
         );
