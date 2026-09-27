@@ -1,0 +1,29 @@
+id: 01a0e37a-26e7-7381-8578-945cc0eec78a
+spec_id: TASK-1552
+agreed_id: TASK-1552
+title: 'Pre-flight retraction follow-ups: unheld NotOurs rework rounds, stale Rework hold on AlreadyRetracted, and three test gaps'
+description: |
+  Three non-blocking findings from the strict independent review of TASK-1529 (2026-09-27), grouped because they sit in the same code path.
+
+  1. `NotOurs` leaves a guards-failing PR published with no hold and no marker (lib.rs:102995-103007) — prose only, which is the state TASK-1289 and TASK-1529 set out to remove. Under the branch-keyed ownership rule this is the COMMON case, not an edge case: on rework round 2, round 1's PR is still open on the branch, so round 2's refusal goes unenforced.
+  2. `AlreadyRetracted` never clears a previous failed retraction's Rework hold and never performs the Done to InProgress return. A close that succeeded but whose status read failed therefore leaves the spec Done, with a closed PR and a stale hold.
+  3. Test gaps: nothing covers the merged race, the unreadable-forge path, or a spec-search-resolved target. Separately, the tempdir fixtures have no store, so `return_spec_to_implementer_after_retraction` no-ops and the Done to InProgress return is only covered by the pure flip test.
+
+  Acceptance: each of the three is fixed or explicitly declined with a reason, and each fix carries a fixture test that fails without it.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T15:27:08.519589561Z
+modified_at: 2026-09-27T15:27:08.519589561Z
+req_type: Task
+tags:
+- preflight from-review:TASK-1529
+filed_at:
+  code_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: da36c066-c384-494e-a7cf-abffb3cfe52d
