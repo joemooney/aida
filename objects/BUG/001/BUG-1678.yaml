@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:52.109830507Z
-modified_at: 2026-09-27T01:54:07.668669147Z
+modified_at: 2026-09-27T02:00:21.373147097Z
 req_type: Bug
 comments:
 - id: 01a0e075-dce9-7d13-a5d5-6314b8f958e6
@@ -21,3 +21,19 @@ comments:
   content: 'Implemented and pushed branch bug-1678 at 6022ac539f ([AI:codex] fix(cache): share target fallback index across show lookups (BUG-1678)). A command-scoped reader shares a lazy UUID-to-path fallback index across show relationships/blockers in JSON, TOON, human, and card rendering; canonical YAML and UUID validation remain authoritative. Added trace comments and regressions for N stale-cache misses, missing/wrong cache paths, unreadable cache, repeated/missing targets, and fresh canonical reads. Validation in isolated HOME: cargo test -p aida-core targeted_reader -- --nocapture PASS (2 tests); cargo fmt --all -- --check PASS. Ran cargo test --workspace --no-fail-fast; stopped at a 25-minute bound while CLI-library history-cache tests were still progressing. No FAILED tests reported before termination (exit 143); full workspace result is INCOMPLETE, not a pass. Completed integration suites include show JSON audit and relationship-type journey checks. Logs: /tmp/bug-1678-focused.log, /tmp/bug-1678-fmt.log, /tmp/bug-1678-workspace.log. HOME guards passed. No main-checkout edits, self-review, PR creation, or merge. Per operator instruction, handoff is the pushed branch for independent review.'
   created_at: 2026-09-27T01:54:07.668625614Z
   modified_at: 2026-09-27T01:54:07.668625614Z
+- id: 01a0e097-847d-7f11-a686-e889a2dcd871
+  author: mcp
+  content: |-
+    Independent strict cache-path review, PR #2221, branch bug-1678, exact GitHub head verified twice: 6022ac539facfc0d5a60168f7df545ef779e71fa. First-class verdict recorded APPROVED. Reviewed merge-base diff against GitHub base 854b7e26f7222c73845064275a18c293c9895283 (head is one base commit behind); exactly two files changed. No implementation edits or PR modifications/merge.
+
+    Evidence: aida-core/src/db/cached_git_backend.rs:299-330 creates one OnceLock<Result<HashMap<Uuid, PathBuf>>> per reader. Cache-hit YAML reads and fallback rereads validate UUID. Direct read_object avoids the old missing-filename agreed-id scan. One inventory scan parses each object once; later misses reuse the index, including absent UUIDs. Cost O(store objects + target lookups) YAML work and O(store objects) path memory per operation (directory iteration plus indexed SQL lookup cost also applies), not one scan per target. Single-call get_requirement creates a fresh reader, so this optimization is explicitly scoped to consumers sharing a reader, not every loop in the application.
+
+    CLI evidence: aida-cli-lib/src/git_backend_cmd.rs:4140 creates a single reader; all seven relationship/blocker lookup sites at 4223, 4371, 4522, 4547, 4619, 4804, 4873 reuse it. Existing relationship types, display IDs/titles, blocker status/satisfaction and missing-target behavior remain intact. Root resolution and --tree are outside this shared reader; no claim that the entire command always performs only one scan regardless of other work.
+
+    Invalidation/edge assessment: index stores paths rather than Requirement snapshots; canonical title/status updates at existing paths are reread. Missing/unparseable/wrong-UUID files fail closed. New reader discovers additions; a retained reader does not rediscover moved/new/repaired files after initial inventory, as documented. Error inventory results are likewise retained until reader recreation. No show-path store writes require invalidation. Duplicate UUID selection retains first encountered path, but the comment calling this deterministic overstates unsorted read_dir ordering; same preexisting traversal behavior, non-blocking.
+
+    Tests run in clean detached scratch worktree /tmp/aida-cache-review-2221 at exact head: timeout 300 env CARGO_TARGET_DIR=/home/joe/ai/aida/target-review cargo test -p aida-core --lib targeted_reader_ -- --nocapture: 2 passed, 0 failed (46.61s build, 15.34s tests). The stale-cache test performs two rounds over eight targets plus missing UUIDs, covers a warm hit with zero scans, missing filename, wrong UUID, canonical update, and fresh-operation addition. Unreadable-cache test drops requirements_cache. Both assert OBJECT_LIST_COUNT == 1, which instruments the actual listing used by all current full scan paths; source inspection confirms no hidden repeated full parse over a saved list. cargo fmt --all -- --check and git diff --check passed; scratch source worktree remains clean.
+
+    Non-blocking coverage limits: tests call the reader directly, not real CLI rendering; no direct concurrent deletion/relocation, malformed YAML, duplicate UUID, or listing-error retry test. These are not evidence of a current blocking defect. GitHub Build (ubuntu-latest) still pending at final check; merge-hold-gate passed. User-reported full workspace run stopped at 25 minutes with no failures is INCOMPLETE, NOT green. Approval is an independent cache-path judgment, not integrator sign-off or a green full-workspace claim. Installed CLI lacks review claim subcommand, so that optional marker attempt failed; verdict record succeeded.
+  created_at: 2026-09-27T02:00:21.373117994Z
+  modified_at: 2026-09-27T02:00:21.373117994Z
