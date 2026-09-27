@@ -7,12 +7,12 @@ description: |-
 
   Resolved prior finding: enabled failure-notice without -route suffix now yields schedule-route-invalid:failure-notice; user-disabled bindings yield no finding or skipped tick line.
   Reviewed sha: dd21f4342b50990a1ac25234f19bc8b88e500033
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-27T06:25:58.647752766Z
-modified_at: 2026-09-27T08:09:05.110784917Z
+modified_at: 2026-09-27T08:09:06.536617990Z
 req_type: Task
 tags:
 - carried-from:TASK-1535
@@ -25,6 +25,14 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): This is a carried-forward ''Resolved prior finding'', not new work. TASK-1535 is Completed, its approved exact-head review explicitly verifies suffixless failure-notice produces schedule-route-invalid:failure-notice and user-disabled bad routes stay quiet, and the regression test is present on main. Reject this audit placeholder as non-actionable; TASK-1535 remains the shipped source of truth.'
   created_at: 2026-09-27T08:09:05.110784917Z
   modified_at: 2026-09-27T08:09:05.110784917Z
+history:
+- id: 01a0e1e9-1ee8-7181-b815-9fa8fe065c7d
+  author: joe
+  timestamp: 2026-09-27T08:09:06.536616238Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 88f9a8eaabe86108763231ef131b97b4a06d63e0
   branch: main
