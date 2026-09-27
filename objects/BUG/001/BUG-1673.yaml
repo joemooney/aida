@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:52:32.634921118Z
-modified_at: 2026-09-27T19:51:23.988529737Z
+modified_at: 2026-09-27T20:31:20.492539228Z
 req_type: Bug
 comments:
 - id: 01a0dfa2-c373-7983-921c-32ca76082d23
@@ -57,6 +57,19 @@ comments:
     REMAINING SCOPE for the implementer, unchanged from the filed acceptance: (1) on NotFound or a parse error for a listed object, the loader re-lists and retries that object once after a short delay before omitting it; (2) AIDA's own store object writes use write_atomic (temp+rename); (3) a fixture test that deletes and recreates an object between listing and reading still yields the spec. Store-integrity code, so strict independent review is required.
   created_at: 2026-09-27T19:51:23.988529737Z
   modified_at: 2026-09-27T19:51:23.988529737Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
+- id: 01a0e490-a7ac-7603-8a6a-d52cfe67eba1
+  author: joe
+  content: |-
+    ADVISOR DISPOSITION on the strict review (advisor seat, 2026-09-27 13:32) — both MAJORs accepted. One becomes a sequencing dependency on TASK-1547, the other is a rework on this branch. BUG-1673 does NOT merge until both are settled.
+
+    MAJOR 1 — write_atomic's crash window, and it IS a regression this branch introduces. I checked rather than assuming: origin/main's object_store.rs contains NO write_atomic call, and this branch adds two (object_store.rs:152 and :195). So this branch is what starts creating '<stem>.tmp.<pid>.<seq>' staging files under objects/. A crash between the staging write and the rename orphans one, and this repository's own .aida-store/.gitignore currently carries '.aida/*.lock' but NO staging pattern — verified directly — so the next auto-push 'git add -A' would commit that orphan into the store. The blast radius is bounded: the loader filters on the .yaml extension, so a committed orphan is repository junk rather than a mis-loaded or corrupted spec. But it is still a new way for this branch to dirty a user's store, and the reviewer's ask is a sequencing one ('ensure existing stores are protected before relying on these writes'), not a defect in this code. ACTION: BUG-1673 is now blocked-by TASK-1547, which heals existing stores with a doctor finding and is already approved and unblocked. TASK-1547 goes next; 1673 merges after it.
+
+    MAJOR 2 — the stderr test will flake, and we cannot afford another one. bug_1673_loader_omits_object_deleted_for_good_without_parse_hint captures stderr by re-executing std::env::current_exe() as a child test process. It is deterministic, which is why it got this far, but BUG-1689 exists in this repo precisely because fixture-exec hits ETXTBSY and 'production retries it, test fixtures do not' — and this adds an un-retried current_exe() launch. We already have exactly one flaky REQUIRED check (BUG-1695, the sandbox teardown race) and it blocked an unrelated PR today. Adding a second would make a red Linux build uninformative, which is the expensive failure, not the lost minute. ACTION: reworked to route the warning through an injectable sink so the assertion needs no child process.
+
+    WHAT THE REVIEW CONFIRMED, and this was the part that mattered most for a never-compiled salvage branch: the retry genuinely RE-LISTS rather than re-reading (so it can actually see a recreated object — the original salvage could not, and would not have fixed the bug at all); it is bounded with no loop or recursion; and critically, a persistently-missing object records NO fingerprint, which the reviewer traced through to git_backend.rs:1286 to confirm that save then classifies it as kept_unloaded instead of DELETING the spec. That last one is the silent-data-loss path and it is correct.
+  created_at: 2026-09-27T20:31:20.492539228Z
+  modified_at: 2026-09-27T20:31:20.492539228Z
   session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
 history:
 - id: 01a0e334-3b50-7381-8506-d3f49a8ca02c
