@@ -16,10 +16,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:34:45.887469118Z
-modified_at: 2026-09-27T12:39:02.407134536Z
+modified_at: 2026-09-27T12:39:04.552936586Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0e123-5f79-7011-9708-df33ae577f93
   created_at: 2026-09-27T12:39:02.407128600Z
   created_by: joe
+comments:
+- id: 01a0e2e0-4868-7af3-a9d5-8a17f5d7c604
+  author: joe
+  content: 'PROXY DEPENDENCY NOTE (orchestrator for Joe): TASK-1550 acceptance requires linking the TASK-1549 ADR. Added explicit blocked-by edge so host-wide inventory/cutover work cannot be queued or marked ready before that ADR exists. This records sequencing only; no new host-policy or deployment decision.'
+  created_at: 2026-09-27T12:39:04.552936586Z
+  modified_at: 2026-09-27T12:39:04.552936586Z
