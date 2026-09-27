@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-27T03:27:53.650400027Z
+modified_at: 2026-09-27T03:56:51.035168204Z
 req_type: Story
 tags:
 - aida:history
@@ -220,4 +220,60 @@ comments:
   content: 'Independent advisor HOLD / REWORK: see durable disposition and codex brief STORY-1477-2026-09-27T032743Z.md; metadata-only, no dispatch or merge.'
   created_at: 2026-09-27T03:27:53.273799304Z
   modified_at: 2026-09-27T03:27:53.273799304Z
+- id: 01a0e102-2bdb-74d0-aeb5-79d92f060718
+  author: mcp
+  content: |
+    IMPLEMENTER REWORK HANDOFF — STORY-1477 / PR #2224
+
+    Exact SHA: a706cc7a77bf0fa8f8370e8c9747afc9ec6738a9
+    Branch: story-1477
+    PR: https://github.com/joemooney/aida/pull/2224
+
+    Scope: advisor R1–R3 only, preserving sketch 01a0e08c-37d6-75e3-b4b7-2ef14d6ed106 and binding signoff 01a0e08f-b8ac-7680-a70f-82821f0de309. Brief read in full and acknowledged at /home/joe/ai/aida/.aida/agent-briefs/codex/STORY-1477-2026-09-27T032743Z.md.acked. Existing worktree, branch, and implementer lease retained.
+
+    R1: Fresh-binary audit generation initially exposed inherited history --json on both management leaves, incorrectly advertising support. JSON is now local to history and history events; both before/after-events spellings retain identical event JSON. Parent-position --json with templates is explicitly refused before config loading; --format json is rejected by the existing capability gate. Regenerated audit adds exactly two JSON not honoured rows. Fixture exercises listing and user/project removal refusals and byte-identical config preservation.
+
+    R2: Both optional string parameters have singular example keys: fields=id,date,event and template={id} {event}. Stdio fixture executes each example and checks CLI/MCP event parity and projected key order. No MCP mutation API, default envelope, type, or conflict contract changed.
+
+    R3: Templates::load uses crate::home_dir() with the same missing-home error/path. New EnvVarGuard/temp-home test calls the public loader, verifies paths and user/project precedence, and saves/removes in those isolated scopes. No guard whitelist or scan relaxation.
+
+    Additional unresolved implementer finding SPEC-442: proposed date-format example {date:%H:%M} {id} {event} failed against the real fixture ledger with invalid event timestamp. Existing decode emits a human minute timestamp and format_date expects RFC3339; synthetic unit rows masked the mismatch. This exists in original PR head 30fb7000634c5d5d3e554dacbae9980e63afa4c6. It is distinct from SPEC-441's far-future bound issue. No date renderer/decoder repair was made under the explicit R1–R3-only instruction. Product/advisor must disposition this acceptance issue; the passing R2 example does not resolve it.
+
+    Windows baseline remains unresolved: the advisor reports five pre-existing doctor/scaffold path-separator failures using the earlier comparator, not fresh exact-base Windows execution. No local Windows reproduction, doctor/scaffold fix, exceptional gate treatment, or merge approval is claimed. Operator choice for separate remediation/sequencing remains required.
+
+    Originating advisor evidence (retained, not presented as fresh rework CI):
+    - Ubuntu: https://github.com/joemooney/aida/actions/runs/36288501643/job/108533832278
+    - macOS: https://github.com/joemooney/aida/actions/runs/36288501661/job/108533832368
+    - Windows: https://github.com/joemooney/aida/actions/runs/36288501661/job/108533832459
+    - Exact-base Ubuntu: https://github.com/joemooney/aida/actions/runs/36285986900
+    - Earlier Windows comparator: https://github.com/joemooney/aida/actions/runs/36282473168
+
+    No self-review, merge, worktree deletion, or branch-protection changes. Spec remains In Progress, HOLD remains for independent acceptance review/advisor disposition and unresolved gates.
+
+    Local validation (Linux, fixture/fake HOME; no claim of fresh macOS/Windows CI):
+    - PASS: cargo test -p aida-cli --test bug_1502_format_json_audit checked_in_audit_is_exhaustive_and_every_honoured_probe_parses -- --exact (1).
+    - PASS: cargo test -p aida-cli-lib --lib mcp::tests::every_tool_parameter_has_examples_patterns_or_enums -- --exact (1).
+    - PASS: cargo test -p aida-cli-lib --lib test_home::tests::no_direct_dirs_home_dir_in_crate -- --exact (1).
+    - PASS: cargo test -p aida-cli-lib --lib history_layout (7).
+    - PASS final: cargo test -p aida-cli-lib --lib history (169 passed, 1 existing slow sweep ignored). Earlier rework run found the old root-only parser assertion; updated it for effective parent/events JSON and added the literal before-events case. The exact parser test also passes. No audit/exhaustiveness assertion was relaxed.
+    - PASS: cargo test -p aida-cli-lib --lib config_edit (4).
+    - PASS: bash tests/test_history_templates.sh (CLI/config/MCP/TTY/cache; JSON management refusal with config immutability; both MCP examples; public-loader coverage in the unit suite).
+    - PASS: bash tests/test_mcp_stdio.sh --skip-agent-contract.
+    - PASS: bash tests/test_mcp_doc_consistency.sh.
+    - PASS: cargo fmt --all -- --check; git diff --check.
+    - Initial new smoke assertions were corrected for AIDA diagnostics on stdout and allowed CLI/MCP source metadata differences. The final fixture checks refusal diagnostics, absence of management output, immutable configs, matching event rows/count, envelope keys and projected key order.
+    - Home-isolation guards reported real ~/.aida unchanged on smoke runs. Production config files were not used as test fixtures.
+
+    Logs: /tmp/story-1477-rework-{audit,examples,home,layout,json-parser,history-final,config,smoke,stdio,docs,fmt}.log; full workspace log /tmp/story-1477-workspace.log.
+
+    Full workspace attempt: `cargo test --workspace --no-fail-fast` ran under the shell HOME isolation guard for approximately 20 minutes, then was deliberately bounded/stopped (exit 143). It completed the CLI integration targets and progressed through the library suite, but did not complete the workspace. The only observed failure was bug_1631_history_spec_id_tests::bug_1631_history_json_flag_parses_on_both_sides_of_events in the binary built before its assertion was adapted to the R1 flag ownership. The corrected exact test and complete final history subset both pass. No full-workspace-green claim; remaining library/crate/doc-test work must be verified by CI/reviewer. The workspace HOME guard also reported real ~/.aida unchanged.
+
+    Push verified: origin/story-1477 and PR #2224 head are a706cc7a77bf0fa8f8370e8c9747afc9ec6738a9; worktree clean. Fresh CI started and was still running at handoff:
+    - Ubuntu: https://github.com/joemooney/aida/actions/runs/36292752415/job/108545846396
+    - macOS: https://github.com/joemooney/aida/actions/runs/36292752339/job/108545846388
+    - Windows: https://github.com/joemooney/aida/actions/runs/36292752339/job/108545846497
+
+    Next: product routes this exact SHA plus the acknowledged advisor brief to a separate reviewer, obtains a durable verdict, and returns it to advisor. SPEC-442 and Windows baseline sequencing remain explicit disposition questions; R1–R3 repair is not a merge/acceptance verdict.
+  created_at: 2026-09-27T03:56:51.035150658Z
+  modified_at: 2026-09-27T03:56:51.035150658Z
 execution_mode: drive
