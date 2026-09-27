@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-27T02:04:35.705323741Z
+modified_at: 2026-09-27T02:26:31.470816792Z
 req_type: Story
 tags:
 - aida:history
@@ -140,4 +140,22 @@ comments:
     Scope is coherent with the current EventKind, HistoryEventRecord, CLI mode selection, MCP text-envelope tool, and config writers. Product may dispatch implementation under this signoff; no further advisor sketch revision is required unless implementation changes one of these contracts. This is design signoff, not implementation or merge approval.
   created_at: 2026-09-27T01:51:50.444827554Z
   modified_at: 2026-09-27T01:51:50.444827554Z
+- id: 01a0e0af-79ae-7cd0-b16e-c33237f75bf4
+  author: mcp
+  content: |-
+    IMPLEMENTER HANDOFF — approved bounded contract implemented; ready for independent review.
+
+    Exact SHA: 30fb7000634c5d5d3e554dacbae9980e63afa4c6
+    Branch: story-1477 (pushed; clean isolated worktree /home/joe/ai/aida-story-1477)
+    PR: https://github.com/joemooney/aida/pull/2224 (base main; open; CI running at handoff)
+
+    CLI/config/MCP share bounded parsing, scoped resolution, event-local accessors and ordered JSON projection. All four signoff choices retained: exact event-local title/priority and summary-only comment; explicit user:/project: removal; MCP opt-in human template text; custom templates/fields force full feed while builtin aliases preserve CLI modes/output. Includes accepted config.toml ADR, docs, trace comments, and CI contract test. Save validates and successfully collects/renders the query before atomic TOML mutation.
+
+    Validation: cargo check -p aida-cli-lib; cargo test -p aida-cli-lib history_layout --lib (6 passed, including parse-only strftime rejection); cargo test -p aida-cli-lib history --lib (168 passed, 1 existing slow sweep ignored); cargo test -p aida-cli-lib config_edit --lib (4 passed); bash tests/test_history_templates.sh (CLI/config/MCP, colored TTY/captured aliases, sibling config isolation, cache parity, failed-save immutability); bash tests/test_mcp_stdio.sh --skip-agent-contract; bash tests/test_mcp_doc_consistency.sh; cargo fmt --all -- --check; git diff --check. All passed; isolated HOME guards confirmed operator ~/.aida unchanged.
+
+    Known gap outside this change: far-future ISO bounds (e.g. year 2100) differ between Git date parsing and history-cache comparisons; reproduced independently with plain git log and filed as implementer finding SPEC-441. Filtering remains unchanged; parity fixture uses 2030. Comment bodies, saved views, list/search templates, and MCP config mutation remain explicit non-goals. Cross-platform CI is pending, not locally validated.
+
+    No self-review or merge performed. Lease and worktree retained; spec remains In Progress for independent review/merge.
+  created_at: 2026-09-27T02:26:31.470803954Z
+  modified_at: 2026-09-27T02:26:31.470803954Z
 execution_mode: drive
