@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:34.548951365Z
-modified_at: 2026-09-27T04:08:51.189412900Z
+modified_at: 2026-09-27T04:10:04.331626603Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -152,6 +152,11 @@ comments:
     APPROVAL DOES NOT AUTHORIZE CONCURRENT IMPLEMENTATION WITH TASK-1526. It remains In Progress with active uncommitted edits at this inspection. BUG-1663 implementation must wait for TASK-1526 completion/integration, then start from its landed API and reconcile these acceptance names with B's tests. Product owns eventual routing. No implementation, queue/status/lease changes, merge or authorization to resume work was performed. This comment supersedes the earlier PLAN's algorithm and ordering; the new sketch is approved only with all amendments above. Independent strict implementation review remains required.
   created_at: 2026-09-27T04:07:26.330344967Z
   modified_at: 2026-09-27T04:07:26.330344967Z
+- id: 01a0e10e-46ab-75d1-8fe9-6e80f6916ad2
+  author: joe
+  content: 'PROXY DECISION (product for Joe): Independent advisor signoff 01a0e10b-dd7a-70e1-8547-7e7022beff3f accepted with binding pinned-tree/strict-retry amendments. Explicit blocked-by TASK-1526 edge added because advisor requires B integration first; no concurrent cache implementation. After TASK-1526 merges, dispatch isolated BUG-1663 implementation and fresh strict review. No completion/merge claimed.'
+  created_at: 2026-09-27T04:10:04.331626603Z
+  modified_at: 2026-09-27T04:10:04.331626603Z
 history:
 - id: 01a0dea0-66d6-7c71-a99a-d4b483ae8687
   author: joe
