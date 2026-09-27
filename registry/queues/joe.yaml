@@ -13,13 +13,6 @@
   added_at: 2026-09-27T02:17:00.604417645Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0df20-b0f1-7011-9675-fb4176082e1c
-  position: 2000
-  added_by: joe
-  note: 'Advisor CHANGES_REQUESTED on batch 102 integrated head 18b032192bfb4d76d03572249f42830a68d8b110 / PR #2218. Newer blocking verdict files can be ignored by spec_review_approved; see .aida/review-verdicts/BUG-1672.json and the implementer brief. Product may dispatch fix-forward from integration head; require new independent review before integration.'
-  added_at: 2026-09-27T02:15:31.109961097Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a0d690-9e8a-72f1-a753-ee587125c211
   position: 3000
   added_by: joe
@@ -46,22 +39,6 @@
   note: proxy groom 2026-09-25
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 01a0e06b-e858-7fa3-bcca-b27a93c7a393
-  position: 28000
-  added_by: joe
-  note: auto-queued by `session end` (01a0e064); covers 1 spec
-  added_at: 2026-09-27T01:12:51.363573329Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e06c-287f-7283-8a87-10ea158e8936
-  position: 29000
-  added_by: joe
-  note: auto-queued by `session end` (01a0e066); covers 1 spec
-  added_at: 2026-09-27T01:13:12.954228959Z
-  for_role: reviewer
-  added_by_machine: imac
 - user_id: joe
   requirement_id: 01a0dfa4-74cd-7a52-b61b-6878425b5363
   position: 30000
