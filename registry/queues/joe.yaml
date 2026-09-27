@@ -74,14 +74,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0de72-c8ae-75c3-9dcc-7e3625b62f01
-  position: 35000
-  added_by: joe
-  note: BUG-1639 slice 1 is Completed; this satisfies the recorded queue trigger. Bounded scaffold/template sync + docs task.
-  added_at: 2026-09-27T11:48:10.081526038Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0e0a8-e5e6-7530-afce-26cdf3b9c862
   position: 36000
   added_by: joe
@@ -104,4 +96,11 @@
   note: Approved ADR/acceptance reconciliation only; honor BUG-1669 advisor signoff M1-M5 and no implementation/install/deployment authority.
   added_at: 2026-09-27T12:34:47.838756268Z
   for_role: implementer
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0de72-c8ae-75c3-9dcc-7e3625b62f01
+  position: 39000
+  added_by: joe
+  added_at: 2026-09-27T12:54:34.977933308Z
+  for_role: product
   added_by_machine: imac
