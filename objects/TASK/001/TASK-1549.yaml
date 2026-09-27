@@ -13,12 +13,12 @@ description: |
   - Inventory the design decisions and unresolved concrete operator approvals (backend/platform, privileged service installation/trust root, actual credentials, current-run migration, rollback/recovery); do not imply any has already been granted.
   - Link BUG-1679's protected binary identity/admission dependency and keep PR #2226 operator-held.
   Out of scope: service/VM installation, credential migration, live scheduler/watch changes, code launch-path edits, permission bypass, or claims of deployed protection.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:33:06.937954090Z
-modified_at: 2026-09-27T12:34:46.634678376Z
+modified_at: 2026-09-27T14:25:03.469361657Z
 req_type: Task
 comments:
 - id: 01a0e2dc-58ea-7fe1-b3d2-32cf8cf68fba
@@ -26,3 +26,11 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): Queue this approved, design-only prerequisite under the independent BUG-1669 architecture signoff 01a0e11e-12db-7cd0-a3d1-39df79961a63 and binding M1-M5. Scope is documenting the already-recorded operator direction and reconciling BUG-1669 acceptance; no code/launcher edits, service or VM install, credentials, privileged proof, live-route changes, deployment, or merge authorization. All concrete implementation/deployment approvals return to Joe.'
   created_at: 2026-09-27T12:34:46.634678376Z
   modified_at: 2026-09-27T12:34:46.634678376Z
+history:
+- id: 01a0e341-4fed-7d50-adbd-9cbfc71cc7b2
+  author: aida-session-start
+  timestamp: 2026-09-27T14:25:03.469360854Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
