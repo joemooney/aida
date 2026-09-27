@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-09-27T01:45:42.081338957Z
+modified_at: 2026-09-27T02:13:52.001043628Z
 req_type: Bug
 comments:
 - id: 01a0df0b-e7f8-7193-84a1-2955581faa5f
@@ -188,6 +188,11 @@ comments:
     Disposition: requested revision with an explicit operator choice blocking security signoff. The inventory and typed-permit direction are useful, but accepting them as-is would silently weaken AC2 and leave burndown/scheduler authority unresolved. No binding approval amendments can make this sketch signable without that choice and concrete delegation design. Product may prepare the revision/operator decision; product MAY NOT queue or dispatch BUG-1669 on this review. No code edits, launches, tests, queue/dispatch or merge performed; existing untracked .codegraph/ and target-review/ left untouched.
   created_at: 2026-09-27T01:45:42.081308216Z
   modified_at: 2026-09-27T01:45:42.081308216Z
+- id: 01a0e0a3-e301-7c72-83e7-68ab14eaf9e0
+  author: joe
+  content: 'OPERATOR DECISION (Joe, 2026-09-26): retain literal protected authorization for full-access headless launches. A same-user-forgeable local guardrail, ambient environment flag, PID/state file, or agent-created PTY is not sufficient; do not weaken AC2. Revise the architecture sketch to define a protected grant boundary with operation/spec/phase scope, delegation and lifetime, burndown fan-out, advisor-watch consent, and scheduler bootstrap. Independent advisor signoff is required before implementation dispatch.'
+  created_at: 2026-09-27T02:13:52.001043628Z
+  modified_at: 2026-09-27T02:13:52.001043628Z
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
   author: joe
