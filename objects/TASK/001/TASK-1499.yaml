@@ -14,12 +14,12 @@ description: |
   4. When both target/debug and target/release exist, the documented precedence and stale-build rule decide which runs, and a test covers the stale case.
   5. No generated project file contains a machine-specific absolute AIDA checkout path (test greps the scaffold output).
   6. No change to agent permission settings, seat Git policy, or approval-prompt behavior (out of scope; separate spec).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-27T08:51:26.155547124Z
+modified_at: 2026-09-27T08:51:50.162223249Z
 req_type: Task
 tags:
 - agent-launch
@@ -117,6 +117,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e210-3d12-7911-a2a1-1f7d3f1baace
+  author: aida-session-start
+  timestamp: 2026-09-27T08:51:50.162222634Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 decision_request:
   question: TASK-1499 scaffolds a launch profile that sets writable roots and permission metadata. Approve that permission-shaping part?
