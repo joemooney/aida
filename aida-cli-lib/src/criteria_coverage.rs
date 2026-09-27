@@ -256,6 +256,8 @@ fn display_id(req: &Requirement) -> Option<&str> {
 pub(crate) struct TraceTokens {
     /// Criterion-level tokens (`SPEC.crit`), upper-cased, with duplicates.
     pub(crate) criterion_tokens: Vec<String>,
+    /// Criterion tokens attached to discovered tests (`aida criteria <ID>`).
+    pub(crate) test_criterion_tokens: Vec<String>,
     /// Count of `trace:<SPEC>` occurrences in the source pathspecs.
     pub(crate) trace_comments: usize,
     pub(crate) source: String,
@@ -299,6 +301,7 @@ pub(crate) fn collect_trace_tokens(project_root: &Path) -> TraceTokens {
                 .filter(|id| id.contains('.'))
                 .map(|id| id.to_ascii_uppercase())
                 .collect(),
+            test_criterion_tokens: Vec::new(),
             trace_comments: comments.len(),
             source: "git grep over tracked files".to_string(),
         },
@@ -306,11 +309,21 @@ pub(crate) fn collect_trace_tokens(project_root: &Path) -> TraceTokens {
             let (criterion_tokens, trace_comments) = walk_trace_tokens(project_root);
             TraceTokens {
                 criterion_tokens,
+                test_criterion_tokens: Vec::new(),
                 trace_comments,
                 source: "filesystem walk (not a git checkout)".to_string(),
             }
         }
     }
+}
+
+// trace:TASK-1546 | ai:codex
+fn window_start(now: DateTime<Utc>, window_days: u64) -> DateTime<Utc> {
+    i64::try_from(window_days)
+        .ok()
+        .and_then(chrono::Duration::try_days)
+        .and_then(|duration| now.checked_sub_signed(duration))
+        .unwrap_or(DateTime::<Utc>::MIN_UTC)
 }
 
 /// Filesystem fallback: walk source files (skipping the usual vendor / build
@@ -385,8 +398,12 @@ pub(crate) fn coverage_from_parts(
     tokens: &TraceTokens,
     head: Option<String>,
 ) -> CoverageReport {
-    let traced: BTreeSet<&str> = tokens.criterion_tokens.iter().map(|s| s.as_str()).collect();
-    let since = now - chrono::Duration::days(window_days as i64);
+    let traced: BTreeSet<&str> = tokens
+        .test_criterion_tokens
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
+    let since = window_start(now, window_days);
 
     let figures = |label: &str, days: Option<u64>, subjects: &[String]| {
         let mut specs = Share::default();
@@ -495,10 +512,44 @@ pub(crate) fn build_coverage_report(
     now: DateTime<Utc>,
     window_days: u64,
 ) -> CoverageReport {
-    let since = now - chrono::Duration::days(window_days as i64);
-    let subjects_window = commit_subjects(project_root, Some(since));
+    let since = window_start(now, window_days);
+    // trace:TASK-1546 | ai:codex
+    // Git does not parse Chrono's minimum year. A window reaching that far
+    // back is equivalent to all reachable commits.
+    let subjects_window = commit_subjects(
+        project_root,
+        (since != DateTime::<Utc>::MIN_UTC).then_some(since),
+    );
     let subjects_all = commit_subjects(project_root, None);
-    let tokens = collect_trace_tokens(project_root);
+    let mut tokens = collect_trace_tokens(project_root);
+    // trace:TASK-1546 | ai:codex
+    // Reuse the per-spec test scanner so prose and unattached markers cannot
+    // turn a criterion green. The raw git-grep count above stays comparable
+    // with the SPIKE-86 script.
+    let mut scanned_specs = BTreeSet::new();
+    for req in store
+        .requirements
+        .iter()
+        .filter(|r| is_authored_work_spec(r))
+    {
+        let Some(id) = display_id(req) else { continue };
+        if !scanned_specs.insert(id.to_ascii_uppercase()) {
+            continue;
+        }
+        if crate::criteria::parse_acceptance_criteria(id, &req.description).is_empty() {
+            continue;
+        }
+        if let Ok(tests) = crate::criteria::scan_tests_for_criteria(project_root, id) {
+            tokens
+                .test_criterion_tokens
+                .extend(tests.into_iter().flat_map(|test| {
+                    test.traces
+                        .into_iter()
+                        .filter(|trace| trace.contains('.'))
+                        .map(|trace| trace.to_ascii_uppercase())
+                }));
+        }
+    }
     let head = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
