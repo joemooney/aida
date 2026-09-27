@@ -2718,6 +2718,22 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
     assert!(argv.contains("--dangerously-skip-permissions"), "{argv}");
     assert!(argv.contains("--prompt-interactive"), "{argv}");
     assert!(argv.contains("work STORY-434"), "{argv}");
+    // BUG-1686 fixed the HEADLESS agy argv, whose `-p` swallowed the permission
+    // flag. This interactive lane never had that bug — its option flags already
+    // precede the prompt flag, with the prompt as the adjacent value — and this
+    // assertion records that, so the headless fix is not silently widened into a
+    // path that did not need it and cannot regress the other way either.
+    // trace:BUG-1686 | ai:claude
+    // trace:BUG-1686.ac4341ac | ai:claude
+    assert_eq!(
+        argv.lines().collect::<Vec<&str>>(),
+        vec![
+            "--dangerously-skip-permissions",
+            "--prompt-interactive",
+            "work STORY-434",
+        ],
+        "{argv}"
+    );
     let views = agent_registry::list_agent_views(
         &project,
         &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]),

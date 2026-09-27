@@ -75743,6 +75743,11 @@ mod queue_work_tests;
 #[path = "tests/bug_1607_reviewer_vendor_tests.rs"]
 mod bug_1607_reviewer_vendor_tests;
 
+// trace:BUG-1686 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1686_agy_headless_argv_tests.rs"]
+mod bug_1686_agy_headless_argv_tests;
+
 #[cfg(test)]
 #[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]
 mod bug_1609_gitlab_reviewer_preflight_tests;
