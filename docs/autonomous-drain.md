@@ -145,7 +145,11 @@ recorded as *not run*, never counts as machine-verified, and the review
 escalates to the Phase 3 reviewer seat, whose prompt lists them under
 "Needs manual verification" with an instruction not to execute them but to
 judge from the diff and the CI result already observed. A refused command can
-never auto-approve a PR, and its text is never sent to the LLM evaluator.
+never auto-approve a PR, and its text is never sent to the LLM evaluator. If a
+permitted check also *failed*, the machine verdict stays a rejection and the
+review still goes to the seat, whose prompt names the failed checks as settled
+("this review cannot be an approval") next to the ones to check by hand — so a
+failure never swallows the manual-verification list.
 
 To let a reviewing machine run them, opt in from that machine's own
 `~/.aida/config.toml` — the only trust source. The repo's `.aida/config.toml`
@@ -167,9 +171,10 @@ Matching is whole-word (`cargo test` does not match `cargo testx`), a command
 containing `` ; & | $ ` < > ( ) \ ' " `` or a control character is refused
 under any entry except `"*"`, and the string that was checked is the string
 that runs. Anything malformed — wrong types, an empty allowlist, an entry
-containing a refused character — denies everything for that review and says
-so once on stderr. `aida config show` renders the effective value; there is
-no setter verb and no env var can enable it.
+containing a refused character (checked before surrounding whitespace is
+trimmed, so a stray carriage return denies too) — denies everything for that
+review and says so once on stderr. `aida config show` renders the effective
+value; there is no setter verb and no env var can enable it.
 
 **Migration.** Installs that relied on auto-run executable checks will now see
 those reviews escalate to the reviewer seat instead of auto-approving or

@@ -529,7 +529,75 @@ pub fn execute_graded_review(
 
     let prose_count = residual_prose.len();
 
-    // If any machine check failed, fast-fail immediately (Rung 2 veto)
+    // Any refused command escalates, ahead of the Rung-2 failure veto AND of
+    // BOTH approve branches. Without the approve guard, one permitted passing
+    // command plus one refused command and no prose would auto-approve on the
+    // Rung-2 branch, and no prose at all would auto-approve on the evaluator
+    // fast-pass. Ahead of the failure veto because a veto's early return used
+    // to drop the refused criteria before the reviewer prompt was built, so
+    // nothing ever asked for them by hand: a failed permitted check keeps its
+    // veto (the verdict stays `rejected` and the seat's prompt says the review
+    // cannot be an approval) while the refused criteria still travel to the
+    // seat as manual-verification obligations. Refused commands never reach
+    // the evaluator either — a model reading a diff cannot verify that a
+    // command passes. Prose is left for the seat unevaluated.
+    // trace:STORY-1476 | ai:claude
+    if not_run_count > 0 {
+        for text in &residual_prose {
+            results.push(CriterionResult {
+                criterion: CriterionKind::Prose { text: text.clone() },
+                status: CriterionStatus::Escalated,
+                output: None,
+                exit_code: None,
+                probability: None,
+                confidence: None,
+                heuristic: false,
+                model: None,
+                question_payload_hash: None,
+            });
+        }
+        let vetoed = machine_failed_count > 0;
+        let summary = if vetoed {
+            format!(
+                "{} of {} deterministic acceptance checks failed, so this review cannot be an \
+                 approval; escalated to the Phase 3 conversational reviewer seat for the \
+                 criteria that need checking by hand.{}",
+                machine_failed_count,
+                machine_verified_count,
+                not_run_summary_suffix(policy, not_run_count)
+            )
+        } else {
+            format!(
+                "Passed {} machine check(s); escalated to Phase 3 conversational reviewer seat.{}",
+                machine_passed_count,
+                not_run_summary_suffix(policy, not_run_count)
+            )
+        };
+        return Ok(GradedReviewVerdict {
+            spec_id: spec_id.to_string(),
+            reviewed_sha: reviewed_sha.to_string(),
+            overall_verdict: if vetoed { "rejected" } else { "escalated" }.to_string(),
+            verdict_kind: format!(
+                "{:?}",
+                if vetoed {
+                    VerdictKind::Rejected
+                } else {
+                    VerdictKind::Unknown
+                }
+            ),
+            machine_verified_count,
+            machine_passed_count,
+            prose_count,
+            residual_prose_count: prose_count,
+            escalated_to_seat: true,
+            not_run_count,
+            results,
+            summary,
+        });
+    }
+
+    // Rung-2 veto: a failed deterministic check with nothing left to check by
+    // hand is a settled rejection and never reaches the seat.
     if machine_failed_count > 0 {
         return Ok(GradedReviewVerdict {
             spec_id: spec_id.to_string(),
@@ -547,47 +615,8 @@ pub fn execute_graded_review(
                 "{} of {} deterministic acceptance checks failed.{}",
                 machine_failed_count,
                 machine_verified_count,
-                not_run_summary_suffix(policy, not_run_count)
-            ),
-        });
-    }
-
-    // Any refused command escalates, ahead of BOTH approve branches: without
-    // this, one permitted passing command plus one refused command and no
-    // prose would auto-approve on the Rung-2 branch, and no prose at all
-    // would auto-approve on the evaluator fast-pass. Refused commands never
-    // reach the evaluator either — a model reading a diff cannot verify that
-    // a command passes. Prose is left for the seat unevaluated.
-    // trace:STORY-1476 | ai:claude
-    if not_run_count > 0 {
-        for text in &residual_prose {
-            results.push(CriterionResult {
-                criterion: CriterionKind::Prose { text: text.clone() },
-                status: CriterionStatus::Escalated,
-                output: None,
-                exit_code: None,
-                probability: None,
-                confidence: None,
-                heuristic: false,
-                model: None,
-                question_payload_hash: None,
-            });
-        }
-        return Ok(GradedReviewVerdict {
-            spec_id: spec_id.to_string(),
-            reviewed_sha: reviewed_sha.to_string(),
-            overall_verdict: "escalated".to_string(),
-            verdict_kind: format!("{:?}", VerdictKind::Unknown),
-            machine_verified_count,
-            machine_passed_count,
-            prose_count,
-            residual_prose_count: prose_count,
-            escalated_to_seat: true,
-            not_run_count,
-            results,
-            summary: format!(
-                "Passed {} machine check(s); escalated to Phase 3 conversational reviewer seat.{}",
-                machine_passed_count,
+                // Always empty here: the refused-command branch above returns
+                // first, so this path has nothing left to check by hand.
                 not_run_summary_suffix(policy, not_run_count)
             ),
         });
@@ -774,6 +803,10 @@ pub fn execute_graded_review(
 /// In accordance with STORY-1424:
 /// - Settled machine checks are listed as passed and excluded from judgment.
 /// - The reviewer is asked to evaluate ONLY the residual prose criteria.
+///
+/// Refused (not-run) commands are listed for manual verification, and a
+/// deterministic check that failed is listed as a settled veto so an escalated
+/// review that already carries a rejection cannot be approved at the seat.
 // trace:STORY-1424 | ai:antigravity
 pub fn generate_graded_reviewer_prompt(
     spec_id: &str,
@@ -785,12 +818,40 @@ pub fn generate_graded_reviewer_prompt(
         None => format!("/aida-review --spec {spec_id}"),
     };
 
+    // A deterministic check that failed is a settled veto the seat must be
+    // told about: when refused commands escalate a review that also has a
+    // failure, the prompt has to carry both halves. trace:STORY-1476 | ai:claude
+    let has_failed_command = verdict.results.iter().any(|r| {
+        r.status == CriterionStatus::Failed
+            && matches!(r.criterion, CriterionKind::Executable { .. })
+    });
+
     // The context block is emitted whenever there is something settled OR
     // something refused: a refused-command list must reach the seat even
     // when nothing passed (the orchestrator forwards everything after the
     // first blank line as AIDA_GRADED_REVIEW_CONTEXT). trace:STORY-1476 | ai:claude
-    if verdict.machine_passed_count > 0 || verdict.not_run_count > 0 {
+    if verdict.machine_passed_count > 0 || verdict.not_run_count > 0 || has_failed_command {
         prompt.push_str("\n\n[GRADED REVIEW CONTEXT — STORY-1424]");
+        if has_failed_command {
+            prompt.push_str(
+                "\nThese deterministic checks FAILED at the reviewed commit and are SETTLED: this \
+                 review cannot be an approval — request changes, and report the failures below \
+                 alongside anything else you find:\n",
+            );
+            for r in &verdict.results {
+                if r.status == CriterionStatus::Failed {
+                    if let CriterionKind::Executable { command, .. } = &r.criterion {
+                        prompt.push_str(&format!(
+                            "  - [FAILED (exit {})] `{}`\n",
+                            r.exit_code
+                                .map(|c| c.to_string())
+                                .unwrap_or_else(|| "?".to_string()),
+                            command
+                        ));
+                    }
+                }
+            }
+        }
         if verdict.machine_passed_count > 0 {
             prompt.push_str(&format!(
                 "\nThe following criteria were MACHINE-VERIFIED at commit {} and are already SETTLED (do not re-evaluate):\n",

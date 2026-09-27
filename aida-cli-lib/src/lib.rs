@@ -63453,7 +63453,9 @@ pub(crate) fn acceptance_command_policy_global_quiet(
 /// Pure parse of `[review] run_acceptance_commands` +
 /// `acceptance_command_allow`. Fail-closed: anything other than a well-typed,
 /// enabled, non-empty allowlist of clean entries is `Err` (denied), never a
-/// partially-honoured policy — a bad element does not get skipped.
+/// partially-honoured policy — a bad element does not get skipped. Refused
+/// characters are checked on the entry as written, before trimming, so a
+/// malformed entry cannot be normalised into an accepted one.
 // trace:STORY-1476 | ai:claude
 pub(crate) fn acceptance_command_policy_from_toml(
     value: &toml::Value,
@@ -63483,15 +63485,20 @@ pub(crate) fn acceptance_command_policy_from_toml(
                 let entry = item.as_str().ok_or_else(|| {
                     "[review] acceptance_command_allow entries must all be strings".to_string()
                 })?;
+                // Fail closed on the RAW entry, before any trimming: `*\r`
+                // would otherwise normalise to `*` and be accepted as full
+                // trust even though CR is refused.
+                // trace:STORY-1476 trace:TASK-1545 | ai:claude
+                if graded_review::contains_refused_chars(entry) {
+                    return Err(format!(
+                        "[review] acceptance_command_allow entry `{}` contains a shell \
+                         metacharacter or control character",
+                        entry.escape_debug()
+                    ));
+                }
                 let trimmed = entry.trim();
                 if trimmed.is_empty() {
                     return Err("[review] acceptance_command_allow has an empty entry".to_string());
-                }
-                if graded_review::contains_refused_chars(trimmed) {
-                    return Err(format!(
-                        "[review] acceptance_command_allow entry `{trimmed}` contains a shell \
-                         metacharacter or control character"
-                    ));
                 }
                 // `*` is either the whole entry (full trust) or the last word
                 // (any trailing arguments); anywhere else it is a typo.

@@ -189,22 +189,42 @@ fn story_1476_mixed_passed_and_notrun_escalates() {
     assert!(verdict.escalated_to_seat);
 }
 
-/// A1: a failed permitted command alongside a refused one stays a fail-closed
-/// reject, and the summary still names the refused count.
+/// A1 plus the STORY-1476 review finding: a failed permitted command keeps
+/// the fail-closed `rejected` machine verdict, and the refused command still
+/// reaches the Phase 3 seat as a manual-verification obligation instead of
+/// being dropped with the early return.
 #[cfg(unix)]
 #[test]
-fn story_1476_failed_plus_notrun_stays_rejected() {
+fn story_1476_failed_plus_notrun_rejects_and_still_escalates_manual_checks() {
     let checkout = tempfile::tempdir().unwrap();
     let desc = "## Acceptance\n- [ ] `false`\n- [ ] `touch pwned`\n";
     let verdict = run(desc, checkout.path(), None, &allow(&["false"]));
 
     assert!(!checkout.path().join("pwned").exists());
-    assert_eq!(verdict.overall_verdict, "rejected");
-    assert!(!verdict.escalated_to_seat);
+    assert_eq!(
+        verdict.overall_verdict, "rejected",
+        "the failed deterministic check keeps its veto"
+    );
+    assert_eq!(verdict.verdict_kind, "Rejected");
+    assert!(
+        verdict.escalated_to_seat,
+        "the refused command must still reach the reviewer seat: {}",
+        verdict.summary
+    );
     assert_eq!(verdict.not_run_count, 1);
     assert!(verdict
         .summary
         .contains("1 spec-authored command(s) not run"));
+
+    // The seat's prompt carries both halves: the settled failure it may not
+    // approve over, and the refused command to verify by hand.
+    let prompt = generate_graded_reviewer_prompt("STORY-9001", Some(79), &verdict);
+    assert!(prompt.contains("[FAILED (exit 1)] `false`"), "{prompt}");
+    assert!(prompt.contains("cannot be an approval"), "{prompt}");
+    assert!(prompt.contains("Needs manual verification"), "{prompt}");
+    assert!(prompt.contains("[NOT RUN] `touch pwned`"), "{prompt}");
+    let (_, context) = prompt.split_once("\n\n").unwrap();
+    assert!(context.contains("[NOT RUN] `touch pwned`"));
 }
 
 /// A refused command's text never reaches the evaluator, and neither does
@@ -517,6 +537,59 @@ fn story_1476_policy_from_toml_pure() {
     for body in denied {
         assert!(parse(body).is_err(), "expected denied policy for:\n{body}");
     }
+}
+
+/// TASK-1545 acceptance 1: a refused character is checked on the RAW entry.
+/// Trimming first would normalise a malformed entry such as `*\r` to `*` and
+/// accept it as full trust.
+#[test]
+fn story_1476_allow_entry_refused_char_checked_before_trim() {
+    let parse = |body: &str| acceptance_command_policy_from_toml(&toml::from_str(body).unwrap());
+
+    for entry in [
+        "*\\r",
+        "*\\n",
+        "cargo test\\r",
+        "\\rcargo test",
+        "cargo test\\u0007",
+        "cargo test \\r *",
+    ] {
+        let body = format!(
+            "[review]\nrun_acceptance_commands = true\nacceptance_command_allow = [\"{entry}\"]\n"
+        );
+        assert!(
+            parse(&body).is_err(),
+            "entry {entry:?} must deny the whole policy"
+        );
+    }
+
+    // Plain surrounding whitespace is still trimmed, and such an entry stays
+    // usable: only refused characters deny.
+    let ok = parse(
+        "[review]\nrun_acceptance_commands = true\nacceptance_command_allow = [\"  cargo test  \", \"\\tmake docs\\t\"]\n",
+    )
+    .unwrap();
+    assert_eq!(ok.allow, vec!["cargo test", "make docs"]);
+    assert!(ok.permits("cargo test"));
+
+    // End to end: a stray carriage return in the global config denies the
+    // whole policy, so the spec-authored command is still refused.
+    let home = tempfile::tempdir().unwrap();
+    let _env = fake_home_with_config(
+        home.path(),
+        Some("[review]\nrun_acceptance_commands = true\nacceptance_command_allow = [\"*\\r\"]\n"),
+    );
+    let policy = acceptance_command_policy_global();
+    assert_eq!(policy, AcceptanceCommandPolicy::default());
+    let checkout = tempfile::tempdir().unwrap();
+    let verdict = run(
+        "## Acceptance\n- [ ] `touch pwned`\n",
+        checkout.path(),
+        None,
+        &policy,
+    );
+    assert!(!checkout.path().join("pwned").exists());
+    assert_eq!(verdict.results[0].status, CriterionStatus::NotRun);
 }
 
 // --- Reviewer prompt ---------------------------------------------------------
