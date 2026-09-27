@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-27T16:50:53.256984236Z
-modified_at: 2026-09-27T16:50:53.256984236Z
+modified_at: 2026-09-27T19:28:12.755917741Z
 req_type: Task
 tags:
 - carried-from:STORY-1477
 - finding-hash:34a462f8
 - from-review:STORY-1477
 - kind:carried-forward
+comments:
+- id: 01a0e456-dbd3-7321-bc50-c0293571ea3d
+  author: joe
+  content: 'PROXY DECISION (orchestrator-as-advisor for Joe, 2026-09-27 12:30): APPROVED and promoted into the queue. Carried forward from an APPROVED review verdict on STORY-1477 (now completed), so nothing here is blocking — but it is a real user-facing defect, not a style note: with a valid TOML ''history = { keep = 1 }'', ''aida history --template {id} --save-as-template test'' EXITS 0 while leaving config unchanged, and list/render/remove then cannot find the template the user was just told was saved. A write path that reports success and silently persists nothing is the worst failure shape we ship, because the user has no signal to retry. Concrete, bounded and decision-free, so it is inside the delegation Joe granted this seat. Acceptance is already stated in the finding: make the nested table actually serializable, and cover user-level and project-level reload round trips so the bug cannot return unobserved. Not architecture-class and not authority-class; ordinary review suffices. Reviewed sha of the originating verdict: 5bab54d1762971c3986502c3fd05b29fa7b52d0b.'
+  created_at: 2026-09-27T19:28:12.755917741Z
+  modified_at: 2026-09-27T19:28:12.755917741Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
 filed_at:
   code_sha: 6b1dac2a201bae751901ab95ad49e591292465a1
   branch: main
