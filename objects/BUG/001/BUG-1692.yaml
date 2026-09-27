@@ -23,8 +23,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:17:34.541546385Z
-modified_at: 2026-09-27T16:17:34.541546385Z
+modified_at: 2026-09-27T19:28:00.279515269Z
 req_type: Bug
+comments:
+- id: 01a0e456-ab17-70d3-bc37-0cb9ef98bf01
+  author: joe
+  content: 'PROXY DECISION (orchestrator-as-advisor for Joe, 2026-09-27 12:29): APPROVED and signed off into the drain. Routine, bounded, decision-free, not authority-class. The filing is unusually good: it names the exact assertion (aida-cli/tests/bug_1502_format_json_audit.rs:455), the exact mechanism (the first invocation warms the history index so the second is served from it, flipping source git-walk -> history-cache and index_tip null -> a store sha, neither of which normalize_volatile strips), and it proves the diagnosis with a measurement that isolates the variable — it reproduces only under full-workspace load and passed in isolation both WITH and WITHOUT the branch''s changes, so it is a pre-existing flake and not STORY-1478''s doing. High value for the cost: this is a false red on the one test that failed in the whole workspace, and false reds are exactly what is making CI unaffordable to read right now. The acceptance criteria already protect the test''s teeth (it must still fail if the two spellings genuinely disagree on count or any event field), which is the thing I would otherwise have had to add. Either fix is acceptable — strip the provenance fields in normalize_volatile, or pin AIDA_HISTORY_CACHE=0 for the history probe — because both compare the answer rather than which source served it.'
+  created_at: 2026-09-27T19:28:00.279515269Z
+  modified_at: 2026-09-27T19:28:00.279515269Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
 filed_at:
   code_sha: ed4164b71dcf92baefceae31163ca76004ff60e6
   branch: claude/story-1478
