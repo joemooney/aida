@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T04:44:59.122261809Z
-modified_at: 2026-09-27T20:58:48.842367394Z
+modified_at: 2026-09-27T20:59:54.250638143Z
 req_type: ChangeRequest
 tags:
 - cross-vendor
@@ -88,4 +88,18 @@ decision_request:
   - label: Decline
     consequence: seats stay idle until a human starts a session
     resolution: mark CR-7 deferred with that as the trigger
+  answered: 0
+  note: |-
+    OPERATOR DECISION (Joe, 2026-09-27 13:58, in session — reviewed the orchestrator's recommendation and said 'agreed'). APPROVED IN SCOPE, NOT IN WHOLE. Read this note before implementing anything: the option text says 'an addressed seat wakes and works without a human starting it', and that is NOT what was approved yet.
+
+    AUTHORIZED NOW, and nothing else:
+    - Item 7, status-claim honesty in advisor-role.md and the seat skills. Filed as its own child spec. This is the cheapest fix for the WORST part of the 2026-09-22 incident. The 90 idle minutes were bad; the seat then claiming it was 'still working' after its turn had ended was worse, because a false status claim makes every later report untrustworthy. A progress claim must name its state (actively watching / delegated / paused) and cite 'aida ps' or 'aida integrate'. This increases autonomy by exactly zero.
+    - Item 1, the SPIKE on hold-hook behavior across the four harnesses. Filed as its own child spec. Pure information-gathering, no autonomy change, and its result decides whether item 6 (interactive hold policy) is even viable — if a held Stop hook locks TUI input, long holds are unusable for interactive seats and the shape has to change.
+
+    HELD, gated structurally: items 2, 3, 4, 5 and 6 — 'aida seat wait', the per-vendor Stop-hook adapters, the OpenCode plugin, the resume fallback, and the interactive hold policy. CR-7 now carries blocked-by BUG-1693 so this is enforced by the substrate, not by a note an agent may skip.
+
+    Why that gate and not a general go-ahead: CR-7 is genuinely the conservative option — it only continues a session a human already started, only on work ADDRESSED to the seat, never on idle alone, under a per-hour wake cap (default 12). That is much weaker than cold-boot and it is why this got a yes rather than a no. But a woken advisor or integrator seat can MERGE, and BUG-1693 records that the merge-hold floor is advisory only: the marker directory is 0755-mine and the gh token reports admin, so a hold can be released with two commands the CLI never sees and no clearance record. Waking a seat that can quietly release its own hold is the one combination worth waiting on. BUG-1693 is now queued; its AC2 (the required merge-hold-gate check must agree with a RECORDED CLEARANCE, so dropping the label alone cannot release a PR) is achievable without the protected broker, so this is a short wait, not an indefinite one.
+
+    Standing constraints, unchanged: NEVER model-side CronCreate / /loop / ScheduleWakeup polling (BUG-1589), never tmux scraping or keystroke injection, and honor the human-presence turn clock — never kill or hold a session a human is using.
   asked_at: 2026-09-27T14:15:42.891786997Z
+  answered_at: 2026-09-27T20:59:54.250544598Z
