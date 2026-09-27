@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T17:29:11.789280036Z
-modified_at: 2026-09-27T14:26:25.621663486Z
+modified_at: 2026-09-27T14:26:27.062692842Z
 req_type: Story
 relationships:
 - rel_type: Blocks
@@ -157,6 +157,19 @@ comments:
   created_at: 2026-09-26T23:25:49.336314495Z
   modified_at: 2026-09-26T23:25:49.336314495Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e342-9650-7762-bcc0-ba81700d95e5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1476):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: add0cf724397
+    Recorded: 2026-09-27T12:59:36.748551815+00:00
+    Findings:
+    1. aida-cli-lib/src/lib.rs:63486-63490 trims each allowlist entry before rejecting control characters. A value such as "*\\r" is normalized to "*" and accepted as full trust, although CR is in the refused-character set and malformed config must deny the whole policy. Validate the raw entry before trimming; add trailing CR/LF and surrounding-whitespace control tests. Related history: TASK-1545 acceptance 1 explicitly calls this out.
+    2. aida-cli-lib/src/graded_review.rs:532-552 returns rejected immediately when any permitted command fails, before the not_run_count escalation at 562-593. The refused criterion remains in the graded result/summary but does not reach the manual-verification reviewer prompt; the added regression at story_1476_acceptance_trust_tests.rs:192-207 codifies this. Acceptance requires refused criteria to be surfaced for manual verification, so preserve the failed-check veto while also routing the refused criterion to the reviewer seat (or otherwise recording a manual-verification obligation).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-27T14:26:27.024570547Z
+  modified_at: 2026-09-27T14:26:27.024570547Z
 history:
 - id: 01a0def4-fc93-7511-9f30-c80d96061f8f
   author: joe
