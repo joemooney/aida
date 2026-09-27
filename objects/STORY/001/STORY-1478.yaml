@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:46:45.113349128Z
-modified_at: 2026-09-27T16:17:07.876076641Z
+modified_at: 2026-09-27T16:18:04.170953432Z
 req_type: Story
 tags:
 - aida:history
@@ -132,6 +132,24 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): queue this bounded per-spec timeline feature. Its acceptance defines the activity classes, JSON span shape, graceful missing-Forge behavior, and fixture coverage; no architecture/sketch gate is tagged. Keep dispatch serialized behind SPEC-441 because both change history surfaces, and avoid adding build load while disk remains at 96%.'
   created_at: 2026-09-27T08:59:37.538524402Z
   modified_at: 2026-09-27T08:59:37.538524402Z
+- id: 01a0e3a8-c70a-7a22-a625-2a2b6e4f990b
+  author: joe
+  content: |-
+    IMPLEMENTED on claude/story-1478 @ ed4164b71dcf92baefceae31163ca76004ff60e6 (pushed to origin + gitlab mirror). No PR opened, per the operator's instruction.
+
+    Checks, all foreground under a blocking flock on the machine-wide cargo slot (fair kernel-order queueing rather than the wrapper's flock -n poll, which had starved this session for 56m as 2nd-oldest of 17 waiters while 20s-old waiters won slots):
+    - make build-fast            -> rc=0 (release profile, 12m06s)
+    - cargo fmt --all -- --check -> rc=0
+    - cargo clippy --workspace   -> rc=0
+    - cargo test --workspace     -> rc=101, exactly ONE failure: checked_in_audit_is_exhaustive_and_every_honoured_probe_parses
+    - cargo test -p aida-cli-lib story_1478 -> 13 passed, 0 failed
+
+    The single workspace failure is pre-existing and unrelated; filed as BUG-1692. Evidence: the diff was exclusively history-cache provenance (source git-walk vs history-cache, index_tip null vs sha) with every event byte-identical, and the same test file run alone passed 8/8 BOTH with this branch's changes and with them stashed. normalize_volatile only strips idle_secs, so the aida history probe compares which source served the answer.
+
+    Design note on the amendment that mattered most in practice: merging abutting spans by (activity, class) alone silently collapsed an in-phase ci retry into one long ci span, erasing the #1/#2 numbering the acceptance asks for. Spans now carry a merge identity — one key per drain phase ENTRY (so separate attempts stay separate) and one key shared across a PR's checks (so parallel CI jobs union rather than read as repeated attempts). Caught by story_1478_rework_retry_and_rereview.
+  created_at: 2026-09-27T16:18:04.170953432Z
+  modified_at: 2026-09-27T16:18:04.170953432Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e347-77cb-77e0-afba-62a0d3d07bcf
   author: aida-session-start
