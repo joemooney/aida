@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:01:08.750080015Z
-modified_at: 2026-09-27T14:46:37.369272273Z
+modified_at: 2026-09-27T15:03:05.556622246Z
 req_type: Task
 comments:
 - id: 01a0de73-5e62-7873-83b8-824c0ca37326
@@ -22,6 +22,34 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): signed off into the drain via ''aida queue add''. Routine, bounded, decision-free, and not authority-class, so it falls inside the delegation Joe granted the orchestrator seat. Verification task: confirm real vendor skill-discovery paths. Read-only investigation with a written finding; no production behaviour change.'
   created_at: 2026-09-27T14:15:02.228800023Z
   modified_at: 2026-09-27T14:15:02.228800023Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e364-2254-7582-b09e-dab75bd83b43
+  author: joe
+  content: |-
+    FINDING (2026-09-27, read-only verification; Codex 0.157.1 and agy 1.2.12; no vendor agent session and no model call, so no API quota spent). Full note with method, quoted vendor documentation and per-question evidence class: docs/research/2026-09-27-vendor-skill-discovery-paths.md (branch claude/task-1521, sha f3f0c5989e). The three previously untested rows of docs/agents/seat-parity.md are filled in.
+
+    METHOD. Codex: 'codex debug prompt-input' renders the model-visible prompt input as JSON locally; its <skills_instructions> block names every resolved skill root and every indexed skill, which IS the discovery result. Probe projects were disposable git repos in the session scratchpad with CODEX_HOME pointed at a scratch dir, so nothing under ~/.codex was read or written. Antigravity: agy has no dry-run renderer, so evidence is (a) the customization docs shipped inside the agy binary, (b) a literal-string census of that binary, (c) the 'Available skills:' block in agy's own persisted conversation stores under ~/.gemini/antigravity-cli/conversations/ (what real past sessions were actually told).
+
+    ANSWERS.
+    1. Does Codex still read .codex/skills? YES — DIRECT OBSERVATION. 0.157.1 resolves three roots: <proj>/.codex/skills, $CODEX_HOME/skills/.system, <proj>/.agents/skills. It is a live first-class root, not a shim. .antigravity/skills is not a Codex root.
+    2. Does Antigravity still read .antigravity/skills? NO — VENDOR DOCUMENTATION (embedded in the 1.2.12 binary: workspace customization roots are .agents/, .agent/, _agents/, _agent/ walking cwd to repo root, plus ~/.gemini/config/; .antigravity/ and .claude/ are not listed) plus a zero-occurrence literal census (.agents/skills 13 hits, .antigravity/skills 0, .claude/skills 0, .codex/skills 0), CORROBORATED BY DIRECT NEGATIVE OBSERVATION on an earlier build: in the 2026-09-08 market-watcher session that project had >=15 AIDA skills in .antigravity/skills, >=15 in .codex/skills, 1 in .claude/skills and 37 in .agents/skills, and agy listed only the .agents/skills ones. Across all 44 conversation stores, every listed skill came from a .agents/skills path or the bundled builtin dir — zero from .antigravity, .codex or .claude. Most likely .antigravity/skills was NEVER a surface and AIDA invented it by analogy with .codex/skills.
+    3. Does Codex read .claude/skills? NO — DIRECT OBSERVATION. A probe project carrying the full 56-skill .claude/skills pack contributed 0 entries; the literal '.claude/skills' does not occur in the Codex binary at all. Antigravity: also no (documentation + one direct negative).
+    4. Is an AIDA-delivered skill actually discovered? YES — DIRECT OBSERVATION, both vendors. Real scaffolder output (aida scaffold apply into a tempdir, 23 portable skills) placed in .agents/skills and .codex/skills was indexed with name and description correct: frontmatter at byte 0 with the '<!-- AIDA Generated -->' marker AFTER the frontmatter parses cleanly. For agy, its own persisted prompts list this repo's 26-skill .agents/skills pack by name and path, in sessions through 2026-09-27 05:24 (i.e. on 1.2.12).
+    5. Duplicate name: Codex lists BOTH copies as two entries under the SAME name, no dedup and no suppression even when the bytes are identical — only the root-prefixed path differs. agy documents override-by-priority (workspace > declared > global > built-in) but the AIDA case cannot arise there, since only .agents/skills is read. Which aida-orchestrate body each vendor picks: necessarily the PORTABLE one, because neither vendor can see .claude/skills.
+
+    CONTRADICTS WHAT THE CODE AND DOCS ASSUME.
+    (a) BUG-1639 advisor decision (b) is inverted for Codex. It kept maintaining an existing real .codex/skills on the reasoning that 'keeping it identical is strictly safer than leaving stale duplicates'. Measured, Codex reads BOTH roots: a maintained legacy pack doubles every AIDA skill in the Codex list — 46 entries where 23 are intended, two entries per name the model cannot tell apart. Making them identical does not remove the duplicate, it makes it undetectable. For Codex the safe resting state is exactly ONE pack.
+    (b) .antigravity/skills costs ~22 files per install and buys nothing.
+    (c) docs/agents/antigravity-mcp-setup.md (~L210) and docs/agents/codex-mcp-setup.md (~L336, ~L358) still present the legacy packs as the discovery surface. Both are GENERATED MIRRORS of masters under aida-core/templates/docs/agents/, as is docs/agents/aida-mcp-install-matrix.md, so correcting them is template work (TASK-1520-shaped) and was deliberately NOT done here.
+    (d) The sketch's 'scaffold-drift/agents-skill-symlink' doctor finding does not exist in the code yet, and Codex skips a symlinked SKILL.md in .codex/skills exactly as in .agents/skills — so while a legacy pack is maintained the guard must cover it too.
+    (e) The dev-activated aida on PATH (0.15.0, sha 7c6faed690) predates slice 1: it still writes .codex/skills and .antigravity/skills and no .agents/skills, so a scaffold apply run with it today installs only legacy packs. Reported, not fixed.
+    Also observed on 0.157.1, useful to TASK-1520: Codex reads ONLY the .agents spelling — _agents/skills and .agent/skills (both valid for Antigravity) are not Codex roots; discovery walks up from cwd to the repo root; a hard link and a symlinked skill DIRECTORY holding a regular SKILL.md are both indexed, a symlinked SKILL.md is silently skipped.
+
+    UNVERIFIED, honestly labelled. (i) Which copy a Codex $name INVOCATION resolves to on a duplicate. prompt-input does not expand $name mentions and root numbering is assignment order, not precedence. Would be settled by a live Codex session with distinguishable bodies in the two packs, invoking $aida-probe-dup and reading which path it opened. Moot if TASK-1519 prunes the legacy pack — another argument for pruning. (ii) .antigravity/skills under 1.2.12 SPECIFICALLY: the direct negative is from an earlier build, since this repo has no .antigravity/skills for a 1.2.12 session to ignore. Would be settled by one cheap agy turn in a tempdir project whose only AIDA skill sits in .antigravity/skills, then grepping that conversation store for the 'Available skills:' block. That starts a vendor session, so it is an operator action. (iii) Older supported vendor versions were not probed.
+
+    FOR TASK-1519. Retiring .antigravity/skills is safe: nothing reads it. Retiring .codex/skills is not merely safe, it IS the fix — 'freeze and report with a manual removal hint' is the weakest acceptable outcome and pruning unedited AIDA-headed aida-* dirs is the right one; the fail-closed pruning rules already on TASK-1519 are unaffected. Duplicate aida-* names across .claude/skills and .agents/skills are a non-issue for both non-Claude vendors, which also removes one stated risk from the carved-out single-location option. No migration logic needs to reason about which aida-orchestrate body a vendor picks. No defect found in the scaffolder itself; (a) above is a design decision to revisit, not a bug in code — file it as its own spec if you want it tracked separately from TASK-1519.
+  created_at: 2026-09-27T15:03:05.556622246Z
+  modified_at: 2026-09-27T15:03:05.556622246Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0de73-4407-7a81-8820-ee688e7504f1
