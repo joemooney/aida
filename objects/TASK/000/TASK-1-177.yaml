@@ -29,7 +29,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-27T04:10:57.835863554Z
-modified_at: 2026-09-27T14:21:11.476658107Z
+modified_at: 2026-09-27T14:21:15.605314027Z
 req_type: Task
 tags:
 - exact-head:e63efc3997a85df8cb1ff463f48222900ed5f7d6
@@ -50,6 +50,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): rejected as a duplicate review artifact, not as work. This spec is a recorded observation of the strict independent review of PR #2226; its content is already held in two canonical places — .aida/review-verdicts/BUG-1679.json and the merge-hold on PR #2226. The surviving work item is BUG-1679, which is in rework now. Rejecting keeps review records from accumulating as open board items; no finding is lost.'
   created_at: 2026-09-27T14:16:15.163049595Z
   modified_at: 2026-09-27T14:16:15.163049595Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e33d-d5d5-7ab1-a71f-7e470ab87688
+  author: joe
+  content: 'CORRECTION (orchestrator proxy for Joe, 2026-09-27 07:20): I rejected this spec ~20 minutes ago as a duplicate review artifact. That was WRONG and I have reopened it (--force was required to reverse the close). Advisor decision 01a0e115 on BUG-1679 explicitly directs ''Preserve this spec and TASK-1-177 as the rework trail'', and this spec IS TASK-1-177 (see origin_id). I had not read that decision when I dispositioned it. My earlier rejection comment here is superseded: this is not a duplicate to be cleared, it is a deliberately retained rework trail. It stays open until the BUG-1669 protected-admission gate closes and Joe disposes of BUG-1679.'
+  created_at: 2026-09-27T14:21:15.605314027Z
+  modified_at: 2026-09-27T14:21:15.605314027Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e339-3979-7d20-8100-b1aac941abae
