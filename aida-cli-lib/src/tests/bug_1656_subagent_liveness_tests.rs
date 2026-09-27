@@ -79,6 +79,7 @@ fn running_work(
 
 #[test]
 fn bug_1656_dead_pid_with_fresh_dirty_movement_is_moving_not_salvageable() {
+    let worktree = tempfile::tempdir().unwrap();
     let state = dispatch_state_with_movement(
         Some(false),
         true,
@@ -92,7 +93,7 @@ fn bug_1656_dead_pid_with_fresh_dirty_movement_is_moving_not_salvageable() {
     assert_eq!(state, DispatchState::Moving);
     let hint = crate::dispatch_health_ps::next_command_hint(
         state,
-        std::path::Path::new("/tmp/wt"),
+        worktree.path(),
         "claude/task-1",
         None,
         Some("TASK-1"),
@@ -369,6 +370,50 @@ fn bug_1656_stale_lease_without_live_harness_lease_is_plain_abandoned() {
 
 // --- (2) adopting the spec lease ------------------------------------------------
 
+// trace:BUG-1656 | ai:codex
+fn adoption_lease_fixture(
+    id: &str,
+    scope: &str,
+    slug: &str,
+    worktree_path: &str,
+    custom_key: bool,
+) -> String {
+    format!(
+        "id = \"{id}\"\nscope = \"{scope}\"\nslug = \"{slug}\"\nowner = \"t\"\n\
+         worktree_path = {}\nbranch = \"claude/task-77\"\n\
+         started_at = \"2026-09-26T00:00:00Z\"\nhostname = \"h\"\n{}",
+        aida_core::toml_quote::toml_string(worktree_path),
+        if custom_key {
+            "custom_key = \"kept\"\n"
+        } else {
+            ""
+        },
+    )
+}
+
+#[test]
+fn bug_1656_adoption_fixture_paths_round_trip() {
+    for path in [
+        r#"C:\Users\Runner\AppData\Local\Temp\wt-task-77"#,
+        "worktree with spaces/wt-task-77",
+        "worktree with \"quotes\"/wt-task-77",
+    ] {
+        for (id, scope, slug, custom_key) in [
+            ("aaaa11112222", "TASK-77", "task-77", true),
+            (
+                "bbbb33334444",
+                "harness-worktree",
+                "harness-worktree",
+                false,
+            ),
+        ] {
+            let body = adoption_lease_fixture(id, scope, slug, path, custom_key);
+            let parsed: toml::Value = toml::from_str(&body).unwrap();
+            assert_eq!(parsed["worktree_path"].as_str(), Some(path), "{body}");
+        }
+    }
+}
+
 #[test]
 fn bug_1656_subagent_adopts_only_the_spec_lease_of_its_own_worktree() {
     let tmp = tempfile::tempdir().unwrap();
@@ -399,19 +444,16 @@ fn bug_1656_adoption_stamps_harness_pid_and_keeps_unknown_keys() {
     std::fs::create_dir_all(&wt).unwrap();
     let sessions = root.join(".aida").join("sessions");
     std::fs::create_dir_all(&sessions).unwrap();
-    let body = format!(
-        "id = \"aaaa11112222\"\nscope = \"TASK-77\"\nslug = \"task-77\"\nowner = \"t\"\n\
-         worktree_path = \"{}\"\nbranch = \"claude/task-77\"\n\
-         started_at = \"2026-09-26T00:00:00Z\"\nhostname = \"h\"\ncustom_key = \"kept\"\n",
-        wt.display()
-    );
+    let worktree_path = wt.to_str().unwrap();
+    let body = adoption_lease_fixture("aaaa11112222", "TASK-77", "task-77", worktree_path, true);
     std::fs::write(sessions.join("aaaa11112222.toml"), &body).unwrap();
     // A harness lease for the same dir is never the adoption target.
-    let harness = format!(
-        "id = \"bbbb33334444\"\nscope = \"harness-worktree\"\nslug = \"harness-worktree\"\nowner = \"t\"\n\
-         worktree_path = \"{}\"\nbranch = \"claude/task-77\"\n\
-         started_at = \"2026-09-26T00:00:00Z\"\nhostname = \"h\"\n",
-        wt.display()
+    let harness = adoption_lease_fixture(
+        "bbbb33334444",
+        "harness-worktree",
+        "harness-worktree",
+        worktree_path,
+        false,
     );
     std::fs::write(sessions.join("bbbb33334444.toml"), &harness).unwrap();
 
