@@ -1,0 +1,100 @@
+id: 01a0e34b-f42d-7673-8513-070176ab1313
+spec_id: ADR-60
+agreed_id: ADR-60
+title: 'Cross-machine cycle-time evidence: keep the live event log local, publish a per-spec timing record to the store at terminal state'
+description: |
+  ## Status
+
+  Accepted (proxy decision on STORY-1480, 2026-09-25; this ADR records it before implementation).
+
+  ## Context
+
+  `.aida/events.jsonl` is the live phase-event stream. It is per-clone, local-only
+  and rotated, so work performed on one machine is invisible to every other clone:
+  a spec completed on machine X has no timing evidence on machine Y, and the
+  per-spec timeline and the aggregate cycle-time breakdown therefore cannot
+  account for it at all.
+
+  ## Decision
+
+  Keep the live event log local and authoritative for in-flight detail. When a
+  spec reaches a terminal state, publish ONE small per-spec timing record to the
+  git-canonical store, alongside the existing completion write. The record is the
+  finished span list filtered to lifecycle kinds; mail, cron and shift-tick noise
+  stays local and is never published.
+
+  Concretely:
+
+  - Store path: `timings/<SPEC-ID>.yaml` on the `aida-store` orphan branch, one
+    file per spec, written through the same CAS push-wins loop the schedule
+    ledger uses (`pull -> load -> merge -> save -> add -> commit -> push`, retry
+    on rejected push).
+  - Published kinds are an explicit allow-list of lifecycle verbs. Anything not
+    on the list is not published.
+  - Each span carries the node that recorded it, so a reader can tell whose
+    clock produced its timestamps.
+  - The store merge machinery gains a resolver for this path so a concurrent
+    write from two machines unions rather than wedging the store.
+
+  ## Cross-machine clock policy
+
+  The store gives two different guarantees, and this record deliberately sits in
+  the safer class:
+
+  - Append-only, id-keyed collections (spec `history`, `comments`,
+    `processing_record`, the oplog) are merged by UNION on a stable id. Survival
+    of an entry does not depend on any clock; only display order does.
+  - Scalar fields are merged last-write-wins on wall-clock `modified_at`, with a
+    content-hash tie-break on an exact tie (BUG-578). Under clock skew the
+    wall-clock-later write wins even when it is causally earlier. There is no
+    hybrid logical clock in the codebase; the HLC module was removed rather than
+    wired in.
+
+  Therefore the timing record is modelled as a UNION-BY-ID span set, not as a
+  last-write-wins document. Each span's id is a pure function of its content
+  (activity, start, end, source, recording node), so:
+
+  - Two machines that both publish spans for the same spec keep both sets; no
+    span can be lost because one machine's clock is behind.
+  - A span's DURATION is measured start-to-end by a single host's clock, so it
+    stays meaningful under skew.
+  - A GAP BETWEEN two spans recorded by DIFFERENT nodes is not a measurement. It
+    mixes two clocks and can even be negative. Such a gap is reported as
+    `unknown` with the disagreeing nodes named; it is never silently clamped and
+    presented as a measured wait.
+
+  ## Rejected alternatives
+
+  - **A. Make the store the live event log** — every phase event becomes a store
+    commit. Rejected: it puts a git commit on the drain hot path, contends with
+    lease and status writes, and inflates store history.
+  - **C. A separate telemetry orphan branch** (`aida-events`) with per-node,
+    per-day shards synced by `aida db sync`. Rejected for now: it buys raw
+    in-flight cross-machine history that nothing yet needs. Revisit only if
+    in-flight cross-machine visibility is shown to be needed.
+
+  ## Consequences
+
+  - Completed work is comparable across machines after `aida pull`.
+  - In-flight work remains visible only on the machine running it. That is a
+    known, accepted limitation of this decision, not an oversight.
+  - A spec that never reaches a terminal state publishes no record.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T14:36:40.877891260Z
+modified_at: 2026-09-27T14:36:40.877891260Z
+req_type: Decision
+tags:
+- aida:history
+- aida:metrics
+- observability
+filed_at:
+  code_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: da36c066-c384-494e-a7cf-abffb3cfe52d
