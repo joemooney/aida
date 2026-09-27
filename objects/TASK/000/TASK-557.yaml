@@ -20,7 +20,8 @@ tags:
 - launcher
 - ux-papercut
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 019e5de5-e792-7d73-9779-74e8e6909e56
   created_at: 2026-05-25T06:50:32.275762457Z
   created_by: joe

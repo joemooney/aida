@@ -27,15 +27,18 @@ created_at: 2026-09-15T15:06:20.028036180Z
 modified_at: 2026-09-15T16:07:56.943761172Z
 req_type: Story
 relationships:
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 01a0a3df-cb7e-7bd2-b0a9-ad1881e6426c
   created_at: 2026-09-15T15:06:24.540062630Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 01a0a58c-a0cc-7e30-b9db-ef4e0901eac7
   created_at: 2026-09-15T15:06:26.423549281Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 01a0a3c4-87ac-7c71-ae25-d67352d57bd6
   created_at: 2026-09-15T15:06:28.211048605Z
   created_by: joe

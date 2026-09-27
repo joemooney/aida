@@ -26,11 +26,13 @@ created_at: 2026-09-10T09:58:34.676318902Z
 modified_at: 2026-09-11T04:48:35.193400440Z
 req_type: Story
 relationships:
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 01a08988-d8cc-7890-bb34-8d75e03077dc
   created_at: 2026-09-10T09:58:41.968062Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 01a08982-3dd3-75f1-b4ae-29cace968190
   created_at: 2026-09-10T09:58:43.296968182Z
   created_by: joe
