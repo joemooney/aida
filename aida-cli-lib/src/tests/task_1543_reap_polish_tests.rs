@@ -59,6 +59,67 @@ fn create_fixture_repo() -> (tempfile::TempDir, PathBuf) {
     (tmp, root)
 }
 
+/// Canonicalize a fixture path into the spelling git itself uses.
+///
+/// `canonicalize` is what resolves a Windows 8.3 short component (the
+/// `C:\Users\RUNNER~1\...` temp root a GitHub Actions runner hands out) to the
+/// long name git prints, so it stays. What it adds on Windows is the `\\?\`
+/// verbatim prefix, which is not a spelling git emits and not one every git
+/// subcommand accepts, so it is stripped again. Pure string work — no `cfg`
+/// branch — and a no-op on Unix, where no fixture path starts with `\\?\`.
+// trace:TASK-1543 | ai:claude
+fn canonical_for_git(path: &Path) -> PathBuf {
+    let canon = path.canonicalize().expect("fixture path canonicalizes");
+    let text = canon.to_string_lossy().to_string();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = text.strip_prefix(r"\\?\") {
+        return PathBuf::from(rest);
+    }
+    canon
+}
+
+/// Stable comparison key for a worktree path across the two spellings the
+/// fixture and `git worktree list --porcelain` can each produce for the same
+/// directory.
+///
+/// They genuinely differ on Windows: the fixture path descends from
+/// `std::env::temp_dir()`, which on a GitHub Actions runner is the 8.3 short
+/// form `C:\Users\RUNNER~1\AppData\Local\Temp`, and `std::fs::canonicalize`
+/// rewrites that as the `\\?\`-prefixed verbatim form with `\` separators,
+/// while git prints the resolved long name with `/` separators
+/// (`C:/Users/runneradmin/AppData/Local/Temp/...`). macOS differs the same way
+/// (`/var` vs `/private/var`). What is identical in every spelling is the tail
+/// below the temp root — the tempdir name and the worktree directory name, both
+/// created by this fixture and echoed back by git verbatim — so the key is those
+/// last two components, separator- and case-normalised.
+// trace:TASK-1543 | ai:claude
+fn worktree_key(path: &Path) -> String {
+    let parts: Vec<String> = path
+        .components()
+        .filter_map(|c| match c {
+            std::path::Component::Normal(s) => Some(s.to_string_lossy().to_lowercase()),
+            _ => None,
+        })
+        .collect();
+    let skip = parts.len().saturating_sub(2);
+    parts.into_iter().skip(skip).collect::<Vec<_>>().join("/")
+}
+
+/// Is `wt` registered in this `git worktree list --porcelain` output? Parses the
+/// listing into records and compares by [`worktree_key`] rather than
+/// substring-matching the raw text. Still exact about presence: a removed or
+/// pruned worktree has no record at all, so its key is absent and the negative
+/// assertions below keep their teeth.
+// trace:TASK-1543 | ai:claude
+fn listing_registers(listing: &str, wt: &Path) -> bool {
+    let want = worktree_key(wt);
+    aida_core::git_ops::parse_worktree_list_porcelain(listing)
+        .iter()
+        .any(|p| worktree_key(p) == want)
+}
+
 /// Acceptance 1: Where reap prunes a missing worktree, use
 /// `git worktree remove --force -- <lease path>` scoped to that entry instead of
 /// a repo-wide `git worktree prune`, so another session's temporarily
@@ -94,8 +155,8 @@ fn task_1543_reap_missing_worktree_scopes_removal_preserving_sibling_missing_wor
         ],
     );
 
-    let wt_a = wt_a.canonicalize().unwrap();
-    let wt_b = wt_b.canonicalize().unwrap();
+    let wt_a = canonical_for_git(&wt_a);
+    let wt_b = canonical_for_git(&wt_b);
 
     commit_file(&wt_a, "a.txt", "content-a\n", "feat(a): task a (TASK-1543)");
     commit_file(&wt_b, "b.txt", "content-b\n", "feat(b): task b (TASK-9999)");
@@ -121,8 +182,14 @@ fn task_1543_reap_missing_worktree_scopes_removal_preserving_sibling_missing_wor
     std::fs::remove_dir_all(&wt_b).unwrap();
 
     let initial_listing = git(&root, &["worktree", "list", "--porcelain"]);
-    assert!(initial_listing.contains(wt_a.to_str().unwrap()));
-    assert!(initial_listing.contains(wt_b.to_str().unwrap()));
+    assert!(
+        listing_registers(&initial_listing, &wt_a),
+        "wt_a must start out registered:\n{initial_listing}"
+    );
+    assert!(
+        listing_registers(&initial_listing, &wt_b),
+        "wt_b must start out registered:\n{initial_listing}"
+    );
     assert!(initial_listing.contains("prunable"));
 
     let (_facts, tip) = gather_merge_facts_pinned(
@@ -151,11 +218,11 @@ fn task_1543_reap_missing_worktree_scopes_removal_preserving_sibling_missing_wor
     // 2. wt_b registration is PRESERVED (still in git worktree listing as prunable).
     let listing = git(&root, &["worktree", "list", "--porcelain"]);
     assert!(
-        !listing.contains(wt_a.to_str().unwrap()),
+        !listing_registers(&listing, &wt_a),
         "wt_a should have been removed from worktree list:\n{listing}"
     );
     assert!(
-        listing.contains(wt_b.to_str().unwrap()),
+        listing_registers(&listing, &wt_b),
         "wt_b should have been preserved in worktree list:\n{listing}"
     );
     assert!(
@@ -197,8 +264,8 @@ fn task_1543_teardown_does_not_prune_sibling_missing_worktree() {
         ],
     );
 
-    let wt_1 = wt_1.canonicalize().unwrap();
-    let wt_2 = wt_2.canonicalize().unwrap();
+    let wt_1 = canonical_for_git(&wt_1);
+    let wt_2 = canonical_for_git(&wt_2);
 
     // Directory of wt_2 is removed (temporarily unavailable).
     std::fs::remove_dir_all(&wt_2).unwrap();
@@ -211,11 +278,11 @@ fn task_1543_teardown_does_not_prune_sibling_missing_worktree() {
     // wt_2 must NOT have been pruned by teardown of wt_1!
     let listing = git(&root, &["worktree", "list", "--porcelain"]);
     assert!(
-        !listing.contains(wt_1.to_str().unwrap()),
+        !listing_registers(&listing, &wt_1),
         "wt_1 must be removed:\n{listing}"
     );
     assert!(
-        listing.contains(wt_2.to_str().unwrap()),
+        listing_registers(&listing, &wt_2),
         "wt_2 must be preserved:\n{listing}"
     );
     assert!(
@@ -224,9 +291,18 @@ fn task_1543_teardown_does_not_prune_sibling_missing_worktree() {
     );
 }
 
-/// Acceptance 2: worktree_is_locked parses 'git worktree list --porcelain -z'
-/// so paths with newlines are detected properly when locked or unlocked.
+/// Acceptance 2, end-to-end against real git: worktree_is_locked parses
+/// `git worktree list --porcelain -z` so paths with newlines are detected
+/// properly when locked or unlocked.
+///
+/// Unix only, and not because the assertions are weaker elsewhere: a newline is
+/// not a legal character in a Windows path, so `git worktree add` there cannot
+/// even create the fixture ("could not create leading directories ... Invalid
+/// argument"). The parser half of the behaviour is covered on every platform by
+/// `task_1543_porcelain_z_lock_parser_keeps_newline_paths_in_one_field` below.
 // trace:TASK-1543 | ai:antigravity
+// trace:TASK-1543 | ai:claude
+#[cfg(unix)]
 #[test]
 fn task_1543_worktree_is_locked_detects_newline_in_path() {
     let (tmp, root) = create_fixture_repo();
@@ -258,8 +334,8 @@ fn task_1543_worktree_is_locked_detects_newline_in_path() {
         ],
     );
 
-    let wt_nl = wt_nl.canonicalize().unwrap();
-    let wt_other = wt_other.canonicalize().unwrap();
+    let wt_nl = canonical_for_git(&wt_nl);
+    let wt_other = canonical_for_git(&wt_other);
 
     // Initially neither is locked.
     assert!(
@@ -323,4 +399,68 @@ fn task_1543_worktree_is_locked_detects_newline_in_path() {
     // Non-existent repo returns false.
     let bogus = tmp.path().join("does_not_exist");
     assert!(!crate::worktree_is_locked(&bogus, &wt_nl));
+}
+
+/// Acceptance 2, platform-independent half: the NUL framing of
+/// `git worktree list --porcelain -z` keeps a worktree path containing newlines
+/// in a single field and attributes `locked` to the right record. Runs on every
+/// platform — including Windows, where such a path cannot exist on disk —
+/// because it feeds the pure parser a recorded porcelain stream instead of
+/// asking the filesystem for an illegal path.
+// trace:TASK-1543 | ai:claude
+#[test]
+fn task_1543_porcelain_z_lock_parser_keeps_newline_paths_in_one_field() {
+    // Byte-for-byte the shape git emits: NUL after every attribute, plus one
+    // extra NUL closing each record.
+    let stream = concat!(
+        "worktree /fixture/repo\0",
+        "HEAD 1111111111111111111111111111111111111111\0",
+        "branch refs/heads/main\0",
+        "\0",
+        "worktree /fixture/wt\nwith\nnewlines\0",
+        "HEAD 2222222222222222222222222222222222222222\0",
+        "branch refs/heads/b_nl\0",
+        "locked testing newline locks\0",
+        "\0",
+        "worktree /fixture/wt_other\0",
+        "HEAD 3333333333333333333333333333333333333333\0",
+        "branch refs/heads/b_other\0",
+        "\0",
+    );
+
+    let states = crate::parse_worktree_lock_states_z(stream);
+    // Three records, not five: the newline path was NOT split into extra
+    // entries, which is exactly what a line-oriented parse got wrong.
+    assert_eq!(
+        states,
+        vec![
+            (PathBuf::from("/fixture/repo"), false),
+            (PathBuf::from("/fixture/wt\nwith\nnewlines"), true),
+            (PathBuf::from("/fixture/wt_other"), false),
+        ],
+        "only the newline-path record is locked, and it stays one record"
+    );
+
+    // A bare `locked` with no reason counts as locked.
+    let bare = concat!(
+        "worktree /fixture/wt_other\0",
+        "HEAD 3333333333333333333333333333333333333333\0",
+        "locked\0",
+        "\0",
+    );
+    assert_eq!(
+        crate::parse_worktree_lock_states_z(bare),
+        vec![(PathBuf::from("/fixture/wt_other"), true)],
+        "bare `locked` (no reason) must be detected"
+    );
+
+    // A `locked` field after the record terminator belongs to nobody.
+    let stray = concat!("worktree /fixture/wt_other\0", "\0", "locked\0", "\0");
+    assert_eq!(
+        crate::parse_worktree_lock_states_z(stray),
+        vec![(PathBuf::from("/fixture/wt_other"), false)],
+        "a lock attribute outside a record must not leak onto the previous one"
+    );
+
+    assert!(crate::parse_worktree_lock_states_z("").is_empty());
 }

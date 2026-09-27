@@ -25209,19 +25209,42 @@ pub(crate) fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path:
     }
     let wt_canon = wt.canonicalize().unwrap_or_else(|_| wt.to_path_buf());
     let text = String::from_utf8_lossy(&out.stdout);
-    let mut cur_match = false;
+    parse_worktree_lock_states_z(&text)
+        .into_iter()
+        .any(|(rec, locked)| {
+            locked && {
+                let rec_canon = rec.canonicalize().unwrap_or(rec);
+                rec_canon == wt_canon
+            }
+        })
+}
+
+/// Pure parser for `git worktree list --porcelain -z`: one `(path, locked)` pair
+/// per registered worktree, in git's own order. `-z` terminates every attribute
+/// with NUL and every record with an extra NUL, so a worktree path containing
+/// newlines stays a single field — which is exactly the case a line-oriented
+/// parser gets wrong. Split out from [`worktree_is_locked`] so the NUL framing
+/// is testable on every platform, including ones whose filesystem cannot hold a
+/// newline in a path at all (Windows).
+// trace:TASK-1543 | ai:claude
+pub(crate) fn parse_worktree_lock_states_z(text: &str) -> Vec<(std::path::PathBuf, bool)> {
+    let mut out: Vec<(std::path::PathBuf, bool)> = Vec::new();
+    // Index of the record the fields currently belong to; cleared by the empty
+    // field that terminates each record.
+    let mut cur: Option<usize> = None;
     for field in text.split('\0') {
         if let Some(p) = field.strip_prefix("worktree ") {
-            let rec = std::path::PathBuf::from(p);
-            let rec_canon = rec.canonicalize().unwrap_or(rec);
-            cur_match = rec_canon == wt_canon;
-        } else if cur_match && (field == "locked" || field.starts_with("locked ")) {
-            return true;
+            out.push((std::path::PathBuf::from(p), false));
+            cur = Some(out.len() - 1);
         } else if field.is_empty() {
-            cur_match = false;
+            cur = None;
+        } else if field == "locked" || field.starts_with("locked ") {
+            if let Some(i) = cur {
+                out[i].1 = true;
+            }
         }
     }
-    false
+    out
 }
 
 /// BUG-614: `aida session gc` — the explicit operator GC of stale agent
