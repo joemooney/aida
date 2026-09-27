@@ -3,12 +3,12 @@ spec_id: TASK-1530
 agreed_id: TASK-1530
 title: 'Orchestrate skill: treat the context ceiling as a soft limit; keep the loop running through compaction instead of rotating out'
 description: 'Operator decision (Joe, 2026-09-26 12:10): ''I need the context size ceiling to be a soft limit, if I am not around we need to keep working, the open list continues to grow in count.'' The orchestrate skill (aida-core/templates/skills/aida-orchestrate.md and skills-portable copy) says to rotate out at the context ceiling, which stopped all work until a human started a new session. Acceptance: 1. The skill''s Context and handoff section says the ceiling is advisory: keep running, rely on the harness''s automatic compaction, and refresh the substrate handoff after every batch so compaction loses nothing. 2. Rotation is reserved for an operator request or a genuinely broken session, and then hands off to a successor rather than stopping. 3. Edit the template masters only, then make sync-templates and make check-templates pass.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:12:05.244013845Z
-modified_at: 2026-09-26T22:01:24.029636840Z
+modified_at: 2026-09-27T04:24:08.804212563Z
 req_type: Task
 comments:
 - id: 01a0df96-96e4-7eb1-b263-f19f9d6066a5
@@ -38,3 +38,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0e11b-2956-79e2-a97d-0feb4e3ab91a
+  author: aida-auto-bump
+  timestamp: 2026-09-27T04:24:08.790294275Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0e11b-2964-7450-9697-9c07f922610f
+  timestamp: 2026-09-27T04:24:08.804211394Z
+  agent: implementer
+  commit_sha: 43c0429198401473e0cfab73267fc413883b3e1b
+  summary: Completed via merge 43c04291
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T04:24:08.790289734Z
+  completion_sha: 43c0429198401473e0cfab73267fc413883b3e1b
