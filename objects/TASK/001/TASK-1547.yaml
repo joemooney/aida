@@ -1,0 +1,20 @@
+id: 01a0e035-fb49-7152-81dd-a9e1bff1eab4
+spec_id: TASK-1547
+agreed_id: TASK-1547
+title: 'Existing stores get the *.tmp.* ignore rule: widen the doctor repair and info/exclude guards'
+description: 'Follow-up from BUG-1677: new stores ignore write_atomic staging files (*.tmp.*), but existing stores don''t — the doctor store-gitignore repair early-returns when .aida/node.toml exists, and ensure_lock_excluded skips info/exclude when .gitignore already has .aida/*.lock. Acceptance: 1. The doctor repair (or ensure_*_excluded) adds ''*.tmp.*'' to an existing store''s ignore/exclude idempotently without rewriting the user''s other lines. 2. Fixture tests for a store with an existing hand-written .gitignore.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T00:13:49.257295434Z
+modified_at: 2026-09-27T00:13:49.257295434Z
+req_type: Task
+filed_at:
+  code_sha: 9791e5eaac5cb4b0083aeaa32744c5900e396fc1
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
