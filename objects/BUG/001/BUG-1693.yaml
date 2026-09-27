@@ -22,15 +22,23 @@ description: |
   4. State explicitly what this design can and cannot achieve against an agent running as the same user with an admin forge token. If genuine enforcement requires the protected-broker boundary of BUG-1669 and ADR-61, say so and record the honest limit rather than implying the gap is closed.
 
   Out of scope: implementing the protected broker itself, and any change to who may merge.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:47:42.428525396Z
-modified_at: 2026-09-27T16:47:42.428525396Z
+modified_at: 2026-09-27T16:48:04.246017794Z
 req_type: Bug
 tags:
 - authority merge-hold integrity-floor
+history:
+- id: 01a0e3c4-3e96-7950-8853-6173b8caa711
+  author: joe
+  timestamp: 2026-09-27T16:48:04.246015537Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: d0e65db703fbbb9a04e43822dcb3ddd984f67bc7
   branch: main
