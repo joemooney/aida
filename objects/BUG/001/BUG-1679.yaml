@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-27T14:29:22.826084861Z
+modified_at: 2026-09-27T14:52:27.045240915Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -94,6 +94,25 @@ comments:
     The critical path to un-deferring it is TASK-1549, the P-enrolled-host protected launch ADR, which an architect is drafting now as design-only work. That ADR is also what produces the acceptance reconciliation this spec's finding P1 needs, since P1 is a finding against this spec's own acceptance criterion 1 and no implementer can close it.
   created_at: 2026-09-27T14:29:22.826084861Z
   modified_at: 2026-09-27T14:29:22.826084861Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e35a-6425-7a30-91b1-491daf5da543
+  author: joe
+  content: |
+    RECORD (TASK-1549 architect seat, per advisor verdict 01a0e351-5a7c-78a3-a0fb-bb79f078cb6a answer O7): THIS SPEC'S AC1 IS SUPERSEDED BY THE PROTECTED IDENTITY-ADMISSION CONTRACT. Recording only — I am NOT editing this spec's acceptance, because 01a0e115 routed BUG-1679 acceptance reconciliation to PRODUCT and 01a0e11a forbids narrowing it now. No status, blocker, queue, hold or PR change.
+
+    AC1 as written ("resolve_aida_exe_from prefers AIDA_BIN when it names an executable file, else falls back as today") cannot be satisfied safely and cannot be closed by any implementer, because fixing the finding means deleting the behaviour the criterion asks for — the point 01a0e33d already made. Executability is a usability property, not provenance; a child cannot distinguish an authentic coordinator export from an attacker-supplied variable; and absolute paths, canonicalization, --version probing (which executes the candidate), same-UID ownership, writable allowlists, UUID/PID state, a PTY or another env marker all fail to supply the missing protected identity.
+
+    Where the contract now lives: ADR-61 ("P-enrolled-host is the protected boundary for every AIDA-managed full-access agent launch", allocated 2026-09-27 as a decision spec) section 10 records that AIDA_BIN is untrusted input; that a different coordinating build may be selected only through independently established protected installation/admission/update policy with a launch plan bound to that admitted identity; that AIDA_BIN may at most name an already-admitted candidate; that unknown or unadmitted identity, or unavailable protected authority, refuses the managed protected launch with no arbitrary PATH or vendor fallback; and that identity admission is necessary but is not itself a scoped launch grant.
+
+    Which spec specifies it: SPIKE-91, under its existing acceptance line "pinned executable/dependency identity admission". No new spec was invented; the scope already had a home and what was missing was the link, so a References edge SPIKE-91 -> BUG-1679 has been added so the dependency is walkable rather than only prose. A separate spec is warranted only if SPIKE-91's output shows identity admission needs its own installer and update-policy design, which is knowable only after SPIKE-91.
+
+    For the eventual product acceptance reconciliation, two further facts already on this spec's record: (a) the advisor's recommended revised acceptance in 01a0e115 is the text to start from, not AC1; (b) the refusing implementer noted in 01a0e33d that export_coordinating_bin_env early-returns when AIDA_BIN is not absolute, so a relative value silently disables the PATH/AIDA_BIN export altogether — a second failure mode on the same input.
+
+    Also noted for whoever reconciles this spec, from 01a0e351's verification pass and not my finding: this spec's store status is still NeedsAttention although the 07:30 proxy comment says DEFERRED. Worth reconciling; it does not affect any gate.
+
+    Unchanged: blocked-by BUG-1669; PR #2226 OPEN at e63efc3997a85df8cb1ff463f48222900ed5f7d6 with aida:merge-hold, operator-held, and only Joe releases it. Neither green CI, mechanical repairs, revised acceptance nor a future reviewer pass removes that hold (01a0e115, 01a0e11a).
+  created_at: 2026-09-27T14:52:27.045240915Z
+  modified_at: 2026-09-27T14:52:27.045240915Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e0fd-3532-7760-9c08-3b79df618a20
