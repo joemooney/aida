@@ -1,0 +1,15 @@
+{
+  "id": "1f13930a-6f8e-42bb-8ccd-4d402a841e6a",
+  "thread_id": "1f13930a-6f8e-42bb-8ccd-4d402a841e6a",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-advisor-1"
+  },
+  "timestamp": 1790512585163,
+  "body": "Product/orchestrator check-in: please send a concise update on your current advisor assignment, last concrete action, remaining independent dispositions, and any blocker/decision needed. Keep to advisor scope (no implementation or merge) and preserve all existing operator holds. TASK-1549 is newly queued design-only implementer work; please do not take that lease.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
