@@ -42,12 +42,12 @@ description: |
 
   ## Groomed decision (proxy, 2026-09-25)
   Project templates live in the tracked .aida/config.toml under [history.templates] (the recommendation). The aida-store alternative is rejected: a formatting preference should not become a requirement-graph object. Added acceptance: the implementing PR files an accepted ADR recording this choice and the rejected alternative before the code lands. Sequencing: after TASK-1512 (its --to/--from/--opened must exist for the compose criterion).
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-27T06:49:13.685910400Z
+modified_at: 2026-09-27T16:50:51.822238271Z
 req_type: Story
 tags:
 - aida:history
@@ -323,4 +323,24 @@ comments:
   content: 'PROXY DECISION (product for Joe): operator explicitly directs that optional macOS/Windows checks are not to delay backlog merges until the backlog is drained. Current main protection requires only merge-hold-gate and Build (ubuntu-latest). This resolves the prior open operator choice about sequencing the reported Windows baseline doctor/scaffold failures for STORY-1477; it does not authorize changing protection, waiving Ubuntu failures, bypassing the rework hold, or treating unresolved review acceptance as passed. Keep baseline platform remediation tracked separately and proceed with fresh independent review plus advisor disposition at the current PR head.'
   created_at: 2026-09-27T06:49:13.685910400Z
   modified_at: 2026-09-27T06:49:13.685910400Z
+history:
+- id: 01a0e3c6-ccea-73b3-89ff-2d7e786b75b3
+  author: aida-auto-bump
+  timestamp: 2026-09-27T16:50:51.754632437Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e3c6-cd2e-7000-97d2-9c84f5ec11cb
+  timestamp: 2026-09-27T16:50:51.822223308Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/STORY-1477-2026-09-27T041918Z.md.acked
+  commit_sha: 6b1dac2a201bae751901ab95ad49e591292465a1
+  summary: 'Approved exact SHA 5bab54d176: full acceptance verified. R1-R3 retained, R4 inline history persistence and R5 real decoded-feed strftime verified across all platforms and test suites.'
+  review_verdict: approved
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T16:50:51.754626493Z
+  completion_sha: 6b1dac2a201bae751901ab95ad49e591292465a1
