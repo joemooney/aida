@@ -25,10 +25,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:44:26.230904362Z
-modified_at: 2026-09-27T14:44:39.029955123Z
+modified_at: 2026-09-27T14:44:42.163730040Z
 req_type: Bug
 tags:
 - reporting cli defer
+comments:
+- id: 01a0e353-4c33-7a80-8b36-9ab50b1dff67
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): approved and queued. Concrete, reproducible on two live specs (BUG-1679, TASK-1533), and it demonstrably cost real agent time today: the orchestrator reported two specs as deferred while the store still called them needs-attention, and an independent advisor had to catch the contradiction. Reporting-surface only, no behaviour change to deferral itself.'
+  created_at: 2026-09-27T14:44:42.163730040Z
+  modified_at: 2026-09-27T14:44:42.163730040Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e353-3ff5-7c90-88e4-2cfa5ee01388
   author: joe
