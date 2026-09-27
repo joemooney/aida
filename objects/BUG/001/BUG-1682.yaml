@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:57:53.754613048Z
-modified_at: 2026-09-27T03:56:23.204834432Z
+modified_at: 2026-09-27T03:59:22.297677240Z
 req_type: Bug
 comments:
 - id: 01a0e101-bf24-7c71-882a-a9e28b9b08e6
@@ -51,3 +51,44 @@ comments:
     This is a proposal awaiting an independent advisor's explicit signoff, not an approval or implementation authorization.
   created_at: 2026-09-27T03:56:23.204834432Z
   modified_at: 2026-09-27T03:56:23.204834432Z
+- id: 01a0e104-7ab9-7a73-b79b-1843eb5bcee1
+  author: codex (independent advisor)
+  content: |
+    ADVISOR SIGNOFF: APPROVED
+
+    Independent design gate for SKETCH 01a0e101-bf24-7c71-882a-a9e28b9b08e6. I am the fresh reviewing advisor, not the sketch author, product seat, or implementer. Approval is for the sketch WITH the binding amendments below; it is not an implementation verdict or merge authorization. No code, status, queue, or merge action is part of this review.
+
+    Evidence inspected
+    Read AGENTS.md, two-seat protocol, rework-brief craft, recovery playbooks, BUG-1682 --full and its comments using /home/joe/ai/aida/target/release/aida. Inspected source at HEAD 854b7e26f7222c73845064275a18c293c9895283 (reviewed files have no working-tree diff): aida-cli-lib/src/global_queue.rs:64-118, all repository global_queue callers, aida-core/src/fs_atomic.rs:84-175 and tests, worktree_pool.rs:315-352, db/store_lock.rs, file_lock.rs, lib.rs:49315, test_home.rs:114-199,261-289, and installed fs2 0.4.3 Unix/Windows implementations. The current bug is confirmed: load suppresses parse errors; add/remove read before unguarded save; save truncates with fs::write. No external global_queue::save caller was found. fs2 supplies flock / LockFileEx; the worktree-pool blocking precedent is real, while the store uses a separate timeout/reentrancy policy.
+
+    Concurrency judgment
+    A permanent sidecar acquired before the first read, retained through replacement, and never unlinked gives mutual exclusion to cooperating writers. A waiter reads its predecessor's committed state, so distinct keys survive, upserts retain one entry per (UUID, project_root), and disjoint removals cannot overwrite additions. Rename is the publication point; lock acquisition is not FIFO and invocation order is not promised. Atomic write alone would not fix lost updates. Making snapshot save private and guard-required is essential, not optional. Every add/remove, including an initially absent file, must use the same resolved YAML/sidecar pair and lock protocol. No callback, storage operation, recursive acquisition, or subprocess belongs in the production critical section. Close/drop must release on error and unwind. Old binaries/manual writers remain outside the guarantee.
+
+    Binding design decisions and amendments
+    1. Placement: approve the bounded membership/persistence fix. queue_cmd.rs:3461,3469 computes top/append outside the transaction; autopilot_audit.rs:1254 computes max+1. Equal/stale positions under concurrency are accepted here. Keep position sorting and existing signatures; do not claim transactional top/append placement or expand into a placement-intent API. Existing arithmetic overflow is not solved by this approval. A later placement change needs its own design; tests here must assert membership and valid serialized same-key outcomes, not scheduler-dependent position order.
+
+    2. Contention: approve blocking fs2 exclusive locking, with no new timeout/env variable. The critical section is bounded local file work with no nested lock/subprocess. This is a safety choice, not a bounded-latency or fairness guarantee: a live stalled holder can block others. Lock errors propagate; never write unlocked. Test harnesses MUST have deadlines and kill/reap children on failure so a regression cannot hang CI. Do not copy the store's timeout/reentrancy machinery or AIDA_STORE_LOCK_TIMEOUT_SECS.
+
+    3. Fail closed: only read_atomic's final NotFound initializes an absent queue. YAML syntax/type failures, empty/whitespace/null documents, and all other read errors must be errors with role/path context. Require a sequence document; [] remains the valid empty queue. Remove mutation-path unwrap_or_default in queue_cmd.rs:3461,3469,3647 and autopilot_audit.rs:1254. Propagate those errors before placement/target selection; malformed queue removal must report corruption, not merely 'not found'. add/remove must still independently re-read and validate under lock. Best-effort read-only list/next/digest diagnostic improvements may remain outside this bug; those callers must not become snapshot writers. Preserve remove's no-op/no-write behavior.
+
+    4. Windows and crash contract: reuse read_atomic/write_atomic unchanged. Rust documents std::fs::rename as replacing an existing file, currently using MoveFileExW with SetFileInformationByHandle fallback on Windows, NOT an implementation that should be described specifically as ReplaceFileW. Microsoft documents replacement subject to access rights and possible errors. Sources: https://doc.rust-lang.org/std/fs/fn.rename.html and https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw . Never introduce delete-destination-then-rename. The helper retries Windows reader NotFound/PermissionDenied for a bounded budget; it neither retries writer rename failures nor guarantees every reader succeeds. Narrow the snapshot claim to successful file reads returning complete published content. A terminal NotFound maps to absence by policy, not proof of absence under arbitrary external interference. Under cooperating writers, a lock-held mutation read cannot race another writer's rename. A lock-free load is not a transaction for later decisions.
+
+    Death before publication leaves the previous committed file (or initial absence); death after successful publication leaves the new file. Killing during publication permits an uncertain old/new outcome, never an exactly-once acknowledgment promise. These are process-death/local-filesystem expectations, not OS-crash/power-loss durability: write_atomic does no sync_all or directory fsync. Cleanup is best effort (remove_file errors are ignored), so even a failed write can leave staging litter. Readers must ignore it and never remove the permanent sidecar. The existing helper tests do not supply a named deterministic staging/rename-failure cleanup test; do not claim that coverage already exists.
+
+    5. Hermetic fixtures: use a re-executed lib-test child exercising production global_queue functions, with HOME set per Command and AIDA_LIB_TEST_REAL_HOMES inherited intact. test_home::install_nested preserves the fake HOME and home_dir reads it on Windows; production dirs::home_dir does not offer that same HOME override. AIDA_HOME alone is insufficient. Assert the exact expected temp queue path in every child before touching it. Do not mutate parent HOME concurrently or introduce production test flags. Clear/set irrelevant child overrides explicitly; use unique fixture directories, readiness/release handshakes, deadlines, and child cleanup. The test resolver guard is the existing home-resolution exception; queue mutation/locking code must be the production path.
+
+    Required named tests (implement these or document a one-to-one name mapping)
+    - bug_1682_cross_process_adds_preserve_exact_identity_set: barrier-start many child writers; both missing-file creation and seeded queue; all successes, exact UUID/project set, valid YAML, invariant sentinels.
+    - bug_1682_sidecar_blocks_before_read_and_roles_are_independent: confirmed lock holder prevents another same-role transaction from reading/mutating; waiter retains holder's intervening committed entry; another role progresses. Use a test-only observation seam if needed rather than relying solely on elapsed sleep.
+    - bug_1682_mixed_mutations_preserve_scope_and_upsert_uniqueness: disjoint add/remove, same-key upserts, same UUID across projects, scoped and unscoped removal; serialized outcomes and no unrelated losses. Include no-op removal preserving bytes/no publication.
+    - bug_1682_readers_observe_complete_seeded_snapshots: continuous child reader with concurrent replacements, invariant sentinel on every successful snapshot, no spurious empty queue in the seeded cooperating-writer fixture; run on Unix and Windows.
+    - bug_1682_killed_holder_releases_lock_and_preserves_publication_boundary: child handshakes before publication and after successful publication but before acknowledgment; kill/reap, next writer succeeds, expected old/new state survives, sidecar persists. Also cover an absent initial target and ignored orphan staging file. A narrow test-only seam around the existing helper call is acceptable; no shared-helper redesign is needed.
+    - bug_1682_invalid_documents_and_io_failures_preserve_committed_bytes: missing succeeds; malformed, empty/whitespace/null, and wrong-type YAML fail; deterministic read/lock/staging/rename errors propagate without replacing prior bytes; next acquisition succeeds after error/unwind. Use portable failure injection/filesystem fixtures, not chmod-only assertions; assert cleanup only when cleanup itself can succeed.
+    - bug_1682_mutation_callers_propagate_load_errors: cover global CLI add/top/remove and autopilot QueueAdd pre-reads, with contextual failure and no write/success report on corrupt input.
+    - bug_1682_child_home_is_fenced: every child resolves the same expected fixture path and retains the real-home fence, including on Windows.
+
+    Retain core coverage: replaces_content_no_leftovers, read_atomic_handles_concurrent_writes, concurrent_writers_never_tear_the_file, bug_1660_retry_policy_per_platform, bug_1654_budget_holds_when_sleeps_overshoot, bug_1654_transient_missing_file_is_read_after_retry. Implementation review must show targeted BUG-1682 results plus relevant atomic-helper tests and cargo fmt --all -- --check. Windows cross-compilation alone is not runtime evidence; execute the concurrency/reader fixtures on Windows (the cross-platform workflow already runs workspace tests). No tests were executed or claimed passing in this design-only review.
+
+    Disposition: APPROVED with all amendments binding. The three open design questions are resolved above; implementation and independent implementation review remain outstanding. No unresolved design gate is waived.
+  created_at: 2026-09-27T03:59:22.297677240Z
+  modified_at: 2026-09-27T03:59:22.297677240Z
