@@ -3,12 +3,12 @@ spec_id: TASK-1544
 agreed_id: TASK-1544
 title: Light entry path for the performance and remote-drift doctor checks (like disk-headroom)
 description: 'Follow-up from BUG-1675: ''aida doctor check performance'' and ''check remote-drift'' do not need the store for their own findings but go through the full store load, so under load they can time out (exit 124) and trip their guard routes. Acceptance: 1. Both single-category checks skip the store load and full findings pass, keeping report shape and --fail-on-findings behaviour identical. 2. Tests with injected inputs; one real-probe wiring test each. 3. Measured runtime on this repo recorded on the spec.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:23:25.623165354Z
-modified_at: 2026-09-27T06:20:36.588834363Z
+modified_at: 2026-09-27T06:22:15.204553179Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -21,3 +21,11 @@ comments:
   content: 'PROXY DECISION (product, 2026-09-26): bounded approved follow-up to merged BUG-1675; queue for independent low-cost implementer and fresh reviewer as next backlog wave. No architecture or authority change.'
   created_at: 2026-09-27T06:20:36.588834363Z
   modified_at: 2026-09-27T06:20:36.588834363Z
+history:
+- id: 01a0e187-4aa4-7631-8776-a795f548fc4a
+  author: aida-session-start
+  timestamp: 2026-09-27T06:22:15.204552380Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
