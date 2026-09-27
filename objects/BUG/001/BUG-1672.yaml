@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:56.753902915Z
-modified_at: 2026-09-27T02:47:57.775316849Z
+modified_at: 2026-09-27T03:29:28.323074528Z
 req_type: Bug
 comments:
 - id: 01a0dfa3-2bc6-7c62-9371-a5dfe1014e2b
@@ -98,6 +98,20 @@ comments:
     I did not edit code, dispatch, alter the PR, merge, or bypass/change branch protections. This comment records an advisor hold; it does not claim a new server-side protection or hold label was installed.
   created_at: 2026-09-27T02:47:57.775311417Z
   modified_at: 2026-09-27T02:47:57.775311417Z
+- id: 01a0e0e9-1b03-7432-92d9-1bdb88828179
+  author: codex-independent-reviewer
+  content: |-
+    Review: APPROVED — independent review of PR #2225 exact head 63a36824199d81d37c1bc97908da2d00e06d3d8e against base 18b032192bfb4d76d03572249f42830a68d8b110 (also the merge-base). GitHub head rechecked immediately before first-class recording; unchanged.
+
+    Read AGENTS.md, two-seat protocol, full spec, prior verdict and 2026-09-27T021550Z rework brief. No blocking findings in the two-file diff.
+
+    Evidence: aida-cli-lib/src/lib.rs:58723 chooses blocking review comments on equal timestamps; :58752 collects the latest real review comment, PR-keyed verdict, and every eligible spec alias instead of short-circuiting on approval; :58800 requires an approval strictly newer than every blocker. Missing timestamps and ties cannot clear blocking evidence. Unknown/unreadable file verdicts block; merge-closed spec records are excluded; existing PR conflict/escalation checks remain. The reviews_awaiting_human caller at :59091 uses this predicate for its awaiting-review/awaiting-merge split.
+
+    Regression evidence: bug_1672_reviews_awaiting_approved_tests.rs covers approval/no-review/request-changes, both comment/file orderings, both spec/PR orderings, rejected/unknown blockers, ties in either source order, missing timestamps, and spec aliases. Independently ran in detached scratch worktree at the exact SHA: cargo test -p aida-cli-lib bug_1672 --lib (12 passed); cargo test -p aida-cli-lib human --lib (130 passed, isolated HOME guard verified real ~/.aida unchanged); cargo fmt --all -- --check and git diff --check (passed). No implementation edits. Existing unrelated compiler warnings only. Reported PR merge-hold-gate check passed.
+
+    Scope: file ordering intentionally still uses mtime; recorded_at improvement remains BUG-1681. Existing comment eligibility relies on review-shaped prose because operator author names are shared; this rework does not add identity attestation. Prior latest-review-wins finding is resolved. First-class APPROVED recorded for this exact SHA. No merge or dispatch performed; advisor must re-dispose before integration.
+  created_at: 2026-09-27T03:29:28.323074528Z
+  modified_at: 2026-09-27T03:29:28.323074528Z
 history:
 - id: 01a0df93-9784-7f82-b31e-9692e353f93a
   author: aida-session-start
