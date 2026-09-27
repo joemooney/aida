@@ -16,10 +16,28 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:33:42.192429110Z
-modified_at: 2026-09-27T14:47:52.195337586Z
+modified_at: 2026-09-27T14:59:27.786749399Z
 req_type: Spike
 relationships:
 - rel_type: References
   target_id: 01a0dfa4-a985-7dc1-a589-c47f294dacd5
   created_at: 2026-09-27T14:47:52.195330775Z
   created_by: joe
+comments:
+- id: 01a0e360-cfaa-7820-85a4-195945caab56
+  author: joe
+  content: |-
+    PROXY DECISION (orchestrator for Joe, 2026-09-27 08:03): SPIKE-91 stays UNGATED. Recording this because two sessions raised it and neither would decide it, correctly, since it is a queue decision rather than a documentation one.
+
+    The advisor reviewing TASK-1549 found that SPIKE-91 has no blocked-by edge at all and is pickup-ready today, which means the claim that the protected-launch ADR gates four downstream specs was only three-quarters true. The architect then declined to add an edge unilaterally, on the grounds that adding a blocker is a sequencing decision, not documentation. Both were right to stop.
+
+    My decision as proxy: leave it ungated, and do NOT add a blocked-by edge. Reasoning — SPIKE-91's scope is read-only research (backend and platform feasibility, per-vendor minimum-credential statements, resource budgets, the pinned executable and dependency identity-admission line). None of that needs anything ADR-61 decided; if anything the research is what will let the ADR's open questions O2, O3 and O4 be answered at all. Gating it behind the ADR would invert the dependency and stall the very evidence the next gate needs.
+
+    Two conditions on that, from the advisor's verdict, which any implementer picking this up must honour:
+    1. SPIKE-91 must carry a resource budget. This host has a 2-slot cargo gate and a documented systemd-oomd incident on 2026-09-25 that killed an entire terminal scope and every agent in it, so an unbounded research spike that starts builds or VMs is a real hazard.
+    2. The per-vendor credential question is more load-bearing than the ADR states: if all three vendors require an unrestricted HOME, the protected boundary ships empty. That should be settled as three separately named verdicts, one per vendor, sourced from vendor documentation.
+
+    This is a routine sequencing call inside the delegation, and it is reversible: if product intends SPIKE-91 to wait on the ADR, add the edge deliberately and say why.
+  created_at: 2026-09-27T14:59:27.786749399Z
+  modified_at: 2026-09-27T14:59:27.786749399Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
