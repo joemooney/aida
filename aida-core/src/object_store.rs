@@ -144,7 +144,13 @@ pub fn write_object(objects_root: &Path, req: &Requirement) -> Result<PathBuf> {
     let yaml = serde_yaml::to_string(req)
         .with_context(|| format!("Failed to serialize requirement {}", spec_id))?;
 
-    std::fs::write(&path, &yaml).with_context(|| format!("Failed to write {}", path.display()))?;
+    // BUG-1673: stage + rename, so a concurrent whole-store load can never
+    // read a half-written object (which it would report as a parse failure and
+    // drop from that load). `list_objects` ignores the staging file because
+    // `write_atomic` names it `<stem>.tmp.<pid>.<seq>`, whose extension is not
+    // `yaml`. trace:BUG-1673 | ai:claude
+    crate::write_atomic(&path, yaml.as_bytes())
+        .with_context(|| format!("Failed to write {}", path.display()))?;
 
     Ok(path)
 }
@@ -185,7 +191,9 @@ pub fn write_object_if_changed(objects_root: &Path, req: &Requirement) -> Result
         std::fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
     }
-    std::fs::write(&path, &yaml).with_context(|| format!("Failed to write {}", path.display()))?;
+    // Atomic for the same reason as `write_object`. trace:BUG-1673 | ai:claude
+    crate::write_atomic(&path, yaml.as_bytes())
+        .with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(true)
 }
 
@@ -384,6 +392,77 @@ pub fn read_object_text(objects_root: &Path, spec_id: &str) -> Result<Option<Str
         .with_context(|| format!("Failed to read {}", path.display()))
 }
 
+/// Operator-facing note for an object that `list_objects` reported and that
+/// was gone by the time the loader read it, twice. Deliberately NOT
+/// `parse_failure_hint`: that hint's binary-version-skew narrative
+/// misdiagnoses a plain deletion and sends the reader chasing a rebuild.
+// trace:BUG-1673 | ai:claude
+pub fn removed_while_loading_note(spec_id: &str) -> String {
+    format!(
+        "Note: {} was removed while loading; skipped (no fingerprint recorded, \
+         so a later whole-store save leaves it alone)",
+        spec_id
+    )
+}
+
+/// Delay before the single retry of a listed object whose read or parse
+/// failed. `git checkout` / `git pull` replaces an object file in place
+/// (delete + create, and the create is not atomic), so the window in which
+/// the file is absent or half-written is sub-millisecond; this is orders of
+/// magnitude more than needed while staying invisible in a whole-store load.
+// trace:BUG-1673 | ai:claude
+#[cfg(feature = "native")]
+const LISTED_OBJECT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(25);
+
+/// Outcome of one attempt at reading an object file that `list_objects`
+/// reported. Keeps the three cases apart because they want different
+/// snapshot bookkeeping and different operator messages.
+// trace:BUG-1673 | ai:claude
+#[cfg(feature = "native")]
+enum ListedObject {
+    /// Read and deserialized.
+    Loaded {
+        text: String,
+        /// Boxed: a bare `Requirement` would make this variant dominate the
+        /// enum's size for every read.
+        req: Box<Requirement>,
+    },
+    /// Read, but the YAML did not deserialize. The text is carried out so the
+    /// load snapshot can still fingerprint it — BUG-1612 relies on an
+    /// unparseable object being recorded, so a whole-store save recognizes it
+    /// as one this load saw and preserves it instead of deleting it.
+    Unparseable { text: String, error: anyhow::Error },
+    /// The file could not be read at all. `missing` separates "the file is
+    /// gone" (a concurrent delete or checkout) from a real I/O failure.
+    Unreadable { error: anyhow::Error, missing: bool },
+}
+
+/// One read + parse attempt for a listed object. Never warns; the caller
+/// decides, after the retry, which outcome is worth reporting.
+// trace:BUG-1673 | ai:claude
+#[cfg(feature = "native")]
+fn read_listed_object(path: &Path) -> ListedObject {
+    match crate::read_atomic(path) {
+        Err(e) => {
+            let missing = e.kind() == std::io::ErrorKind::NotFound;
+            ListedObject::Unreadable {
+                error: anyhow::Error::new(e).context(format!("Failed to read {}", path.display())),
+                missing,
+            }
+        }
+        Ok(text) => match serde_yaml::from_str::<Requirement>(&text) {
+            Ok(req) => ListedObject::Loaded {
+                text,
+                req: Box::new(req),
+            },
+            Err(e) => ListedObject::Unparseable {
+                error: anyhow::Error::new(e).context(format!("Failed to parse {}", path.display())),
+                text,
+            },
+        },
+    }
+}
+
 /// Load all requirements, and also return the load snapshot: every listed
 /// object file (including ones that failed to parse) with a fingerprint of
 /// its text. A whole-store save uses it to tell which absent objects the
@@ -398,23 +477,59 @@ pub fn load_all_objects_with_fingerprints(
     let mut requirements = Vec::with_capacity(files.len());
 
     for (spec_id, path) in &files {
-        let parsed = crate::read_atomic(path)
-            .with_context(|| format!("Failed to read {}", path.display()))
-            .and_then(|yaml| {
-                fingerprints.insert(spec_id.clone(), content_fingerprint(&yaml));
-                serde_yaml::from_str::<Requirement>(&yaml)
-                    .with_context(|| format!("Failed to parse {}", path.display()))
-            });
-        match parsed {
-            Ok(req) => requirements.push(req),
-            Err(e) => {
+        let read_attempt = |_attempt: u32| {
+            #[cfg(test)]
+            tests::bug_1673_before_object_read(spec_id, path, _attempt);
+            read_listed_object(path)
+        };
+
+        // BUG-1673: `git checkout` / `git pull` replaces an object file by
+        // delete + create, so a load racing one can find a listed object
+        // absent or half-written even though the spec is present before and
+        // after. `read_atomic` returns `NotFound` (and a truncated file
+        // returns a parse error) immediately on Unix — BUG-1660 keeps it
+        // zero-wait there on purpose — so the wait belongs here: one short
+        // retry of THIS object, never a blanket delay. Re-listing would be a
+        // second full directory walk that tells us nothing new, because the
+        // object's path is a pure function of its spec id.
+        // trace:BUG-1673 | ai:claude
+        let mut outcome = read_attempt(0);
+        if !matches!(outcome, ListedObject::Loaded { .. }) {
+            std::thread::sleep(LISTED_OBJECT_RETRY_DELAY);
+            outcome = read_attempt(1);
+        }
+
+        match outcome {
+            ListedObject::Loaded { text, req } => {
+                fingerprints.insert(spec_id.clone(), content_fingerprint(&text));
+                requirements.push(*req);
+            }
+            ListedObject::Unparseable { text, error } => {
+                // BUG-1612: record the fingerprint even though the parse
+                // failed, so a whole-store save treats this object as one the
+                // load saw and preserves it rather than deleting work a newer
+                // binary wrote. trace:BUG-1612 | ai:claude
+                fingerprints.insert(spec_id.clone(), content_fingerprint(&text));
                 // BUG-97 / TASK-223: enrich the warning with the recovery
                 // hint so users see actionable next steps the first time
                 // a parse failure happens, not just "this thing broke."
                 // trace:BUG-97 TASK-223 | ai:claude
                 eprintln!("Warning: failed to load {} (parse error)", spec_id);
-                eprintln!("  Detail: {}", e);
+                eprintln!("  Detail: {}", error);
                 eprintln!("{}", parse_failure_hint(Some(path)));
+            }
+            ListedObject::Unreadable { error, missing } => {
+                if missing {
+                    // Listed, then genuinely removed. No fingerprint is
+                    // recorded, so `save_reporting` classifies the spec
+                    // `kept_unloaded` and never deletes it.
+                    // trace:BUG-1673 | ai:claude
+                    eprintln!("{}", removed_while_loading_note(spec_id));
+                } else {
+                    eprintln!("Warning: failed to load {} (read error)", spec_id);
+                    eprintln!("  Detail: {}", error);
+                    eprintln!("{}", parse_failure_hint(Some(path)));
+                }
             }
         }
     }
@@ -884,5 +999,286 @@ mod tests {
         // No "File:" line when no path provided — still useful content.
         assert!(!h.contains("File:"));
         assert!(h.contains("Recovery:"));
+    }
+
+    // ------------------------------------------------------------- BUG-1673
+    // A whole-store load runs against a worktree that a `git checkout` /
+    // `git pull` can be rewriting. git replaces a file in place (delete +
+    // create), so between `list_objects` and the read of one object the file
+    // can be absent or half-written even though the spec exists before and
+    // after. `read_atomic` is deliberately zero-wait on Unix (BUG-1660), so
+    // the loader itself retries the object once.
+
+    #[cfg(feature = "native")]
+    thread_local! {
+        /// Test hook run immediately before each of the loader's read
+        /// attempts for a listed object, with the attempt index (0 = the
+        /// first read, 1 = the retry). Thread-local, so tests running in
+        /// parallel never see each other's hook.
+        // trace:BUG-1673 | ai:claude
+        static BUG_1673_BEFORE_READ: std::cell::RefCell<Option<Box<dyn FnMut(&str, &Path, u32)>>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    /// Called from `load_all_objects_with_fingerprints` under `cfg(test)`.
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    pub(super) fn bug_1673_before_object_read(spec_id: &str, path: &Path, attempt: u32) {
+        let hook = BUG_1673_BEFORE_READ.with(|h| h.borrow_mut().take());
+        if let Some(mut f) = hook {
+            f(spec_id, path, attempt);
+            BUG_1673_BEFORE_READ.with(|h| {
+                let mut slot = h.borrow_mut();
+                if slot.is_none() {
+                    *slot = Some(f);
+                }
+            });
+        }
+    }
+
+    /// Install a before-read hook; returns the call counter it increments.
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    fn bug_1673_install_hook(
+        mut f: impl FnMut(&str, &Path, u32) + 'static,
+    ) -> std::rc::Rc<std::cell::Cell<usize>> {
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0usize));
+        let counter = calls.clone();
+        BUG_1673_BEFORE_READ.with(|h| {
+            *h.borrow_mut() = Some(Box::new(move |spec_id, path, attempt| {
+                counter.set(counter.get() + 1);
+                f(spec_id, path, attempt);
+            }));
+        });
+        calls
+    }
+
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    fn bug_1673_clear_hook() {
+        BUG_1673_BEFORE_READ.with(|h| *h.borrow_mut() = None);
+    }
+
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    fn bug_1673_spec(spec_id: &str, title: &str) -> Requirement {
+        let mut req = Requirement::new(title.into(), "desc".into());
+        req.spec_id = Some(spec_id.into());
+        req
+    }
+
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    fn bug_1673_titles(reqs: &[Requirement]) -> Vec<String> {
+        let mut titles: Vec<String> = reqs.iter().map(|r| r.title.clone()).collect();
+        titles.sort();
+        titles
+    }
+
+    /// The bug: a spec whose object file is momentarily absent — a checkout
+    /// has deleted it and is about to write it back — was warned about and
+    /// dropped from that load. It must survive instead.
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    #[test]
+    fn bug_1673_loader_keeps_object_recreated_between_listing_and_reading() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+        write_object(&objects_root, &bug_1673_spec("BUG-1", "untouched")).unwrap();
+        write_object(&objects_root, &bug_1673_spec("BUG-2", "recreated")).unwrap();
+
+        // Stand in for the checkout: delete the file before the first read,
+        // write it back before the retry.
+        let saved = std::fs::read_to_string(object_path(&objects_root, "BUG-2").unwrap()).unwrap();
+        let calls = bug_1673_install_hook(move |spec_id, path, attempt| {
+            if spec_id != "BUG-2" {
+                return;
+            }
+            if attempt == 0 {
+                std::fs::remove_file(path).unwrap();
+            } else {
+                std::fs::write(path, &saved).unwrap();
+            }
+        });
+
+        let loaded = load_all_objects_with_fingerprints(&objects_root);
+        bug_1673_clear_hook();
+        let (reqs, fingerprints) = loaded.unwrap();
+
+        assert_eq!(
+            bug_1673_titles(&reqs),
+            vec!["recreated".to_string(), "untouched".to_string()],
+            "the recreated object must not be dropped from the load"
+        );
+        assert!(
+            fingerprints.contains_key("BUG-2"),
+            "the retried object belongs in the load snapshot, or a later \
+             whole-store save cannot tell it was loaded"
+        );
+        assert_eq!(
+            calls.get(),
+            3,
+            "one read for the untouched object, two for the recreated one"
+        );
+    }
+
+    /// The other half of the same race: the checkout has created the file but
+    /// not finished writing it, so the read succeeds and the parse fails.
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    #[test]
+    fn bug_1673_loader_keeps_half_written_object_after_retry() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+        write_object(&objects_root, &bug_1673_spec("BUG-3", "half-written")).unwrap();
+
+        let saved = std::fs::read_to_string(object_path(&objects_root, "BUG-3").unwrap()).unwrap();
+        let truncated = saved[..saved.len() / 2].to_string();
+        let restored = saved.clone();
+        let calls = bug_1673_install_hook(move |_spec_id, path, attempt| {
+            if attempt == 0 {
+                std::fs::write(path, &truncated).unwrap();
+            } else {
+                std::fs::write(path, &restored).unwrap();
+            }
+        });
+
+        let loaded = load_all_objects_with_fingerprints(&objects_root);
+        bug_1673_clear_hook();
+        let (reqs, fingerprints) = loaded.unwrap();
+
+        assert_eq!(bug_1673_titles(&reqs), vec!["half-written".to_string()]);
+        assert_eq!(
+            fingerprints.get("BUG-3").copied(),
+            Some(content_fingerprint(&saved)),
+            "the snapshot fingerprints the text the retry actually read"
+        );
+        assert_eq!(calls.get(), 2, "exactly one retry");
+    }
+
+    /// An object that is really gone still gets omitted — the retry costs one
+    /// short wait, not a hang — and it is reported as a removal, never with
+    /// the parse-failure hint, whose binary-version narrative would
+    /// misdiagnose it. No fingerprint is recorded, which is what makes a later
+    /// whole-store save treat the spec as `kept_unloaded` (BUG-1612) instead
+    /// of deleting it.
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    #[test]
+    fn bug_1673_loader_omits_object_deleted_for_good_without_parse_hint() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+        write_object(&objects_root, &bug_1673_spec("BUG-4", "survivor")).unwrap();
+        write_object(&objects_root, &bug_1673_spec("BUG-5", "doomed")).unwrap();
+
+        let calls = bug_1673_install_hook(|spec_id, path, _attempt| {
+            if spec_id == "BUG-5" && path.exists() {
+                std::fs::remove_file(path).unwrap();
+            }
+        });
+
+        let loaded = load_all_objects_with_fingerprints(&objects_root);
+        bug_1673_clear_hook();
+        let (reqs, fingerprints) = loaded.unwrap();
+
+        assert_eq!(bug_1673_titles(&reqs), vec!["survivor".to_string()]);
+        assert!(
+            !fingerprints.contains_key("BUG-5"),
+            "an omitted object must NOT be fingerprinted, or a whole-store \
+             save would think the caller deleted it"
+        );
+        assert!(fingerprints.contains_key("BUG-4"));
+        assert_eq!(
+            calls.get(),
+            3,
+            "the doomed object is retried once, then given up on"
+        );
+
+        let note = removed_while_loading_note("BUG-5");
+        assert!(note.contains("BUG-5"));
+        assert!(
+            !note.contains("binary version mismatch"),
+            "a deletion must not be reported with the parse-failure hint: {note}"
+        );
+    }
+
+    /// The BUG-1612 contract survives the retry: an object that is
+    /// unparseable on both attempts is still fingerprinted, so a whole-store
+    /// save preserves rather than deletes it.
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    #[test]
+    fn bug_1673_loader_fingerprints_persistently_unparseable_object() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+        write_object(&objects_root, &bug_1673_spec("BUG-6", "fine")).unwrap();
+
+        let corrupt = "not: [a, valid, requirement\n";
+        let path = objects_root.join("BUG").join("000").join("BUG-7.yaml");
+        std::fs::write(&path, corrupt).unwrap();
+
+        let (reqs, fingerprints) = load_all_objects_with_fingerprints(&objects_root).unwrap();
+
+        assert_eq!(bug_1673_titles(&reqs), vec!["fine".to_string()]);
+        assert_eq!(
+            fingerprints.get("BUG-7").copied(),
+            Some(content_fingerprint(corrupt)),
+            "an unparseable object stays in the load snapshot"
+        );
+    }
+
+    /// `write_object` stages and renames, so it leaves no `.tmp.` sibling and
+    /// `list_objects` / `count_objects` never see one.
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    #[test]
+    fn bug_1673_write_object_is_atomic_and_leaves_no_temp_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+        let path = write_object(&objects_root, &bug_1673_spec("BUG-8", "atomic")).unwrap();
+        // A second write exercises the rename-over-existing path.
+        assert!(
+            write_object_if_changed(&objects_root, &bug_1673_spec("BUG-8", "atomic 2")).unwrap()
+        );
+
+        let shard = path.parent().unwrap();
+        let strays: Vec<String> = std::fs::read_dir(shard)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.contains(".tmp."))
+            .collect();
+        assert!(strays.is_empty(), "staging files left behind: {strays:?}");
+        assert_eq!(list_objects(&objects_root).unwrap().len(), 1);
+        assert_eq!(count_objects(&objects_root).unwrap(), 1);
+    }
+
+    /// A reader racing repeated `write_object` calls never observes a torn
+    /// file — every read either parses or (never, on POSIX) misses the file.
+    // trace:BUG-1673 | ai:claude
+    #[cfg(feature = "native")]
+    #[test]
+    fn bug_1673_concurrent_write_object_is_never_read_torn() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+        write_object(&objects_root, &bug_1673_spec("BUG-9", "seed")).unwrap();
+
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let writer_root = objects_root.clone();
+        let writer_stop = stop.clone();
+        let writer = std::thread::spawn(move || {
+            let mut n = 0u32;
+            while !writer_stop.load(std::sync::atomic::Ordering::Relaxed) {
+                n += 1;
+                let title = "x".repeat(200 + (n as usize % 50));
+                write_object(&writer_root, &bug_1673_spec("BUG-9", &title)).unwrap();
+            }
+        });
+
+        for _ in 0..300 {
+            read_object(&objects_root, "BUG-9")
+                .expect("a concurrent atomic write must never yield a torn object");
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        writer.join().unwrap();
     }
 }
