@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:00:50.627945754Z
-modified_at: 2026-09-26T16:01:33.615010767Z
+modified_at: 2026-09-27T14:15:28.783278546Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -22,6 +22,12 @@ comments:
   created_at: 2026-09-26T16:01:33.615010767Z
   modified_at: 2026-09-26T16:01:33.615010767Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0e338-8b0f-7c80-a3b8-8bd1d0085d31
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): signed off into the drain via ''aida queue add''. The CODE is routine (seed the .agents/skills record from legacy packs, show legacy packs in scaffold status, doctor warning). NOT delegated: actually RUNNING the migration against Joe''s existing Codex/Antigravity installs is a post-merge live action against user-owned files outside this repo, so it stays for Joe. The implementer must make the pruning fail closed: prune only unedited AIDA-headed aida-* directories, dry-run first, and never delete anything it did not verify as unedited.'
+  created_at: 2026-09-27T14:15:28.783278546Z
+  modified_at: 2026-09-27T14:15:28.783278546Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0de73-10f7-7d10-b025-301a4cfa0d0a
   author: joe
