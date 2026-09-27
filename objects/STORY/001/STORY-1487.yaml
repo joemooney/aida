@@ -13,12 +13,12 @@ description: |
   3. Run against AIDA at a pinned commit, figures (a) to (c) agree with docs/positioning/spike-86-scripts/ output for the same window within 1 percentage point (test or documented check).
   4. `aida criteria gap` either works as the corpus-wide report or errors with a message pointing at the new command; it never treats "gap" as a spec ID (test).
   5. Works on a project with no criteria traces at all (reports 0 of N, exit 0) (test).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:34:45.334160782Z
-modified_at: 2026-09-26T23:39:15.393688954Z
+modified_at: 2026-09-27T05:45:23.996717997Z
 req_type: Story
 tags:
 - criteria
@@ -79,4 +79,21 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0e165-8d10-72d3-afaf-6c17403940d4
+  author: aida-auto-bump
+  timestamp: 2026-09-27T05:45:23.984505898Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0e165-8d1c-7b52-8b41-1b8db58e8f5d
+  timestamp: 2026-09-27T05:45:23.996716752Z
+  agent: implementer
+  commit_sha: f936ea71e5132079950712c82d94d2eb2a581635
+  summary: Completed via merge f936ea71
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T05:45:23.984501233Z
+  completion_sha: f936ea71e5132079950712c82d94d2eb2a581635
