@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:06.828604970Z
-modified_at: 2026-09-27T07:16:47.117348518Z
+modified_at: 2026-09-27T08:07:47.467127474Z
 req_type: Task
 tags:
 - criteria
@@ -98,6 +98,27 @@ comments:
   created_at: 2026-09-26T23:08:14.542090637Z
   modified_at: 2026-09-26T23:08:14.542090637Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e1e7-ea0b-72d1-b830-0c2ff24c770f
+  author: joe
+  content: |
+    ADVISOR DISPOSITION: APPROVED for integration
+
+    Independent adjudication of commit a746083f3f34c852d07ad2c659071ed6ad92cab7 against TASK-1522 acceptance criteria, STORY-1487 plan/decision records, and registered review verdict at .aida/review-verdicts/TASK-1522.json.
+
+    Verification of Cross-Spec Constraints & Acceptance:
+    1. Advisory / Reporting-Only: Conforms to PRIN-9. No gating or blocking introduced in `criteria_gate.rs`, `pr_cmd.rs`, `queue_cmd.rs`, or merge paths.
+    2. No Completion / Approval Enforcement: Spec completion seam remains unaffected. Unit test `test_completion_ignores_intent_capture_floor` confirms transition to Completed succeeds even when floor is 100% and traced count is 0.
+    3. Rolling 30-Day Completed-Work Cohort: Evaluates strictly authored work specs (`Story`, `Task`, `Bug`) completed within `[now - 30d, now]` having acceptance criteria (`criteria > 0`), excluding auto-drafted stubs and non-work specs. Edge case of zero completed specs correctly evaluates to `at or above floor` with `(nothing to measure)`. Verified by `test_intent_share_counts_only_completed_work_specs_in_window` and `test_zero_completed_specs_reports_at_or_above_floor`.
+    4. Test-Attached Traces Only: `SpecCoverage` and `intent_capture_share` evaluate against `test_criterion_tokens` (restricted to test functions per TASK-1546), preventing loose source or prose mentions from satisfying criteria.
+    5. Status & Config Behavior:
+       - Config: Key `[capture] criterion_test_floor_pct` in `.aida/config.toml` defaults to 50% when unset or out-of-range (0..=100); commented template added to `init_cmd.rs`. Verified by `test_capture_floor_default_is_50_when_unset` and `test_capture_floor_invalid_value_falls_back_to_default`.
+       - Status line: Per PROXY DECISION (01a0dfa3-eea6-7773-80e2-210dee9b87fa), `aida status` reads `.aida/cache/capture-coverage.json` only and remains silent when absent or stale (invalidated by code HEAD or store HEAD advance). Outputs single advisory line when below floor; silent when at or above floor. Verified by `test_status_prints_intent_line_below_floor_and_nothing_at_or_above` and `test_cache_invalidated_when_store_head_moves`.
+    6. Testing: All 9 dedicated unit tests pass in `task_1522_intent_capture_tests.rs`.
+    7. Conventions: Conforms to AGENTS.md conventions (commit subject trailer `(TASK-1522)`, trace comments `// trace:TASK-1522 | ai:antigravity`, clean git hygiene).
+
+    Integration readiness confirmed. Approved for integration.
+  created_at: 2026-09-27T08:07:47.467127474Z
+  modified_at: 2026-09-27T08:07:47.467127474Z
 history:
 - id: 01a0e1b9-378d-77b2-9146-45d614e2fe4a
   author: aida-session-start
