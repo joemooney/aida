@@ -1,5 +1,6 @@
 id: 01a0e11c-07a7-7ee0-b7de-e7363094acb6
 spec_id: TASK-1-178
+agreed_id: TASK-197
 title: 'Resolved prior ordering blocker from 18b032192bfb4d76d03572249f42830a68d8b110: …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1672, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
