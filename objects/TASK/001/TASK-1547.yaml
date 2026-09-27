@@ -8,10 +8,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:13:49.257295434Z
-modified_at: 2026-09-27T00:14:03.690655417Z
+modified_at: 2026-09-27T16:33:50.813945667Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0dfa4-25a5-7f30-a113-2dced517a3ff
   created_at: 2026-09-27T00:14:03.690646359Z
   created_by: joe
+comments:
+- id: 01a0e3b7-38dd-7490-a205-333e5a45b391
+  author: joe
+  content: 'Round-4 correction from BUG-1677: do NOT widen info/exclude. A store attached as a linked worktree resolves ''git rev-parse --git-path info/exclude'' to the PROJECT''s shared common dir, so a staging-file rule written there hides the user''s own *.tmp.* files (that was the round-3 blocker). ensure_store_lock_excluded now writes only the anchored .aida/*.lock. The staging patterns are store-scoped and single-sourced as aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS / store_staging_ignore_block(); this task should make the doctor repair append that block idempotently to an EXISTING store''s tracked .gitignore (its early-return on .aida/node.toml is the gap), not touch info/exclude, and not use a bare *.tmp.*. workspace::tests::bug_1677_store_gitignore_hides_every_staging_name_and_nothing_else is the git check-ignore pattern to extend to the repaired-store fixture.'
+  created_at: 2026-09-27T16:33:50.813945667Z
+  modified_at: 2026-09-27T16:33:50.813945667Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
