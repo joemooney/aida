@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:40.554193021Z
-modified_at: 2026-09-27T00:14:39.095255704Z
+modified_at: 2026-09-27T00:15:26.997135018Z
 req_type: Task
 comments:
 - id: 01a0dfb4-9f34-77a3-9ea5-01c6bc2f8d85
@@ -16,6 +16,12 @@ comments:
   content: 'DRAFT (uncompiled) on claude/task-1529 @ 28da0ad9e1: implements ADR-51 retract-after with the two advisor additions from TASK-1289. New aida-cli-lib/src/preflight_retraction.rs: decide_target (only a PR that was NOT open on the branch before the implementer launched is the agent''s to retract; same number = NotOurs), verify_closed (only an observed Closed counts; Open/Merged/unreadable = failure), RetractionOutcome, and a durable marker .aida/preflight-retractions/PR-<n>.json (state retracted|retraction-failed, spec, branch, guard detail, error, attempts). RealPhaseDriver: new preexisting_phase1_pr recorded in run_implementer via project_forge().change_for_branch before spawning; retract_refused_publication now returns RetractionOutcome — skips NotOurs/AlreadyMerged/already-closed (idempotent), closes with the guard note, re-reads change_status to VERIFY, writes the marker, and on failure also places a typed Rework merge-hold (merge_hold::typed_hold + write_typed_hold) so no AIDA merge path takes the still-open PR; on verified success returns the spec Done→InProgress for the same implementer (retraction_in_progress_flip under new aida_core::conflict::PREFLIGHT_RETRACT_AUTHOR, lease untouched). New refused_preflight_failure builds the PhaseFailure whose text names the outcome distinctly (retracted / already closed / STILL OPEN retraction failed / left untouched). RecordingForge gained scripted state, close_error, close_takes_effect and a comments log. Tests (forge_seam_tests, fake forge, tempdir): closes+verifies+records (fail case), passing guards touch nothing (pass), pre-existing PR never closed while a new PR on the same branch is (not-ours), close-ok-but-still-open and close-error both yield a failed retraction with marker + merge-hold, idempotent second run, and the pure Done→InProgress flip; module unit tests for decide_target/verify_closed/marker attempts. Decisions to confirm: close rather than convert-to-draft (the Forge trait has no draft conversion; close_change already posts the guard output); ''not ours'' is defined by a branch-keyed pre-launch snapshot, not PR author; a failed retraction places a Rework-kind merge-hold. Left: aida human / status --awaiting do not yet surface the marker (the merge-hold surfaces). Compile risks: forge Box<dyn Forge> borrowed across close+status calls in retract_refused_publication, ChangeState import in the test module, HoldReasonKind::Rework path/visibility, and the hook''s cargo fmt already reformatted the files.'
   created_at: 2026-09-26T21:52:31.540453191Z
   modified_at: 2026-09-26T21:52:31.540453191Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e037-7915-71a0-9f40-665c7faa5db0
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): (1)+(2) author-based not-ours check -> follow-up (needs author in ChangeMetadata); branch-keyed pre-launch snapshot accepted meanwhile; (3) draft-error -> close fallback accepted (a failing PR must leave review); (4) GitLab draft verification via fake forge only is accepted; (5) test-only leaves_pr_open fine.'
+  created_at: 2026-09-27T00:15:26.997135018Z
+  modified_at: 2026-09-27T00:15:26.997135018Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df93-519f-7082-8697-0c3ea16f6b85
