@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:52.109830507Z
-modified_at: 2026-09-27T01:24:12.583528327Z
+modified_at: 2026-09-27T01:54:07.668669147Z
 req_type: Bug
 comments:
 - id: 01a0e075-dce9-7d13-a5d5-6314b8f958e6
@@ -16,3 +16,8 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): APPROVED for dispatch as a bounded cache-read fix. Use the existing acceptance of one full fallback scan for N missing relationship targets. Astra implementer; independent strict cache review before integration. This is unrelated to batch 102 Windows CI.'
   created_at: 2026-09-27T01:23:35.785586617Z
   modified_at: 2026-09-27T01:23:35.785586617Z
+- id: 01a0e091-d0b4-7642-ad50-3ba31f215df0
+  author: mcp
+  content: 'Implemented and pushed branch bug-1678 at 6022ac539f ([AI:codex] fix(cache): share target fallback index across show lookups (BUG-1678)). A command-scoped reader shares a lazy UUID-to-path fallback index across show relationships/blockers in JSON, TOON, human, and card rendering; canonical YAML and UUID validation remain authoritative. Added trace comments and regressions for N stale-cache misses, missing/wrong cache paths, unreadable cache, repeated/missing targets, and fresh canonical reads. Validation in isolated HOME: cargo test -p aida-core targeted_reader -- --nocapture PASS (2 tests); cargo fmt --all -- --check PASS. Ran cargo test --workspace --no-fail-fast; stopped at a 25-minute bound while CLI-library history-cache tests were still progressing. No FAILED tests reported before termination (exit 143); full workspace result is INCOMPLETE, not a pass. Completed integration suites include show JSON audit and relationship-type journey checks. Logs: /tmp/bug-1678-focused.log, /tmp/bug-1678-fmt.log, /tmp/bug-1678-workspace.log. HOME guards passed. No main-checkout edits, self-review, PR creation, or merge. Per operator instruction, handoff is the pushed branch for independent review.'
+  created_at: 2026-09-27T01:54:07.668625614Z
+  modified_at: 2026-09-27T01:54:07.668625614Z
