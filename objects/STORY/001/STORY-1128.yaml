@@ -35,7 +35,8 @@ relationships:
 - rel_type: Child
   target_id: 01a0a3be-952f-72c0-b19f-ba7a6fa59574
   created_at: 2026-09-15T06:27:02.007163768Z
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0a4cc-9784-7e53-ba36-bb1bfb51c6f3
   created_at: 2026-09-15T11:21:14.753973549Z
   created_by: joe

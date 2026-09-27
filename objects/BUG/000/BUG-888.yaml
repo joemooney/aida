@@ -11,7 +11,8 @@ created_at: 2026-09-07T18:54:31.667231524Z
 modified_at: 2026-09-07T19:32:55.838915406Z
 req_type: Bug
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a07d4f-92ff-7ea3-a2eb-e71ff7799e07
   created_at: 2026-09-07T19:19:26.910621191Z
   created_by: joe
