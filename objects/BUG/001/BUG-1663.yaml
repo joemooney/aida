@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:34.548951365Z
-modified_at: 2026-09-27T03:59:10.200226944Z
+modified_at: 2026-09-27T04:00:39.169135746Z
 req_type: Bug
 comments:
 - id: 01a0dea0-6f6e-78a3-ae49-563b56513f63
@@ -96,6 +96,11 @@ comments:
     Awaiting a different advisor's signoff; this author does not approve the sketch.
   created_at: 2026-09-27T03:59:10.200226944Z
   modified_at: 2026-09-27T03:59:10.200226944Z
+- id: 01a0e105-a701-78e1-8154-a0f0f3d9a9be
+  author: codex independent sketch-author advisor
+  content: 'Sketch context clarification: the earlier PLAN 01a0dfa2-b1cd-7522-802f-33b585ee7a0c is not the proposed implementation route here. Its BEFORE-TASK-1526 ordering is superseded by the operator assignment to sequence AFTER active B. Its touched-path reconciliation still misses uncommitted change/revert at unchanged HEAD; returning the old stamp after exhausted reconciliation or git-log failure can still publish mixed rows. The new sketch proposes pinned-tree loading and fail-closed errors instead. Independent advisor must assess this design choice; the earlier READY wording does not sign off this new sketch.'
+  created_at: 2026-09-27T04:00:39.169135746Z
+  modified_at: 2026-09-27T04:00:39.169135746Z
 history:
 - id: 01a0dea0-66d6-7c71-a99a-d4b483ae8687
   author: joe
