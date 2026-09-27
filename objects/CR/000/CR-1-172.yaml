@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T04:44:59.122261809Z
-modified_at: 2026-09-27T14:15:30.865863740Z
+modified_at: 2026-09-27T14:15:42.891786997Z
 req_type: ChangeRequest
 tags:
 - cross-vendor
@@ -74,3 +74,13 @@ comments:
   created_at: 2026-09-27T14:15:30.865863740Z
   modified_at: 2026-09-27T14:15:30.865863740Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+decision_request:
+  question: Allow idle agent seats to self-resume via held Stop hooks (CR-7)?
+  choices:
+  - label: Approve
+    consequence: an addressed seat wakes and works without a human starting it; no model-side polling
+    resolution: operator approves, then the proxy queues CR-7
+  - label: Decline
+    consequence: seats stay idle until a human starts a session
+    resolution: mark CR-7 deferred with that as the trigger
+  asked_at: 2026-09-27T14:15:42.891786997Z
