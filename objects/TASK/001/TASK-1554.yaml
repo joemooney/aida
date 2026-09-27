@@ -1,0 +1,28 @@
+id: 01a0e3e1-7d16-7a22-9a54-36f457c60014
+spec_id: TASK-1554
+agreed_id: TASK-1554
+title: Release note and stale comments for the home-resolver change
+description: |
+  Follow-up from the TASK-1513 independent review (non-blocking notes 3, 5, 7 and 8). Documentation only; no behavior change.
+
+  Acceptance criteria:
+
+  1. A release note covers the Windows/MSYS2 config-location change. `aida-core/src/home.rs` now prefers `$HOME` over `SHGetKnownFolderPath`. On normal Windows `USERPROFILE` equals the profile dir so nothing changes, but under MSYS2 / Git-Bash where `HOME=/home/user`, `registry.rs:141` resolves `\home\user\.aida.config` and AIDA silently stops finding an existing `C:\Users\user\.aida.config`. This is the intended overridability and the module doc says so, but it is user-visible on that platform/shell combination and needs to be called out, with the workaround (set `AIDA_TEST_HOME`/`USERPROFILE`, or move the config).
+  2. The stale doc comment at `git_ops.rs:2615-2617` is corrected. It says "`dirs` is an optional dep here, so home is resolved from the environment to stay feature-gate-free", which no longer describes the code: it now delegates to `crate::home::home_dir()`, whose fallback IS `native`-gated. Harmless, since `git_ops` is itself `#[cfg(feature = "native")]`, but the comment misleads.
+  3. The `passwd_home()` SAFETY comment (`test_home.rs:114-117`) is accurate. It justifies the non-reentrant `getpwuid` static buffer with "this runs from the init section before `main`", but `nested_real_homes` (`test_home.rs:306`) and the new test at `:579` also call it from a test thread. It is safe in practice — nothing else in the process calls `getpw*` concurrently, because `dirs::home_dir()` returns `$HOME`, which is always set post-redirect — so the comment should state that reason rather than claim pre-`main` exclusivity.
+  4. The `Redirect.real_homes` doc (`test_home.rs:46-49`) lists the actual sources. It still enumerates the old five and omits the newly added password-database home.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T17:20:00.790572735Z
+modified_at: 2026-09-27T17:20:00.790572735Z
+req_type: Task
+filed_at:
+  code_sha: 6b1dac2a201bae751901ab95ad49e591292465a1
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '7201317922'
+  vendor: antigravity
+  session: 3266fac0-5feb-463f-a891-7a3a066739c1
