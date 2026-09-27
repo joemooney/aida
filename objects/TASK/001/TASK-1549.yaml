@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:33:06.937954090Z
-modified_at: 2026-09-27T14:42:34.748841547Z
+modified_at: 2026-09-27T14:45:17.442707554Z
 req_type: Task
 comments:
 - id: 01a0e2dc-58ea-7fe1-b3d2-32cf8cf68fba
@@ -191,6 +191,17 @@ comments:
     Actions taken: read-only review, plus this comment. No code, test, build, agent launch, installation, credential, queue, status, dispatch, merge or spec edit other than this comment. No host inventory, no KVM or Firecracker probe.
   created_at: 2026-09-27T14:42:34.748841547Z
   modified_at: 2026-09-27T14:42:34.748841547Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e353-d602-71a1-ad1f-e848abd89ea8
+  author: joe
+  content: |-
+    ORCHESTRATION ERROR (proxy for Joe, 2026-09-27 07:45): the ADR-60 collision the advisor found is MY fault, not the architect's. I had a second implementer working STORY-1480 in parallel, and it allocated ADR-60 properly through AIDA at 14:36:40Z ('Cross-machine cycle-time evidence: keep the live event log local, publish a per-spec timing record to the store at terminal state') while the TASK-1549 architect was writing a file that asserted the same number. Verified: 'aida show ADR-60' returns the STORY-1480 decision, and 'aida show ADR-61' returns not-found.
+
+    Root cause and the lesson for this seat: a number written into a filename reserves nothing. I dispatched two agents whose work could both need a new ADR number, in parallel, without either taking the number from the dispenser first. Any future parallel dispatch that may mint an ADR must allocate the ID through AIDA at the START of the work, not name it at write time. The advisor's amendment A1 is exactly this: take whatever ID the dispenser returns.
+
+    The rework has been sent back to the SAME architect session so it keeps its context, with all six binding amendments. A NEW reviewer will re-check it, not the advisor who wrote the verdict.
+  created_at: 2026-09-27T14:45:17.442707554Z
+  modified_at: 2026-09-27T14:45:17.442707554Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e341-4fed-7d50-adbd-9cbfc71cc7b2
