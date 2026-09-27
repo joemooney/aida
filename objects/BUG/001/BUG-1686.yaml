@@ -12,12 +12,12 @@ description: |-
   2. Add a fixture executable that records argv; assert the prompt and permission posture are passed exactly once and are not confused, while preserving any configured model/output flags.
   3. A launch regression test proves the headless queue-work path reaches the agent process (or fails before creating/leaving an In-Progress lease/worktree).
   4. Do not weaken, remove, or silently reinterpret the permission/sandbox policy; do not change unrelated interactive launch behavior.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T09:41:03.172727931Z
-modified_at: 2026-09-27T14:16:52.593465971Z
+modified_at: 2026-09-27T16:17:26.124369666Z
 req_type: Bug
 tags:
 - vendor:antigravity headless-launch cli-argv
@@ -59,3 +59,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e3a8-327f-7fb3-aca6-b68bae7a04e0
+  author: joe
+  timestamp: 2026-09-27T16:17:26.143756210Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-27T16:17:26.124369666Z
+  implemented_by: joe
