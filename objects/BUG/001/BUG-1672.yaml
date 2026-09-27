@@ -3,12 +3,12 @@ spec_id: BUG-1672
 agreed_id: BUG-1672
 title: aida human lists specs under reviews-awaiting after an independent review has already approved them
 description: 'Seen 2026-09-26: BUG-1653, BUG-1658, TASK-1515 and BUG-1664 each carry a posted ''Review: APPROVE'' comment and are queued for integration, yet aida human lists them as reviews-awaiting for the operator. Acceptance: 1. A spec whose latest review comment/verdict is APPROVE from a non-author reviewer is not listed under reviews-awaiting (it may appear under an ''awaiting integration'' line instead). 2. REQUEST_CHANGES or no review keeps it listed. 3. Fixture test covering all three.'
-status: Done
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:56.753902915Z
-modified_at: 2026-09-27T02:12:55.589651295Z
+modified_at: 2026-09-27T02:15:24.917517953Z
 req_type: Bug
 comments:
 - id: 01a0dfa3-2bc6-7c62-9371-a5dfe1014e2b
