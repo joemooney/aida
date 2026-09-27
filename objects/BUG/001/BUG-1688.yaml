@@ -1,0 +1,35 @@
+id: 01a0e35f-e033-7cf0-b672-45e200511130
+spec_id: BUG-1688
+agreed_id: BUG-1688
+title: Gate or refuse full-access launches in shipped scripts that have no legitimate unattended caller
+description: |
+  Surfaced 2026-09-27 during the TASK-1549 ADR work and blessed by advisor verdict 01a0e351 as a cheap subset worth separating from the broader boundary work.
+
+  `scripts/aida-demo.sh` (bypass probe at approximately line 1029) and the four `scripts/ablations/gate-vs-rule*.sh` construct full-access vendor argv directly, with no AIDA mediation. They are official shipped AIDA artefacts and they are not part of any unattended drain. So gating or refusing them cuts BUG-1669's exposure on that surface to nearly nothing while interrupting no solo, burndown, wave, watch or scheduled work, and requiring no broker, no backend, no installation and no credentials.
+
+  This is an ordinary defect fix in shipped scripts. It is NOT a deployment decision about the protected boundary, and it explicitly cannot close BUG-1669: ADR-61's reconciled AC3 and AC4 make a refusal-only change insufficient by construction. The value is that it removes the part of the exposure that costs nothing to remove, during what may be a long wait for the protected broker.
+
+  Acceptance:
+  1. Each of the five scripts either refuses with a typed nonzero error and launches nothing, or routes through an explicitly bounded request. The demo's user-facing narrative still works, or is adjusted honestly to describe what it now does.
+  2. A fixture using recording vendor binaries proves zero vendor launches from each of the five scripts.
+  3. Audit for any other shipped route with no legitimate unattended caller, and list each one with its disposition. Report rather than silently widening this fix.
+  4. The change claims no protected boundary and does not mark BUG-1669 complete.
+
+  Out of scope: the broker, backend selection, installation, credentials, any production launch sink, and any acceptance change to BUG-1669.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T14:58:26.483962647Z
+modified_at: 2026-09-27T14:58:26.483962647Z
+req_type: Bug
+tags:
+- authority security launch scripts from:TASK-1549
+filed_at:
+  code_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: da36c066-c384-494e-a7cf-abffb3cfe52d
