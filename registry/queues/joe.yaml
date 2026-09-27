@@ -81,6 +81,7 @@
   requirement_id: 01a0dfa4-a985-7dc1-a589-c47f294dacd5
   position: 33000
   added_by: joe
-  added_at: 2026-09-27T03:50:29.939038406Z
-  for_role: product
+  note: 'Product signoff: bounded AIDA_BIN resolver fix; independent implementation and review required.'
+  added_at: 2026-09-27T03:50:49.775433749Z
+  for_role: implementer
   added_by_machine: imac
