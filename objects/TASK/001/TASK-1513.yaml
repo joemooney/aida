@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T08:49:06.684815058Z
-modified_at: 2026-09-27T17:18:39.959286084Z
+modified_at: 2026-09-27T17:56:32.180940459Z
 req_type: Task
 comments:
 - id: 01a0dce7-9ea7-7a40-bce7-57caaaa1113f
@@ -75,6 +75,12 @@ comments:
   content: 'Review: APPROVE (independent reviewer, 2026-09-27, strict; did not write the code). Five probes, all answered with file:line evidence. (1) No fence escape at any rerouted site: the cfg(test) arm routes to test_home::home_dir() which ends in assert_hermetic; init_cmd.rs:71 and reconstitute.rs:604 moved INSIDE the fence (tighter than main); git_ops.rs:2618-2626 lands in the temp home because $HOME always wins under redirect, and the one theoretical widening (HOME+USERPROFILE+AIDA_TEST_HOME all unset) is unreachable -- no aida test ever unsets HOME. (2) The ratchet is NOT vacuous: reimplemented both scans over the sha''s trees, 95 + 534 files scanned, 0 offenders each, so the tests pass for the right reason. Bypass forms exist (std::env::home_dir() is un-deprecated on rustc 1.92 and not in the needle list; line-based scan; name-based self-exemption; only 2 crates scanned) -- ratchet-completeness gaps, not fence leaks; filed as follow-up. (3) DELETE path cannot escape: file_name() is a single readdir component (no / or ..), must strip the aida-lib-test-home- prefix and parse a dead pid, root is only temp_dir(); file_type() does not follow symlinks and remove_dir_all uses openat O_NOFOLLOW, so a TOCTOU swap fails rather than escapes; MAX_SWEEP=64 bounds it; whole module is #[cfg(test)] so it is in no shipped artifact. (4) aida-server/src/main.rs:302 unrouted is acceptable, not a gap: no tests dir, no fence exposure, identical on unix; follow-up for consistency. (5) No OnceLock/caching in home.rs -- var_os is read on every call, so a later set_var is always observed; the pre-existing REDIRECT OnceLock panics rather than silently returning the real home. Also verified the native feature gate, libc availability, and that Rust 1.82 features break no MSRV (no rust-version, no rust-toolchain).'
   created_at: 2026-09-27T17:18:39.959286084Z
   modified_at: 2026-09-27T17:18:39.959286084Z
+  session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
+- id: 01a0e402-ed34-7de0-8465-295c81dde034
+  author: joe
+  content: 'Review: APPROVE (cross-vendor reviewer: codex seat; did not write the fix) of the portability follow-up commit 923f86b64caf6b1c4c7373100ce8923471709d63. CI''s ''Check Rust test portability ratchet'' (scripts/check-portability.sh, rule tmp-literal) had failed PR #2236 on 7 string literals containing /tmp in the new home.rs unit tests -- a gate the documented local check set does not run, so the branch was green locally and only went red after a 10-minute CI build. Fix: sentinels changed to /fixture/home and /fixture/up, matching the adjacent #[cfg(windows)] test''s C:\fixture\... style. All six review points confirmed: (1) only test code changed, confined to the mod tests block of aida-core/src/home.rs; (2) no assertion weakened or removed -- HOME precedence, USERPROFILE fallback, None-when-unset, and non_empty''s empty/non-empty mapping all still asserted; (3) home_from_env and non_empty never touch the filesystem, so non-existent sentinel paths are sound; (4) the new literals match none of the other portability rule regexes; (5) portability-allowlist.txt was NOT grown -- it is reserved for pre-existing debt, so allowlisting would have hidden the problem; (6) scripts/check-portability.sh exits 0 with no output. Author also verified the CI allowlist-growth check against origin/main (exit 0) and ''cargo test -p aida-core --lib home'' (3 passed, 0 failed). Process gap filed as TASK-1555: ~25 CI gates are unreachable from any local make target.'
+  created_at: 2026-09-27T17:56:32.180940459Z
+  modified_at: 2026-09-27T17:56:32.180940459Z
   session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
 history:
 - id: 01a0e334-3bd0-70f1-82b9-c7ec0b360de9
