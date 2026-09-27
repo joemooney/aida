@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:33:06.937954090Z
-modified_at: 2026-09-27T14:25:03.469361657Z
+modified_at: 2026-09-27T14:29:50.599681739Z
 req_type: Task
 comments:
 - id: 01a0e2dc-58ea-7fe1-b3d2-32cf8cf68fba
@@ -26,6 +26,69 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): Queue this approved, design-only prerequisite under the independent BUG-1669 architecture signoff 01a0e11e-12db-7cd0-a3d1-39df79961a63 and binding M1-M5. Scope is documenting the already-recorded operator direction and reconciling BUG-1669 acceptance; no code/launcher edits, service or VM install, credentials, privileged proof, live-route changes, deployment, or merge authorization. All concrete implementation/deployment approvals return to Joe.'
   created_at: 2026-09-27T12:34:46.634678376Z
   modified_at: 2026-09-27T12:34:46.634678376Z
+- id: 01a0e345-b187-7fd1-b9be-3d80552a5e40
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): ADR-60 records the P-enrolled-host protected launch boundary as design only. No code, launcher, service, credential, live route, queue or merge change was made. This comment is a design record, not signoff; TASK-1549's own deliverable is documentation, so what needs review here is whether the ADR faithfully captures the settled decisions and the binding amendments without overclaiming.
+
+    Deliverable: docs/plans/2026-09-27-adr-60-p-enrolled-host-protected-launch-boundary.md on branch claude/task-1549 (worktree /home/joe/ai/wt-task-1549). It follows the repository's hand-written ADR convention (docs/plans/YYYY-MM-DD-adr-N-slug.md, as ADR-7 and ADR-47; ADR-60 is the next free number). Also posted: an acceptance-reconciliation PROPOSAL as a comment on BUG-1669. I did NOT edit BUG-1669's acceptance - that is product's call.
+
+    Summary of the ADR
+
+    1. Protected boundary. Authorisation lives outside the agent-controlled login in service-held state the agent cannot read or write, and the service - not the caller - performs the launch. A full-access launch needs either explicit operator approval through an authenticated, agent-inaccessible endpoint displaying the exact normalised request, or an authenticated, still-live, scope-limited controller delegation derived from one. Broker owns validation AND spawn atomically. Full access is confined to a disposable service-owned isolated worker per phase attempt, with typed model/forge/artifact adapters holding their own credentials. Legacy orchestrator::detect is demoted to a diagnostic classifier; no environment-carried bearer token. The literal protection goal is retained: writable state, environment variables, PTY presence, SO_PEERCRED, roles, --force/--yes/--no-human, client version strings, 0600 same-UID secrets, agent-readable MAC keys and private Rust permit fields are each listed as explicitly rejected substitutes, because Joe rejected exactly those in 01a0e0a3.
+
+    2. Host-wide enrollment/admission rule. Coverage is host-wide over AIDA-managed launches across all projects (01a0e103). One host authority; every official entry point is a thin proposal/status/attach client; enrollment enables scoped requests and absence of enrollment is refusal, not exemption. Host registry is protected service state, not project .aida config. All postures use the external worker boundary - no local contained-mode exception. Execution code and images are pinned at the service, never by a hash the requesting CLI reports.
+
+    3. Cross-repo scope. Coverage is not a grant. Repo A consent conveys no authority in repo B; no cross-repo parent grant, artifacts, transcripts, context or credentials in v1; a new repo inherits nothing; path, spec number, cloned remote, symlink switch, rename or copied .aida-store cannot transfer authority. Per M2 the isolation covers observation and attachment, not only mutation.
+
+    4. Refusal of unprotected/unknown routes. No backend, no enrollment, unsupported platform/vendor/adapter/schema, expired or revoked authority, failed isolation attestation or unauthorised peer all produce a typed nonzero refusal with no agent launched, no alternate vendor/backend/local fallback, and no launch-associated mutation before a valid preparation reservation. Refusal propagates: a denied compete arm cannot become a failed arm followed by a judge; solo stops its chain. Native Claude burndown fan-out is not grandfathered and refuses until a broker-mediated wave controller replaces it. Read-only previews, renderers, dry-runs and schedule due/status stay usable and confer no authority.
+
+    5. Unmanaged-client exclusion, stated as a bound rather than an escape. An unrelated vendor client launched outside AIDA with its own independent credentials is outside the promise; the boundary prevents such a client obtaining protected AIDA resources but cannot prove an unconfined login cannot run its own clients. This is NOT P-managed, so migrating unrelated third-party clients or credentials is not a prerequisite. Critically, the exclusion may never be used to relabel a surviving official AIDA route - that is a FAILED cutover case, and a real incompatibility returns to Joe as a deployment blocker.
+
+    6. Accepted-in-principle is not approval. The ADR says so in its own section and repeats it in the gate table and the approvals inventory: no privileged-service installation, backend selection, credential migration, deployment, implementation dispatch or merge is approved, and no protection is deployed today. Out of scope is stated explicitly: service/VM installation, credential migration, live scheduler/watch changes, launch-path code edits, permission bypass, and any claim of deployed protection.
+
+    7. Five gates kept separate. (1) Independent architecture signoff - CLOSED by 01a0e11e as amended. (2) Concrete installer/backend/credential proposal - OPEN. (3) Disposable privileged proof - OPEN. (4) Deployment approval - OPEN, never granted. (5) Operator-held merge gates - OPEN; BUG-1669 stays implementation-held even after its prerequisites complete (01a0e125), and PR #2226 stays operator-held with aida:merge-hold at e63efc3997 per 01a0e115 and 01a0e11a.
+
+    8. M1-M5 incorporated, each with its landing place named in the ADR: M1 host-wide coverage as an admission AND cutover invariant (sections 2, 4, 5, plus the TASK-1550 handoff; credential revocation alone does not prove a credential-free/custom/local-model route is blocked); M2 repo/principal authorization over observation and attachment, hostile guest output neutralised on trusted displays (sections 3 and 4, carried into SPIKE-91); M3 frozen versioned canonical domain-separated signed request encoding before protocol implementation, with an artifact hash establishing content identity but never permission to read or import (sections 1 and 3, owned by SPIKE-91); M4 attest real confinement and supervision before Running rather than from successful process creation, guardian health participating in admission, the 10s bound and suspend fence not assertable from configuration given the jailer's missing-parent-cgroup behaviour (sections 1 and 4, owned by SPIKE-91); M5 gate separation preserved in product capture and all dependent work, which is what this ADR and the BUG-1669 comment discharge (sections 6, 9 and 10).
+
+    9. BUG-1669 acceptance proposal. Section 9 of the ADR proposes AC1-AC5. AC2 replaces the old detect/terminal wording with the protected-endpoint-or-live-delegation rule and keeps detect diagnostic; AC4 reverses the old positive fixture (hand-written DrainState + matching UUID + live PID) into a required forgery negative, alongside a fabricated PTY answering yes and forced-true IsTerminal, and makes the positive case authenticated approval -> protected controller -> scoped worker -> allowed next phase over real channels with both hermetic and disposable real-boundary layers; AC5 forbids any deployed-protection claim before independently reviewed real-boundary evidence. The ADR names the consequence product must weigh: under that wording, closing BUG-1669 without the backend means every affected route refuses and today's unattended work stops.
+
+    10. BUG-1679 link. Section 10 records that BUG-1679's own AC1 cannot be satisfied safely (executability is not provenance), that protected binary identity/admission is owned by this boundary, that AIDA_BIN is untrusted input and may at most name an already-admitted candidate, that identity admission is necessary but is not a scoped launch grant, and that PR #2226 stays operator-held.
+
+    Also recorded: fifteen settled design decisions that dependent work must not reopen; eleven NOT-YET-GRANTED operator approvals in a table (backend/platform, privileged installation and trust root, actual credentials, disposable privileged test environment, current-run migration and cutover, rollback/recovery, runtime ceilings, repository enrollment mappings, BUG-1669 dispatch, PR #2226 merge, and any deployed-protection claim); the rejected alternatives (option B cooperative guardrail, option H deny-only, P-managed, plain repo-local P-enrolled, token hardening, privileged-daemon-only, scheduler provenance as approval, localhost/PTY approval channel, grandfathered native fan-out); and the design's honest limits even if built - trusted administrator/kernel/hypervisor/approval device assumed, no semantic obedience proof, no intra-worker collusion prevention, no DoS protection, no retroactive revocation of completed effects.
+
+    Open questions I could not close
+
+    O1. Whether this host can actually satisfy M1's cutover invariant. The ADR states the rule; only TASK-1550's real inventory can show whether any official global/per-project/script/IDE/MCP/timer/watch/drain route retains independent host execution. If one does, deployment is blocked and the mismatch returns to Joe. I did no host inventory - that is TASK-1550's read-only scope, and doing it here would have exceeded this spec.
+
+    O2. Backend feasibility. Firecracker + jailer is a candidate only. Whether this machine has qualifying nested KVM, kernel and versions is unknown and unverified; I ran no probes. SPIKE-91 owns the comparison against at least one alternative.
+
+    O3. Vendor compatibility. Whether Claude/Codex/Agy can operate through typed adapters without an unrestricted login HOME, a generic network proxy or a reusable OAuth credential is unresolved. If a vendor cannot, that vendor is unsupported until separately designed - a product consequence nobody has accepted yet.
+
+    O4. The M4 10s termination bound and the suspend fence are unqualified numbers. They cannot be asserted from configuration and I did not measure anything.
+
+    O5. Whether product adopts the proposed AC text, and whether an AC5-style no-overclaim criterion belongs in acceptance at all rather than in review policy. I proposed it; product decides.
+
+    O6. Whether the eventual BUG-1669 fix ships behind a refusal-only interim or waits for the backend. The ADR records option H as unapproved and not presumed, but does not choose, because choosing would be a deployment decision.
+
+    O7. Where BUG-1679's identity-admission contract is finally specified - SPIKE-91's pinned executable/dependency admission, or a separate spec. I linked the dependency without inventing an ID.
+
+    What I deliberately left out
+
+    Any code. No launch path, resolver, test, script or template was touched; there is no aida-core/templates change, so make check-templates was not required. No trace comment was added to source, since there is no implementation code to trace; the trace marker lives in the ADR footer as an HTML comment, matching how docs/forge-providers.md traces ADR-54.
+
+    No protocol design, message schemas, Rust module or crate skeletons, transition-table refinement, adapter API surfaces or test-file authoring - those are SPIKE-91's and the later implementation specs', and pre-empting them would have created unreviewed mechanism under a docs-only mandate.
+
+    No host inventory, no port assignment for the future approval listener (the ports registry is consulted at deployment, not now), no probing of KVM/Firecracker availability, no examination of real credentials, and no reading of live drain/session/watch state.
+
+    No spec edits beyond this spec's own status: BUG-1669's acceptance is untouched and its blockers are unchanged; BUG-1679 and TASK-1550 were not queued, unblocked or re-dispatched; PR #2226 was not touched, unheld or reviewed. No new spec IDs were invented.
+
+    No claim of protection, present or future. No installation, credential, VM, service, deployment or merge action. No agent dispatched.
+
+    Requested next action: an independent advisor reviews ADR-60 for faithfulness to 01a0e0a3, 01a0e103, 01a0e10c and 01a0e11e/M1-M5, and for any overclaim; product separately decides the BUG-1669 acceptance text. BUG-1669, BUG-1679 and TASK-1550 remain exactly as they were.
+  created_at: 2026-09-27T14:29:50.599681739Z
+  modified_at: 2026-09-27T14:29:50.599681739Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e341-4fed-7d50-adbd-9cbfc71cc7b2
   author: aida-session-start
