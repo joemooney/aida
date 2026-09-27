@@ -26,6 +26,14 @@ use uuid::Uuid;
 
 use crate::models::Requirement;
 
+fn emit_loader_warning(message: &str) {
+    #[cfg(test)]
+    if tests::bug_1673_capture_warning(message) {
+        return;
+    }
+    eprintln!("{message}");
+}
+
 /// Maximum files per shard directory.
 const SHARD_SIZE: u32 = 1000;
 
@@ -539,9 +547,12 @@ pub fn load_all_objects_with_fingerprints(
                 // hint so users see actionable next steps the first time
                 // a parse failure happens, not just "this thing broke."
                 // trace:BUG-97 TASK-223 | ai:claude
-                eprintln!("Warning: failed to load {} (parse error)", spec_id);
-                eprintln!("  Detail: {}", error);
-                eprintln!("{}", parse_failure_hint(Some(path)));
+                emit_loader_warning(&format!(
+                    "Warning: failed to load {} (parse error)",
+                    spec_id
+                ));
+                emit_loader_warning(&format!("  Detail: {}", error));
+                emit_loader_warning(&parse_failure_hint(Some(path)));
             }
             ListedObject::Unreadable { error, missing } => {
                 if missing {
@@ -549,11 +560,14 @@ pub fn load_all_objects_with_fingerprints(
                     // recorded, so `save_reporting` classifies the spec
                     // `kept_unloaded` and never deletes it.
                     // trace:BUG-1673 | ai:claude
-                    eprintln!("{}", removed_while_loading_note(spec_id));
+                    emit_loader_warning(&removed_while_loading_note(spec_id));
                 } else {
-                    eprintln!("Warning: failed to load {} (read error)", spec_id);
-                    eprintln!("  Detail: {}", error);
-                    eprintln!("{}", parse_failure_hint(Some(path)));
+                    emit_loader_warning(&format!(
+                        "Warning: failed to load {} (read error)",
+                        spec_id
+                    ));
+                    emit_loader_warning(&format!("  Detail: {}", error));
+                    emit_loader_warning(&parse_failure_hint(Some(path)));
                 }
             }
         }
@@ -1043,6 +1057,8 @@ mod tests {
         // trace:BUG-1673 | ai:claude
         static BUG_1673_BEFORE_READ: std::cell::RefCell<Option<Box<dyn FnMut(&str, &Path, u32)>>> =
             const { std::cell::RefCell::new(None) };
+        static BUG_1673_WARNING_SINK: std::cell::RefCell<Option<Box<dyn FnMut(&str)>>> =
+            const { std::cell::RefCell::new(None) };
     }
 
     /// Called from `load_all_objects_with_fingerprints` under `cfg(test)`.
@@ -1059,6 +1075,22 @@ mod tests {
                 }
             });
         }
+    }
+
+    pub(super) fn bug_1673_capture_warning(message: &str) -> bool {
+        BUG_1673_WARNING_SINK.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            if let Some(sink) = slot.as_mut() {
+                sink(message);
+                true
+            } else {
+                false
+            }
+        })
+    }
+
+    fn bug_1673_install_warning_sink(sink: impl FnMut(&str) + 'static) {
+        BUG_1673_WARNING_SINK.with(|slot| *slot.borrow_mut() = Some(Box::new(sink)));
     }
 
     /// Install a before-read hook; returns the call counter it increments.
@@ -1191,29 +1223,9 @@ mod tests {
     #[cfg(feature = "native")]
     #[test]
     fn bug_1673_loader_omits_object_deleted_for_good_without_parse_hint() {
-        const CHILD_ENV: &str = "AIDA_BUG_1673_CAPTURE_REMOVAL_WARNING";
-        if std::env::var_os(CHILD_ENV).is_none() {
-            let output = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["--exact", "object_store::tests::bug_1673_loader_omits_object_deleted_for_good_without_parse_hint", "--nocapture"])
-                .env(CHILD_ENV, "1")
-                .output()
-                .unwrap();
-            assert!(
-                output.status.success(),
-                "child fixture failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            let stderr = String::from_utf8(output.stderr).unwrap();
-            assert!(
-                stderr.contains("BUG-5 was removed while loading"),
-                "missing spec-specific removal warning: {stderr}"
-            );
-            assert!(
-                !stderr.contains("binary version mismatch"),
-                "a deletion must not be reported with the parse-failure hint: {stderr}"
-            );
-            return;
-        }
+        let warnings = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let captured = warnings.clone();
+        bug_1673_install_warning_sink(move |line| captured.borrow_mut().push(line.to_owned()));
 
         let dir = tempfile::tempdir().unwrap();
         let objects_root = dir.path().join("objects");
@@ -1228,6 +1240,16 @@ mod tests {
 
         let loaded = load_all_objects_with_fingerprints(&objects_root);
         bug_1673_clear_hook();
+        BUG_1673_WARNING_SINK.with(|slot| *slot.borrow_mut() = None);
+        let warnings = warnings.borrow().join("\n");
+        assert!(
+            warnings.contains("BUG-5 was removed while loading"),
+            "missing spec-specific removal warning: {warnings}"
+        );
+        assert!(
+            !warnings.contains("binary version mismatch"),
+            "a deletion must not be reported with the parse-failure hint: {warnings}"
+        );
         let (reqs, fingerprints) = loaded.unwrap();
 
         assert_eq!(bug_1673_titles(&reqs), vec!["survivor".to_string()]);
