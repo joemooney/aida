@@ -1,0 +1,27 @@
+id: 01a0e18a-b377-78b0-a88c-f3c527a9af5a
+spec_id: TASK-1-179
+title: 'Resolved prior finding: enabled failure-notice without -route suffix now yields…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1535, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Resolved prior finding: enabled failure-notice without -route suffix now yields schedule-route-invalid:failure-notice; user-disabled bindings yield no finding or skipped tick line.
+  Reviewed sha: dd21f4342b50990a1ac25234f19bc8b88e500033
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-27T06:25:58.647752766Z
+modified_at: 2026-09-27T06:25:58.647752766Z
+req_type: Task
+tags:
+- carried-from:TASK-1535
+- finding-hash:3c45e5dc
+- from-review:TASK-1535
+- kind:carried-forward
+filed_at:
+  code_sha: 88f9a8eaabe86108763231ef131b97b4a06d63e0
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: codex
