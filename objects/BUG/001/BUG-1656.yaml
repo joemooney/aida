@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:09:46.732993537Z
-modified_at: 2026-09-27T04:45:38.297064940Z
+modified_at: 2026-09-27T04:45:39.471727245Z
 req_type: Bug
 comments:
 - id: 01a0de44-9000-72a3-a708-076238101753
@@ -79,6 +79,11 @@ comments:
     Routing: same owning spec, original implementation branch, implementer role. Per the operator's explicit limits, this advisor only records comments: no branch/status/queue change, push, merge, deletion, or implementation edit. Product/dispatcher should arrange the bounded implementer pickup and any necessary requeue/status bookkeeping, preserving this comment as the rework brief and obtaining fresh SHA review. Existing spec status is done; that label does not clear this readiness hold.
   created_at: 2026-09-27T04:44:37.671693901Z
   modified_at: 2026-09-27T04:44:37.671693901Z
+- id: 01a0e12e-dafb-7443-8426-11105fbc11ae
+  author: joe
+  content: 'Batch 103 portability rework authorized by independent advisor comment 01a0e12d-e9a7-7180-9aa9-6142d4bbdf20; draft PR #2228 held until corrected source branch and fresh exact-head review.'
+  created_at: 2026-09-27T04:45:39.451135529Z
+  modified_at: 2026-09-27T04:45:39.451135529Z
 history:
 - id: 01a0de44-67f6-7c70-907e-9af7fb4e3e10
   author: joe
