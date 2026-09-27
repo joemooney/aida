@@ -3,12 +3,12 @@ spec_id: BUG-1685
 agreed_id: BUG-1685
 title: Doctor scaffold drift detects skills on Windows
 description: 'Windows cross-platform CI on PR #2218 fails five aida-cli-lib doctor_cmd scaffold-drift tests. scan_scaffold_drift compares Path values rendered with to_string_lossy() against Unix-style prefixes such as .agents/skills/, so Windows backslashes hide missing or modified skills. Acceptance: doctor detects missing and modified vendor skills on Windows and Unix using path component comparisons; the five failing tests pass on Windows; memory-lane and Claude-only selection behavior stays intact.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T01:06:44.685596479Z
-modified_at: 2026-09-27T01:06:44.685596479Z
+modified_at: 2026-09-27T01:06:56.940744759Z
 req_type: Bug
 tags:
 - ci
