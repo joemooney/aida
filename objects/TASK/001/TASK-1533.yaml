@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:47:36.637006946Z
-modified_at: 2026-09-27T14:28:33.436737061Z
+modified_at: 2026-09-27T14:28:44.604239718Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -37,6 +37,22 @@ comments:
   content: 'Verified product blocker: installed release SHA 7c6faed6 predates BUG-1655 bound CronJobFailed:<job> parsing (landed at 9791e5eaac). Current schedule status only proves the unbound config loads. Operator authorization or a safe compatible runtime proof is required before changing route bindings. No config or host binary changes; implementer stopped with clean worktree.'
   created_at: 2026-09-27T11:04:25.561364385Z
   modified_at: 2026-09-27T11:04:25.561364385Z
+- id: 01a0e344-afbc-7a93-ae54-ecdd1594f0bb
+  author: joe
+  content: |-
+    PROXY DECISION (orchestrator for Joe, 2026-09-27 07:30): DEFERRED with a concrete trigger rather than left as needs-attention, because nothing here is implementable work — it is a wait on a live install plus an operator-gated change. Deferral does NOT count toward draining the list and is reported to Joe as outstanding.
+
+    What I verified: BUG-1655 (the blocker) is Completed, so the code side is done. 'aida dev activate' is ACTIVE, so 'aida' currently resolves to /home/joe/ai/aida/target/release/aida built 2026-09-26 10:38 at sha 7c6faed690+dirty. I could NOT confirm whether that build accepts the bound 'on = ["CronJobFailed:<guard>"]' form: a strings scan found no such literal (not conclusive, it may be built at runtime) and a fixture attempt failed because the check needs a full store, not just a config file. So the gate condition is UNVERIFIED, not met.
+
+    Why this is operator-gated and why I did not just do it:
+    - Step 1 requires rebuilding and INSTALLING aida, which writes a user-owned binary outside this repo.
+    - Steps 2-3 edit the five live route jobs (performance, hub-drift, stranded-branches, disk-headroom, watchdog) in this repo's .aida/config.toml, which drives the LIVE scheduler.
+    - The ordering is a trap the spec itself names: an older installed binary REJECTS the bound form at config load. Editing the config before the new binary is installed would break the live tick and silence all five guards. That is a self-inflicted outage, so it needs Joe's explicit go-ahead and the install must land first.
+
+    Sequence when Joe approves: install the new binary, confirm 'aida schedule status' loads, THEN bind the five routes, then verify with one forced guard failure in a fixture or dry run that only that guard's route becomes due.
+  created_at: 2026-09-27T14:28:44.604239718Z
+  modified_at: 2026-09-27T14:28:44.604239718Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e269-1067-7852-9759-65daff96d2f7
   author: aida-session-start
