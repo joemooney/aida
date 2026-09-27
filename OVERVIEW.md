@@ -39,6 +39,18 @@ the main checkout's lock, including launches from sibling worktrees. Shared
 cross-clone claims retain their own heartbeat/TTL. This is not an atomic lock
 redesign; see [coverage and limits](docs/testing/bug-1683-drain-lock.md).
 
+<!-- trace:BUG-1682 | ai:codex -->
+**Global queue persistence.** The per-home role queues in `~/.aida/queue/`
+serialize cooperating writers with a permanent `<role>.lock` sidecar held
+across reading, validation, mutation, and atomic YAML replacement. Successful
+reads observe complete published content; only a final missing-file error
+initializes an empty queue. Corrupt documents and other I/O failures propagate
+from mutations, including CLI and autopilot pre-reads. Blocking locks release
+on process death but provide no fairness or bounded wait guarantee. This
+protects membership, not concurrent top/append placement, power-loss durability,
+or writes by older binaries that ignore the sidecar. Never delete a live
+sidecar to clear contention.
+
 **Honest scope.** AIDA is alpha. The core graph, traceability, queue, and MCP workflows have held under this repository's own multi-agent dogfood; broader-team scale, turnkey unattended reliability, and onboarding outside this project are still being validated. Selective gating, not blanket: a programmatic gate beats a stated rule only when the invariant sits *far from the point of action* (attention-distance; [2026-06-18-gate-vs-rule-pilot.md](docs/research/ablations/2026-06-18-gate-vs-rule-pilot.md) falsified the blanket form). Every claim above traces to a finding or a shipped command.
 
 ---
