@@ -1,0 +1,29 @@
+id: 01a0e123-5f79-7011-9708-df33ae577f93
+spec_id: TASK-1549
+agreed_id: TASK-1549
+title: Record P-enrolled-host protected launch ADR and reconcile BUG-1669 acceptance
+description: |
+  Design-only prerequisite for BUG-1669; no implementation or installation authorization.
+
+  Record Joe's three operator decisions (literal same-user anti-forgery, every AIDA-managed launch across projects on this host with unmanaged clients excluded, and P-enrolled-host broker/isolated-worker direction in principle). Reconcile BUG-1669 AC2's old terminal/orchestrator::detect wording and AC4's old positive fixture with protected consent; retain the literal protection goal, never substitute writable state/env/PTY corroboration.
+
+  Acceptance:
+  - A reviewed ADR and BUG-1669 acceptance update state the protected boundary, host-wide enrollment/admission rule, cross-repo scope, unprotected/unknown route refusal, and explicit unmanaged-client exclusion.
+  - The ADR incorporates independent architecture signoff 01a0e11e-12db-7cd0-a3d1-39df79961a63 amendments M1-M5 and separates architecture signoff, concrete installer/backend/credential proposal, disposable privileged proof, deployment approval, and operator-held merge gates.
+  - Inventory the design decisions and unresolved concrete operator approvals (backend/platform, privileged service installation/trust root, actual credentials, current-run migration, rollback/recovery); do not imply any has already been granted.
+  - Link BUG-1679's protected binary identity/admission dependency and keep PR #2226 operator-held.
+  Out of scope: service/VM installation, credential migration, live scheduler/watch changes, code launch-path edits, permission bypass, or claims of deployed protection.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T04:33:06.937954090Z
+modified_at: 2026-09-27T04:33:06.937954090Z
+req_type: Task
+filed_at:
+  code_sha: 43c0429198401473e0cfab73267fc413883b3e1b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: codex
