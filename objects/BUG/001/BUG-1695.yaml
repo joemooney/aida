@@ -1,0 +1,36 @@
+id: 01a0e478-2afd-7970-af85-43c7d289536e
+spec_id: BUG-1695
+agreed_id: BUG-1695
+title: 'sandbox_create_and_seed_round_trip flakes on teardown: destroy fails with ''Directory not empty'' (os error 39)'
+description: |-
+  Blocked PR #2240 (STORY-1478) on the REQUIRED Build (ubuntu-latest) check with 7152 passed / 1 failed. The failure is unrelated to that branch, which touches only cli.rs, git_backend_cmd.rs, history.rs, history_timeline.rs, lib.rs and docs/cli/08-reporting.md — no sandbox code.
+
+  OBSERVED (CI run 36345474679, job 108693654830, 2026-09-27T19:52:35Z):
+    thread 'sandbox_cmd::tests::sandbox_create_and_seed_round_trip' panicked at aida-cli-lib/src/sandbox_cmd.rs:275:40:
+    destroy: failed to destroy sandbox at /tmp/.tmpvydjCu/sb
+    Caused by: Directory not empty (os error 39)
+
+  DIAGNOSIS (to confirm, not assumed): os error 39 on a recursive destroy is the classic teardown race — something is still creating or holding entries under the sandbox root while the remove walks it, so the directory refills between the walk and the rmdir. Candidates: a child process spawned by the seed step that has not exited, an unflushed/unclosed handle, or a concurrent test sharing the temp root. It passes locally and under lighter load, which fits a race rather than a logic error.
+
+  WHY IT MATTERS BEYOND THE ONE TEST: it fails a REQUIRED check, so it can block ANY unrelated PR from merging, and it teaches readers to dismiss a red Linux build as 'probably the flake' — which is exactly how a genuine regression gets waved through. That second cost is the larger one.
+
+  ## Acceptance
+  - The destroy path is robust against the race: either it waits for the sandbox to be quiescent before removing, or it retries the removal on ENOTEMPTY a bounded number of times, or the test's sandbox root is isolated from whatever else is writing under it. Whichever is chosen, the reason is recorded in a comment so a later reader does not 'simplify' it away.
+  - Root-cause first: identify WHAT is still writing under the sandbox root at destroy time and state it in the fix. A bare retry loop added without that answer is not acceptable, because it would equally mask a genuine leak of a child process.
+  - A test demonstrates the fixed behavior deterministically with fixtures — no sleeps and no polling loops.
+  - If the cause is a leaked child process, the fix closes the leak rather than only tolerating it at teardown.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T20:04:35.709308377Z
+modified_at: 2026-09-27T20:04:35.709308377Z
+req_type: Bug
+filed_at:
+  code_sha: 467b0ada978d3686cd3486db43a90ca41208a701
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '7201317922'
+  vendor: antigravity
+  session: d7986875-d11b-4a5b-a34d-75f358d3671e
