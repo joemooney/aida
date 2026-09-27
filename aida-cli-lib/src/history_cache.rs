@@ -1606,12 +1606,12 @@ impl HistoryCache {
             return Ok(None);
         }
 
+        // trace:SPEC-441 | ai:antigravity
         let parse_bound = |raw: &Option<String>| -> Result<Option<i64>> {
             raw.as_deref()
                 .map(|s| {
-                    chrono::DateTime::parse_from_rfc3339(s)
-                        .map(|d| d.timestamp())
-                        .with_context(|| format!("unparseable window bound {s}"))
+                    crate::history::parse_history_timestamp_bound(s)
+                        .ok_or_else(|| anyhow::anyhow!("unparseable window bound {s}"))
                 })
                 .transpose()
         };
