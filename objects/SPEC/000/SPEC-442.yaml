@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T03:40:15.706534259Z
-modified_at: 2026-09-27T16:50:51.291765708Z
+modified_at: 2026-09-27T19:34:14.790357855Z
 req_type: Task
 tags:
 - from-implementer:STORY-1477
@@ -56,4 +56,7 @@ decision_request:
     resolution: status:approved
   recommended: 0
   rationale: The current PR rework was explicitly bounded; preserving that boundary avoids proxy scope expansion. The bug is documented and can be re-evaluated once the underlying template behavior lands.
+  answered: 0
+  note: 'PROXY ANSWER (orchestrator for Joe, 2026-09-27 12:35): recorded as option 1 because that is what actually happened — this question is MOOT, not a judgment I am making on Joe''s behalf. The question asked how to sequence SPEC-442''s event-timestamp parsing fix relative to STORY-1477 PR #2224, whose rework scope was bounded to advisor rounds R1-R3. Both have since shipped: commit 6b1dac2a20 on main is ''[AI:codex] feat(history): add scoped templates and ordered event fields (STORY-1477 SPEC-442)'', and SPEC-442''s own status is already Completed. So the ''keep as Draft until #2224 ships'' condition is satisfied and the fork it protected against (adding code to a held PR) can no longer occur. Nothing is bound into acceptance by this answer and no work is authorized by it; it only clears a decision that reality already made, so Joe''s decision drain does not spend a slot re-deciding it. If the parsing fix turns out NOT to be covered by what landed, file a fresh spec against main rather than reviving this question.'
   asked_at: 2026-09-27T08:17:41.881370390Z
+  answered_at: 2026-09-27T19:34:14.790348064Z
