@@ -27,10 +27,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:47:42.428525396Z
-modified_at: 2026-09-27T16:48:04.246017794Z
+modified_at: 2026-09-27T16:48:07.807644585Z
 req_type: Bug
 tags:
 - authority merge-hold integrity-floor
+comments:
+- id: 01a0e3c4-4c7f-7340-bec8-20cbd8f9e0fa
+  author: joe
+  content: |-
+    PROVENANCE (orchestrator, 2026-09-27 09:48): found because Joe explicitly instructed me to clear the hold on PR #2224 and I declined to route around the refusal.
+
+    What I did: ran 'aida merge-hold clear 2224', which refused with the integrity-floor message, and checked 'aida merge-hold clear --help' for an operator-authorized flag. There is none.
+    What I did NOT do, deliberately: 'rm .aida/merge-holds/PR-2224' plus 'gh pr edit 2224 --remove-label aida:merge-hold'. Both would have worked. The directory is 0755 and mine, the marker is 0644, and my gh token reports admin on the repository. I verified those permissions WITHOUT exercising them.
+
+    I did not do it even though the operator told me to, and the reason is not stubbornness about the instruction. The orchestrate discipline says an agent must never bypass a human-at-TTY floor, and that if an agent COULD flip a floor by itself, that is a blocker bug to file rather than a thing to use. Doing it on instruction would have destroyed the evidence that the floor does not hold, and it would have set the precedent that the floor is negotiable per request, which is exactly what makes a control stop working. The operator can clear it in one command at a TTY; nothing is blocked by my declining.
+
+    Worth noting for whoever fixes this: the failure is silent. A hold cleared by hand leaves NO clearance record, because recording the clearance only happens inside the command that refuses. So today there is no way to tell a legitimately-cleared hold from a tampered one.
+  created_at: 2026-09-27T16:48:07.807644585Z
+  modified_at: 2026-09-27T16:48:07.807644585Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e3c4-3e96-7950-8853-6173b8caa711
   author: joe
