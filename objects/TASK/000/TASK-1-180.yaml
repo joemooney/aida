@@ -1,0 +1,27 @@
+id: 01a0e3c6-d2c8-7f21-88da-8a7779bddb26
+spec_id: TASK-1-180
+title: 'P2 history_layout.rs:398-405: with valid TOML history = { keep = 1 }, --templat…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1477, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  P2 history_layout.rs:398-405: with valid TOML history = { keep = 1 }, --template {id} --save-as-template test exits 0 but leaves config unchanged; list/render/remove cannot find the saved template. Create a serializable nested table and cover user/project reload round trips.
+  Reviewed sha: 5bab54d1762971c3986502c3fd05b29fa7b52d0b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-27T16:50:53.256984236Z
+modified_at: 2026-09-27T16:50:53.256984236Z
+req_type: Task
+tags:
+- carried-from:STORY-1477
+- finding-hash:34a462f8
+- from-review:STORY-1477
+- kind:carried-forward
+filed_at:
+  code_sha: 6b1dac2a201bae751901ab95ad49e591292465a1
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '7201317922'
+  vendor: antigravity
