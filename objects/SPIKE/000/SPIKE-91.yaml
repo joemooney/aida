@@ -18,10 +18,3 @@ feature: Uncategorized
 created_at: 2026-09-27T04:33:42.192429110Z
 modified_at: 2026-09-27T04:33:42.192429110Z
 req_type: Spike
-filed_at:
-  code_sha: 43c0429198401473e0cfab73267fc413883b3e1b
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 7c6faed690
-  vendor: codex

@@ -13,12 +13,6 @@ tags:
 - from-implementer:STORY-1477
 - kind:bug-spotted
 - severity:major
-filed_at:
-  code_sha: 30fb7000634c5d5d3e554dacbae9980e63afa4c6
-  branch: story-1477
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: 7c6faed690
 decision_request:
   question: 'How should SPEC-442’s event-timestamp parsing fix be sequenced relative to STORY-1477 PR #2224, whose current rework scope was limited to advisor rounds R1–R3?'
   choices:
