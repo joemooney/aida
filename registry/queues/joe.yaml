@@ -81,3 +81,10 @@
   added_at: 2026-09-27T09:03:01.887500714Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0dfea-c944-7c80-b0e2-731590d1e304
+  position: 35000
+  added_by: joe
+  added_at: 2026-09-27T09:28:55.367532535Z
+  for_role: product
+  added_by_machine: imac
