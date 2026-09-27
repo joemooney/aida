@@ -78,10 +78,10 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0dfa4-a985-7dc1-a589-c47f294dacd5
+  requirement_id: 01a0e027-66da-7213-92b2-0553753e02f5
   position: 33000
   added_by: joe
-  note: 'Product signoff: bounded AIDA_BIN resolver fix; independent implementation and review required.'
-  added_at: 2026-09-27T03:50:49.775433749Z
+  note: Independent architecture signoff 01a0e104-7ab9-7a73-b79b-1843eb5bcee1; strict review and Windows CI required.
+  added_at: 2026-09-27T04:01:49.487617234Z
   for_role: implementer
   added_by_machine: imac
