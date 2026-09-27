@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-09-27T02:13:52.001043628Z
+modified_at: 2026-09-27T02:19:17.649411153Z
 req_type: Bug
 comments:
 - id: 01a0df0b-e7f8-7193-84a1-2955581faa5f
@@ -193,6 +193,143 @@ comments:
   content: 'OPERATOR DECISION (Joe, 2026-09-26): retain literal protected authorization for full-access headless launches. A same-user-forgeable local guardrail, ambient environment flag, PID/state file, or agent-created PTY is not sufficient; do not weaken AC2. Revise the architecture sketch to define a protected grant boundary with operation/spec/phase scope, delegation and lifetime, burndown fan-out, advisor-watch consent, and scheduler bootstrap. Independent advisor signoff is required before implementation dispatch.'
   created_at: 2026-09-27T02:13:52.001043628Z
   modified_at: 2026-09-27T02:13:52.001043628Z
+- id: 01a0e0a8-db11-7660-832d-7d55f00f0c21
+  author: mcp
+  content: |-
+    REVISED SKETCH — protected authorization, following Joe's OPERATOR DECISION. NOT SIGNOFF.
+
+    Seat: separate architecture sketch author only (Codex). This supersedes the security/delegation proposal in SKETCH 01a0e086-e274-7333-9fa5-28891f6a88d0; it does not approve implementation. Read AGENTS.md, the two-seat protocol, aida show BUG-1669 --full, and ALL four comments (proxy decision, original sketch, independent ADVISOR revision-required disposition, Joe's 2026-09-26 19:13 decision). Source inspected at 854b7e26f7222c73845064275a18c293c9895283. Code remains read-only; this comment is the only requested durable change.
+
+    1. Conclusion and bounded deployment fork
+
+    Joe has already rejected a cooperative same-user guardrail. That choice is settled; this revision does NOT reopen it.
+
+    Literal protected authorization cannot be guaranteed by the current unrestricted same-UID CLI/process model. An agent that can replace the CLI/verifier, read its credentials, modify its inputs and state, run arbitrary vendor executables, and manufacture a PTY can bypass an in-process permit check. Moving a secret to another mode-0600 file or using a MAC/private Rust fields does not fix this. A privileged issuer alone also does not fix unrestricted descendants that can steal or bypass its execution authority.
+
+    Proposed operator choice is now deployment, not whether to weaken AC2:
+    P (recommended for retaining the requested functionality): authorize a service-backed execution perimeter, initially Linux-only, with an administrator-installed broker/controller and isolated worker domains, plus an approval channel outside the agent-controlled login session. Vendor permission bypass remains possible INSIDE a worker domain; it does not disable the external perimeter. Existing native burndown fan-out is replaced with broker-mediated per-spec workers. This is a materially larger architecture/security change.
+    H: retain the current unrestricted process/deployment model and leave protected bypass execution unavailable. Refuse all affected bypass launch paths until a protected backend is installed; previews and non-launch/read-only operations continue. This is a containment posture, not completion of AC2/AC4's authorized-drain functionality, and BUG-1669 remains unresolved.
+
+    If “full access” must mean unrestricted access to Joe's host login, credentials and processes, P cannot promise protected spec/phase delegation or descendant enforcement. No same-process token design reconciles those requirements. That would require a further operator decision about the execution perimeter; do not claim success by calling a UUID unforgeable. No service installation, platform selection, scope amendment or implementation is authorized by this sketch.
+
+    2. Source-grounded evidence and coverage
+
+    Confirmed:
+    - orchestrator.rs:193–260: detect -> classify -> run_is_live accepts nonempty AUTO_COMPLETE plus a UUID equal to writable DrainState.run_uuid and a live PID. live_run_marker has the same basis. drain_state.rs:383–399 stores ordinary project JSON.
+    - lib.rs:94516–94557 creates the UUID locally AFTER earlier phase preparation; state publication is best-effort. orchestrator_phase_child_env (104227) exports the token, phase index and role. These are diagnostic hints, not protected credentials.
+    - authority_stdin_is_terminal/authority_stdout_is_terminal (34612/34624) call IsTerminal. Both can be true for an agent-created PTY.
+    - handle_burndown_run (56499 onward) permits --force around the dispatch-role guard; the launcher holds a drain lock, does not establish independent protected phase authority, uses Claude-native fan-out and passes AIDA_BURNDOWN_LOCK_HELD. Quiet and verbose launches and three continuation rounds need identical enforcement. The skill re-resolves candidates today; that must not expand an authorized set.
+    - advisor_watch.rs:121–280 checks home/away and awaiting work; fork_and_run copies a transcript before its resume launch, while other vendors cold boot.
+    - shift.rs::build_wave_argv/wave_command/RealExec::spawn_wave and launch_wave_isolated use detached or systemd --user launches; the latter has invoker/cgroup probes and carefully limited fallback. Those probes are scheduling evidence, not protected approval. solo_cmd::solo_cycle runs intake/apply then burndown and currently continues after nonzero steps. maintenance_schedule::run_aida_command and schedule_driver carry timer/cron execution, not authority.
+    - session.rs::compose_headless_command/shared sinks use an optional OS wrapper. AIDA_OS_WRAP can override it; project/home mounts and PATH-derived programs remain inputs. This is NOT the proposed mandatory security perimeter. Codex/Agy headless argv still bypass even when contained=true.
+
+    Retain original inventory A–F as required implementation coverage, with explicit additions:
+    (a) compete + zen arms AND judges; guard before run_compete_arm removes worktrees/branches; judge override is not authority.
+    (b) intake assess/propose/apply/groom routing, including then-drain as a distinct delegated operation.
+    (c) burndown quiet/verbose/continuations and integration-triggered launches.
+    (d) shared session spawn/exec/resume, research, remedy, dryrun-AI, intent, harvest, reconstitute, queue fresh/resumed implementer/reviewer, watch fork/cold boot.
+    (e) direct RealPhaseDriver advisor/fork, implementer resume, CI-fix and other direct Command sinks.
+    (f) agent-new foreground/background, defaults/extra flags, interactive session/resume/reviewer plans whenever their resolved posture bypasses.
+    (g) solo, shift, timer/cron, detached/systemd and pane transport wrappers.
+    Include scripts/aida-demo.sh's actual bypass probe in scope: replace it with a broker-authorized bounded demo request or refuse. Ablation scripts are developer experiments, not an authorized alternate transport; they cannot acquire protected execution resources by invoking vendors directly. Pure previews/renderers do not need grants. Unknown executables, plugins and argv/config overrides are refused by the protected backend until explicitly enrolled and reviewed.
+
+    3. Trust boundary for P
+
+    Trusted computing base: host kernel/hypervisor, administrator-controlled broker and deterministic controller, immutable installed controller/vendor adapters, protected grant database, execution-domain manager, and the separate operator approval device. Agent processes, repo code/hooks/config, HOME, PATH, .aida, AIDA env, git metadata, prompts, transcripts, vendor results, user services and local terminals are untrusted.
+
+    Concrete initial deployment proposal: a root-installed service manages disposable service-owned Linux worker VMs (one per spec/phase attempt), with no administrator capability or host management socket exposed to guests or Joe's agent login. Hypervisor processes/control interfaces and VM disks are owned by service principals inaccessible to that login. Guests may use the same numeric application UID, but that is not the host principal or another guest's identity. Shared writable host HOME, credential directories, tmux sockets and issuer files are prohibited. Code is imported/exported as bounded untrusted artifacts; the broker never runs repository hooks, build commands or arbitrary caller argv as its privileged identity. Builds and Git parsing of untrusted content run in workers, with hooks disabled for service-side repository plumbing. Privileged code is a small typed launch/control surface, not a privileged copy of the whole AIDA CLI.
+
+    Install broker binaries/policy outside user-writable trees (e.g. administrator-owned /usr/libexec and /etc); store grants, revocations, enrolled repo mappings and audit events in administrator-owned /var/lib/aida-launch. No issuer secret, grant database or approval credential lives in .aida, agent HOME, env, argv, logs or a shared cache. Protected audit writes fail closed for launches. Public project-state projections are observability only.
+
+    Public local IPC accepts proposals/status, never operator approval. SO_PEERCRED identifying Joe proves only the login UID, not human intent. Worker requests arrive on service-created VM-specific channels mapped to a service-held domain instance/boot generation. Caller-supplied IDs, PID, claimed phase, vsock CID alone or inherited FDs alone are insufficient: the service validates its domain/channel binding and rejects foreign/reconnected instances. Within one compromised worker, all processes are the same untrusted principal and share only that worker's narrow rights; no claim of distinguishing “good” and “malicious” processes inside it.
+
+    Use a separate operator device with an enrolled authentication key inaccessible to agents, authenticated transport to the broker and an explicit display of the broker's normalized request. Approval binds broker identity, random request nonce, request digest, repo, members, operations, limits and expiry; the broker consumes it once. Denial, timeout, lost connection, malformed approval or changed request launches nothing. Remote authentication/cryptography and its implementation require independent review; this is an assumption, not a proof of unforgeability. No localhost web page, generic “approve AIDA”, cached sudo authorization, user-polkit exception or local PTY is an acceptable substitute. Existing local prompts can present a request/status but cannot issue grants. The operator may reject requests without agents learning an approval credential.
+
+    To prevent an alternate CLI from obtaining protected resources, keep the worker runtime and execution/service credentials outside the agent login. Guest egress and privileged operations must go through service-controlled adapters; do not hand workers reusable host/forge/issuer credentials. A broker gate does not magically prevent an unrestricted host process with its OWN unrelated credentials from running its OWN vendor client. Preventing every such shell execution on the entire workstation would additionally require OS confinement of that login or a separate managed host. That stronger workstation-wide claim is NOT proven here. P protects enrolled AIDA execution authority; if AC2 requires the stronger workstation-wide claim, isolation of all agent entry points is an explicit prerequisite, not an exclusion hidden in documentation.
+
+    4. Grant schema and atomic launch protocol
+
+    No portable bearer “run token”. Use opaque public grant/run IDs as lookup handles; possession grants nothing. Authority is server-side state plus the authenticated operator or service-created worker/controller principal.
+
+    Root grant fields:
+    - grant_id, broker_epoch, issuer/approval audit reference, request digest, version and revocation generation;
+    - enrolled repo_id, protected repository snapshot/revision and enrollment generation; accepted worktree imports/mappings;
+    - root_run_id, optional wave_id, parent_grant_id, grantee execution-domain instance;
+    - operation enum (e.g. compete, intake-propose, intake-apply, wave, single-drain, watch, scheduler), exact spec IDs with approved content digests, allowed phase/child-operation transitions;
+    - installed adapter/vendor image digest, resolved bypass posture, template/launch-plan digest and bound input artifacts (or an explicitly authorized bounded input schema);
+    - not_before, absolute deadline, max elapsed time, launches/retries/continuations, concurrency and resource ceilings, delegation depth and allowed child edges;
+    - owner/controller instance and state: pending/reserved/started/completed/revoked/expired.
+
+    Repo identity is broker enrollment, not a pathname, remote URL, git config or .git file supplied by an agent. Enrollment pins a service-owned workspace/snapshot mapping. Sibling worktrees require validated imports into that mapping. A symlink replacement or changed snapshot cannot silently retarget a pending approval. Spec IDs alone are insufficient when their contents can change: material content/plan changes invalidate the request and need renewed consent. Runtime work products can change only through the approved phase workflow.
+
+    Flow:
+    1. CLI resolves an observational proposal; broker normalizes against its enrolled policy/snapshot and requests approval if no valid parent delegation exists.
+    2. Broker reserves a scoped preparation action BEFORE queue/tag/lease/drain-state/log/transcript/worktree mutation or --with-plan execution associated with launching. Authorization refusal has zero such side effects; broker audit of a refusal is the explicit exception.
+    3. Protected controller performs only allowed preparation, creates a bounded LaunchPlan, then calls broker Start(grant, plan_digest, attempt_id).
+    4. Broker atomically checks identity/scope/ancestry/deadline/revocation/budget, consumes the launch slot and creates the domain/child using pinned programs and sanitized env. It owns both validation AND spawn; a client-side “yes” followed by unrestricted local spawn is not the boundary.
+    5. Return a process/status handle, never transferable launch permission. Durable attempt IDs make retries idempotent; uncertain spawn results remain reserved and reconciled rather than retried via a different vendor/backend.
+
+    Private Rust LaunchPermit fields remain useful API discipline only. Caller preflight guards and every shared/direct sink must route to broker execution. Default-no human prompts, --force, --yes, --no-human, roles, config bypass defaults, lock-held flags and presence cannot mint a grant. Actual vendor posture must be resolved from enrolled adapter/config, including aliases and --key=value; searching a few literal flags is insufficient.
+
+    Keep orchestrator::detect's legacy context classifier for diagnostics only. Add a separate typed, request-specific protected authorization API (no root-wide is_orchestrated boolean authority). For AC2's reference to detect, its protected dispatch-verification entry point must query this broker for the exact operation/spec/phase; a legacy Orchestrated result is never sufficient. Audit all callers before migration so no hidden authority path still consumes corroboration.
+
+    5. Delegation: drain, wave and burndown
+
+    The protected deterministic controller, not an LLM process, owns the parent grant. Worker agents may request a bounded next action; broker/controller validates the transition and creates the child. A worker never receives its parent's delegation privilege.
+
+    Single drain: bind one spec/revision and enumerated phases. Reviewer, advisor, CI-fix, harvest, planning and resume each require their own allowed edge/attempt budget; merely being an implementer cannot request compete, intake, watch or another spec. Completion/results from an agent are untrusted workflow evidence, not permission to expand scope. Existing lease/readiness/independent-advisor gates remain necessary; a launch grant does not confer lifecycle signoff or merge authority.
+
+    Wave: operator approves an exact finite member set (resolve batch/nextN before consent), allowed phases, max parallelism, deadline and aggregate limits. Broker holds wave -> per-spec run -> phase-attempt records independently. Concurrent/pipelined children do not overwrite a global drain-state authorization record. Each child grant is a strict subset, shares the parent's remaining budget and deadline, and cannot redelegate unless its edge says so. All allocation is transactional; sibling claims cannot overspend. Dynamic queue additions, changed spec contents or widened operation sets require fresh approval. Diagnostic drain-state may still change without changing authority.
+
+    Burndown: replace Claude-native dispatch with a broker-controlled wave controller that selects only approved members and requests per-spec runs. A Claude coordinator can propose ordering, not spawn privileged children or supply arbitrary executable/prompt overrides. Quiet/verbose are output modes for the SAME grant tree. One initial coordinator attempt plus at most the existing three continuations, also capped by operator budget/deadline; continuations do not reset counters or re-resolve a wider ready set. Per-spec drains use separate child records, not the wave lock as authorization.
+
+    Native vendor fan-out is NOT grandfathered. A native subagent in the same vendor process has no independently authenticatable spec/phase identity; a prompt or hook cannot supply one. In protected mode, the old native burndown path refuses with an explicit unsupported-boundary error. The supported replacement creates separate broker-owned per-spec workers. Any adapter retaining native fan-out must first prove an externally enforced launch/tool boundary; until then it is unsupported. Internal model computation within an already granted worker is not a new protected principal and gains no sibling/parent permissions. Preventing all arbitrary computation or semantic off-task work is not something launch authorization proves. Vendor-owned tool processes stay inside that worker's external domain; they cannot launch a new protected worker or escape to host execution. This is an explicit compatibility change for operator/advisor review, not an assumption of native coverage.
+
+    6. Lifetime, revocation and watch
+
+    Proposed conservative initial policy: ordinary/wave grants have a displayed finite runtime (default 2 hours, administrator ceiling 24 hours); watch defaults to 1 hour and at most 6 launches; scheduler grants expire within 24 hours. Operator may select smaller bounds; larger ceilings need administrator policy change and renewed approval. No indefinite grants. These are proposed values, not existing behavior.
+
+    A protected controller instance owns the run. Worker death closes only its attempt and consumes its retry budget. Controller death, cancellation, deadline or broker epoch change revokes the root and all descendants. PID reuse or copying a run ID does not restore identity. Terminal/client disconnect does not kill an explicitly approved detached run: the owner is the broker controller, and detached lifetime was displayed at approval. Foreground owner loss may cancel according to the approved plan.
+
+    Broker checks every preparation, launch and delegation; checks/spawn/revoke have a defined serialized ordering. Revocation wins before Start: zero child. Start wins first: child may have begun; stop its execution domain and revoke its service credentials. A service-owned supervisor enforces deadlines and terminates domains if the broker disappears. Broker restart invalidates all outstanding grants, kills/reconciles old domains and requires new consent. Termination cannot undo edits, network calls or merges already performed; no claim of instantaneous retroactive revocation. An unreachable/unhealthy supervisor blocks further launch and requires operator recovery.
+
+    Watch has its own operation grant, exact named duties and spec/candidate set, protected owner instance, minimum wake spacing, launch count and deadline capped by authenticated away TTL. Revalidate before execute_fork/transcript copying, logs and every fork/cold boot. Broker mirrors authoritative home/away lease; untrusted local “away” cannot extend it. Local “home” may conservatively stop work, but only authenticated operator action can extend/reissue consent. Home, away expiry, revocation or owner death ends the watch and its active worker. Restart requires a new grant. Incoming work outside the frozen set is displayed for new approval, not silently admitted. An ordinary drain grant cannot start watch. Fork/cold boot have identical scope and enforce transcript/source binding.
+
+    7. Scheduler bootstrap and operational consequences
+
+    No grandfathered solo/timer/user-systemd authority. Initial protected schedule enrollment requires the independent operator channel, binding repository snapshot/spec allowlist, named job/operations, time window, maximum wave/launch count, cadence/concurrency and aggregate budget. No “all future approved specs” in v1: AIDA approval/tag files are writable by the attacker. The broker may select a subset from the frozen allowlist using current eligibility as an additional filter; changes never expand authorization.
+
+    The broker owns schedule time/counters and a protected controller. Cron, maintenance tick or systemd --user can submit a wake hint/job ID but cannot carry a reusable scheduler secret. Broker re-evaluates due time and starts once with a durable tick/attempt ID. Prefer service-owned execution; detached and unit routes are lifecycle presentation behind the same broker, not distinct authority paths. A proven pre-start transport failure may retry the SAME reserved attempt through another protected transport; denial, revocation, scope failure or ambiguous start may not fall back to an unprotected spawn.
+
+    solo-cycle needs an explicitly approved bundle for intake-apply and wave operations on the approved sets. Newly drafted/approved specs do not automatically enter the wave grant. Authorization denial stops its launch sequence rather than continuing into burndown/integration and retrying next tick. Read-only due/status and existing non-agent maintenance remain usable; maintenance cannot launder a bypass launch. Current unattended workloads without enrollment WILL stop launching. This consequence must be accepted with P; “but systemd started it” is not an exemption.
+
+    8. Migration and failure behavior
+
+    Do not reinterpret existing UUIDs, session ack files or running user processes as grants. Stage backend enrollment and reviewed immutable builds; switch all A–G sinks/wrappers together to default deny unless broker-authorized. Unsupported platforms/backend-unavailable/custom adapter/native-fan-out paths refuse; no cooperative fallback and no automatic contained-vendor downgrade. Existing user-owned binaries may still run outside the protected service, but cannot access its execution authority. If host-wide blocking is required, remove those unmanaged execution routes through administrator policy first.
+
+    Existing drains must finish outside any claim of protection or be stopped/restarted by an explicit operator migration action. Never adopt their PID/state as authorized. Read-only CLI, previews and diagnostic drain-state remain compatible. New protected denial is typed and nonzero, for example: “Protected launch authorization is missing or expired. No agent was launched.” Propagate it through compete/zen/solo so a denied arm cannot become a failed result followed by judge launch.
+
+    Credential/database/audit failure, enrollment mismatch, unsupported adapter, changed request, unauthorized IPC peer, corrupt state, exhausted budget, stale epoch and failed isolation all deny before launch. Restore of an old broker database must invalidate epochs rather than resurrect approvals. No secret in diagnostic errors. Rate-limit untrusted proposal requests to avoid approval flooding; denial-of-service by an unrestricted local user is not solved by grant cryptography.
+
+    9. Hermetic validation required before any protection claim
+
+    No tests executed for this sketch. Two test layers are necessary:
+    A. Unprivileged hermetic CLI/contract tests: temporary git repo/store, fake HOME/XDG/vendor homes, private recording PATH vendors, cleared env and isolated test ambient guard. Exercise EVERY branch in inventory A–G with valid work prerequisites. Inject confirmation and broker responses only through cfg(test) interfaces, never production test env bypasses. Assert authority-specific nonzero refusal, zero vendor sentinels and unchanged worktree/queue/lease/log/transcript/state snapshots (excluding broker refusal audit). Test both TTYs true and an actual fabricated PTY sending “yes”; both must fail without protected consent. Hand-written DrainState + live fixture PID + UUID now MUST fail; it is a forgery fixture, not the positive security test.
+    B. Disposable privileged CI VM running the actual service/domain boundary, no developer HOME, no real model, no network/forge credentials, recording vendor adapters and an isolated test approval principal. This layer must run (not silently skip) before signoff on a supported backend. Unprivileged mock tests cannot establish same-user protection.
+
+    Adversarial matrix: read/replay all .aida/env tokens; alternate/replaced CLI; PATH/judge/config/plugin injection; broker-socket impersonation; request digest substitution; symlink/.git/root retargeting; wrong repo/run/spec/content/phase/operation; parent/sibling impersonation; FD/IPC forwarding from another domain; PID reuse; attempted ptrace/process-memory access and VM-control access; worker attempts to access broker database, operator key, host HOME, credential service or another domain. Assert no out-of-scope protected launch. Test copied broker IDs with the attacker's own vendor client as well as through AIDA.
+
+    Positive real-service fixtures: isolated approval issuer authorizes one request, broker starts fake vendor, delegated child runs through the actual protected channel. Cover fresh/resume/exec, direct advisor/CI-fix, compete arms and judge, intake then-drain, wave -> multiple concurrent per-spec runs -> phases, sibling worktree imports, quiet/verbose and three continuations, protected pane/log attachment, watch fork/cold boot and schedule/solo bootstrap. Native burndown must refuse until replaced; test the mediated replacement, not a prompt promise.
+
+    State-machine/race tests: launch vs revoke order, one-use approval/replayed nonce, duplicated attempt id, concurrent budget/delegation depletion, no wave expansion, parent death, child failure, timer/TTL expiry, home, restart/epoch rotation, rollback, unavailable audit/database/supervisor, systemd ambiguous launch with no duplicate detached fallback. Kill broker and prove domain supervision stops work. Security tests must exercise actual handlers and IPC/spawn, not only authorize().
+
+    Argument for protection is conditional: only the external operator principal can approve; only the broker can allocate execution domains; agents cannot modify/read protected code/state or impersonate another domain; every protected spawn atomically consumes a scoped grant. Each premise needs implementation/deployment evidence and independent review. No “unforgeable token” claim is made for current AIDA or for an unimplemented proposal.
+
+    Primary platform references checked for this design: Linux documents SO_PEERCRED as connection-time process credentials, which do not establish human consent. [Linux unix(7)](https://man7.org/linux/man-pages/man7/unix.7.html). Kernel Yama documentation explains same-UID process inspection and configurable ptrace restrictions, reinforcing that same-user memory isolation cannot be assumed. [Kernel Yama documentation](https://docs.kernel.org/admin-guide/LSM/Yama.html). These references support individual boundary assumptions, not certification of this architecture.
+
+    Requested disposition: operator chooses P's deployment/perimeter and explicit compatibility changes, or H's hold/deny posture; then a separate independent advisor reviews this revised sketch and the remaining platform proof obligations. Joe's literal protection decision stands throughout. This author grants no approval, implementation dispatch, queue change or merge authority.
+  created_at: 2026-09-27T02:19:17.649381810Z
+  modified_at: 2026-09-27T02:19:17.649381810Z
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
   author: joe
