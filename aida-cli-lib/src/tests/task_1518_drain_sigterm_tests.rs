@@ -115,6 +115,7 @@ fn ctx(
         guard: Arc::downgrade(&slot),
         grace,
         term_flag,
+        borrowed: false,
     };
     (slot, ctx)
 }
@@ -162,7 +163,7 @@ fn task_1518_first_term_writes_stop_request_and_marks_leases_but_keeps_the_lock(
     let tmp = fake_drain(pid);
     let root = tmp.path();
 
-    let report = on_first_term(root, pid);
+    let report = on_first_term(root, pid, false);
     assert!(report.stop_requested);
     assert!(stop_path(root).exists());
     let stop = std::fs::read_to_string(stop_path(root)).unwrap();
@@ -175,7 +176,7 @@ fn task_1518_first_term_writes_stop_request_and_marks_leases_but_keeps_the_lock(
     );
 
     // Idempotent: a second pass marks nothing new and still keeps the lock.
-    let again = on_first_term(root, pid);
+    let again = on_first_term(root, pid, false);
     assert!(again.leases_marked.is_empty());
     assert!(drain_lock_path(root).exists());
 }
@@ -210,7 +211,7 @@ fn task_1518_release_step_never_removes_a_lock_it_does_not_own() {
     assert!(!release_drain_lock(root, &Arc::downgrade(&slot)));
     assert!(drain_lock_path(root).exists());
     // And the bookkeeping stamps nothing of another drain's either.
-    let report = on_first_term(root, std::process::id());
+    let report = on_first_term(root, std::process::id(), false);
     assert!(report.leases_marked.is_empty());
     assert!(drain_lock_path(root).exists());
 }
@@ -255,6 +256,102 @@ fn task_1518_release_step_after_the_slot_is_gone_releases_nothing() {
     assert!(handle.upgrade().is_none());
 
     assert!(!release_drain_lock(root, &handle));
+}
+
+/// PROXY DECISION (a): a BORROWED child (`AIDA_DRAIN_BORROW`) stamps its own
+/// leases but never writes the shared stop request — a manual kill of one
+/// child must not stop the parent wave.
+#[test]
+fn task_1518_borrowed_child_marks_leases_but_writes_no_stop_request() {
+    let pid = std::process::id();
+    let tmp = fake_drain(pid);
+    let root = tmp.path();
+
+    let report = on_first_term(root, pid, true);
+    assert!(!report.stop_requested);
+    assert!(
+        !stop_path(root).exists(),
+        "the parent wave's stop file is untouched"
+    );
+    assert_eq!(report.leases_marked, vec!["aaaa11112222".to_string()]);
+    assert!(drain_lock_path(root).exists());
+}
+
+// --- `aida drain stop --now` ------------------------------------------------
+
+fn lock_of(root: &Path) -> DrainLock {
+    serde_json::from_str(&std::fs::read_to_string(drain_lock_path(root)).unwrap()).unwrap()
+}
+
+/// The lock file survives `stop --now` while the signalled pid is alive: the
+/// drain may still be integrating under it, and removing the file would let
+/// `aida drain start` / the next tick double-drive main.
+#[test]
+fn task_1518_stop_now_leaves_the_lock_while_the_drain_pid_is_alive() {
+    let pid = std::process::id();
+    let tmp = fake_drain(pid);
+    let root = tmp.path();
+    let lock = lock_of(root);
+
+    let outcome = crate::drain_cmd::release_lock_after_stop_now(
+        root,
+        &lock,
+        |_, _| true,
+        Duration::from_millis(300),
+        Duration::from_millis(20),
+    );
+    assert_eq!(outcome, crate::drain_cmd::StopNowLock::LeftToDrain);
+    assert!(
+        drain_lock_path(root).exists(),
+        "never remove the drain lock under a live drain"
+    );
+}
+
+/// Once the pid is gone, `stop --now` removes a lock that still records it —
+/// and never one a successor drain has since taken.
+#[test]
+fn task_1518_stop_now_releases_only_the_dead_pids_own_lock() {
+    let pid = std::process::id();
+    let tmp = fake_drain(pid);
+    let root = tmp.path();
+    let lock = lock_of(root);
+
+    // Alive for the first two polls, then gone.
+    let polls = std::sync::atomic::AtomicUsize::new(0);
+    let outcome = crate::drain_cmd::release_lock_after_stop_now(
+        root,
+        &lock,
+        |_, _| polls.fetch_add(1, Ordering::SeqCst) < 2,
+        Duration::from_secs(5),
+        Duration::from_millis(10),
+    );
+    assert_eq!(outcome, crate::drain_cmd::StopNowLock::ReleasedAfterExit);
+    assert!(!drain_lock_path(root).exists());
+
+    // The drain released it itself: nothing left for stop --now.
+    let outcome = crate::drain_cmd::release_lock_after_stop_now(
+        root,
+        &lock,
+        |_, _| false,
+        Duration::from_secs(1),
+        Duration::from_millis(10),
+    );
+    assert_eq!(outcome, crate::drain_cmd::StopNowLock::ReleasedByDrain);
+
+    // A successor took the lock under a different pid: left alone.
+    populate_fake_drain(root, pid.wrapping_add(4242));
+    let outcome = crate::drain_cmd::release_lock_after_stop_now(
+        root,
+        &lock,
+        |_, _| false,
+        Duration::from_secs(1),
+        Duration::from_millis(10),
+    );
+    assert_eq!(outcome, crate::drain_cmd::StopNowLock::ReleasedByDrain);
+    assert!(
+        drain_lock_path(root).exists(),
+        "a successor's lock is never removed"
+    );
 }
 
 // --- Protocol ---------------------------------------------------------------
@@ -546,6 +643,7 @@ fn task_1518_real_sigterm_child_body() {
         guard: Arc::downgrade(&slot),
         grace: Duration::from_secs(4),
         term_flag: process_term_flag(),
+        borrowed: false,
     })
     .unwrap();
 

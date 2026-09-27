@@ -6170,6 +6170,7 @@ pub(crate) fn handle_queue_command(
                                 guard: std::sync::Arc::downgrade(&_drain_guard),
                                 grace: crate::drain_signal::grace_from_env(),
                                 term_flag: crate::drain_signal::process_term_flag(),
+                                borrowed: drain_lock::borrow_requested(),
                             })
                         {
                             eprintln!(

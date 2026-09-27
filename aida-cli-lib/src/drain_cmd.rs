@@ -559,9 +559,38 @@ fn handle_drain_stop(project: Option<&str>, now: bool) -> Result<()> {
             .arg("-TERM")
             .arg(lock.pid.to_string())
             .status();
-        let _ = std::fs::remove_file(drain_lock::drain_lock_path(&root));
+        // TASK-1518: the drain catches SIGTERM and may keep driving its
+        // in-flight head (possibly an integrate on main) for up to its grace
+        // window, holding the drain lock the whole time. Removing the lock
+        // file here would let `aida drain start` or the next night-shift tick
+        // double-drive main under it, so the file is left to the exiting
+        // drain: wait (bounded) for the pid to go, then remove it only if it
+        // still records that pid. trace:TASK-1518 | ai:claude
+        println!(
+            "Hard stop requested for drain pid {}; waiting up to {}s for it to exit...",
+            lock.pid,
+            STOP_NOW_EXIT_WAIT.as_secs()
+        );
+        match release_lock_after_stop_now(
+            &root,
+            &lock,
+            process_probe::process_identity_is_alive,
+            STOP_NOW_EXIT_WAIT,
+            STOP_NOW_POLL,
+        ) {
+            StopNowLock::ReleasedAfterExit => {
+                println!("Drain pid {} exited; drain lock released.", lock.pid)
+            }
+            StopNowLock::ReleasedByDrain => {
+                println!("Drain pid {} exited and released its lock.", lock.pid)
+            }
+            StopNowLock::LeftToDrain => println!(
+                "Drain pid {} is still finishing its in-flight phase; it releases the drain lock \
+                 when it exits (a second `aida drain stop --now` exits it immediately).",
+                lock.pid
+            ),
+        }
         let _ = drain_state::DrainState::clear(&root);
-        println!("Hard stop requested for drain pid {}.", lock.pid);
     } else {
         println!(
             "Graceful stop requested for drain pid {}. The in-flight phase may finish; no new spec will be picked up.",
@@ -569,6 +598,58 @@ fn handle_drain_stop(project: Option<&str>, now: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// How long `aida drain stop --now` waits for the signalled drain to exit
+/// before leaving the lock to it: the handler's grace cap
+/// (`drain_signal::MAX_GRACE_SECS`) plus a margin for the release itself.
+// trace:TASK-1518 | ai:claude
+const STOP_NOW_EXIT_WAIT: std::time::Duration =
+    std::time::Duration::from_secs(crate::drain_signal::MAX_GRACE_SECS + 15);
+const STOP_NOW_POLL: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// What `aida drain stop --now` did about the drain lock.
+// trace:TASK-1518 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StopNowLock {
+    /// The pid exited within the wait and the file still recorded it, so
+    /// `stop --now` removed it (the drain's own release did not land).
+    ReleasedAfterExit,
+    /// The pid exited within the wait and the file was already gone (or
+    /// re-taken by another pid): the drain released it itself.
+    ReleasedByDrain,
+    /// The pid is still alive after the wait: the lock file is left in place
+    /// for the drain to release on exit — never removed under a live drain.
+    LeftToDrain,
+}
+
+/// The lock disposition after `stop --now` signalled `lock.pid`: poll
+/// `is_alive` for up to `wait`, and remove the lock file ONLY once the pid is
+/// gone and the file still records that pid. Pure over the injected liveness
+/// so the "never remove under a live drain" rule is unit-testable without a
+/// process.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn release_lock_after_stop_now(
+    project_root: &std::path::Path,
+    lock: &drain_lock::DrainLock,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
+    wait: std::time::Duration,
+    poll: std::time::Duration,
+) -> StopNowLock {
+    let deadline = std::time::Instant::now() + wait;
+    loop {
+        if !is_alive(lock.pid, lock.pid_start_time.as_deref()) {
+            return if drain_lock::release_lock_if_pid(project_root, lock.pid) {
+                StopNowLock::ReleasedAfterExit
+            } else {
+                StopNowLock::ReleasedByDrain
+            };
+        }
+        if std::time::Instant::now() >= deadline {
+            return StopNowLock::LeftToDrain;
+        }
+        std::thread::sleep(poll);
+    }
 }
 
 pub(crate) fn drain_stop_path(project_root: &std::path::Path) -> std::path::PathBuf {

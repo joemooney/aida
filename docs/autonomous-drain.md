@@ -1238,7 +1238,10 @@ stop request (no further head is picked up) and stamps `interrupted_at` /
 `AIDA_DRAIN_TERM_GRACE_SECS` (default 30, at most 60) for the in-flight
 phase to land, holding the drain lock the whole time so no other driver can
 take it while this one may still be integrating on `main`; a second SIGTERM
-or the end of that window releases the lock and forces the exit with `143`. `aida ps` reads the mark: a marked lease with no live process and
+or the end of that window releases the lock and forces the exit with `143`.
+`aida drain stop --now` therefore never removes the lock file under a live
+drain: it waits (bounded) for the pid to exit and otherwise leaves the lock
+to the drain to release. `aida ps` reads the mark: a marked lease with no live process and
 a clean worktree shows as `stopped` (worktree intact; resume with the usual
 `aida queue work <spec>`) rather than as a dead agent. Without a signal
 nothing changes. Unix only; on Windows the stop paths are unchanged

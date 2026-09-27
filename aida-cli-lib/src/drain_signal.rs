@@ -31,7 +31,14 @@
 //! — the BUG-538 hole the lock exists to close. A SECOND SIGTERM, or the end
 //! of the grace window, releases the lock (guard dropped: heartbeat stopped,
 //! shared claim released, local file removed only when it still records our
-//! pid) and immediately forces `process::exit(SIGTERM_EXIT_CODE)`.
+//! pid) and immediately forces `process::exit(SIGTERM_EXIT_CODE)`. That
+//! release may do one store round trip (the shared cross-clone claim) before
+//! the exit, which is why it sits inside the grace budget.
+//!
+//! A drain whose lock is BORROWED (an internal child drive under
+//! `AIDA_DRAIN_BORROW`) still stamps its own leases but writes no stop
+//! request: the request file is shared with the parent wave, and a manual
+//! kill of one child must not stop the whole wave.
 //!
 //! Without a signal nothing here runs: installing the handler only spawns a
 //! parked thread. Unix only; on Windows [`install`] is a documented no-op
@@ -138,6 +145,9 @@ pub(crate) struct DrainTermContext {
     /// Raised after the first SIGTERM's bookkeeping; production passes
     /// [`process_term_flag`].
     pub(crate) term_flag: &'static AtomicBool,
+    /// This drain borrows its parent's lock (`AIDA_DRAIN_BORROW`): stamp
+    /// leases, but never write the shared stop request.
+    pub(crate) borrowed: bool,
 }
 
 /// Where the handler's signals come from. Production wraps a signal-hook
@@ -247,7 +257,7 @@ where
     }
 
     ctx.term_flag.store(true, Ordering::SeqCst);
-    let report = on_first_term(&ctx.project_root, ctx.drain_pid);
+    let report = on_first_term(&ctx.project_root, ctx.drain_pid, ctx.borrowed);
     eprintln!(
         "  {} SIGTERM: stop requested; {} lease(s) marked interrupted; drain lock held \
          while the in-flight phase finishes; exiting {} within {}s (a second SIGTERM exits now)",
@@ -286,13 +296,15 @@ where
 }
 
 /// The first SIGTERM's bookkeeping, pure over the filesystem: stop request
-/// and lease stamps. Deliberately NOT the lock release — that is
+/// (skipped for a `borrowed` child, whose request file belongs to the parent
+/// wave) and lease stamps. Deliberately NOT the lock release — that is
 /// [`release_drain_lock`], run just before the exit. Every step is
 /// best-effort and independent so a failure in one never skips the other.
 // trace:TASK-1518 | ai:claude
-pub(crate) fn on_first_term(project_root: &Path, drain_pid: u32) -> TermReport {
-    let stop_requested =
-        crate::drain_cmd::write_stop_request(project_root, REASON_SIGTERM, Some(drain_pid)).is_ok();
+pub(crate) fn on_first_term(project_root: &Path, drain_pid: u32, borrowed: bool) -> TermReport {
+    let stop_requested = !borrowed
+        && crate::drain_cmd::write_stop_request(project_root, REASON_SIGTERM, Some(drain_pid))
+            .is_ok();
     let leases_marked = mark_in_flight_leases_interrupted(project_root, drain_pid);
     TermReport {
         stop_requested,
