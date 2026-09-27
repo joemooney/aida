@@ -2861,9 +2861,13 @@ fn toon_list_cell(
         // BUG-781: the agent surface reports the TERMINAL truth for an accepted
         // decision — `accepted`, the recognized ADR verb — not the `approved`
         // token that reads as "cleared to start". trace:BUG-781 | ai:claude
-        "status" => toon_status_token(crate::status_display::display_status_for_type(
+        // BUG-1687: routed through the shared presented-status resolver so a
+        // deferred row reads `deferred` here exactly as it does in `aida show`
+        // and in the human column. trace:BUG-1687 | ai:claude
+        "status" => toon_status_token(&crate::status_display::presented_status(
             &r.req_type,
             &r.status,
+            r.deferred,
         )),
         "type" => r.req_type.to_ascii_lowercase(),
         "priority" => r.priority.to_ascii_lowercase(),
@@ -3012,9 +3016,13 @@ where
                 // BUG-781: paint on the DISPLAY label, so an accepted decision
                 // gets the terminal green rather than the un-started cyan.
                 // trace:BUG-781 | ai:claude
+                // BUG-1687: the palette key must be the label the cell actually
+                // carries (`toon_list_cell` renders a deferred row as
+                // `deferred`), or a deferred row paints in its stored status's
+                // colour. trace:BUG-1687 | ai:claude
                 "status" => status_display::paint_status(
                     &padded,
-                    status_display::display_status_for_type(&req.req_type, &req.status),
+                    &status_display::presented_status(&req.req_type, &req.status, req.deferred),
                 )
                 .to_string(),
                 "id" => padded.bold().to_string(),
@@ -84202,6 +84210,13 @@ mod task_1488_related_edge_migration_widen_tests;
 #[cfg(test)]
 #[path = "tests/bug_1602_rel_remove_handler_tests.rs"]
 mod bug_1602_rel_remove_handler_tests;
+
+// BUG-1687: the presentation layer that makes a deferred spec report one state
+// (presented status, glyph/colour, card badge, list json label, undefer-first
+// next step). trace:BUG-1687 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1687_deferred_presented_state_tests.rs"]
+mod bug_1687_deferred_presented_state_tests;
 
 // BUG-1611: lifecycle authority guard at queue done, the forced reopen, and
 // zen auto-approve. trace:BUG-1611 | ai:claude

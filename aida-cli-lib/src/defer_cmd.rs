@@ -38,6 +38,12 @@ pub(crate) fn defer_single(
     // update the revisit trigger via `--until` without an undefer round-trip.
     let already = req.deferred;
     let now = chrono::Utc::now();
+    // BUG-1687: `status` is deliberately NOT written here. The read surfaces
+    // present a deferred spec as `Deferred` (see `status_display::presented_status`)
+    // so no reader is told to act now, while the stored lifecycle status stays
+    // intact for `handle_undefer_command` to restore. Do not "simplify" this by
+    // moving status — that strands the spec on undefer.
+    // trace:BUG-1687 | ai:claude
     req.deferred = true;
     if already {
         // Preserve the original defer timestamp on a trigger update.
@@ -129,7 +135,19 @@ fn remove_deferred_queue_rows(
 
 /// Inverse of `aida defer` — clears the deferred flag + revisit trigger so the
 /// spec reappears in the default views. Mirrors `handle_unarchive_command`.
+///
+/// BUG-1687 (un-defer restores the prior status): this restores the spec's
+/// lifecycle status for free, and must keep doing so. `defer_single` above never
+/// writes `status`, so the status the spec had when it was parked is still the
+/// status on disk — there is no "status before defer" to record, and none is
+/// recorded. BUG-1687 was fixed by relabelling the PRESENTED status on the read
+/// surfaces (`status_display::presented_status`) rather than by moving the
+/// lifecycle state, precisely so this stays true: rewriting status on defer
+/// would destroy the only copy of the prior status and would need a new
+/// persisted field, a cache column, a conflict-merge rule and an export
+/// round-trip to put back what orthogonality already gives.
 // trace:STORY-584 | ai:claude
+// trace:BUG-1687 | ai:claude
 pub(crate) fn handle_undefer_command(
     id: &str,
     backend: &aida_core::CachedGitBackend,

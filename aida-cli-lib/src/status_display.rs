@@ -21,6 +21,15 @@
 //! | NeedsAttention | magenta (bold)   | ⚠     |
 //! | Accepted    | green               | ☑     |
 //! | Superseded  | green (dimmed)      | ⊡     |
+//! | Deferred    | blue (dimmed)       | ⏳    |
+//!
+//! `Deferred` (BUG-1687) is also DISPLAY-only, and for the same reason
+//! `Accepted` is: deferral is a view-level flag orthogonal to the lifecycle
+//! status, so a deferred spec keeps whatever status it had (often
+//! `NeedsAttention` or `InProgress`) stored underneath. Rendering that stored
+//! word verbatim told every reader to act now on work that was deliberately
+//! parked, so [`presented_status`] relabels it. Nothing is rewritten on disk —
+//! that is what lets `aida undefer` put the spec straight back where it was.
 //!
 //! `Superseded` (TASK-1176) is terminal-but-ADOPTED: the spec was followed and
 //! then replaced by a successor. It sits in the closed-green family (dimmed,
@@ -129,6 +138,9 @@ pub(crate) fn status_glyph_for_profile(
         "needsattention" => Glyph::Blocked,
         "needsdecision" => Glyph::Blocked,
         "shelved" => Glyph::Pause,
+        // A deferred spec is waiting on a recorded trigger, not on a person.
+        // trace:BUG-1687 | ai:claude
+        "deferred" => Glyph::Hourglass,
         // trace:BUG-781 | ai:claude — the decision-class terminal label.
         "accepted" => Glyph::Accepted,
         // trace:TASK-1176 | ai:claude — adopted, then replaced.
@@ -174,6 +186,9 @@ fn status_glyph_literal(status: &str) -> &'static str {
         "needsdecision" => "⚠",
         // STORY-1023: mechanically parked with a typed recovery path.
         "shelved" => "⏸",
+        // BUG-1687: parked until a recorded condition comes true.
+        // trace:BUG-1687 | ai:claude
+        "deferred" => "⏳",
         // trace:BUG-781 | ai:claude — a ratified decision: checked and closed.
         "accepted" => "☑",
         // trace:TASK-1176 | ai:claude — adopted, then replaced: the same box
@@ -210,6 +225,11 @@ pub(crate) fn paint_status(text: &str, status: &str) -> ColoredString {
         // STORY-1023: a typed mechanical shelf should stay visible without
         // looking like an operator escalation.
         "shelved" => text.blue(),
+        // BUG-1687: dimmed blue — parked and NOT actionable. Deliberately not
+        // the bold magenta `needsattention` wears, because the whole point of
+        // the relabel is that nobody should act on a deferred spec now.
+        // trace:BUG-1687 | ai:claude
+        "deferred" => text.blue().dimmed(),
         // BUG-781: a ratified decision is terminal, so it paints in the closed
         // green family — never the cyan `Approved` wears on a task that has yet
         // to be started. trace:BUG-781 | ai:claude
@@ -247,6 +267,30 @@ pub(crate) fn display_status_for_type<'a>(req_type: &str, status: &'a str) -> &'
     }
 }
 
+/// The label a spec's status DISPLAYS as once the deferral view-flag is taken
+/// into account — the one presented-status resolver every surface that renders
+/// a spec's state must go through.
+///
+/// `aida defer` sets a view-level flag and deliberately does NOT touch the
+/// lifecycle status (that orthogonality is what makes `aida undefer` lossless).
+/// The cost was that `aida show` and `aida list` kept printing the stored
+/// `Needs Attention` / `In Progress` for a spec that had been parked and
+/// dequeued, so two readers of the same store could honestly report two
+/// different states. Routing every surface through here means the presented
+/// answer is one answer; the stored status stays available beside it
+/// (`stored_status` in the machine projections) so nothing is lost.
+// trace:BUG-1687 | ai:claude
+pub(crate) fn presented_status(req_type: &str, status: &str, deferred: bool) -> String {
+    if deferred {
+        return DEFERRED_LABEL.to_string();
+    }
+    display_status_for_type(req_type, status).to_string()
+}
+
+/// The display label (and palette key) for a deferred spec.
+// trace:BUG-1687 | ai:claude
+pub(crate) const DEFERRED_LABEL: &str = "Deferred";
+
 /// `"<glyph> <coloured status>"` — the badge for prominent single-status
 /// displays: the `aida show` Status line and its bottom reprint, the spec
 /// card one-liner, the `[…]` chips in `aida queue list` and the `aida status`
@@ -257,6 +301,12 @@ pub(crate) fn status_badge(status: &str) -> String {
 }
 
 pub(crate) fn parked_status_badge(req: &aida_core::models::Requirement) -> String {
+    // A deferred spec is parked outside executable work entirely, so deferral
+    // outranks the NeedsAttention lens: "shelved (ci-red)" would still read as
+    // something to pick up. trace:BUG-1687 | ai:claude
+    if req.deferred {
+        return status_badge(DEFERRED_LABEL);
+    }
     match needs_attention_lens(req) {
         Some(lens) => {
             let label = lens.label();

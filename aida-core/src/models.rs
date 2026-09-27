@@ -200,6 +200,44 @@ impl RequirementStatus {
         }
         Ok(out)
     }
+
+    /// Split a raw `--status` spec into the DEFERRED view-axis request and the
+    /// remaining lifecycle-status tokens.
+    ///
+    /// `deferred` is not a lifecycle status — it is a view-level flag stored
+    /// beside the status (see `aida defer`). But "deferred" is the word a reader
+    /// uses for the state a parked spec is in, so `aida list --status deferred`
+    /// is the query they type, and before BUG-1687 it hard-errored as an
+    /// unknown status while `aida show --json` was reporting `deferred = true`
+    /// on the very same spec. Recognising the token here keeps the enum honest
+    /// (no fake `Deferred` variant in the lifecycle state machine) while making
+    /// the obvious query work: the caller flips its defer filter to
+    /// deferred-only and constrains status by whatever tokens are LEFT, so
+    /// `--status deferred` matches every deferred spec and
+    /// `--status deferred,in-progress` narrows to the deferred in-progress ones.
+    ///
+    /// Errors identically to [`Self::expand_filter_spec`], naming the first
+    /// unrecognized token.
+    // trace:BUG-1687 | ai:claude
+    pub fn split_filter_spec(spec: &str) -> Result<(bool, Vec<String>), String> {
+        let mut deferred = false;
+        let mut kept: Vec<&str> = Vec::new();
+        for raw in spec.split(',') {
+            let token = raw.trim();
+            if token.is_empty() {
+                continue;
+            }
+            if Self::normalize_token(token) == "deferred" {
+                deferred = true;
+            } else {
+                kept.push(token);
+            }
+        }
+        if kept.is_empty() {
+            return Ok((deferred, Vec::new()));
+        }
+        Ok((deferred, Self::expand_filter_spec(&kept.join(","))?))
+    }
 }
 
 /// The kind of obstacle that triggered a punt — the machine-readable category
@@ -8704,6 +8742,45 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
         assert_eq!(
             RequirementStatus::expand_filter_spec(" done , , completed "),
             Ok(vec!["Done".to_string(), "Completed".to_string()])
+        );
+    }
+
+    /// BUG-1687: `deferred` is peeled off as the VIEW axis it is, leaving the
+    /// lifecycle-status tokens behind. A bare `--status deferred` therefore
+    /// leaves status unconstrained, so every deferred spec matches regardless of
+    /// the status still stored under the deferral.
+    // trace:BUG-1687 | ai:claude
+    #[test]
+    fn split_filter_spec_peels_the_deferred_view_axis() {
+        assert_eq!(
+            RequirementStatus::split_filter_spec("deferred"),
+            Ok((true, Vec::new()))
+        );
+        // Spelling variants collapse the same way every status token does.
+        for spelling in ["Deferred", "DEFERRED", "de-ferred"] {
+            assert_eq!(
+                RequirementStatus::split_filter_spec(spelling).map(|(d, _)| d),
+                Ok(true),
+                "spelling {spelling}"
+            );
+        }
+        // Mixed spec: deferred narrows the view axis, the rest still narrows status.
+        assert_eq!(
+            RequirementStatus::split_filter_spec("deferred,in-progress"),
+            Ok((true, vec!["InProgress".to_string()]))
+        );
+        // No deferred token → identical to expand_filter_spec.
+        assert_eq!(
+            RequirementStatus::split_filter_spec("open"),
+            Ok((
+                false,
+                RequirementStatus::expand_filter_spec("open").unwrap()
+            ))
+        );
+        // Still an error on a genuinely unknown token, naming it.
+        assert_eq!(
+            RequirementStatus::split_filter_spec("deferred,wat"),
+            Err("wat".to_string())
         );
     }
 

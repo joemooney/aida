@@ -104,6 +104,15 @@ pub fn registry() -> Vec<AliasGroup> {
             "aida list --status closed",
             "every finished/abandoned spec (done, completed, rejected)",
         ),
+        // BUG-1687: `deferred` is a view axis, not a status, so it is a
+        // hand-written row here rather than a STATUS_TOKENS entry — the
+        // recognizer test below would (rightly) reject it as a status.
+        // trace:BUG-1687 | ai:claude
+        row(
+            "aida list deferred",
+            "aida list --deferred",
+            "every spec parked by `aida defer`, whatever status is stored",
+        ),
     ];
     // The canonical statuses are each their own positional shortcut. The tokens
     // are the user-facing spellings (hyphenated); each is validated against

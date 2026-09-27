@@ -9123,6 +9123,11 @@ pub enum Command {
         ///   open            - Draft, Approved, Planned, InProgress, NeedsAttention
         ///   closed          - Done, Completed, Rejected
         ///
+        /// View axis (combines with the statuses above):
+        ///   deferred        - parked by `aida defer`, whatever status is stored
+        ///                     (same rows as `--deferred`; narrow it with
+        ///                     `deferred,in-progress`)
+        ///
         /// User filters (owner OR assignee):
         ///   me              - your shell identity ($AIDA_USER / $USER)
         ///   user:<name>     - the named person (e.g. `user:joe`)
@@ -9143,7 +9148,13 @@ pub enum Command {
         /// (`--status draft,approved`) and the `open` / `closed` aliases:
         /// `open` = Draft, Approved, Planned, InProgress, NeedsAttention;
         /// `closed` = Done, Completed, Rejected.
+        ///
+        /// Also accepts `deferred` — the parked-work view axis rather than a
+        /// lifecycle status, so `--status deferred` returns every deferred spec
+        /// whatever status is stored under it (the same rows as `--deferred`),
+        /// and `--status deferred,in-progress` narrows within that shelf.
         // trace:TASK-0415 | ai:claude
+        // trace:BUG-1687 | ai:claude
         #[clap(long)]
         status: Option<String>,
 

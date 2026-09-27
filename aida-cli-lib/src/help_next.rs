@@ -152,6 +152,20 @@ pub fn spec_next(status: &str, id: &str) -> Vec<NextStep> {
     ranked.into_iter().map(|(_, s)| s).collect()
 }
 
+/// Lead the next-step block with `aida undefer <id>` when the spec is deferred.
+///
+/// The lifecycle transitions [`spec_next`] computes stay valid and stay listed —
+/// but none of them is the real first move on a parked spec, and offering
+/// `aida edit <id> --status in-progress` as the headline next step on work that
+/// was deliberately dequeued is the same contradiction BUG-1687 fixes in the
+/// status line. No-op when the spec is not deferred.
+// trace:BUG-1687 | ai:claude
+pub fn lead_with_undefer(next: &mut Vec<NextStep>, deferred: bool, id: &str) {
+    if deferred {
+        next.insert(0, NextStep::new(format!("aida undefer {id}"), "undeferred"));
+    }
+}
+
 /// Lifecycle-aware next steps for the `aida why <spec>` surface.
 ///
 /// `spec_next` is intentionally status-only, but epics are rollups: an

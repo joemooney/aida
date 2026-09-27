@@ -68,6 +68,7 @@ The commands you touch on day one and then every day after: `init` once, then `a
 - the positional `[STATUS]` — `aida list open` / `closed` are aliases (`open` = Draft/Approved/Planned/InProgress/NeedsAttention). The fastest way to "what's live."
 - `--tags 'prefix:*'` — the trailing-`*` prefix-glob is how you query a whole namespace (`aida list --tags 'aida:queue:*'`). Without it you're matching an exact tag.
 - `--all` vs `--archived` — `--all` is *both* archived and live; `--archived` is *only* archived (for auditing the archive itself). They're different questions.
+- `--status deferred` — the parked shelf, by the word you'd actually type for it. `deferred` is a *view axis*, not a lifecycle status, so it returns every spec `aida defer` parked whatever status is stored underneath — the same rows as `--deferred`. Narrow within the shelf by adding statuses (`--status deferred,in-progress`). This is the query to use when you need to confirm that deferral isn't quietly counting toward a backlog burndown.
 - `--sync` — pull the store from origin before listing. Opt-in because the fast local path is the common case; reach for it when collaborating or when another machine/session may have written.
 - `--parent <ID>` — "what's still open under this EPIC" — composes with the other filters, the everyday rollup query.
 - `--no-scope` — bypass your role's scope filter. Needed when a subsystem-scoped role is hiding specs you actually want to see.
