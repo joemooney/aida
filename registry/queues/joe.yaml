@@ -89,3 +89,11 @@
   added_at: 2026-09-27T12:08:08.188810224Z
   for_role: advisor
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0dfee-bb1a-7581-90b2-c01c570645e3
+  position: 37000
+  added_by: joe
+  note: Recovered orphaned clean in-progress session; fresh isolated implementer attempt from current main. Drain logic requires Claude/Codex per strict-review policy; Agy is not an eligible implementer for this class.
+  added_at: 2026-09-27T12:20:23.417110479Z
+  for_role: implementer
+  added_by_machine: imac
