@@ -1435,10 +1435,12 @@ pub enum HeadlessVendor {
     Claude,
     /// `codex exec …` — the Codex headless CLI. trace:STORY-683
     Codex,
-    /// `agy -p …` — the Antigravity (AGY) headless CLI. The `agy` runtime's
-    /// non-interactive `-p`/`--print` mode is the AGY analogue of `claude -p` /
-    /// `codex exec` (verified in SPIKE-27's agy-architecture surface note).
-    // trace:TASK-1048 | ai:claude
+    /// `agy … -p <prompt>` — the Antigravity (AGY) headless CLI. The `agy`
+    /// runtime's non-interactive `-p`/`--print` mode is the AGY analogue of
+    /// `claude -p` / `codex exec` (verified in SPIKE-27's agy-architecture
+    /// surface note). BUG-1686: agy's `-p` TAKES the prompt as its value, so it
+    /// comes last, after every option flag.
+    // trace:TASK-1048 BUG-1686 | ai:claude
     Agy,
 }
 
@@ -1873,27 +1875,36 @@ pub fn headless_vendor_args(
 /// `aida agent new antigravity --bypass-sandbox` launch uses) so the run is
 /// unattended. Like Codex, AGY has no caller-minted `--session-id` /
 /// `stream-json` machinery threaded here, so the arm does not carry `session_id`.
-/// The prompt is the final positional. Pure — unit-tested without spawning.
-// trace:TASK-1048 | ai:claude
+///
+/// BUG-1686: unlike Claude's boolean `-p`, Antigravity's `-p`/`--print` TAKES A
+/// VALUE, so the prompt is that flag's value and `-p <prompt>` must come LAST,
+/// after every option flag. Pure — unit-tested without spawning.
+// trace:TASK-1048 BUG-1686 | ai:claude
 pub fn agy_headless_args(prompt: &str) -> Vec<String> {
     agy_headless_args_with_effort(prompt, None)
 }
 
 // trace:STORY-1033 | ai:codex
+// BUG-1686: argv ORDER is load-bearing here. Antigravity CLI 1.2.12 parses
+// Go-style flags and `-p` / `--print` / `--prompt` is a VALUE-taking flag
+// ("Run a single prompt non-interactively and print the response"), not the
+// boolean `-p` claude has. The pre-BUG-1686 order emitted
+// `-p --dangerously-skip-permissions [--effort E] <prompt>`, so agy took the
+// literal string "--dangerously-skip-permissions" as the prompt, never saw the
+// permission flag as a flag, and rejected the launch — `aida queue work <SPEC>
+// --vendor agy --no-human=both --strict` left a lease and worktree behind with
+// no implementer process. Go's flag parser also stops at the first non-flag
+// argument, so a trailing positional prompt is not an option either: EVERY
+// option flag precedes `-p`, and the prompt is `-p`'s value at the tail.
+// The permission posture is unchanged — the same single flag, moved, not weakened.
+// trace:BUG-1686 | ai:claude
 pub fn agy_headless_args_with_effort(prompt: &str, effort: Option<&str>) -> Vec<String> {
-    vec![
-        "-p".to_string(),
-        "--dangerously-skip-permissions".to_string(),
-    ]
-    .into_iter()
-    .chain(
-        effort
-            .filter(|e| !e.trim().is_empty())
-            .map(|e| vec!["--effort".to_string(), e.to_string()])
-            .unwrap_or_default(),
-    )
-    .chain([prompt.to_string()])
-    .collect()
+    let mut args = vec!["--dangerously-skip-permissions".to_string()];
+    if let Some(effort) = effort.filter(|e| !e.trim().is_empty()) {
+        args.extend(["--effort".to_string(), effort.to_string()]);
+    }
+    args.extend(["-p".to_string(), prompt.to_string()]);
+    args
 }
 
 /// STORY-683: the `codex exec` argv (after the `codex` program name) for a
@@ -5540,14 +5551,16 @@ mod tests {
             "codex arm must not carry claude's -p: {codex:?}"
         );
 
-        // TASK-1048: Agy arm: `agy -p --dangerously-skip-permissions <prompt>`,
-        // with the prompt as the final positional and NO codex `exec`.
+        // TASK-1048: Agy arm: `agy --dangerously-skip-permissions -p <prompt>`,
+        // with the prompt as `-p`'s value at the tail and NO codex `exec`.
+        // BUG-1686: the permission flag leads; `-p` is value-taking on agy.
+        // trace:BUG-1686 | ai:claude
         let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None, None);
         assert_eq!(agy, agy_headless_args(prompt), "{agy:?}");
-        assert_eq!(agy.first().map(String::as_str), Some("-p"), "{agy:?}");
-        assert!(
-            agy.contains(&"--dangerously-skip-permissions".to_string()),
-            "agy bypass: {agy:?}"
+        assert_eq!(
+            agy.first().map(String::as_str),
+            Some("--dangerously-skip-permissions"),
+            "{agy:?}"
         );
         assert_eq!(agy.last().map(String::as_str), Some(prompt), "{agy:?}");
         assert!(
@@ -5653,7 +5666,13 @@ mod tests {
                 advisor_tier_program_and_args(HeadlessVendor::Agy, is_fork, seeded, advisor_uuid);
             assert_eq!(prog, "agy", "is_fork={is_fork}");
             assert_eq!(args, agy_headless_args(seeded), "is_fork={is_fork}");
-            assert_eq!(args.first().map(String::as_str), Some("-p"), "{args:?}");
+            // BUG-1686: permission flag first, prompt as `-p`'s trailing value.
+            // trace:BUG-1686 | ai:claude
+            assert_eq!(
+                args.first().map(String::as_str),
+                Some("--dangerously-skip-permissions"),
+                "{args:?}"
+            );
             assert_eq!(args.last().map(String::as_str), Some(seeded), "{args:?}");
             assert!(!args.contains(&"--resume".to_string()), "{args:?}");
             assert!(!args.contains(&advisor_uuid.to_string()), "{args:?}");
