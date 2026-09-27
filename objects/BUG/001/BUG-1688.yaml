@@ -21,10 +21,26 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:58:26.483962647Z
-modified_at: 2026-09-27T14:58:26.483962647Z
+modified_at: 2026-09-27T14:58:46.374948559Z
 req_type: Bug
 tags:
 - authority security launch scripts from:TASK-1549
+comments:
+- id: 01a0e360-2de6-7fe1-9d34-4817e3bf8689
+  author: joe
+  content: |-
+    PROXY DECISION (orchestrator for Joe, 2026-09-27 08:02): filed but NOT approved and NOT queued — this one is Joe's call, deliberately.
+
+    Why I am not blessing it myself: the change is bounded and the advisor (verdict 01a0e351) judged it the right cheap subset, so on scope it would be routine. But it touches the full-access launch surface, which is authority-class, and the orchestrate discipline says an agent must not widen or narrow its own operating envelope. Even a change that only REMOVES agent capability is a change to what agents may do, and the honest place for that decision is the operator.
+
+    What makes it attractive: it needs no broker, no backend, no installation and no credentials, and it interrupts no solo, burndown, wave, watch or scheduled work, because the five scripts have no legitimate unattended caller. So it converts a long wait for the protected boundary into a smaller wait, at near-zero cost.
+
+    What it explicitly does NOT do: close BUG-1669. ADR-61's reconciled AC3 and AC4 make a refusal-only change insufficient by construction, so this is additive risk reduction, not the fix.
+
+    Joe: 'aida edit BUG-1688 --status approved && aida queue add BUG-1688' to let the fleet take it.
+  created_at: 2026-09-27T14:58:46.374948559Z
+  modified_at: 2026-09-27T14:58:46.374948559Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 filed_at:
   code_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
   branch: main
