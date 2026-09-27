@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:57:58.020230325Z
-modified_at: 2026-09-27T14:21:49.318388258Z
+modified_at: 2026-09-27T19:26:34.504910402Z
 req_type: Task
 tags:
 - needs-sketch
@@ -46,6 +46,24 @@ comments:
   created_at: 2026-09-27T14:21:49.318388258Z
   modified_at: 2026-09-27T14:21:49.318388258Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e455-5c08-7360-8469-c023899b011d
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (advisor seat, 2026-09-27 12:27) — the sketch in the preceding comment is APPROVED as written, with two amendments that are acceptance criteria, not suggestions.
+
+    Why it passes the sketch gate:
+    - Scope is CONSTRAINING only. It adds five systemd properties to an existing transient wave unit and introduces no new flag class: no timer flag, no Restart=, no --scope. It does not enable, schedule or start any unattended run, and does not change who may dispatch. That is what keeps it out of authority class, and point 5 states the exclusions explicitly (tick unit files stay limit-free per A12; the cron driver is untouched).
+    - The failure postures are the right way round: FAIL CLOSED on configuration (an unparseable value, a weight outside systemd's 1..=10000, or memory_high above memory_max refuses the launch on BOTH launch paths) and FAIL OPEN on delegation (a user manager without memory-controller delegation still launches the wave, warn-only, with no forced fallback). A misconfigured limit must never silently degrade to unlimited, and a missing controller must never silently stop work.
+    - The evidence is quantitative and tied to the incident it mitigates: on the 70 GB incident machine 40%/50% resolve to 28.2 GiB / 35.3 GiB, so the reclaim throttle engages below the ~30 GB the 2026-09-25 runaway reached, and the hard kill stays inside the wave's own cgroup rather than taking the terminal scope and every agent with it.
+
+    AMENDMENT A1 (required): the delegation fail-open must be VISIBLE, never silent. When the memory controller is not delegated, the wave launches but the run must surface the doctor finding on the launch path itself, not only in 'aida doctor'. An operator who never runs doctor must still learn that the wave they just started is effectively unlimited. Report-only is correct; invisible is not.
+
+    AMENDMENT A2 (required): the TASK-1510 argv allowlist test must be extended with EXACTLY these five properties and must continue to reject any sixth. The allowlist is the mechanism that keeps this change from becoming a general-purpose systemd-flag injection point, so a test that merely permits the five without still rejecting an unlisted flag does not satisfy this.
+
+    Independence: I did not author this sketch (it was written by the implementer seat) and I will not implement or merge it. Strict independent review is still required before it lands, because it touches drain launch paths.
+  created_at: 2026-09-27T19:26:34.504910402Z
+  modified_at: 2026-09-27T19:26:34.504910402Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
 history:
 - id: 01a0de70-30e7-75e2-9cba-681834d2dccd
   author: joe
