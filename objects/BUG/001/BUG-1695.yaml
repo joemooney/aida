@@ -24,8 +24,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T20:04:35.709308377Z
-modified_at: 2026-09-27T20:04:35.709308377Z
+modified_at: 2026-09-27T20:05:09.007940204Z
 req_type: Bug
+comments:
+- id: 01a0e478-ad0f-7b23-b15a-84aa065137dd
+  author: joe
+  content: 'PROXY DECISION (orchestrator-as-advisor for Joe, 2026-09-27 13:05): APPROVED and queued. Filed because it failed a REQUIRED check and blocked an unrelated PR, not because anyone asked for it. Not a tooling project — it is a one-test correctness/robustness bug with a named panic site, so it is inside the delegation Joe granted this seat, and per his standing order on CI we FILE it and keep draining rather than stopping to fix CI now. The acceptance deliberately forbids a bare ENOTEMPTY retry loop added without naming what is still writing under the sandbox root, because that same loop would equally mask a leaked child process — which is the more likely real cause and the more serious one.'
+  created_at: 2026-09-27T20:05:09.007940204Z
+  modified_at: 2026-09-27T20:05:09.007940204Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
 filed_at:
   code_sha: 467b0ada978d3686cd3486db43a90ca41208a701
   branch: main
