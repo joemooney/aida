@@ -1697,6 +1697,34 @@ impl Storage {
     ) -> Result<Vec<crate::models::QueueEntry>> {
         self.queue_backend()?.queue_remove_many(user_id, ids)
     }
+
+    /// [`Self::queue_remove_many`] with the caller's "still dead?" predicate
+    /// re-run under the store write lock, immediately before the removal, so a
+    /// spec reopened after the sweep selected its entry keeps that entry.
+    // trace:BUG-1671 | ai:claude
+    pub fn queue_remove_many_if(
+        &self,
+        user_id: &str,
+        ids: &[uuid::Uuid],
+        still_dead: &dyn Fn(&uuid::Uuid) -> bool,
+    ) -> Result<Vec<crate::models::QueueEntry>> {
+        self.queue_backend()?
+            .queue_remove_many_if(user_id, ids, still_dead)
+    }
+
+    /// [`Self::queue_remove_for_role`] with the same in-lock re-check as
+    /// [`Self::queue_remove_many_if`]. Returns whether the entry was removed.
+    // trace:BUG-1671 | ai:claude
+    pub fn queue_remove_for_role_if(
+        &self,
+        user_id: &str,
+        requirement_id: &uuid::Uuid,
+        role: Option<&str>,
+        still_dead: &dyn Fn(&uuid::Uuid) -> bool,
+    ) -> Result<bool> {
+        self.queue_backend()?
+            .queue_remove_for_role_if(user_id, requirement_id, role, still_dead)
+    }
 }
 
 #[cfg(test)]

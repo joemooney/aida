@@ -284,6 +284,7 @@ mod sandbox_cmd;
 mod scaffold_cmd;
 mod scaffold_refresh;
 mod stranded_sweep;
+mod sweep_test_hook;
 // trace:STORY-262 | ai:claude
 mod schedule;
 mod schedule_cmd;
@@ -18030,6 +18031,10 @@ fn maybe_auto_archive_sweep(
     let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
     let statuses = ["Completed", "Rejected"];
     let mut to_archive: Vec<aida_core::Requirement> = Vec::new();
+    // cache-tolerant-read: selection only — each candidate's YAML object is
+    // re-read and its eligibility re-decided inside the store write lock
+    // (`bulk_update_atomically`) before anything is written.
+    // trace:BUG-1671 | ai:claude
     for s in &statuses {
         let filter = aida_core::ListFilter {
             status: Some((*s).to_string()),
@@ -18061,15 +18066,24 @@ fn maybe_auto_archive_sweep(
         return;
     }
     let now = chrono::Utc::now();
-    let mut count = 0usize;
-    for mut req in to_archive {
-        req.archived = true;
-        req.archived_at = Some(now);
-        req.modified_at = now;
-        if backend.update_requirement(&req).is_ok() {
-            count += 1;
-        }
-    }
+    crate::sweep_test_hook::fire(backend.path());
+    // BUG-1671: re-decide each candidate on the object read INSIDE the store
+    // write lock, so a spec reopened between the pass above and this write is
+    // skipped instead of being reverted by the whole-object write. Collapses
+    // the old commit-per-spec loop into one commit as well.
+    // trace:BUG-1671 | ai:claude
+    let count = backend
+        .bulk_update_atomically(&to_archive, "chore(archive)", |req| {
+            if !archive_cmd::archive_sweep_still_eligible(req, &statuses, cutoff) {
+                return false;
+            }
+            req.archived = true;
+            req.archived_at = Some(now);
+            req.modified_at = now;
+            true
+        })
+        .map(|report| report.written.len())
+        .unwrap_or(0);
     if !quiet && count > 0 {
         println!(
             "  {} {count} spec(s) older than {days}d (auto-sweep, opt out via AIDA_AUTO_ARCHIVE=0)",
@@ -75790,6 +75804,13 @@ mod bug_1651_promote_queue_cas_tests;
 #[cfg(test)]
 #[path = "tests/bug_1664_stale_sweep_tests.rs"]
 mod bug_1664_stale_sweep_tests;
+
+// BUG-1671: the sweeps re-check each candidate INSIDE the store write lock, so
+// a reopen landing between the re-check and the write is not overwritten.
+// trace:BUG-1671 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1671_sweep_lock_window_tests.rs"]
+mod bug_1671_sweep_lock_window_tests;
 
 // BUG-1672: `aida human` reviews-awaiting must not list already-approved
 // specs. trace:BUG-1672 | ai:claude

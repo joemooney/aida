@@ -59,6 +59,35 @@ pub(crate) struct SaveReport {
     pub(crate) stale_untouched: Vec<String>,
 }
 
+/// What a [`GitBackend::bulk_update_atomically`] batch wrote and what it left
+/// alone. Every count is a candidate the caller offered that the in-lock
+/// re-read rejected, so a sweep can report why it wrote fewer specs than it
+/// selected.
+// trace:BUG-1671 | ai:claude
+#[derive(Debug, Default, Clone)]
+pub struct BulkAtomicReport {
+    /// The specs the batch kept, as written (the fresh object with the
+    /// caller's mutation applied). A caller with a write-through cache upserts
+    /// exactly these.
+    pub written: Vec<Requirement>,
+    /// Candidates whose stored object no longer qualified: the caller's
+    /// predicate said no, or the spec_id now names a different uuid.
+    pub skipped_changed: usize,
+    /// Candidates whose stored object is gone (deleted since selection).
+    pub skipped_missing: usize,
+    /// Candidates whose stored object could not be read or parsed. Counted,
+    /// never fatal: one corrupt object must not abort a whole sweep.
+    pub skipped_unreadable: usize,
+}
+
+impl BulkAtomicReport {
+    /// How many candidates the batch declined to write, for any reason.
+    // trace:BUG-1671 | ai:claude
+    pub fn skipped(&self) -> usize {
+        self.skipped_changed + self.skipped_missing + self.skipped_unreadable
+    }
+}
+
 /// A whole-store save refused because specs it would write (or delete), or
 /// store-level `metadata.yaml` fields it changed, changed on disk after the
 /// store was loaded. Nothing was written.
@@ -985,6 +1014,121 @@ impl GitBackend {
         );
         self.auto_commit_paths(&message, &path_refs);
         Ok(n)
+    }
+
+    /// [`Self::bulk_update`]'s compare-and-swap sibling: apply a decision to
+    /// many specs in ONE commit, with every eligibility decision taken on the
+    /// object read INSIDE the store write lock.
+    ///
+    /// A sweep picks its candidates from a cache projection and (at best)
+    /// re-reads each object to confirm them — but that read happens before the
+    /// write path takes the lock, so a concurrent writer can land between the
+    /// re-check and `bulk_update`'s write, and the whole-object write reverts
+    /// it. Here the lock is taken first and each `target`'s object is re-read
+    /// under it; `keep` sees that fresh copy and returns whether it still
+    /// qualifies. Only what `keep` accepted is mutated and written, so a spec
+    /// changed after candidate selection is skipped instead of overwritten.
+    ///
+    /// Per target: the stored object is read (absent -> `skipped_missing`,
+    /// unreadable/unparsable -> `skipped_unreadable`), its uuid must still
+    /// match `target.id` (else `skipped_changed`), then `keep(&mut fresh)`
+    /// decides. `false` -> `skipped_changed`. Nothing aborts the batch: a
+    /// sweep is best-effort over many specs, so one unreadable object is
+    /// counted, not fatal.
+    ///
+    /// This is `update_spec_atomically` N times under one lock and one commit,
+    /// which is what keeps a large sweep a single store commit (BUG-425).
+    // trace:BUG-1671 | ai:claude
+    pub fn bulk_update_atomically<F>(
+        &self,
+        targets: &[Requirement],
+        commit_subject: &str,
+        mut keep: F,
+    ) -> Result<BulkAtomicReport>
+    where
+        F: FnMut(&mut Requirement) -> bool,
+    {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // trace:BUG-1671 | ai:claude — one lock spans every re-check and every
+        // write, so no lock-respecting writer can slip between them.
+        let _lock = self.lock_store()?;
+        let mut report = BulkAtomicReport::default();
+        let mut changed: Vec<String> = Vec::new();
+        for target in targets {
+            let Some(spec_id) = target.spec_id.as_deref() else {
+                // Nothing to read the stored object by.
+                report.skipped_unreadable += 1;
+                continue;
+            };
+            let spec_id = object_store::canonical_spec_id(spec_id);
+            let path = match object_store::object_path(&self.objects_root, &spec_id) {
+                Ok(p) => p,
+                Err(_) => {
+                    report.skipped_unreadable += 1;
+                    continue;
+                }
+            };
+            // One read serves both the re-check and the compare-and-swap
+            // baseline, so the lock is held for N reads, not 2N.
+            let before = match std::fs::read(&path) {
+                Ok(bytes) => bytes,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    report.skipped_missing += 1;
+                    continue;
+                }
+                Err(_) => {
+                    report.skipped_unreadable += 1;
+                    continue;
+                }
+            };
+            let fresh: Requirement = match serde_yaml::from_slice(&before) {
+                Ok(req) => req,
+                Err(_) => {
+                    report.skipped_unreadable += 1;
+                    continue;
+                }
+            };
+            if fresh.id != target.id {
+                // The spec_id now names a different requirement.
+                report.skipped_changed += 1;
+                continue;
+            }
+            let mut next = fresh.clone();
+            if !keep(&mut next) {
+                report.skipped_changed += 1;
+                continue;
+            }
+            if next.id != fresh.id || next.spec_id != fresh.spec_id {
+                anyhow::bail!(
+                    "update of {spec_id} tried to change its id or spec_id; nothing was written"
+                );
+            }
+            if serde_yaml::to_string(&next)? == serde_yaml::to_string(&fresh)? {
+                report.written.push(next);
+                continue;
+            }
+            self.ensure_object_unchanged(&spec_id, &path, &before)?;
+            if let Some(written) = self.stage_requirement_update(&next)? {
+                changed.push(written.to_string());
+            }
+            report.written.push(next);
+        }
+        if !changed.is_empty() {
+            let paths: Vec<String> = changed
+                .iter()
+                .filter_map(|sid| object_store::relative_object_path(sid).ok())
+                .collect();
+            let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+            let n = changed.len();
+            let message = format!(
+                "{}: update {} requirement{}",
+                commit_subject,
+                n,
+                if n == 1 { "" } else { "s" }
+            );
+            self.auto_commit_paths(&message, &path_refs);
+        }
+        Ok(report)
     }
 
     /// Acquire the store write lock (re-entrant per thread). Every write path
@@ -2043,6 +2187,46 @@ impl DatabaseBackend for GitBackend {
         );
         Ok(removed)
     }
+
+    /// The store lock spans `still_dead` and the queue write, so a spec
+    /// reopened after the sweep selected its entry cannot be missed: the
+    /// reopen's own write needs this lock. See the trait doc.
+    // trace:BUG-1671 | ai:claude
+    fn queue_remove_many_if(
+        &self,
+        user_id: &str,
+        ids: &[uuid::Uuid],
+        still_dead: &dyn Fn(&uuid::Uuid) -> bool,
+    ) -> Result<Vec<QueueEntry>> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        // trace:BUG-1671 | ai:claude — re-check and remove under one hold.
+        let _lock = self.lock_store()?;
+        let live: Vec<uuid::Uuid> = ids.iter().copied().filter(|id| still_dead(id)).collect();
+        self.queue_remove_many(user_id, &live)
+    }
+
+    /// The role-scoped counterpart of [`Self::queue_remove_many_if`]: the store
+    /// lock spans `still_dead` and the queue write.
+    // trace:BUG-1671 | ai:claude
+    fn queue_remove_for_role_if(
+        &self,
+        user_id: &str,
+        requirement_id: &uuid::Uuid,
+        role: Option<&str>,
+        still_dead: &dyn Fn(&uuid::Uuid) -> bool,
+    ) -> Result<bool> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // trace:BUG-1671 | ai:claude — re-check and remove under one hold.
+        let _lock = self.lock_store()?;
+        if !still_dead(requirement_id) {
+            return Ok(false);
+        }
+        self.queue_remove_for_role(user_id, requirement_id, role)?;
+        Ok(true)
+    }
 }
 
 /// Buffers a batch of new requirements for write-behind commit. Created via
@@ -2940,6 +3124,147 @@ mod tests {
             count_commits(),
             before + 1,
             "no-op bulk_update must not add an empty commit"
+        );
+    }
+
+    /// BUG-1671: the batched compare-and-swap decides on the object read under
+    /// the store lock — a spec changed after the caller picked it is skipped,
+    /// not overwritten — and still lands in ONE commit (BUG-425).
+    // trace:BUG-1671 | ai:claude
+    #[test]
+    fn bulk_update_atomically_decides_on_the_stored_object_in_one_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .unwrap();
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "test@example.com"]);
+        git(&["config", "user.name", "Test"]);
+
+        let mut reqs = Vec::new();
+        for i in 1..=3 {
+            let r = Requirement::new(format!("Atomic bulk {i}"), format!("desc {i}"));
+            reqs.push(backend.add_requirement(r).unwrap());
+        }
+        // The caller's copy of #2 is stale: on disk it has already been
+        // reopened. Its spec_id is also reused by a different uuid for #3.
+        let mut reopened = reqs[1].clone();
+        reopened.status = crate::models::RequirementStatus::InProgress;
+        backend.update_requirement(&reopened).unwrap();
+        let mut impostor = reqs[2].clone();
+        impostor.id = uuid::Uuid::new_v4();
+
+        let targets = vec![reqs[0].clone(), reqs[1].clone(), impostor];
+        let count_commits = || -> usize {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(["rev-list", "--count", "HEAD"])
+                .output()
+                .unwrap();
+            String::from_utf8(out.stdout)
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap()
+        };
+        let before = count_commits();
+
+        let report = backend
+            .bulk_update_atomically(&targets, "chore(archive)", |req| {
+                // Only a spec that is still Draft on disk qualifies.
+                if req.status != crate::models::RequirementStatus::Draft {
+                    return false;
+                }
+                req.archived = true;
+                true
+            })
+            .unwrap();
+
+        assert_eq!(report.written.len(), 1, "only the untouched spec qualifies");
+        assert_eq!(
+            report.written[0].id, reqs[0].id,
+            "the written spec is the one still eligible on disk"
+        );
+        assert_eq!(
+            report.skipped_changed, 2,
+            "the reopened spec and the uuid mismatch are both skipped: {report:?}"
+        );
+        assert_eq!(report.skipped_missing, 0);
+        assert_eq!(report.skipped_unreadable, 0);
+        assert_eq!(report.skipped(), 2);
+        assert_eq!(
+            count_commits(),
+            before + 1,
+            "one commit for the whole batch, as bulk_update gives"
+        );
+
+        let loaded = backend.load().unwrap();
+        let archived: Vec<&str> = loaded
+            .requirements
+            .iter()
+            .filter(|r| r.archived)
+            .filter_map(|r| r.spec_id.as_deref())
+            .collect();
+        assert_eq!(archived, vec![reqs[0].spec_id.as_deref().unwrap()]);
+        let on_disk = backend
+            .get_requirement_by_spec_id(reqs[1].spec_id.as_deref().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            on_disk.status,
+            crate::models::RequirementStatus::InProgress,
+            "the reopen survived the batch"
+        );
+    }
+
+    /// BUG-1671: a candidate whose object is gone or unparsable is counted and
+    /// skipped — one damaged spec must not abort a sweep over hundreds.
+    // trace:BUG-1671 | ai:claude
+    #[test]
+    fn bulk_update_atomically_counts_missing_and_unreadable_candidates() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+
+        let mut reqs = Vec::new();
+        for i in 1..=3 {
+            let r = Requirement::new(format!("Damaged bulk {i}"), format!("desc {i}"));
+            reqs.push(backend.add_requirement(r).unwrap());
+        }
+        // #2's object is unparsable, #3's is deleted.
+        let objects = root.join("objects");
+        let corrupt =
+            object_store::object_path(&objects, reqs[1].spec_id.as_deref().unwrap()).unwrap();
+        std::fs::write(&corrupt, ": not yaml at all\n\t- [").unwrap();
+        let gone =
+            object_store::object_path(&objects, reqs[2].spec_id.as_deref().unwrap()).unwrap();
+        std::fs::remove_file(&gone).unwrap();
+
+        let report = backend
+            .bulk_update_atomically(&reqs, "chore(archive)", |req| {
+                req.archived = true;
+                true
+            })
+            .expect("one damaged object must not fail the batch");
+
+        assert_eq!(report.written.len(), 1);
+        assert_eq!(report.skipped_unreadable, 1, "{report:?}");
+        assert_eq!(report.skipped_missing, 1, "{report:?}");
+        assert_eq!(report.skipped_changed, 0, "{report:?}");
+        assert_eq!(
+            std::fs::read_to_string(&corrupt).unwrap(),
+            ": not yaml at all\n\t- [",
+            "an unreadable object is left exactly as it was, not rewritten"
         );
     }
 

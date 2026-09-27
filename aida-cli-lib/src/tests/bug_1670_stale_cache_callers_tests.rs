@@ -432,14 +432,6 @@ const TOLERANT_METHODS: &[&str] = &["list_summaries", "descendant_ids", "id_cand
 /// re-validation that makes the tolerant read safe.
 const ALLOW_MARKER: &str = "cache-tolerant-read:";
 
-/// Sweeps owned by a sibling fix that re-validates each candidate against
-/// the stored object; they are checked there, not here.
-const EXEMPT_FUNCTIONS: &[&str] = &[
-    "opportunistic_queue_gc",
-    "archive_sweep",
-    "maybe_auto_archive_sweep",
-];
-
 fn lint_name_matches(name: &str) -> bool {
     let n = name.to_ascii_lowercase();
     ["gc", "sweep", "prune", "reap", "emit_findings"]
@@ -635,7 +627,7 @@ fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
 fn lint_source(file: &str, src: &str) -> Vec<String> {
     let mut hits = Vec::new();
     for (name, body_orig, body_code) in functions(src) {
-        if !lint_name_matches(&name) || EXEMPT_FUNCTIONS.contains(&name.as_str()) {
+        if !lint_name_matches(&name) {
             continue;
         }
         if allowed(&body_orig) {

@@ -184,9 +184,10 @@ pub use db::{
     compute_degrees, create_backend, edge_weight, export_to_json, import_from_json,
     migrate_sqlite_to_yaml, migrate_yaml_to_sqlite, observe_cache_lock, observe_lock_info_file,
     open_or_create, read_cache_lock_info, reclaim_dead_lock_info, shared_cache_path,
-    stray_cache_lock_info_path, ArchiveFilter, Cache, CacheLockInfo, CacheLockObservation,
-    CachedGitBackend, DeferFilter, Degrees, GitBackend, ListFilter, LockInfoReclaim,
-    LockOwnerState, RequirementSummary, SortOrder, SqliteBackend, StoreConflictError, YamlBackend,
+    stray_cache_lock_info_path, ArchiveFilter, BulkAtomicReport, Cache, CacheLockInfo,
+    CacheLockObservation, CachedGitBackend, DeferFilter, Degrees, GitBackend, ListFilter,
+    LockInfoReclaim, LockOwnerState, RequirementSummary, SortOrder, SqliteBackend,
+    StoreConflictError, YamlBackend,
 };
 #[cfg(all(feature = "native", feature = "postgres"))]
 pub use db::{migrate_from_postgres, migrate_to_postgres};
