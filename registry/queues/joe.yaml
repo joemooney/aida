@@ -81,3 +81,11 @@
   added_at: 2026-09-27T09:03:01.887500714Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0dfea-c944-7c80-b0e2-731590d1e304
+  position: 35000
+  added_by: joe
+  note: 'Proxy-signoff: bounded high-priority fix; current aida ps output reproduces duplicate main-checkout salvage hints. Separate implementation/review; fixture-only tests.'
+  added_at: 2026-09-27T09:29:21.773685095Z
+  for_role: implementer
+  added_by_machine: imac
