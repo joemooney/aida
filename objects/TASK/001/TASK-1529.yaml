@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:40.554193021Z
-modified_at: 2026-09-27T15:08:55.205387522Z
+modified_at: 2026-09-27T15:08:59.978815967Z
 req_type: Task
 relationships:
 - rel_type: Blocks
@@ -40,6 +40,28 @@ comments:
     NOT YET CONFIRMED: the probe was never run to completion, so this is a hypothesis with a written reproduction, not a verified defect. The fresh strict reviewer now on this branch has been asked to run it and settle it.
   created_at: 2026-09-27T14:23:33.154203208Z
   modified_at: 2026-09-27T14:23:33.154203208Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e369-8acd-78b1-85de-1fae76e00a76
+  author: joe
+  content: |-
+    Review: REQUEST_CHANGES (strict independent review, 2026-09-27, at exact head f7a834e99b87e695544cd358b0bcf8cb309fbefb). THE SALVAGED PROBE IS CONFIRMED, and the reviewer reproduced it two ways — once with its own independently written probe before it had even seen the salvaged one, then with the salvaged test verbatim. Both retract PR-99.
+
+    BLOCKER B1 — the guard retracts a PR it does not own. Mechanism, with file:line:
+    - lib.rs:106141 — the pre-launch snapshot is change_for_branch(&intended_branch) ONLY.
+    - lib.rs:102984 — the target is resolved by detect_phase1_pr(branch), which at lib.rs:104336-104361 falls back to change_for_spec(&self.spec) and even realigns self.branch to the found PR's head.
+    - forge.rs:1393 -> detect_open_pr_for_spec_github at lib.rs:43601-43608 is 'gh pr list --search <SPEC> --state open'. That is a FULL-TEXT search over open PRs, covering title, body and comments. There is no author, branch or trailer filter anywhere in the chain.
+    - decide_target (preflight_retraction.rs:40) compares only PR NUMBERS against the branch-keyed snapshot, so a PR found by spec text can never be classified NotOurs.
+    Failure scenario: someone else has an open PR whose body merely says 'blocked by TASK-1421'. Our implementer fails the fmt guard and opened nothing on our branch. The branch lookup is empty, the spec search returns THEIR PR, and AIDA converts their PR to draft, posts our guard output on it, writes a marker recording our branch, and flips our spec Done->InProgress off the back of it. The path fires precisely when there is nothing of ours to retract. Acceptance 3 ('never touches a PR the agent did not open') is not met. This is NOT the same as the TASK-1548 deferral, which is about a same-branch PR's author; no author field is needed to close this one.
+
+    BLOCKER B2 — a MERGED change is reported as 'already a draft or closed'. lib.rs:103018-103022 returns AlreadyRetracted for any non-Open state, so ChangeState::Merged lands there even though an AlreadyMerged variant exists and verify_closed already has a Merged case. Reproduced: guards refused, the change shipped to main anyway, no marker, no hold, no escalation, and the drain log makes a false claim about a merge.
+
+    BLOCKER B3 — an unreadable forge FAILS OPEN and fabricates 'no PR was open'. lib.rs:102989 collapses Phase1PrResolve::Fail (gh missing or errored) and Retry (forge unreachable) into NoOpenPr; lib.rs:106144 collapses Ok(CliFailed)/Err in the snapshot into None. So a broken forge silently downgrades the gate to advisory while asserting a state never observed. This contradicts the doctrine the same change implements for close/draft verification at preflight_retraction.rs:217-238, where 'we could not tell' is correctly not treated as 'we saw it'. It is also the fail-open feeder for B1: one gh hiccup at launch makes any later-found PR 'ours'.
+
+    Non-blocking, worth filing separately: nothing ever un-drafts a PR ('gh pr ready' without --undo appears nowhere in the tree), so after a verified draft retraction the retry reuses the same draft PR and GitHub refuses to merge it; NotOurs leaves a guards-failing PR published with no hold and no marker, which is the COMMON rework round; AlreadyRetracted never clears a previous failed retraction's Rework hold; write_typed_hold at lib.rs:103106 overwrites any existing hold, so a Recusal hold could be silently replaced; and task_1529_passing_preflight_leaves_the_open_change_untouched at lib.rs:105469 is VACUOUS — it drops the driver before asserting, so it cannot fail.
+
+    What the reviewer verified as good: verified-not-attempted in both verify_closed and verify_drafted, the durable marker with attempt counting, the Rework merge-hold on a failed retraction, idempotency, distinct phase-failure wording, GitHub/GitLab parity with an Unsupported default, and a passing guard never reaching the retraction. No flakes: every test passed first time single-threaded (13 TASK-1529 tests, 47 merge_hold, 10 forge_seam, 6 preflight_retraction).
+  created_at: 2026-09-27T15:08:59.978815967Z
+  modified_at: 2026-09-27T15:08:59.978815967Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0df93-519f-7082-8697-0c3ea16f6b85
