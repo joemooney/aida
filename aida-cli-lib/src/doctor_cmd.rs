@@ -3606,6 +3606,14 @@ pub(crate) struct AgentWorktreeFacts {
     /// it false whenever the git probes needed to prove it are inconclusive.
     // trace:BUG-1287 | ai:claude
     pub(crate) content_fully_landed: bool,
+    /// True when the default branch carries a landed commit whose subject or
+    /// body-line trailer names this branch's (finished) spec — the shape a
+    /// batched integration PR leaves behind: the spec's own branch is never
+    /// merged or PR'd directly, so neither `ancestor_of_main` nor `pr_merged`
+    /// can fire. Like `pr_merged` it is only a merge SIGNAL: a positive
+    /// `unique_unmerged_commits` still needs `content_fully_landed` to clear.
+    // trace:BUG-1657 | ai:claude
+    pub(crate) spec_trailer_on_main: bool,
 }
 
 /// Pure squash-aware classification of one agent-managed worktree. No git/forge
@@ -3627,6 +3635,9 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
         Some("branch is an ancestor of origin/main (merged)")
     } else if facts.pr_merged {
         Some("its PR is merged (squash-merged)")
+    } else if facts.spec_trailer_on_main {
+        // trace:BUG-1657 | ai:claude
+        Some("its spec landed on origin/main through an integration merge")
     } else {
         None
     };
@@ -3846,6 +3857,121 @@ pub(crate) fn branch_content_fully_landed(
     default_side_ids.iter().any(|id| id == &branch_patch_id)
 }
 
+/// Per-path proof that everything `branch` changed since its merge-base with
+/// `default_ref` is already on `default_ref`, byte for byte: for every path ANY
+/// branch commit touched, the default branch holds the same blob id and mode
+/// as the branch tip, or both lack the path. This is the
+/// batched-integration complement to [`branch_content_fully_landed`]: when an
+/// integration branch folds several specs' work into ONE squash commit, no
+/// patch-id matches anything on the default side, yet every change the branch
+/// makes is already there.
+///
+/// Deliberately NOT a three-way merge: `git merge-tree` honours
+/// `.gitattributes` merge drivers, so a `merge=ours` path would merge
+/// "cleanly" while dropping an edit that never shipped. Tree-to-tree raw diffs
+/// compare object ids and modes only — no attributes, drivers or textconv.
+///
+/// Conservative on any doubt: a failed git call, an unparsable diff, or any
+/// touched path whose content differs returns `false` (stay KEPT). A change
+/// that landed and was later reverted or edited again on the default branch
+/// also stays KEPT. Read-only.
+// trace:BUG-1657 | ai:claude
+pub(crate) fn branch_paths_match_default(
+    project_root: &std::path::Path,
+    default_ref: &str,
+    branch: &str,
+) -> bool {
+    let run = |args: &[&str]| -> Option<Vec<u8>> {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| o.stdout)
+    };
+    let Some(merge_base) = run(&[
+        "merge-base",
+        git_arg_guard::END_OF_OPTIONS,
+        default_ref,
+        branch,
+    ]) else {
+        return false;
+    };
+    let merge_base = String::from_utf8_lossy(&merge_base).trim().to_string();
+    if merge_base.is_empty() {
+        return false;
+    }
+    let changed_paths = |from: &str, to: &str| -> Option<std::collections::HashSet<Vec<u8>>> {
+        let raw = run(&[
+            "diff",
+            "--raw",
+            "-z",
+            "--no-renames",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--ignore-submodules=none",
+            git_arg_guard::END_OF_OPTIONS,
+            from,
+            to,
+            "--",
+        ])?;
+        parse_raw_diff_paths(&raw)
+    };
+    // Every path ANY branch commit touched — the union over each commit's own
+    // diff, not the net merge-base..tip diff, which would miss a path changed
+    // and then changed back (a deletion or revert made after an integration
+    // batch picked up an earlier tip). Merge commits are diffed against each
+    // parent (`-m`), which can only widen the set.
+    let range = format!("{merge_base}..{branch}");
+    let Some(log_raw) = run(&[
+        "log",
+        "--raw",
+        "-z",
+        "-m",
+        "--no-renames",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--ignore-submodules=none",
+        "--format=",
+        git_arg_guard::END_OF_OPTIONS,
+        &range,
+        "--",
+    ]) else {
+        return false;
+    };
+    let Some(touched) = parse_raw_diff_paths(&log_raw) else {
+        return false;
+    };
+    if touched.is_empty() {
+        return false;
+    }
+    // Paths where the default branch's tree differs from the branch tip
+    // (blob id or mode). Nothing the branch touched may appear here.
+    let Some(differs) = changed_paths(default_ref, branch) else {
+        return false;
+    };
+    touched.is_disjoint(&differs)
+}
+
+/// Parse `git diff --raw -z --no-renames` output into its set of paths. Each
+/// record is a `:`-prefixed metadata field followed by one NUL-terminated
+/// path. Returns `None` on any record that does not fit that shape.
+// trace:BUG-1657 | ai:claude
+fn parse_raw_diff_paths(raw: &[u8]) -> Option<std::collections::HashSet<Vec<u8>>> {
+    let mut paths = std::collections::HashSet::new();
+    let mut fields = raw.split(|b| *b == 0).filter(|f| !f.is_empty());
+    while let Some(meta) = fields.next() {
+        if meta.first() != Some(&b':') {
+            return None;
+        }
+        paths.insert(fields.next()?.to_vec());
+    }
+    Some(paths)
+}
+
 /// BUG-1288: batched sibling of the per-commit `patch_id` closure in
 /// [`branch_content_fully_landed`] — feeds a whole `git log -p` stream (one
 /// commit hash line followed by that commit's diff, repeated) through a
@@ -3995,6 +4121,7 @@ fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFind
             pr_merged,
             unique_unmerged_commits,
             content_fully_landed,
+            spec_trailer_on_main: false,
         };
 
         match classify_agent_worktree(&facts) {
@@ -5710,6 +5837,7 @@ mod story_462_doctor_tests {
             pr_merged: false,
             unique_unmerged_commits: 0,
             content_fully_landed: false,
+            spec_trailer_on_main: false,
         }
     }
 
