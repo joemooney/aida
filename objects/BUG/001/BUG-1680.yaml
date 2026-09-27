@@ -3,12 +3,12 @@ spec_id: BUG-1680
 agreed_id: BUG-1680
 title: aida ps suggests salvage-committing untracked files onto main for dead harness sessions on the main checkout, repeated once per dead session
 description: 'Seen 2026-09-26 in aida ps: five identical ''Salvageable harness-worktree /home/joe/ai/aida (branch main) ... git add -A && git commit -m "wip: salvage main"'' rows. The only ''uncommitted work'' was untracked tool directories (.agents/, .codegraph/, target-review/). Following the hint commits junk straight to the default branch. Acceptance: 1. Never suggest a salvage commit on the default branch (or any protected branch); instead suggest inspecting the files. 2. Untracked-only trees are not ''uncommitted work'' for salvage purposes unless the files are inside tracked directories touched by the session (or say ''untracked files only''). 3. Rows for the same worktree path are shown once with a count. 4. Fixture tests for each.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:51:41.252866288Z
-modified_at: 2026-09-27T11:36:16.675423707Z
+modified_at: 2026-09-27T15:29:56.905203415Z
 req_type: Bug
 comments:
 - id: 01a0e232-2b80-7730-9a95-c52e76d1616b
@@ -2248,3 +2248,25 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e37c-b627-7ad2-993b-b4070accb7d9
+  author: aida-auto-bump
+  timestamp: 2026-09-27T15:29:56.263275029Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e37c-b8a9-70a3-885e-f2f52b320845
+  timestamp: 2026-09-27T15:29:56.905190710Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/antigravity/BUG-1680-2026-09-27T093102Z.md
+  commit_sha: a1582e8edf5c0eddc68703ba4e1d46ea46ad3f69
+  summary: 'Verified all acceptance criteria and prior rework findings: worktree checkout branch detection, dynamic default-branch discovery, root/parent/non-UTF8 paths, fail-closed ls-files handling, untracked-only human wording, worktree dedup with counts, untracked_only, and all spec IDs in human and JSON ps, and comprehensive fixture tests.'
+  punted:
+  - 'punted: session end observed 1 commit ahead on branch `bug-1680` with no open PR; work may need manual push/PR recovery'
+  - 'punted: session end observed 2 commits ahead on branch `bug-1680-rework` with no open PR; work may need manual push/PR recovery'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T15:29:56.263233735Z
+  completion_sha: a1582e8edf5c0eddc68703ba4e1d46ea46ad3f69
