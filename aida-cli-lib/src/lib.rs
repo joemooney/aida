@@ -23670,6 +23670,27 @@ fn detect_store_tracked_runtime(project_root: &std::path::Path) -> Vec<String> {
     hits
 }
 
+/// TASK-1547: detect an attached git-canonical store whose tracked `.gitignore`
+/// lacks any atomic-write staging pattern. This check is independent of the
+/// tracked-runtime scan: healed stores still need the newer staging rules.
+// trace:TASK-1547 | ai:codex
+pub(crate) fn detect_store_missing_staging_ignores(project_root: &std::path::Path) -> Vec<String> {
+    if distributed_mode_declared_from(project_root).is_none() {
+        return Vec::new();
+    }
+    let store_worktree = project_root.join(".aida-store");
+    if !store_worktree.join("objects").is_dir() {
+        return Vec::new();
+    }
+    let existing = std::fs::read_to_string(store_worktree.join(".gitignore")).unwrap_or_default();
+    let lines: std::collections::HashSet<&str> = existing.lines().map(str::trim).collect();
+    aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS
+        .iter()
+        .filter(|pattern| !lines.contains(**pattern))
+        .map(|pattern| (*pattern).to_string())
+        .collect()
+}
+
 /// Whether a store-worktree-relative path is a per-clone runtime file that must
 /// never be tracked on the orphan `aida-store` branch: `.aida/node.toml`,
 /// `.aida/dispenser.toml`, any `.aida/*.lock`, or any `.aida/cache.db*`
@@ -24329,6 +24350,19 @@ fn collect_doctor_findings(
             ),
             action: "git rm --cached the file in the store worktree + gitignore it (per-clone runtime state must stay untracked)"
                 .to_string(),
+            safe_heal: true,
+        });
+    }
+
+    // TASK-1547: staged atomic-write files are protected in the store's
+    // tracked .gitignore even after all BUG-563 runtime files are untracked.
+    // trace:TASK-1547 | ai:codex
+    if !detect_store_missing_staging_ignores(project_root).is_empty() {
+        push(DoctorFinding {
+            category: "store-staging-ignore".to_string(),
+            id: ".gitignore".to_string(),
+            summary: "store .gitignore is missing the staging-ignore patterns".to_string(),
+            action: "append missing atomic-write staging patterns to the store .gitignore and commit on the orphan branch".to_string(),
             safe_heal: true,
         });
     }
