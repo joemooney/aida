@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:46:45.113349128Z
-modified_at: 2026-09-27T18:26:21.271261066Z
+modified_at: 2026-09-27T18:59:17.503454412Z
 req_type: Story
 tags:
 - aida:history
@@ -170,6 +170,25 @@ comments:
     BUG-1692 is corroborated as genuinely pre-existing: the audit test and normalization logic are unchanged on origin/main and the assertion still compares history JSON without removing 'source' or 'index_tip' (bug_1502_format_json_audit.rs:200-207, :455-458). Not a blocker here. Build-free CI gates all exit 0.
   created_at: 2026-09-27T18:26:19.904437127Z
   modified_at: 2026-09-27T18:26:19.904437127Z
+  session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
+- id: 01a0e43c-617f-7ff3-a3d9-df404b4e23c8
+  author: joe
+  content: |-
+    VERIFICATION FAILED -- orchestrator ran the targeted suite that the implementer did not rerun. Head e321ea55ba (the implementer's work, committed by the orchestrator because the codex sandbox could not write the linked worktree's gitdir).
+
+    'cargo test -p aida-cli-lib --lib history_timeline' => 17 passed, 1 FAILED:
+      history_timeline::tests::story_1478_drained_bug_1424_two_runs_review_shelve
+      panicked at aida-cli-lib/src/history_timeline.rs:1954: 'a fully recorded lifecycle is not partial'
+
+    The implementer reported that its single targeted run failed three tests -- the existing BUG-1424 completeness assertion, the existing disputed-overlap assertion, and its own new false-flag test -- then said it 'corrected those issues afterward' but explicitly did NOT rerun. That correction did not hold for the BUG-1424 case: a FULLY RECORDED lifecycle is now being reported as partial/incomplete.
+
+    Most likely cause, for the next implementer to check first: one of the new 'mark coverage incomplete' paths is too aggressive. Blocker 2's change (a contradictory skewed transition stays unknown and marks coverage incomplete) or the malformed-store-log reporting is firing on a lifecycle that is actually complete, so the completeness invariant at :1954 now trips. The fix must make coverage-incomplete fire ONLY when something is genuinely unobserved or contradictory -- a fully recorded lifecycle must still report complete. Do not weaken the :1954 assertion to make the test pass; that assertion is the point.
+
+    The four blocker fixes themselves look right in shape (exact nanosecond accounting with an exact invariant, skew-honest unknown transitions, phase closure gated on matching-phase success flags, malformed store records surfaced rather than filter_map'd) and the five new tests are the right tests. This is a scoping bug in the new coverage-incomplete signal, not a reason to redo the design.
+
+    Also note for whoever picks this up: the codex sandbox CANNOT commit in this worktree ('.git/worktrees/wt-story-1478/index.lock' on a read-only filesystem, because a linked worktree's gitdir lives outside the sandbox root). Either commit on codex's behalf from the main checkout, or run this one with a Claude implementer instead.
+  created_at: 2026-09-27T18:59:17.503454412Z
+  modified_at: 2026-09-27T18:59:17.503454412Z
   session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
 history:
 - id: 01a0e347-77cb-77e0-afba-62a0d3d07bcf
