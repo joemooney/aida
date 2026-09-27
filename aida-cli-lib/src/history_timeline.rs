@@ -2705,6 +2705,32 @@ mod tests {
         assert!(t.coverage_notes.iter().any(|n| n.contains("contradict")));
     }
 
+    /// The continuity guard must not over-narrow the skew detector. Here the
+    /// true order is Approved -> In Progress -> In Review -> Completed, but
+    /// clock skew timestamps the In Review -> Completed transition BEFORE the
+    /// In Progress -> In Review one, so timestamp ordering interleaves them.
+    /// The transition under test starts from neither the preceding state nor a
+    /// gap: the FOLLOWING transition is the true successor, which is exactly
+    /// what proves the ordering is wrong rather than merely incomplete.
+    // trace:STORY-1478 | ai:claude
+    #[test]
+    fn story_1478_skew_three_transitions_deep_is_still_contradictory() {
+        let store = vec![
+            filed("2026-09-20T00:00:01Z", "Approved", "d0"),
+            tr("2026-09-20T00:00:02Z", "Approved", "In Progress", "d1"),
+            // Skewed: recorded before the transition that must precede it.
+            tr("2026-09-20T00:00:03Z", "In Review", "Completed", "d2"),
+            tr("2026-09-20T00:00:04Z", "In Progress", "In Review", "d3"),
+        ];
+        let t = build_timeline(input(store, Vec::new())).expect("timeline");
+        assert!(
+            t.incomplete,
+            "skew that is only visible three transitions deep must still be caught"
+        );
+        assert!(t.spans.iter().any(|s| s.class == SpanClass::Unknown));
+        assert!(t.coverage_notes.iter().any(|n| n.contains("contradict")));
+    }
+
     // trace:STORY-1478 | ai:codex
     #[test]
     fn story_1478_unfinished_endpoint_is_last_observed_boundary() {

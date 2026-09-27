@@ -8073,7 +8073,7 @@ pub(crate) fn handle_git_backend_command(
                          `aida history <SPEC-ID> --timeline`"
                     );
                 };
-                if matches!(cmd, Some(HistoryCommand::Events)) {
+                if matches!(cmd, Some(HistoryCommand::Events { .. })) {
                     anyhow::bail!(
                         "`--timeline` and the `events` feed are different views; pass one or the other"
                     );
