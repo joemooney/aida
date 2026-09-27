@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:56.753902915Z
-modified_at: 2026-09-27T03:38:50.802618267Z
+modified_at: 2026-09-27T03:50:14.961448329Z
 req_type: Bug
 comments:
 - id: 01a0dfa3-2bc6-7c62-9371-a5dfe1014e2b
@@ -145,6 +145,33 @@ comments:
   content: 'Integrator bounded fresh-CI recheck for batch PR #2218 at exact head a5bf87ddb6c2f0633fa093e868e193b82da44e6b: PR remains OPEN with correct seven-spec trailer. merge-hold-gate SUCCESS (run 36291803607, job 108543190637). Required Build (ubuntu-latest) IN_PROGRESS (run 36291803604, job 108543190530). Build (windows-latest) IN_PROGRESS (run 36291803600, job 108543190614); Build (macos-latest) IN_PROGRESS (same run, job 108543190485). GitLab live forge smoke and History index random sweep are SKIPPED, not passes. No failure reported yet. #2218 was not merged to main. After exact-head fresh platform CI settles, a second independent advisor gate is required; old-head green checks and the limited fixup-fold disposition do not authorize main merge.'
   created_at: 2026-09-27T03:38:50.802611534Z
   modified_at: 2026-09-27T03:38:50.802611534Z
+- id: 01a0e0fc-20b1-7403-a853-965874002cd9
+  author: mcp
+  content: |-
+    SECOND independent AIDA advisor — HOLD (bounded CI timeout), NOT PASS TO MAIN INTEGRATOR.
+
+    Batch-102 PR https://github.com/joemooney/aida/pull/2218, exact head a5bf87ddb6c2f0633fa093e868e193b82da44e6b. Final evidence snapshot 2026-09-27 ~03:48 UTC. I am separate from product, implementer, reviewer, integrator, and the advisor who approved the #2225 fixup fold.
+
+    Both exact-run commands, timeout 600s gh run watch <ID> --exit-status --interval 20, exited 124 before CI settled. No replacement watcher or rerun was started. Final one-shot forge recheck confirms both runs still IN_PROGRESS at this exact head:
+    - Required Build (ubuntu-latest), run 36291803604, job 108543190530: IN_PROGRESS. Build all packages and Run tests SUCCESS; Trace/doc-header stranding gate IN_PROGRESS at recheck. https://github.com/joemooney/aida/actions/runs/36291803604/job/108543190530
+    - Windows, run 36291803600, job 108543190614: IN_PROGRESS. Build all packages SUCCESS; Run tests IN_PROGRESS. https://github.com/joemooney/aida/actions/runs/36291803600/job/108543190614
+    - macOS, run 36291803600, job 108543190485: IN_PROGRESS. Build all packages SUCCESS; Run tests IN_PROGRESS. https://github.com/joemooney/aida/actions/runs/36291803600/job/108543190485
+    - Required merge-hold-gate SUCCESS, run 36291803607, job 108543190637. https://github.com/joemooney/aida/actions/runs/36291803607/job/108543190637
+    - GitLab live forge smoke and History index random sweep SKIPPED, not passed tests. No pending job is being called green. Windows/macOS remain explicit prerequisites for this requested gate even though main protection requires only Build (ubuntu-latest) and merge-hold-gate.
+
+    Review completed: read AGENTS.md, two-seat protocol, rework/recovery discipline, all seven specs and actual approval trails, prior batch HOLD, the 2026-09-27T021550Z rework brief, first-class BUG-1672/BUG-1685 verdict records, and the actual 15-file integration diff. Stable patch IDs match reviewed source versus integration deltas for BUG-1662 daea75f379, TASK-1530 a67fa9cc64, TASK-1524 0d0f955a65, TASK-1525 9ad39c86c1, BUG-1661 7709c0fda4, and original BUG-1672 688477d939 (using its actual merge-base b9a986e9fbe3912a0415963c8344ddca4830b700). BUG-1685 reviewed f3d5cd39342a74ea9065fa2804c3c754a77f2b3f and integrated 18b032192bfb4d76d03572249f42830a68d8b110 have identical trees.
+
+    #2225 is MERGED. Folded a5bf87ddb6c2f0633fa093e868e193b82da44e6b has sole parent 18b032192bfb4d76d03572249f42830a68d8b110 and tree a39de1213d22764e5da12c5d2aed6e13abaf25a9, identical to independently approved 63a36824199d81d37c1bc97908da2d00e06d3d8e. The previous latest-review-wins defect is resolved: all eligible comment/spec/PR candidates participate; approval must be strictly newer than every blocker; ties/missing ordering cannot clear a blocker. Regression fixtures cover reverse comment/file order, both spec/PR orders, equal times, missing times, and aliases. The independent reviewer reported 12 targeted and 130 human tests plus fmt/diff checks passing; I read those results and inspected the code, without rerunning local tests. recorded_at sourcing stays BUG-1681; review-shaped-comment identity limitation remains explicitly accepted scope.
+
+    Authority assessment: TASK-1530 changes the orchestrator context ceiling/rotation guidance pursuant to the explicit operator decision in that spec. The hook preserves the existing nonblocking formatting convenience; CI remains its formatting gate. Memory-lane refresh narrows scaffolding to the selected footprint and skips permission setup. No additional merge-protection, seat-authority, dispatch-contract, or gate-bypass change found. git diff --check passes.
+
+    Final PR recheck: OPEN, MERGEABLE, BLOCKED, head unchanged, no labels and no local .aida/merge-holds/PR-2218 marker. Title is [AI:claude] chore(integrate): batch 102 (BUG-1662 TASK-1530 TASK-1524 TASK-1525 BUG-1661 BUG-1672 BUG-1685), all seven in one trailing group. The old .aida/review-verdicts/PR-2218.json still contains the prior CHANGES REQUESTED handshake; I did not overwrite it or clear any gate.
+
+    Base evidence discrepancy preserved: git ls-remote origin refs/heads/main confirms supplied 854b7e26f7222c73845064275a18c293c9895283, while GitHub PR REST/GraphQL base fields still report its parent 9791e5eaac5cb4b0083aeaa32744c5900e396fc1. The sole extra main commit is BUG-1684's Makefile-only build-fast wrapper fix, outside this batch's PR diff. A fresh advisor/integrator must reconcile live base/head and applicable check evidence before admitting main; this comment does not certify tests against an unverified target.
+
+    Disposition: HOLD for incomplete fresh CI, not a new implementation rework finding. Product should resume the gate with a fresh independent advisor after the exact pending handles settle. That advisor must recheck head/base, all required and requested platform results, title/trailer, and remaining handshake/hold state before issuing PASS TO MAIN INTEGRATOR. The old green runs and limited fixup-fold approval do not authorize main. No code/PR edits, dispatch, merge, protection bypass, hold clearing, or remote CI cancellation performed.
+  created_at: 2026-09-27T03:50:14.961421673Z
+  modified_at: 2026-09-27T03:50:14.961421673Z
 history:
 - id: 01a0df93-9784-7f82-b31e-9692e353f93a
   author: aida-session-start
