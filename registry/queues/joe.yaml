@@ -48,3 +48,11 @@
   added_at: 2026-09-27T01:13:12.954228959Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0dfa4-74cd-7a52-b61b-6878425b5363
+  position: 30000
+  added_by: joe
+  note: 'Proxy dispatch: bounded cache-read fix; Astra implementer, strict review'
+  added_at: 2026-09-27T01:23:37.429475155Z
+  for_role: implementer
+  added_by_machine: imac
