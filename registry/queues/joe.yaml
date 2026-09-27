@@ -57,14 +57,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0df88-9a37-71a0-866f-2aacedfb1284
-  position: 31000
-  added_by: joe
-  note: 'Proxy: bounded guard-route follow-up after BUG-1655; next available implementer slot'
-  added_at: 2026-09-27T01:27:53.285239511Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0e040-2ea5-7723-9a84-29ea9bdd4850
   position: 32000
   added_by: joe
