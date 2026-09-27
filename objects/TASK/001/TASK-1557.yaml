@@ -17,12 +17,12 @@ description: |-
   5. Applies to every seat role, not only advisor.
 
   Out of scope: 'aida seat wait', the Stop-hook adapters, the OpenCode plugin, the resume fallback, and the interactive hold policy — all held on BUG-1693 under CR-7. This spec adds no wake mechanism and no autonomy.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T21:00:10.134435787Z
-modified_at: 2026-09-27T21:00:41.984619453Z
+modified_at: 2026-09-27T21:21:57.337721218Z
 req_type: Task
 relationships:
 - rel_type: !Custom child-of
