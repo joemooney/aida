@@ -1,0 +1,38 @@
+id: 01a0e413-17e5-7420-9788-1605232ade1e
+spec_id: TASK-1556
+agreed_id: TASK-1556
+title: Key the staging-ignore guard on ALL patterns, not just the first
+description: |
+  Found by the fresh independent review of BUG-1677's blocker fix (2026-09-27), flagged as the highest-value follow-up. This is a LATENT re-creation of the exact bug BUG-1677 just fixed.
+
+  aida-cli-lib/src/doctor_cmd.rs:5690 decides whether to append the staging-ignore block with:
+
+      if !lines.contains(&staging_patterns[0])
+
+  where `staging_patterns[0] == "objects/**/*.tmp.*"`. Keying on the FIRST pattern alone means that if `STORE_STAGING_IGNORE_PATTERNS` (aida-core/src/fs_atomic.rs) ever gains a 6th entry, every store healed by the CURRENT version already contains `objects/**/*.tmp.*`, so the predicate is satisfied and the new pattern is NEVER appended. That is structurally identical to the blocker this code just fixed, where `.aida/node.toml` was used as a one-pattern sentinel for a block that had grown a second concern.
+
+  Acceptance criteria:
+
+  1. The predicate requires ALL staging patterns to be present before it skips, e.g. `if !staging_patterns.iter().all(|p| lines.contains(p))`. Better still, append only the patterns actually missing, so a store gains exactly the delta rather than a duplicate block.
+  2. A regression test proves it: seed a `.gitignore` containing the CURRENT staging patterns, add a new pattern to `STORE_STAGING_IGNORE_PATTERNS` (or inject a test-only list), and assert the missing pattern is appended. It must fail against the single-pattern predicate.
+  3. Apply the same review to the BUG-563 side at doctor_cmd.rs:5672, which keys on `.aida/node.toml` alone for a multi-pattern runtime block. Same failure mode if that block grows.
+  4. Consider deriving both predicates from the owning constant rather than a hand-picked index, so adding a pattern cannot silently change idempotence semantics. The general rule: an idempotence sentinel must cover every line the block writes.
+
+  Also worth folding in (same review, note 3): the test constant `BUG_563_RUNTIME_PATTERNS` at doctor_cmd.rs:5805 is a hand-copied twin of the production literal at :5674-5681. Because the assertions go through `trim`, the tests would still pass if the production literal drifted into leading whitespace -- which would break the real gitignore, since git does NOT strip leading whitespace from a pattern. Share one constant, or assert via `git check-ignore`.
+
+  Out of scope: the residual coverage gap for stores already fully healed by BUG-563 (that is TASK-1547).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T18:14:11.685245281Z
+modified_at: 2026-09-27T18:14:11.685245281Z
+req_type: Task
+filed_at:
+  code_sha: 6b1dac2a201bae751901ab95ad49e591292465a1
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '7201317922'
+  vendor: antigravity
+  session: 3266fac0-5feb-463f-a891-7a3a066739c1
