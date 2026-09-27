@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:58:26.483962647Z
-modified_at: 2026-09-27T14:58:47.499010242Z
+modified_at: 2026-09-27T20:58:59.998850503Z
 req_type: Bug
 tags:
 - authority security launch scripts from:TASK-1549
@@ -58,4 +58,14 @@ decision_request:
   - label: Wait for the broker
     consequence: exposure stays on the demo and ablation scripts until the protected boundary ships
     resolution: leave BUG-1688 unapproved, revisit after SPIKE-91
+  answered: 0
+  note: |-
+    OPERATOR DECISION (Joe, 2026-09-27 13:58, in session — he reviewed the orchestrator's recommendation and said 'agreed'). APPROVED: gate or refuse the five shipped scripts now, ahead of the protected broker.
+
+    Reasoning on the record, because the alternative was 'wait for the broker' and that option buys nothing. Waiting does not make scripts/aida-demo.sh's bypass probe or the four scripts/ablations/gate-vs-rule*.sh any safer; it just keeps a full-access bypass shipping inside an official AIDA artefact. And the wait is unbounded, not short: BUG-1669 is blocked on SPIKE-91 and TASK-1550, both Approved and neither Completed, and ADR-61 records that no protection is deployed.
+
+    The cost side is genuinely near zero, which is what makes this separable from the boundary work: none of the five scripts is part of any unattended drain, so gating them interrupts no solo, burndown, wave, watch or scheduled work, and the change needs no broker, no backend, no installation and no credentials.
+
+    Two things the implementer must not drift on. First, AC4 stands: this claims NO protected boundary and does NOT mark BUG-1669 complete. ADR-61's reconciled AC3/AC4 make a refusal-only change insufficient by construction, so nothing here may be presented as closing BUG-1669. Second, AC3's audit of other shipped routes with no legitimate unattended caller is expected to FIND things — report them with a disposition each, as a follow-up list. Do not silently widen this fix to cover them.
   asked_at: 2026-09-27T14:58:47.499010242Z
+  answered_at: 2026-09-27T20:58:59.998839887Z
