@@ -14,9 +14,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T02:19:20.422469520Z
-modified_at: 2026-09-27T08:12:04.840401550Z
+modified_at: 2026-09-27T08:12:12.724948237Z
 req_type: Task
 tags:
 - from-implementer:STORY-1477
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a0e1eb-f634-7b01-8743-312714b6d3fe
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): This is an independent, reproduced history correctness bug on current main, not a STORY-1477 renderer issue. Current main still feeds validated RFC3339 bounds to git log; read-only check at store head 170cadffd6 returned no commit for --until=2100-01-01 while --until=2030-01-01 returned the 2026 head. The expanded fixture acceptance requires Git-walk/index parity. Approve and queue for implementation as an independent backlog item.'
+  created_at: 2026-09-27T08:12:12.724948237Z
+  modified_at: 2026-09-27T08:12:12.724948237Z
