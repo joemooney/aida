@@ -3,12 +3,12 @@ spec_id: BUG-1656
 agreed_id: BUG-1656
 title: aida ps/awaiting flag Agent-tool subagents' live spec work as orphaned/abandoned and suggest a salvage-commit into the worktree they are editing
 description: 'Observed 2026-09-26: the orchestrator dispatched Claude Code Agent-tool subagents into existing leased worktrees (wt-task-1515, wt-bug-1641). The subagents hold only a generic harness-worktree lease on the main checkout, so aida ps showed the spec lease as dead, ''salvageable: nothing running, uncommitted work'', and recommended ''git add -A && git commit -m wip: salvage'' in the worktree the live agent was editing mid-change. aida awaiting listed both as ''orphaned In-Progress: abandoned''. Following the advice would commit half-written work under the agent and race its edits. Fix: (1) treat recent file movement in the worktree (dirty mtime within N minutes) as liveness, and never recommend salvage while the dirty tree is still changing; (2) give Agent-tool subagents a way to adopt the spec lease (e.g. aida worktree enter/adopt from within the subagent, or the dispatcher records the harness session against the spec lease); (3) the awaiting item should say ''possibly worked by a subagent'' when a live harness lease exists in the same repo. Acceptance: a test with a dead spec-lease pid plus fresh dirty-file mtimes gives no salvage advice and no ''abandoned'' awaiting row.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:09:46.732993537Z
-modified_at: 2026-09-27T05:03:47.680597927Z
+modified_at: 2026-09-27T05:45:22.146228396Z
 req_type: Bug
 comments:
 - id: 01a0de44-9000-72a3-a708-076238101753
@@ -142,4 +142,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e165-85e1-7732-96e4-fed5f10bde66
+  author: aida-auto-bump
+  timestamp: 2026-09-27T05:45:22.145101769Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e165-85e2-7e40-a77d-dc964228ecf3
+  timestamp: 2026-09-27T05:45:22.146227700Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/BUG-1656-2026-09-27T044606Z.md.acked
+  commit_sha: f936ea71e5132079950712c82d94d2eb2a581635
+  summary: Completed via merge f936ea71
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T05:45:22.145075079Z
+  completion_sha: f936ea71e5132079950712c82d94d2eb2a581635
