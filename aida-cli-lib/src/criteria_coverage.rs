@@ -102,6 +102,7 @@ pub(crate) struct CoverageReport {
     pub(crate) generated_at: String,
     pub(crate) head: Option<String>,
     pub(crate) windows: Vec<WindowFigures>,
+    pub(crate) intent_capture: Option<crate::intent_capture::IntentCapture>,
     /// (c-raw) criterion-level trace tokens in tracked files, and the
     /// distinct specs they name — the two numbers `report.py` prints.
     pub(crate) criterion_trace_tokens: usize,
@@ -124,9 +125,11 @@ pub(crate) struct CoverageReport {
 /// One authored work spec with acceptance criteria, and how many of those
 /// criteria have a traced test.
 // trace:STORY-1487 | ai:claude
+// trace:TASK-1522 | ai:antigravity
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct SpecCoverage {
     pub(crate) spec_id: String,
+    pub(crate) spec_type: RequirementType,
     pub(crate) status: String,
     pub(crate) created_at: DateTime<Utc>,
     /// Completion time for Completed/Done specs: the recorded completion
@@ -389,6 +392,7 @@ fn walk_source_files(root: &Path, out: &mut Vec<std::path::PathBuf>) {
 /// store, the trace tokens. Everything the CLI prints comes from here, so a
 /// fixture can pin the arithmetic without git.
 // trace:STORY-1487 | ai:claude
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn coverage_from_parts(
     store: &RequirementsStore,
     now: DateTime<Utc>,
@@ -397,6 +401,30 @@ pub(crate) fn coverage_from_parts(
     subjects_all: &[String],
     tokens: &TraceTokens,
     head: Option<String>,
+) -> CoverageReport {
+    coverage_from_parts_with_floor(
+        store,
+        now,
+        window_days,
+        subjects_window,
+        subjects_all,
+        tokens,
+        head,
+        crate::intent_capture::DEFAULT_FLOOR_PCT,
+    )
+}
+
+/// Variant of `coverage_from_parts` that accepts a configured floor percentage.
+// trace:TASK-1522 | ai:antigravity
+pub(crate) fn coverage_from_parts_with_floor(
+    store: &RequirementsStore,
+    now: DateTime<Utc>,
+    window_days: u64,
+    subjects_window: &[String],
+    subjects_all: &[String],
+    tokens: &TraceTokens,
+    head: Option<String>,
+    floor_pct: u8,
 ) -> CoverageReport {
     let traced: BTreeSet<&str> = tokens
         .test_criterion_tokens
@@ -466,6 +494,7 @@ pub(crate) fn coverage_from_parts(
             });
             Some(SpecCoverage {
                 spec_id: id.to_string(),
+                spec_type: req.req_type.clone(),
                 status: format!("{:?}", req.status),
                 created_at: req.created_at,
                 completed_at,
@@ -481,6 +510,10 @@ pub(crate) fn coverage_from_parts(
         *by_spec.entry(spec).or_default() += 1;
     }
 
+    let intent_capture = Some(crate::intent_capture::intent_capture_share(
+        &specs, now, floor_pct,
+    ));
+
     CoverageReport {
         generated_at: now.to_rfc3339(),
         head,
@@ -492,6 +525,7 @@ pub(crate) fn coverage_from_parts(
             ),
             figures("all time", None, subjects_all),
         ],
+        intent_capture,
         criterion_trace_tokens: tokens.criterion_tokens.len(),
         criterion_traced_specs: by_spec.len(),
         trace_comments: tokens.trace_comments,
@@ -506,12 +540,14 @@ pub(crate) fn coverage_from_parts(
 
 /// Gather from the project (git + store) and build the report.
 // trace:STORY-1487 | ai:claude
+// trace:TASK-1522 | ai:antigravity
 pub(crate) fn build_coverage_report(
     project_root: &Path,
     store: &RequirementsStore,
     now: DateTime<Utc>,
     window_days: u64,
 ) -> CoverageReport {
+    let floor_pct = crate::intent_capture::intent_capture_floor_pct(project_root);
     let since = window_start(now, window_days);
     // trace:TASK-1546 | ai:codex
     // Git does not parse Chrono's minimum year. A window reaching that far
@@ -559,7 +595,7 @@ pub(crate) fn build_coverage_report(
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .filter(|s| !s.is_empty());
-    coverage_from_parts(
+    coverage_from_parts_with_floor(
         store,
         now,
         window_days,
@@ -567,6 +603,7 @@ pub(crate) fn build_coverage_report(
         &subjects_all,
         &tokens,
         head,
+        floor_pct,
     )
 }
 
@@ -595,15 +632,18 @@ pub(crate) fn dispatch_criteria(
 /// Where every report run writes its result, relative to the project root.
 pub(crate) const CACHE_REL_PATH: &str = ".aida/cache/capture-coverage.json";
 /// Bump when the cache shape changes; readers ignore other versions.
-pub(crate) const CACHE_SCHEMA_VERSION: u32 = 1;
+pub(crate) const CACHE_SCHEMA_VERSION: u32 = 2;
 
 /// The cache file: the report plus its per-spec detail and a freshness
-/// stamp (the full code HEAD the report was taken at).
+/// stamp (the full code HEAD and aida-store HEAD the report was taken at).
 // trace:STORY-1487 | ai:claude
+// trace:TASK-1522 | ai:antigravity
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct CoverageCache {
     pub(crate) schema_version: u32,
     pub(crate) head_full: Option<String>,
+    #[serde(default)]
+    pub(crate) store_head: Option<String>,
     pub(crate) generated_at: DateTime<Utc>,
     pub(crate) report: CoverageReport,
     pub(crate) specs: Vec<SpecCoverage>,
@@ -621,9 +661,32 @@ fn git_head_full(project_root: &Path) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// The store worktree HEAD sha for cache invalidation when a spec is edited.
+// trace:TASK-1522 | ai:antigravity
+pub(crate) fn store_head_sha(project_root: &Path) -> Option<String> {
+    let store_path =
+        aida_core::store_locate::detect_distributed_store_from(project_root).or_else(|| {
+            let p = project_root.join(".aida-store");
+            p.exists().then_some(p)
+        })?;
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&store_path)
+        .args(["rev-parse", "HEAD"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!s.is_empty()).then_some(s)
+}
+
 /// Write the cache under `.aida/cache/`. Only in an initialised project
 /// (`.aida/` exists); failures are ignored — the report never depends on it.
 // trace:STORY-1487 | ai:claude
+// trace:TASK-1522 | ai:antigravity
 pub(crate) fn write_coverage_cache(
     project_root: &Path,
     report: &CoverageReport,
@@ -635,6 +698,7 @@ pub(crate) fn write_coverage_cache(
     let cache = CoverageCache {
         schema_version: CACHE_SCHEMA_VERSION,
         head_full: git_head_full(project_root),
+        store_head: store_head_sha(project_root),
         generated_at: now,
         report: report.clone(),
         specs: report.specs.clone(),
@@ -652,7 +716,8 @@ pub(crate) fn write_coverage_cache(
 /// at the current code HEAD, and no older than `max_age`. `None` otherwise,
 /// so a reader stays silent instead of reporting stale figures.
 // trace:STORY-1487 | ai:claude
-// Read by the status-line intent-capture indicator, which lands separately.
+// trace:TASK-1522 | ai:antigravity
+// Read by the status-line intent-capture indicator.
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn load_fresh_coverage_cache(
     project_root: &Path,
@@ -668,6 +733,9 @@ pub(crate) fn load_fresh_coverage_cache(
         return None;
     }
     if cache.head_full != git_head_full(project_root) {
+        return None;
+    }
+    if cache.store_head != store_head_sha(project_root) {
         return None;
     }
     cache.report.specs = cache.specs.clone();
@@ -721,6 +789,10 @@ fn print_human(report: &CoverageReport) {
             w.criteria_with_traced_test.render()
         );
     }
+    if let Some(ic) = &report.intent_capture {
+        println!();
+        println!("{}", ic.render_report_line());
+    }
     println!();
     println!("{}", "source".bold());
     println!(
@@ -745,3 +817,7 @@ fn print_human(report: &CoverageReport) {
 #[cfg(test)]
 #[path = "tests/story_1487_capture_coverage_tests.rs"]
 mod story_1487_capture_coverage_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1522_intent_capture_tests.rs"]
+mod task_1522_intent_capture_tests;

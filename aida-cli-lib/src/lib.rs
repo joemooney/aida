@@ -76,6 +76,8 @@ mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
 mod git_arg_guard;
 mod git_backend_cmd;
+// trace:TASK-1522 | ai:antigravity
+pub(crate) mod intent_capture;
 mod machine_readiness;
 mod mcp_cmd;
 mod orchestrator_cmd;
@@ -17237,6 +17239,16 @@ fn init_store_mirror_config_section() -> &'static str {
      #\n\
      # [store.sync]\n\
      # mirror_remotes = [\"gitlab\"]\n"
+}
+
+// trace:TASK-1522 | ai:antigravity
+pub(crate) fn init_capture_config_section() -> &'static str {
+    "\n# Effort-balance intent-capture target (TASK-1522): advisory floor on the\n\
+     # share of newly completed specs with at least one traced test criterion.\n\
+     # Reported by `aida criteria coverage` and `aida status`; not enforced.\n\
+     #\n\
+     # [capture]\n\
+     # criterion_test_floor_pct = 50\n"
 }
 
 /// The `[worktree]` scaffold section. AIDA-created worktrees are expected to be
@@ -82270,6 +82282,11 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
         "",
         "your personal queue: `aida queue list`".dimmed()
     );
+    if let Some(line) = crate::intent_capture::status_intent_capture_line(
+        &std::env::current_dir().unwrap_or_default(),
+    ) {
+        println!("{line}");
+    }
     println!();
 
     println!("{}", "─── Requirements (cache) ───".bold());
