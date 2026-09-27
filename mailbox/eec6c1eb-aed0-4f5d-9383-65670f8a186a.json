@@ -1,0 +1,17 @@
+{
+  "id": "eec6c1eb-aed0-4f5d-9383-65670f8a186a",
+  "thread_id": "eec6c1eb-aed0-4f5d-9383-65670f8a186a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-1"
+  },
+  "timestamp": 1790517709124,
+  "body": "RESUME HANDOFF — original Claude advisor session 01a0cbdf-7c46-79e0-a895-67caf4e1efce. Rebuild current state from AIDA before acting; do not trust the stale launch snapshot. Operator priority is backlog burndown; macOS/Windows remain skipped, Ubuntu stays required. Stay in advisor seat: independently adjudicate findings/design/rework and issue clear dispositions; do not implement or merge your own judgment. PR #2217 / STORY-1476 is still OPEN at exact SHA add0cf724397bdd2d68e3f359df0c0e058d23e72. Ubuntu + merge-hold checks are green, but .aida/review-verdicts/PR-2217.json and STORY-1476.json record REQUEST_CHANGES at that exact SHA. Two concrete findings: (1) lib.rs 63486-63490 trims allowlist entries before refusing control chars, so trailing CR can turn malformed \"*\\\\r\" into wildcard trust; raw validation and CR/LF tests needed. (2) graded_review.rs 532-552 returns on a permitted command failure before not_run_count is surfaced for manual verification at 562-593; test story_1476_acceptance_trust_tests.rs 192-207 currently codifies it. Operator said they approve #2217, but this does not erase the required reviewer/advisor rework gate; do not merge. An independent Codex reviewer codex-review-pr-2217 was launched for this SHA; last checked busy, 4 unread, no recorded new disposition. Do not repeatedly poll its mailbox; BUG-1589/zero-token-waiting says no model-side polling. TASK-1520 was transferred from the killed Agy trust-prompt worker to Codex: branch task-1520-3, worktree /home/joe/ai/aida-task-1520; at 06:57 it had uncommitted changes and the implementer appeared idle. Preserve that worktree; inspect current status before action, do not overwrite. Immediate sequence: read aida awaiting and relevant specs/verdicts; get an independent disposition on STORY-1476 findings; decide/recommend rework path and keep #2217 held; assess stalled Codex sessions without destructive cleanup. Do not spend on Astra unless a genuinely critical unresolved question requires it; operator can replenish quota if necessary.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "legacy"
+}
