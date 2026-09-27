@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:58:05.809657428Z
-modified_at: 2026-09-27T04:44:30.845993446Z
+modified_at: 2026-09-27T04:44:56.424626205Z
 req_type: Task
 relationships:
 - rel_type: Blocks
@@ -65,6 +65,31 @@ comments:
     Integration HEAD was checked before review and again immediately before posting and remains the exact SHA above. No code edits, push, spec status changes or merge. Comments only: original six exact-head branch review provenance is preserved; no first-class review record is overwritten. No findings in this integration-only delta.
   created_at: 2026-09-27T04:44:30.845993446Z
   modified_at: 2026-09-27T04:44:30.845993446Z
+- id: 01a0e12e-32e8-7700-937c-d12e85d8c0a7
+  author: codex-advisor
+  content: |
+    INDEPENDENT ADVISOR DISPOSITION — batch103 portability rework, 2026-09-26 (Codex advisor; no implementation or integration authorship).
+
+    REQUEST CHANGES; explicitly AUTHORIZE bounded test-fixture portability rework on the original implementation branch below. No product/architecture fork exists for these six findings. The existing TOML serializer/quoting facility and platform-neutral fixture paths suffice. Do not broaden this into production behavior, lease semantics, signal forwarding, lifecycle vocabulary, or a new shared harness. Any newly discovered need for such changes returns to the advisor before proceeding.
+
+    Evidence: read AGENTS.md, two-seat-protocol.md, rework-brief-craft.md, seat-recovery-playbooks.md, both owning specs and their actual prior approval comments. Inspected OPEN/DRAFT PR https://github.com/joemooney/aida/pull/2228 at exact head 9f0b49295bd9c9952c601d592889268c393b16e9. Independently ran bash scripts/check-portability.sh in its clean assembly worktree: exit 1, exactly the six cited findings. Verified both local and origin implementation heads and clean original worktrees. Compared affected files against their original heads: BUG-1656 differs only by the three-line assembly fixture addition of interrupted_at/interrupted_reason = None and its trace; TASK-1518 file is identical. Thus these defects belong to the original implementations, not the mechanical assembly patch. The raw TOML construction fails on Windows-style backslash paths and quotes, or can silently interpret backslashes as escapes; a separate Python TOML reproduction confirmed those mechanisms (not a Rust runtime test). Hardcoded /tmp placeholders need correction under the existing ratchet even where no actual I/O uses them.
+
+    Verdict provenance: PR #2228 body records mechanical fixture change APPROVED and batch readiness REQUEST CHANGES; its local handoff copy is /tmp/aida-batch103-validation/pr-body.md. No separate reviewer verdict file is named there; no first-class verdict record is inferred or fabricated. This disposition independently reproduces and validates the six findings.
+
+    Owning branch: claude/task-1518 @ 0e8b4ee714e7282a9cb9f4d248c6468eafb7b5c5, clean worktree /home/joe/ai/wt-task-1518. File: aida-cli-lib/src/tests/task_1518_drain_sigterm_tests.rs; assembly and original line numbers match.
+    - Line 61, write_lease: replace hardcoded /tmp/none with a portable, deliberately nonexistent path under the owned temporary root; serialize/quote it safely while retaining all fixture keys, creator identity and custom_key.
+    - Lines 519/520, task_1518_ps_reads_a_marked_lease_as_stopped_not_dead: remove the /tmp sentinel string replacement and unescaped worktree_path construction. Set the worktree path through structured TOML editing/serialization or a fixture parameter; it must name the actual existing wt directory and parse through list_leases. Preserve unknown keys. Retain before=unstamped/STALLED and after=interrupted/STOPPED, stopped-wave resume hint and no dead-process hint.
+    Retain the owning acceptance: first SIGTERM releases only the owned lock and marks the appropriate leases; second SIGTERM/deadline gives bounded nonzero exit; no-signal behavior remains unchanged. Keep the existing Unix-only real-signal tests and Windows no-op product behavior, while keeping channel/bookkeeping/reader coverage portable. Do not fold TASK-1542 follow-ups into this test-only rework.
+
+    Shared acceptance/gates: retain the portability baseline and rule/scanner files unchanged; no allowlist growth, waiver, suppression, ignored tests, or blanket Unix gating of platform-neutral coverage. Use existing aida_core::toml_quote::toml_string without adding outer quotes, or TOML value/table serialization; preserve the exact path string through parse/serialize. Demonstrate fixture path round-trips for Windows backslashes, spaces, and embedded quotes using the actual fixture construction; these can be string-only cases on any host, with real filesystem paths restricted to host-valid names. Preserve all current behavioral assertions and unknown-key checks.
+
+    Verification required on each new exact implementation SHA: cargo fmt --all -- --check; git diff --check against its pinned original head; bash scripts/check-portability.sh and bash scripts/check-portability.sh --check-allowlist-growth 43c0429198401473e0cfab73267fc413883b3e1b. All must pass without baseline/rule edits. Run the owning Rust test module with cargo test -p aida-cli-lib --lib bug_1656 (BUG-1656) or cargo test -p aida-cli-lib --lib task_1518 (TASK-1518), under isolated test HOME/store fixtures and normal Cargo slot controls. Require native Windows execution of the portable affected tests plus Unix execution including TASK-1518 real-signal child coverage; cross-compilation alone is insufficient. Attach commands, actual results, and exact tested SHAs; capacity-blocked or unrun checks remain open gates.
+
+    Fresh independent reviewer(s), distinct from the implementer, must review each changed implementation SHA; prior approvals of the old heads do not approve their successors. After approved branches are reassembled by the integrator, require fresh independent review of the new assembled SHA, the six-finding ratchet clean, and completion of PR #2228's outstanding combined Rust/runtime, new-binary CLI/manual, clippy and required CI validation. Preserve the existing uninterrupted lease fixture fields in the assembly. Keep PR #2228 DRAFT/on hold until these gates clear; a green merge-hold job alone is not readiness. No merge authorization is given here.
+
+    Routing: same owning spec, original implementation branch, implementer role. Per the operator's explicit limits, this advisor only records comments: no branch/status/queue change, push, merge, deletion, or implementation edit. Product/dispatcher should arrange the bounded implementer pickup and any necessary requeue/status bookkeeping, preserving this comment as the rework brief and obtaining fresh SHA review. Existing spec status is done; that label does not clear this readiness hold.
+  created_at: 2026-09-27T04:44:56.424626205Z
+  modified_at: 2026-09-27T04:44:56.424626205Z
 history:
 - id: 01a0de70-412f-71b2-a0d8-b5ceffefddc0
   author: joe
