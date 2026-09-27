@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-27T14:29:03.144503855Z
+modified_at: 2026-09-27T14:29:22.826084861Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -83,6 +83,17 @@ comments:
     BUG-1679 stays PARKED. The proxy will not dispatch it again, and the correct next step is product acceptance reconciliation, not implementation. The refusing agent did re-verify all four findings read-only and found each technically valid; it also noted one consequence not in the verdict — export_coordinating_bin_env early-returns when AIDA_BIN is not absolute, so a relative value silently disables the PATH/AIDA_BIN export altogether, a second failure mode on the same input. Recording that here so the eventual gate has it.
   created_at: 2026-09-27T14:20:59.786511397Z
   modified_at: 2026-09-27T14:20:59.786511397Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e345-450a-7fa3-8bdf-ad75a3984ae2
+  author: joe
+  content: |-
+    PROXY DECISION (orchestrator for Joe, 2026-09-27 07:30): DEFERRED with Joe's own revisit condition as the trigger, instead of sitting at needs-attention. Rationale: needs-attention implies somebody should act now, and Joe's operator decision 01a0e11a says the opposite — do not resume the implementer, revisit only after the protected admission architecture and implementation gates, then a fresh exact-head review and an explicit hold release by Joe. Deferring records the wait honestly and stops this spec advertising false urgency to the next agent that reads the board.
+
+    This changes NOTHING that Joe's decision withheld: no merge, no unhold, no acceptance weakening, no completion. PR #2226 stays open and operator-held at e63efc3997 as the rework trail, and TASK-196 (TASK-1-177) stays open alongside it for the same reason. Deferral does not count toward draining the list and is reported to Joe as outstanding.
+
+    The critical path to un-deferring it is TASK-1549, the P-enrolled-host protected launch ADR, which an architect is drafting now as design-only work. That ADR is also what produces the acceptance reconciliation this spec's finding P1 needs, since P1 is a finding against this spec's own acceptance criterion 1 and no implementer can close it.
+  created_at: 2026-09-27T14:29:22.826084861Z
+  modified_at: 2026-09-27T14:29:22.826084861Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e0fd-3532-7760-9c08-3b79df618a20
