@@ -29,7 +29,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-27T04:10:57.835863554Z
-modified_at: 2026-09-27T14:21:15.605314027Z
+modified_at: 2026-09-27T19:27:53.248484306Z
 req_type: Task
 tags:
 - exact-head:e63efc3997a85df8cb1ff463f48222900ed5f7d6
@@ -57,6 +57,12 @@ comments:
   created_at: 2026-09-27T14:21:15.605314027Z
   modified_at: 2026-09-27T14:21:15.605314027Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e456-8fa0-75e0-9adf-b1385b1f70d5
+  author: joe
+  content: 'PROXY DECISION (orchestrator-as-advisor for Joe, 2026-09-27 12:29): DISMISSED as a duplicate record, not as a rejected concern. This draft is the verbatim strict-review verdict for PR #2226 at e63efc3997a8. That verdict is already tracked in two live places: the typed merge hold on PR #2226 (reason_kind=rework, ''CHANGES REQUESTED for BUG-1679 at e63efc3997a8'') and BUG-1679''s own rework state. Keeping a third copy as a draft spec inflates the open count without adding a unit of work, and it would rot the moment #2226''s head moves. The review findings themselves stand and still gate that PR: the hold lifts only on a fresh APPROVED verdict at the then-current head, and a human ships it. No work is lost by closing this.'
+  created_at: 2026-09-27T19:27:53.248484306Z
+  modified_at: 2026-09-27T19:27:53.248484306Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
 history:
 - id: 01a0e339-3979-7d20-8100-b1aac941abae
   author: joe
