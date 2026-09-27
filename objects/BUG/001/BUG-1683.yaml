@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:24:57.765790728Z
-modified_at: 2026-09-27T01:28:13.389337868Z
+modified_at: 2026-09-27T01:33:08.855034820Z
 req_type: Bug
 comments:
 - id: 01a0e07a-194d-7082-bb95-7e42ae4b61cc
@@ -63,3 +63,23 @@ comments:
     4. Confirm the existing acquisition/shared-claim/cleanup races are separate scope rather than a prerequisite for this specific live-age regression fix.
   created_at: 2026-09-27T01:28:13.389300846Z
   modified_at: 2026-09-27T01:28:13.389300846Z
+- id: 01a0e07e-9b76-7e03-b978-ee1744d49b54
+  author: mcp
+  content: |-
+    ADVISOR SIGNOFF: APPROVED with binding amendments
+
+    Independent source review of the SKETCH against 9791e5eaac5cb4b0083aeaa32744c5900e396fc1. This approves the bounded design, not an implementation or merge.
+
+    Verified: drain_lock.rs::decide_lock currently uses pid_dead || aged_out; the aged_out_lock_reclaims_even_when_pid_alive test explicitly expects the unsafe acquisition. acquire_drain_lock_with_specs passes process_identity_is_alive, including pid_start_time. In aida-core/src/liveness.rs, matching live identity holds; available mismatched identity rejects a recycled PID; missing recorded/current start identity conservatively retains a live PID. probe_lock/classify_lock already ignore age. The shared heartbeat refreshes the coordination claim, not started_at_utc.
+
+    Approve removing local age authority entirely, retaining immutable started_at_utc and the existing shared TTL/heartbeat. No typed Unknown API or heartbeat/schema change is required for this bounded bug. Explicitly accept the documented existing boolean probe-error, unreadable/corrupt record, shared-claim ordering, non-exclusive acquisition, and PID-only cleanup limitations as outside this fix. Do not describe false as proven death or advertise complete fail-closed/atomic mutual exclusion. Intentional FORCE remains an exception; BORROW must observe without replacing/releasing the parent.
+
+    Binding amendments:
+    1. Expand the entry-point evidence matrix beyond the four named CLI routes. queue work acquires before single/batch/batches/nextN/--drain/--from-pr/real --resume-drain dispatch (queue_cmd.rs:6110-6190); burndown run acquires before its worker (lib.rs:56688-56708); drain start probes then delegates (drain_cmd.rs:471 onward); queue integrate, including --watch, acquires before integration (queue_cmd.rs:13950 onward). Also cover top-level integrate --run/--watch delegation (lib.rs:65310 onward), shelved drain resume -> queue work --from-pr, zen/do delegation, and autoprogress/shift launch routing. Runtime fixtures at independent boundaries plus explicit wiring checks for aliases are acceptable. Autoprogress legitimately returns success when it skips a live drain: require no launch and unchanged lock, not a universal nonzero exit for wrappers. Dry-run/read-only routes remain exempt.
+    2. Resolve a concrete root inconsistency uncovered in this audit: queue integrate uses find_project_root(), which returns the current linked worktree, while queue work/burndown target find_main_worktree_root(). Add a sibling-worktree two-hour-holder fixture for queue integrate and top-level integrate --run/--watch against the main lock. If reproduced, canonicalize that acquisition to the shared main root within the sketch's expressly allowed missing-wiring correction. Removing age alone must not be represented as covering every entry point while this bypass remains. Do not broaden into transaction/cleanup redesign.
+    3. Two-hour fixture must use an independently kept-alive child and its actual kernel start identity obtained in the same canonical format as production; backdate only started_at_utc. A mocked always-true predicate or fabricated start identity is insufficient process-level evidence. Assert the fixture identity is available/matches (or explicitly report platform exclusion), and prove the gate was reached using the holder-specific diagnostic, unchanged bytes, and zero worker/merge sentinels. Supply eligible inputs and isolate FORCE/BORROW and stale override; arrange local-only coordination so a shared-claim refusal cannot mask the defective local decision. No age sleeps; guaranteed child cleanup.
+    4. Retain the complete identity/recovery matrix: two-hour matching live identity refuses even with zero stale override; legacy missing identity and unreadable current identity remain held; invalid/future display timestamps cannot evict; dead PID and confirmed identity mismatch reclaim; borrow/drop preserves bytes at two hours. Test BORROW together with FORCE because the integrator currently sets both; borrow must win for a live parent. Keep explicit force behavior separately tested, without extending force past drain start's existing pre-probe.
+
+    Implementation signoff requires the above evidence plus targeted lock/liveness/CLI tests and formatting. No code changed, no tests claimed run, no work dispatched, no merge performed by this advisor.
+  created_at: 2026-09-27T01:33:08.854996905Z
+  modified_at: 2026-09-27T01:33:08.854996905Z
