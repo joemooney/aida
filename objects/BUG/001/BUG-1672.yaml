@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:56.753902915Z
-modified_at: 2026-09-27T03:50:14.961448329Z
+modified_at: 2026-09-27T04:03:33.330058372Z
 req_type: Bug
 comments:
 - id: 01a0dfa3-2bc6-7c62-9371-a5dfe1014e2b
@@ -172,6 +172,30 @@ comments:
     Disposition: HOLD for incomplete fresh CI, not a new implementation rework finding. Product should resume the gate with a fresh independent advisor after the exact pending handles settle. That advisor must recheck head/base, all required and requested platform results, title/trailer, and remaining handshake/hold state before issuing PASS TO MAIN INTEGRATOR. The old green runs and limited fixup-fold approval do not authorize main. No code/PR edits, dispatch, merge, protection bypass, hold clearing, or remote CI cancellation performed.
   created_at: 2026-09-27T03:50:14.961421673Z
   modified_at: 2026-09-27T03:50:14.961421673Z
+- id: 01a0e108-4f52-7fe0-b5f6-a39220ba8aec
+  author: mcp
+  content: |-
+    ADVISOR HOLD — bounded Windows CI timeout; NOT PASS TO MAIN INTEGRATOR.
+
+    Fresh independent CI disposition seat for batch 102 PR https://github.com/joemooney/aida/pull/2218 at exact head a5bf87ddb6c2f0633fa093e868e193b82da44e6b, separate from product, implementer, reviewer, and integrator. Final forge snapshot: 2026-09-27T04:02:53Z (2026-09-26 21:02:53 MST).
+
+    Executed exactly one bounded watcher: timeout 540 gh run watch 36291803600 --exit-status. It exited 124. No replacement watcher, CI rerun, or remote cancellation. Final one-shot recheck confirms run 36291803600 remains IN_PROGRESS at the exact SHA; Windows job 108543190614 has Build all packages SUCCESS, but Run tests remains IN_PROGRESS (started 03:45:59Z), with post-job cleanup pending. No failed test conclusion is established. Evidence: https://github.com/joemooney/aida/actions/runs/36291803600/job/108543190614 . Local watcher log: /tmp/aida-batch102-windows-36291803600-watch.log.
+
+    Other applicable checks:
+    - Required Build (ubuntu-latest): SUCCESS, run 36291803604/job 108543190530, completed 03:49:30Z. https://github.com/joemooney/aida/actions/runs/36291803604/job/108543190530
+    - Requested Build (macos-latest): SUCCESS, run 36291803600/job 108543190485, completed 03:51:55Z; native build and tests both succeeded. https://github.com/joemooney/aida/actions/runs/36291803600/job/108543190485
+    - Required merge-hold-gate: SUCCESS, run 36291803607/job 108543190637. https://github.com/joemooney/aida/actions/runs/36291803607/job/108543190637
+    - Release, GitLab live forge smoke, and History index random sweep are event-inapplicable SKIPPED rows, not passed tests. Ubuntu report-only cross-target probe emits exit 101 under existing continue-on-error; its green job is not evidence of successful cross-compilation.
+
+    Read AGENTS.md, two-seat, integrator, recovery and rework disciplines; BUG-1672's full latest review/ADVISOR trail including prior design HOLD, independent fixup approval, mechanical-fold disposition, and later CI-timeout HOLD. Read first-class BUG-1672 approval and old PR-2218 CHANGES REQUESTED record. Independently confirmed current integration head and approved fixup 63a36824199d81d37c1bc97908da2d00e06d3d8e have identical tree a39de1213d22764e5da12c5d2aed6e13abaf25a9 and sole parent 18b032192bfb4d76d03572249f42830a68d8b110. No intervening head change or review staleness found. Prior substantive pre-CI advisor assessment remains applicable; no new design rejection. Inspected authority-sensitive template/hook deltas and TASK-1530's explicit operator decision; no additional authority delta beyond the previously reviewed tree. Diff whitespace check passed. No local tests rerun by this CI disposition seat.
+
+    Base reconciliation: PR fields still report 9791e5eaac5cb4b0083aeaa32744c5900e396fc1, but both git ls-remote and GitHub main branch endpoint identify live main 854b7e26f7222c73845064275a18c293c9895283. Ubuntu and macOS checkout logs show tested synthetic merge 38d68d8c806c9a5d64f395bd6ca2e1afcbac30ed; GitHub commit API confirms its parents are live main 854b7e26f7222c73845064275a18c293c9895283 and requested head a5bf87ddb6c2f0633fa093e868e193b82da44e6b. This resolves the earlier uncertainty about which base those completed jobs tested. The extra main commit changes only Makefile build-fast, outside the batch diff.
+
+    Final PR: OPEN, MERGEABLE, UNSTABLE, exact head unchanged, all seven spec IDs preserved in title trailer, no labels. No local PR-2218 merge-hold marker found. Main protection requires Ubuntu and merge-hold, strict=false, enforce_admins=true; requested Windows completion remains a prerequisite for this disposition. The old local PR-2218 rework handshake is retained unchanged; its finding has subsequent independent fixup approval and pre-CI advisor review, but this comment does not clear it or authorize merge.
+
+    Disposition remains HOLD solely for incomplete Windows CI. Require a fresh exact-head CI/hold/review recheck once that job concludes before PASS. No code, spec status, queue, PR branch, protection, hold record, or merge changes performed.
+  created_at: 2026-09-27T04:03:33.330020174Z
+  modified_at: 2026-09-27T04:03:33.330020174Z
 history:
 - id: 01a0df93-9784-7f82-b31e-9692e353f93a
   author: aida-session-start
