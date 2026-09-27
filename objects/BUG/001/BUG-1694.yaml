@@ -22,8 +22,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T19:29:58.004516622Z
-modified_at: 2026-09-27T19:29:58.004516622Z
+modified_at: 2026-09-27T19:30:26.521730888Z
 req_type: Bug
+comments:
+- id: 01a0e458-e659-76e2-9eb0-234d37f6126c
+  author: joe
+  content: 'PROXY DECISION (orchestrator-as-advisor for Joe, 2026-09-27 12:32): APPROVED but deliberately NOT queued. Filed from the TASK-1543 strict review; see that spec''s ADVISOR DISPOSITION comment for why it was split rather than fixed in place. It is tagged needs-sketch because the fix requires a mutual-exclusion protocol shared with the worktree-create path — a second caller and a real design fork — so it needs a sketch plus independent advisor signoff before any implementer touches it. Do not hand this to a drain seat as ordinary work: an implementer optimizing for a green test will add a fourth exists() check, which moves the window instead of closing it, and the acceptance criteria are written specifically to fail that shortcut.'
+  created_at: 2026-09-27T19:30:26.521730888Z
+  modified_at: 2026-09-27T19:30:26.521730888Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
 filed_at:
   code_sha: 4b8f4e5bd0714c70cffa67a81f2e952dd8d6a9a7
   branch: main
