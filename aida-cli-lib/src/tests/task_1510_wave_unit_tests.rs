@@ -73,19 +73,19 @@ fn show_not_found() -> BoundedRun {
 
 /// A fake host: `systemd-run` and `show` answers are scripted, every call is
 /// recorded, and anything else a wave launch must never do panics.
-struct WaveHost {
+pub(crate) struct WaveHost {
     supported: bool,
     cgroup: Option<String>,
     run: BoundedRun,
     show: std::collections::VecDeque<BoundedRun>,
-    runs: Vec<Vec<String>>,
+    pub(crate) runs: Vec<Vec<String>>,
     run_timeouts: Vec<StdDuration>,
     shows: Vec<Vec<String>>,
     show_timeouts: Vec<StdDuration>,
 }
 
 impl WaveHost {
-    fn systemd() -> Self {
+    pub(crate) fn systemd() -> Self {
         Self {
             supported: true,
             cgroup: Some(tick_cgroup(REPO)),
@@ -157,6 +157,7 @@ fn launch_with(
         detached += 1;
         Ok((9090, Some("start-9090".to_string())))
     };
+    let cfg = cfg_on();
     let w = WaveLaunch {
         setting,
         invoker,
@@ -167,7 +168,9 @@ fn launch_with(
         log,
         now: now(),
         tick_pid: TICK_PID,
-        runtime_max_secs: cfg_on().wave_runtime_max_secs(),
+        runtime_max_secs: cfg.wave_runtime_max_secs(),
+        // trace:TASK-1517 | ai:claude
+        limits: cfg.wave_limits_for_launch(),
     };
     let identity = |pid: u32| Some(format!("start-{pid}"));
     let result = launch_wave_isolated(host, &w, &mut launcher, &identity);
@@ -245,6 +248,12 @@ fn wave_unit_argv_has_no_timer_or_restart_flags() {
                 "StandardError=append:",
                 "RuntimeMaxSec=",
                 "OOMPolicy=stop",
+                // trace:TASK-1517 | ai:claude — resource limits only.
+                "MemoryHigh=",
+                "MemoryMax=",
+                "CPUWeight=",
+                "IOWeight=",
+                "TasksMax=",
             ]
             .iter()
             .any(|allowed| p.starts_with(allowed)),
@@ -639,11 +648,19 @@ fn wave_unit_properties_are_exactly_the_amended_set() {
         .into_iter()
         .filter(|p| !p.starts_with("UnsetEnvironment="))
         .collect();
+    // TASK-1517 amended the set with the per-wave resource limits; the
+    // assertion stays exact, so a further property is a deliberate change.
+    // trace:TASK-1517 | ai:claude
     let want = [
         format!("StandardOutput=append:{LOG}"),
         format!("StandardError=append:{LOG}"),
         "RuntimeMaxSec=12600".to_string(),
         "OOMPolicy=stop".to_string(),
+        "MemoryHigh=40%".to_string(),
+        "MemoryMax=50%".to_string(),
+        "CPUWeight=50".to_string(),
+        "IOWeight=50".to_string(),
+        "TasksMax=2048".to_string(),
     ];
     assert_eq!(props, want.iter().map(String::as_str).collect::<Vec<_>>());
     let unit = wave_unit_name(REPO, now(), TICK_PID);
@@ -660,9 +677,11 @@ fn wave_unit_properties_are_exactly_the_amended_set() {
     ] {
         assert!(opts.iter().any(|o| o == f), "{f}");
     }
-    assert!(!opts
-        .iter()
-        .any(|o| o.contains("Memory") || o.contains("Weight")));
+    // A12's "no resource limits" applies to the TICK unit file, not to the
+    // wave unit; task_1491's
+    // `systemd_unit_has_killmode_process_and_first_fire_trigger` still
+    // asserts the tick unit carries none.
+    // trace:TASK-1517 | ai:claude
 }
 
 #[test]
@@ -1189,7 +1208,7 @@ fn render_report_names_the_unit_and_a_fallback_reason() {
 // tick_core harness: the production launch helper over a fake host
 // ---------------------------------------------------------------------------
 
-fn probes() -> Probes {
+pub(crate) fn probes() -> Probes {
     let candidates = vec![Candidate {
         spec: "TASK-1".to_string(),
         status: RequirementStatus::Approved,
@@ -1228,7 +1247,7 @@ fn probes() -> Probes {
     }
 }
 
-fn ctx() -> TickCtx {
+pub(crate) fn ctx() -> TickCtx {
     TickCtx {
         now: now(),
         dry_run: false,
@@ -1242,16 +1261,16 @@ fn ctx() -> TickCtx {
 
 /// A [`ShiftExec`] whose `spawn_wave` runs the real launch helper against a
 /// fake host and a counting detached launcher.
-struct TickExec {
-    host: WaveHost,
-    detached: usize,
+pub(crate) struct TickExec {
+    pub(crate) host: WaveHost,
+    pub(crate) detached: usize,
     saves: Vec<ShiftState>,
     events: Vec<EventKind>,
     notifies: usize,
 }
 
 impl TickExec {
-    fn new(host: WaveHost) -> Self {
+    pub(crate) fn new(host: WaveHost) -> Self {
         Self {
             host,
             detached: 0,
@@ -1271,6 +1290,7 @@ impl ShiftExec for TickExec {
     }
     fn spawn_wave(&mut self, argv: &[String], log: &Path) -> Result<WaveSpawn> {
         let log = log.display().to_string();
+        let cfg = cfg_on();
         let w = WaveLaunch {
             setting: WaveUnitSetting::Auto,
             invoker: Some("systemd"),
@@ -1281,7 +1301,9 @@ impl ShiftExec for TickExec {
             log: &log,
             now: now(),
             tick_pid: TICK_PID,
-            runtime_max_secs: cfg_on().wave_runtime_max_secs(),
+            runtime_max_secs: cfg.wave_runtime_max_secs(),
+            // trace:TASK-1517 | ai:claude
+            limits: cfg.wave_limits_for_launch(),
         };
         let detached = &mut self.detached;
         let mut launcher = || -> Result<(u32, Option<String>)> {

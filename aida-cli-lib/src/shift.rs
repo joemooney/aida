@@ -20,8 +20,12 @@
 //!    (which takes the drain lock exactly like a manual drain), and records
 //!    its pid. Under the systemd driver the wave runs in its own transient
 //!    `systemd-run --user` unit (`[shift] wave_unit = "auto"`), with a
-//!    per-wave journal and a hard `RuntimeMaxSec`; otherwise, or when that
-//!    provably fails, it is launched detached and the report says why;
+//!    per-wave journal, a hard `RuntimeMaxSec` and its own resource limits
+//!    (`[shift] wave_memory_high`/`wave_memory_max`, `wave_cpu_weight`,
+//!    `wave_io_weight`, `wave_tasks_max`), so a runaway wave is killed
+//!    inside its own cgroup and not by an out-of-memory kill of the whole
+//!    session; otherwise, or when that provably fails, it is launched
+//!    detached and the report says why;
 //! 7. emits one `ShiftTick` event only when it acted or its refusing-guard
 //!    set changed.
 //!
@@ -168,6 +172,16 @@ pub(crate) struct ShiftConfig {
     /// (`auto`, the default) or always launch it detached (`off`).
     // trace:TASK-1510 | ai:claude
     pub wave_unit: WaveUnitSetting,
+    /// What a wave unit is allowed to consume: `MemoryHigh`/`MemoryMax`,
+    /// `CPUWeight`/`IOWeight` and `TasksMax`, from the `[shift] wave_memory_*`
+    /// / `wave_cpu_weight` / `wave_io_weight` / `wave_tasks_max` keys.
+    // trace:TASK-1517 | ai:claude
+    pub wave_limits: crate::schedule_driver::WaveLimits,
+    /// A configured wave limit that cannot be used. The `wave-limits` guard
+    /// refuses every launch while it is set, on both launch paths: running a
+    /// wave with no limit at all is the outcome this exists to prevent.
+    // trace:TASK-1517 | ai:claude
+    pub wave_limits_error: Option<String>,
     /// A configured `max_runtime` that does not parse. The `max-runtime`
     /// guard refuses every launch while it is set (A7), on both launch paths.
     pub max_runtime_error: Option<String>,
@@ -196,6 +210,17 @@ impl ShiftConfig {
             .map(|d| {
                 d.num_seconds().max(0) as u64 + crate::schedule_driver::WAVE_UNIT_RUNTIME_GRACE_SECS
             })
+    }
+
+    /// The limits a wave unit is started with. `None` when the configured
+    /// limits cannot be used (the `wave-limits` guard refuses then, so the
+    /// launch path never sees this).
+    // trace:TASK-1517 | ai:claude
+    pub(crate) fn wave_limits_for_launch(&self) -> Option<&crate::schedule_driver::WaveLimits> {
+        if self.wave_limits_error.is_some() {
+            return None;
+        }
+        Some(&self.wave_limits)
     }
 }
 
@@ -294,6 +319,24 @@ pub(crate) fn build_config(
         }
         _ => WaveUnitSetting::Auto,
     };
+    // trace:TASK-1517 | ai:claude — same precedence as every other tunable
+    // (local layer over committed `[shift]`), and a value that cannot be
+    // used fails the launch closed instead of silently lifting the limit.
+    let wave_limit_values = [
+        get("wave_memory_high"),
+        get("wave_memory_max"),
+        get("wave_cpu_weight"),
+        get("wave_io_weight"),
+        get("wave_tasks_max"),
+    ];
+    let (wave_limits, wave_limits_error) =
+        crate::schedule_driver::build_wave_limits(&crate::schedule_driver::WaveLimitInput {
+            memory_high: wave_limit_values[0],
+            memory_max: wave_limit_values[1],
+            cpu_weight: wave_limit_values[2],
+            io_weight: wave_limit_values[3],
+            tasks_max: wave_limit_values[4],
+        });
     let max_runtime_hours = crate::maintenance_schedule::parse_duration(&max_runtime)
         .map(|d| ((d.num_minutes() + 59) / 60).max(1) as u64)
         .unwrap_or(3);
@@ -364,6 +407,8 @@ pub(crate) fn build_config(
         mail_latency,
         mail_latency_secs,
         wave_unit,
+        wave_limits,
+        wave_limits_error,
         max_runtime_error,
     }
 }
@@ -1154,6 +1199,13 @@ pub(crate) fn evaluate_guards(
         Some(e) => verdict("max-runtime", false, e.clone()),
         None => verdict("max-runtime", true, format!("{} per wave", cfg.max_runtime)),
     });
+    // Path-independent like `max-runtime`: a limit that cannot be understood
+    // refuses the launch instead of becoming no limit at all.
+    // trace:TASK-1517 | ai:claude
+    v.push(match &cfg.wave_limits_error {
+        Some(e) => verdict("wave-limits", false, e.clone()),
+        None => verdict("wave-limits", true, cfg.wave_limits.describe()),
+    });
     let launch_ok = ctx.launch_ok();
     v.push(verdict(
         "deadline",
@@ -1355,6 +1407,10 @@ struct WaveLaunch<'a> {
     now: DateTime<Utc>,
     tick_pid: u32,
     runtime_max_secs: Option<u64>,
+    /// `None` when the configured limits cannot be used: the wave-limits
+    /// guard has already refused, and the launch fails closed regardless.
+    // trace:TASK-1517 | ai:claude
+    limits: Option<&'a crate::schedule_driver::WaveLimits>,
 }
 
 /// Start the wave that `tick_core` has already decided to launch. The ONLY
@@ -1422,6 +1478,14 @@ fn launch_wave_isolated(
         // Unreachable past the max-runtime guard; fail closed regardless.
         anyhow::bail!("max_runtime does not parse; the wave was not launched");
     };
+    // Unreachable past the wave-limits guard; fail closed regardless. An
+    // unlimited wave in its own unit is exactly what TASK-1517 removes.
+    // trace:TASK-1517 | ai:claude
+    let Some(limits) = w.limits else {
+        anyhow::bail!(
+            "the configured per-wave resource limits cannot be used; the wave was not launched"
+        );
+    };
     let unit = wave_unit_name(w.repo, w.now, w.tick_pid);
     let batch = w
         .argv
@@ -1439,6 +1503,8 @@ fn launch_wave_isolated(
         log: w.log,
         description: &description,
         runtime_max_secs,
+        // trace:TASK-1517 | ai:claude
+        limits,
         set_env: &set_env,
         unset_env: &unset_env,
         argv: w.argv,
@@ -1545,6 +1611,8 @@ pub(crate) struct RealExec<'a> {
     pub host: Box<dyn crate::schedule_driver::DriverHost>,
     pub wave_unit: WaveUnitSetting,
     pub wave_runtime_max_secs: Option<u64>,
+    // trace:TASK-1517 | ai:claude
+    pub wave_limits: Option<crate::schedule_driver::WaveLimits>,
     pub now: DateTime<Utc>,
 }
 
@@ -1563,6 +1631,8 @@ impl<'a> RealExec<'a> {
             host: Box::new(crate::schedule_driver::RealDriverHost),
             wave_unit: cfg.wave_unit,
             wave_runtime_max_secs: cfg.wave_runtime_max_secs(),
+            // trace:TASK-1517 | ai:claude
+            wave_limits: cfg.wave_limits_for_launch().cloned(),
             now,
         }
     }
@@ -1615,6 +1685,8 @@ impl ShiftExec for RealExec<'_> {
             now: self.now,
             tick_pid: std::process::id(),
             runtime_max_secs: self.wave_runtime_max_secs,
+            // trace:TASK-1517 | ai:claude
+            limits: self.wave_limits.as_ref(),
         };
         launch_wave_isolated(
             self.host.as_mut(),
@@ -3692,3 +3764,7 @@ mod story_1218_shift_tick_tests;
 #[cfg(test)]
 #[path = "tests/task_1510_wave_unit_tests.rs"]
 mod task_1510_wave_unit_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1517_wave_limits_tests.rs"]
+mod task_1517_wave_limits_tests;
