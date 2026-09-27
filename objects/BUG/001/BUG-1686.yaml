@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T09:41:03.172727931Z
-modified_at: 2026-09-27T16:17:26.124369666Z
+modified_at: 2026-09-27T18:25:44.550856743Z
 req_type: Bug
 tags:
 - vendor:antigravity headless-launch cli-argv
@@ -44,6 +44,17 @@ comments:
   created_at: 2026-09-27T14:16:08.798344337Z
   modified_at: 2026-09-27T14:16:08.798344337Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e41d-aa66-7a11-9fd9-dcd887156ffb
+  author: joe
+  content: |-
+    Review: APPROVE (cross-vendor reviewer: codex seat; did not write it). Head 5e797ac39f. NOTE the tip was my 'wip: salvage claude/bug-1686' commit rescuing uncommitted work from a dead session; the reviewer was told to treat it with extra suspicion and judged the salvaged portion COMPLETE AND COHERENT -- builder change, regression tests and vendor-isolation checks fit together, no half-finished code (only the WIP commit message understates its scope).
+
+    Confirmed: (1) argv order test pins the COMPLETE vector, not flag membership -- bug_1686_agy_headless_argv_tests.rs:89 and the spawned-process test at :411; (2) only Agy's arm and builder changed, Claude and Codex builders untouched (headless_vendor_args dispatch at session.rs:1861); (3) NO authority widening -- argv ORDER only, the same single --dangerously-skip-permissions flag remains at session.rs:1902, no new launch path and nothing newly startable unattended. Build-free CI gates all exit 0 (check-portability.sh, glyph-lint.sh --block, check-trace-headers.py).
+
+    CORRECTION to the commit's rationale, carried forward so nobody repeats it: the claim that flags placed after the prompt are NECESSARILY ignored is too strong -- the vendor's own headless docs show options after '-p <prompt>'. The real defect was narrower and the fix is still right: in the old order '-p' consumed the permission flag ITSELF as its value, which matches the reported failure. Reviewer did not run cargo tests (no target/ dir; resolved by inspecting the diff and the exact-vector assertions).
+  created_at: 2026-09-27T18:25:44.550856743Z
+  modified_at: 2026-09-27T18:25:44.550856743Z
+  session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
 history:
 - id: 01a0e339-1dad-7e71-a4ac-ecaf23a54fca
   author: joe
