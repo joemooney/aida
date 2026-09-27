@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-27T01:48:00.854872345Z
+modified_at: 2026-09-27T01:51:50.444827554Z
 req_type: Story
 tags:
 - aida:history
@@ -123,4 +123,21 @@ comments:
     Advisor forks to close before implementation: (1) approve event-local/summary-only semantics for `{title}`, `{priority}`, `{comment}` or explicitly expand EventKind/cache decoder for historical values and comment bodies; (2) confirm explicit scoped `templates rm` rather than the spec's optional unqualified removal; (3) confirm opt-in human MCP template text despite the tool's normally JSON-only response; (4) confirm custom templates and `--fields` always select full events rather than attempting to format the digest/progression. These are API choices; the storage decision is already closed by Joe.
   created_at: 2026-09-27T01:48:00.854872345Z
   modified_at: 2026-09-27T01:48:00.854872345Z
+- id: 01a0e08f-b8ac-7680-a70f-82821f0de309
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF — STORY-1477 sketch 01a0e08c-37d6-75e3-b4b7-2ef14d6ed106 (independent advisor, 2026-09-26)
+
+    Approved with these binding API decisions and amendments. Joe's operator decision already fixes project storage at tracked .aida/config.toml; the implementing PR must include the accepted ADR described in the sketch. TASK-1512 is Completed, so the sequencing dependency is satisfied.
+
+    1. Event-local fields: approve the bounded decoder scope. {title} is populated from Added/Deleted title and the new value of TitleChange; {priority} is populated from Added priority and the new value of PriorityChange. They are empty/null on other events, even if today's spec has a value. {comment} is the existing CommentsAdded summary/count, never a comment body; empty/null on other events. Document these exact meanings in help/MCP docs. {from}/{to} continue to carry the old/new values for transitions, including title and priority changes. Do not read current spec state to backfill historical rows or expand the decoder/cache for bodies in this story.
+    2. Deletion: require an explicit user: or project: qualifier for `history templates rm`; reject unqualified and builtin: removal. This is a deliberate tightening of the spec's optional qualifier so shadowed names cannot cause accidental deletion. List output must make the target scope clear.
+    3. MCP: approve explicit `template` returning human text in the existing MCP text envelope. Explicit `fields` returns the existing JSON envelope with projected event rows; neither parameter keeps the current JSON response byte-stable. Reject `template`+`fields` and other unsupported combinations as invalid_arg, and update the history tool descriptor/output documentation so callers can distinguish the opt-in text form. No MCP save/remove API.
+    4. Mode selection: custom/inline templates and `--fields` select the full event feed, including a single SPEC-ID. Builtin full/oneline aliases retain existing mode selection and byte identity. Unqualified full/oneline have byte identity only when lookup resolves to the builtin; a user/project shadow has its own format. Keep filters, ordering, window selection, and unflagged digest/progression/JSON behavior intact.
+
+    Additional binding details: `--fields` promises caller-specified order in human/TOON and JSON. serde_json's default map ordering is not that order, so use an ordered row serializer or equivalent rather than constructing ordinary JSON maps; keep the existing top-level envelope. Validate the format/name/field list before the history walk and before any save. The save path must preserve unrelated TOML content and write only the selected scope. For a save plus query, if the query is invalid, do not persist the template; make validation and mutation order explicit. Test the same filters/limits on CLI and MCP when asserting parity, because their defaults and archive/meta visibility differ.
+
+    Scope is coherent with the current EventKind, HistoryEventRecord, CLI mode selection, MCP text-envelope tool, and config writers. Product may dispatch implementation under this signoff; no further advisor sketch revision is required unless implementation changes one of these contracts. This is design signoff, not implementation or merge approval.
+  created_at: 2026-09-27T01:51:50.444827554Z
+  modified_at: 2026-09-27T01:51:50.444827554Z
 execution_mode: drive
