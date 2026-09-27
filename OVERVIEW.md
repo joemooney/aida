@@ -31,6 +31,12 @@ The defensible niche is the **agent-collaboration layer**: stable spec IDs, type
 
 **Type protocols.** AIDA stores concise work contracts for spikes, bugs, stories, tasks, decisions, and docs as editable META requirements, with optional `research`, `docs`, and `keystone` lane overlays. Interactive pickup and headless implementer/reviewer prompts inject the resolved protocol before work begins, cite its META ids, cap the combined body at 40 lines, and label the precedence `type < lane < spec acceptance`; a leased session receives the compact type reminder again in its per-turn notice. Inspect them with `aida protocol show <type> [--lane <lane>]`; MCP clients read the identical text at `aida://protocol/<type>[/<lane>]`, and editing either META body changes the next pickup without rebuilding AIDA.
 
+**Drain ownership.** Local drain acquisition retains an observed-live PID/start
+identity regardless of launch age. Queue work, burndown and integration share
+the main checkout's lock, including launches from sibling worktrees. Shared
+cross-clone claims retain their own heartbeat/TTL. This is not an atomic lock
+redesign; see [coverage and limits](docs/testing/bug-1683-drain-lock.md).
+
 **Honest scope.** AIDA is alpha. The core graph, traceability, queue, and MCP workflows have held under this repository's own multi-agent dogfood; broader-team scale, turnkey unattended reliability, and onboarding outside this project are still being validated. Selective gating, not blanket: a programmatic gate beats a stated rule only when the invariant sits *far from the point of action* (attention-distance; [2026-06-18-gate-vs-rule-pilot.md](docs/research/ablations/2026-06-18-gate-vs-rule-pilot.md) falsified the blanket form). Every claim above traces to a finding or a shipped command.
 
 ---

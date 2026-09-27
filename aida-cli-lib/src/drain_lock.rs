@@ -18,16 +18,17 @@
 //! `.aida/drain.lock` carrying the holder's `pid`, `started_at_utc`, the
 //! `command` that launched it, and the `host`. A second launch reads it and:
 //!
-//! - **live + fresh** → REFUSE with the holder's pid / start / command.
-//! - **stale** (pid dead, or older than [`stale_secs`]) → reclaim and proceed.
+//! - **live process identity (regardless of age)** → REFUSE with the holder's pid / start / command.
+//! - **stale** (process identity probe returns false) → reclaim and proceed.
 //! - **`AIDA_DRAIN_FORCE=1`** → bypass the check entirely (the rare intentional
 //!   concurrent case, or a known-dead holder whose pid was recycled).
 //!
 //! Release is RAII: [`DrainGuard`]'s `Drop` removes the file on a clean exit.
 //! Drain handlers that terminate via `std::process::exit` skip `Drop`, but that
 //! is harmless — their pid is dead the instant they exit, so the next launch
-//! stale-reclaims. The age backstop ([`AIDA_DRAIN_LOCK_STALE_SECS`], default
-//! 1800s) catches the pathological pid-recycle case.
+//! stale-reclaims. PID/start-time identity detects recycled PIDs. The shared
+//! claim TTL (`AIDA_DRAIN_LOCK_STALE_SECS`, default 1800s) is separate.
+//! trace:BUG-1683 | ai:codex
 //!
 //! # Granularity (out of scope)
 //!
@@ -42,7 +43,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::process_probe;
@@ -65,13 +66,10 @@ const FORCE_ENV: &str = "AIDA_DRAIN_FORCE";
 /// [`FORCE_ENV`]; this is only for child drives launched by AIDA itself.
 const BORROW_ENV: &str = "AIDA_DRAIN_BORROW";
 
-/// Env override: age (seconds) past which a still-claimed lock is treated as
-/// stale even if its pid happens to be alive (pid-recycle backstop).
+/// Env override: shared coordination claim TTL, not local live-holder eviction.
 const STALE_SECS_ENV: &str = "AIDA_DRAIN_LOCK_STALE_SECS";
 
-/// Default staleness horizon: a lock older than this is reclaimable regardless
-/// of pid liveness. 30 minutes — comfortably longer than any single phase, far
-/// shorter than a wedged drain a human would want auto-cleared.
+/// Default shared claim TTL; refreshed by the background heartbeat.
 const DEFAULT_STALE_SECS: u64 = 1800;
 
 /// Path of the drain lock under `project_root`.
@@ -184,19 +182,6 @@ pub(crate) struct DrainLock {
     pub(crate) specs: Vec<String>,
 }
 
-impl DrainLock {
-    /// Age in seconds relative to `now`, parsed from [`Self::started_at_utc`].
-    /// An unparseable timestamp returns `None` (treated as "age unknown" — the
-    /// pid-liveness check then decides staleness on its own).
-    fn age_secs(&self, now: DateTime<Utc>) -> Option<u64> {
-        let started = DateTime::parse_from_rfc3339(&self.started_at_utc)
-            .ok()?
-            .with_timezone(&Utc);
-        let secs = now.signed_duration_since(started).num_seconds();
-        Some(secs.max(0) as u64)
-    }
-}
-
 /// The pure decision: given the lock currently on disk (if any), should a new
 /// drain ACQUIRE (write its own, possibly reclaiming a stale one) or be
 /// REFUSED? Liveness is injected as a predicate so the three paths
@@ -205,20 +190,20 @@ impl DrainLock {
 /// trace:BUG-538 | ai:claude
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum LockDecision {
-    /// No live lock stands in the way — write ours.
+    /// Write ours under the existing probe/force policy.
     Acquire,
-    /// A live, non-stale drain holds the lock — refuse, surfacing the holder.
+    /// A live drain holds the lock — refuse, surfacing the holder.
     Refuse(DrainLock),
 }
 
 /// Decide ACQUIRE vs REFUSE. `force` short-circuits to ACQUIRE (the
 /// `AIDA_DRAIN_FORCE=1` escape). An absent / unparseable on-disk lock is always
 /// ACQUIRE. A present lock is reclaimable (→ ACQUIRE) when forced, when its pid
-/// is dead, or when it is older than `stale_secs`; otherwise REFUSE.
+/// identity probe returns false; otherwise REFUSE regardless of launch age.
+/// Existing boolean probe errors and corrupt-record behavior are unchanged.
+// trace:BUG-1683 | ai:codex
 pub(crate) fn decide_lock(
     existing: Option<DrainLock>,
-    now: DateTime<Utc>,
-    stale_secs: u64,
     force: bool,
     is_alive: impl Fn(u32, Option<&str>) -> bool,
 ) -> LockDecision {
@@ -228,9 +213,7 @@ pub(crate) fn decide_lock(
     let Some(lock) = existing else {
         return LockDecision::Acquire;
     };
-    let pid_dead = !is_alive(lock.pid, lock.pid_start_time.as_deref());
-    let aged_out = lock.age_secs(now).map(|a| a > stale_secs).unwrap_or(false);
-    if pid_dead || aged_out {
+    if !is_alive(lock.pid, lock.pid_start_time.as_deref()) {
         LockDecision::Acquire
     } else {
         LockDecision::Refuse(lock)
@@ -246,9 +229,7 @@ fn read_lock(path: &Path) -> Option<DrainLock> {
 }
 
 /// Read the local drain lock and return it only when its recorded PID is alive.
-/// Unlike [`probe_lock`], this does not apply the age backstop: status surfaces
-/// are reporting an existing in-flight drain, not deciding whether a new drain
-/// may reclaim the lock.
+/// Like [`probe_lock`] and acquisition, this ignores launch age.
 // trace:TASK-1194 | ai:codex
 pub(crate) fn read_pid_live_lock(project_root: &Path) -> Option<DrainLock> {
     let lock = read_lock(&drain_lock_path(project_root))?;
@@ -256,7 +237,7 @@ pub(crate) fn read_pid_live_lock(project_root: &Path) -> Option<DrainLock> {
         .then_some(lock)
 }
 
-/// Resolve the staleness horizon from `AIDA_DRAIN_LOCK_STALE_SECS`, falling
+/// Resolve the shared claim TTL from `AIDA_DRAIN_LOCK_STALE_SECS`, falling
 /// back to [`DEFAULT_STALE_SECS`]. A non-numeric value falls back too.
 fn stale_secs() -> u64 {
     std::env::var(STALE_SECS_ENV)
@@ -294,13 +275,17 @@ pub(crate) fn borrow_requested() -> bool {
 // trace:TASK-148 | ai:claude
 #[cfg(test)]
 pub(crate) fn test_env_isolation() -> crate::test_env::EnvVarsGuard {
-    crate::test_env::EnvVarsGuard::apply(&[(BORROW_ENV, None), (FORCE_ENV, None)])
+    crate::test_env::EnvVarsGuard::apply(&[
+        (BORROW_ENV, None),
+        (FORCE_ENV, None),
+        (STALE_SECS_ENV, None),
+    ])
 }
 
 /// Acquire the global drain lock for `project_root`, launched as `command`.
 ///
 /// On success returns a [`DrainGuard`] that removes the lock on `Drop`. On a
-/// live, non-stale conflict returns an `Err` whose message names the holder and
+/// live conflict returns an `Err` whose message names the holder and
 /// the recovery paths (wait, remove the file, or `AIDA_DRAIN_FORCE=1`).
 ///
 /// Both drain entry points (`aida burndown run` and `aida queue work
@@ -396,8 +381,6 @@ pub(crate) fn acquire_drain_lock_with_specs(
 
     match decide_lock(
         existing.clone(),
-        Utc::now(),
-        stale_secs(),
         forced,
         process_probe::process_identity_is_alive,
     ) {
@@ -671,12 +654,6 @@ mod tests {
         }
     }
 
-    fn now() -> DateTime<Utc> {
-        DateTime::parse_from_rfc3339("2026-06-14T12:00:00Z")
-            .unwrap()
-            .with_timezone(&Utc)
-    }
-
     #[test]
     fn atexit_removes_our_lock_but_preserves_a_foreign_one() {
         // BUG-712: the process-exit hook must clean up OUR leftover lock, but
@@ -730,7 +707,7 @@ mod tests {
 
     #[test]
     fn no_existing_lock_acquires() {
-        let d = decide_lock(None, now(), 1800, false, |_, _| true);
+        let d = decide_lock(None, false, |_, _| true);
         assert_eq!(d, LockDecision::Acquire);
     }
 
@@ -738,7 +715,7 @@ mod tests {
     fn live_fresh_lock_refuses() {
         // started 60s ago, pid alive → refuse.
         let l = lock(4242, "2026-06-14T11:59:00Z");
-        let d = decide_lock(Some(l.clone()), now(), 1800, false, |_, _| true);
+        let d = decide_lock(Some(l.clone()), false, |_, _| true);
         assert_eq!(d, LockDecision::Refuse(l));
     }
 
@@ -746,22 +723,43 @@ mod tests {
     fn dead_pid_lock_reclaims() {
         // pid dead → reclaim even though it's fresh.
         let l = lock(4242, "2026-06-14T11:59:30Z");
-        let d = decide_lock(Some(l), now(), 1800, false, |_, _| false);
+        let d = decide_lock(Some(l.clone()), false, |pid, start| {
+            assert_eq!(pid, l.pid);
+            assert_eq!(start, l.pid_start_time.as_deref());
+            false
+        });
         assert_eq!(d, LockDecision::Acquire);
     }
 
+    // trace:BUG-1683 | ai:codex
     #[test]
-    fn aged_out_lock_reclaims_even_when_pid_alive() {
-        // started 3600s ago > 1800 horizon, pid alive → reclaim (pid-recycle backstop).
-        let l = lock(4242, "2026-06-14T11:00:00Z");
-        let d = decide_lock(Some(l), now(), 1800, false, |_, _| true);
-        assert_eq!(d, LockDecision::Acquire);
+    fn live_two_hour_identity_lock_refuses() {
+        let l = lock(4242, "2026-06-14T10:00:00Z");
+        let d = decide_lock(Some(l.clone()), false, |pid, start| {
+            assert_eq!(pid, 4242);
+            assert_eq!(start, l.pid_start_time.as_deref());
+            true
+        });
+        assert_eq!(d, LockDecision::Refuse(l));
+    }
+
+    #[test]
+    fn recycled_pid_lock_reclaims_even_when_fresh() {
+        let l = lock(4242, &Utc::now().to_rfc3339());
+        assert_eq!(
+            decide_lock(Some(l.clone()), false, |pid, start| {
+                assert_eq!(pid, l.pid);
+                assert_eq!(start, l.pid_start_time.as_deref());
+                false
+            }),
+            LockDecision::Acquire
+        );
     }
 
     #[test]
     fn force_overrides_a_live_fresh_lock() {
         let l = lock(4242, "2026-06-14T11:59:00Z");
-        let d = decide_lock(Some(l), now(), 1800, true, |_, _| true);
+        let d = decide_lock(Some(l), true, |_, _| true);
         assert_eq!(d, LockDecision::Acquire);
     }
 
@@ -769,18 +767,45 @@ mod tests {
     fn unparseable_timestamp_falls_back_to_pid_liveness() {
         // age unknown → only pid liveness decides. Alive → refuse.
         let l = lock(4242, "not-a-timestamp");
-        let alive = decide_lock(Some(l.clone()), now(), 1800, false, |_, _| true);
+        let alive = decide_lock(Some(l.clone()), false, |_, _| true);
         assert_eq!(alive, LockDecision::Refuse(l));
         // Dead → reclaim.
         let l2 = lock(4242, "not-a-timestamp");
-        let dead = decide_lock(Some(l2), now(), 1800, false, |_, _| false);
+        let dead = decide_lock(Some(l2), false, |_, _| false);
         assert_eq!(dead, LockDecision::Acquire);
     }
 
+    // trace:BUG-1683 | ai:codex
     #[test]
-    fn age_secs_clamps_future_timestamps_to_zero() {
-        let l = lock(1, "2026-06-14T13:00:00Z"); // 1h in the future vs now()
-        assert_eq!(l.age_secs(now()), Some(0));
+    fn live_lock_refuses_with_zero_stale_override() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            (BORROW_ENV, None),
+            (FORCE_ENV, None),
+            (STALE_SECS_ENV, Some("0")),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let path = drain_lock_path(dir.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        for started in [
+            (Utc::now() - chrono::Duration::hours(2)).to_rfc3339(),
+            "invalid".into(),
+            "2999-01-01T00:00:00Z".into(),
+        ] {
+            for identity in [
+                process_probe::process_start_identity(std::process::id()),
+                None,
+            ] {
+                let mut holder = lock(std::process::id(), &started);
+                holder.pid_start_time = identity;
+                let bytes = serde_json::to_vec(&holder).unwrap();
+                std::fs::write(&path, &bytes).unwrap();
+                assert!(acquire_drain_lock(dir.path(), "contender")
+                    .unwrap_err()
+                    .to_string()
+                    .contains("a drain is already running"));
+                assert_eq!(std::fs::read(&path).unwrap(), bytes);
+            }
+        }
     }
 
     // ── acquire_drain_lock / DrainGuard round-trip (real fs + real pid) ──
@@ -854,6 +879,26 @@ mod tests {
         assert_eq!(read_lock(&path).unwrap().pid, std::process::id());
     }
 
+    // trace:BUG-1683 | ai:codex
+    #[test]
+    fn acquire_reclaims_a_live_pid_with_confirmed_identity_mismatch() {
+        let _env = test_env_isolation();
+        let Some(actual) = process_probe::process_start_identity(std::process::id()) else {
+            return; // Platform cannot expose start identity; liveness unit tests cover the contract.
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let path = drain_lock_path(dir.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut recycled = lock(std::process::id(), &Utc::now().to_rfc3339());
+        assert_ne!(recycled.pid_start_time.as_deref(), Some(actual.as_str()));
+        recycled.command = "recycled holder".into();
+        std::fs::write(&path, serde_json::to_vec(&recycled).unwrap()).unwrap();
+        let _guard = acquire_drain_lock(dir.path(), "replacement").unwrap();
+        let replacement = read_lock(&path).unwrap();
+        assert_eq!(replacement.command, "replacement");
+        assert_eq!(replacement.pid_start_time, Some(actual));
+    }
+
     #[test]
     fn guard_drop_leaves_a_successor_lock_intact() {
         // If our guard's file was reclaimed by another drain (different pid),
@@ -885,24 +930,34 @@ mod tests {
     }
 
     #[test]
-    fn borrow_guard_preserves_parent_lock_on_drop() {
+    fn old_live_parent_borrow_preserves_lock_on_drop() {
         // BUG-748: a nested internal drive must be able to run under a parent
         // drain without overwriting the parent's lock or releasing it when the
         // child exits. This is the batch/integrator failure mode that left the
         // next orchestrated implementer without a live lock.
-        let _env = crate::test_env::EnvVarsGuard::set(&[(BORROW_ENV, "1"), (FORCE_ENV, "1")]);
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            (BORROW_ENV, "1"),
+            (FORCE_ENV, "1"),
+            (STALE_SECS_ENV, "0"),
+        ]);
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let path = drain_lock_path(root);
         let parent = acquire_drain_lock(root, "parent batch drain").unwrap();
-        let parent_lock = read_lock(&path).expect("parent lock exists");
+        // trace:BUG-1683 | ai:codex
+        let mut parent_lock = read_lock(&path).expect("parent lock exists");
+        parent_lock.started_at_utc = (Utc::now() - chrono::Duration::hours(2)).to_rfc3339();
+        let bytes = serde_json::to_vec(&parent_lock).unwrap();
+        std::fs::write(&path, &bytes).unwrap();
 
         let borrowed = acquire_drain_lock(root, "internal child drive").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
         assert_eq!(
             read_lock(&path).expect("borrowed child must not rewrite lock"),
             parent_lock
         );
         drop(borrowed);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
         assert_eq!(
             read_lock(&path).expect("borrowed child must not release lock"),
             parent_lock
@@ -921,8 +976,11 @@ mod tests {
         // live parent to borrow; the command becomes the owner as usual.
         // TASK-148: also CLEAR the force escape — a leaked `AIDA_DRAIN_FORCE`
         // would reach the same "owns the lock" outcome for the wrong reason.
-        let _env =
-            crate::test_env::EnvVarsGuard::apply(&[(BORROW_ENV, Some("1")), (FORCE_ENV, None)]);
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            (BORROW_ENV, Some("1")),
+            (FORCE_ENV, None),
+            (STALE_SECS_ENV, None),
+        ]);
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let path = drain_lock_path(root);
