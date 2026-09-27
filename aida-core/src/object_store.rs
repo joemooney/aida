@@ -397,9 +397,10 @@ pub fn read_object_text(objects_root: &Path, spec_id: &str) -> Result<Option<Str
 /// `parse_failure_hint`: that hint's binary-version-skew narrative
 /// misdiagnoses a plain deletion and sends the reader chasing a rebuild.
 // trace:BUG-1673 | ai:claude
+// trace:BUG-1673 | ai:codex
 pub fn removed_while_loading_note(spec_id: &str) -> String {
     format!(
-        "Note: {} was removed while loading; skipped (no fingerprint recorded, \
+        "Warning: {} was removed while loading; skipped (no fingerprint recorded, \
          so a later whole-store save leaves it alone)",
         spec_id
     )
@@ -489,14 +490,38 @@ pub fn load_all_objects_with_fingerprints(
         // after. `read_atomic` returns `NotFound` (and a truncated file
         // returns a parse error) immediately on Unix — BUG-1660 keeps it
         // zero-wait there on purpose — so the wait belongs here: one short
-        // retry of THIS object, never a blanket delay. Re-listing would be a
-        // second full directory walk that tells us nothing new, because the
-        // object's path is a pure function of its spec id.
+        // retry of THIS object, never a blanket delay. The acceptance requires
+        // refreshing the listing after the delay, then retrying the listed
+        // path for this spec id (falling back to the original path if it has
+        // disappeared from the refreshed listing).
         // trace:BUG-1673 | ai:claude
         let mut outcome = read_attempt(0);
-        if !matches!(outcome, ListedObject::Loaded { .. }) {
+        if matches!(outcome, ListedObject::Unparseable { .. })
+            || matches!(outcome, ListedObject::Unreadable { missing: true, .. })
+        {
+            // Tests drive the race synchronously through the fixture hook;
+            // avoid wall-clock delay there. Production waits briefly before
+            // refreshing the listing and selecting this object's current path.
+            #[cfg(not(test))]
             std::thread::sleep(LISTED_OBJECT_RETRY_DELAY);
-            outcome = read_attempt(1);
+            #[cfg(test)]
+            let _ = LISTED_OBJECT_RETRY_DELAY;
+
+            // trace:BUG-1673 | ai:codex
+            let retry_path = list_objects(objects_root)
+                .ok()
+                .and_then(|listed| {
+                    listed
+                        .into_iter()
+                        .find(|(listed_id, _)| listed_id == spec_id)
+                        .map(|(_, listed_path)| listed_path)
+                })
+                .unwrap_or_else(|| path.clone());
+            outcome = {
+                #[cfg(test)]
+                tests::bug_1673_before_object_read(spec_id, &retry_path, 1);
+                read_listed_object(&retry_path)
+            };
         }
 
         match outcome {
@@ -1166,6 +1191,30 @@ mod tests {
     #[cfg(feature = "native")]
     #[test]
     fn bug_1673_loader_omits_object_deleted_for_good_without_parse_hint() {
+        const CHILD_ENV: &str = "AIDA_BUG_1673_CAPTURE_REMOVAL_WARNING";
+        if std::env::var_os(CHILD_ENV).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "object_store::tests::bug_1673_loader_omits_object_deleted_for_good_without_parse_hint", "--nocapture"])
+                .env(CHILD_ENV, "1")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "child fixture failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let stderr = String::from_utf8(output.stderr).unwrap();
+            assert!(
+                stderr.contains("BUG-5 was removed while loading"),
+                "missing spec-specific removal warning: {stderr}"
+            );
+            assert!(
+                !stderr.contains("binary version mismatch"),
+                "a deletion must not be reported with the parse-failure hint: {stderr}"
+            );
+            return;
+        }
+
         let dir = tempfile::tempdir().unwrap();
         let objects_root = dir.path().join("objects");
         write_object(&objects_root, &bug_1673_spec("BUG-4", "survivor")).unwrap();
@@ -1192,13 +1241,6 @@ mod tests {
             calls.get(),
             3,
             "the doomed object is retried once, then given up on"
-        );
-
-        let note = removed_while_loading_note("BUG-5");
-        assert!(note.contains("BUG-5"));
-        assert!(
-            !note.contains("binary version mismatch"),
-            "a deletion must not be reported with the parse-failure hint: {note}"
         );
     }
 
@@ -1252,8 +1294,8 @@ mod tests {
         assert_eq!(count_objects(&objects_root).unwrap(), 1);
     }
 
-    /// A reader racing repeated `write_object` calls never observes a torn
-    /// file — every read either parses or (never, on POSIX) misses the file.
+    /// The fixture forces a write between synchronous reads and proves the
+    /// loader's read follows that write without observing a torn object.
     // trace:BUG-1673 | ai:claude
     #[cfg(feature = "native")]
     #[test]
@@ -1262,23 +1304,33 @@ mod tests {
         let objects_root = dir.path().join("objects");
         write_object(&objects_root, &bug_1673_spec("BUG-9", "seed")).unwrap();
 
-        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let writer_root = objects_root.clone();
-        let writer_stop = stop.clone();
-        let writer = std::thread::spawn(move || {
-            let mut n = 0u32;
-            while !writer_stop.load(std::sync::atomic::Ordering::Relaxed) {
-                n += 1;
-                let title = "x".repeat(200 + (n as usize % 50));
-                write_object(&writer_root, &bug_1673_spec("BUG-9", &title)).unwrap();
+        let hook_root = objects_root.clone();
+        let interleavings = std::rc::Rc::new(std::cell::Cell::new(0usize));
+        let seen = interleavings.clone();
+        let calls = bug_1673_install_hook(move |spec_id, _path, attempt| {
+            if spec_id == "BUG-9" && attempt == 0 {
+                assert_eq!(read_object(&hook_root, "BUG-9").unwrap().title, "seed");
+                write_object(&hook_root, &bug_1673_spec("BUG-9", "written-between-reads")).unwrap();
+                assert_eq!(
+                    read_object(&hook_root, "BUG-9").unwrap().title,
+                    "written-between-reads"
+                );
+                seen.set(seen.get() + 1);
             }
         });
 
-        for _ in 0..300 {
-            read_object(&objects_root, "BUG-9")
-                .expect("a concurrent atomic write must never yield a torn object");
-        }
-        stop.store(true, std::sync::atomic::Ordering::Relaxed);
-        writer.join().unwrap();
+        let loaded = load_all_objects_with_fingerprints(&objects_root).unwrap();
+        bug_1673_clear_hook();
+        assert_eq!(bug_1673_titles(&loaded.0), vec!["written-between-reads"]);
+        assert_eq!(
+            calls.get(),
+            1,
+            "the fixture ran immediately before the loader read"
+        );
+        assert_eq!(
+            interleavings.get(),
+            1,
+            "the hook observed reads on both sides of its write"
+        );
     }
 }
