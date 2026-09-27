@@ -33,18 +33,18 @@
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0e016-349d-7043-bc78-9afdd81356dc
-  position: 35000
-  added_by: joe
-  note: Next bounded capture-coverage polish after STORY-1487; low-cost Sol, independent review.
-  added_at: 2026-09-27T06:20:52.780457271Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0e007-d837-7321-ba14-174ff4d50d18
   position: 36000
   added_by: joe
   note: Independent review approved; batch with TASK-1546; use integration PR CI as required merge gate.
   added_at: 2026-09-27T06:46:52.165260760Z
+  for_role: integrator
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e016-349d-7043-bc78-9afdd81356dc
+  position: 37000
+  added_by: joe
+  note: Independent review approved; batch with TASK-1544; use integration PR CI as required merge gate.
+  added_at: 2026-09-27T06:46:53.832187591Z
   for_role: integrator
   added_by_machine: imac
