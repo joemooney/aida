@@ -32,7 +32,9 @@
 //!
 //! trace:TASK-1090 | ai:claude
 
-use std::path::Path;
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// The three dispatch-health states a single `aida ps` row can classify into.
@@ -285,6 +287,10 @@ pub(crate) struct WorktreeGitProbe {
     /// reads dead.
     // trace:BUG-1656 | ai:claude
     pub(crate) dirty_newest_mtime_age_secs: Option<u64>,
+    /// BUG-1680: True when the dirty state consists exclusively of untracked files
+    /// (no tracked modified/deleted/staged changes).
+    // trace:BUG-1680 | ai:antigravity
+    pub(crate) untracked_only: bool,
 }
 
 /// BUG-1656: how recently the newest dirty file must have been written for
@@ -349,6 +355,36 @@ pub(crate) fn parse_porcelain_z(out: &str) -> Vec<(String, String)> {
             let _original = fields.next();
         }
         records.push((xy.to_string(), path.to_string()));
+    }
+    records
+}
+
+/// BUG-1680: parse `git status --porcelain -z` directly from bytes into `(XY, PathBuf)`
+/// records, preserving non-UTF-8 filenames without lossy string conversion.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn parse_porcelain_z_bytes(out: &[u8]) -> Vec<(String, PathBuf)> {
+    let mut records = Vec::new();
+    let mut fields = out.split(|&b| b == 0);
+    while let Some(field) = fields.next() {
+        if field.len() < 4 {
+            continue;
+        }
+        let xy = match std::str::from_utf8(&field[..2]) {
+            Ok(s) => s.to_string(),
+            Err(_) => continue,
+        };
+        if field[2] != b' ' {
+            continue;
+        }
+        #[cfg(unix)]
+        let path = PathBuf::from(std::ffi::OsStr::from_bytes(&field[3..]));
+        #[cfg(not(unix))]
+        let path = PathBuf::from(String::from_utf8_lossy(&field[3..]).into_owned());
+
+        if xy.contains('R') || xy.contains('C') {
+            let _original = fields.next();
+        }
+        records.push((xy, path));
     }
     records
 }
@@ -429,12 +465,113 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
     } else {
         None
     };
+    // BUG-1680: distinguish untracked-only files from salvageable changes.
+    // trace:BUG-1680 | ai:antigravity
+    let untracked_only = if dirty {
+        probe_untracked_only(worktree_path)
+    } else {
+        false
+    };
     WorktreeGitProbe {
         dirty,
         ahead_of_main,
         last_commit_subject,
         dirty_newest_mtime_age_secs,
+        untracked_only,
     }
+}
+
+/// BUG-1680: True when an untracked file is inside a directory tracked in git.
+/// Root untracked files are checked against tracked files in the repository;
+/// fails closed (returns true) if git ls-files fails.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn is_untracked_inside_tracked_dir<P: AsRef<Path>>(
+    worktree: &Path,
+    rel_path: P,
+) -> bool {
+    let path = rel_path.as_ref();
+    let parent = match path.parent() {
+        Some(p) if !p.as_os_str().is_empty() && p != Path::new(".") => p,
+        _ => {
+            // Root untracked file: check if the repository root has tracked files.
+            return match Command::new("git")
+                .arg("-C")
+                .arg(worktree)
+                .args(["ls-files"])
+                .output()
+            {
+                Ok(out) => {
+                    if !out.status.success() {
+                        // Fail closed: unresolved git state treated as tracked work
+                        true
+                    } else {
+                        !out.stdout.is_empty()
+                    }
+                }
+                Err(_) => true, // Fail closed on process execution error
+            };
+        }
+    };
+
+    let mut current = Some(parent);
+    while let Some(dir) = current {
+        if dir.as_os_str().is_empty() || dir == Path::new(".") {
+            break;
+        }
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(worktree)
+            .arg("ls-files")
+            .arg(dir)
+            .output();
+        match out {
+            Ok(output) => {
+                if !output.status.success() {
+                    // Fail closed if git ls-files fails
+                    return true;
+                }
+                if !output.stdout.is_empty() {
+                    return true;
+                }
+            }
+            Err(_) => {
+                // Fail closed if git command execution fails
+                return true;
+            }
+        }
+        current = dir.parent();
+    }
+    false
+}
+
+/// BUG-1680: True when every changed path in the worktree is an untracked file (`??`)
+/// outside of tracked directories, and none are tracked modifications, deletions, or staged changes.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn probe_untracked_only(worktree: &Path) -> bool {
+    let Ok(out) = Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["status", "--porcelain", "-z", "--untracked-files=all"])
+        .output()
+    else {
+        return false;
+    };
+    if !out.status.success() {
+        return false;
+    }
+    let records = parse_porcelain_z_bytes(&out.stdout);
+    if records.is_empty() {
+        return false;
+    }
+    let has_tracked_change = records.iter().any(|(xy, _)| xy != "??" && xy != "!!");
+    if has_tracked_change {
+        return false;
+    }
+    let untracked_in_tracked_dir = records
+        .iter()
+        .filter(|(xy, _)| xy == "??")
+        .any(|(_, path)| is_untracked_inside_tracked_dir(worktree, path));
+    !untracked_in_tracked_dir
 }
 
 /// BUG-1656: [`dispatch_state`] plus the "is the dirty tree still changing"
@@ -486,6 +623,84 @@ pub(crate) fn dispatch_state_with_movement(
 /// second session on a spec someone is working by hand.
 // trace:TASK-1090 | ai:claude
 // trace:BUG-778 | ai:claude
+// trace:BUG-1680 | ai:antigravity
+pub(crate) const PROTECTED_BRANCHES: &[&str] =
+    &["main", "master", "trunk", "develop", "aida-store", "HEAD"];
+
+/// Return the branch name currently checked out at `worktree` (its HEAD).
+/// `None` if detached or git fails.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn current_branch_at(worktree: &Path) -> Option<String> {
+    git_stdout(worktree, &["symbolic-ref", "--short", "HEAD"])
+}
+
+fn normalize_branch_name(branch: &str) -> &str {
+    let b = branch.trim();
+    if let Some(short) = b.strip_prefix("refs/heads/") {
+        return short;
+    }
+    if let Some(remotes) = b.strip_prefix("refs/remotes/") {
+        if let Some((_remote, name)) = remotes.split_once('/') {
+            return name;
+        }
+    }
+    if let Some((remote, name)) = b.split_once('/') {
+        if remote.eq_ignore_ascii_case("origin") || remote.eq_ignore_ascii_case("upstream") {
+            return name;
+        }
+    }
+    b
+}
+
+fn is_protected_branch_name(branch: &str) -> bool {
+    let normalized = normalize_branch_name(branch);
+    if PROTECTED_BRANCHES
+        .iter()
+        .any(|p| p.eq_ignore_ascii_case(normalized))
+    {
+        return true;
+    }
+    PROTECTED_BRANCHES
+        .iter()
+        .any(|p| p.eq_ignore_ascii_case(branch.trim()))
+}
+
+/// BUG-1680: Is `branch` a protected or default branch where automated salvage
+/// commits should never be recommended? Checks standard branch names as well as
+/// dynamically discovered default branch of `worktree` via the default-branch ref probe.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn is_protected_branch_at(worktree: &Path, branch: &str) -> bool {
+    let branch = branch.trim();
+    if branch.is_empty() {
+        return false;
+    }
+    if is_protected_branch_name(branch) {
+        return true;
+    }
+    // Dynamic default-branch ref discovery for the repository
+    if let Some(default_ref) = crate::detect_default_branch_ref(worktree) {
+        let default_short = default_ref
+            .strip_prefix("origin/")
+            .unwrap_or(&default_ref)
+            .strip_prefix("upstream/")
+            .unwrap_or(&default_ref);
+        let normalized = normalize_branch_name(branch);
+        if normalized.eq_ignore_ascii_case(default_short)
+            || branch.eq_ignore_ascii_case(default_short)
+            || branch.eq_ignore_ascii_case(&default_ref)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// BUG-1680: Static branch name check for backward compatibility.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn is_protected_branch(branch: &str) -> bool {
+    is_protected_branch_name(branch)
+}
+
 pub(crate) fn next_command_hint(
     state: DispatchState,
     worktree_path: &Path,
@@ -493,6 +708,28 @@ pub(crate) fn next_command_hint(
     last_commit_subject: Option<&str>,
     spec: Option<&str>,
     manual_enter: bool,
+) -> Option<String> {
+    next_command_hint_with_untracked(
+        state,
+        worktree_path,
+        branch,
+        last_commit_subject,
+        spec,
+        manual_enter,
+        false,
+    )
+}
+
+/// BUG-1680: [`next_command_hint`] with untracked-only distinction and protected-branch guard.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn next_command_hint_with_untracked(
+    state: DispatchState,
+    worktree_path: &Path,
+    branch: &str,
+    last_commit_subject: Option<&str>,
+    spec: Option<&str>,
+    manual_enter: bool,
+    untracked_only: bool,
 ) -> Option<String> {
     let wt = worktree_path.display();
     let last_commit = last_commit_subject.unwrap_or("(no commits yet)");
@@ -509,6 +746,16 @@ pub(crate) fn next_command_hint(
             None => format!("aida agent new claude --cwd {wt}"),
         }
     };
+
+    // BUG-1680: Resolve actual checked-out branch at worktree path before offering salvage.
+    // A stale lease naming a feature branch must not offer salvage-commit if the worktree
+    // is currently on main or a protected default branch.
+    // trace:BUG-1680 | ai:antigravity
+    let actual_branch = current_branch_at(worktree_path);
+    let effective_branch = actual_branch.as_deref().unwrap_or(branch);
+    let is_protected = is_protected_branch_at(worktree_path, effective_branch)
+        || is_protected_branch_at(worktree_path, branch);
+
     match state {
         DispatchState::Moving => None,
         // BUG-778: the hand-entered, launch-pending shape. Names the ONE thing
@@ -522,7 +769,7 @@ pub(crate) fn next_command_hint(
                 None => "aida session end".to_string(),
             };
             Some(format!(
-                "entered by hand — worktree {wt} (branch {branch}) is yours and no agent has been \
+                "entered by hand — worktree {wt} (branch {effective_branch}) is yours and no agent has been \
                  launched in it yet; start one there, or {release} to hand the lease back"
             ))
         }
@@ -531,16 +778,34 @@ pub(crate) fn next_command_hint(
         // is still at risk and still worth salvaging, but the framing must not
         // imply a crash that never happened. trace:BUG-778 | ai:claude
         DispatchState::Salvageable => {
-            let lead = if manual_enter {
-                "nothing running, uncommitted work"
+            // BUG-1680: distinguish untracked-only files from salvageable changes.
+            // trace:BUG-1680 | ai:antigravity
+            let work_desc = if untracked_only {
+                "untracked files only"
             } else {
-                "dead process, uncommitted work"
+                "uncommitted work"
             };
-            Some(format!(
-                "{lead} in {wt} (branch {branch}, last commit \"{last_commit}\") — \
-                 salvage-commit then rebrief: git -C {wt} add -A && git -C {wt} commit -m \"wip: salvage {branch}\" \
-                 — then: {rebrief}"
-            ))
+            let lead = if manual_enter {
+                format!("nothing running, {work_desc}")
+            } else {
+                format!("dead process, {work_desc}")
+            };
+            if is_protected {
+                // BUG-1680: Never recommend a salvage commit on the default branch
+                // (or any protected branch); instead suggest inspecting the files.
+                // trace:BUG-1680 | ai:antigravity
+                Some(format!(
+                    "{lead} in {wt} (branch {effective_branch}, last commit \"{last_commit}\") — \
+                     inspect the files: git -C {wt} status \
+                     — then: {rebrief}"
+                ))
+            } else {
+                Some(format!(
+                    "{lead} in {wt} (branch {effective_branch}, last commit \"{last_commit}\") — \
+                     salvage-commit then rebrief: git -C {wt} add -A && git -C {wt} commit -m \"wip: salvage {effective_branch}\" \
+                     — then: {rebrief}"
+                ))
+            }
         }
         DispatchState::Stalled => Some(format!(
             "no branch/dirty movement in {wt} (branch {branch}, last commit \"{last_commit}\") — resume/rebrief: {rebrief}"

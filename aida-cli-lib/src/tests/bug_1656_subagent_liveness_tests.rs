@@ -241,6 +241,7 @@ fn bug_1656_dead_lease_with_fresh_dirty_movement_gives_no_salvage_and_no_abandon
         ahead_of_main: 0,
         last_commit_subject: Some("wip".into()),
         dirty_newest_mtime_age_secs: Some(30),
+        untracked_only: false,
     };
     let (rows, orphans) = running_work(&specs, &leases, &[], probe);
 
@@ -282,6 +283,7 @@ fn bug_1656_dead_lease_with_old_dirty_diff_is_still_salvageable_and_abandoned() 
         ahead_of_main: 0,
         last_commit_subject: Some("wip".into()),
         dirty_newest_mtime_age_secs: Some(3 * 60 * 60),
+        untracked_only: false,
     };
     let (rows, orphans) = running_work(&specs, &leases, &[], probe);
     let row = rows
