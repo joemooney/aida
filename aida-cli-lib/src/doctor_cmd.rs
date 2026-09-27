@@ -5349,9 +5349,13 @@ fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> R
     if existing.lines().any(|l| l.trim() == ".aida/node.toml") {
         return Ok(false);
     }
-    // `*.tmp.*` is the atomic-write staging name (`fs_atomic::write_atomic`),
-    // so a lock-free `git add -A .` can never stage one. trace:BUG-1677 | ai:claude
-    let block =
+    // The staging-file ignores come from `fs_atomic`, which owns the staging
+    // name, so a lock-free `git add -A .` (db sync, auto-push) can never stage
+    // one. They go in the STORE worktree's tracked `.gitignore`, never the
+    // project's `info/exclude`: a store attached as a linked worktree shares
+    // the project's exclude file, so an ignore written there would hide the
+    // user's own files too. trace:BUG-1677 | ai:claude
+    let block = format!(
         "\n# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n\
          .aida/node.toml\n\
          .aida/dispenser.toml\n\
@@ -5360,8 +5364,9 @@ fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> R
          .aida/cache.db-journal\n\
          .aida/cache.db-shm\n\
          .aida/cache.db-wal\n\
-         # Atomic-write staging files (temp+rename) — never tracked\n\
-         *.tmp.*\n";
+         {}",
+        aida_core::fs_atomic::store_staging_ignore_block()
+    );
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -8732,7 +8737,13 @@ hostname = "localhost"
         assert!(gi.contains(".aida/dispenser.toml"));
         assert!(gi.contains(".aida/*.lock"));
         assert!(gi.contains(".aida/cache.db"));
-        assert!(gi.lines().any(|l| l.trim() == "*.tmp.*"));
+        for pat in aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS {
+            assert!(gi.lines().any(|l| l.trim() == *pat), "missing {pat}");
+        }
+        assert!(
+            !gi.lines().any(|l| l.trim() == "*.tmp.*"),
+            "the staging ignore must stay store-scoped"
+        );
     }
 
     /// BUG-563 GUARD: with distributed-mode config but NO attached `.aida-store`
