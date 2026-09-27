@@ -1,0 +1,33 @@
+id: 01a0e3ed-14a6-7b93-850f-b1fb76ff2585
+spec_id: TASK-1555
+agreed_id: TASK-1555
+title: Give agents one local entrypoint for the CI-only gates (make check-ci)
+description: |
+  Found while shipping TASK-1513 (2026-09-27). Its PR (#2236) went red after a 10-minute CI build on the "Check Rust test portability ratchet" step: 7 hardcoded "/tmp/fixture-*" string literals in new aida-core/src/home.rs unit tests. The full workspace suite, build-fast, fmt and clippy were ALL green locally, because `scripts/check-portability.sh` is in no make target, is absent from CLAUDE.md's documented check set, and is absent from .aida/discipline. There is no way for an implementer following the documented checks to discover it before pushing.
+
+  This is a fleet-economics bug, not a one-off. CI's Build job runs ~25 gates that the documented local check set does not, including: TUI seam guard, External-prose classifier inventory, GitLab live-smoke workflow guard, MCP doc-consistency test, advisor-code-guard hook test, advisor-code-gate substrate test, pre-commit provenance move-detection test, ~/.aida home-guard self-test, CLI-manual drift-guard, Monitor contract drift guard, Removed mode-flag spelling guard, Check Rust test portability ratchet, Prose-classification rule fixtures, Glyph-literal lint, Trace/doc-header stranding gate, Doc-intent gate. Every gate an agent cannot run locally costs a full CI cycle plus a re-push, and on a constrained host that is the dominant cost of a fix.
+
+  Acceptance criteria:
+
+  1. A single make target (suggest `make check-ci`) runs every CI gate that CAN run locally, in CI's own order, and exits non-zero on the first failure. Gates that genuinely cannot run locally (anything needing GitHub/GitLab credentials, a live forge, or a non-Linux runner) are explicitly SKIPPED with a printed one-line reason naming the gate, so the skip list is visible rather than silent.
+  2. The target is fast enough to be run before every push, or is split so it is: e.g. `make check-ci-fast` for the pure-script gates that need no build (portability ratchet, glyph lint, spelling guard, prose-fixture, drift guards) and `make check-ci` for the full set. The script-only tier must not require a cargo build.
+  3. CLAUDE.md's check list names the new target as the pre-push gate, replacing the current enumeration that silently omits ~25 gates.
+  4. The implementer/reviewer briefs in the AIDA skill templates tell agents to run it. Since aida-core/templates/ is the source of truth, update the template master and run `make sync-templates` + `make check-templates`.
+  5. A test or CI step keeps the target honest: if a new gate is added to .github/workflows/ci.yml and not to the local target (or to the documented skip list), something fails. Otherwise this drifts straight back out of date -- that drift is the actual root cause here.
+
+  Out of scope: changing any gate's rules, and the portability fix for TASK-1513 itself (already fixed in that branch).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T17:32:40.486442883Z
+modified_at: 2026-09-27T17:32:40.486442883Z
+req_type: Task
+filed_at:
+  code_sha: 6b1dac2a201bae751901ab95ad49e591292465a1
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '7201317922'
+  vendor: antigravity
+  session: 3266fac0-5feb-463f-a891-7a3a066739c1
