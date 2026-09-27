@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:47:36.637006946Z
-modified_at: 2026-09-27T11:04:25.580407970Z
+modified_at: 2026-09-27T14:28:33.436737061Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -52,3 +52,6 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+deferred: true
+deferred_at: 2026-09-27T14:28:33.436737061Z
+deferred_until: the aida binary active on this host is rebuilt from a main that contains BUG-1655 and 'aida schedule status' loads the bound form; Joe approves the install and the live .aida/config.toml route edit
