@@ -1,0 +1,35 @@
+id: 01a0e3a8-534d-78f0-a57d-6b7acc818783
+spec_id: BUG-1692
+agreed_id: BUG-1692
+title: bug_1502_format_json_audit's aida history probe compares cache-provenance fields, so it flakes under load
+description: |-
+  `checked_in_audit_is_exhaustive_and_every_honoured_probe_parses` (aida-cli/tests/bug_1502_format_json_audit.rs:455) runs each probe twice — once as `--format json`, once as `--json` — and asserts the two JSON documents are equal after `normalize_volatile`.
+
+  For the `aida history --full` probe the two documents are NOT stably equal. The FIRST invocation warms the history index, so the SECOND is served from it: `source` flips `git-walk` -> `history-cache` and `index_tip` flips `null` -> a store sha. `normalize_volatile` (line 200) only removes `idle_secs`, so neither field is stripped and the assertion fails on the provenance fields while every event is byte-identical.
+
+  MEASURED 2026-09-27 on claude/story-1478 (base 7201317922):
+  - `cargo test --workspace`: FAILED, 7 passed 1 failed — the only failure in the whole workspace. Diff was exclusively `source` and `index_tip`; the `events` arrays and `count` matched exactly.
+  - Same test file alone, changes stashed (pristine base): ok, 8 passed, rc=0.
+  - Same test file alone, changes applied: ok, 8 passed, rc=0.
+
+  So it reproduces only under full-workspace load (timing decides how much index the first call manages to build), and it is independent of the branch under test — it passed in isolation both with and without the branch's changes.
+
+  ## Acceptance
+  - `normalize_volatile` also drops the cache-provenance fields (`source`, `index_tip`) — or the history probe pins `AIDA_HISTORY_CACHE=0` — so the two spellings are compared on the answer, not on which source happened to serve it.
+  - The test still fails if the two spellings genuinely disagree about `count` or any event field.
+  - A regression test (or a comment recording the measurement above) states why the provenance fields are excluded, so a later reader does not re-add them.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T16:17:34.541546385Z
+modified_at: 2026-09-27T16:17:34.541546385Z
+req_type: Bug
+filed_at:
+  code_sha: ed4164b71dcf92baefceae31163ca76004ff60e6
+  branch: claude/story-1478
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: da36c066-c384-494e-a7cf-abffb3cfe52d
