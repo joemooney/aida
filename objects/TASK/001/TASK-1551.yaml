@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:11:56.017473960Z
-modified_at: 2026-09-27T16:04:15.585296229Z
+modified_at: 2026-09-27T16:22:07.447451902Z
 req_type: Task
 tags:
 - build throughput profile from:operator
@@ -74,6 +74,22 @@ comments:
     Same timing rule as the rest of this spec: do NOT change it mid-wave. Switching CARGO_TARGET_DIR now would force every in-flight agent to rebuild from scratch in the new location. Sequence it with TASK-1537's baseline on a quiet machine, and measure cold-parallel against warm-serialised with the concurrency recorded beside each number.
   created_at: 2026-09-27T16:04:15.585296229Z
   modified_at: 2026-09-27T16:04:15.585296229Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e3ac-7d57-7a01-84ae-2c20d6b20fe7
+  author: joe
+  content: |-
+    INCIDENT + FIX (orchestrator, 2026-09-27 09:22): the build-slot wrapper I installed had a real FAIRNESS defect, found by a subagent, not by me.
+
+    The bug: the wrapper polled all slots with 'flock -n' inside a sleep loop. That is not a queue — every waiter races on every wakeup, so arrival order is ignored and old waiters starve. Measured by the STORY-1478 implementer: it waited 56 MINUTES as the second-oldest of 17 waiters while 20-second-old waiters repeatedly won slots. It worked around this itself by switching to a blocking flock rather than bypassing the budget or killing its build, which was the right call.
+
+    The fix, now in ~/.local/bin/cargo (backup cargo.bak2-20260927): take a BLOCKING flock on a single queue.lock first, so the kernel orders waiters by arrival; only the queue holder then polls for a free slot, and it releases the queue lock at the moment it acquires one. Same N-slot budget, fair service order. Verified: a gated 'cargo build --help' acquires a slot and returns 0, and queue.lock now exists beside slot-0/slot-1.
+
+    MY OWN MISTAKE, recorded because it cost other agents time: to kill my stalled rebuild I ran 'pkill -f "cargo build --workspace --release"'. That pattern matches EVERY worktree's 'make build-fast', not just mine, so it was effectively a fleet-wide build kill. Confirmed casualties: my own rebuild (log shows 'make: *** [Makefile:117: build-fast] Terminated'), and the wt-story-1476 worktree showed fresh 14-second-old builds immediately afterwards, consistent with a restart. I messaged the STORY-1476 and TASK-1517 implementers so neither misdiagnoses a killed build as a defect in its own change.
+    LESSON FOR THIS SEAT: never pkill on a pattern shared by the fleet. Kill by pid, or scope the pattern to the worktree path. 'Look before deleting' applies to processes too.
+
+    Also relevant to this spec's measurement plan: the starvation means every build-queue timing taken before 09:22 today is unreliable as evidence, because wait time depended on luck rather than load. TASK-1537's baseline must be taken AFTER this fix, which strengthens the existing requirement to take it on a quiet machine.
+  created_at: 2026-09-27T16:22:07.447451902Z
+  modified_at: 2026-09-27T16:22:07.447451902Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e36c-a542-70f3-9af1-2f55156db28e
