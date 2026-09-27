@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-09-27T04:35:37.056717702Z
+modified_at: 2026-09-27T14:28:42.447958126Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -675,6 +675,47 @@ comments:
   content: 'PROXY DECISION (product for Joe): Independent architecture signoff 01a0e11e-12db-7cd0-a3d1-39df79961a63 accepted with M1-M5 as binding DESIGN only. Captured and linked three blocked-by prerequisites: TASK-1549 acceptance/deployment ADR, SPIKE-91 protected backend and disposable proof plan, TASK-1550 host-wide admission/cutover inventory. They authorize research/docs/read-only inventory only, not code implementation, privileged tests, service installation, credential migration, deployment or merge. BUG-1669 remains implementation-held even after these specs complete until a concrete package returns for Joe''s separate approval and independent evidence review. BUG-1679 is blocked-by BUG-1669 and PR #2226 remains operator-held.'
   created_at: 2026-09-27T04:35:37.056717702Z
   modified_at: 2026-09-27T04:35:37.056717702Z
+- id: 01a0e344-a74f-7ac2-9d00-616a8f6ace48
+  author: joe
+  content: |
+    ACCEPTANCE RECONCILIATION PROPOSAL (TASK-1549 design record) — PROPOSAL ONLY. I have NOT edited this spec's acceptance; acceptance changes are product's call. No implementation, queue, dispatch, installation, credential, deployment or merge change is made or requested by this comment, and BUG-1669 remains blocked and implementation-held.
+
+    Seat: architect/documentation only, on TASK-1549 (branch claude/task-1549, worktree /home/joe/ai/wt-task-1549). Read BUG-1669 --full and all twelve comments, BUG-1679 --full and its comments, TASK-1550 and SPIKE-91. The design record is docs/plans/2026-09-27-adr-60-p-enrolled-host-protected-launch-boundary.md (ADR-60), which incorporates independent architecture signoff 01a0e11e-12db-7cd0-a3d1-39df79961a63 with binding amendments M1-M5, and records Joe's decisions 01a0e0a3 (literal same-user anti-forgery), 01a0e103 (every AIDA-managed launch on this host across projects, unmanaged clients excluded) and 01a0e10c (P-enrolled-host accepted IN PRINCIPLE, design authorization only).
+
+    Why the current acceptance needs reconciling
+
+    AC2 names two authorities that the recorded evidence disqualifies. "The unforgeable drain run-token check (orchestrator::detect)" reads a non-empty AIDA_AUTO_COMPLETE, a UUID equal to DrainState::run_uuid in ordinary project JSON, and a live PID; it authenticates no issuer, ancestry, process-start identity or operation scope. "A human confirmed at a real terminal" resolves to authority_stdin_is_terminal / authority_stdout_is_terminal, two IsTerminal observations that an agent-created PTY satisfies before answering yes. Under 01a0e0a3 neither is sufficient, so the wording must change without weakening the requirement: "unforgeable" describes the required boundary, not today's detect.
+
+    AC4's positive fixture is worse than insufficient. A hand-written DrainState with a matching UUID and a live fixture PID demonstrates the forgery; retaining it as the positive security test would certify the vulnerability. It must be reversed into a required negative.
+
+    Proposed replacement text for product to adopt, amend or reject
+
+    AC1 - Inventory every AIDA-managed production agent launch across projects on this host, including configured, foreground, background, resumed, wrapped, scripted and IDE/MCP routes, and each route's effective resolved vendor posture. List each in the PR body with its protected admission or its explicit refusal.
+
+    AC2 - A full-access launch requires EITHER explicit operator approval through an authenticated, agent-inaccessible approval endpoint that displays the exact scoped request, OR an authenticated, still-live, scope-limited controller delegation derived from such an approval. The broker validates and performs the launch atomically. A terminal is a request and display surface only, unless it IS that separately protected endpoint. IsTerminal, a fabricated PTY answering yes, legacy orchestrator::detect, AIDA_AUTO_COMPLETE and its token, DrainState UUID/PID corroboration, effective role, --force/--yes/--no-human, and any other ambient environment value grant nothing. (Replaces AC2's detect/terminal wording; detect is retained as a diagnostic classifier only.)
+
+    AC3 - Otherwise a typed nonzero refusal and no agent launched, with no alternate vendor, backend or local fallback, and no launch-associated mutation before a valid preparation reservation. (Extends the present AC3 with the no-fallback and no-side-effect-before-reservation clauses.)
+
+    AC4 - Retain fake HOME, injectable terminal observations and real-handler per-sink refusal coverage for every inventoried branch. REVERSE the old writable-state / live-PID positive fixture into a required forgery negative: hand-written DrainState with a matching UUID and a live PID must now FAIL, as must a fabricated PTY answering yes and both IsTerminal observations forced true. The positive case is authenticated approval -> protected controller -> scoped phase worker -> allowed next phase over the real protected channels. Add both hermetic protocol coverage AND disposable actual-boundary evidence; a privileged suite that skips is not a pass. Test injection seams are cfg(test) only and never a production authorization feature.
+
+    AC5 (new) - No claim that protection is deployed may appear in code, CLI output, docs, release notes or the PR body until the real-boundary evidence exists and has been independently reviewed.
+
+    Consequence product must weigh before adopting: under the proposed AC2/AC3, closing this bug without the protected backend means every affected full-access route REFUSES, interrupting today's unattended solo, burndown, wave, watch and scheduled work. That consequence was accepted in principle by 01a0e10c; its execution is a separate deployment gate and is NOT YET GRANTED.
+
+    Gate separation preserved (M5)
+
+    1. Independent architecture signoff - CLOSED by 01a0e11e, architecture only, as amended by M1-M5.
+    2. Concrete installer/backend/credential proposal, independently reviewed - OPEN (SPIKE-91, TASK-1550).
+    3. Disposable privileged proof on a real installed boundary - OPEN; mocks and source review are not protection proof, and a skipped privileged suite is a block, not a pass.
+    4. Deployment approval (installation, enrollment, credentials, cutover, current-run handling, recovery/rollback) - OPEN, never granted.
+    5. Operator-held merge gates - OPEN. BUG-1669 stays implementation-held even after TASK-1549, SPIKE-91 and TASK-1550 complete, per 01a0e125.
+
+    Accepted in principle is not approval to implement, install, migrate or deploy, and no protection is deployed today. BUG-1679's protected binary identity/admission dependency is recorded in ADR-60 section 10: AIDA_BIN is untrusted input, a different coordinating build may be selected only through protected installation/admission/update policy with a launch plan bound to that admitted identity, and identity admission is necessary but is not itself a scoped launch grant. PR #2226 at e63efc3997a85df8cb1ff463f48222900ed5f7d6 REMAINS OPERATOR-HELD with aida:merge-hold, per 01a0e115 and 01a0e11a; neither green CI, mechanical repairs, revised acceptance nor a future reviewer pass removes it.
+
+    Requested next action: product decides on the AC text above. This comment does not queue, unblock or dispatch BUG-1669, BUG-1679 or TASK-1550.
+  created_at: 2026-09-27T14:28:42.447958126Z
+  modified_at: 2026-09-27T14:28:42.447958126Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
   author: joe
