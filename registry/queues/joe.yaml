@@ -48,3 +48,11 @@
   added_at: 2026-09-27T08:12:15.399387129Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0df68-5d60-7291-80bc-d17b53b2282e
+  position: 30000
+  added_by: joe
+  note: Approved ready backlog; bounded env-guard/test-lint completion; independent review required.
+  added_at: 2026-09-27T08:25:05.796202046Z
+  for_role: implementer
+  added_by_machine: imac
