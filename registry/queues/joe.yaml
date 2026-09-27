@@ -6,13 +6,6 @@
   added_at: 2026-09-27T03:28:01.703827990Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0df88-9a37-71a0-866f-2aacedfb1284
-  position: 1000
-  added_by: joe
-  note: 'REWORK for PR #2223 at 060589ef39b48f5b15fbe4d9bc427d6bdd6fe0b7: .aida/review-verdicts/TASK-1535.json requests changes. build_invalid_route_findings omits invalid enabled routes without the -route suffix, contrary to approved PLAN. Concrete implementer brief: .aida/agent-briefs/codex/TASK-1535-2026-09-27T021635Z.md. Keep review gate open pending independent re-review.'
-  added_at: 2026-09-27T02:17:00.604417645Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a0d690-9e8a-72f1-a753-ee587125c211
   position: 3000
   added_by: joe
@@ -39,29 +32,6 @@
   note: proxy groom 2026-09-25
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 01a0dfa4-74cd-7a52-b61b-6878425b5363
-  position: 30000
-  added_by: joe
-  note: 'Proxy dispatch: bounded cache-read fix; Astra implementer, strict review'
-  added_at: 2026-09-27T01:23:37.429475155Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e040-2ea5-7723-9a84-29ea9bdd4850
-  position: 32000
-  added_by: joe
-  added_at: 2026-09-27T01:34:31.079382781Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e027-66da-7213-92b2-0553753e02f5
-  position: 33000
-  added_by: joe
-  note: Independent architecture signoff 01a0e104-7ab9-7a73-b79b-1843eb5bcee1; strict review and Windows CI required.
-  added_at: 2026-09-27T04:01:49.487617234Z
-  for_role: implementer
-  added_by_machine: imac
 - user_id: joe
   requirement_id: 01a0e007-d837-7321-ba14-174ff4d50d18
   position: 34000
