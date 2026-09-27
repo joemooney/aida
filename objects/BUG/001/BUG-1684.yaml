@@ -3,12 +3,12 @@ spec_id: BUG-1684
 agreed_id: BUG-1684
 title: make build-fast works with a configured sccache wrapper
 description: 'Regression: with build.rustc-wrapper set to sccache in ~/.cargo/config.toml, make build-fast sets CARGO_INCREMENTAL=1 and fails before compilation with sccache: incremental compilation is prohibited. Acceptance: make build-fast preserves incremental release iteration and succeeds with sccache configured globally; the ordinary build-release behavior is unchanged; document the wrapper interaction near the target.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T01:04:41.671496965Z
-modified_at: 2026-09-27T01:33:30.557975965Z
+modified_at: 2026-09-27T01:35:32.255823146Z
 req_type: Bug
 tags:
 - build-time
@@ -39,3 +39,22 @@ comments:
     No head mismatch or required-check/merge-hold blocker found. Disposition is valid for this SHA only; integrator must recheck head and gates at merge time. This comment records readiness only: no merge, branch-protection change, queue mutation, or new work dispatch performed.
   created_at: 2026-09-27T01:33:30.557969407Z
   modified_at: 2026-09-27T01:33:30.557969407Z
+history:
+- id: 01a0e080-ca8b-7f10-93d9-998beb6e7b73
+  author: aida-auto-bump
+  timestamp: 2026-09-27T01:35:31.979777816Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e080-cb9f-78f0-a806-adbd86a92417
+  timestamp: 2026-09-27T01:35:32.255817336Z
+  agent: aida
+  commit_sha: 854b7e26f7222c73845064275a18c293c9895283
+  summary: 'VERDICT: APPROVE — build-fast clears the global sccache wrapper while retaining CARGO_INCREMENTAL=1; build-release is unchanged; local reproduction and PR CI pass.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T01:35:31.979644159Z
+  completion_sha: 854b7e26f7222c73845064275a18c293c9895283
