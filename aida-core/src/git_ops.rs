@@ -2017,7 +2017,9 @@ pub fn remove_worktree_at(repo_root: &Path, worktree_path: &Path, force: bool) -
             result.stderr
         );
     }
-    let _ = git(repo_root, &["worktree", "prune"]);
+    // trace:TASK-1543: do not run repo-wide `git worktree prune` here;
+    // `git worktree remove` already removed this worktree, and a prune would
+    // clear another session's temporarily unavailable worktree registration.
     Ok(())
 }
 

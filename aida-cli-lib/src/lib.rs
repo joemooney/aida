@@ -25189,16 +25189,19 @@ fn worktree_is_active(wt: &std::path::Path, active: &HashSet<std::path::PathBuf>
         .any(|a| *a == wt_canon || a.starts_with(&wt_canon))
 }
 
-/// BUG-614: is this worktree locked? Parses `git worktree list --porcelain` and
-/// reports whether the record for `wt` carries a bare `locked` line (git emits
-/// `locked` with an optional reason after it). Read-only; false on any git
-/// failure so a probe error never makes us treat a worktree as removable.
-/// trace:BUG-614 | ai:claude
-fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path::Path) -> bool {
+/// Is this worktree locked? Parses `git worktree list --porcelain -z`
+/// and reports whether the record for `wt` carries a `locked` field (git emits
+/// `locked` with an optional reason after it). `-z` terminates each attribute
+/// with NUL and each entry with an extra NUL, correctly handling worktree paths
+/// containing newlines. Read-only; false on any git failure so a probe error
+/// never makes us treat a worktree as removable.
+// trace:BUG-614 trace:TASK-1543 | ai:antigravity
+pub(crate) fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path::Path) -> bool {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["worktree", "list", "--porcelain"])
+        .args(["worktree", "list", "--porcelain", "-z"])
+        .stderr(std::process::Stdio::null())
         .output();
     let Ok(out) = out else { return false };
     if !out.status.success() {
@@ -25207,13 +25210,15 @@ fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path::Path) -> b
     let wt_canon = wt.canonicalize().unwrap_or_else(|_| wt.to_path_buf());
     let text = String::from_utf8_lossy(&out.stdout);
     let mut cur_match = false;
-    for line in text.lines() {
-        if let Some(p) = line.strip_prefix("worktree ") {
+    for field in text.split('\0') {
+        if let Some(p) = field.strip_prefix("worktree ") {
             let rec = std::path::PathBuf::from(p);
             let rec_canon = rec.canonicalize().unwrap_or(rec);
             cur_match = rec_canon == wt_canon;
-        } else if cur_match && (line == "locked" || line.starts_with("locked ")) {
+        } else if cur_match && (field == "locked" || field.starts_with("locked ")) {
             return true;
+        } else if field.is_empty() {
+            cur_match = false;
         }
     }
     false

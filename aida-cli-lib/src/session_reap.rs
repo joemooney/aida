@@ -960,13 +960,20 @@ fn reap_one(
     }
     // A worktree directory removed by hand leaves a prunable registration
     // behind; clear it so no dangling entry still names the deleted branch.
-    // `prune` only drops entries whose directories are gone.
-    // trace:BUG-1657 | ai:claude
+    // Scope removal to this lease path rather than a repo-wide prune so
+    // another session's temporarily unavailable worktree keeps its registration.
+    // trace:BUG-1657 trace:TASK-1543 | ai:antigravity
     if worktree_missing {
         let _ = std::process::Command::new("git")
             .arg("-C")
             .arg(project_root)
-            .args(["worktree", "prune"])
+            .args([
+                "worktree",
+                "remove",
+                "--force",
+                crate::git_arg_guard::END_OF_OPTIONS,
+            ])
+            .arg(&lease.worktree_path)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status();
@@ -1486,3 +1493,9 @@ mod task_1179_chain_suggest_tests;
 #[cfg(test)]
 #[path = "tests/bug_1657_batched_reap_tests.rs"]
 mod bug_1657_batched_reap_tests;
+
+// Reap polish: scoped missing worktree removal and porcelain -z lock detection.
+// trace:TASK-1543 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/task_1543_reap_polish_tests.rs"]
+mod task_1543_reap_polish_tests;
