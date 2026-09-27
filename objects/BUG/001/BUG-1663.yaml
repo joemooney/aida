@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:34.548951365Z
-modified_at: 2026-09-26T21:32:56.653933827Z
+modified_at: 2026-09-27T03:59:10.200226944Z
 req_type: Bug
 comments:
 - id: 01a0dea0-6f6e-78a3-ae49-563b56513f63
@@ -49,6 +49,53 @@ comments:
   created_at: 2026-09-26T21:32:56.653933827Z
   modified_at: 2026-09-26T21:32:56.653933827Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e104-4b78-72e2-999e-79972b4e139e
+  author: codex independent sketch-author advisor
+  content: |
+    SKETCH (awaiting advisor signoff):
+
+    Owner/trigger and sequencing
+    BUG-1663 owns the cache rebuild source-snapshot race identified by TASK-1515 round-3 finding 3, comment 01a0de9f-61ac-7821-912b-6d4e8f8a9f48. This is a sketch-author proposal, not my own signoff, implementation review, or merge approval. Read-only inspection at main 854b7e26f7222c73845064275a18c293c9895283 confirms full_rebuild loads mutable files after capturing HEAD. A transient modification/addition can enter the rows, then a revert/deletion leaves no net diff from the stamped commit and a later incremental incorrectly declares those rows fresh. The review also explicitly includes a failed, uncommitted write being reverted.
+    Implementation MUST follow completion/integration of active TASK-1526 slice B and start from its landed API, after independent advisor signoff on this sketch. TASK-1526 is In Progress; its binding pre-C decision is 01a0e0fb-8d6b-7790-b04b-f808236dbe2d, adopted by product in 01a0e0fd-bc48-7600-bc20-b0a8f781d0f7. Do not overlap its cache edits or absorb this fix into its active scope. Product owns eventual routing; no status, queue, lease or relationship changes are made here.
+
+    Invariant and concrete choice
+    For a committed rebuild stamped S, the complete source inputs (object membership, each object's bytes, and metadata used by projection) must come from one immutable commit tree S. Projection-derived columns follow existing projection rules. Rows plus S, built_at and schema_version commit atomically as TASK-1515 requires. S is provenance, not an assertion that HEAD cannot move immediately afterward. Never stamp the latest observed HEAD on an earlier or mixed load.
+    Choose a cache-only pinned-commit loader, not a before/after HEAD or index-mtime heuristic and not persistent per-row blob IDs. Resolve an actual commit OID once, enumerate objects recursively from that tree, read their blobs and metadata.yaml from that same OID, deserialize, then assemble a projection-only RequirementsStore. Use batched Git object reads (or equivalent existing library support), not one git subprocess per spec, no checkout/reset or temporary modification of the live worktree. Keep the mutable GitBackend::load/save load-snapshot/CAS contract separate; this projection object is not a new save baseline. Missing metadata may default only when absent in the pinned tree under the existing metadata contract. Object read/parse failures must abort this rebuild rather than quietly stamp an incomplete set (today load_all_objects_with_fingerprints warns and skips).
+
+    Concurrent commits and fallback
+    A commit during loading cannot contaminate this load: finish from S and publish S only. Integrate with B's transaction-time cache-head recheck: a delayed freshness rebuild must not overwrite an already advanced valid projection; re-evaluate mismatched/non-ancestor publication state instead of imposing lexical SHA ordering. Preserve B's distinction between an optional freshness refill and a forced save reconciliation (the WIP handoff already caught an incorrect skip there).
+    After publication, recheck current HEAD. A strict refresh that still needs catch-up may retry against the new pinned commit, bounded to three snapshot attempts total; reuse a demonstrably safe incremental path when applicable, otherwise another pinned full rebuild. If commits keep outrunning the bound, return an explicit store-moved/retry error to strict callers, not success-as-fresh and not an unverified worktree rebuild. A valid historical projection may remain committed at S; it must stay stale relative to the observed current HEAD. Snapshot read/parse/Git failures leave the prior cache unchanged. An unreadable HEAD in a real Git store is an error, not the empty-string non-Git fixture convention. Commit loss from concurrent destructive GC/ref rewrite likewise errors/retries boundedly, never falls back to live files. No protocol can promise freshness against a commit after its final observation; the guarantee is an internally correct generation and an honest comparison at the return decision.
+
+    Files/symbols and race boundaries
+    - aida-core/src/db/cached_git_backend.rs: full_rebuild, ensure_cache_fresh, rebuild_after_cache_schema_drift, rebuild_cache; route all unlocked full rebuild entry points through pinned snapshot loading. Re-audit save/update_atomically reconciliation after B lands so no mutable/unproven input receives a valid committed SHA. Keep forced reconciliation distinct from optional freshness skip.
+    - aida-core/src/db/git_backend.rs: add an internal cache-projection loader near load_metadata/assemble_store; do not replace StorageBackend::load or alter loaded_objects save semantics.
+    - aida-core/src/git_ops.rs (or an existing suitable Git-object helper discovered during implementation): exact-commit tree enumeration and batched blob reads, checked exit status/framing, bounded paths within metadata.yaml/objects. Reuse object deserialization semantics from object_store.rs without its warning-and-skip full-load policy.
+    - aida-core/src/db/cache.rs: rebuild_projection/rebuild_from_store/rebuild_from_store_after_schema_drift keep transactional rows/stamps/migration, and B's in-transaction refresh-generation guard. No schema change is intended.
+    - Tests in cached_git_backend.rs and cache.rs, plus focused snapshot-loader tests; adapt locations to landed B.
+    The refresh flock is single-flight optimization, not source consistency or writer exclusion. No store lock is held for the full Git-tree scan; no new store/flock/SQLite lock-order cycle. Preserve busy_timeout=0 and retry delays. Dirty worktree/index writes, checkout order, same-HEAD transient write/revert, deletion during enumeration, HEAD advance after load, and publication delayed behind another refresher are explicit cases. Existing incremental live-file reads and pre-resolved epic inputs must not be used as an unproven catch-up shortcut: keep B's guards, and if source consistency cannot be established for the selected incremental, decline to the pinned rebuild on strict paths. This sketch does not claim HEAD equality alone proves absence of dirty-file races.
+
+    Deterministic acceptance fixture
+    Use isolated real Git store/cache and fake HOME; barriers/channels or scoped cfg(test) hooks with cleanup, never sleep-based scheduling or the live store. Pause the rebuild after capturing S but before enumeration/object consumption; allow a writer to commit T; pause again after the targeted object would be consumed but before publication, then commit U. Two fixtures:
+    1. At S, existing X has title original. T changes X to transient. U restores X to original. Assert diff(S,U) for X is empty. Under the old worktree loader, force consumption of transient bytes between barriers; the fixed loader must consume S's original bytes.
+    2. At S, X is absent. T adds X before enumeration/consumption. U deletes X after consumption. Assert diff(S,U) for X is empty. The old loader can insert a ghost; the pinned loader must never include X for S.
+    After releasing the barriers, drive the normal next refresh and inspect rows + raw source_head_sha together on a separate SQLite read transaction: current content/membership, no ghost, and a stamp whose commit projection agrees. Accept either a correct S intermediate snapshot followed by catch-up or bounded retry straight to U; never transient rows labelled S/U. Add a same-HEAD dirty-write/revert variant to defeat the naive pre/post HEAD-check fix. Mutation check: switching snapshot reads back to mutable worktree consumption must make these tests fail.
+    Additional barriers cover a commit after snapshot load/before SQLite publish, competing newer publication while this rebuild waits, continuous commits exhausting the strict bound, malformed/missing blob abort with prior rows/stamp intact, and atomic migration with a held reader. Exercise ordinary fallback, explicit rebuild, and schema-drift rebuild. Preserve save reconciliation regression coverage. Assert counters/path selection, not only elapsed time.
+
+    Strict versus tolerant readers
+    Strict mutations/gates and explicit rebuilds may not report an unproven snapshot fresh or silently serve stale on exhaustion/error. B's compatible tolerant readers retain bounded waits and its scoped row/metadata labels: Deferred before C when a full rebuild is needed, WriterBusy only from actual SQLite contention, and a running state only with corresponding evidence. This BUG does not make the pre-C non-TTY reader run a full scan, reset its wait budget, invent a worker/request, or weaken migration/unsupported-lock exceptions. Arbitrary parse/Git/schema errors are not relabelled as Deferred. TASK-1527 may later invoke this same loader from its worker; no worker dependency is required to fix explicit/strict rebuilds. BUG-1674's separate show deadline remains untouched.
+
+    Out of scope
+    No detached worker/request/backoff machinery (TASK-1527), caller conversion (TASK-1514), show redesign (BUG-1674), immutable second SQLite cache (SPIKE-90), lease/queue changes, general store-lock redesign, cache schema/per-row blob persistence, or cleanup of unrelated findings. No general promise that existing incremental graph approximations become exact. No edits or test execution were performed in this sketch-author pass; source inspection and review findings are the evidence, fixture outcomes above are proposed acceptance.
+
+    Open questions for independent advisor signoff
+    1. Approve pinned committed-tree projection, including fail-closed malformed-object behavior, rather than preserving the worktree loader's skip-and-warn behavior for rebuilds?
+    2. Dirty/no-auto-commit operation: proposal is that uncommitted worktree state must not be labelled with a committed SHA. Preserve non-Git fixture support through an explicit separate unstamped path; for real Git no-auto-commit/save reconciliation, either prove committed equivalence or publish without a freshness claim and return an explicit strict error where required. Confirm the intended operator-facing dirty-store behavior before implementation; do not silently discard read-your-writes semantics or pretend an empty stamp is fresh.
+    3. Approve three total strict snapshot attempts and the explicit store-moved error on exhaustion? Tolerant budgets remain B's and must not multiply this loop.
+    4. Confirm scope of adjacent incremental provenance: proposed minimum is to refuse an unproven incremental catch-up and use the pinned loader; if proving that needs a broad incremental rewrite, return to advisor for a bounded follow-up decision rather than expanding silently. The rebuild fix must itself be complete and cannot depend on the ABA diff to repair mixed rows.
+
+    Awaiting a different advisor's signoff; this author does not approve the sketch.
+  created_at: 2026-09-27T03:59:10.200226944Z
+  modified_at: 2026-09-27T03:59:10.200226944Z
 history:
 - id: 01a0dea0-66d6-7c71-a99a-d4b483ae8687
   author: joe
