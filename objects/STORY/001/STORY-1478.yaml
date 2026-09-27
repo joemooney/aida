@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:46:45.113349128Z
-modified_at: 2026-09-27T16:18:04.170953432Z
+modified_at: 2026-09-27T18:26:19.904437127Z
 req_type: Story
 tags:
 - aida:history
@@ -150,6 +150,27 @@ comments:
   created_at: 2026-09-27T16:18:04.170953432Z
   modified_at: 2026-09-27T16:18:04.170953432Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e41e-3480-75c2-b8eb-c794894bd65e
+  author: joe
+  content: |-
+    Review: REQUEST_CHANGES (cross-vendor reviewer: codex seat; did not write it). Head ed4164b71dcf92baefceae31163ca76004ff60e6. Four blockers, all with file:line.
+
+    BLOCKER 1 -- the headline invariant does not actually hold. Span durations and elapsed time each truncate to MILLISECONDS at separate boundaries (history_timeline.rs:149-151 and :439-449), and the invariant check tolerates up to 2ms of drift. With nanosecond timestamps, several sub-millisecond spans can each truncate to ZERO while their combined elapsed interval rounds to multiple milliseconds, so 'work + wait + unknown == elapsed' is false for a window split into enough sub-ms intervals. Fix: compute from shared integer duration units, or preserve sub-millisecond precision, so the identity is exact rather than tolerance-based. (The half-open partition at :809 is correct and does prevent double-counting overlaps -- that part is fine.)
+
+    BLOCKER 2 -- clock skew silently reorders lifecycle transitions. Store markers sort by timestamp then SHA (:287). If skew places a later status commit before an earlier one, transitions are reordered and wrong boundaries get selected. The status-interval code clamps a reversed interval to zero (:493-500) instead of surfacing the conflicting order as unknown. Cross-machine skew is real in this system, so a reversed pair must become unknown/disputed, not silently zero.
+
+    BLOCKER 3 -- the unfinished-endpoint guarantee is UNTESTED for the ordinary case. The code does end an unfinished timeline at the latest store/event timestamp rather than Utc::now() (:334-349), which is right, but the only related test (:2255-2291) covers a REOPEN AFTER COMPLETION, not an unfinished timeline whose end is asserted against an advancing wall-clock. This is exactly the regression that would go unnoticed, so it needs its own test.
+
+    BLOCKER 4 -- phase closure ignores completion flags, against the signed amendments. A same-run RunCompleted closes EVERY open phase without checking its completion flags (:608-609), so a run-completed record with pull_completed or build_completed false is treated as evidence that trailing work finished. Gate phase closure on the matching phase AND its successful completion flags.
+
+    ALSO FIX (smaller, same class as the claim the branch makes): malformed store git-log records are silently dropped -- filter_map(parse_log_line) at :1292-1295 discards unparseable lines without reporting them. The branch deliberately avoids events::read_all precisely because it silently drops lines, so this is the same defect in the store path. Surface those failures as incomplete coverage the way the JSONL reader does (:1392-1397, :1419-1452).
+
+    CONFIRMED CORRECT, do not touch: unknown spans are never interpolated (:847-857); equal-authority disagreement yields unknown 'disputed' (:858-869); the JSONL event reader does NOT silently drop unparseable lines and counts parse failures in its coverage note; RFC3339 timestamps are converted to UTC so DST/offset arithmetic is not a hazard (:1328-1332); empty history errors rather than emitting a confident empty result (:312-315); reversed phase intervals and reversed forge checks are already handled (:595-598, :779-785).
+
+    BUG-1692 is corroborated as genuinely pre-existing: the audit test and normalization logic are unchanged on origin/main and the assertion still compares history JSON without removing 'source' or 'index_tip' (bug_1502_format_json_audit.rs:200-207, :455-458). Not a blocker here. Build-free CI gates all exit 0.
+  created_at: 2026-09-27T18:26:19.904437127Z
+  modified_at: 2026-09-27T18:26:19.904437127Z
+  session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
 history:
 - id: 01a0e347-77cb-77e0-afba-62a0d3d07bcf
   author: aida-session-start
