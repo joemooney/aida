@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:01:08.750080015Z
-modified_at: 2026-09-27T15:03:56.972895357Z
+modified_at: 2026-09-27T15:30:39.985238186Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -55,6 +55,41 @@ comments:
     FOR TASK-1519. Retiring .antigravity/skills is safe: nothing reads it. Retiring .codex/skills is not merely safe, it IS the fix — 'freeze and report with a manual removal hint' is the weakest acceptable outcome and pruning unedited AIDA-headed aida-* dirs is the right one; the fail-closed pruning rules already on TASK-1519 are unaffected. Duplicate aida-* names across .claude/skills and .agents/skills are a non-issue for both non-Claude vendors, which also removes one stated risk from the carved-out single-location option. No migration logic needs to reason about which aida-orchestrate body a vendor picks. No defect found in the scaffolder itself; (a) above is a design decision to revisit, not a bug in code — file it as its own spec if you want it tracked separately from TASK-1519.
   created_at: 2026-09-27T15:03:05.556622246Z
   modified_at: 2026-09-27T15:03:05.556622246Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e37d-60f1-7ac3-a97c-891fa8737678
+  author: joe
+  content: |-
+    VERDICT: APPROVE
+
+    Independent review of TASK-1521 (branch claude/task-1521, sha f3f0c5989eb5513e595f643b73aacf890fe2a66d). I did not run any vendor CLI or agent session; I corroborated using static, read-only inspection of the already-installed binaries on this host plus `git diff`/`find`.
+
+    EVIDENCE-CLASS DISCIPLINE
+    Every row in the answers table in docs/research/2026-09-27-vendor-skill-discovery-paths.md carries an explicit evidence class (Direct observation / Vendor documentation + census / UNVERIFIED). The one UNVERIFIED item ("which copy a Codex $name invocation resolves to on a duplicate") is never treated as settled elsewhere in the doc or in seat-parity.md — the seat-parity table only asserts what was actually observed (both entries listed, no dedup), and the doc's own "Consequences for TASK-1519" section explicitly notes this question is moot if the legacy pack is pruned rather than papering over it. No overstatement found.
+
+    THE FOUR QUESTIONS
+    1. Do Codex/Antigravity still read `.codex/skills` / `.antigravity/skills`? Codex: YES, direct observation — CONFIRMED. I ran `strings`-equivalent grep on the actual installed Codex native musl binary on this host (codex-cli 0.157.1, same version cited) and found the literal `.codex/skills` (2 occurrences) and `.agents/skills` (1 occurrence) present, `.antigravity/skills` and `.claude/skills` absent (0 occurrences) — consistent with the doc's root-resolution claim. Antigravity: NO, vendor documentation + zero-literal census + a corroborating direct negative from an earlier build — appropriately hedged as not a pure 1.2.12 direct observation, and the doc says so explicitly in its "version caveat" paragraph. I independently grepped the installed agy 1.2.12 binary and got 0 hits for `.antigravity/skills`, `.claude/skills`, and `.codex/skills` (my `.agents/skills` count was 8 vs. the doc's 13 — likely a difference in string-extraction method/dedup, immaterial to the zero-vs-nonzero claim that does the work). Evidence supports the answer.
+    2. Which copy wins on a duplicate name? Codex: both listed as separate entries under the same name, no dedup — direct observation via `codex debug prompt-input`, plausible and internally consistent with the binary containing no "duplicate/shadowed/ambiguous" diagnostic strings. Antigravity: doc correctly scopes this to vendor-documented priority order and notes it's moot for AIDA's case since only `.agents/skills` is read — correctly not claimed as directly observed.
+    3. Does Codex read `.claude/skills`? NO, direct observation. CONFIRMED independently: the literal string `.claude/skills` does not occur anywhere in either the Codex JS wrapper or the native musl binary on this host (0 occurrences both places).
+    4. Is an AIDA-delivered skill actually discovered? YES, both vendors, direct observation (real scaffolder output for Codex; agy's own persisted conversation stores for Antigravity). The versions and conversation-store count cited in the doc match this host exactly: `codex --version` → 0.157.1, `agy --version` → 1.2.12, and `ls ~/.gemini/antigravity-cli/conversations/ | wc -l` → 44, matching the doc's "all 44 conversation stores" claim verbatim. Strong corroboration.
+
+    THE TWO HIGH-WEIGHT CLAIMS
+    - "Antigravity does NOT read `.antigravity/skills`": well-supported — vendor doc list in the binary omits it, zero-literal census (independently reproduced: 0 hits), and a corroborating direct negative from a real past session with skills sitting unread in that directory. Appropriately caveated as not a pure 1.2.12-specific direct observation, with a concrete follow-up experiment specified. Not overstated.
+    - "Codex produces 46 entries where 23 are intended": arithmetic checks out internally (23 from `.agents/skills` + 23 duplicated from `.codex/skills` = 46; the doc's own probe reports 51 total = 23+23+5 builtins+0 from `.claude/skills`, consistent). This is a plausible, mechanically-explained consequence of the directly-observed no-dedup behavior (item 3 above), not a leap.
+
+    MIRROR-SAFETY CHECK
+    Confirmed directly: `find aida-core/templates -iname "*seat-parity*"` returns nothing — seat-parity.md genuinely has no template master, so editing it directly is correct per CLAUDE.md's mirror policy. By contrast, `aida-core/templates/docs/agents/aida-mcp-install-matrix.md`, `antigravity-mcp-setup.md`, and `codex-mcp-setup.md` DO exist as masters, confirming those three are generated mirrors as claimed. `git diff origin/main...claude/task-1521 --name-only` touches exactly two files — `docs/agents/seat-parity.md` and the new `docs/research/2026-09-27-vendor-skill-discovery-paths.md` — none of the three mirror files were touched. Mirror-safety claim fully verified.
+
+    CONVENTION CHECK
+    File name `2026-09-27-vendor-skill-discovery-paths.md` follows the existing `YYYY-MM-DD-slug.md` convention in docs/research/. Header structure (title, bolded Date/Spec/Status/Consumer metadata line, then numbered sections) matches the style of recent entries (e.g. 2026-09-22-jev-system-one-measurement-protocol.md, 2026-06-29-warm-pool-build-delta.md).
+
+    OTHER NOTES
+    - Commit `f3f0c5989e` matches the pushed sha and follows the `[AI:tool] type(scope): summary (SPEC-ID)` convention.
+    - No code, spec store, or generated-mirror files were touched — pure docs diff as claimed.
+    - Minor, non-blocking: my independent `.agents/skills` literal count on the agy binary (8) didn't match the doc's cited figure (13); doesn't affect any load-bearing claim since the decisive counts (zero-vs-nonzero for the other three paths) reproduced exactly.
+
+    — Reviewed by Claude (independent reviewer session), 2026-09-27.
+  created_at: 2026-09-27T15:30:39.985238186Z
+  modified_at: 2026-09-27T15:30:39.985238186Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0de73-4407-7a81-8820-ee688e7504f1
