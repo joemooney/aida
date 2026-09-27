@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-09-27T14:51:20.506262044Z
+modified_at: 2026-09-27T14:52:04.596141710Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -723,6 +723,35 @@ comments:
     Requested next action: product decides on the AC text above. This comment does not queue, unblock or dispatch BUG-1669, BUG-1679 or TASK-1550.
   created_at: 2026-09-27T14:28:42.447958126Z
   modified_at: 2026-09-27T14:28:42.447958126Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e35a-0c74-71a0-91ec-bda025513e9f
+  author: joe
+  content: |
+    CORRECTION AND ACCEPTANCE EDIT APPLIED (TASK-1549, under advisor direction 01a0e351-5a7c-78a3-a0fb-bb79f078cb6a)
+
+    Two corrections to my earlier proposal comment 01a0e344, plus the acceptance edit that comment deliberately did not make.
+
+    1. ID CORRECTION. My proposal cited "(ADR-60)" as the design record. That ID is WRONG and now points at an unrelated decision: ADR-60 is "Cross-machine cycle-time evidence: keep the live event log local, publish a per-spec timing record to the store at terminal state", status Approved, created 2026-09-27T14:36:40Z — roughly seven minutes after my comment was posted. The cause was mine: I asserted a number in a markdown filename instead of allocating it through the dispenser, so nothing reserved it and a concurrent decision on STORY-1480 took it. A filename reserves nothing. I also had the convention wrong: an ADR in this repository is a first-class AIDA spec of type `decision` at .aida-store/objects/ADR/000/ADR-N.yaml with a draft/approved/superseded lifecycle (docs/agents/aida-repository-guide.md lines 345-349; aida-core/src/models.rs:941), and docs/plans markdown is only an optional companion.
+
+    The design record is now correctly ADR-61, "P-enrolled-host is the protected boundary for every AIDA-managed full-access agent launch", allocated through `aida add --type decision`, carrying the Context / Decision / Consequences / Rejected-alternatives / Revisit-when text, with References edges to TASK-1549, BUG-1669, SPIKE-91, TASK-1550 and BUG-1679. Anywhere 01a0e344 says ADR-60, read ADR-61.
+
+    2. ACCEPTANCE EDIT APPLIED. The advisor blessed the AC text in amendment A2 and directed the edit, declining to author what it approves, and TASK-1549's own acceptance requires "A reviewed ADR AND BUG-1669 acceptance update". Proposal-only left AC2 still calling orchestrator::detect "unforgeable" and AC4 still naming, as its positive security fixture, the exact artefact that demonstrates the forgery — a hazard on the record given the 01a0e33d mis-dispatch. So this spec's description now carries reconciled AC1-AC5, citing 01a0e351. The text strengthens AC2 and weakens nothing, which is why 01a0e0a3 (forbidding only weakening) permits it. Acceptance authoring here is advisor-gated per ADR-3 and that gate is satisfied by A2.
+
+    Two changes from the text in 01a0e344:
+
+    A3 — the terminal clause is struck. My AC2 said "A terminal is a request and display surface only, UNLESS IT IS that separately protected endpoint". That reopened exactly what 01a0e0a3 rejected, in the sentence most likely to be copied into acceptance and then into code. Replaced with: a terminal is a request and display surface only; no terminal, PTY or socket reachable from any login session in which an agent can execute may serve as the approval endpoint, which must be a separately authenticated surface under a principal distinct from the agent's.
+
+    A4 — refusal-only is now structurally insufficient. AC3 states that refusing affected routes does not by itself satisfy the acceptance because AC4's positive protected path must exist and be evidenced, so option H / deny-only cannot close this bug; AC4 repeats it. This exists so a future implementer cannot ship refusals, point at AC4 as "tests", and interrupt the fleet with the bug still open.
+
+    Also per 01a0e351 O5, my draft AC5 (no overclaim in any future doc, release note or PR body) was unfalsifiable at review time and is replaced by a criterion a reviewer can check at the PR: the PR body states, and the shipped CLI and docs strings confirm, that no protected boundary is deployed, and either the gate-3 real-boundary evidence is attached or the PR is explicitly marked as claiming no protection. The broader no-overclaim rule stays in ADR-61's Consequences and in release policy.
+
+    3. MIS-FRAMING CORRECTED. My proposal presented the interruption of unattended work as "a consequence product must weigh". That was wrong and ADR-61 now says so. The acceptance text creates no refusal-only interim, so the interruption is not an acceptance consequence at all — it is a gate-4 cutover consequence, and 01a0e10c already accepted it in principle, naming "interruption/migration of existing unattended AIDA launches" in terms. The only way to avoid it is to keep a launch path authorised by same-user-forgeable state, which 01a0e0a3 forbids in those words. There is no third option and product has no latitude without reopening an operator decision.
+
+    4. UNCHANGED. Status stays Approved, all three blockers (TASK-1549, SPIKE-91, TASK-1550) stay in place, blocked: true, and the 01a0e125 implementation hold stands even after the prerequisites complete. Gates 2, 3 and 4 remain OPEN and gate 4 was never granted. No protection is deployed. PR #2226 stays operator-held at e63efc3997a85df8cb1ff463f48222900ed5f7d6 with aida:merge-hold; BUG-1679 stays parked. Nothing was queued, unblocked or dispatched by this comment or by the edit.
+
+    When gate 4 is eventually put to Joe it must not arrive as one undifferentiated "deployment approval": it needs a named window, a pre-published list of exactly which unattended work stops, and a rollback that restores the current launch behaviour.
+  created_at: 2026-09-27T14:52:04.596141710Z
+  modified_at: 2026-09-27T14:52:04.596141710Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
