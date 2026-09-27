@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:16:14.364445449Z
-modified_at: 2026-09-27T14:26:59.194526613Z
+modified_at: 2026-09-27T14:27:14.416007337Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -44,6 +44,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST_CHANGES: runtime scope/lock probes pass on Linux, but new fixtures are not Windows-portable. Full merge-base diff reviewed against main 7201317922f4023c53b8410661a25f4a6d0391ee (merge-base 88f9a8eaabe86108763231ef131b97b4a06d63e0; one commit behind). Focused suite 3/3, session_reap 54/54, core worktree_pool_destroy 11/11, cargo fmt --all -- --check pass. Fixture probes preserve missing/locked/live-dirty siblings and validate whitespace/newline paths, multiline reasons, bare locks, and lock-record isolation.. No triage reason was given.'
   created_at: 2026-09-27T14:26:59.194525128Z
   modified_at: 2026-09-27T14:26:59.194525128Z
+- id: 01a0e343-4f70-7e41-ae72-778d8df58006
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27 07:28): recorded the rework in the substrate. A Windows-portability rework has been in flight on branch task-1543 in /home/joe/ai/aida-task-1543 since 07:15; I had dispatched it without running ''aida queue rework'' first, so the board did not reflect that. Fixed now. Do not dispatch a second implementer while that session is live. The three fixes are in the CORRECTION comment above; PR #2233 stays a draft and is not to be merged until a NEW reviewer confirms on all three platforms.'
+  created_at: 2026-09-27T14:27:14.416007337Z
+  modified_at: 2026-09-27T14:27:14.416007337Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e1ac-4d92-7bc0-b685-1538cad58db1
   author: aida-session-start
