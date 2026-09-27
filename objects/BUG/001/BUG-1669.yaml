@@ -2,20 +2,28 @@ id: 01a0df0b-ae41-7031-bc31-6425ece75175
 spec_id: BUG-1669
 agreed_id: BUG-1669
 title: Headless commands that hard-code full-access bypass can be started by any agent without dispatch authority (compete, intake assess, burndown run)
-description: |-
+description: |
   Found by the TASK-1500 advisor (amendment A10); orchestrator confirmed compete.rs builds 'claude -p --permission-mode bypassPermissions' argv unconditionally. Intake assess and burndown run need the same audit. Any agent allowed to run 'aida *' can therefore start a detached full-access child with a prompt of its choosing.
 
-  Acceptance:
-  1. Audit every production code path that launches an agent with a bypass/full-access flag; list each in the PR body with its authorisation check.
-  2. Each such path launches bypass only when (a) a human confirmed at a real terminal, or (b) the unforgeable drain run-token check (orchestrator::detect) confirms a dispatched drain child; an environment variable alone grants nothing.
-  3. Otherwise it refuses with a plain message and launches nothing.
-  4. Tests with a fake HOME and an injectable terminal check prove refusal for each listed path and that the drain-token path still works.
+  Acceptance (reconciled 2026-09-27 under ADR-61 and advisor direction 01a0e351-5a7c-78a3-a0fb-bb79f078cb6a amendments A2/A3/A4; supersedes the original AC1-AC4 wording, which named orchestrator::detect as "unforgeable" and asked for a positive fixture built from hand-written DrainState plus a live PID — the artefact that demonstrates the forgery. Operator decisions 01a0e0a3, 01a0e103 and 01a0e10c control; this text strengthens the requirement and weakens nothing):
+
+  1. Inventory every AIDA-managed production agent launch across projects on this host, including configured, foreground, background, resumed, wrapped, scripted and IDE/MCP routes, and each route's effective resolved vendor posture. List each in the PR body with its protected admission or its explicit refusal.
+
+  2. A full-access launch requires EITHER explicit operator approval through an authenticated, agent-inaccessible approval endpoint that displays the exact scoped request, OR an authenticated, still-live, scope-limited controller delegation derived from such an approval. The broker validates and performs the launch atomically. A terminal is a request and display surface only: no terminal, PTY or socket reachable from any login session in which an agent can execute may serve as the approval endpoint, which must be a separately authenticated surface under a principal distinct from the agent's. IsTerminal, a fabricated PTY answering yes, legacy orchestrator::detect, AIDA_AUTO_COMPLETE and its token, DrainState UUID/PID corroboration, effective role, --force/--yes/--no-human and any other ambient environment value grant nothing. orchestrator::detect is retained as a diagnostic classifier only.
+
+  3. Otherwise a typed nonzero refusal and no agent launched, with no alternate vendor, backend or local fallback, and no launch-associated mutation before a valid preparation reservation. Refusing affected routes does not by itself satisfy this acceptance: the positive protected path of AC4 must exist and be evidenced, so option H / deny-only cannot close this bug.
+
+  4. Retain fake HOME, injectable terminal observations and real-handler per-sink refusal coverage for every inventoried branch. Reverse the old writable-state / live-PID positive fixture into a required forgery NEGATIVE: hand-written DrainState with a matching UUID and a live PID must now FAIL, as must a fabricated PTY answering yes and both IsTerminal observations forced true. The positive case is authenticated approval -> protected controller -> scoped phase worker -> allowed next phase, over the real protected channels. Add both hermetic protocol coverage AND disposable actual-boundary evidence; a privileged suite that skips is not a pass. Test injection seams are cfg(test) only and never a production authorization feature. A change that only refuses does not satisfy this criterion.
+
+  5. The PR body states, and the shipped CLI and docs strings confirm, that no protected boundary is deployed; and either the gate-3 real-boundary evidence is attached, or the PR is explicitly marked as claiming no protection.
+
+  Design record: ADR-61 (P-enrolled-host protected boundary), with binding amendments M1-M5 from architecture signoff 01a0e11e-12db-7cd0-a3d1-39df79961a63. Remains implementation-held per 01a0e125 even after TASK-1549, SPIKE-91 and TASK-1550 complete; a concrete installer/backend/credential package returns for Joe's separate authorization. No protection is deployed.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-09-27T14:28:42.447958126Z
+modified_at: 2026-09-27T14:51:20.506262044Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
