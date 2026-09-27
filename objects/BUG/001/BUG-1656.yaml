@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:09:46.732993537Z
-modified_at: 2026-09-27T04:51:59.753470062Z
+modified_at: 2026-09-27T05:03:47.680597927Z
 req_type: Bug
 comments:
 - id: 01a0de44-9000-72a3-a708-076238101753
@@ -94,6 +94,18 @@ comments:
   content: 'Batch103 bounded portability rework handoff (implementer): source branch claude/bug-1656 pushed at 4a7bc5720dda85efd4a32c81aa4b433da487fc56; origin ref verified exact. Test-only change in aida-cli-lib/src/tests/bug_1656_subagent_liveness_tests.rs: tempdir hint path, TOML-quoted spec/harness fixture paths, round-trip cases for Windows backslashes, spaces, and embedded quotes. Existing behavioral assertions retained. Passed at this SHA: cargo fmt --all -- --check; git diff --check against 13d0daf80dc20134002f96c0e1a1281f143febfc; bash scripts/check-portability.sh; bash scripts/check-portability.sh --check-allowlist-growth 43c0429198401473e0cfab73267fc413883b3e1b; isolated-HOME cargo test --offline --locked -p aida-cli-lib --lib bug_1656 -- --test-threads=1 (18 passed, 0 failed). Native Windows execution and independent exact-head review remain pending; PR #2228 remains draft/held. No self-review or merge.'
   created_at: 2026-09-27T04:51:59.753470062Z
   modified_at: 2026-09-27T04:51:59.753470062Z
+- id: 01a0e13f-75e0-78a2-b562-7f99ec983018
+  author: codex-independent-strict-reviewer
+  content: |
+    BATCH103 REWORK DELTA — independent strict code review. VERDICT: APPROVE (code only).
+
+    Reviewed source replacement 13d0daf80dc20134002f96c0e1a1281f143febfc -> 4a7bc5720dda85efd4a32c81aa4b433da487fc56 and draft PR #2228 assembly 9f0b49295bd9c9952c601d592889268c393b16e9 -> ad3cef0379f0f8f7c8fcd3959650c87bf9da65b8. Read owning acceptance and advisor rework comment 01a0e12d-e9a7-7180-9aa9-6142d4bbdf20. Assembly includes the exact new source head; its BUG file delta matches the source replacement and retains interrupted_at: None / interrupted_reason: None in the uninterrupted lease fixture. No production code or prior behavioral assertion was removed.
+
+    The /tmp hint became a tempdir path. Both spec and harness adoption fixtures now use aida_core::toml_quote::toml_string; the same helper creates their round-trip cases for Windows backslashes, spaces and embedded quotes. Matching-spec adoption, exclusions, unknown-key retention, fresh movement/no salvage/no abandoned row, and stale-tree negative controls remain asserted. Exact diff checks passed for source replacement and assembly. On the assembled SHA, isolated-HOME focused BUG tests passed (18/18); cargo fmt --all -- --check, both portability checks (including allowlist growth against 43c0429198401473e0cfab73267fc413883b3e1b), and git diff --check passed.
+
+    PR head was rechecked immediately before this verdict and remained ad3cef0379f0f8f7c8fcd3959650c87bf9da65b8, draft. This approves only the reviewed code delta. Required CI and native Windows execution remain pending/unverified; this is not merge readiness or a waiver. Prior old-head approval provenance remains intact.
+  created_at: 2026-09-27T05:03:47.680597927Z
+  modified_at: 2026-09-27T05:03:47.680597927Z
 history:
 - id: 01a0de44-67f6-7c70-907e-9af7fb4e3e10
   author: joe
