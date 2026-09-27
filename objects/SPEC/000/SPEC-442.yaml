@@ -2,17 +2,25 @@ id: 01a0e0f2-fbda-75c3-9869-68a85596eff9
 spec_id: SPEC-442
 title: History strftime templates reject decoded event timestamps
 description: 'Discovered during bounded STORY-1477 R1-R3 rework of PR #2224, not an independent review. Exercising proposed R2 MCP example template={date:%H:%M} {id} {event} against the isolated tests/test_history_templates.py fixture returned history: invalid_arg: invalid event timestamp (log /tmp/story-1477-rework-direct-smoke.log). history.rs decode path constructs Event.timestamp with human_timestamp(&commit.iso_timestamp) around line 2126; event_record copies that string around line 2553. history_layout.rs format_date parses RFC3339 around line 133. Existing unit fixture uses an RFC3339 timestamp and misses the real feed mismatch. This behavior exists in original head 30fb7000634c5d5d3e554dacbae9980e63afa4c6; it is distinct from the earlier far-future Git bound finding SPEC-441. User explicitly limited this rework to advisor R1-R3, so no timestamp/decoder/rendering repair is made. R2 will use valid working string example {id} {event}; report this unresolved acceptance issue to product/advisor for separate authorization/sequencing. Reproduction uses temporary HOME and throwaway git-canonical repo, never operator config. Expected: real CLI/MCP event rows render date strftime placeholders with approved local-time semantics without altering default JSON/history contracts.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T03:40:15.706534259Z
-modified_at: 2026-09-27T08:17:41.881370390Z
+modified_at: 2026-09-27T14:16:09.720468289Z
 req_type: Task
 tags:
 - from-implementer:STORY-1477
 - kind:bug-spotted
 - severity:major
+history:
+- id: 01a0e339-2af8-75c0-a4e1-ab7a81eada2a
+  author: joe
+  timestamp: 2026-09-27T14:16:09.720465767Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 decision_request:
   question: 'How should SPEC-442’s event-timestamp parsing fix be sequenced relative to STORY-1477 PR #2224, whose current rework scope was limited to advisor rounds R1–R3?'
   choices:
