@@ -1,4 +1,11 @@
 - user_id: joe
+  requirement_id: 01a0df88-9a37-71a0-866f-2aacedfb1284
+  position: 1000
+  added_by: joe
+  note: 'REWORK for PR #2223 at 060589ef39b48f5b15fbe4d9bc427d6bdd6fe0b7: .aida/review-verdicts/TASK-1535.json requests changes. build_invalid_route_findings omits invalid enabled routes without the -route suffix, contrary to approved PLAN. Concrete implementer brief: .aida/agent-briefs/codex/TASK-1535-2026-09-27T021635Z.md. Keep review gate open pending independent re-review.'
+  added_at: 2026-09-27T02:17:00.604417645Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 01a0df20-b0f1-7011-9675-fb4176082e1c
   position: 2000
   added_by: joe
