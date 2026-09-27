@@ -1,0 +1,27 @@
+id: 01a0e11c-07a7-7ee0-b7de-e7363094acb6
+spec_id: TASK-1-178
+title: 'Resolved prior ordering blocker from 18b032192bfb4d76d03572249f42830a68d8b110: …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1672, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Resolved prior ordering blocker from 18b032192bfb4d76d03572249f42830a68d8b110: all eligible comment/spec/PR candidates participate; approvals must be strictly newer than every blocker. No outstanding finding in the reviewed diff. BUG-1681 retains timestamp-source work.
+  Reviewed sha: 63a36824199d81d37c1bc97908da2d00e06d3d8e
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-27T04:25:05.703591123Z
+modified_at: 2026-09-27T04:25:05.703591123Z
+req_type: Task
+tags:
+- carried-from:BUG-1672
+- finding-hash:b807f399
+- from-review:BUG-1672
+- kind:carried-forward
+filed_at:
+  code_sha: 43c0429198401473e0cfab73267fc413883b3e1b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: codex
