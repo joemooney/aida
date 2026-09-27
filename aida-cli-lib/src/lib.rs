@@ -4727,6 +4727,10 @@ fn run() -> Result<()> {
             crate::cli::RemoteCommand::MirrorPush { pushed_remote } => {
                 remote_create::handle_remote_mirror_push(&project_root, pushed_remote)
             }
+            // trace:BUG-1676 | ai:claude
+            crate::cli::RemoteCommand::MirrorSync { json } => {
+                remote_create::handle_remote_mirror_sync(&project_root, *json)
+            }
             crate::cli::RemoteCommand::Reconcile { execute, json, yes } => {
                 remote_create::handle_remote_reconcile(&project_root, *execute, *json, *yes)
             }
@@ -71160,6 +71164,19 @@ fn handle_pull_command(
                 e,
             );
         }
+    }
+
+    // BUG-1676: the mirror hubs follow ORIGIN, not this machine's pushes. The
+    // default branch advances by forge-side merges that only a pull ever
+    // sees, and the store is pushed to origin by targeted writes that never
+    // fan out, so this is the one place both hubs are brought level on every
+    // regular cadence (drain phase 5, `aida pr ship`, an operator catch-up).
+    // Best-effort and silent on success: a hub failure is printed and never
+    // changes the pull's exit code (the BUG-254 contract below stays bound to
+    // the two legs).
+    // trace:BUG-1676 | ai:claude
+    if code_failed.is_none() && store_failed.is_none() {
+        remote_create::mirror_sync_after_pull(&project_root);
     }
 
     // BUG-254: any leg failure → non-zero exit, so the orchestrator's

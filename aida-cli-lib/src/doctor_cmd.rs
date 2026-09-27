@@ -3404,13 +3404,20 @@ fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
                 category: "remote-drift".to_string(),
                 id: format!("remote-drift-{branch}"),
                 summary: format!("branch `{branch}` differs across remotes: {detail}"),
+                // BUG-1676: a hub that is merely BEHIND origin (a forge-side
+                // merge, a store push from another clone) is fixed by
+                // `aida remote mirror-sync`; only a genuinely diverged hub
+                // needs a reconcile. trace:BUG-1676 | ai:claude
                 action: if branch == "aida-store" {
-                    "run `aida remote reconcile` (dry-run; --execute to union-merge and push every hub); \
-                     never force-push a shared branch to resolve"
+                    "run `aida remote mirror-sync` if a hub is merely behind origin; if the hubs \
+                     diverged, run `aida remote reconcile` (dry-run; --execute to union-merge and \
+                     push every hub); never force-push a shared branch to resolve"
                         .to_string()
                 } else {
-                    "reconcile the divergent tips and push to every remote (see `aida remote status`); \
-                     never force-push a shared branch to resolve"
+                    "run `aida remote mirror-sync` to push origin's tip to every mirror hub (a \
+                     forge-side merge never fires the pre-push mirror hook); if the tips diverged, \
+                     reconcile them by hand (see `aida remote status`); never force-push a shared \
+                     branch to resolve"
                         .to_string()
                 },
                 safe_heal: false,
