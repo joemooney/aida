@@ -1,12 +1,4 @@
 - user_id: joe
-  requirement_id: 01a0e001-439c-7d92-8bdf-202d939603d9
-  position: -2000
-  added_by: joe
-  note: Independent reviewer approved exact SHA; advisor must inspect verdict, spec, PR draft/merge-hold state, and decide whether integration is ready. Do not change PR state or merge.
-  added_at: 2026-09-27T09:12:27.911928858Z
-  for_role: advisor
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0db2d-c579-7e33-ab6b-174e64568ccc
   position: -1000
   added_by: joe
