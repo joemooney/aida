@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:09:46.732993537Z
-modified_at: 2026-09-26T23:38:04.311541948Z
+modified_at: 2026-09-27T04:44:37.195883488Z
 req_type: Bug
 comments:
 - id: 01a0de44-9000-72a3-a708-076238101753
@@ -35,6 +35,25 @@ comments:
   created_at: 2026-09-26T23:38:04.311541948Z
   modified_at: 2026-09-26T23:38:04.311541948Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e12d-e7cb-7c52-ba29-7ee81a59f626
+  author: codex-independent-strict-reviewer
+  content: |
+    Independent strict reviewer: Codex, new review seat, separate from product, all six implementers, integrator and advisor.
+    VERDICT: APPROVE
+    Scope: only mechanical integration fix commit 9f0b49295bd9c9952c601d592889268c393b16e9 on codex/integrate-batch103, reviewed via exact git diff 9f0b49295bd9c9952c601d592889268c393b16e9^ 9f0b49295bd9c9952c601d592889268c393b16e9. This is not a replacement review of the six product branches.
+
+    Read AGENTS.md, .aida/discipline/integrator-role.md, TASK-1518 and BUG-1656 acceptance and review/decision comments. The complete delta is three added lines in aida-cli-lib/src/tests/bug_1656_subagent_liveness_tests.rs: a TASK-1518 trace and interrupted_at: None / interrupted_reason: None in the SessionLease fixture. No production source or assertion is changed. Both optional fields serde-default to None and skip serialization when None; this is the normal unstamped/uninterrupted lease state used by production constructors. build_running_work passes interrupted_at.is_some() into apply_interruption, so None does not activate stopped-wave classification. interrupted_reason is informational. Fresh movement still must be Moving with no salvage hint/no orphan; stale dirty work still must be Salvageable and abandoned. Those positive and negative assertions remain intact and pass. The addition fixes the fixture's missing struct fields without hiding failures. Trace attribution is valid (BUG-1656 module trace plus TASK-1518 field trace); the mixed-agent commit subject has a valid trailing spec group including both IDs.
+
+    Independent validation from an exact-SHA git archive, compiled and run in /tmp/batch103-independent-review-z6mp8byw/source with separate target, fake HOME/TMPDIR, AIDA_* environment cleared, and bubblewrap read-only live source/store/config plus isolated PID namespace:
+    - cargo test --offline --locked -p aida-cli-lib --lib -- bug_1656 task_1518 --test-threads=1: PASS, 35 passed / 0 failed / 0 ignored (17 BUG-1656, 18 TASK-1518), 11.61s test runtime. Includes real SIGTERM child lock-release/lease-marking, second-signal and deadline exit, no-signal invariance, interruption classification, fresh/stale movement and adoption regressions.
+    - cargo fmt --all -- --check: PASS (exit 0).
+    - git diff --check for the exact parent-to-commit range: PASS.
+    Build emitted existing warnings outside this three-line delta. Initial sandbox attempt was stopped because the host cargo wrapper could not write its slot locks; the successful retry used the real cargo executable with a writable toolchain cache and unchanged read-only live project/store/config.
+    Logs: /tmp/batch103-independent-review-z6mp8byw/tests.log and fmt.log.
+
+    Integration HEAD was checked before review and again immediately before posting and remains the exact SHA above. No code edits, push, spec status changes or merge. Comments only: original six exact-head branch review provenance is preserved; no first-class review record is overwritten. No findings in this integration-only delta.
+  created_at: 2026-09-27T04:44:37.195883488Z
+  modified_at: 2026-09-27T04:44:37.195883488Z
 history:
 - id: 01a0de44-67f6-7c70-907e-9af7fb4e3e10
   author: joe
