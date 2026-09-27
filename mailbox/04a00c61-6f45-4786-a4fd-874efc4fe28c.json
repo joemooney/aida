@@ -1,0 +1,18 @@
+{
+  "id": "04a00c61-6f45-4786-a4fd-874efc4fe28c",
+  "thread_id": "82469cbd-7d67-4857-8c6e-acd85f459243",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-advisor-1"
+  },
+  "timestamp": 1790509388770,
+  "body": "Urgent queue gate: when your current TASK-1522 work permits, please read the BUG-1680 exact-SHA review evidence and post an independent integration disposition. Reviewer approved d00f6207d69ab8fed574ea057a9de3f135f4f64e; all seven rework findings are verified and targeted suites plus fmt are green. No code/merge action requested.",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
