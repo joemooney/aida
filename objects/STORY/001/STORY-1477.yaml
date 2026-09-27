@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-27T02:26:31.470816792Z
+modified_at: 2026-09-27T03:27:19.358139786Z
 req_type: Story
 tags:
 - aida:history
@@ -158,4 +158,61 @@ comments:
     No self-review or merge performed. Lease and worktree retained; spec remains In Progress for independent review/merge.
   created_at: 2026-09-27T02:26:31.470803954Z
   modified_at: 2026-09-27T02:26:31.470803954Z
+- id: 01a0e0e7-233e-7c12-ba47-d489dad37bd5
+  author: mcp
+  content: |
+    ADVISOR DISPOSITION: HOLD / REWORK — STORY-1477, PR #2224
+    Independent advisor assessment, 2026-09-26 America/Phoenix.
+    Assessed head: 30fb7000634c5d5d3e554dacbae9980e63afa4c6.
+    Compared base: 854b7e26f7222c73845064275a18c293c9895283.
+    Authority: existing STORY-1477 acceptance plus signed-off sketch 01a0e08c-37d6-75e3-b4b7-2ef14d6ed106 and its binding advisor amendments. No scope amendment or merge approval.
+
+    Evidence provenance
+    - Ubuntu: https://github.com/joemooney/aida/actions/runs/36288501643/job/108533832278
+    - macOS: https://github.com/joemooney/aida/actions/runs/36288501661/job/108533832368
+    - Windows: https://github.com/joemooney/aida/actions/runs/36288501661/job/108533832459
+    - Exact-base Ubuntu: https://github.com/joemooney/aida/actions/runs/36285986900
+    - Earlier Windows baseline comparator: https://github.com/joemooney/aida/actions/runs/36282473168 (head 5d2742074ef7aa495b6539d646aa708e72d46c68).
+    Read the full spec/comments and actual diff. No independent reviewer verdict file was named in the handoff or found in the inspected runtime paths, and PR reviews were empty. This is a CI-backed advisor rework disposition, not a substitute for the independent acceptance review. Preserve these CI URLs as the originating evidence.
+
+    Blocking, change-induced findings and required bounded rework
+
+    R1 — incomplete command JSON audit.
+    Files/symbols: aida-cli-lib/src/cli.rs::HistoryCommand::Templates and HistoryTemplatesCommand::Rm; docs/cli-format-json-audit.md; scripts/generate-format-json-audit.py; aida-cli/tests/bug_1502_format_json_audit.rs::checked_in_audit_is_exhaustive_and_every_honoured_probe_parses.
+    Ubuntu assertion at line 422 compares the current clap command catalog with the checked-in audit. The exact set difference is ONLY "aida history templates" and "aida history templates rm" missing from the audit; no stale extra entries. Both commands are introduced by this diff. The exact-base run passes this test.
+    Required: regenerate the checked-in audit using a binary built from the corrected PR head, via python3 scripts/generate-format-json-audit.py <fresh-aida-binary> docs/cli-format-json-audit.md. Inspect the diff. Both management leaves lack a local --json projection, so their expected classification is "JSON not honoured"; --format json must be explicitly refused before listing/removal and must not mutate config. Do not invent JSON management behavior or weaken the exhaustiveness test. Keep existing history/history events JSON probes honoured.
+    Proof: cargo test -p aida-cli --test bug_1502_format_json_audit checked_in_audit_is_exhaustive_and_every_honoured_probe_parses -- --exact; verify unsupported JSON invocation in an isolated fixture, including config immutability for rm.
+
+    R2 — both new MCP history parameters omit required examples.
+    File/symbol: aida-cli-lib/src/mcp.rs::tool_descriptors(), history.inputSchema.properties.fields and .template (head around lines 7450–7457).
+    All three platforms fail mcp::tests::every_tool_parameter_has_examples_patterns_or_enums on fields. Inspection shows template has the same omission; the test stops at fields first. The test has a second unconditional assertion requiring the singular "example" key, so merely adding a pattern/enum is insufficient. Both parameter entries are new; exact-base Ubuntu passes the test.
+    Required: add valid string examples for BOTH parameters, e.g. fields="id,date,event" and template="{date:%H:%M} {id} {event}". Preserve the signed-off optional string types, mutual exclusion, read-only MCP scope, default JSON envelope and opt-in text contract.
+    Proof: cargo test -p aida-cli-lib --lib mcp::tests::every_tool_parameter_has_examples_patterns_or_enums -- --exact; MCP stdio smoke and history-template contract must remain passing, with examples valid for the shared parser.
+
+    R3 — template loader bypasses hermetic home guard.
+    File/symbol: aida-cli-lib/src/history_layout.rs:300, Templates::load.
+    All three platforms fail test_home::tests::no_direct_dirs_home_dir_in_crate, identifying this exact new call to dirs::home_dir(). The crate requires crate::home_dir(), which preserves production home lookup and adds the test-time real-home fence. Existing tests using Templates::at do not excuse bypassing the public loader. Exact-base Ubuntu passes this guard.
+    Required: route Templates::load through the existing crate::home_dir() helper, retaining the missing-home error and ~/.aida/config.toml path. Do not whitelist history_layout.rs or relax the scan. Verify the public load path uses the isolated test home, user/project precedence remains correct, and save/remove do not touch the operator home.
+    Proof: cargo test -p aida-cli-lib --lib test_home::tests::no_direct_dirs_home_dir_in_crate -- --exact; history_layout tests and tests/test_history_templates.sh. Exercise Templates::load under the existing hermetic HOME harness rather than only Templates::at.
+
+    Baseline separation / scope boundary
+    - Exact base CI is red for bug_1452_refusal_aftermath_tests::refusal_aftermath_is_parked_held_and_awaiting_visible, but that test PASSES on this PR's Ubuntu/macOS/Windows runs. A red base does not explain any of R1–R3; all three named Ubuntu failures passed on that exact base. No fix to the refusal test is requested here.
+    - macOS has exactly the two library regressions R2/R3.
+    - Windows has R2/R3 plus five pre-existing doctor/scaffold failures:
+      doctor_cmd::story_462_doctor_tests::bug_1645_doctor_does_not_nag_memory_lane_toward_full_upgrade
+      doctor_cmd::story_462_doctor_tests::bug_1653_doctor_memory_lane_drift_hint_is_manual_restore
+      doctor_cmd::story_462_doctor_tests::scaffold_drift_flags_missing_codex_skills_with_exact_fix
+      doctor_cmd::story_462_doctor_tests::scaffold_drift_still_flags_legacy_pack_missing_skills
+      doctor_cmd::story_462_doctor_tests::scaffold_drift_skips_portable_pack_for_claude_only_selection
+      The earlier Windows comparator logs fail all five at the same assertions (missing drift findings), before this PR. The responsible scan_scaffold_drift path predicates in doctor_cmd.rs around lines 826–834 and 868 convert Path to strings and require slash-only prefixes such as ".agents/skills/"; scaffolding constructs skill paths with PathBuf::join (aida-core/src/scaffolding/mod.rs around 2102), introducing Windows separators. That filters out missing/modified vendor skill paths before the expected findings are emitted. These predicates and relevant doctor/scaffolding implementation are unchanged by STORY-1477. The earlier comparator differs from exact base in other work; its doctor differences affect wording/later action assertions, not the failed path predicates. This is pre-existing Windows path-handling evidence, not a fresh exact-base Windows execution. No local Windows reproduction was performed.
+      Expected behavior for separately scoped baseline remediation: all five named tests find the appropriate missing/drifted skill on Windows, while Claude-only selection produces no Codex warning and memory-lane instructions preserve the lane. Path membership must not depend on slash spelling.
+      Product must retain this baseline gate and take an explicit operator choice for separate remediation/sequencing or any exceptional gate treatment. Do not add doctor/scaffolding repairs to STORY-1477 without operator choice; do not turn known baseline red into merge approval. Far-future date parsing (implementer finding SPEC-441) also remains outside scope.
+
+    Rework completion and next handoff
+    1. Same STORY-1477, implementation role, existing branch/worktree and retained implementer lease; no replacement spec for R1–R3. Queueing is metadata only; this advisor launches nobody and does not steal the lease.
+    2. Implementer fixes R1–R3, commits/pushes a new exact SHA with (STORY-1477), runs the three exact regression tests, history_layout/history/config_edit coverage, tests/test_history_templates.sh, tests/test_mcp_stdio.sh --skip-agent-contract, tests/test_mcp_doc_consistency.sh and cargo fmt --all -- --check. Do not edit code in the advisor session.
+    3. Product routes the revised exact SHA and this brief to a separate reviewer for full acceptance/sketch verification and a durable verdict path. Reviewer reports Ubuntu/macOS CI and distinguishes any remaining Windows baseline failures from fresh regressions; tests behind the initial failed step must actually run before being claimed green.
+    4. Advisor reads that fresh verdict and resolves rework sufficiency; only then can an eligible, CI-green change go to the integrator for mechanical merge. HOLD remains until gates are resolved. No implementation approval, self-review, merge, or implementation dispatch is granted by this disposition.
+  created_at: 2026-09-27T03:27:19.358111821Z
+  modified_at: 2026-09-27T03:27:19.358111821Z
 execution_mode: drive

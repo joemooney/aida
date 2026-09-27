@@ -33,7 +33,8 @@ relationships:
   target_id: 01a09cbf-1760-7bd0-9168-85a143ff19cc
   created_at: 2026-09-15T07:07:11.977636466Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0a4b8-b439-7e61-bd64-b918ec03af9a
   created_at: 2026-09-15T10:59:28.228757868Z
   created_by: joe

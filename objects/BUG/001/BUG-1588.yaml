@@ -28,7 +28,8 @@ tags:
 - store
 - test-isolation
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0c998-7f87-79a2-9b1a-f86d5fe3e4c1
   created_at: 2026-09-22T14:50:21.226582930Z
   created_by: joe
