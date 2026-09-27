@@ -8,5 +8,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-26T21:35:05.605942116Z
+modified_at: 2026-09-27T03:50:20.461465787Z
 req_type: Bug
+comments:
+- id: 01a0e0fc-362d-7862-b492-3e3a6e7df3a6
+  author: joe
+  content: 'PROXY DECISION (product for Joe): Approved bounded bug is eligible now; it addresses the coordinating-binary handoff without touching authority or live user data. Queue for independent implementation, exact-head review, advisor gate, and batched integration. Keep the AIDA_BIN override executable-file only with fallback to existing resolver; test via fake executable and fake HOME.'
+  created_at: 2026-09-27T03:50:20.461465787Z
+  modified_at: 2026-09-27T03:50:20.461465787Z
