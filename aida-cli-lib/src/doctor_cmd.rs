@@ -1207,6 +1207,14 @@ const MEMORY_LANE_SKILL_ACTION: &str = "Memory-lane project: do not run `aida sc
 // trace:BUG-1662 | ai:claude
 const MEMORY_LANE_DRIFT_ACTION: &str = "Memory-lane project: run `aida scaffold refresh` to update unedited skills (it keeps the project a memory lane). A skill you edited is kept: inspect it with `aida scaffold diff`, and to restore it run `aida scaffold extract --output <tmp-dir>`, then copy `<tmp-dir>/skills/<name>.md` to `<pack>/<name>/SKILL.md` (e.g. `.agents/skills/aida-capture/SKILL.md`).";
 
+/// The fix for a memory-lane project flooded with the discipline pack by an older refresh.
+// trace:TASK-1536 | ai:agy
+const MEMORY_LANE_DISCIPLINE_ACTION: &str = "Memory-lane project: remove the flooded discipline pack: `rm -rf .aida/discipline` and remove any `.aida/discipline/` allow-list entries from `.gitignore`.";
+
+/// The fix for a memory-lane project whose AGENTS.md block was replaced with the full conventions block.
+// trace:TASK-1536 | ai:agy
+const MEMORY_LANE_CONVENTIONS_ACTION: &str = "Memory-lane project: restore the memory-lane block in AGENTS.md: replace the '# AIDA Conventions' section between the '<!-- AIDA-AUTOGEN-BEGIN -->' and '<!-- AIDA-AUTOGEN-END -->' markers with '# AIDA Memory Lane' and 'Storage: <path>' (e.g. copy the block from CLAUDE.md).";
+
 fn scan_scaffold_drift(
     project_root: &std::path::Path,
     store: &aida_core::RequirementsStore,
@@ -1336,6 +1344,45 @@ fn scan_scaffold_drift(
             },
             safe_heal: false,
         });
+    }
+
+    // (1b) Memory-lane project flooded by an older refresh (BUG-1662 follow-up).
+    // An older refresh installed the full discipline pack (.aida/discipline/)
+    // and/or replaced the memory-lane block in AGENTS.md with the full conventions
+    // block. Flag each flooded artifact and give manual restore steps.
+    // trace:TASK-1536 | ai:agy
+    if lane {
+        let discipline_dir = project_root.join(".aida/discipline");
+        if discipline_dir.exists() {
+            findings.push(DoctorFinding {
+                category: "scaffold-drift".to_string(),
+                id: "scaffold-drift/memory-lane-discipline".to_string(),
+                summary: "Memory-lane project carries the full discipline pack (.aida/discipline/) installed by an older refresh".to_string(),
+                action: MEMORY_LANE_DISCIPLINE_ACTION.to_string(),
+                safe_heal: false,
+            });
+        }
+
+        let agents_md_path = project_root.join("AGENTS.md");
+        if let Ok(content) = std::fs::read_to_string(&agents_md_path) {
+            let has_conventions =
+                if let Some(block) = aida_core::scaffolding::extract_aida_block(&content) {
+                    block.lines().any(|l| l.trim_end() == "# AIDA Conventions")
+                } else {
+                    content
+                        .lines()
+                        .any(|l| l.trim_end() == "# AIDA Conventions")
+                };
+            if has_conventions {
+                findings.push(DoctorFinding {
+                    category: "scaffold-drift".to_string(),
+                    id: "scaffold-drift/memory-lane-agents-conventions".to_string(),
+                    summary: "Memory-lane project AGENTS.md carries the full AIDA Conventions block instead of the memory-lane block (installed by an older refresh)".to_string(),
+                    action: MEMORY_LANE_CONVENTIONS_ACTION.to_string(),
+                    safe_heal: false,
+                });
+            }
+        }
     }
 
     // (2) Machine-global ~/.codex/prompts — the TASK-1123 incident case.
@@ -9217,6 +9264,115 @@ hostname = "localhost"
             "{:?}",
             findings.iter().map(|f| &f.id).collect::<Vec<_>>()
         );
+    }
+
+    /// TASK-1536: aida doctor flags a memory-lane project whose AGENTS.md
+    /// carries the full conventions block or a discipline pack (flooded by an
+    /// older refresh) and gives manual restore steps.
+    // trace:TASK-1536 | ai:agy
+    #[test]
+    fn task_1536_doctor_flags_flooded_memory_lane_with_manual_restore_guidance() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let store = aida_core::RequirementsStore::new();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::MemoryLane).unwrap();
+        crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+
+        // 1. Clean memory-lane project has neither flooded finding.
+        let findings = scan_scaffold_drift(root, &store);
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.id != "scaffold-drift/memory-lane-discipline"
+                    && f.id != "scaffold-drift/memory-lane-agents-conventions"),
+            "{:?}",
+            findings.iter().map(|f| &f.id).collect::<Vec<_>>()
+        );
+
+        // 2. Flood with discipline pack (as older refresh did).
+        std::fs::create_dir_all(root.join(".aida/discipline")).unwrap();
+        std::fs::write(root.join(".aida/discipline/README.md"), "# Discipline\n").unwrap();
+        let findings = scan_scaffold_drift(root, &store);
+        let discipline_finding = findings
+            .iter()
+            .find(|f| f.id == "scaffold-drift/memory-lane-discipline")
+            .expect("flooded discipline pack is flagged");
+        assert_eq!(discipline_finding.action, MEMORY_LANE_DISCIPLINE_ACTION);
+        assert!(discipline_finding
+            .action
+            .contains("rm -rf .aida/discipline"));
+        assert!(discipline_finding.action.contains(".gitignore"));
+
+        // 3. Flood AGENTS.md with full conventions block.
+        let conventions_agents = "\
+# AGENTS.md
+
+<!-- AIDA-AUTOGEN-BEGIN -->
+# AIDA Conventions
+
+This file is the single source of truth for AIDA's coding conventions in this project.
+<!-- AIDA-AUTOGEN-END -->
+
+User content.
+";
+        std::fs::write(root.join("AGENTS.md"), conventions_agents).unwrap();
+        let findings = scan_scaffold_drift(root, &store);
+        assert!(findings
+            .iter()
+            .any(|f| f.id == "scaffold-drift/memory-lane-discipline"));
+        let conventions_finding = findings
+            .iter()
+            .find(|f| f.id == "scaffold-drift/memory-lane-agents-conventions")
+            .expect("flooded AGENTS.md conventions block is flagged");
+        assert_eq!(conventions_finding.action, MEMORY_LANE_CONVENTIONS_ACTION);
+        assert!(conventions_finding.action.contains("# AIDA Memory Lane"));
+
+        // 4. Manually restore discipline pack: remove .aida/discipline.
+        std::fs::remove_dir_all(root.join(".aida/discipline")).unwrap();
+        let findings = scan_scaffold_drift(root, &store);
+        assert!(findings
+            .iter()
+            .all(|f| f.id != "scaffold-drift/memory-lane-discipline"));
+        assert!(findings
+            .iter()
+            .any(|f| f.id == "scaffold-drift/memory-lane-agents-conventions"));
+
+        // 5. Manually restore AGENTS.md: replace with # AIDA Memory Lane block.
+        let restored_agents = "\
+# AGENTS.md
+
+<!-- AIDA-AUTOGEN-BEGIN -->
+# AIDA Memory Lane
+
+Storage: test
+<!-- AIDA-AUTOGEN-END -->
+
+User content.
+";
+        std::fs::write(root.join("AGENTS.md"), restored_agents).unwrap();
+        let findings = scan_scaffold_drift(root, &store);
+        assert!(findings
+            .iter()
+            .all(|f| f.id != "scaffold-drift/memory-lane-discipline"
+                && f.id != "scaffold-drift/memory-lane-agents-conventions"));
+
+        // 6. A full-footprint project with both is NOT flagged as flooded.
+        let full_dir = tempfile::tempdir().unwrap();
+        let full_root = full_dir.path();
+        std::fs::create_dir_all(full_root.join(".aida/discipline")).unwrap();
+        std::fs::write(
+            full_root.join(".aida/discipline/README.md"),
+            "# Discipline\n",
+        )
+        .unwrap();
+        std::fs::write(full_root.join("AGENTS.md"), conventions_agents).unwrap();
+        crate::init_cmd::write_init_footprint(full_root, crate::cli::InitFootprint::Full).unwrap();
+        let full_findings = scan_scaffold_drift(full_root, &store);
+        assert!(full_findings
+            .iter()
+            .all(|f| f.id != "scaffold-drift/memory-lane-discipline"
+                && f.id != "scaffold-drift/memory-lane-agents-conventions"));
     }
 
     /// BUG-1645 review: files behind a user-owned symlinked skill directory

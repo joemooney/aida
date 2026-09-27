@@ -888,6 +888,7 @@ pub(crate) const MEMORY_LANE_SKILLS: [&str; 2] = ["aida-capture", "aida-learn"];
 /// records a non-memory-lane skill (delivered or opted out), and there is no
 /// full-install marker (`.claude/AIDA.md`, `.claude/commands/aida-*`).
 // trace:BUG-1645 | ai:claude
+// trace:TASK-1536 | ai:agy
 pub(crate) fn looks_like_memory_lane(project_root: &std::path::Path) -> bool {
     use aida_core::scaffolding::refresh::{read_skill_manifest, skill_present};
     // Only a full install writes `.claude/AIDA.md` or `.claude/commands/aida-*`:
@@ -950,7 +951,11 @@ pub(crate) fn looks_like_memory_lane(project_root: &std::path::Path) -> bool {
             }
         }
     }
-    lane_skill_seen
+    // trace:TASK-1536 | ai:agy
+    // A lane created before saved footprints, with no skills, is recognised
+    // as a lane when AGENTS.md has the memory-lane block heading.
+    let lane_agents_heading_seen = has_memory_lane_agents_heading(project_root);
+    lane_skill_seen || lane_agents_heading_seen
 }
 
 /// The project's footprint: the saved `[scaffold] footprint`, else
@@ -1054,7 +1059,25 @@ fn memory_lane_project_name(store: &RequirementsStore) -> &str {
 /// The heading that marks an AIDA-AUTOGEN block as the memory-lane block
 /// (as opposed to the full conventions block).
 // trace:BUG-1662 | ai:claude
-const MEMORY_LANE_BLOCK_HEADING: &str = "# AIDA Memory Lane";
+// trace:TASK-1536 | ai:agy
+pub(crate) const MEMORY_LANE_BLOCK_HEADING: &str = "# AIDA Memory Lane";
+
+/// Does AGENTS.md carry the memory-lane block heading?
+// trace:TASK-1536 | ai:agy
+pub(crate) fn has_memory_lane_agents_heading(project_root: &std::path::Path) -> bool {
+    let Ok(content) = std::fs::read_to_string(project_root.join("AGENTS.md")) else {
+        return false;
+    };
+    if let Some(block) = aida_core::scaffolding::extract_aida_block(&content) {
+        block
+            .lines()
+            .any(|l| l.trim_end() == MEMORY_LANE_BLOCK_HEADING)
+    } else {
+        content
+            .lines()
+            .any(|l| l.trim_end() == MEMORY_LANE_BLOCK_HEADING)
+    }
+}
 
 /// The current memory-lane block for a file whose AIDA-AUTOGEN block is a
 /// memory-lane block, keeping the storage line it was written with. `None`
