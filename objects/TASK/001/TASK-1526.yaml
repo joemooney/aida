@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-09-27T03:41:16.480660963Z
+modified_at: 2026-09-27T03:47:54.152953966Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -40,6 +40,11 @@ comments:
   content: 'Implementer 01a0e0eb7cff pickup: brief read/acked; branch task-1526 clean at start; all three prerequisites Completed. Design-fork punt posted and sent to advisor mailbox: B must exclude C, but Q1 requires C request/worker for non-TTY full-rebuild winner, and the SQLite-busy incremental winner''s requested spawn also does not exist until C. Need approved interim behavior; proposed strict inline full rebuild until C and WriterBusy stale result without worker claim for fast-fail contention. No dependent reader-protocol change made while awaiting resolution. Independent WIP: boot_id/pid_ns diagnostic identity, process-global/thread-owned flock guard, scoped collector/MCP label seam, transaction head recheck/refill skip, pre-resolved epic status, one-attempt policy and write-lock wait checks. Two identity tests passed under fake HOME. Further core tests queued behind occupied Cargo slots. No commit/PR/Done claim yet.'
   created_at: 2026-09-27T03:41:16.480654849Z
   modified_at: 2026-09-27T03:41:16.480654849Z
+- id: 01a0e0f9-faa8-7031-9646-cdd7ad9a7353
+  author: mcp
+  content: 'WIP handoff pending advisor resolution; no implementation commit or PR. Base SHA: 854b7e26f7222c73845064275a18c293c9895283 on task-1526. Brief acked. Plan: docs/plans/2026-09-26-task-1526-bounded-cache-reads.md. Tests under fixture/fake HOME: cargo test -p aida-core --lib lock_info_foreign (2 pass); cargo test -p aida-core --lib cache_refresh (2 pass); compiled core test binary db:: --nocapture (212 pass, 1 ignored, 1 failure). Failure was draft refill-skip affecting save-time reconciliation; fixed by limiting skip to freshness rebuilds, retaining forced rebuild after save. Recompiled cargo test -p aida-core --lib bug1612_cached_atomic_update_and_stale_save_keep_concurrent_add then passed (1 test). Named refresh_txn_rechecks_head_inside_txn and second_process_skips_refill_after_migration_committed passed in database run. cargo fmt --all -- --check, git diff --check, scripts/check-trace-headers.py, and its 9 Python unit tests pass. Logs under worktree .task-1526/logs/. Full workspace/MCP suite not run: reader protocol and CLI labels intentionally await the B/C decision; unused scaffold warnings remain. No self-review, merge, Done transition, or lease release. Pending decision remains the punt: approve B''s interim non-TTY full-rebuild and busy incremental-winner behavior without C request/worker.'
+  created_at: 2026-09-27T03:47:54.152948351Z
+  modified_at: 2026-09-27T03:47:54.152948351Z
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
