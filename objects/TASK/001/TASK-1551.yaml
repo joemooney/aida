@@ -32,10 +32,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:11:56.017473960Z
-modified_at: 2026-09-27T15:12:23.362270071Z
+modified_at: 2026-09-27T15:12:25.726072904Z
 req_type: Task
 tags:
 - build throughput profile from:operator
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a0dfca-faa9-7f31-9cd7-762219b9db72
+  created_at: 2026-09-27T15:12:25.726064017Z
+  created_by: joe
 history:
 - id: 01a0e36c-a542-70f3-9af1-2f55156db28e
   author: joe
