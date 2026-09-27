@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:52:32.634921118Z
-modified_at: 2026-09-27T14:10:46.224568304Z
+modified_at: 2026-09-27T19:51:23.988529737Z
 req_type: Bug
 comments:
 - id: 01a0dfa2-c373-7983-921c-32ca76082d23
@@ -43,6 +43,21 @@ comments:
   created_at: 2026-09-26T21:33:01.171781847Z
   modified_at: 2026-09-26T21:33:01.171781847Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e46c-1654-74d1-9bc8-977e79e104c2
+  author: joe
+  content: |-
+    ADVISOR DESIGN DECISION on the rebase conflict (advisor seat, 2026-09-27 12:50) — BUG-1673 drops its exclude-machinery changes entirely and keeps only its real scope. Resolved in main's favour; the branch is now rebased onto main and confined to aida-core/src/object_store.rs (+409/-13).
+
+    THE CONFLICT. The salvaged branch introduced 'pub const STORE_RUNTIME_EXCLUDES: &[&str] = &[".aida/*.lock", "objects/**/*.tmp.*"]' in git_ops.rs and broadened both ensure_store_lock_excluded and store_lock.rs::ensure_lock_excluded to cover it. That collided head-on with BUG-1677, which has since merged and whose doc comment states the opposite rule explicitly: 'Only this one anchored pattern belongs here. The store is usually a linked worktree of the PROJECT repo, so info/exclude resolves to the project's shared common dir: anything written here applies to the user's whole project, not just the store. Store-scoped ignores (the atomic-write staging files, for example) go in the store's tracked .gitignore.'
+
+    WHY MAIN WINS, and it is not seniority. Writing 'objects/**/*.tmp.*' into info/exclude of a linked-worktree store writes it into the PROJECT's shared common dir, so it would silently hide the user's own matching files across their whole repository. That is the same defect the TASK-1547 acceptance rewrite already rejected. The branch's intent was sound — a store must not commit write_atomic's staging files — but main already solves it by the correct mechanism: aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS seeded into a store's TRACKED .gitignore, with TASK-1547 healing stores that predate it and TASK-1556 fixing the guard that currently keys on staging_patterns[0] alone. Keeping a second, parallel pattern list in git_ops would have given us two sources of truth for one rule and guaranteed this conflict again.
+
+    WHAT I DID NOT THROW AWAY. The branch's version of the gitignore-coverage check was genuinely better than main's: it required '.all()' of the runtime patterns to be present, whereas main checks one pattern. That improvement is right, and it is exactly what TASK-1556 already tracks — so it belongs there, applied once to STORE_STAGING_IGNORE_PATTERNS, not duplicated here. Verified while deciding: this repository's own .aida-store/.gitignore has '.aida/*.lock' but NO staging pattern, so existing stores really are unprotected today and TASK-1547 is not hypothetical.
+
+    REMAINING SCOPE for the implementer, unchanged from the filed acceptance: (1) on NotFound or a parse error for a listed object, the loader re-lists and retries that object once after a short delay before omitting it; (2) AIDA's own store object writes use write_atomic (temp+rename); (3) a fixture test that deletes and recreates an object between listing and reading still yields the spec. Store-integrity code, so strict independent review is required.
+  created_at: 2026-09-27T19:51:23.988529737Z
+  modified_at: 2026-09-27T19:51:23.988529737Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
 history:
 - id: 01a0e334-3b50-7381-8506-d3f49a8ca02c
   author: aida-session-start
