@@ -101492,8 +101492,9 @@ fn reconcile_orchestrated_branch(
 /// (before phase 1 can rebuild) and stripping any pre-existing suffix, we
 /// stabilise the path for the whole parent process.
 ///
-/// Falls back to the bare "aida" name (PATH search) if the OS lookup
-/// failed or the resolved path doesn't exist on disk.
+/// A valid executable in `AIDA_BIN` takes precedence for child processes.
+/// Otherwise, falls back to the bare "aida" name (PATH search) if the OS
+/// lookup failed or the resolved path doesn't exist on disk.
 ///
 /// trace:BUG-217 | ai:claude
 pub(crate) fn aida_exe_path() -> std::path::PathBuf {
@@ -101503,8 +101504,22 @@ pub(crate) fn aida_exe_path() -> std::path::PathBuf {
         .clone()
 }
 
+// trace:BUG-1679 | ai:codex
 // trace:BUG-1199 trace:TASK-1262 | ai:codex
 fn resolve_aida_exe_from(current: Option<std::path::PathBuf>) -> std::path::PathBuf {
+    resolve_aida_exe_from_with_bin(current, std::env::var_os("AIDA_BIN"))
+}
+
+fn resolve_aida_exe_from_with_bin(
+    current: Option<std::path::PathBuf>,
+    coordinating_bin: Option<std::ffi::OsString>,
+) -> std::path::PathBuf {
+    if let Some(bin) = coordinating_bin {
+        let path = std::path::PathBuf::from(bin);
+        if is_executable(&path) {
+            return path;
+        }
+    }
     if let Some(p) = current {
         // Linux's `/proc/self/exe` can return "<path> (deleted)" when the
         // executable file has been unlinked. Strip that before checking.

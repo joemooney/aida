@@ -1,7 +1,60 @@
 use super::{
     aida_exe_path, pr_ship_post_merge_aida_exe, prepend_dir_to_path, resolve_aida_exe,
-    resolve_aida_exe_from,
+    resolve_aida_exe_from, resolve_aida_exe_from_with_bin,
 };
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
+// trace:BUG-1679 | ai:codex
+#[test]
+fn coordinating_bin_wins_only_when_executable() {
+    let fixture = tempfile::tempdir().unwrap();
+    let fake_home = fixture.path().join("home");
+    std::fs::create_dir(&fake_home).unwrap();
+    let binary = fake_home.join("aida");
+    let current = fixture.path().join("current-aida");
+    std::fs::write(&current, b"current").unwrap();
+    std::fs::write(&binary, b"#!/bin/sh\nexit 0\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    assert_eq!(
+        resolve_aida_exe_from_with_bin(
+            Some(current.clone()),
+            Some(binary.clone().into_os_string())
+        ),
+        binary
+    );
+
+    #[cfg(unix)]
+    {
+        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(
+            resolve_aida_exe_from_with_bin(
+                Some(current.clone()),
+                Some(binary.clone().into_os_string())
+            ),
+            current
+        );
+    }
+    assert_eq!(
+        resolve_aida_exe_from_with_bin(Some(current.clone()), Some(fake_home.into_os_string())),
+        current
+    );
+    assert_eq!(
+        resolve_aida_exe_from_with_bin(
+            Some(current.clone()),
+            Some(fixture.path().join("missing").into_os_string())
+        ),
+        current
+    );
+    assert_eq!(
+        resolve_aida_exe_from_with_bin(None, Some(fixture.path().join("missing").into_os_string())),
+        std::path::PathBuf::from("aida")
+    );
+}
 
 #[test]
 fn returns_a_path() {
