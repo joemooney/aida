@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T17:29:11.789280036Z
-modified_at: 2026-09-27T14:26:27.062692842Z
+modified_at: 2026-09-27T14:26:40.546272780Z
 req_type: Story
 relationships:
 - rel_type: Blocks
@@ -170,6 +170,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-27T14:26:27.024570547Z
   modified_at: 2026-09-27T14:26:27.024570547Z
+- id: 01a0e342-cb22-7c91-9dbf-077480d223cc
+  author: joe
+  content: |-
+    PROXY DECISION (orchestrator for Joe, 2026-09-27 07:27): rework is ALREADY IN FLIGHT — an implementer has been working branch claude/story-1476 in worktree /home/joe/ai/wt-story-1476 since 07:12. I had dispatched it without running 'aida queue rework STORY-1476' first, so the board still advertised the rework as unclaimed. Joe spotted that gap; this records it. Status is now Approved and queued for implementer, which reflects reality.
+
+    The two blockers being fixed, from .aida/review-verdicts/PR-2217.json:
+    1. Allowlist entries are trimmed BEFORE the refused-character check, so '*\r' normalises to '*' and is accepted. Policy parsing must fail closed: check refused characters on the RAW entry. This is also TASK-1545 acceptance criterion 1, which is blocked on it.
+    2. A failed permitted command returns rejected before the NotRun escalation, so refused criteria never reach the reviewer prompt.
+
+    The implementer was briefed to add a proven-fail-without-fix test per finding and to push (updating PR #2217) but NOT to merge or mark ready. PR #2217 stays for Joe per the previous orchestrator's hold. A NEW strict reviewer follows.
+
+    Do not dispatch a second implementer for this spec while that session is live.
+  created_at: 2026-09-27T14:26:40.546272780Z
+  modified_at: 2026-09-27T14:26:40.546272780Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0def4-fc93-7511-9f30-c80d96061f8f
   author: joe
