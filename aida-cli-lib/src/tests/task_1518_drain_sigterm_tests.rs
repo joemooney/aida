@@ -725,7 +725,7 @@ fn task_1518_real_sigterm_in_a_child_process_releases_lock_and_marks_leases() {
     use std::os::unix::process::ExitStatusExt as _;
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().to_path_buf();
-    let exe = std::env::current_exe().unwrap();
+    let exe = crate::aida_exe_path();
     let output = std::process::Command::new(exe)
         .args(["real_sigterm_child_body", "--nocapture", "--test-threads=1"])
         .env(CHILD_ROOT_ENV, &root)
