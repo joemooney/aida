@@ -22,7 +22,7 @@
 use anyhow::Result;
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde_json::{json, Value as JsonValue};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use crate::events::{Event as FeedEvent, EventKind};
@@ -277,6 +277,44 @@ fn is_status(s: &str, want: &str) -> bool {
     norm_status(s) == norm_status(want)
 }
 
+// trace:STORY-1478 | ai:codex
+fn transitions_form_chain(transitions: &[(&str, &str, &str)]) -> bool {
+    if transitions.is_empty() {
+        return false;
+    }
+    let mut degree: BTreeMap<String, i32> = BTreeMap::new();
+    let mut adjacency: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (from, to, _) in transitions {
+        let from = norm_status(from);
+        let to = norm_status(to);
+        *degree.entry(from.clone()).or_default() -= 1;
+        *degree.entry(to.clone()).or_default() += 1;
+        adjacency.entry(from.clone()).or_default().push(to.clone());
+        adjacency.entry(to).or_default().push(from);
+    }
+    let starts = degree.values().filter(|&&d| d == -1).count();
+    let ends = degree.values().filter(|&&d| d == 1).count();
+    if !((starts == 1 && ends == 1)
+        || (starts == 0 && ends == 0 && degree.values().all(|&d| d == 0)))
+        || degree.values().any(|&d| d.abs() > 1)
+    {
+        return false;
+    }
+    let Some(root) = degree.keys().next() else {
+        return false;
+    };
+    let mut seen = BTreeSet::from([root.clone()]);
+    let mut pending = vec![root.clone()];
+    while let Some(node) = pending.pop() {
+        for neighbor in &adjacency[&node] {
+            if seen.insert(neighbor.clone()) {
+                pending.push(neighbor.clone());
+            }
+        }
+    }
+    seen.len() == degree.len()
+}
+
 fn rfc3339(t: DateTime<Utc>) -> String {
     t.to_rfc3339_opts(SecondsFormat::Millis, true)
 }
@@ -290,25 +328,21 @@ pub(crate) fn build_timeline(input: TimelineInput) -> Result<Timeline> {
     let mut store = input.store.clone();
     store.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.sha.cmp(&b.sha)));
     let mut contradictory: BTreeSet<String> = BTreeSet::new();
-    for (i, pair) in store.windows(2).enumerate() {
-        if let (
-            StoreMarkerKind::Status { from, to },
-            Some(StoreMarkerKind::Status {
-                from: next_from,
-                to: next_to,
-            }),
-        ) = (&pair[1].kind, store.get(i + 2).map(|m| &m.kind))
-        {
-            // A mismatch alone can reflect omitted intermediate commits. It
-            // is a clock-order contradiction when the following transition
-            // proves this transition's source state was reached later.
-            if !is_status(from, pair[0].status_after())
-                && is_status(next_from, pair[0].status_after())
-                && (is_status(from, next_to) || is_status(to, next_from))
-            {
-                contradictory.insert(pair[0].sha.clone());
-                contradictory.insert(pair[1].sha.clone());
+    let transitions: Vec<(&str, &str, &str)> = store
+        .iter()
+        .filter_map(|marker| match &marker.kind {
+            StoreMarkerKind::Status { from, to } => {
+                Some((from.as_str(), to.as_str(), marker.sha.as_str()))
             }
+            _ => None,
+        })
+        .collect();
+    let ordered_consistently = transitions
+        .windows(2)
+        .all(|pair| is_status(pair[0].1, pair[1].0));
+    if !ordered_consistently {
+        if transitions_form_chain(&transitions) {
+            contradictory.extend(transitions.iter().map(|(_, _, sha)| (*sha).to_string()));
         }
     }
     if !contradictory.is_empty() {
@@ -2729,6 +2763,56 @@ mod tests {
         );
         assert!(t.spans.iter().any(|s| s.class == SpanClass::Unknown));
         assert!(t.coverage_notes.iter().any(|n| n.contains("contradict")));
+    }
+
+    // trace:STORY-1478 | ai:codex
+    #[test]
+    fn story_1478_skew_after_two_later_transitions_is_contradictory() {
+        let store = vec![
+            filed("2026-09-20T00:00:00Z", "Approved", "x0"),
+            tr("2026-09-20T00:00:02Z", "A", "B", "x1"),
+            tr("2026-09-20T00:00:04Z", "C", "D", "x2"),
+            tr("2026-09-20T00:00:05Z", "D", "Completed", "x3"),
+            tr("2026-09-20T00:00:06Z", "B", "C", "x4"),
+        ];
+        let t = build_timeline(input(store, Vec::new())).expect("timeline");
+        assert!(t.incomplete);
+        assert!(t.spans.iter().any(|s| s.class == SpanClass::Unknown));
+        assert!(t.coverage_notes.iter().any(|n| n.contains("contradict")));
+    }
+
+    // trace:STORY-1478 | ai:codex
+    #[test]
+    fn story_1478_skew_after_three_later_transitions_is_contradictory() {
+        let store = vec![
+            filed("2026-09-20T00:00:00Z", "Approved", "y0"),
+            tr("2026-09-20T00:00:02Z", "A", "B", "y1"),
+            tr("2026-09-20T00:00:04Z", "C", "D", "y2"),
+            tr("2026-09-20T00:00:05Z", "D", "E", "y3"),
+            tr("2026-09-20T00:00:06Z", "E", "F", "y4"),
+            tr("2026-09-20T00:00:07Z", "B", "C", "y5"),
+            tr("2026-09-20T00:00:08Z", "F", "Completed", "y6"),
+        ];
+        let t = build_timeline(input(store, Vec::new())).expect("timeline");
+        assert!(t.incomplete);
+        assert!(t.spans.iter().any(|s| s.class == SpanClass::Unknown));
+        assert!(t.coverage_notes.iter().any(|n| n.contains("contradict")));
+    }
+
+    // trace:STORY-1478 | ai:codex
+    #[test]
+    fn story_1478_consistent_rework_chain_is_not_skew() {
+        let store = vec![
+            filed("2026-09-20T00:00:00Z", "Approved", "z0"),
+            tr("2026-09-20T00:00:02Z", "Approved", "In Progress", "z1"),
+            tr("2026-09-20T00:00:03Z", "In Progress", "Done", "z2"),
+            tr("2026-09-20T00:00:04Z", "Done", "In Progress", "z3"),
+            tr("2026-09-20T00:00:05Z", "In Progress", "Done", "z4"),
+            tr("2026-09-20T00:00:06Z", "Done", "Completed", "z5"),
+        ];
+        let t = build_timeline(input(store, Vec::new())).expect("timeline");
+        assert!(!t.incomplete);
+        assert!(!t.coverage_notes.iter().any(|n| n.contains("contradict")));
     }
 
     // trace:STORY-1478 | ai:codex
