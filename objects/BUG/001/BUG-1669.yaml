@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-09-27T02:19:17.649411153Z
+modified_at: 2026-09-27T02:24:29.057697173Z
 req_type: Bug
 comments:
 - id: 01a0df0b-e7f8-7193-84a1-2955581faa5f
@@ -330,6 +330,54 @@ comments:
     Requested disposition: operator chooses P's deployment/perimeter and explicit compatibility changes, or H's hold/deny posture; then a separate independent advisor reviews this revised sketch and the remaining platform proof obligations. Joe's literal protection decision stands throughout. This author grants no approval, implementation dispatch, queue change or merge authority.
   created_at: 2026-09-27T02:19:17.649381810Z
   modified_at: 2026-09-27T02:19:17.649381810Z
+- id: 01a0e0ad-9b81-7e61-a3d4-8d00ef3077f8
+  author: mcp
+  content: |-
+    ADVISOR — REVISE / OPERATOR DEPLOYMENT DECISION REQUIRED. NOT SIGNED OFF. PRODUCT MAY NOT QUEUE OR DISPATCH BUG-1669 IMPLEMENTATION.
+
+    Independent advisor: Codex, separate from product, sketch author and implementer. Read AGENTS.md, .aida/discipline/two-seat-protocol.md, aida show BUG-1669 --full and the full MCP description plus all five comments: original sketch, previous ADVISOR revision-required disposition, Joe's OPERATOR DECISION retaining literal protection, and latest REVISED SKETCH included. Independently checked source at 854b7e26f7222c73845064275a18c293c9895283. This is an architecture disposition, not implementation verification. No implementation, agent dispatch, tests, installation, queue change or merge performed.
+
+    Judgment:
+    The revision offers a plausible real security boundary, not merely another file/env/PTY check: an external approval principal, administrator-owned service state and code, broker-owned atomic spawn, and isolated worker principals can prevent an ordinary same-user agent from minting grants or acquiring parent rights. That conclusion is conditional on enforcing the perimeter. The sketch explicitly leaves its deployment/perimeter unaccepted and important boundary mechanisms unspecified. I cannot convert those conditions into SIGNOFF by calling them implementation details. Joe's rejection of cooperative guardrails is settled and is NOT reopened.
+
+    Current source still has the original vulnerability: orchestrator.rs::run_is_live/detect uses writable DrainState, UUID equality and PID liveness; session.rs::compose_headless_command uses the optional environment-overridable wrapper; advisor_watch copies transcripts before its spawn; solo_cycle continues after nonzero steps; shift has detached/user-systemd routes. None establishes protected consent. The revision's inventory A–G and replacement of that authority model remain required.
+
+    Exact operator deployment decision:
+    Record whether Joe authorizes P: administrator-installed Linux broker plus service-owned per-attempt VMs, independent approval device, service-controlled credentials/egress, and bypass only INSIDE those domains. Accept explicitly the loss of unrestricted host HOME/process/credential access, replacement of native burndown dispatch, finite frozen schedule/watch sets, expiry/reapproval, unsupported-platform refusal and interruption of unenrolled unattended work.
+
+    Within P, state the protected perimeter:
+    P-enrolled: the guarantee covers enrolled AIDA resources and service execution; unmanaged host agents with independent vendor credentials remain capable of launching their own clients. This does NOT satisfy a workstation-wide prohibition and must not be described as doing so.
+    P-managed: if all agents on Joe's workstation must be unable to launch outside authorization, move all those agent entry points/credentials into a managed domain or separate execution host and remove their unmanaged host execution authority. That confinement is a prerequisite, not a CLI feature.
+    Alternatively choose H: defer protected execution and authorize a separate deny-only containment change; BUG-1669 remains unresolved because authorized-drain functionality is absent.
+    No choice permits a same-user-forgeable substitute. Merely authorizing a privileged daemon while retaining arbitrary host execution and shared credentials does not establish P-managed. Current comments do not select P-enrolled, P-managed or H. The two-seat protocol requires the advisor to surface this deployment choice rather than choose it for the operator.
+
+    Required revision/proof obligations (not conditional signoff):
+    1. Installation and trust root. Name the supported hypervisor/backend, service principals, VM lifecycle and channel mechanism, approval enrollment/authentication protocol, and administrator installation/update/recovery procedure. The agent login must have no effective root/sudo/polkit, hypervisor management, service-update, protected backup, signing-key or approval-device access. Protect executable dependencies and images as well as the broker binary. Updates may not execute artifacts from an agent-writable target directory as trusted code. Pin and independently approve deployed builds. Define key rotation, device loss, uninstall and rollback; restoring a database/snapshot must not resurrect grants. Approval re-enrollment must require the same independent trust root. No service installation is authorized by this review.
+
+    2. Worker identity and resource mediation. A service-held domain/boot binding is the right concept but requires a concrete transport/handshake and reconnect protocol. Authenticate both directions; prevent a fake broker or stale/reused domain endpoint from being accepted. A guest-supplied CID, PID, run ID or forwarded FD is insufficient by itself. Reject host/public-IPC callers presenting worker IDs. All processes inside a compromised VM have that VM's narrow authority; do not promise to distinguish or prevent collaboration among them. Specify typed service adapters for model/forge/artifact operations, including repo/ref/action restrictions, input validation, quotas and revocation. A generic authenticated HTTP proxy, arbitrary shell adapter, credential helper or writable host mount would recreate the bypass. Treat artifact import/export, archive links and repository metadata as hostile; never execute guest hooks on the host. Worker scope means enforced resources/actions, not proof that arbitrary model computation semantically follows the spec.
+
+    3. Scope/delegation. The proposed server-side grant tree, fixed content digests, phase transitions, aggregate budgets and idempotent Start are sound directions. Keep parent delegation exclusively in the deterministic controller, not in LLM-readable state. Specify a transition table and which authenticated principal may request each action. Agent-written status, tags, review comments and completion artifacts cannot supply security approval or increase scope. Existing lifecycle gates remain additional checks; a launch grant never authorizes merge. Define approved artifact lineage between phases so legitimate code changes can proceed without allowing a changed spec/plan or substituted input to expand consent. Preparation reservations must themselves consume bounded authority; ambiguous outcomes remain reconciled, never released into duplicate launches.
+
+    4. Lifetime/revocation. Retain finite deadlines, root-to-descendant revocation and serialized Start/revoke ordering. Add trusted time/monotonic elapsed handling, clock rollback/suspend behavior, durable budget accounting and a bounded supervisor heartbeat/kill deadline. An unavailable supervisor must stop existing domains within a stated bound as well as block new launches; killing only the broker must not strand workers indefinitely. Revoke service adapter access with the domain, including existing connections. Reboot/restore must start with no live authority until cleanup is confirmed. Revocation cannot undo completed effects. Proposed 2h/24h/watch limits are policy proposals to accept and display, not existing operator consent.
+
+    5. Burndown. Approve only broker-mediated wave -> per-spec -> phase launches in the eventual design. Separate records solve the shared drain-state overwrite problem. Quiet/verbose/resume share one fixed membership, deadline and aggregate budget; three continuations cannot reset it. Native subagents may compute inside an already granted worker but gain no separate protected principal or sibling rights. The old native dispatch path must refuse until replaced; prompts/hooks are not enforcement. Freeze batch/nextN membership before approval and test concurrent allocation and retry accounting.
+
+    6. Advisor-watch and scheduler. The revision resolves the conceptual bootstrap correctly: independent watch/schedule grants, exact duties/sets, protected away lease and service-owned timing. Require authenticated home/away handling, no local-away extension, expiry and active-worker termination, source-bound transcript imports before fork, and identical cold-boot enforcement. New incoming work cannot silently join a watch. Timer/user-systemd invocations are hints only. Duplicate ticks consume one attempt; denial or ambiguous start cannot fall back to detached unprotected execution. Solo must stop its launch chain on authority refusal. These intentionally reduce today's unattended behavior and require the deployment acceptance above.
+
+    7. Tests and release evidence. Keep both proposed layers: hermetic fake-HOME real-handler coverage for every A–G branch, and mandatory disposable privileged CI exercising the actual installed broker/VM/approval/adapter boundary with fake vendors and no real credentials. Mocks cannot establish isolation. Add tests for installer ACLs/effective administrative access, protected update/restore, artifact escape, generic-proxy/credential laundering, clock rollback, supervisor loss and credential revocation, alongside the revision's PTY/state forgery, replay, parent/sibling, scope, concurrency and restart matrix. Pin the tested deployment versions. Publish per-sink evidence and unsupported-path refusal; an unavailable privileged test runner blocks release rather than silently skipping. No security tests have been executed in this advisory pass.
+
+    Platform evidence checked: Linux Yama documentation describes same-UID process inspection risks and policy-dependent ptrace restrictions (https://docs.kernel.org/admin-guide/LSM/Yama.html). The Linux vsock manual describes CID/port addressing and disconnect/CID changes across migration (https://man7.org/linux/man-pages/man7/vsock.7.html). These support requiring protected process/channel identity; they do not certify this proposed system.
+
+    Narrower prerequisite specs for product to prepare (proposed scopes, no IDs invented or specs created):
+    - Deployment ADR: P-enrolled/P-managed/H, supported platform, operator channel and explicit compatibility contract; reconcile AC2/AC4's old terminal/detect wording with protected consent without weakening it.
+    - Protected backend/security-boundary spike: selected VM backend, authenticated approval/domain channels, typed resource adapters, installer/update/recovery threat model, and a disposable real-boundary proof fixture. Architecture signoff required before its implementation; evidence review before production integration.
+    - If P-managed: managed agent entry points and credential migration/confinement, independently verified before claiming workstation-wide protection.
+    - If Joe selects H or wants interim containment: separately approved deny-only closure of affected production sinks and refusal propagation, explicitly not BUG-1669 completion.
+    Then split grant/state-machine and wave/watch/scheduler migrations into dependent implementation specs after the revised architecture is signed. Searches for "protected broker" and "privileged broker" found no existing prerequisite specs; these are proposals for product to capture, not asserted IDs.
+
+    Queue disposition: the read view currently lists BUG-1669 in implementer position 29 despite the earlier hold. Queue presence and Approved status are NOT eligibility or signoff. Product must keep it ineligible/remove or hold that entry through its normal process; I have not changed the queue. Product may capture the decision/prerequisite scopes and route a revised sketch for independent review, but MAY NOT queue, dispatch or implement BUG-1669 on this disposition. No merge authorization.
+  created_at: 2026-09-27T02:24:29.057659358Z
+  modified_at: 2026-09-27T02:24:29.057659358Z
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
   author: joe
