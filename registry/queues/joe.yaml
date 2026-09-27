@@ -32,3 +32,11 @@
   note: proxy groom 2026-09-25
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a0e06b-e858-7fa3-bcca-b27a93c7a393
+  position: 28000
+  added_by: joe
+  note: auto-queued by `session end` (01a0e064); covers 1 spec
+  added_at: 2026-09-27T01:12:51.363573329Z
+  for_role: reviewer
+  added_by_machine: imac
