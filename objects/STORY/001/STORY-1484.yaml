@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-09-26T20:20:57.572587779Z
+modified_at: 2026-09-27T03:44:24.500582547Z
 req_type: Story
 tags:
 - cache
@@ -241,3 +241,8 @@ comments:
   created_at: 2026-09-26T20:20:57.572587779Z
   modified_at: 2026-09-26T20:20:57.572587779Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e0f6-c7b4-7c61-a5f5-8f1b6975a105
+  author: mcp
+  content: 'INDEPENDENT ADVISOR AMENDMENT — BUG-1674 sketch signed off APPROVED with binding amendments on BUG-1674 (Codex advisor, independent GPT-6 Astra correctness consultation). Add single-spec show to the stale-allowed protocol, using slice B''s APIs and A9 collector/output contract. For show specifically, Q1''s TTY inline rebuild, Q2''s 15s migration wait, A7''s worker-crash strict fallback and C''s no-detach override cannot bypass the shared 4s operational deadline / externally measured <5000ms invocation ceiling (<=1500ms aggregate cache wait). No full-scan/rebuild/schema-repair fallback in bounded show. Before C, serve a compatible labelled snapshot with honest no-worker state; incompatible/unusable schema or unprovable identity gets a bounded explicit error. Thus no TASK-1527 dependency is needed for show. Identity rows and metadata share a pinned SQLite read transaction; chosen UUID/native path/requested alias are validated against a bounded single-object committed YAML blob at cache_head when serving historically; label covers object, identity completeness and derived fields. Known ambiguity refuses, unseen collisions are not claimed absent, and mutable parseable partial YAML is not a historical snapshot. Detailed tests, semantics, scope and dogfood closure gates are in BUG-1674''s ADVISOR SIGNOFF. Product handoff: BUG-1674 should be blocked-by TASK-1526 (an actual API prerequisite), not merely sequencing-held; product records that edge before pickup. TASK-1526 has live overlapping cache edits and an unresolved non-show B/C interim fork; this amendment does not approve that unrelated fork or authorize overlapping work. No queue/relations/dispatch altered by this advisor.'
+  created_at: 2026-09-27T03:44:24.500576572Z
+  modified_at: 2026-09-27T03:44:24.500576572Z
