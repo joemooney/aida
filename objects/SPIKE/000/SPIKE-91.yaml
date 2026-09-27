@@ -1,0 +1,27 @@
+id: 01a0e123-e930-7ac2-8c30-d455d7b039aa
+spec_id: SPIKE-91
+agreed_id: SPIKE-91
+title: Specify and evaluate protected broker/worker boundary and disposable proof plan
+description: |
+  Design/research prerequisite for BUG-1669's independently signed P-enrolled-host architecture (advisor comment 01a0e11e-12db-7cd0-a3d1-39df79961a63). Produce a concrete, reviewable boundary package; do not install or run a privileged service.
+
+  Acceptance:
+  - Compare the Firecracker+jailer candidate against at least one viable isolated-worker backend for this host, with explicit kernel/hypervisor assumptions, service/admin/worker principals, authenticated approval and one-boot worker channels, private endpoint binding, cgroup/jail/FD checks, guardian/supervisor failure model, and fail-closed recovery/update path.
+  - Specify typed model/forge/artifact adapters, repo-scoped observation/attach authorization, hostile output/artifact handling, frozen domain-separated signed request encoding, quota/replay/revocation behavior, and pinned executable/dependency identity admission.
+  - Deliver an installer/trust-root/credential custody and migration proposal, disposable privileged CI fixture plan, real-boundary test matrix (cross-repo, stale clients, forgery, fault/rollback, supervision, adapter/credential laundering), and cost/operability tradeoffs.
+  - Identify exact concrete decisions and permissions that must return to Joe before backend selection, installation, disposable privileged testing, credential migration or deployment. Mocks and source review alone must not be labelled protection proof.
+  Out of scope: production installation, privileged test execution, live credentials, global host config edits, implementing BUG-1669 launch sinks, or weakening current human/merge gates.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T04:33:42.192429110Z
+modified_at: 2026-09-27T04:33:42.192429110Z
+req_type: Spike
+filed_at:
+  code_sha: 43c0429198401473e0cfab73267fc413883b3e1b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: codex
