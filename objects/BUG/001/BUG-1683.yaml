@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:24:57.765790728Z
-modified_at: 2026-09-27T02:12:04.332664123Z
+modified_at: 2026-09-27T02:12:13.130529465Z
 req_type: Bug
 comments:
 - id: 01a0e07a-194d-7082-bb95-7e42ae4b61cc
@@ -107,3 +107,8 @@ comments:
     No blocking findings within signed-off scope. Existing boolean probe-error/corrupt-record, shared-first ordering, nonexclusive acquisition and PID-only cleanup limits remain explicitly accepted/documented; this is not full atomic/fail-closed locking. CI Build (ubuntu-latest) is still IN_PROGRESS at final head check, NOT green. Approval is the bounded code/safety verdict, not merge authorization. First-class verdict recording is being retried after transient database-lock failure.
   created_at: 2026-09-27T02:12:04.332629286Z
   modified_at: 2026-09-27T02:12:04.332629286Z
+- id: 01a0e0a2-60ca-79e0-b35f-32a387184e5e
+  author: mcp
+  content: 'First-class verdict persistence confirmed: aida review record succeeded on retry, recording APPROVED for branch bug-1683 at 645c260d6206cbfaaa969d5305bc2eefd3f922cf in .aida/review-verdicts/BUG-1683.json. Detailed independent evidence and validation limits are in the preceding review comment. CI was still pending at the reviewed-head check; no implementation edits or merge.'
+  created_at: 2026-09-27T02:12:13.130513991Z
+  modified_at: 2026-09-27T02:12:13.130513991Z
