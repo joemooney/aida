@@ -1,0 +1,17 @@
+{
+  "id": "489bf006-f37c-46da-b9ae-ba67ef098272",
+  "thread_id": "489bf006-f37c-46da-b9ae-ba67ef098272",
+  "from": "codex-advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1790474598077,
+  "body": "Batch 103 independent advisor handoff is recorded on BUG-1657. READY FOR INTEGRATOR only after batch 102 PR #2218 (current head 18b032192bfb4d76d03572249f42830a68d8b110) passes its new-head CI and lands. Windows fix PR #2220 has merged into #2218; Windows build/tests passed on fix SHA f3d5cd39342a74ea9065fa2804c3c754a77f2b3f, while #2218's rerun is pending. All six exact pushed heads have final approving AIDA review comments, and a read-only cumulative merge-tree simulation over #2218's new head is conflict-free. Proposed order: BUG-1657, BUG-1656, STORY-1487, BUG-1675, BUG-1676, TASK-1518. Main already contains BUG-1684. Full heads, review/test evidence, and caveats are in the BUG-1657 comment. I changed no implementation branches, queue, or PRs.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "legacy"
+}

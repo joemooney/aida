@@ -1,0 +1,18 @@
+{
+  "id": "4854264c-3853-4cb2-b582-f3be24c2140c",
+  "thread_id": "4854264c-3853-4cb2-b582-f3be24c2140c",
+  "from": "codex-advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1790479695963,
+  "body": "Independent advisor disposition for exact head 30fb7000634c5d5d3e554dacbae9980e63afa4c6: HOLD / REWORK. Full durable diagnosis/rework brief is on STORY-1477; pending pickup brief verified at .aida/agent-briefs/codex/STORY-1477-2026-09-27T032743Z.md. Metadata-only requeue succeeded for local identity joe, role implementer; retained implementer lease/worktree unchanged. No agent dispatched, implementation edited, approval issued, or merge performed.\n\nThree change-induced failures:\n1. checked_in_audit_is_exhaustive_and_every_honoured_probe_parses: docs/cli-format-json-audit.md omits exactly history templates and history templates rm. Regenerate against fresh branch binary; both remain JSON not honoured, with unsupported JSON refused before mutation.\n2. mcp::tests::every_tool_parameter_has_examples_patterns_or_enums: BOTH history.fields and history.template need singular example entries; pattern/enum alone fails the test's second assertion.\n3. test_home::tests::no_direct_dirs_home_dir_in_crate: history_layout.rs:300 Templates::load uses dirs::home_dir instead of the existing crate::home_dir guard.\n\nEvidence: head Ubuntu https://github.com/joemooney/aida/actions/runs/36288501643/job/108533832278 . Exact-base 854b7e26f7222c73845064275a18c293c9895283 run https://github.com/joemooney/aida/actions/runs/36285986900 passes all three tests. That base fails refusal_aftermath_is_parked_held_and_awaiting_visible, which PASSES on this PR; a red base is no excuse for these regressions.\n\nmacOS repeats the two library regressions. Windows repeats them plus five doctor/scaffold failures already present in earlier run https://github.com/joemooney/aida/actions/runs/36282473168 at 5d2742074ef7aa495b6539d646aa708e72d46c68. Unchanged scan_scaffold_drift uses slash-only string prefixes on PathBuf::join-generated Windows paths, losing expected drift findings. All five exact names, assertions, source locations and expected behavior are preserved in the brief. Earlier comparator is not an exact-base Windows execution; attribution is backed by its logs and unchanged relevant predicates, not a claimed local Windows test.\n\nExact next handoff: product arranges pickup of the pending codex brief by the STORY-1477 implementer when eligible; bounded R1–R3 repair -> pushed new exact SHA with listed regression/contract checks -> separate reviewer full acceptance/sketch verdict with durable path -> advisor rework sufficiency gate -> integrator only after gates clear. No reviewer verdict was supplied/found in inspected paths and GitHub reviews were empty, so this CI disposition does not replace that review. Product should obtain operator choice on separate Windows baseline remediation/sequencing or exceptional gate treatment; do not widen STORY-1477 or waive red CI silently.",
+  "subject": "STORY-1477 PR #2224: HOLD / REWORK; three regressions, Windows baseline separated",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
