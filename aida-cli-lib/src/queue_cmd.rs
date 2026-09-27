@@ -3458,7 +3458,8 @@ pub(crate) fn handle_queue_command(
                 let project_root = project_root.canonicalize().unwrap_or(project_root);
                 let project_name = global_queue::project_name_for(&project_root);
                 let position = if *top {
-                    let existing = global_queue::load(&role).unwrap_or_default();
+                    // trace:BUG-1682 | ai:codex
+                    let existing = global_queue::load(&role)?;
                     existing.first().map(|e| e.position - 1000).unwrap_or(1000)
                 } else {
                     i64::MAX
@@ -3466,7 +3467,8 @@ pub(crate) fn handle_queue_command(
                 // Resolve i64::MAX to actual max+1000 inline (the local queue
                 // path delegates this to the backend; we do it here ourselves).
                 let position = if position == i64::MAX {
-                    let existing = global_queue::load(&role).unwrap_or_default();
+                    // trace:BUG-1682 | ai:codex
+                    let existing = global_queue::load(&role)?;
                     existing.iter().map(|e| e.position).max().unwrap_or(0) + 1000
                 } else {
                     position
@@ -3644,7 +3646,8 @@ pub(crate) fn handle_queue_command(
                 // only, so `aida queue remove --global FR-1` would miss an
                 // entry cached under the legacy spec_id form `FR-1-042`.
                 // trace:BUG-83 | ai:claude
-                let entries = global_queue::load(&role).unwrap_or_default();
+                // trace:BUG-1682 | ai:codex
+                let entries = global_queue::load(&role)?;
                 let target = entries.iter().find(|e| {
                     e.spec_id
                         .as_deref()
@@ -14010,8 +14013,10 @@ pub(crate) fn handle_queue_integrate(
     let _drain_guard = if dry_run {
         None
     } else {
+        // Linked worktrees share the main checkout's merge authority.
+        // trace:BUG-1683 | ai:codex
         Some(drain_lock::acquire_drain_lock(
-            &project_root,
+            &find_main_worktree_root()?,
             "queue integrate",
         )?)
     };
