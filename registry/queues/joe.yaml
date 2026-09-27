@@ -64,3 +64,10 @@
   added_at: 2026-09-27T01:27:53.285239511Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e040-2ea5-7723-9a84-29ea9bdd4850
+  position: 32000
+  added_by: joe
+  added_at: 2026-09-27T01:34:31.079382781Z
+  for_role: implementer
+  added_by_machine: imac
