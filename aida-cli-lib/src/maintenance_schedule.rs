@@ -2409,7 +2409,7 @@ pub(crate) fn build_unbound_route_findings(tasks: &[Task]) -> Vec<crate::DoctorF
 pub(crate) fn build_invalid_route_findings(tasks: &[Task]) -> Vec<crate::DoctorFinding> {
     tasks
         .iter()
-        .filter(|t| t.name.ends_with("-route") && t.problem.is_some())
+        .filter(|t| t.problem.is_some())
         .map(|t| crate::DoctorFinding {
             category: "scheduler-driver".to_string(),
             id: format!("schedule-route-invalid:{}", t.name),
@@ -5471,7 +5471,21 @@ prompt = "look"
 enabled = true
 
 [[schedule.jobs]]
+name = "failure-notice"
+seats = ["advisor"]
+on = ["CronJobFailed:missing-guard"]
+prompt = "look"
+enabled = true
+
+[[schedule.jobs]]
 name = "user-disabled-route"
+seats = ["advisor"]
+on = ["CronJobFailed:missing-guard"]
+prompt = "look"
+enabled = false
+
+[[schedule.jobs]]
+name = "user-disabled-notice"
 seats = ["advisor"]
 on = ["CronJobFailed:missing-guard"]
 prompt = "look"
@@ -5492,6 +5506,20 @@ enabled = false
         assert!(find("schedule-route-invalid:renamed-route")
             .summary
             .contains("missing-guard"));
+        let failure_notice = cfg
+            .tasks
+            .iter()
+            .find(|t| t.name == "failure-notice")
+            .unwrap();
+        assert!(!failure_notice.enabled);
+        assert!(failure_notice
+            .problem
+            .as_deref()
+            .unwrap()
+            .contains("missing-guard"));
+        assert!(find("schedule-route-invalid:failure-notice")
+            .summary
+            .contains("missing-guard"));
         assert!(find("schedule-route-unbound:known-guard-route")
             .action
             .contains("CronJobFailed:known-guard"));
@@ -5499,6 +5527,13 @@ enabled = false
         assert!(orphan.contains("bind it to the job it guards"), "{orphan}");
         assert!(!orphan.contains("CronJobFailed:orphan"), "{orphan}");
         assert!(!findings.iter().any(|f| f.id.contains("user-disabled")));
+        let user_disabled_notice = cfg
+            .tasks
+            .iter()
+            .find(|t| t.name == "user-disabled-notice")
+            .unwrap();
+        assert!(!user_disabled_notice.enabled);
+        assert!(user_disabled_notice.problem.is_none());
 
         let mut state = ScheduleState::default();
         let lines = tick_with_executor(tmp.path(), cfg, &mut state, at(12), false, |_r, _c| {
@@ -5506,9 +5541,13 @@ enabled = false
         })
         .unwrap();
         assert!(lines.iter().any(|l| l.contains("renamed-route skipped")));
+        assert!(lines.iter().any(|l| l.contains("failure-notice skipped")));
         assert!(!lines
             .iter()
             .any(|l| l.contains("user-disabled-route skipped")));
+        assert!(!lines
+            .iter()
+            .any(|l| l.contains("user-disabled-notice skipped")));
     }
 
     #[test]
