@@ -3,12 +3,12 @@ spec_id: BUG-1679
 agreed_id: BUG-1679
 title: AIDA_BIN is exported for child processes but never read, so the coordinating-binary contract only holds via the PATH prepend
 description: 'Found by the planner: export_coordinating_bin_env (lib.rs ~101499) sets AIDA_BIN but resolve_aida_exe_from never reads it. Acceptance: 1. resolve_aida_exe_from prefers AIDA_BIN when it names an executable file, else falls back as today. 2. Test with a fake binary path.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-27T03:50:20.461465787Z
+modified_at: 2026-09-27T03:51:25.746290860Z
 req_type: Bug
 comments:
 - id: 01a0e0fc-362d-7862-b492-3e3a6e7df3a6
@@ -16,3 +16,11 @@ comments:
   content: 'PROXY DECISION (product for Joe): Approved bounded bug is eligible now; it addresses the coordinating-binary handoff without touching authority or live user data. Queue for independent implementation, exact-head review, advisor gate, and batched integration. Keep the AIDA_BIN override executable-file only with fallback to existing resolver; test via fake executable and fake HOME.'
   created_at: 2026-09-27T03:50:20.461465787Z
   modified_at: 2026-09-27T03:50:20.461465787Z
+history:
+- id: 01a0e0fd-3532-7760-9c08-3b79df618a20
+  author: aida-session-start
+  timestamp: 2026-09-27T03:51:25.746290268Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
