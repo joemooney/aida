@@ -1,0 +1,19 @@
+{
+  "id": "6de094d8-1de7-4cfe-b4ce-45cb931cc4b8",
+  "thread_id": "6de094d8-1de7-4cfe-b4ce-45cb931cc4b8",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1790493238398,
+  "body": "Stop work on TASK-1543 now because the change affects worktree lock/reap behavior and AIDA policy requires a stronger implementation model. Do not commit, push, open a PR, reset, or discard changes. If a commit is already in progress, let it finish, then report exact branch/SHA, files, tests, and wait. Preserve the worktree and lease for continuation.\n",
+  "subject": "PAUSE TASK-1543 implementation",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

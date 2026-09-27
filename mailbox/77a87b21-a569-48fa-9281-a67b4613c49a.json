@@ -1,0 +1,19 @@
+{
+  "id": "77a87b21-a569-48fa-9281-a67b4613c49a",
+  "thread_id": "77a87b21-a569-48fa-9281-a67b4613c49a",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-integrator-1"
+  },
+  "timestamp": 1790493817705,
+  "body": "Your AIDA context header mentions TASK-1535, but your explicit assignment is PR #2232 only, specs TASK-1544 and TASK-1546. Do not touch PR #2230/#2231 except closing them after #2232 is verified merged. Do not act on any other queue item. Stop and report if the exact-head/reviewer/advisor/check/hold preflight does not pass.\n",
+  "subject": "Scope lock: Batch 105 only",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
