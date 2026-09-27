@@ -147,9 +147,13 @@ pub(crate) struct Span {
 
 impl Span {
     pub(crate) fn duration_s(&self) -> f64 {
-        let ms = (self.end - self.start).num_milliseconds().max(0);
-        ms as f64 / 1000.0
+        duration_ns(self.start, self.end).max(0) as f64 / 1_000_000_000.0
     }
+}
+
+fn duration_ns(start: DateTime<Utc>, end: DateTime<Utc>) -> i128 {
+    let d = end - start;
+    d.num_seconds() as i128 * 1_000_000_000 + d.subsec_nanos() as i128
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -285,6 +289,30 @@ pub(crate) fn build_timeline(input: TimelineInput) -> Result<Timeline> {
 
     let mut store = input.store.clone();
     store.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.sha.cmp(&b.sha)));
+    let mut contradictory: BTreeSet<String> = BTreeSet::new();
+    for (i, pair) in store.windows(2).enumerate() {
+        if let (
+            StoreMarkerKind::Status { from, to },
+            Some(StoreMarkerKind::Status {
+                from: next_from,
+                to: next_to,
+            }),
+        ) = (&pair[1].kind, store.get(i + 2).map(|m| &m.kind))
+        {
+            // A mismatch alone can reflect omitted intermediate commits. It
+            // is a clock-order contradiction when the following transition
+            // proves this transition's source state was reached later.
+            if !is_status(from, pair[0].status_after())
+                && (is_status(from, next_to) || is_status(to, next_from))
+            {
+                contradictory.insert(pair[0].sha.clone());
+                contradictory.insert(pair[1].sha.clone());
+            }
+        }
+    }
+    if !contradictory.is_empty() {
+        notes.push(format!("{} store transition(s) contradict the preceding state after timestamp ordering; affected lifecycle intervals are unknown", contradictory.len()));
+    }
 
     let mut events = input.events.clone();
     events.sort_by(|a, b| a.ev.ts.cmp(&b.ev.ts).then_with(|| a.origin.cmp(&b.origin)));
@@ -340,7 +368,12 @@ pub(crate) fn build_timeline(input: TimelineInput) -> Result<Timeline> {
         }
     };
 
-    let mut incomplete = filed.is_none() || endpoint_kind == EndpointKind::LastObserved;
+    let mut incomplete = filed.is_none()
+        || endpoint_kind == EndpointKind::LastObserved
+        || notes
+            .iter()
+            .any(|n| n.contains("store git-log record(s) could not be parsed"));
+    incomplete |= !contradictory.is_empty();
     if endpoint_kind == EndpointKind::LastObserved {
         notes.push(format!(
             "not completed in the store, so the window ends at the last boundary any \
@@ -397,6 +430,7 @@ pub(crate) fn build_timeline(input: TimelineInput) -> Result<Timeline> {
         filed.as_ref(),
         observed_end,
         first_work,
+        &contradictory,
         &mut notes,
     ));
 
@@ -436,17 +470,21 @@ pub(crate) fn build_timeline(input: TimelineInput) -> Result<Timeline> {
     number_repeats(&mut post_spans);
     let post_completion_s = union_seconds(&post_spans);
 
+    let elapsed_ns = duration_ns(observed_start, observed_end);
+    let work_ns = class_total_ns(&spans, SpanClass::Work);
+    let wait_ns = class_total_ns(&spans, SpanClass::Wait);
+    let unknown_ns = class_total_ns(&spans, SpanClass::Unknown);
     let totals = Totals {
-        work: class_total(&spans, SpanClass::Work),
-        wait: class_total(&spans, SpanClass::Wait),
-        unknown: class_total(&spans, SpanClass::Unknown),
-        elapsed: (observed_end - observed_start).num_milliseconds() as f64 / 1000.0,
+        work: work_ns as f64 / 1_000_000_000.0,
+        wait: wait_ns as f64 / 1_000_000_000.0,
+        unknown: unknown_ns as f64 / 1_000_000_000.0,
+        elapsed: elapsed_ns as f64 / 1_000_000_000.0,
     };
     // Conservation is structural (the partition covers the envelope exactly
     // once), but a drift here would mean a silently wrong breakdown, so it
     // is reported rather than trusted.
     let sum = totals.work + totals.wait + totals.unknown;
-    if (sum - totals.elapsed).abs() > 0.002 {
+    if work_ns + wait_ns + unknown_ns != elapsed_ns {
         notes.push(format!(
             "internal accounting drift: spans total {:.3}s against a {:.3}s window; \
              treat this breakdown as unreliable",
@@ -511,6 +549,7 @@ fn store_wait_candidates(
     filed: Option<&StoreMarker>,
     envelope_end: DateTime<Utc>,
     first_work: Option<DateTime<Utc>>,
+    contradictory: &BTreeSet<String>,
     notes: &mut Vec<String>,
 ) -> Vec<Candidate> {
     let mut out = Vec::new();
@@ -526,6 +565,9 @@ fn store_wait_candidates(
         }
     }
     for (status, start, mut end, sha) in status_intervals(store, envelope_end) {
+        if contradictory.contains(&sha) {
+            continue;
+        }
         // A Draft interval is a recorded state, so it counts wherever it
         // appears; only the "it must have started as a Draft" assumption is
         // refused, above.
@@ -605,7 +647,17 @@ fn phase_candidates(events: &[DrainRecord], notes: &mut Vec<String>) -> Vec<Cand
                 // A park ends work whoever recorded it; the shelve path does
                 // not always carry the run UUID.
                 EventKind::SpecShelved { .. } => same_run || later.ev.run_uuid.is_empty(),
-                EventKind::RunCompleted { .. } => same_run,
+                EventKind::RunCompleted {
+                    pull_completed,
+                    build_completed,
+                } => {
+                    same_run
+                        && match slug_l.as_str() {
+                            "pull" => *pull_completed,
+                            "build" => *build_completed,
+                            _ => false,
+                        }
+                }
                 _ => false,
             };
             if closes {
@@ -974,11 +1026,11 @@ fn number_repeats(spans: &mut [Span]) {
     }
 }
 
-fn class_total(spans: &[Span], class: SpanClass) -> f64 {
+fn class_total_ns(spans: &[Span], class: SpanClass) -> i128 {
     spans
         .iter()
         .filter(|s| s.class == class)
-        .map(|s| s.duration_s())
+        .map(|s| duration_ns(s.start, s.end).max(0))
         .sum()
 }
 
@@ -1289,10 +1341,7 @@ pub(crate) fn collect_store_markers(
             rel.clone(),
         ],
     )?;
-    let commits: Vec<crate::history::CommitMeta> = log
-        .lines()
-        .filter_map(crate::history::parse_log_line)
-        .collect();
+    let commits = parse_store_log(&log, &mut notes);
     if commits.is_empty() {
         anyhow::bail!(
             "no recorded history for {} — nothing to build a timeline from",
@@ -1375,6 +1424,24 @@ pub(crate) fn collect_store_markers(
         ));
     }
     Ok((markers, notes))
+}
+
+fn parse_store_log(log: &str, notes: &mut Vec<String>) -> Vec<crate::history::CommitMeta> {
+    let mut commits = Vec::new();
+    let mut malformed = 0usize;
+    for line in log.lines() {
+        match crate::history::parse_log_line(line) {
+            Some(commit) => commits.push(commit),
+            None => malformed += 1,
+        }
+    }
+    if malformed > 0 {
+        notes.push(format!(
+            "{} store git-log record(s) could not be parsed; their boundaries are missing and coverage is incomplete",
+            malformed
+        ));
+    }
+    commits
 }
 
 fn yaml_status(yaml: &str) -> Option<String> {
@@ -1780,7 +1847,7 @@ mod tests {
         assert_eq!(cursor, t.observed_end, "spans do not reach the window end");
         let sum = t.totals.work + t.totals.wait + t.totals.unknown;
         assert!(
-            (sum - t.totals.elapsed).abs() < 0.002,
+            sum == t.totals.elapsed,
             "work+wait+unknown ({sum}) != elapsed ({})",
             t.totals.elapsed
         );
@@ -2264,20 +2331,22 @@ mod tests {
         ];
         let events = vec![
             rec("2026-09-20T00:10:00Z", "rA", 1, phase(1, "implementer", 1)),
+            rec("2026-09-20T00:40:00Z", "rA", 2, phase(2, "pull", 1)),
             rec(
-                "2026-09-20T00:40:00Z",
+                "2026-09-20T00:50:00Z",
                 "rA",
-                2,
+                3,
                 EventKind::RunCompleted {
                     pull_completed: true,
                     build_completed: true,
                 },
             ),
             rec("2026-09-20T00:10:00Z", "rB", 3, phase(1, "reviewer", 1)),
+            rec("2026-09-20T00:40:00Z", "rB", 4, phase(2, "pull", 1)),
             rec(
-                "2026-09-20T00:40:00Z",
+                "2026-09-20T00:50:00Z",
                 "rB",
-                4,
+                5,
                 EventKind::RunCompleted {
                     pull_completed: true,
                     build_completed: true,
@@ -2584,5 +2653,124 @@ mod tests {
         assert_eq!(fmt_dur(222.0), "3m42s");
         assert_eq!(fmt_dur(20_877.0), "5h47m57s");
         assert_eq!(fmt_dur(90_061.0), "1d1h1m1s");
+    }
+
+    // trace:STORY-1478 | ai:codex
+    #[test]
+    fn story_1478_submillisecond_spans_conserve_exactly() {
+        let start = at("2026-09-20T00:00:00Z");
+        let mut store = vec![filed("2026-09-20T00:00:00Z", "Draft", "n0")];
+        let mut previous = "Draft";
+        for i in 1..20 {
+            let next = if i % 2 == 0 { "Draft" } else { "Approved" };
+            store.push(StoreMarker {
+                at: start + chrono::Duration::nanoseconds(i * 250_000),
+                sha: format!("n{i}"),
+                kind: StoreMarkerKind::Status {
+                    from: previous.into(),
+                    to: next.into(),
+                },
+            });
+            previous = if next == "Draft" { "Draft" } else { "Approved" };
+        }
+        store.push(StoreMarker {
+            at: start + chrono::Duration::milliseconds(5),
+            sha: "n20".into(),
+            kind: StoreMarkerKind::Status {
+                from: previous.into(),
+                to: "Completed".into(),
+            },
+        });
+        let t = build_timeline(input(store, Vec::new())).expect("timeline");
+        assert_partition(&t);
+        assert_eq!(t.totals.elapsed, 0.005);
+        assert_eq!(
+            t.totals.work + t.totals.wait + t.totals.unknown,
+            t.totals.elapsed
+        );
+    }
+
+    // trace:STORY-1478 | ai:codex
+    #[test]
+    fn story_1478_skewed_store_transition_is_unknown() {
+        let store = vec![
+            filed("2026-09-20T00:00:01Z", "Approved", "s0"),
+            tr("2026-09-20T00:00:03Z", "Approved", "In Progress", "s1"),
+            tr("2026-09-20T00:00:02Z", "In Progress", "Completed", "s2"),
+        ];
+        let t = build_timeline(input(store, Vec::new())).expect("timeline");
+        assert!(t.incomplete);
+        assert!(t.spans.iter().any(|s| s.class == SpanClass::Unknown));
+        assert!(t.coverage_notes.iter().any(|n| n.contains("contradict")));
+    }
+
+    // trace:STORY-1478 | ai:codex
+    #[test]
+    fn story_1478_unfinished_endpoint_is_last_observed_boundary() {
+        let store = vec![
+            filed("2026-09-20T00:00:00Z", "Approved", "u0"),
+            tr("2026-09-20T00:00:02Z", "Approved", "In Progress", "u1"),
+        ];
+        let last = at("2026-09-20T00:00:04.123456789Z");
+        let event = rec(
+            "2026-09-20T00:00:04.123456789Z",
+            "run",
+            1,
+            EventKind::RunStarted,
+        );
+        let mut fixture = input(store, vec![event]);
+        fixture.as_of = last;
+        let t = build_timeline(fixture.clone()).expect("timeline");
+        assert_eq!(t.endpoint_kind, EndpointKind::LastObserved);
+        assert_eq!(t.observed_end, last);
+        fixture.as_of += chrono::Duration::days(10);
+        assert_eq!(build_timeline(fixture).unwrap().observed_end, last);
+    }
+
+    // trace:STORY-1478 | ai:codex
+    #[test]
+    fn story_1478_run_completed_requires_matching_success_flag() {
+        let store = vec![
+            filed("2026-09-20T00:00:00Z", "Approved", "c0"),
+            tr("2026-09-20T00:02:00Z", "Approved", "Completed", "c1"),
+        ];
+        let events = vec![
+            rec("2026-09-20T00:00:10Z", "run", 1, phase(1, "pull", 1)),
+            rec(
+                "2026-09-20T00:01:00Z",
+                "run",
+                2,
+                EventKind::RunCompleted {
+                    pull_completed: false,
+                    build_completed: true,
+                },
+            ),
+        ];
+        let t = build_timeline(input(store, events)).expect("timeline");
+        assert!(find(&t, "pull").is_none());
+        assert!(t
+            .spans
+            .iter()
+            .all(|s| s.class != SpanClass::Work || s.activity != "pull"));
+    }
+
+    // trace:STORY-1478 | ai:codex
+    #[test]
+    fn story_1478_malformed_store_log_marks_coverage_incomplete() {
+        let mut notes = Vec::new();
+        let parsed = parse_store_log("broken record\n", &mut notes);
+        assert!(parsed.is_empty());
+        assert!(notes
+            .iter()
+            .any(|n| n.contains("could not be parsed") && n.contains("incomplete")));
+        let mut fixture = input(
+            vec![
+                filed("2026-09-20T00:00:00Z", "Approved", "m0"),
+                tr("2026-09-20T00:01:00Z", "Approved", "Completed", "m1"),
+            ],
+            Vec::new(),
+        );
+        fixture.notes = notes;
+        assert!(build_timeline(fixture).unwrap().incomplete);
     }
 }
