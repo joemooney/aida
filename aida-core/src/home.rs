@@ -111,19 +111,13 @@ mod tests {
     // trace:TASK-1513 | ai:claude
     #[test]
     fn home_from_env_prefers_home_then_userprofile() {
-        let both = env_of(&[
-            ("HOME", "/tmp/fixture-home"),
-            ("USERPROFILE", "/tmp/fixture-up"),
-        ]);
-        assert_eq!(
-            home_from_env(&both),
-            Some(PathBuf::from("/tmp/fixture-home"))
-        );
+        let both = env_of(&[("HOME", "/fixture/home"), ("USERPROFILE", "/fixture/up")]);
+        assert_eq!(home_from_env(&both), Some(PathBuf::from("/fixture/home")));
 
-        let profile_only = env_of(&[("USERPROFILE", "/tmp/fixture-up")]);
+        let profile_only = env_of(&[("USERPROFILE", "/fixture/up")]);
         assert_eq!(
             home_from_env(&profile_only),
-            Some(PathBuf::from("/tmp/fixture-up"))
+            Some(PathBuf::from("/fixture/up"))
         );
 
         assert_eq!(home_from_env(&env_of(&[])), None);
@@ -165,8 +159,8 @@ mod tests {
         assert_eq!(non_empty(Some(std::ffi::OsString::from(""))), None);
         assert_eq!(non_empty(None), None);
         assert_eq!(
-            non_empty(Some(std::ffi::OsString::from("/tmp/fixture-home"))),
-            Some(PathBuf::from("/tmp/fixture-home"))
+            non_empty(Some(std::ffi::OsString::from("/fixture/home"))),
+            Some(PathBuf::from("/fixture/home"))
         );
     }
 
