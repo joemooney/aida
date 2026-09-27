@@ -8,8 +8,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:31.845994217Z
-modified_at: 2026-09-26T22:24:30.505747065Z
+modified_at: 2026-09-27T00:14:10.940057953Z
 req_type: Bug
+relationships:
+- rel_type: Blocks
+  target_id: 01a0e035-fb49-7152-81dd-a9e1bff1eab4
+  created_at: 2026-09-27T00:14:10.940050170Z
+  created_by: joe
 history:
 - id: 01a0dfac-b643-7391-abd2-9048fefe3a9a
   author: aida-session-start
