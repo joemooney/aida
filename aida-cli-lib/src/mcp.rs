@@ -2501,6 +2501,32 @@ impl<'a> McpServer<'a> {
     // `events` boolean so existing agent callers do not change shape.
     // trace:STORY-1028 | ai:codex
     fn tool_history(&self, args: &Value) -> Result<String, String> {
+        // trace:STORY-1477 | ai:codex
+        use crate::history_layout::{Layout, Templates};
+        let layout_arg = |key: &str| -> Result<Option<&str>, String> {
+            match args.get(key) {
+                None => Ok(None),
+                Some(Value::String(raw)) => Ok(Some(raw)),
+                _ => Err(format!("invalid {key}: expected a string")),
+            }
+        };
+        let template = layout_arg("template")?;
+        let fields = layout_arg("fields")?;
+        if (template.is_some() && fields.is_some())
+            || ((template.is_some() || fields.is_some())
+                && args.get("oneline").and_then(Value::as_bool) == Some(true))
+            || (template.is_some() && args.get("events").and_then(Value::as_bool) == Some(true))
+        {
+            return Err("invalid combination: template/fields are mutually exclusive, cannot combine with oneline; template cannot combine with explicit events".into());
+        }
+        let layout = template
+            .map(|raw| Templates::load(&self.project_root)?.resolve(raw))
+            .transpose()
+            .map_err(|e: anyhow::Error| format!("invalid template: {e:#}"))?;
+        let selected_fields = fields
+            .map(crate::history_layout::fields)
+            .transpose()
+            .map_err(|e| e.to_string())?;
         let spec_id = args
             .get("spec_id")
             .and_then(|v| v.as_str())
@@ -2575,7 +2601,9 @@ impl<'a> McpServer<'a> {
         // always been events mode (the structured ledger), so `events` defaults
         // true here and a caller passing `events: false` only matters for the
         // digest-vs-events distinction the CLI surfaces.
-        let events_mode = args.get("events").and_then(|v| v.as_bool()).unwrap_or(true)
+        let events_mode = layout.is_some()
+            || selected_fields.is_some()
+            || args.get("events").and_then(|v| v.as_bool()).unwrap_or(true)
             || shipped_only
             || opened_only
             || to_status.is_some()
@@ -2627,8 +2655,23 @@ impl<'a> McpServer<'a> {
             // visible (the CLI-only default-view hide doesn't apply here).
             exclude_meta: false,
         };
+        if matches!(layout, Some(Layout::Full | Layout::Oneline)) {
+            return history::render_template_alias(
+                self.storage.path(),
+                &opts,
+                matches!(layout, Some(Layout::Oneline)),
+            )
+            .map_err(|e| e.to_string());
+        }
         let records = history::collect_event_records(self.storage.path(), &opts)
             .map_err(|e| e.to_string())?;
+        if let Some(fields) = &selected_fields {
+            return crate::history_layout::project_json(&records, fields)
+                .map_err(|e| e.to_string());
+        }
+        if let Some(Layout::Custom(template)) = &layout {
+            return template.render_records(&records).map_err(|e| e.to_string());
+        }
         // BUG-1617: tell a caller when the default commit window ran out
         // before `limit` events were found, so a short `events` array reads
         // as "there may be more — widen the window" rather than "that's
@@ -7399,10 +7442,18 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "history",
-            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history events` for MCP consumers. Returns pretty-printed JSON with structured event records. Mirrors the CLI's filter surface (type/author/since/until/limit/shipped/to/from/opened/status-changes/comments). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all` — no `all` toggle is needed.",
+            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history events` for MCP consumers. Returns pretty-printed JSON with structured event records by default; explicit template returns human text in the existing MCP text envelope; fields projects ordered JSON event keys. template and fields are mutually exclusive. Mirrors the CLI's filter surface (type/author/since/until/limit/shipped/to/from/opened/status-changes/comments). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all` — no `all` toggle is needed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
+                    "template": {
+                        "type": "string",
+                        "description": "Opt-in human event text: inline if it contains {, otherwise a scoped template name (user > project > builtin). Fields: commit,date[:strftime],author,id,type,priority,title,kind,event,from,to,comment; escape {{/}}. Title: Added/Deleted/TitleChange new value; priority: Added/PriorityChange new value; absent otherwise. Comment is a CommentsAdded count/summary, never a body. Missing fields are empty. Cannot combine with fields, oneline or explicit events:true. No save/remove API."
+                    },
+                    "fields": {
+                        "type": "string",
+                        "description": "Ordered CSV event fields: commit,date,author,id,type,priority,title,kind,event,from,to,comment. Returns the existing JSON envelope with only these keys in each events row, in caller order; unavailable event-local values are null. Selects the full event feed. Cannot combine with template or oneline."
+                    },
                     "spec_id": {
                         "type": "string",
                         "description": "Optional SPEC-ID filter for a single requirement's event history (mirrors `aida history events --id`, i.e. `aida history <SPEC-ID> --full`: the full event trail, not the status-progression view). Accepts the raw UUID `show_requirement` returns; it is resolved to the canonical SPEC-ID before filtering.",
@@ -7485,7 +7536,7 @@ pub fn tool_descriptors() -> Value {
                 }
             },
             "outputSchema": text_envelope_output_schema(
-                "pretty-printed JSON `{ count, events, window_exhausted, source, index_tip }`, where each event has `sha`, `timestamp`, `author`, `spec_id`, `req_type`, `kind`, `summary`, and structured `detail` fields, plus the flat per-event row fields `id` (same as `spec_id`), `ts` (same as `timestamp`), and `from`/`to` (old and new value of a status, priority, title, owner, feature or type transition; null for other kinds). `window_exhausted` is true when the commit walk hit its cap before `count` reached the requested `limit` — there may be older matching events beyond it; a caller who needs them should narrow with `since`/`until`, since the MCP tool has no `max_commits` override of its own. `source` is `history-cache` when the rebuildable history index answered or `git-walk` when the store's git log was read directly (the index was off, still filling, or could not prove it held the whole answer); both return the same events. `index_tip` is the full store commit SHA an index answer reflects, or null for `git-walk`."
+                "With explicit template: human text in this same text envelope. With fields: pretty-printed JSON with caller-ordered projected events rows (unavailable event-local values are null) and the same envelope. Neither parameter: unchanged pretty-printed JSON `{ count, events, window_exhausted, source, index_tip }`, where each event has `sha`, `timestamp`, `author`, `spec_id`, `req_type`, `kind`, `summary`, and structured `detail` fields, plus the flat per-event row fields `id` (same as `spec_id`), `ts` (same as `timestamp`), and `from`/`to` (old and new value of a status, priority, title, owner, feature or type transition; null for other kinds). `window_exhausted` is true when the commit walk hit its cap before `count` reached the requested `limit` — there may be older matching events beyond it; a caller who needs them should narrow with `since`/`until`, since the MCP tool has no `max_commits` override of its own. `source` is `history-cache` when the rebuildable history index answered or `git-walk` when the store's git log was read directly (the index was off, still filling, or could not prove it held the whole answer); both return the same events. `index_tip` is the full store commit SHA an index answer reflects, or null for `git-walk`."
             )
         },
 

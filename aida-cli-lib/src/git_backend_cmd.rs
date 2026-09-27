@@ -7768,6 +7768,10 @@ pub(crate) fn handle_git_backend_command(
         }
         Command::History {
             spec,
+            template,
+            fields,
+            save_as_template,
+            force,
             limit,
             max_commits,
             events,
@@ -7792,6 +7796,56 @@ pub(crate) fn handle_git_backend_command(
             include_meta,
             cmd,
         } => {
+            // trace:STORY-1477 | ai:codex
+            use crate::history_layout::{Layout, Templates};
+            let templates =
+                if template.is_some() || matches!(cmd, Some(HistoryCommand::Templates { .. })) {
+                    Some(Templates::load(&crate::find_project_root_from(
+                        &std::env::current_dir()?,
+                    )?)?)
+                } else {
+                    None
+                };
+            if let Some(HistoryCommand::Templates { cmd }) = cmd {
+                if template.is_some() || fields.is_some() || save_as_template.is_some() || *force {
+                    anyhow::bail!("invalid combination: templates management cannot be combined with render/save options");
+                }
+                let templates = templates.as_ref().unwrap();
+                match cmd {
+                    Some(crate::cli::HistoryTemplatesCommand::Rm { name }) => {
+                        templates.remove(name)?
+                    }
+                    None => print!("{}", templates.list()),
+                }
+                return Ok(());
+            }
+            if template.is_some()
+                && (*json
+                    || matches!(
+                        crate::output_format_override(),
+                        Some(crate::cli::OutputFormat::Json | crate::cli::OutputFormat::Toon)
+                    )
+                    || matches!(cmd, Some(HistoryCommand::Events)))
+            {
+                anyhow::bail!("invalid combination: --template requires human output and cannot be combined with events; use --format human and omit events");
+            }
+            let layout = template
+                .as_deref()
+                .map(|raw| templates.as_ref().unwrap().resolve(raw))
+                .transpose()?;
+            let selected_fields = fields
+                .as_deref()
+                .map(crate::history_layout::fields)
+                .transpose()?;
+            if let Some(target) = save_as_template {
+                templates
+                    .as_ref()
+                    .unwrap()
+                    .validate_save(target, template.as_deref(), *force)?;
+            }
+            let oneline = &(*oneline || matches!(layout, Some(Layout::Oneline)));
+            let custom_feed =
+                matches!(layout, Some(Layout::Custom(_))) || selected_fields.is_some();
             // TASK-1480: `aida history <SPEC-ID>` is shorthand for `aida
             // history --id <SPEC-ID>` — clap keeps them mutually exclusive
             // (`conflicts_with`), so at most one is ever set here.
@@ -7818,6 +7872,7 @@ pub(crate) fn handle_git_backend_command(
             }
             let explicit_events = match cmd {
                 Some(HistoryCommand::Events) => true,
+                Some(HistoryCommand::Templates { .. }) => unreachable!(),
                 None => {
                     if *events {
                         note_hidden_alias(
@@ -7827,7 +7882,7 @@ pub(crate) fn handle_git_backend_command(
                     }
                     // trace:TASK-1480 | ai:claude — `--full` is the
                     // discoverable, non-hidden spelling of the same mode.
-                    *events || *full
+                    *events || *full || matches!(layout, Some(Layout::Full)) || custom_feed
                 }
             };
             // TASK-1512: `--to`/`--from` take the status spellings `aida
@@ -8026,7 +8081,37 @@ pub(crate) fn handle_git_backend_command(
                 // default-view drowning. trace:STORY-737 | ai:claude
                 exclude_meta: history_should_exclude_meta(*include_meta, r#type.as_deref()),
             };
-            history::run(store_path, &opts, json)?;
+            if custom_feed {
+                // All parsing, ID/window validation and collection succeed before mutation.
+                let records = history::collect_event_records(store_path, &opts)?;
+                let output = if let Some(Layout::Custom(template)) = &layout {
+                    template.render_records(&records)?
+                } else if json {
+                    format!(
+                        "{}\n",
+                        crate::history_layout::project_json(
+                            &records,
+                            selected_fields.as_ref().unwrap()
+                        )?
+                    )
+                } else {
+                    crate::history_layout::project_table(
+                        &records,
+                        selected_fields.as_ref().unwrap(),
+                        crate::agent_output_mode(),
+                    )
+                };
+                if let Some(target) = save_as_template {
+                    templates.as_ref().unwrap().save(
+                        target,
+                        template.as_deref().unwrap(),
+                        *force,
+                    )?;
+                }
+                print!("{output}");
+            } else {
+                history::run(store_path, &opts, json)?;
+            }
         }
         Command::StateSnapshot {
             spec,

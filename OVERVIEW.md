@@ -1,5 +1,12 @@
 # AIDA — Overview
 
+History supports scoped named templates and ordered event fields across CLI/MCP.
+Template parsing, event-local field projection, and config persistence share
+`aida-cli-lib/src/history_layout.rs`; builtin full/oneline keep legacy CLI modes.
+See [history layout docs](docs/cli/08-reporting.md#history-layouts-and-columns)
+and the [accepted storage ADR](docs/aida/05-decisions/ADR-history-template-config.md).
+<!-- trace:STORY-1477 | ai:codex -->
+
 <!-- trace:TASK-1187 | ai:codex -->
 > **What this is — read first.** AIDA is the agent-collaboration layer for a codebase: stable spec IDs, typed requirement relationships, code-to-spec trace comments, and a git-canonical graph exposed through CLI and MCP so humans, Claude Code, Codex CLI, and other agents can coordinate from the same project-owned record. It is alpha software: the core graph, traceability, queue, and MCP workflows are proven in this repository's dogfood, while broader-team scale, unattended reliability, and onboarding remain the precise open slices documented in [docs/research/2026-07-08-coordinating-multi-vendor-agent-fleets.md](docs/research/2026-07-08-coordinating-multi-vendor-agent-fleets.md) and [docs/research/ablations/](docs/research/ablations/).
 

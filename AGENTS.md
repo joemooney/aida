@@ -1,5 +1,12 @@
 # AGENTS.md
 
+History supports scoped named templates and ordered event fields across CLI/MCP.
+Template parsing, event-local field projection, and config persistence share
+`aida-cli-lib/src/history_layout.rs`; builtin full/oneline keep legacy CLI modes.
+See [history layout docs](docs/cli/08-reporting.md#history-layouts-and-columns)
+and the [accepted storage ADR](docs/aida/05-decisions/ADR-history-template-config.md).
+<!-- trace:STORY-1477 | ai:codex -->
+
 Guidance for Codex and MCP-compatible coding agents working in the AIDA
 repository. Read this as instructions-to-self: coordinate through AIDA,
 keep git and the spec store coherent, and leave durable traces for the
