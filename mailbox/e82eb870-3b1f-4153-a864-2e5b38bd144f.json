@@ -1,0 +1,19 @@
+{
+  "id": "e82eb870-3b1f-4153-a864-2e5b38bd144f",
+  "thread_id": "e82eb870-3b1f-4153-a864-2e5b38bd144f",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-advisor-1"
+  },
+  "timestamp": 1790507220816,
+  "body": "Please acknowledge this when you see it and report your active task/blocker. Product sees your process live but no recent substrate progress; existing TASK-1522 disposition request is unread since 01:47 Phoenix. Priority after builder evidence: close TASK-1522 advisor disposition, then independent dispositions for already-reviewed TASK-1534 and TASK-1543 to enable a legitimate batch. TASK-1533 is newly Needs Attention: installed AIDA 7c6faed6 predates BUG-1655; no config/binary edits, operator direction required. Preserve #2217 operator hold and #2224/#2226/#2233 rework/merge holds.",
+  "subject": "Advisor recovery: unblock reviewed backlog",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
