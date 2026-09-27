@@ -1,0 +1,23 @@
+id: 01a0e23d-4c44-7932-8d10-13bbc2ac46bf
+spec_id: BUG-1686
+agreed_id: BUG-1686
+title: Fix Antigravity headless launch argument ordering
+description: |-
+  Observed 2026-09-27 while dispatching BUG-1680 with `aida queue work BUG-1680 --vendor agy --no-human=both --strict`: the headless launcher passed `-p` before `--dangerously-skip-permissions`, so Antigravity CLI 1.2.12 treated the permission flag as the prompt and rejected the actual prompt argument. AIDA created the lease/worktree but no implementer process started.
+
+  Primary caller: non-TTY `aida queue work <SPEC> --vendor agy --no-human...` headless implementer launch. Interactive `aida agent new antigravity` is a separate path and succeeded, so keep both paths distinct.
+
+  Acceptance:
+  1. Construct argv in the order/shape supported by Antigravity print mode so the intended prompt is received and the permission flag is parsed as a flag.
+  2. Add a fixture executable that records argv; assert the prompt and permission posture are passed exactly once and are not confused, while preserving any configured model/output flags.
+  3. A launch regression test proves the headless queue-work path reaches the agent process (or fails before creating/leaving an In-Progress lease/worktree).
+  4. Do not weaken, remove, or silently reinterpret the permission/sandbox policy; do not change unrelated interactive launch behavior.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T09:41:03.172727931Z
+modified_at: 2026-09-27T09:41:03.172727931Z
+req_type: Bug
+tags:
+- vendor:antigravity headless-launch cli-argv
