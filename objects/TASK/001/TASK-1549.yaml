@@ -13,12 +13,12 @@ description: |
   - Inventory the design decisions and unresolved concrete operator approvals (backend/platform, privileged service installation/trust root, actual credentials, current-run migration, rollback/recovery); do not imply any has already been granted.
   - Link BUG-1679's protected binary identity/admission dependency and keep PR #2226 operator-held.
   Out of scope: service/VM installation, credential migration, live scheduler/watch changes, code launch-path edits, permission bypass, or claims of deployed protection.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:33:06.937954090Z
-modified_at: 2026-09-27T14:29:50.599681739Z
+modified_at: 2026-09-27T14:30:43.111506659Z
 req_type: Task
 comments:
 - id: 01a0e2dc-58ea-7fe1-b3d2-32cf8cf68fba
@@ -97,3 +97,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e346-7ea7-7f31-ac2f-33c2167e3963
+  author: joe
+  timestamp: 2026-09-27T14:30:43.111504756Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
