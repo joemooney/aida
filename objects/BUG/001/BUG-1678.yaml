@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:52.109830507Z
-modified_at: 2026-09-27T02:11:01.205982422Z
+modified_at: 2026-09-27T02:15:30.330525885Z
 req_type: Bug
 comments:
 - id: 01a0e075-dce9-7d13-a5d5-6314b8f958e6
@@ -42,3 +42,8 @@ comments:
   content: 'PASS TO INTEGRATOR — PR #2221 at exact head 6022ac539facfc0d5a60168f7df545ef779e71fa. Independent first-class reviewer verdict is APPROVED against this same SHA; reviewer verified both acceptance criteria with focused stale-cache scan-count tests (2/2 passed), format and diff checks, and documented non-blocking coverage limits. GitHub CI run 36286955663 completed success on this SHA; required Build (ubuntu-latest) and merge-hold-gate checks both completed SUCCESS. PR remains OPEN and non-draft; mergeable=MERGEABLE, mergeStateStatus=CLEAN. Title is [AI:codex] fix(cache): share target fallback index across show lookups (BUG-1678), with the required trailing spec ID. Advisor gate passes for this exact head only; integrator should revalidate head and gates at merge time. No merge performed.'
   created_at: 2026-09-27T02:11:01.205982422Z
   modified_at: 2026-09-27T02:11:01.205982422Z
+- id: 01a0e0a5-631a-7002-ac76-706bdc0e053f
+  author: joe
+  content: 'PRODUCT ROUTE (2026-09-26): Independent review and required CI are green at 6022ac539facfc0d5a60168f7df545ef779e71fa. Per Joe''s batching preference, do not merge PR #2221 standalone. Hold its exact reviewed branch for the next integration batch after batch 103, together with other reviewed post-103 work; rerun combined CI and advisor gate there. Keep this PR open as review evidence.'
+  created_at: 2026-09-27T02:15:30.330525885Z
+  modified_at: 2026-09-27T02:15:30.330525885Z
