@@ -1,13 +1,20 @@
 id: 01a0e0a8-e5e6-7530-afce-26cdf3b9c862
 spec_id: SPEC-441
 title: History cache/git-walk disagree for far-future ISO until bounds
-description: 'During isolated STORY-1477 CLI/MCP layout tests, --since 2000-01-01 --until 2100-01-01 returned zero recent events through git-walk (AIDA_HISTORY_CACHE=0), while MCP''s indexed path returned the correct 2026 fixture events. This is outside the new renderer: on base code commit 854b7e26f7222c73845064275a18c293c9895283, plain `git log -1 --format=''%h %cI'' --until=2100-01-01T00:00:00+00:00` selected 61bd5d52c5 (2025-12-31), while the same command with 2030-01-01 selected 854b7e26f7 (2026-09-26). Existing history::collect_filtered_events_git passes RFC3339 strings to Git --since/--until; cache compares parsed bounds directly. Investigate Git''s far-future date parser and pass unambiguous validated timestamps or filter consistently. Preserve existing date/time semantics. The bounded layout change leaves filters untouched and uses a 2030 upper bound in its parity fixture.'
+description: |+
+  During isolated STORY-1477 CLI/MCP layout tests, --since 2000-01-01 --until 2100-01-01 returned zero recent events through git-walk (AIDA_HISTORY_CACHE=0), while MCP's indexed path returned the correct 2026 fixture events. This is outside the new renderer: on base code commit 854b7e26f7222c73845064275a18c293c9895283, plain `git log -1 --format='%h %cI' --until=2100-01-01T00:00:00+00:00` selected 61bd5d52c5 (2025-12-31), while the same command with 2030-01-01 selected 854b7e26f7 (2026-09-26). Existing history::collect_filtered_events_git passes RFC3339 strings to Git --since/--until; cache compares parsed bounds directly. Investigate Git's far-future date parser and pass unambiguous validated timestamps or filter consistently. Preserve existing date semantics. The bounded layout change leaves filters untouched and uses a 2030 upper bound in its parity fixture.
+
+  ## Acceptance
+  1. In a fixture git-canonical store with events dated 2025 and 2026, a query through year 2100 must include all events at or before the bound; Git-walk must not silently omit 2026 rows. Include the current regression case with `--until=2100-01-01T00:00:00+00:00` and a comparison bound of 2030.
+  2. For identical since/until filters, indexed and Git-walk history results match, including the far-future bound.
+  3. Ordinary past/future bounds retain existing boundary semantics; use fixture events only and add tests that fail against the current Git-walk behavior.
+
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T02:19:20.422469520Z
-modified_at: 2026-09-27T02:19:20.422469520Z
+modified_at: 2026-09-27T08:12:04.840401550Z
 req_type: Task
 tags:
 - from-implementer:STORY-1477
