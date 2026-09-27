@@ -3,12 +3,12 @@ spec_id: TASK-1546
 agreed_id: TASK-1546
 title: 'Capture-coverage polish: overflow-safe window, honest trailer/token wording, (c) counts only test-attached tokens'
 description: 'Follow-up from the STORY-1487 review. Acceptance: 1. --window-days uses checked arithmetic (no panic on huge values; clear error or clamp). 2. Docs state trailer drift as ~1 point in the window, more all-time, and describe the broader token pattern accurately (or align it with report.py). 3. Criterion-to-test share counts only trace tokens attached to test functions, consistent with ''aida criteria <ID>''; fixture tokens in docs/prose don''t count. 4. Tests for each.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:39:06.781621127Z
-modified_at: 2026-09-27T06:46:52.971490780Z
+modified_at: 2026-09-27T07:26:17.539804480Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -52,3 +52,21 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0e1c1-ebb0-7492-8325-3a5b214ddafa
+  author: aida-auto-bump
+  timestamp: 2026-09-27T07:26:17.520332930Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0e1c1-ebc3-7350-ba78-2695dc4261d5
+  timestamp: 2026-09-27T07:26:17.539800436Z
+  agent: implementer
+  commit_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
+  summary: 'PASS: batch 105 TASK-1546 capture coverage window and test trace precision verified clean and tested'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T07:26:17.520327154Z
+  completion_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
