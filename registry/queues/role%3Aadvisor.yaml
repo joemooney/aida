@@ -4,10 +4,3 @@
   added_by: role:advisor
   added_at: 2026-09-27T14:27:05.935396430Z
   for_role: advisor
-- user_id: role:advisor
-  requirement_id: 01a0df79-30bd-7b62-a121-093bc5829a1d
-  position: 1000
-  added_by: role:advisor
-  note: 'Verified product blocker: installed release SHA 7c6faed6 predates BUG-1655 bound CronJobFailed:<job> parsing (landed at 9791e5eaac). Current schedule status only proves the unbound config loads. Operator authorization or a safe compatible runtime proof is required before changing route bindings. No config or host binary changes; implementer stopped with clean worktree.'
-  added_at: 2026-09-27T11:04:26.755084339Z
-  for_role: advisor
