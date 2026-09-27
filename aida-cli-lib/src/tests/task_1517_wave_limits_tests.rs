@@ -271,14 +271,24 @@ fn unusable_limits_keep_the_defaults_and_report_one_error() {
 }
 
 #[test]
-fn a_percentage_and_a_size_are_not_compared() {
-    // Ordering a share of the machine against an absolute size needs the
-    // machine; leaving it to systemd is not an error.
+fn a_percentage_and_size_mixed_unit_pair_is_rejected() {
+    // The old expectation was wrong: accepting incomparable units can place
+    // MemoryHigh above MemoryMax, silently defeating the fail-closed guard.
     let (limits, error) =
         limits_of("[shift]\nwave_memory_high = \"90%\"\nwave_memory_max = \"8G\"\n");
-    assert!(error.is_none(), "{error:?}");
-    assert_eq!(limits.memory_high, "90%");
-    assert_eq!(limits.memory_max, (8u64 * 1024 * 1024 * 1024).to_string());
+    let error = error.expect("mixed units must refuse the config");
+    assert!(error.contains("wave_memory_high (90%)"), "{error}");
+    assert!(error.contains("wave_memory_max (8589934592)"), "{error}");
+    assert!(error.contains("same unit"), "{error}");
+    assert_eq!(limits, WaveLimits::default());
+}
+
+#[test]
+fn a_lower_percentage_and_size_mixed_unit_pair_is_also_rejected() {
+    let (_, error) = limits_of("[shift]\nwave_memory_high = \"10%\"\nwave_memory_max = \"8G\"\n");
+    let error = error.expect("mixed units must be rejected even if they may be ordered safely");
+    assert!(error.contains("wave_memory_high (10%)"), "{error}");
+    assert!(error.contains("wave_memory_max (8589934592)"), "{error}");
 }
 
 #[test]

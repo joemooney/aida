@@ -1787,12 +1787,20 @@ pub(crate) fn build_wave_limits(input: &WaveLimitInput<'_>) -> (WaveLimits, Opti
         DEFAULT_WAVE_MEMORY_HIGH,
     );
     let max = take_memory("wave_memory_max", input.memory_max, DEFAULT_WAVE_MEMORY_MAX);
-    // Comparable only when both are the same kind; a percentage and an
-    // absolute size cannot be ordered without knowing the machine.
+    // Keep validation pure: without an injected memory basis, mixed units
+    // cannot be ordered safely. Reject them rather than let systemd launch a
+    // wave whose throttle may sit above its hard limit.
     let over = match (high, max) {
         (WaveMemory::Percent(h), WaveMemory::Percent(m)) => h > m,
         (WaveMemory::Bytes(h), WaveMemory::Bytes(m)) => h > m,
-        _ => false,
+        _ => {
+            errors.push(format!(
+                "wave_memory_high ({}) and wave_memory_max ({}) use mixed units; express both limits in the same unit",
+                high.render(),
+                max.render()
+            ));
+            false
+        }
     };
     if over {
         errors.push(format!(
