@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:23:42.715664058Z
-modified_at: 2026-09-26T23:23:36.886923897Z
+modified_at: 2026-09-27T00:03:59.277777809Z
 req_type: Bug
 tags:
 - performance schedule
@@ -52,6 +52,12 @@ comments:
   content: 'Timing (built debug binary target/debug/aida, this repo, load avg ~9.2): `aida doctor check disk-headroom` 0.12 s, 0.08 s, 0.08 s; with --fail-on-findings --json 0.04 s. Previously 43.8-47.8 s at load 16. Follow-up candidate: performance and remote-drift single-category checks also qualify for a light path (not implemented here).'
   created_at: 2026-09-26T23:22:50.982702518Z
   modified_at: 2026-09-26T23:22:50.982702518Z
+  session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e02c-faad-7531-b025-fecd6d91d9c5
+  author: joe
+  content: 'Review: APPROVE (independent, 34f057ad99): light path reachable only for the single-category check; JSON shape identical to the full path; 0.04-0.09 s vs 58 s (--category) / 4m25s (--all) on this repo; story_1367 disk tests still pass. -> batch 103.'
+  created_at: 2026-09-27T00:03:59.277777809Z
+  modified_at: 2026-09-27T00:03:59.277777809Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 history:
 - id: 01a0df94-6979-7cd1-bd64-1750310484fa
