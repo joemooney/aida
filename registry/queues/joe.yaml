@@ -70,3 +70,11 @@
   added_at: 2026-09-27T06:20:48.881104446Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e016-349d-7043-bc78-9afdd81356dc
+  position: 35000
+  added_by: joe
+  note: Next bounded capture-coverage polish after STORY-1487; low-cost Sol, independent review.
+  added_at: 2026-09-27T06:20:52.780457271Z
+  for_role: implementer
+  added_by_machine: imac
