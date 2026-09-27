@@ -8,5 +8,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:52.109830507Z
-modified_at: 2026-09-26T21:34:52.109830507Z
+modified_at: 2026-09-27T01:23:35.785586617Z
 req_type: Bug
+comments:
+- id: 01a0e075-dce9-7d13-a5d5-6314b8f958e6
+  author: ai:codex:joe
+  content: 'PROXY DECISION (orchestrator for Joe): APPROVED for dispatch as a bounded cache-read fix. Use the existing acceptance of one full fallback scan for N missing relationship targets. Astra implementer; independent strict cache review before integration. This is unrelated to batch 102 Windows CI.'
+  created_at: 2026-09-27T01:23:35.785586617Z
+  modified_at: 2026-09-27T01:23:35.785586617Z
