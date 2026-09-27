@@ -1,0 +1,41 @@
+id: 01a0e373-b0f7-7141-a4e2-9a45bf56df0c
+spec_id: BUG-1689
+agreed_id: BUG-1689
+title: 'Fifth ETXTBSY fixture-exec failure: production retries it, test fixtures do not, and each test file rolls its own fake_gh'
+description: |
+  Blocked batch 106 (PR #2234) on Build (ubuntu-latest), a REQUIRED check, 2026-09-27. This is Linux, so ADR-62 (macOS/Windows do not gate) does not excuse it.
+
+  Failure: task_471_stale_base_preflight_tests::preflight_detects_real_stale_overlap_before_reviewer_launch at line 137, `gh pr view 1` failed to spawn: Text file busy (os error 26). 7104 passed, 1 failed. Unrelated to any of batch 106's four specs (BUG-1680, TASK-1522, TASK-1534, SPEC-441), and the same test passed in a full local workspace run at the same tree.
+
+  FIFTH OCCURRENCE OF A CLASS ALREADY FIXED THREE TIMES: BUG-468, BUG-1202, BUG-1544 (whose own title reads "the fourth occurrence of a class fixed three times, at the one test site both existing remedies skipped"). Point fixes are not holding.
+
+  MEASURED ROOT CAUSE, and it explains why every point fix missed:
+  - Production code HAS the remedy: aida-cli-lib/src/process_retry.rs provides retrying_etxtbsy with ETXTBSY_MAX_RETRIES = 5 and a 50 ms delay.
+  - Test code NEVER uses it: `grep -rn 'process_retry::' aida-cli-lib/src/tests/` returns ZERO hits.
+  - And there is no single fixture helper to fix: 7 separate files define their own fake_gh variants (real_phase_driver_wiring_tests.rs has 3, plus bug_1609_gitlab_reviewer_preflight_tests.rs, task_471_stale_base_preflight_tests.rs, task1312_pr_gc_tests.rs, lib.rs).
+  So each fix has hardened one copy while new copies keep appearing. The defect is the duplication, not any one call site.
+
+  Acceptance:
+  1. ONE shared test helper writes an executable fixture and spawns it, going through the ETXTBSY retry (or closing the fd and fsyncing before exec, whichever is proven). Every fake_gh in the tree uses it; the ad-hoc copies are deleted, not merely patched.
+  2. A ratchet makes occurrence six impossible to introduce silently: a check that fails when a test writes a file with an executable mode and execs it without that helper. Follow the repo's existing portability-ratchet pattern rather than inventing a new mechanism.
+  3. A test proves the race is handled: hold the written fd open, then exec, and assert the helper still succeeds.
+  4. State plainly whether the retry masks a real product defect or is only a test-harness concern, since production already retries.
+
+  Out of scope: the Windows shebang variant (BUG-1453, rejected) and any macOS/Windows-only fixture work, per ADR-62.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T15:20:05.111602861Z
+modified_at: 2026-09-27T15:20:05.111602861Z
+req_type: Bug
+tags:
+- flaky ci test-infra etxtbsy linux
+filed_at:
+  code_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: da36c066-c384-494e-a7cf-abffb3cfe52d
