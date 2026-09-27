@@ -145,7 +145,7 @@ impl GitHubConfig {
 
     /// Standard config file path.
     pub fn config_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
+        let config_dir = crate::home::config_dir()
             .ok_or_else(|| anyhow::anyhow!("Cannot determine config directory"))?;
         Ok(config_dir.join("aida").join("github.toml"))
     }

@@ -68,11 +68,9 @@ pub(crate) fn detect_init_forge(preferred: Option<&str>, remote_url: &str) -> St
     }
 }
 
+// trace:TASK-1513 | ai:claude
 fn user_home_dir() -> Result<std::path::PathBuf> {
-    std::env::var_os("HOME")
-        .map(std::path::PathBuf::from)
-        .filter(|p| !p.as_os_str().is_empty())
-        .ok_or_else(|| anyhow::anyhow!("HOME is unset"))
+    crate::home_dir().ok_or_else(|| anyhow::anyhow!("HOME is unset"))
 }
 
 #[cfg(unix)]

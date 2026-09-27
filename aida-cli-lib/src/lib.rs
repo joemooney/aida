@@ -49487,12 +49487,15 @@ fn aida_home_dir() -> Option<std::path::PathBuf> {
     crate::home_dir()
 }
 
-/// BUG-1642: the one home-directory lookup for this crate. Production is
-/// `dirs::home_dir()`. Under `cfg(test)` it resolves the temp `HOME` the lib
-/// test binary installs before `main` and panics rather than return the
-/// operator's real home, so no lib test can read or write the real `~/.aida`.
-/// Call this instead of the `dirs` crate (a source-scan test enforces it).
+/// BUG-1642: the one home-directory lookup for this crate. Production defers
+/// to [`aida_core::home::home_dir`], which honours `$HOME` / `$USERPROFILE`
+/// before the platform lookup so the answer is overridable on Windows too.
+/// Under `cfg(test)` it resolves the temp `HOME` the lib test binary installs
+/// before `main` and panics rather than return the operator's real home, so no
+/// lib test can read or write the real `~/.aida`. Call this instead of the
+/// `dirs` crate (a source-scan test enforces it).
 // trace:BUG-1642 | ai:claude
+// trace:TASK-1513 | ai:claude
 pub(crate) fn home_dir() -> Option<std::path::PathBuf> {
     #[cfg(test)]
     {
@@ -49500,7 +49503,7 @@ pub(crate) fn home_dir() -> Option<std::path::PathBuf> {
     }
     #[cfg(not(test))]
     {
-        dirs::home_dir() // allow-direct-home-dir
+        aida_core::home::home_dir()
     }
 }
 

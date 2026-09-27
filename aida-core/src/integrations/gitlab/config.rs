@@ -88,7 +88,7 @@ impl GitLabConfig {
 
     /// Get the configuration file path
     pub fn config_path() -> Option<PathBuf> {
-        dirs::config_dir().map(|d| d.join("aida").join("gitlab.toml"))
+        crate::home::config_dir().map(|d| d.join("aida").join("gitlab.toml"))
     }
 
     /// Load configuration from file
