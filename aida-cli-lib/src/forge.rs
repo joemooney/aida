@@ -474,6 +474,19 @@ pub enum ChangeState {
     Closed,
 }
 
+/// What [`Forge::convert_to_draft`] did. A forge with no draft notion (pure
+/// git) reports `Unsupported` so the caller can fall back to closing; it is
+/// not an error, because nothing went wrong.
+// trace:TASK-1529 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DraftConversion {
+    /// The change is now a draft (the caller verifies through
+    /// `change_metadata` before relying on it).
+    Converted,
+    /// This forge cannot mark a change as draft.
+    Unsupported,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReviewDecision {
     Approved,
@@ -898,6 +911,20 @@ pub trait Forge {
     /// so the closure is self-explaining to whoever finds it.
     // trace:TASK-1289 | ai:claude
     fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()>;
+
+    /// `gh pr ready --undo` / `glab mr update --draft` / unsupported.
+    ///
+    /// The gentler retraction: a draft keeps the review history and the
+    /// branch link while taking the change out of every reviewer's queue.
+    /// The orchestrator prefers it over [`Forge::close_change`] when the
+    /// publication guards refuse a PR that is already open, and falls back
+    /// to closing when the forge reports `Unsupported`. The caller posts the
+    /// reason separately (`comment`) and verifies the draft state through
+    /// `change_metadata`. Defaults to `Unsupported`.
+    // trace:TASK-1529 | ai:claude
+    fn convert_to_draft(&self, _c: &ChangeRef) -> Result<DraftConversion> {
+        Ok(DraftConversion::Unsupported)
+    }
 
     /// `gh pr checkout` / pure git checkout (mostly forge-agnostic).
     fn checkout_change(&self, c: &ChangeRef) -> Result<()>;
@@ -1718,6 +1745,19 @@ impl Forge for GitHubForge {
         Ok(())
     }
 
+    /// `gh pr ready --undo` converts an open PR back to a draft.
+    // trace:TASK-1529 | ai:claude
+    fn convert_to_draft(&self, c: &ChangeRef) -> Result<DraftConversion> {
+        let out = self.gh(&["pr", "ready", "--undo", &c.id.to_string()])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr ready --undo failed for #{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(DraftConversion::Converted)
+    }
+
     fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
         let out = self.gh(&["pr", "checkout", &c.id.to_string()])?;
         anyhow::ensure!(out.status.success(), "gh pr checkout failed for #{}", c.id);
@@ -2351,6 +2391,19 @@ impl Forge for GitLabForge {
             String::from_utf8_lossy(&out.stderr).trim()
         );
         Ok(())
+    }
+
+    /// `glab mr update <iid> --draft` marks the MR as a draft.
+    // trace:TASK-1529 | ai:claude
+    fn convert_to_draft(&self, c: &ChangeRef) -> Result<DraftConversion> {
+        let out = self.glab(&["mr", "update", &c.id.to_string(), "--draft"])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab mr update --draft failed for !{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(DraftConversion::Converted)
     }
 
     fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
@@ -3613,6 +3666,21 @@ pub(crate) mod fake {
         pub(crate) close_takes_effect: bool,
         /// TASK-1529: `(change id, body)` for every `comment` call.
         pub(crate) comments: Arc<Mutex<Vec<(u64, String)>>>,
+        /// TASK-1529: whether `change_metadata` reports the change as a
+        /// draft. Shared across clones like `state`.
+        pub(crate) draft: Arc<Mutex<bool>>,
+        /// TASK-1529: when false, `convert_to_draft` reports `Unsupported`
+        /// (the pure-git shape) so the caller falls back to closing.
+        pub(crate) draft_supported: bool,
+        /// TASK-1529: when set, `convert_to_draft` fails with this error and
+        /// changes nothing.
+        pub(crate) draft_error: Option<String>,
+        /// TASK-1529: when false, `convert_to_draft` returns Converted but
+        /// `change_metadata` keeps reporting a non-draft — the "the CLI said
+        /// ok, the forge disagrees" shape the verification exists to catch.
+        pub(crate) draft_takes_effect: bool,
+        /// TASK-1529: every change id `convert_to_draft` was called for.
+        pub(crate) drafted: Arc<Mutex<Vec<u64>>>,
     }
 
     impl RecordingForge {
@@ -3626,7 +3694,25 @@ pub(crate) mod fake {
                 close_error: None,
                 close_takes_effect: true,
                 comments: Arc::new(Mutex::new(Vec::new())),
+                draft: Arc::new(Mutex::new(false)),
+                draft_supported: true,
+                draft_error: None,
+                draft_takes_effect: true,
+                drafted: Arc::new(Mutex::new(Vec::new())),
             }
+        }
+
+        /// TASK-1529: whether the forge currently reports the change as a
+        /// draft.
+        // trace:TASK-1529 | ai:claude
+        pub(crate) fn is_draft(&self) -> bool {
+            *self.draft.lock().unwrap()
+        }
+
+        /// TASK-1529: every `convert_to_draft` call so far.
+        // trace:TASK-1529 | ai:claude
+        pub(crate) fn drafted(&self) -> Vec<u64> {
+            self.drafted.lock().unwrap().clone()
         }
 
         /// TASK-1529: script the state `change_status` reports.
@@ -3692,7 +3778,21 @@ pub(crate) mod fake {
             _: u64,
             _: &mut dyn crate::network_retry::RetrySink,
         ) -> Result<ChangeMetadata> {
-            anyhow::bail!("RecordingForge: change_metadata not scripted")
+            // trace:TASK-1529 | ai:claude
+            match *self.state.lock().unwrap() {
+                Some(state) => Ok(ChangeMetadata {
+                    state,
+                    title: String::new(),
+                    merged_at: None,
+                    base_ref: String::new(),
+                    head_ref: String::new(),
+                    head_sha: String::new(),
+                    is_draft: self.is_draft(),
+                    is_cross_repository: false,
+                    head_repo: None,
+                }),
+                None => anyhow::bail!("RecordingForge: change_metadata not scripted"),
+            }
         }
         fn change_commit_headlines(
             &self,
@@ -3749,6 +3849,20 @@ pub(crate) mod fake {
                 }
             }
             Ok(())
+        }
+        fn convert_to_draft(&self, c: &ChangeRef) -> Result<DraftConversion> {
+            // trace:TASK-1529 | ai:claude
+            if !self.draft_supported {
+                return Ok(DraftConversion::Unsupported);
+            }
+            if let Some(err) = &self.draft_error {
+                anyhow::bail!("{err}");
+            }
+            self.drafted.lock().unwrap().push(c.id);
+            if self.draft_takes_effect {
+                *self.draft.lock().unwrap() = true;
+            }
+            Ok(DraftConversion::Converted)
         }
         fn checkout_change(&self, _: &ChangeRef) -> Result<()> {
             anyhow::bail!("RecordingForge: checkout_change not scripted")

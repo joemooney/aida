@@ -45,18 +45,46 @@ pub(crate) fn decide_target(found: Option<u64>, preexisting: Option<u64>) -> Ret
     }
 }
 
+/// How a PR was taken out of review. Draft is preferred (it keeps the review
+/// history and the branch link); closing is the fallback for a forge that
+/// cannot mark a change as draft, or whose draft conversion did not take.
+// trace:TASK-1529 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RetractionMode {
+    Draft,
+    Closed,
+}
+
+impl RetractionMode {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            RetractionMode::Draft => "draft",
+            RetractionMode::Closed => "closed",
+        }
+    }
+
+    /// The past-tense verb for user-facing lines.
+    pub(crate) fn verb(self) -> &'static str {
+        match self {
+            RetractionMode::Draft => "converted to draft",
+            RetractionMode::Closed => "closed",
+        }
+    }
+}
+
 /// What the retraction did. The phase-failure message and the marker are
 /// both derived from this so they cannot disagree.
 // trace:TASK-1529 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RetractionOutcome {
-    /// The forge reports the change CLOSED after the close call.
-    Retracted { pr: u64 },
-    /// The change was already closed or merged before this retraction ran
-    /// (an earlier attempt, or a human) — nothing to do, and nothing claimed.
+    /// The forge reports the change as a draft (or CLOSED) after the call.
+    Retracted { pr: u64, mode: RetractionMode },
+    /// The change was already a draft, closed or merged before this
+    /// retraction ran (an earlier attempt, or a human) — nothing to do, and
+    /// nothing claimed.
     AlreadyRetracted { pr: u64 },
-    /// The close call failed, or the forge still reports the change OPEN
-    /// afterwards. The PR is published with failing guards.
+    /// Neither the draft conversion nor the close left the forge reporting
+    /// the change retracted. The PR is published with failing guards.
     RetractionFailed { pr: u64, error: String },
     /// The PR was open before the phase started; the agent did not open it.
     NotOurs { pr: u64 },
@@ -69,6 +97,7 @@ pub(crate) enum RetractionOutcome {
 
 impl RetractionOutcome {
     /// True when a PR with failing guards is still published.
+    #[cfg(test)]
     pub(crate) fn leaves_pr_open(&self) -> bool {
         matches!(self, RetractionOutcome::RetractionFailed { .. })
     }
@@ -84,6 +113,9 @@ pub(crate) struct RetractionRecord {
     pub branch: String,
     /// `retracted` or `retraction-failed`.
     pub state: String,
+    /// `draft` or `closed` when retracted; absent when the retraction failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
     /// The guard output that refused publication.
     pub detail: String,
     /// The close error or the post-close state, when the retraction failed.
@@ -98,6 +130,31 @@ pub(crate) struct RetractionRecord {
 
 pub(crate) const STATE_RETRACTED: &str = "retracted";
 pub(crate) const STATE_FAILED: &str = "retraction-failed";
+
+/// The state one marker records: a verified retraction (with how it was
+/// done) or a failed one.
+// trace:TASK-1529 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RecordState {
+    Retracted(RetractionMode),
+    Failed,
+}
+
+impl RecordState {
+    fn as_str(self) -> &'static str {
+        match self {
+            RecordState::Retracted(_) => STATE_RETRACTED,
+            RecordState::Failed => STATE_FAILED,
+        }
+    }
+
+    fn mode(self) -> Option<RetractionMode> {
+        match self {
+            RecordState::Retracted(mode) => Some(mode),
+            RecordState::Failed => None,
+        }
+    }
+}
 
 fn records_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("preflight-retractions")
@@ -125,10 +182,11 @@ pub(crate) fn write_record(
     pr: u64,
     spec: &str,
     branch: &str,
-    state: &str,
+    state: RecordState,
     detail: &str,
     error: Option<&str>,
 ) -> std::io::Result<PathBuf> {
+    let (state, mode) = (state.as_str(), state.mode());
     let dir = records_dir(project_root);
     std::fs::create_dir_all(&dir)?;
     let previous = read_record(project_root, pr);
@@ -143,6 +201,7 @@ pub(crate) fn write_record(
         spec: spec.to_string(),
         branch: branch.to_string(),
         state: state.to_string(),
+        mode: mode.map(|m| m.as_str().to_string()),
         detail: detail.to_string(),
         error: error.map(str::to_string),
         recorded_at,
@@ -178,6 +237,35 @@ pub(crate) fn verify_closed(
     }
 }
 
+/// Interpret the forge's post-conversion draft flag. Only an observed draft
+/// counts; an unreadable flag is a failure for the same reason as
+/// [`verify_closed`]. Pure.
+// trace:TASK-1529 | ai:claude
+pub(crate) fn verify_drafted(observed: Result<bool, String>) -> Result<(), String> {
+    match observed {
+        Ok(true) => Ok(()),
+        Ok(false) => Err("the change still reports ready for review after the draft \
+                          conversion"
+            .to_string()),
+        Err(e) => Err(format!(
+            "could not read the change's draft state after the conversion: {e}"
+        )),
+    }
+}
+
+/// The comment posted on a PR that was converted to draft because the
+/// publication guards refused it. Mirrors
+/// `implementer_preflight::retraction_notice` (the close reason) for the
+/// gentler retraction.
+// trace:TASK-1529 | ai:claude
+pub(crate) fn draft_notice(detail: &str) -> String {
+    format!(
+        "Converted to draft automatically: the publication guards refused this change \
+         before it was reviewed.\n\n{detail}\n\nThe branch is untouched — fix the guard \
+         failure and mark the PR ready for review, or let the drain retry."
+    )
+}
+
 /// The one-line detail a merge-hold placed on a PR whose retraction failed
 /// carries, so `aida human` / `aida status --awaiting` explain the hold
 /// without this module.
@@ -195,7 +283,7 @@ mod tests {
     use crate::forge::ChangeState;
 
     #[test]
-    fn target_is_retract_only_for_a_pr_the_phase_opened() {
+    fn task_1529_target_is_retract_only_for_a_pr_the_phase_opened() {
         assert_eq!(decide_target(None, None), RetractionTarget::Nothing);
         assert_eq!(decide_target(None, Some(7)), RetractionTarget::Nothing);
         assert_eq!(decide_target(Some(42), None), RetractionTarget::Retract(42));
@@ -212,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn only_an_observed_close_counts_as_retracted() {
+    fn task_1529_only_an_observed_close_counts_as_retracted() {
         assert!(verify_closed(Ok(ChangeState::Closed)).is_ok());
         assert!(verify_closed(Ok(ChangeState::Open))
             .unwrap_err()
@@ -226,7 +314,27 @@ mod tests {
     }
 
     #[test]
-    fn marker_round_trips_and_counts_attempts() {
+    fn task_1529_only_an_observed_draft_counts_as_retracted() {
+        assert!(verify_drafted(Ok(true)).is_ok());
+        assert!(verify_drafted(Ok(false))
+            .unwrap_err()
+            .contains("still reports ready for review"));
+        assert!(verify_drafted(Err("gh: timeout".into()))
+            .unwrap_err()
+            .contains("could not read"));
+    }
+
+    #[test]
+    fn task_1529_draft_notice_carries_the_guard_failure_and_the_next_step() {
+        let detail = "guard `Check formatting` failed:\nsrc/x.rs needs rustfmt";
+        let note = draft_notice(detail);
+        assert!(note.contains(detail), "{note}");
+        assert!(note.contains("Converted to draft automatically"), "{note}");
+        assert!(note.contains("branch is untouched"), "{note}");
+    }
+
+    #[test]
+    fn task_1529_marker_round_trips_and_counts_attempts() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         assert!(read_record(root, 42).is_none());
@@ -235,7 +343,7 @@ mod tests {
             42,
             "TASK-1",
             "claude/task-1",
-            STATE_FAILED,
+            RecordState::Failed,
             "guard `fmt` failed",
             Some("gh exploded"),
         )
@@ -253,7 +361,7 @@ mod tests {
             42,
             "TASK-1",
             "claude/task-1",
-            STATE_FAILED,
+            RecordState::Failed,
             "guard `fmt` failed",
             Some("still open"),
         )
@@ -269,14 +377,16 @@ mod tests {
             42,
             "TASK-1",
             "claude/task-1",
-            STATE_RETRACTED,
+            RecordState::Retracted(RetractionMode::Draft),
             "guard `fmt` failed",
             None,
         )
         .unwrap();
         let third = read_record(root, 42).unwrap();
         assert_eq!(third.state, STATE_RETRACTED);
+        assert_eq!(third.mode.as_deref(), Some("draft"));
         assert_eq!(third.attempts, 3);
         assert!(third.error.is_none());
+        assert!(first.mode.is_none(), "a failed retraction records no mode");
     }
 }
