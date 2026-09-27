@@ -1,14 +1,32 @@
 id: 01a0e035-fb49-7152-81dd-a9e1bff1eab4
 spec_id: TASK-1547
 agreed_id: TASK-1547
-title: 'Existing stores get the *.tmp.* ignore rule: widen the doctor repair and info/exclude guards'
-description: 'Follow-up from BUG-1677: new stores ignore write_atomic staging files (*.tmp.*), but existing stores don''t — the doctor store-gitignore repair early-returns when .aida/node.toml exists, and ensure_lock_excluded skips info/exclude when .gitignore already has .aida/*.lock. Acceptance: 1. The doctor repair (or ensure_*_excluded) adds ''*.tmp.*'' to an existing store''s ignore/exclude idempotently without rewriting the user''s other lines. 2. Fixture tests for a store with an existing hand-written .gitignore.'
+title: 'Existing stores get the staging-ignore patterns: add a doctor finding independent of the tracked-runtime detector'
+description: |
+  Follow-up from BUG-1677: new stores ignore write_atomic staging files, but existing stores do not.
+
+  ACCEPTANCE REWRITTEN 2026-09-27 by the orchestrator seat. The original acceptance was wrong in two ways that would have made an implementer build something that fails an existing test:
+    (a) it said to write `.git/info/exclude`. That is the wrong file. info/exclude is per-clone, so it never reaches other clones; worse, a store attached as a LINKED WORKTREE shares the project's exclude file, so an ignore written there would also hide the user's own files. BUG-1677 settled this: the staging ignores belong in the STORE worktree's TRACKED `.gitignore` (see the comment at doctor_cmd.rs, fn ensure_store_tracked_runtime_gitignore).
+    (b) it said to add `*.tmp.*`. A bare `*.tmp.*` is FORBIDDEN -- it is too broad and would stop real store files from being staged, which is worse than the bug. The end-to-end heal test explicitly asserts `!gi.lines().any(|l| l.trim() == "*.tmp.*")`. The correct patterns are the per-area ones owned by `store_staging_ignore_block()` in aida-core/src/fs_atomic.rs: objects/**/*.tmp.*, registry/**/*.tmp.*, schedule/**/*.tmp.*, mailbox/**/*.tmp.*, oplog.tmp.*.
+
+  THE ACTUAL REMAINING GAP (identified by the independent review of BUG-1677's fix, 2026-09-27). BUG-1677 made the two gitignore guards independent, so a store whose `.gitignore` has the BUG-563 runtime patterns but not the staging patterns now gains them. But `ensure_store_tracked_runtime_gitignore` is only reachable from `heal_doctor_store_tracked_runtime` (doctor_cmd.rs:5588, :5617), and that heal only runs when the BUG-563 DETECTOR still finds a runtime file TRACKED on the orphan branch (aida-cli-lib/src/lib.rs:23617-23641, via `git ls-files` in the store worktree). A store already fully healed by BUG-563 -- no tracked runtime files, 563 patterns present -- produces NO finding, so the heal never runs and it never receives the staging block. `git_ops.rs:188`'s `git add -A <subdir>` remains the exposure for exactly that population, which is most existing stores.
+
+  Acceptance criteria:
+
+  1. A doctor FINDING exists for "store .gitignore is missing the staging-ignore patterns", independent of whether any runtime file is still tracked. It must fire for a store with no tracked runtime files whose .gitignore already contains the BUG-563 patterns -- the population the current code misses.
+  2. Its repair appends the per-area staging patterns to the STORE worktree's tracked `.gitignore`, idempotently, without rewriting or reordering the user's other lines, and commits on the orphan branch the same way the BUG-563 repair does.
+  3. A bare `*.tmp.*` is never written. Keep the existing assertion that forbids it.
+  4. Fixture tests cover: a store with a hand-written .gitignore containing unrelated user patterns (they survive untouched, order preserved); a store with the BUG-563 patterns and no staging patterns (gains exactly the staging block, and the finding fires); a fully-guarded store (no finding, byte-identical file); and running the repair twice (no double-append).
+  5. The idempotence predicate covers EVERY pattern the block writes, not just the first -- see TASK-1556, which fixes that same defect in the existing guard. Coordinate with it rather than re-introducing a one-pattern sentinel.
+  6. `ensure_lock_excluded`'s info/exclude behaviour for `.aida/*.lock` is left alone unless a concrete cross-clone problem is demonstrated: a lock file IS genuinely per-clone, so info/exclude is arguably right there. If it is changed, say why in the spec first.
+
+  Out of scope: the queue-writer locking in BUG-1677 itself, and the TASK-1556 predicate fix.
 status: Approved
-priority: Low
+priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:13:49.257295434Z
-modified_at: 2026-09-27T16:33:50.813945667Z
+modified_at: 2026-09-27T18:15:04.102491317Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
