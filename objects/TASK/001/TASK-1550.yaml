@@ -1,0 +1,27 @@
+id: 01a0e124-e1ff-7e21-8211-689441f44316
+spec_id: TASK-1550
+agreed_id: TASK-1550
+title: Inventory host-wide AIDA launch admission and cutover without changing live routes
+description: |
+  Design/read-only prerequisite for BUG-1669's P-enrolled-host boundary; every official AIDA-managed launch across projects on this host must use protected execution or refuse. Do not change any live launcher, credentials, scheduler or service.
+
+  Acceptance:
+  - Inventory AIDA-managed launch entry points across global/per-project CLI binaries, copied/stale versions, scripts, IDE/MCP adapters, interactive/background/resume, solo/burndown/wave/queue/reviewer/advisor/watch, cron/systemd/tmux/detached routes, and current managed workers. Map each to effective posture and protected admission/cutover or refusal.
+  - Define per-repo identity/enrollment generations, cross-repo grant/observation isolation, no legacy-client fallback, missing/unsupported-project refusal, credential-free/custom/local-model route treatment, and current-run interruption/migration plan. Preserve the explicit exclusion for unrelated unmanaged vendor clients; no official AIDA route may be reclassified as unmanaged merely because it evades the gate.
+  - Provide a cutover manifest and fixture/test matrix for unknown repos, alternate/stale/copied clients, repo-A to repo-B grants/transcripts/artifacts, untrusted host principals, scheduled/watch expiry, and rollback. State any host facts/permissions that need Joe's separate approval and any unresolved feasibility mismatch.
+  - Link the independently signed BUG-1669 sketch/advisor amendments M1-M5 and TASK-1549 ADR, without claiming protection is deployed.
+  Out of scope: modifying launch code or host services, enrolling projects, installing VMs/broker, moving credentials, disabling existing user jobs, or waiving human/merge gates.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T04:34:45.887469118Z
+modified_at: 2026-09-27T04:34:45.887469118Z
+req_type: Task
+filed_at:
+  code_sha: 43c0429198401473e0cfab73267fc413883b3e1b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: codex
