@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:16:14.364445449Z
-modified_at: 2026-09-27T14:27:14.416007337Z
+modified_at: 2026-09-27T18:32:22.248035543Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -50,6 +50,30 @@ comments:
   created_at: 2026-09-27T14:27:14.416007337Z
   modified_at: 2026-09-27T14:27:14.416007337Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e423-bbe8-7951-99c3-08f1291f9a28
+  author: joe
+  content: |-
+    Review: REQUEST_CHANGES (cross-vendor reviewer: codex seat). Head a853235e6b. The orchestrator INDEPENDENTLY VERIFIED the blocker against origin/main and it is MORE serious than the review stated -- the reviewer thought the forced-removal behaviour predated this diff. It does not.
+
+    BLOCKER -- this diff converts a provably-safe operation into a destructive one, in a DELETION path.
+    origin/main, session_reap.rs:965: 'git worktree prune'. By definition prune only drops registrations whose DIRECTORIES ARE GONE. It cannot delete anything that exists, so the worst case is a no-op.
+    This branch, session_reap.rs:~966: 'git worktree remove --force -- <lease.worktree_path>'. That DELETES THE DIRECTORY AND ITS CONTENTS, and '--force' explicitly overrides git's own refusal to remove a dirty worktree.
+    The guard is only the earlier 'worktree_missing' check at :903 (has_worktree && !lease.worktree_path.exists()). Between :903 and the removal the function does branch-emptiness and protected-branch resolution, so the window is real, not instantaneous.
+    Concrete failure: the lease path is absent at :903 -- an autofs/NFS mount not yet back, or the worktree removed by hand -- and by the time the command runs the path EXISTS again, because the mount returned, the user re-created the worktree, or a concurrent 'aida worktree add' reused the path. 'remove --force' then deletes a LIVE worktree along with any uncommitted work in it. Under the old 'prune' this was impossible.
+    This matters concretely today: this same session salvaged ~6,700 lines of UNCOMMITTED work out of 15 stale worktrees. A forced removal on a reappearing path is exactly how that work gets destroyed instead of rescued.
+
+    Required fix (keep the scoping goal, restore the safety property):
+    1. Re-verify the path is still ABSENT immediately before the removal, and skip + report if it now exists. Do not rely on the :903 check.
+    2. Drop '--force' so git's own dirty-worktree refusal remains a backstop. If plain 'remove' cannot clear a stale registration whose directory is gone, then clear the registration directly (the per-entry equivalent of what prune does) rather than force-deleting a path.
+    3. Add a test proving a worktree that REAPPEARS between the check and the removal is NOT deleted -- e.g. recreate the directory (with a file in it) after the absence check and assert the file still exists afterwards. It must fail against the current '--force' code.
+    The scoping rationale in the comment is sound and should be kept: a repo-wide prune would drop another session's temporarily-unavailable worktree registration. The objection is only to the destructive mechanism chosen to achieve it.
+
+    CONFIRMED CORRECT, do not touch: the '-z' porcelain parsing splits on NUL and attributes 'locked' only to the current record (lib.rs:25230), which correctly handles newline-containing paths; NUL cannot occur in a path, and newline stays inside the NUL-terminated field. Both internal consumers (worktree_is_locked, branch_checked_out_elsewhere) split on NUL; 'aida worktree list' uses a separate human-readable parser this diff does not change. Git's listing has a single 'locked' marker, not separate read/write markers, so nothing needed is hidden. The tests pin inclusion AND exclusion (target registration disappears while the missing sibling remains; only the newline-path record is locked). No exit-code change. The salvage commit a853235e6b (parser extraction + portability-focused test changes, addressing a Windows newline-fixture limitation and replacing substring checks with parsed path comparisons) is FINISHED work, not a half-edit.
+
+    Build-free CI gates all exit 0. The reviewer did not build or run tests.
+  created_at: 2026-09-27T18:32:22.248035543Z
+  modified_at: 2026-09-27T18:32:22.248035543Z
+  session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
 history:
 - id: 01a0e1ac-4d92-7bc0-b685-1538cad58db1
   author: aida-session-start
