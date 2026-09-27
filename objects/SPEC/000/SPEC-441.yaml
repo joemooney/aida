@@ -1,0 +1,15 @@
+id: 01a0e0a8-e5e6-7530-afce-26cdf3b9c862
+spec_id: SPEC-441
+title: History cache/git-walk disagree for far-future ISO until bounds
+description: 'During isolated STORY-1477 CLI/MCP layout tests, --since 2000-01-01 --until 2100-01-01 returned zero recent events through git-walk (AIDA_HISTORY_CACHE=0), while MCP''s indexed path returned the correct 2026 fixture events. This is outside the new renderer: on base code commit 854b7e26f7222c73845064275a18c293c9895283, plain `git log -1 --format=''%h %cI'' --until=2100-01-01T00:00:00+00:00` selected 61bd5d52c5 (2025-12-31), while the same command with 2030-01-01 selected 854b7e26f7 (2026-09-26). Existing history::collect_filtered_events_git passes RFC3339 strings to Git --since/--until; cache compares parsed bounds directly. Investigate Git''s far-future date parser and pass unambiguous validated timestamps or filter consistently. Preserve existing date/time semantics. The bounded layout change leaves filters untouched and uses a 2030 upper bound in its parity fixture.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T02:19:20.422469520Z
+modified_at: 2026-09-27T02:19:20.422469520Z
+req_type: Task
+tags:
+- from-implementer:STORY-1477
+- kind:bug-spotted
+- severity:minor
