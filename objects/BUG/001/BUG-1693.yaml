@@ -1,0 +1,41 @@
+id: 01a0e3c3-e95c-7a52-a7f1-ca8ae072444d
+spec_id: BUG-1693
+agreed_id: BUG-1693
+title: 'The merge-hold human-at-TTY floor is advisory only: any agent can clear a hold by deleting the marker and dropping the label'
+description: |
+  Found 2026-09-27 when the operator directed the orchestrator to clear the hold on PR #2224 and the command correctly refused.
+
+  `aida merge-hold clear <pr>` refuses agents with: "clearing a merge-hold requires a human at an interactive terminal; dispatch or advisor authority cannot override this integrity floor". That refusal is right, and there is no documented operator-authorized flag to override it, which is also right.
+
+  But the floor is enforced ONLY inside that one command. The state it protects is fully writable by the same agent:
+  - `.aida/merge-holds/` is mode 0755 owned by the invoking user, and its marker files are 0644. An agent can `rm .aida/merge-holds/PR-2224`.
+  - The mirrored `aida:merge-hold` label is on the forge, and the agent's `gh` token reports `admin` permission on the repository, so an agent can drop the label directly.
+
+  So any agent that is told "no" by the CLI can accomplish the same thing with two ordinary commands that the CLI never sees. That makes this an advisory speed bump, not an integrity floor, and the gap is invisible: a hold cleared that way leaves no clearance record, because recording the clearance is something only the refused command does.
+
+  This is the same class as BUG-1667 ("an agent can switch every later agent launch to bypass") and BUG-1669 (headless commands hard-coding full-access). The pattern is that the check lives in the code path rather than in the thing being protected.
+
+  Acceptance:
+  1. Clearing a hold outside the human-gated path is detectable. At minimum, a hold's release requires a recorded clearance, and a marker that disappears without one is reported as tampering by `aida merge-hold list` and by the doctor.
+  2. The merge-hold-gate required check does not pass merely because the label is absent; it must agree with a recorded clearance, so dropping the label alone cannot release a PR.
+  3. A fixture test proves that removing the marker file by hand, and removing the label by hand, each fail to release the PR.
+  4. State explicitly what this design can and cannot achieve against an agent running as the same user with an admin forge token. If genuine enforcement requires the protected-broker boundary of BUG-1669 and ADR-61, say so and record the honest limit rather than implying the gap is closed.
+
+  Out of scope: implementing the protected broker itself, and any change to who may merge.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T16:47:42.428525396Z
+modified_at: 2026-09-27T16:47:42.428525396Z
+req_type: Bug
+tags:
+- authority merge-hold integrity-floor
+filed_at:
+  code_sha: d0e65db703fbbb9a04e43822dcb3ddd984f67bc7
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '7201317922'
+  vendor: antigravity
+  session: da36c066-c384-494e-a7cf-abffb3cfe52d
