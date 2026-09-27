@@ -3,12 +3,12 @@ spec_id: TASK-1521
 agreed_id: TASK-1521
 title: 'Verify real vendor skill discovery: do Codex/Antigravity still read .codex/skills and .antigravity/skills, which copy wins on a duplicate name, does Codex read .claude/skills, and is .aida-delivered t'
 description: Child of BUG-1639 (advisor signoff child C). This gates retiring the legacy skill dirs. It needs real Codex and Antigravity CLIs, in tempdir projects only. Record the findings, with vendor versions, as a comment and in docs/agents/aida-mcp-install-matrix.md. Includes checking which aida-orchestrate copy (portable vs Claude) each vendor picks.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:01:08.750080015Z
-modified_at: 2026-09-27T14:15:02.228800023Z
+modified_at: 2026-09-27T14:46:37.369272273Z
 req_type: Task
 comments:
 - id: 01a0de73-5e62-7873-83b8-824c0ca37326
@@ -31,3 +31,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e355-0e39-7160-be05-075d8fd50eeb
+  author: aida-session-start
+  timestamp: 2026-09-27T14:46:37.369271630Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
