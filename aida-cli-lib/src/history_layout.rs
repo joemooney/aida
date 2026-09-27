@@ -130,13 +130,36 @@ impl Template {
 // complete sample date before any walk, and propagate formatting errors rather
 // than calling Display::to_string, which panics on fmt::Error.
 fn format_date(timestamp: &str, fmt: &str) -> Result<String> {
-    let date = chrono::DateTime::parse_from_rfc3339(timestamp)
-        .context("invalid event timestamp")?
-        .with_timezone(&chrono::Local);
+    use chrono::{Local, NaiveDateTime, TimeZone};
     let mut out = String::new();
-    date.format(fmt)
-        .write_to(&mut out)
-        .context("invalid date directive for formatting")?;
+    // trace:SPEC-442 | ai:codex
+    // Decoded feed rows already contain local minute precision. Interpret that
+    // wall time locally, never as UTC; leave decoder/cache/public values intact.
+    let formatted = if let Ok(date) = chrono::DateTime::parse_from_rfc3339(timestamp) {
+        date.with_timezone(&Local).format(fmt).write_to(&mut out)
+    } else {
+        let date = NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d %H:%M")
+            .context("invalid event timestamp")?;
+        match Local.from_local_datetime(&date).single() {
+            Some(local) => local.format(fmt).write_to(&mut out),
+            // A DST fold has lost its offset in the existing feed. Wall-clock
+            // directives still work; offset-dependent ones fail rather than
+            // guessing which instant was intended.
+            None => {
+                if chrono::format::StrftimeItems::new(fmt).any(|item| {
+                    matches!(
+                        item,
+                        chrono::format::Item::Numeric(chrono::format::Numeric::Timestamp, _)
+                    )
+                }) {
+                    bail!("invalid date directive for formatting: local event offset is ambiguous");
+                }
+                date.format(fmt).write_to(&mut out)
+            }
+        }
+    };
+    formatted
+        .context("invalid date directive for formatting (local event offset may be ambiguous)")?;
     Ok(out)
 }
 fn cell(v: &Value) -> String {
@@ -396,7 +419,14 @@ impl Templates {
             doc["history"] = toml_edit::Item::Table(toml_edit::Table::new());
         }
         if doc["history"].get("templates").is_none() {
-            doc["history"]["templates"] = toml_edit::Item::Table(toml_edit::Table::new());
+            // trace:STORY-1477 | ai:codex
+            // Inline parents serialize Values only, so a regular Table child
+            // would silently disappear when the document is saved.
+            doc["history"]["templates"] = if doc["history"].is_inline_table() {
+                toml_edit::value(toml_edit::InlineTable::new())
+            } else {
+                toml_edit::Item::Table(toml_edit::Table::new())
+            };
         }
         doc["history"]["templates"]
             .as_table_like_mut()
@@ -640,6 +670,44 @@ mod tests {
             assert!(format!("{err:#}").contains("user.toml"));
             assert_eq!(std::fs::read_to_string(path).unwrap(), body);
         }
+    }
+    // trace:STORY-1477 | ai:codex
+    #[test]
+    fn inline_history_first_save_round_trip() {
+        let d = tempfile::tempdir().unwrap();
+        for scope in ["user", "project"] {
+            let path = d.path().join(format!("{scope}.toml"));
+            std::fs::write(
+                &path,
+                "history = { keep = 1 } # inline\n[unrelated]\nkeep = true # untouched\n",
+            )
+            .unwrap();
+            let target = format!("{scope}:first");
+            registry(d.path()).save(&target, "{id}", false).unwrap();
+            assert_eq!(
+                read(&path).unwrap().get("first").map(String::as_str),
+                Some("{id}")
+            );
+            registry(d.path()).remove(&target).unwrap();
+            assert!(!read(&path).unwrap().contains_key("first"));
+            let text = std::fs::read_to_string(&path).unwrap();
+            assert!(
+                text.contains("keep = 1")
+                    && text.contains("# inline")
+                    && text.contains("# untouched")
+            );
+        }
+    }
+    // trace:SPEC-442 | ai:codex
+    #[test]
+    fn decoded_local_date_formats_without_second_conversion() {
+        assert_eq!(
+            format_date("2026-09-25 23:34", "%Y-%m-%d %H:%M").unwrap(),
+            "2026-09-25 23:34"
+        );
+        assert!(format_date("not a timestamp", "%H:%M").is_err());
+        assert!(format_date("2026-09-25 23:34", "%Q").is_err());
+        assert!(format_date("2026-09-25 23:34", "%#z").is_err());
     }
     #[test]
     fn inline_tables_and_worktree_roots() {

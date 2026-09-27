@@ -157,7 +157,12 @@ Save requires an inline template on the same run; existing entries in that
 scope require `--force`, which is invalid without save. Validation and successful
 query rendering precede mutation. Project mutations print a commit reminder.
 Unrelated TOML content/comments are preserved; malformed config is an error;
-there is no migration or read-time rewrite.
+there is no migration or read-time rewrite. Inline `history = { keep = 1 }`
+tables also support save/overwrite/remove while retaining their other values.
+
+Dates use the feed's existing local minute precision. Formatting does not restore
+discarded seconds or offsets: during an ambiguous local DST hour, wall-clock
+formats still work but offset-dependent directives fail explicitly.
 
 Templates allow up to 4096 bytes, no literal controls/newlines, and rendered
 lines up to 16384 bytes. Substituted controls/newlines are normalized to spaces.

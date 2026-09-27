@@ -3,8 +3,12 @@
 
 Run through test_history_templates.sh; uses the existing MCP stdio harness.
 trace:STORY-1477 | ai:codex
+trace:SPEC-442 | ai:codex
 """
 import json
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 import os
 from pathlib import Path
 import pty
@@ -20,7 +24,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix="aida-history-layout-") as tmp:
         root = Path(tmp)
         env = os.environ.copy()
-        env.update(AIDA_OUTPUT_FORMAT="human", AIDA_HISTORY_CACHE="0", NO_COLOR="1")
+        stamp = (datetime.now(timezone.utc) - timedelta(minutes=5)).replace(microsecond=0)
+        env.update(AIDA_OUTPUT_FORMAT="human", AIDA_HISTORY_CACHE="0", NO_COLOR="1",
+                   TZ="UTC", GIT_AUTHOR_DATE=stamp.isoformat(), GIT_COMMITTER_DATE=stamp.isoformat())
 
         def run(*args, ok=True, cwd=root, extra=None):
             result = subprocess.run([str(binary), *args], cwd=cwd, env={**env, **(extra or {})}, text=True, capture_output=True, timeout=45)
@@ -34,6 +40,8 @@ def main():
         created = run("add", "--title", "Before", "--type", "task", "--status", "draft")
         spec = parse_spec_id(created.stdout, "seed")
         run("edit", spec, "--title", "After", "--priority", "high")
+        # Give approval filters a real transition for the date parity checks.
+        run("edit", spec, "--status", "approved", extra={"AIDA_SESSION_ROLE": "advisor"})
         run("comment", "add", spec, "A comment body which must never be exposed by the layout")
         base = ["history", "--all", "--include-meta", "--limit", "100", "--max-commits", "500"]
         original = run(*base, "--full", "--json").stdout
@@ -121,7 +129,8 @@ def main():
             ["--template","mine","--save-as-template","copy"],
             ["--template","{id}","--format","toon"],
             ["--fields","id,id"], ["--fields",""], ["--template","unknown"],
-            ["--template","{date:%Q}"], ["--template","{date:%#z}"], ["--template","{id}","events"],
+            ["--template","{date:%Q}","--save-as-template","bad"], ["--template","{date:%#z}","--save-as-template","bad"],
+            ["--template","{date:%H:%M}","--since","nonsense","--save-as-template","bad"], ["--template","{id}","events"],
         ]:
             run(*base,*options,ok=False)
             assert user.read_bytes() == before
@@ -132,6 +141,40 @@ def main():
         run("history","templates","rm","user:mine")
         assert run(*base,"--template","mine").stdout == run(*base,"--template","project:mine").stdout
         assert '# project marker' in project.read_text() and '# untouched' in project.read_text()
+        # First-save inline history regression: exercise the public loader anew on
+        # every CLI invocation, including reload, overwrite, and scoped removal.
+        for scope, path, other in [("user", user, project), ("project", project, user)]:
+            previous = path.read_bytes()
+            other_before = other.read_bytes()
+            # Root-level inline history, no templates child; retain init fields.
+            body = previous.decode()
+            start = body.index("[history]")
+            # The fixture appends history last; its tables occupy the suffix.
+            assert "[unrelated]" in body[:start]
+            body = body[:start]
+            path.write_text("history = { keep = 1 } # inline marker\n" + body)
+            before_inline = path.read_bytes()
+            target = scope + ":first"
+            saved = run(*base, "--template", template, "--save-as-template", target)
+            assert path.read_bytes() != before_inline
+            assert "Updated " in saved.stderr
+            if scope == "project":
+                assert "commit this tracked config change" in saved.stderr
+            assert target + "\t" + template in run("history", "templates").stdout
+            assert run(*base, "--template", target).stdout == inline
+            persisted = path.read_bytes()
+            run(*base, "--template", "{id}", "--save-as-template", target, ok=False)
+            assert path.read_bytes() == persisted
+            run(*base, "--template", "{id}", "--save-as-template", target, "--force")
+            assert run(*base, "--template", target).stdout == run(*base, "--template", "{id}").stdout
+            run("history", "templates", "rm", target)
+            assert target + "\t" not in run("history", "templates").stdout
+            run(*base, "--template", target, ok=False)
+            assert "keep = 1" in path.read_text() and "# inline marker" in path.read_text()
+            assert "# untouched" in path.read_text() and "[unrelated]" in path.read_text()
+            assert other.read_bytes() == other_before
+            path.write_bytes(previous)
+        print("PASS: R4 user/project inline first-save reload/force/remove and scope preservation", flush=True)
         # A real sibling worktree writes its own tracked config, not the parent.
         subprocess.run(["git","add",".aida/config.toml"],cwd=root,check=True)
         subprocess.run(["git","-c","commit.gpgsign=false","commit","-qm","config"],cwd=root,check=True)
@@ -145,7 +188,8 @@ def main():
         cached = json.loads(run(*base,"--fields",fields,"--json",extra={"AIDA_HISTORY_CACHE":"1"}).stdout)
         assert cached["events"] == selected["events"]
         # Stdio MCP schema, default payload stability, projection, and text parity.
-        client = McpClient(binary, root, 45)
+        with patch.dict(os.environ, env):
+            client = McpClient(binary, root, 45)
         try:
             descriptors = client.request("tools/list")["result"]["tools"]
             descriptor = next(d for d in descriptors if d["name"] == "history")
@@ -188,8 +232,80 @@ def main():
                 assert "invalid_arg" in json.dumps(response), response
         finally:
             client.close()
+        # Real git-decoded dates, independent of descriptor examples. All commits
+        # have one controlled recent instant; offset zones cover a date boundary.
+        limited = base.copy()
+        limited[limited.index("--limit") + 1] = "2"
+        date_template = "{date:%Y-%m-%d %H:%M %z} {id} {event}"
+        acceptance = "{date:%H:%M} {id} {event}"
+        crossed_boundary = False
+        for zone in ["UTC", "Etc/GMT+12", "Etc/GMT-14"]:
+            zone_env = {"TZ": zone}
+            local = stamp.astimezone(ZoneInfo(zone))
+            crossed_boundary |= local.date() != stamp.date()
+            expected_timestamp = local.strftime("%Y-%m-%d %H:%M")
+            baseline = json.loads(run(*base, "--json", extra=zone_env).stdout)
+            assert baseline.keys() == full_json.keys()
+            assert baseline["count"] == full_json["count"] > 0
+            for actual, original_row in zip(baseline["events"], full_json["events"]):
+                assert actual["timestamp"] == actual["ts"] == expected_timestamp
+                assert {k:v for k,v in actual.items() if k not in ["timestamp", "ts"]} == {k:v for k,v in original_row.items() if k not in ["timestamp", "ts"]}
+            # Remove only this fixture's history cache before the cold pass.
+            for cache in root.rglob("*history-v*.db*"):
+                cache.unlink()
+            for mode in ["1", "1", "0"]:  # cold cache, warm cache, disabled git walk
+                options = {**zone_env, "AIDA_HISTORY_CACHE": mode}
+                selected_dates = json.loads(run(*base, "--since", "2h", "--json", extra=options).stdout)
+                assert selected_dates["events"] == baseline["events"]
+                assert selected_dates["source"] == ("history-cache" if mode == "1" else "git-walk"), selected_dates
+                # Exact acceptance command uses default visibility and limits,
+                # unlike the explicitly all-inclusive CLI/MCP parity ledger.
+                default_rows = json.loads(run("history", "--since", "2h", "--full", "--json", extra=options).stdout)["events"]
+                assert default_rows
+                expected = "".join(local.strftime("%H:%M") + " " + r["id"] + " " + r["summary"] + "\n" for r in default_rows)
+                actual = run("history", "--since", "2h", "--template", acceptance, extra=options).stdout
+                assert actual == expected, (zone, mode, actual, expected)
+                run(*base, "--template", date_template, "--save-as-template", "user:dates", "--force", extra=options)
+                with patch.dict(os.environ, {**env, **options}):
+                    dates_client = McpClient(binary, root, 45)
+                try:
+                    for filt, flags in [({}, []), ({"opened": True}, ["--opened"]), ({"to": "approved"}, ["--to", "approved"]), ({"spec_id": spec}, ["--id", spec])]:
+                        rows = json.loads(run(*limited, "--since", "2h", *flags, "--full", "--json", extra=options).stdout)["events"]
+                        assert rows, (zone, mode, filt)
+                        for layout in [acceptance, "builtin:compact", "builtin:approvals", date_template, "user:dates"]:
+                            if layout == "builtin:approvals":
+                                wanted = "".join(local.strftime("%Y-%m-%d") + " " + r["id"] + " " + (r["from"] or "") + " -> " + (r["to"] or "") + "\n" for r in rows)
+                            else:
+                                fmt = "%H:%M" if layout in [acceptance, "builtin:compact"] else "%Y-%m-%d %H:%M %z"
+                                wanted = "".join(local.strftime(fmt) + " " + r["id"] + " " + r["summary"] + "\n" for r in rows)
+                            cli = run(*limited, "--since", "2h", *flags, "--template", layout, extra=options).stdout
+                            assert cli == wanted, (zone, mode, layout, cli, wanted)
+                            mcp = content_text(dates_client.tool("history", {"since": "2h", "limit": 2, "template": layout, **filt}))
+                            assert mcp == wanted, (zone, mode, layout, mcp, wanted)
+                    plain = json.loads(content_text(dates_client.tool("history", {"limit":100})))
+                    assert plain == selected_dates
+                finally:
+                    dates_client.close()
+                for alias in ["full", "oneline"]:
+                    assert run(*base, "--" + alias, extra=options).stdout == run(*base, "--template", "builtin:" + alias, extra=options).stdout
+            print("PASS: R5 real-feed dates CLI/MCP/aliases cold/warm/disabled cache in " + zone, flush=True)
+        assert crossed_boundary
+        run("history", "templates", "rm", "user:dates")
         run("history","templates","rm","project:mine")
         assert run(*base,"--full","--json").stdout == original
+        # The minute-only public feed cannot identify which DST-fold instant
+        # supplied a local wall time. Preserve wall formats; never invent an offset.
+        fold_env = {"TZ": "America/New_York", "GIT_AUTHOR_DATE": "2025-11-02T05:30:00Z",
+                    "GIT_COMMITTER_DATE": "2025-11-02T05:30:00Z"}
+        fold = parse_spec_id(run("add", "--title", "DST fold", "--type", "task", extra=fold_env).stdout, "fold")
+        fold_args = base + ["--id", fold]
+        assert run(*fold_args, "--template", "{date:%Y-%m-%d %H:%M}", extra=fold_env).stdout == "2025-11-02 01:30\n"
+        before_fold_save = user.read_bytes()
+        for directive in ["%z", "%s"]:
+            error = run(*fold_args, "--template", "{date:" + directive + "}", "--save-as-template", "fold", extra=fold_env, ok=False)
+            assert "ambiguous" in error.stderr
+            assert user.read_bytes() == before_fold_save
+        print("PASS: ambiguous local DST date rendering and failed-save immutability")
         print("PASS: history template CLI/config/MCP/TTY/cache contract")
 
 
