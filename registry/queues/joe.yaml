@@ -33,14 +33,6 @@
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0df82-133c-7263-b5fc-01e34a245d84
-  position: 28000
-  added_by: joe
-  note: Approved bounded implementation; prerequisite BUG-1657 is Completed. Product may route to eligible implementer.
-  added_at: 2026-09-27T07:56:14.391569957Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0e0a8-e5e6-7530-afce-26cdf3b9c862
   position: 29000
   added_by: joe
