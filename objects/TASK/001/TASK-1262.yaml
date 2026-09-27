@@ -27,7 +27,8 @@ tags:
 - papercut
 - proxy-groomed
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0b2f1-c9b3-7320-b74d-a5f19042f25e
   created_at: 2026-09-18T05:16:30.506167401Z
   created_by: joe
