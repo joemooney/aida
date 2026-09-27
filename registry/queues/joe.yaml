@@ -1,4 +1,11 @@
 - user_id: joe
+  requirement_id: 01a0da7c-be06-7262-9a06-fdbd736cc59a
+  position: 0
+  added_by: joe
+  note: 'Independent advisor HOLD / REWORK: see durable disposition and codex brief STORY-1477-2026-09-27T032743Z.md; metadata-only, no dispatch or merge.'
+  added_at: 2026-09-27T03:28:01.703827990Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 01a0df88-9a37-71a0-866f-2aacedfb1284
   position: 1000
   added_by: joe
@@ -18,13 +25,6 @@
   added_by: joe
   added_at: 2026-09-25T08:03:05.081126691Z
   added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0da7c-be06-7262-9a06-fdbd736cc59a
-  position: 17000
-  added_by: joe
-  note: proxy groom 2026-09-25
-  added_at: 2026-09-26T05:30:47.588947664Z
-  for_role: implementer
 - user_id: joe
   requirement_id: 01a0db2d-c579-7e33-ab6b-174e64568ccc
   position: 25000
