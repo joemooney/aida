@@ -1,0 +1,41 @@
+id: 01a0e4ab-4b25-74c2-a1b0-e0d25d932a3b
+spec_id: SPIKE-92
+agreed_id: SPIKE-92
+title: 'Spike: can a Stop hook hold across Claude Code, Codex, Antigravity and OpenCode, and does holding lock the TUI?'
+description: |-
+  CR-7 item 1, authorized on its own by operator decision 2026-09-27 (Joe) while CR-7 items 2-6 stay gated on BUG-1693. Pure information-gathering: it changes no behaviour and adds no autonomy. Its result decides whether CR-7 item 6 (interactive hold policy) is viable at all, so it is the right thing to do during the wait.
+
+  THE OPEN QUESTION. CR-7's primary mechanism is a HELD Stop hook: at turn end the hook runs 'aida seat wait', which blocks at zero token cost until an actionable event addressed to the seat arrives, then answers in the vendor's continue dialect. That only works if a harness tolerates a hook that sleeps. Nobody has measured it, and if a held hook locks input, long holds are unusable for any seat a human shares.
+
+  ## Questions to answer, per harness, with observed evidence
+  1. Does the TUI accept or buffer keyboard input while a Stop hook sleeps? Test with a literal 'sleep 30' handler. This is the question that matters most — if input is locked, item 6 must set hold=0 or a short grace period whenever a human is present, and long holds are headless-only.
+  2. Does Ctrl+C / Esc cancel a held hook, and what does the harness do afterwards — resume, abort the turn, or wedge?
+  3. How long may a hook hold before the harness times it out or kills it? Report the actual limit per vendor, not the documented one.
+  4. Does the continue dialect work as documented, tested live: exit 2 plus stderr for Claude Code and Codex; {"decision":"continue","reason":...} for Antigravity (its schema enum is stop|continue|block — confirm 'allow' is NOT valid); stdout for the OpenCode plugin.
+  5. Do Antigravity hooks fire HEADLESS (antigravity-cli #893, '-p' with GEMINI_API_KEY)? If they do not, the headless path needs the resume fallback instead.
+  6. Does the OpenCode plugin load in headless runs? Note session.stopping does not exist (opencode #16626), so session.idle is the only seam.
+  7. Codex's .codex/hooks.json needs a one-time /hooks trust — record exactly what that requires, since it affects whether scaffolding can set this up unattended.
+
+  ## Acceptance
+  1. A written finding per question per harness, each marked MEASURED or NOT MEASURED with the reason. An unmeasured answer is acceptable and useful; a guess presented as a measurement is not.
+  2. An explicit recommendation on CR-7 item 6: is a held hook safe for interactive seats, and if not, what hold value or grace period should a human-present seat use?
+  3. Any harness where the held-hook approach does not work is named, with the fallback it needs instead.
+  4. Findings recorded on CR-7 and in docs/plans/2026-09-22-seat-wake-cross-harness.md so the held items inherit them.
+
+  Out of scope: implementing 'aida seat wait', any Stop-hook adapter, the OpenCode plugin, or the resume fallback. No production config is changed. Explicitly forbidden even here: model-side CronCreate / /loop / ScheduleWakeup polling (BUG-1589), tmux scraping, and keystroke injection.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T21:00:26.277371500Z
+modified_at: 2026-09-27T21:00:26.277371500Z
+req_type: Spike
+filed_at:
+  code_sha: 3f4cda41c98eef3c493ba5ffd69d970e5c1a7b9b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '7201317922'
+  vendor: antigravity
+  session: d7986875-d11b-4a5b-a34d-75f358d3671e
+human_only: true
