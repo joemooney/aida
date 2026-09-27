@@ -21,6 +21,9 @@ on:
   pull_request:
     branches: [main]
     paths:
+      # trace:BUG-1682 | ai:codex
+      - 'aida-cli-lib/src/global_queue.rs'
+      - 'aida-cli-lib/src/tests/bug_1682_global_queue_tests.rs'
       - 'aida-cli-lib/src/agent_registry.rs'
       - 'aida-cli-lib/src/**/worktree*.rs'
       - 'aida-core/src/**/worktree*.rs'

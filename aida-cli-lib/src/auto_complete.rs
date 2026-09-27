@@ -5053,7 +5053,9 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                     skipped,
                     stopped_at: None,
                     outcome: BatchDrainOutcome::MaxReached,
-                    exit_code: DRIVE_EXIT_CLEAN,
+                    // A stop that came from SIGTERM is not a clean drain.
+                    // trace:TASK-1518 | ai:claude
+                    exit_code: crate::drain_signal::stop_exit_code(DRIVE_EXIT_CLEAN),
                 };
             }
             let outcome = if shelved.is_empty() && skipped.is_empty() {
@@ -5220,7 +5222,8 @@ pub(crate) fn drain_batch_with_caps(
                 skipped,
                 stopped_at: None,
                 outcome: BatchDrainOutcome::MaxReached,
-                exit_code: DRIVE_EXIT_CLEAN,
+                // trace:TASK-1518 | ai:claude
+                exit_code: crate::drain_signal::stop_exit_code(DRIVE_EXIT_CLEAN),
             };
         }
         // `--max` bounds how many members the drain *acts on* — shipped,

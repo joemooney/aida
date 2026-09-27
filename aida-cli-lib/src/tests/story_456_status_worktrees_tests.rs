@@ -27,6 +27,8 @@ fn lease(scope: &str, worktree: &std::path::Path) -> SessionLease {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 

@@ -3458,7 +3458,8 @@ pub(crate) fn handle_queue_command(
                 let project_root = project_root.canonicalize().unwrap_or(project_root);
                 let project_name = global_queue::project_name_for(&project_root);
                 let position = if *top {
-                    let existing = global_queue::load(&role).unwrap_or_default();
+                    // trace:BUG-1682 | ai:codex
+                    let existing = global_queue::load(&role)?;
                     existing.first().map(|e| e.position - 1000).unwrap_or(1000)
                 } else {
                     i64::MAX
@@ -3466,7 +3467,8 @@ pub(crate) fn handle_queue_command(
                 // Resolve i64::MAX to actual max+1000 inline (the local queue
                 // path delegates this to the backend; we do it here ourselves).
                 let position = if position == i64::MAX {
-                    let existing = global_queue::load(&role).unwrap_or_default();
+                    // trace:BUG-1682 | ai:codex
+                    let existing = global_queue::load(&role)?;
                     existing.iter().map(|e| e.position).max().unwrap_or(0) + 1000
                 } else {
                     position
@@ -3644,7 +3646,8 @@ pub(crate) fn handle_queue_command(
                 // only, so `aida queue remove --global FR-1` would miss an
                 // entry cached under the legacy spec_id form `FR-1-042`.
                 // trace:BUG-83 | ai:claude
-                let entries = global_queue::load(&role).unwrap_or_default();
+                // trace:BUG-1682 | ai:codex
+                let entries = global_queue::load(&role)?;
                 let target = entries.iter().find(|e| {
                     e.spec_id
                         .as_deref()
@@ -6148,6 +6151,38 @@ pub(crate) fn handle_queue_command(
                         &drain_lock_command,
                     )?)
                 };
+                // TASK-1518: a stopped wave (systemd RuntimeMaxSec / OOMPolicy=stop,
+                // `aida drain stop --now`, a manual kill) must not leave the lock
+                // and its leases for the next tick to reap. The guard moves into a
+                // shared slot so the SIGTERM handler can release it properly
+                // (heartbeat, shared claim, pid-checked file) and stamp the
+                // in-flight leases before the bounded exit. The handler holds only
+                // a Weak handle, so without a signal the slot behaves exactly like
+                // the plain guard did: dropped at the end of this arm, or left to
+                // the atexit hook on `process::exit`. Advisory install: a failure
+                // to register the handler only means today's kill-then-reap
+                // recovery. trace:TASK-1518 | ai:claude
+                let _drain_guard: crate::drain_signal::GuardSlot =
+                    std::sync::Arc::new(std::sync::Mutex::new(_drain_guard));
+                if !*resume_dry_run {
+                    if let Ok(root) = find_main_worktree_root() {
+                        if let Err(e) =
+                            crate::drain_signal::install(crate::drain_signal::DrainTermContext {
+                                project_root: root,
+                                drain_pid: std::process::id(),
+                                guard: std::sync::Arc::downgrade(&_drain_guard),
+                                grace: crate::drain_signal::grace_from_env(),
+                                term_flag: crate::drain_signal::process_term_flag(),
+                                borrowed: drain_lock::borrow_requested(),
+                            })
+                        {
+                            eprintln!(
+                                "  {} could not install the drain SIGTERM handler ({e:#}); a stopped wave falls back to next-tick reap",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                            );
+                        }
+                    }
+                }
                 // BUG-660: prevent the host from sleeping for the duration of an
                 // unattended drive — a lidded/idle laptop must not suspend
                 // mid-drain. Best-effort (a missing caffeinate / systemd-inhibit
@@ -13978,8 +14013,10 @@ pub(crate) fn handle_queue_integrate(
     let _drain_guard = if dry_run {
         None
     } else {
+        // Linked worktrees share the main checkout's merge authority.
+        // trace:BUG-1683 | ai:codex
         Some(drain_lock::acquire_drain_lock(
-            &project_root,
+            &find_main_worktree_root()?,
             "queue integrate",
         )?)
     };
