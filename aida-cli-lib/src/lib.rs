@@ -42459,9 +42459,26 @@ fn kill_process_group(pid: u32) {
 // trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link's bounded
 // `git`/`gh` calls reuse this instead of a second timeout implementation.
 pub(crate) fn command_output_with_timeout(
-    mut cmd: std::process::Command,
+    cmd: std::process::Command,
     timeout: std::time::Duration,
 ) -> Option<std::process::Output> {
+    match command_output_with_timeout_detail(cmd, timeout) {
+        BoundedCommandOutput::Completed(output) => Some(output),
+        BoundedCommandOutput::SpawnFailed | BoundedCommandOutput::TimedOut => None,
+    }
+}
+
+// trace:TASK-1535 | ai:codex
+pub(crate) enum BoundedCommandOutput {
+    Completed(std::process::Output),
+    SpawnFailed,
+    TimedOut,
+}
+
+pub(crate) fn command_output_with_timeout_detail(
+    mut cmd: std::process::Command,
+    timeout: std::time::Duration,
+) -> BoundedCommandOutput {
     use std::io::Read;
 
     #[cfg(unix)]
@@ -42470,17 +42487,20 @@ pub(crate) fn command_output_with_timeout(
         cmd.process_group(0);
     }
 
-    let mut child = cmd
+    let mut child = match cmd
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .ok()?;
+    {
+        Ok(child) => child,
+        Err(_) => return BoundedCommandOutput::SpawnFailed,
+    };
     // Only used to target `killpg` below; on non-unix targets nothing reads
     // it, so it is cfg-gated too rather than left as a dead binding.
     #[cfg(unix)]
     let pid = child.id();
-    let mut stdout_pipe = child.stdout.take()?;
-    let mut stderr_pipe = child.stderr.take()?;
+    let mut stdout_pipe = child.stdout.take().expect("stdout was piped");
+    let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
     let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
     let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -42536,11 +42556,14 @@ pub(crate) fn command_output_with_timeout(
     };
     let stdout = stdout_rx.recv_timeout(read_wait).unwrap_or_default();
     let stderr = stderr_rx.recv_timeout(read_wait).unwrap_or_default();
-    status.map(|status| std::process::Output {
-        status,
-        stdout,
-        stderr,
-    })
+    match status {
+        Some(status) => BoundedCommandOutput::Completed(std::process::Output {
+            status,
+            stdout,
+            stderr,
+        }),
+        None => BoundedCommandOutput::TimedOut,
+    }
 }
 
 /// BUG-1594: the message a forge lookup carries when the scoped
