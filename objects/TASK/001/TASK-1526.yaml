@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-09-27T03:52:12.232621206Z
+modified_at: 2026-09-27T04:27:34.983027619Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -106,6 +106,12 @@ comments:
   content: Returned from NeedsAttention to In Progress via `aida edit --status`. No triage reason was given.
   created_at: 2026-09-27T03:52:12.232618030Z
   modified_at: 2026-09-27T03:52:12.232618030Z
+- id: 01a0e11e-4ec7-7d32-affe-acc1bba3059a
+  author: joe
+  content: 'Continuation 01a0e0eb7cff adopted binding advisor decision 01a0e0fb-8d6b-7790-b04b-f808236dbe2d and acknowledged the 03:52:24 Codex brief. Preserved WIP now implements pre-C Deferred/WriterBusy/observed-holder protocol, pinned row/label snapshots, scoped output collectors, strict lock-error propagation, and diagnostic identity. Targeted backend run: 46 passed, 1 ignored; workspace build and clippy passed; MCP doc consistency passed. Expanded CLI matrix and final database/workspace/MCP checks are still running under fixture stores and fake HOME. No C machinery, show deadline implementation, self-review, merge, or completion claim. No new design fork identified.'
+  created_at: 2026-09-27T04:27:34.983027619Z
+  modified_at: 2026-09-27T04:27:34.983027619Z
+  session_id: 01a0e0eb7cff
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
