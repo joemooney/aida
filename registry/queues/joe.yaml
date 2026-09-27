@@ -32,3 +32,10 @@
   note: proxy groom 2026-09-25
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a0df82-133c-7263-b5fc-01e34a245d84
+  position: 28000
+  added_by: joe
+  added_at: 2026-09-27T07:52:45.456845987Z
+  for_role: product
+  added_by_machine: imac
