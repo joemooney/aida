@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:56.753902915Z
-modified_at: 2026-09-27T03:35:02.389657674Z
+modified_at: 2026-09-27T03:38:50.802618267Z
 req_type: Bug
 comments:
 - id: 01a0dfa3-2bc6-7c62-9371-a5dfe1014e2b
@@ -140,6 +140,11 @@ comments:
   content: 'Integrator mechanical fold: PR #2225 was squash-merged at exact guarded head 63a36824199d81d37c1bc97908da2d00e06d3d8e into its specified PR base claude/integrate-102 at 18b032192bfb4d76d03572249f42830a68d8b110. PR #2225 is MERGED (2026-09-27T03:34:25Z); resulting integration SHA a5bf87ddb6c2f0633fa093e868e193b82da44e6b has sole parent 18b032192bfb4d76d03572249f42830a68d8b110 and tree a39de1213d22764e5da12c5d2aed6e13abaf25a9, identical to reviewed source head tree. PR #2218 is OPEN at new exact head a5bf87ddb6c2f0633fa093e868e193b82da44e6b with title/trailer [AI:claude] chore(integrate): batch 102 (BUG-1662 TASK-1530 TASK-1524 TASK-1525 BUG-1661 BUG-1672 BUG-1685). Fresh checks started: Ubuntu CI run 36291803604, merge-hold run 36291803607, cross-platform run 36291803600. I am waiting for exact-head conclusions. This fold does not authorize merging #2218 to main; second independent advisor gate remains required.'
   created_at: 2026-09-27T03:35:02.389626153Z
   modified_at: 2026-09-27T03:35:02.389626153Z
+- id: 01a0e0f1-b032-78d3-86bc-4a6a8667bc60
+  author: mcp
+  content: 'Integrator bounded fresh-CI recheck for batch PR #2218 at exact head a5bf87ddb6c2f0633fa093e868e193b82da44e6b: PR remains OPEN with correct seven-spec trailer. merge-hold-gate SUCCESS (run 36291803607, job 108543190637). Required Build (ubuntu-latest) IN_PROGRESS (run 36291803604, job 108543190530). Build (windows-latest) IN_PROGRESS (run 36291803600, job 108543190614); Build (macos-latest) IN_PROGRESS (same run, job 108543190485). GitLab live forge smoke and History index random sweep are SKIPPED, not passes. No failure reported yet. #2218 was not merged to main. After exact-head fresh platform CI settles, a second independent advisor gate is required; old-head green checks and the limited fixup-fold disposition do not authorize main merge.'
+  created_at: 2026-09-27T03:38:50.802611534Z
+  modified_at: 2026-09-27T03:38:50.802611534Z
 history:
 - id: 01a0df93-9784-7f82-b31e-9692e353f93a
   author: aida-session-start
