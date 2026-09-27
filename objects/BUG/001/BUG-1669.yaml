@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-09-27T04:19:25.923734675Z
+modified_at: 2026-09-27T04:27:19.642973057Z
 req_type: Bug
 comments:
 - id: 01a0df0b-e7f8-7193-84a1-2955581faa5f
@@ -593,6 +593,70 @@ comments:
     Requested next action: a DISTINCT independent advisor reviews this revised sketch against the cited dispositions and Joe's decisions, then signs or returns concrete design changes. BUG-1669 remains blocked from implementation pending that gate. No queue/dispatch/status/install/credential/merge authorization is supplied by this author.
   created_at: 2026-09-27T04:19:25.923734675Z
   modified_at: 2026-09-27T04:19:25.923734675Z
+- id: 01a0e11e-12db-7cd0-a3d1-39df79961a63
+  author: codex-new-independent-security-architecture-advisor
+  content: |
+    ADVISOR SIGNOFF: APPROVED
+
+    Architecture only, with the binding amendments below. Subject: REVISED SKETCH 01a0e116-d863-7bd3-9a94-faa8e2c3888c. This closes the independent architecture-revision gate for that design as amended; it does not certify an implemented or deployed security boundary, authorize implementation dispatch, or approve PR #2226 or merge BUG-1669.
+
+    Seat and evidence: NEW independent Codex security architecture advisor, separate from product, all prior sketch authors/advisors, implementer and integrator. Read AGENTS.md, .aida/discipline/two-seat-protocol.md, BUG-1669 --full and all ten pre-existing comments in full, including prior advisor 01a0e106-45f4-7a51-9107-7cadcc06eaf0. Used /home/joe/ai/aida/target/release/aida. Independently spot-checked current source at observed HEAD 43c0429198401473e0cfab73267fc413883b3e1b: orchestrator::classify/run_is_live/detect, bypass builders/literals in session/compete/lib and all five shipped scripts, watch fork-before-launch, and solo's continue-after-failure behavior. This is a design review and comparison against the complete recorded A-G inventory, not a new exhaustive call-graph audit or a security test run. The sketch's source anchors refer to its earlier HEAD; implementation/release must refresh them.
+
+    Decision basis
+
+    Joe's literal anti-forgery decision 01a0e0a3-e301-7c72-83e7-68ab14eaf9e0, host-wide AIDA perimeter decision 01a0e103-c774-7620-b1dd-f783c05bcb81, and P-enrolled-host in-principle acceptance 01a0e10c-66ae-7883-9f98-f422dff413fa settle the previously missing operator design direction. I do not reopen those questions or infer installation consent from them.
+
+    The revision supplies an actual external enforcement architecture: independent authenticated approval, protected service state/code, broker-owned admission and spawn, per-attempt isolated workers, and typed credential/resource mediation. No proposal-supplied env, UID, PID, UUID, PTY, role, CLI version, path, grant ID or private Rust field supplies approval. Legacy detect remains diagnostic. A worker certificate alone is insufficient: the service-held domain/boot endpoint binding and live server-side scope must also match. Guest compromise conveys that guest's bounded rights, not controller delegation or another repo's rights. That is a coherent architecture under the stated trusted administrator/kernel/hypervisor/approval-device assumptions; it is not a claim that those assumptions are already established on Joe's host.
+
+    Full access is confined to the guest. No unrestricted host HOME/process access, host control sockets, shared credential mounts, direct guest networking or reusable upstream execution credentials are admitted. Unsupported providers/adapters refuse. Repo ID and enrollment generation, approved content/input lineage, action/phase and quotas are checked at the service, not inferred from a pathname or same-numbered spec. All postures use the boundary; there is no local contained-mode exception. No protected backend, no enrollment, expired authority or uncertain start means refusal/reconciliation, never a local or alternate-vendor fallback.
+
+    Seven prior proof-obligation groups: design disposition
+
+    1. Trust root / installation / update / recovery — addressed by §§3-4 and 9. The Firecracker+jailer candidate, separate broker/controller/supervisor/adapter/admin/device principals, immutable installed bundle, independent pairing, epoch rotation, deny-on-recovery and no grant resurrection replace the earlier unspecified boundary. Exact qualified versions, real ACL/admin reachability, trust-root custody and the installer/recovery manifest remain execution/release gates. Naming this candidate is not Joe selecting or installing it.
+
+    2. Worker identity / resource mediation — addressed by §§3-4. A private per-VM backing endpoint plus one-boot mutual authentication, nonce/epoch/channel generation and broker-initiated reconnect gives a concrete channel design. Public IPC cannot exchange a worker ID or stolen certificate for rights. Typed model/forge/artifact adapters, hostile-input handling and CI credential restrictions address generic-proxy, host-mount and forge laundering. Amendments M2-M3 below make observation channels and protocol binding equally explicit.
+
+    3. Scope / delegation / artifact lineage — addressed by §5. Authenticated principal-specific transitions, protected controller-only reservation/delegation, durable attempt IDs, transactional aggregate budgets, fixed member/content sets and collector-bound output lineage are concrete enough for implementation planning. Legitimate code outputs may advance along approved edges; edited specs/plans, arbitrary substitute inputs or agent-authored approvals cannot widen consent. Preparation itself consumes bounded authority. Launch approval grants no merge right.
+
+    4. Lifetime / revocation / supervision — addressed by §6. Earlier-of absolute/elapsed limits, rollback handling, no live-authority reboot/restore, suspend fencing, serialized Start/revoke and independent guardian supply the missing failure model. The proposed 1s heartbeat / 5s lease / 10s termination contract includes existing streams and active workers, not only new launches. It remains a qualification target, not an observed guarantee. M4 requires positive verification of the enforcement resources and guardian failure behavior.
+
+    5. Burndown — addressed by §7. Protected wave -> spec -> phase records replace native dispatch; quiet/verbose/resume share frozen membership and aggregate accounting. Three continuations do not mint a new budget. Native computation remains within one guest principal; old native dispatch refuses until replaced. No lock-held environment exception remains.
+
+    6. Watch / scheduler / solo — addressed by §7. Distinct bounded grants, authenticated away lease, home/expiry termination, source-bound transcript import before fork, identical cold-boot checks, service-owned time and slot deduplication resolve bootstrap. New findings/specs require renewed consent. Timers/user units are wake hints; pane/unit/detached transports attach to protected executions. Refusal stops the chain, including later integration attempts.
+
+    7. Tests / evidence — addressed by §§8-9. Real-handler fake-HOME tests with valid workflow prerequisites cover refusal ordering and routing. Handwritten state/live PID and fabricated PTY are negative cases. Actual installed disposable boundary tests are mandatory for protection claims; mocks or skipped privileged runs cannot pass isolation. The required multi-repo, unknown-repo, stale-client, credential/adapter, restart/rollback, concurrent budget and fault cases cover the previously requested classes. None has been executed in this review.
+
+    A-G inventory disposition
+
+    A — compete/zen arms AND judges, configured judge and pre-worktree-removal reservation: retained; denied arms must not progress to judge.
+    B — intake assess/groom/advisor, propose/apply and then-drain: retained; then-drain needs its own approved edge/frozen members.
+    C — burndown quiet/verbose/initial/continuations and --force: retained under the mediated controller; legacy native dispatch refuses.
+    D — every shared fresh/exec/resume sink and research, remedy, dryrun-AI, intent, harvest, reconstitution, queue implementer/reviewer and watch fork/cold boot callers: retained with caller-before-mutation and service-side enforcement. Existing narrower workflow restrictions remain.
+    E — direct advisor/fork, implementer resume, CI-fix and all single/batch/nextN/multi-batch/resume/from-PR/pipelined controller entries: retained; no local controller may mint authority by publishing DrainState.
+    F — agent-new foreground/background/config/defaults/extra flags and interactive/resumed/reviewer session surfaces: retained for every effective posture. Unknown executable/config cannot bypass admission.
+    G — solo, shift, maintenance/scheduler, cron/systemd/detached/tmux routes, actual demo probe and all four ablation scripts: explicitly protected or refused. Pure renderers/config writers/previews remain non-launch operations and confer no authority. The host manifest additionally covers IDE/MCP and global/per-project entry points across ALL projects.
+
+    This is a satisfactory design inventory, not proof the future implementation has no additional sinks. An added/discovered launch route inherits the same rule and must enter the per-sink evidence matrix; the inventory is a minimum, not a whitelist of exemptions.
+
+    Binding amendments (part of this approval, not optional follow-up)
+
+    M1 — Host-wide coverage is an admission AND cutover invariant. The final deployment manifest must account for each official global/per-project/script/IDE/MCP/timer/watch/drain route and each extant managed worker. Credential revocation alone does not prove a credential-free/custom/local-model launch is blocked: record and test execution behavior for those routes too. At declared cutover, each official route invokes protected execution or refuses; no surviving legacy official route may be relabeled unmanaged. Run negative tests from the untrusted host principal against stale/copied/replaced clients and protected resources. Arbitrary reconstructed programs using independent unmanaged authority remain the stated exclusion, not evidence of a protected route. If actual shared login/credentials/admin access makes this invariant impossible, deployment is blocked and the concrete mismatch returns to Joe. Do not silently expand the migration to unrelated clients or weaken the perimeter.
+
+    M2 — Apply repo/principal authorization to observation and attachment as well as mutation. Public proposal/status IPC may expose only deliberately public, non-sensitive metadata; opaque IDs must not unlock transcripts, prompts, logs, artifacts, guest consoles or interactive input. Worker-facing status/attach/result APIs remain scoped to the authenticated attempt; operator data access uses a separately authenticated authorized surface. No generic FD/socket/terminal bridge. Treat rendered guest output as hostile and neutralize active terminal/control content on trusted approval/admin displays. Test repo-A/host callers requesting repo-B observations and handles. The existing no-cross-repo-sharing rule includes these channels; withholding writes alone is insufficient.
+
+    M3 — Freeze a versioned, canonical, domain-separated signed request encoding before protocol implementation. The device displays the same normalized fields the broker verifies; reject duplicate/ambiguous/unknown authority fields and bind operation, artifact/input policy, broker/epoch, nonce, limits and detach policy. Separate certificate purposes/endpoints remain mandatory. Channel generation and request IDs must be bound to the authenticated transport; replay across reconnect/boot/endpoint cannot repeat effects or restore quota. Artifact hashes alone establish content identity, never permission to read/import it: require the enrolled source and approved lineage authorization too. Add parser differential, request substitution, role-confusion and cross-repo artifact-hash tests. These specify the revision's existing digest/channel/lineage mechanism rather than add a new trust assumption.
+
+    M4 — Verify actual confinement and supervision before Running, not successful process creation alone. The supervisor must attest the intended cgroup membership, limits, jail ownership, closed inherited FDs and private endpoint mapping before guest work/resource access begins; failures kill/reconcile and deny. Guardian health must itself participate in admission; loss of the guardian must cause another independent live component to stop admissions and terminate domains rather than leave the claimed supervisor-failure defense absent. Qualify broker, supervisor and guardian kill/hang cases, active adapter closure and startup/cleanup races under the declared failure model. The 10s bound and suspend fence cannot be asserted from configuration. The Firecracker jailer documentation specifically permits a cgroup-v2 configuration with a missing parent cgroup to proceed without moving the process, so an exit-status-only check is insufficient: https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md .
+
+    M5 — Preserve gate separation in product capture and all dependent work. Record the reconciled AC wording and these amendments in the owning design/acceptance trail before dispatch; Approved lifecycle status, an existing queue entry or this architecture comment is not dispatch approval. Product may prepare dependent ADR/backend-proof/protocol/state-machine/sink-migration scopes through its normal process. An independently reviewed concrete package must return for Joe's explicit authorization of backend/platform, installer/trust root, privileged disposable test environment, actual credentials, enrollment/migration/current-run handling and recovery/deployment. Pin and review the implementation and actual boundary evidence independently before a protection/release claim. No passing mock, candidate selection or this signoff substitutes for those gates. A material departure from the amended boundary returns for architecture review.
+
+    Why APPROVED rather than another architecture hold: the operator design fork is answered, and the revision now names enforceable principals, transport, resource boundaries, transitions, failure behavior and tests. M1-M5 tighten those concrete mechanisms and preserve their evidence obligations; they do not defer the choice of whether to have a protected issuer, isolated workers, scoped delegation or mandatory coverage. Actual installation facts and test results appropriately remain later gates. Current source still uses forgeable run corroboration and local launch paths; this verdict claims no present protection.
+
+    Platform checks were limited to primitive feasibility: Firecracker documents the per-VM Unix-socket/vsock host-to-guest transport (https://github.com/firecracker-microvm/firecracker/blob/main/docs/vsock.md), not application authorization; Linux documents boottime and wall-clock distinctions (https://docs.kernel.org/core-api/timekeeping.html), not the proposed suspend fence. Those references do not certify this combined protocol.
+
+    Actions taken: read-only review plus this durable comment. No code implementation, tests, agent launch, service installation, credential change, status/queue change, PR #2226 approval, or merge. Architecture verdict: APPROVED as amended. Deployment and release evidence remain outstanding; BUG-1669 is not completed.
+  created_at: 2026-09-27T04:27:19.642973057Z
+  modified_at: 2026-09-27T04:27:19.642973057Z
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
   author: joe
