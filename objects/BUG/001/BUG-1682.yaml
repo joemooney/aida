@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:57:53.754613048Z
-modified_at: 2026-09-27T04:11:54.939972728Z
+modified_at: 2026-09-27T05:06:59.840072433Z
 req_type: Bug
 comments:
 - id: 01a0e101-bf24-7c71-882a-a9e28b9b08e6
@@ -103,6 +103,18 @@ comments:
   created_at: 2026-09-27T04:11:54.939972728Z
   modified_at: 2026-09-27T04:11:54.939972728Z
   session_id: 01a0e1082f96
+- id: 01a0e142-6480-78b1-a3a9-e2e81f8ee90c
+  author: codex
+  content: |
+    REVIEW VERDICT: APPROVE — BUG-1682, PR #2227, exact head 11bd80bea5bd50490009ccdfdda9dbe005982406 (base 854b7e26f7222c73845064275a18c293c9895283; merge-base diff, branch one commit behind origin/main).
+
+    Independent strict review against acceptance and binding advisor signoff 01a0e104-7ab9-7a73-b79b-1843eb5bcee1: permanent nontruncated per-role sidecar is locked before the mutation read and held through serialization, write_atomic replacement and error paths; add/remove have no unlocked snapshot-save path. load and guarded reads use read_atomic without an exists check; only final NotFound initializes an empty queue, and malformed/empty/null/wrong-type YAML fails closed. CLI top/default add/remove and autopilot reversal mutation pre-reads propagate errors. The atomic helper is unchanged and never deletes the destination before rename. Lock-free reads get complete successful snapshots; Windows retry is bounded. Placement positions remain computed outside the lock, as explicitly approved.
+
+    Reviewed the full seven-file merge-base diff, including workflow routing, documentation, all named fake-HOME cross-process fixtures, and the final-head executable resolver change from current_exe to aida_exe_path. The child asserts the fenced temporary HOME and expected path before queue access; production queue algorithm has no test hooks. The resolver's seven focused tests pass on the exact-head artifact. Prior-head focused queue fixtures (nine tests), exact-source atomic-helper tests (14), fmt and diff-check passed in the prior independent review; those are supporting evidence only. The stopped new-head local queue run passed several scenarios but its log ends during caller propagation, so I do not count it as a complete suite. Exact-head GitHub checks were verified once: Ubuntu, macOS, and Windows completed SUCCESS, including Windows runtime fixture execution; merge-hold gate SUCCESS. No local Windows run or broad suite was performed by this reviewer.
+
+    Limitations: sidecar locking is advisory for cooperating writers and has no fairness/timeout; atomic replacement lacks fsync durability; stale/equal top/append positions remain possible and are outside this approved scope. No code, status, push, PR action, architecture approval, or merge by this reviewer.
+  created_at: 2026-09-27T05:06:59.840072433Z
+  modified_at: 2026-09-27T05:06:59.840072433Z
 history:
 - id: 01a0e108-3134-78a3-974e-6e28c13fbe1b
   author: aida-session-start
