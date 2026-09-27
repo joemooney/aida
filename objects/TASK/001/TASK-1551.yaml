@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:11:56.017473960Z
-modified_at: 2026-09-27T15:12:30.095033023Z
+modified_at: 2026-09-27T16:04:15.585296229Z
 req_type: Task
 tags:
 - build throughput profile from:operator
@@ -56,6 +56,24 @@ comments:
     The largest remaining lever is not a compiler flag, it is my own brief template: I had been telling every implementer to run 'cargo test --workspace' AND 'cargo clippy --workspace'. On 6 cores that is a dozen full workspace builds plus a dozen full suites, and clippy after test is close to an extra full build because it recompiles with different flags. Evidence it was actively harmful: a strict reviewer had to cancel its own queued test run because it sat behind other agents' full-suite builds, and my own 'aida doctor check performance' was killed at a 100 s timeout. Implementers now run build-fast plus TARGETED tests plus fmt, and the full workspace suite runs once at integration, where it actually gates the merge and where CI repeats it anyway.
   created_at: 2026-09-27T15:12:30.095033023Z
   modified_at: 2026-09-27T15:12:30.095033023Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e39c-2261-76f1-adc0-26abad78e12c
+  author: joe
+  content: |-
+    MEASUREMENT CORRECTION (orchestrator, 2026-09-27 09:05): the binding constraint on this host has MOVED, and it changes what this spec should optimise.
+
+    At 08:05, with ~12 agents active: CPU 68% user, iowait 1.3%, load 6.7 on 6 cores. CPU-bound. That is what the jobs=3→2 and nice -n 10 changes addressed, and they worked — my own commands stopped timing out and nice time rose to 46%.
+    At 09:00, same fleet: CPU 12.2% user, **iowait 57.2%**, idle 23.9%, and 38 cargo processes queued behind 2 slots. DISK-bound. So compiler flags and CPU scheduling are now the wrong lever, and raising AIDA_CARGO_SLOTS would make it worse rather than better. I considered raising it to 3 and rejected that on this evidence.
+
+    I applied the one cheap I/O remedy: the wrapper now also wraps cargo in 'ionice -c 2 -n 7' (nice governs CPU only and does nothing for I/O scheduling), and I reioniced the 57 running processes. That protects interactive latency but does NOT raise throughput.
+
+    MEASURED ROOT CAUSE of the I/O saturation, and it is not the compiler: each worktree carries its OWN cargo target directory and does its own COLD full build. /home/joe/ai/wt-story-1478 alone is already 18G. Thirteen concurrent worktrees at that size is on the order of 230 GB of writes for what is largely the same compilation, which also explains why the sccache hit rate sits at only 41%.
+
+    So the largest remaining throughput lever is a SHARED target directory (CARGO_TARGET_DIR) across agent worktrees, not opt-level. The trade to evaluate: cargo locks a target directory, so concurrent builds would serialise to roughly one at a time, but each would be WARM and incremental (single-digit minutes) instead of cold (11m33s measured today). Serialised-and-warm plausibly beats parallel-and-cold, and it would remove hundreds of gigabytes of duplicate writes. It needs measuring, not assuming.
+
+    Same timing rule as the rest of this spec: do NOT change it mid-wave. Switching CARGO_TARGET_DIR now would force every in-flight agent to rebuild from scratch in the new location. Sequence it with TASK-1537's baseline on a quiet machine, and measure cold-parallel against warm-serialised with the concurrency recorded beside each number.
+  created_at: 2026-09-27T16:04:15.585296229Z
+  modified_at: 2026-09-27T16:04:15.585296229Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e36c-a542-70f3-9af1-2f55156db28e
