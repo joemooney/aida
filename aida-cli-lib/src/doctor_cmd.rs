@@ -5656,43 +5656,50 @@ fn heal_doctor_store_tracked_runtime(
     })
 }
 
-/// BUG-563: append the per-clone-runtime gitignore guard to the STORE worktree's
-/// `.gitignore` so the untracked files can't return on the orphan branch.
-/// Idempotent — no-op if the load-bearing patterns are already present. Returns
-// whether it wrote anything. trace:BUG-563 | ai:claude
+/// Ensure the per-clone runtime and atomic-write staging guards are present in
+/// the STORE worktree's `.gitignore`. Each concern has its own idempotence
+/// sentinel; returns whether either guard was appended.
+// trace:BUG-563 | ai:claude
 fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> Result<bool> {
     use std::io::Write;
     let gitignore_path = store_worktree.join(".gitignore");
     let existing = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
-    // Already guarded? `.aida/node.toml` is the load-bearing pattern (the one
-    // that conflicts on every cross-clone rebase).
-    if existing.lines().any(|l| l.trim() == ".aida/node.toml") {
+    let lines: Vec<&str> = existing.lines().map(str::trim).collect();
+    let mut blocks = String::new();
+
+    // `.aida/node.toml` is BUG-563's load-bearing pattern: it conflicts on
+    // every cross-clone rebase.
+    if !lines.contains(&".aida/node.toml") {
+        blocks.push_str(
+            "\n# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n\
+             .aida/node.toml\n\
+             .aida/dispenser.toml\n\
+             .aida/*.lock\n\
+             .aida/cache.db\n\
+             .aida/cache.db-journal\n\
+             .aida/cache.db-shm\n\
+             .aida/cache.db-wal\n",
+        );
+    }
+
+    // BUG-1677 staging ignores are owned by fs_atomic. Keep them in this
+    // tracked store `.gitignore`, never the shared project `info/exclude`, so
+    // lock-free `git add -A .` cannot stage a temp file or hide user files.
+    // trace:BUG-1677 | ai:claude
+    let staging_patterns = aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS;
+    if !lines.contains(&staging_patterns[0]) {
+        blocks.push('\n');
+        blocks.push_str(&aida_core::fs_atomic::store_staging_ignore_block());
+    }
+    if blocks.is_empty() {
         return Ok(false);
     }
-    // The staging-file ignores come from `fs_atomic`, which owns the staging
-    // name, so a lock-free `git add -A .` (db sync, auto-push) can never stage
-    // one. They go in the STORE worktree's tracked `.gitignore`, never the
-    // project's `info/exclude`: a store attached as a linked worktree shares
-    // the project's exclude file, so an ignore written there would hide the
-    // user's own files too. trace:BUG-1677 | ai:claude
-    let block = format!(
-        "\n# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n\
-         .aida/node.toml\n\
-         .aida/dispenser.toml\n\
-         .aida/*.lock\n\
-         .aida/cache.db\n\
-         .aida/cache.db-journal\n\
-         .aida/cache.db-shm\n\
-         .aida/cache.db-wal\n\
-         {}",
-        aida_core::fs_atomic::store_staging_ignore_block()
-    );
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&gitignore_path)
         .with_context(|| format!("opening {}", gitignore_path.display()))?;
-    f.write_all(block.as_bytes())
+    f.write_all(blocks.as_bytes())
         .with_context(|| format!("appending to {}", gitignore_path.display()))?;
     Ok(true)
 }
@@ -5786,6 +5793,66 @@ fn heal_doctor_orphan_branch(
 mod story_462_doctor_tests {
     use super::*;
     use clap::Parser;
+
+    fn bug_1677_store_gitignore(contents: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("store");
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::write(store.join(".gitignore"), contents).unwrap();
+        (dir, store)
+    }
+
+    const BUG_563_RUNTIME_PATTERNS: &str =
+        "# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n\
+.aida/node.toml\n\
+.aida/dispenser.toml\n\
+.aida/*.lock\n\
+.aida/cache.db\n\
+.aida/cache.db-journal\n\
+.aida/cache.db-shm\n\
+.aida/cache.db-wal\n";
+
+    #[test]
+    fn bug_1677_appends_staging_ignores_to_bug_563_guarded_store() {
+        let (_dir, store) = bug_1677_store_gitignore(BUG_563_RUNTIME_PATTERNS);
+
+        assert!(ensure_store_tracked_runtime_gitignore(&store).unwrap());
+
+        let content = std::fs::read_to_string(store.join(".gitignore")).unwrap();
+        for pattern in aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS {
+            assert!(
+                content.lines().any(|line| line.trim() == *pattern),
+                "missing staging ignore pattern {pattern:?} in:\n{content}"
+            );
+        }
+    }
+
+    #[test]
+    fn bug_1677_both_gitignore_guards_present_is_noop() {
+        let contents = format!(
+            "{BUG_563_RUNTIME_PATTERNS}\n{}",
+            aida_core::fs_atomic::store_staging_ignore_block()
+        );
+        let (_dir, store) = bug_1677_store_gitignore(&contents);
+
+        assert!(!ensure_store_tracked_runtime_gitignore(&store).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(store.join(".gitignore")).unwrap(),
+            contents
+        );
+    }
+
+    #[test]
+    fn bug_1677_fresh_store_gets_both_gitignore_guards() {
+        let (_dir, store) = bug_1677_store_gitignore("");
+
+        assert!(ensure_store_tracked_runtime_gitignore(&store).unwrap());
+        let content = std::fs::read_to_string(store.join(".gitignore")).unwrap();
+        assert!(content.contains(".aida/node.toml"));
+        for pattern in aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS {
+            assert!(content.lines().any(|line| line.trim() == *pattern));
+        }
+    }
 
     #[test]
     fn doctor_default_flags_parse_without_subcommand() {

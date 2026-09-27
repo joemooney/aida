@@ -4717,6 +4717,10 @@ mod tests {
             .collect()
     }
 
+    // queue_clear is covered for lock blocking and re-entrancy above, but is
+    // deliberately excluded from this lost-update mix: racing a clear against
+    // adds/removes has no single expected final queue, so the assertion below
+    // could not distinguish a correct serialized outcome from a lost update.
     // Writer mix: queue_add (new entries), queue_remove_for_role and
     // queue_remove_many (each draining its own seeded set), queue_reorder
     // (each thread repositions its own stable subset), plus lock-free readers
