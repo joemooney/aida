@@ -19,12 +19,12 @@ description: |
   - Output is human, toon and json. The json form includes per-span `{activity, class, start, end, duration_s, source}` so that the aggregate breakdown story can reuse the same span model.
   - Missing `gh` or a network failure degrades gracefully, with a one-line note.
   - Tests use fixture event and transition streams, covering rework loops, shelve/resume and a spec with no drain events.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:46:45.113349128Z
-modified_at: 2026-09-27T08:59:37.538524402Z
+modified_at: 2026-09-27T14:31:46.891800191Z
 req_type: Story
 tags:
 - aida:history
@@ -132,4 +132,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): queue this bounded per-spec timeline feature. Its acceptance defines the activity classes, JSON span shape, graceful missing-Forge behavior, and fixture coverage; no architecture/sketch gate is tagged. Keep dispatch serialized behind SPEC-441 because both change history surfaces, and avoid adding build load while disk remains at 96%.'
   created_at: 2026-09-27T08:59:37.538524402Z
   modified_at: 2026-09-27T08:59:37.538524402Z
+history:
+- id: 01a0e347-77cb-77e0-afba-62a0d3d07bcf
+  author: aida-session-start
+  timestamp: 2026-09-27T14:31:46.891799412Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
