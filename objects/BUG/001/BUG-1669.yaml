@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-09-27T04:01:19.860803537Z
+modified_at: 2026-09-27T04:08:01.454412524Z
 req_type: Bug
 comments:
 - id: 01a0df0b-e7f8-7193-84a1-2955581faa5f
@@ -431,6 +431,11 @@ comments:
     Final disposition: the perimeter question is CLOSED; deployment-contract acceptance and the concrete architecture/proof obligations remain OPEN. Approved lifecycle status or any pre-existing queue entry does not override this hold. No code edits, tests, queue changes, services, credential migration, dispatch or merge performed. Only this durable advisor comment is authorized and posted.
   created_at: 2026-09-27T04:01:19.860803537Z
   modified_at: 2026-09-27T04:01:19.860803537Z
+- id: 01a0e10c-66ae-7883-9f98-f422dff413fa
+  author: joe
+  content: 'OPERATOR DECISION (Joe, 2026-09-26 21:07 MST): Accept P-enrolled-host as the design direction IN PRINCIPLE for protected authorization of every AIDA-managed agent launch across projects on this host. The design may use an administrator-controlled broker, isolated service-owned workers, agent-inaccessible approval and service-mediated execution credentials/resources; full access is inside that boundary, not unrestricted host HOME/process/credential access. Accept in principle replacing native burndown dispatch, finite scoped watch/schedule grants with expiry/reapproval, refusal of unsupported or unenrolled launches, and interruption/migration of existing unattended AIDA launches. Unmanaged vendor clients outside AIDA are explicitly outside this promise. This is design authorization only: no privileged-service installation, VM backend selection, real credential migration, deployment, implementation dispatch, or merge is approved. A concrete installer, trust root, privileged test environment and migration/recovery plan return for separate explicit operator authorization. Preserve the earlier literal anti-forgery requirement and independent architecture signoff gate.'
+  created_at: 2026-09-27T04:08:01.454412524Z
+  modified_at: 2026-09-27T04:08:01.454412524Z
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
   author: joe
