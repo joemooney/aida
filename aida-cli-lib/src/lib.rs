@@ -58723,7 +58723,8 @@ fn latest_review_comment_verdict(
     comments
         .iter()
         .filter_map(|c| review_comment_verdict(&c.content).map(|k| (k, c.created_at)))
-        .max_by_key(|(_, at)| *at)
+        // trace:BUG-1672 | ai:codex — equal timestamps cannot clear a blocker.
+        .max_by_key(|(kind, at)| (*at, !kind.approves()))
 }
 
 /// BUG-1672: when a verdict file was last written, as UTC. `None` when the
@@ -58743,35 +58744,30 @@ fn verdict_file_written_at(path: &std::path::Path) -> Option<chrono::DateTime<ch
 ///  3. the latest review comment on the spec (the fresh-reviewer flow posts
 ///     only a comment).
 ///
-/// The newest review wins: an approving file does not count when a review
-/// comment posted AFTER it blocks, and the latest review comment decides on
-/// its own when it approves. When the order cannot be told (no file time),
-/// a blocking comment wins, so an unsure case stays listed for the operator.
-// trace:BUG-1672 | ai:claude
+/// The newest review wins across all eligible sources. An approval must be
+/// strictly newer than every blocking candidate; ties or missing timestamps
+/// cannot clear a blocker. File times remain filesystem mtimes (BUG-1681 owns
+/// switching to recorded_at).
+// trace:BUG-1672 | ai:codex
 fn spec_review_approved(
     project_root: &std::path::Path,
     req: &aida_core::Requirement,
     spec_id: &str,
     pr_number: u64,
 ) -> bool {
-    let latest_comment = latest_review_comment_verdict(&req.comments);
-    if latest_comment.is_some_and(|(k, _)| k.approves()) {
-        return true;
+    let mut candidates = Vec::new();
+    if let Some((kind, at)) = latest_review_comment_verdict(&req.comments) {
+        candidates.push((kind.approves(), Some(at)));
     }
-    // The newest review comment blocks (or there is none): a file approval
-    // counts only when it is newer than that blocking comment.
-    let blocking_since = latest_comment.map(|(_, at)| at);
-    let newer_than_block = |path: &std::path::Path| match blocking_since {
-        None => true,
-        Some(at) => verdict_file_written_at(path).is_some_and(|written| written > at),
-    };
 
-    let pr_path = project_root
-        .join(".aida")
-        .join("review-verdicts")
-        .join(format!("PR-{pr_number}.json"));
-    if pr_has_approved_verdict(project_root, pr_number) && newer_than_block(&pr_path) {
-        return true;
+    let pr_path = review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"));
+    if pr_path.is_file() {
+        // Preserve the drain reader's conflict/escalation checks. An unknown
+        // or unreadable verdict is blocking evidence, never an approval.
+        candidates.push((
+            pr_has_approved_verdict(project_root, pr_number),
+            verdict_file_written_at(&pr_path),
+        ));
     }
 
     let ids = [
@@ -58779,17 +58775,37 @@ fn spec_review_approved(
         req.agreed_id.as_deref(),
         req.spec_id.as_deref(),
     ];
-    let spec_file = ids
+    for path in ids
         .into_iter()
         .flatten()
         .filter(|id| !id.trim().is_empty() && *id != "???")
         .map(|id| review_verdict::verdict_path(project_root, id))
-        .find(|p| p.is_file());
-    spec_file.is_some_and(|path| {
+        .filter(|p| p.is_file())
+    {
         let record = std::fs::read_to_string(&path)
             .ok()
             .and_then(|body| review_verdict::parse_recorded_verdict(&body));
-        record.is_some_and(|v| v.kind.approves() && !v.is_closed()) && newer_than_block(&path)
+        if record.as_ref().is_some_and(|v| v.is_closed()) {
+            continue;
+        }
+        candidates.push((
+            record.is_some_and(|v| v.kind.approves()),
+            verdict_file_written_at(&path),
+        ));
+    }
+    review_candidates_approved(&candidates)
+}
+
+// trace:BUG-1672 | ai:codex
+fn review_candidates_approved(
+    candidates: &[(bool, Option<chrono::DateTime<chrono::Utc>>)],
+) -> bool {
+    candidates.iter().any(|(approves, at)| {
+        *approves
+            && candidates.iter().all(|(other_approves, other_at)| {
+                *other_approves
+                    || matches!((at, other_at), (Some(at), Some(other_at)) if at > other_at)
+            })
     })
 }
 

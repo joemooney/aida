@@ -306,3 +306,126 @@ fn newest_review_wins_between_files_and_comments() {
         );
     }
 }
+
+// trace:BUG-1672 | ai:codex
+#[test]
+fn blocking_files_override_older_approving_comments() {
+    for key in [SPEC.to_string(), format!("PR-{PR}")] {
+        for verdict in ["request-changes", "rejected", "unknown"] {
+            let tmp = TempDir::new().unwrap();
+            let req = spec_with("", vec![comment("joe", "Review: APPROVE", 20)]);
+            let path = write_verdict(tmp.path(), &key, &format!(r#"{{"verdict":"{verdict}"}}"#));
+            age_file(&path, 10);
+            assert!(
+                !spec_review_approved(tmp.path(), &req, SPEC, PR),
+                "{key}: newer {verdict}"
+            );
+            age_file(&path, 30);
+            assert!(
+                spec_review_approved(tmp.path(), &req, SPEC, PR),
+                "{key}: newer comment approval"
+            );
+        }
+    }
+}
+
+// trace:BUG-1672 | ai:codex
+#[test]
+fn newest_review_wins_across_spec_and_pr_files() {
+    for (approval_key, blocker_key) in [(SPEC, "PR-42"), ("PR-42", SPEC)] {
+        for verdict in ["request-changes", "rejected", "unknown"] {
+            let tmp = TempDir::new().unwrap();
+            let req = spec_with("", Vec::new());
+            let approval = write_verdict(tmp.path(), approval_key, r#"{"verdict":"approved"}"#);
+            let blocker = write_verdict(
+                tmp.path(),
+                blocker_key,
+                &format!(r#"{{"verdict":"{verdict}"}}"#),
+            );
+            age_file(&approval, 30);
+            age_file(&blocker, 10);
+            assert!(
+                !spec_review_approved(tmp.path(), &req, SPEC, PR),
+                "{blocker_key}: newer {verdict}"
+            );
+            age_file(&approval, 1);
+            assert!(
+                spec_review_approved(tmp.path(), &req, SPEC, PR),
+                "{approval_key}: newer approval"
+            );
+        }
+    }
+}
+
+// trace:BUG-1672 | ai:codex
+#[test]
+fn equal_review_times_preserve_blocker_in_any_source_order() {
+    let at = Utc::now() - Duration::minutes(10);
+    let mut approval = comment("joe", "Review: APPROVE", 10);
+    let mut blocker = comment("joe", "Review: REQUEST_CHANGES", 10);
+    approval.created_at = at;
+    blocker.created_at = at;
+    for comments in [
+        vec![approval.clone(), blocker.clone()],
+        vec![blocker, approval],
+    ] {
+        let tmp = TempDir::new().unwrap();
+        assert!(!spec_review_approved(
+            tmp.path(),
+            &spec_with("", comments),
+            SPEC,
+            PR
+        ));
+    }
+    for (approval_key, blocker_key) in [(SPEC, "PR-42"), ("PR-42", SPEC)] {
+        let tmp = TempDir::new().unwrap();
+        for (key, verdict) in [(approval_key, "approved"), (blocker_key, "request-changes")] {
+            let path = write_verdict(tmp.path(), key, &format!(r#"{{"verdict":"{verdict}"}}"#));
+            std::fs::File::options()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_modified(at.into())
+                .unwrap();
+        }
+        assert!(!spec_review_approved(
+            tmp.path(),
+            &spec_with("", Vec::new()),
+            SPEC,
+            PR
+        ));
+    }
+}
+
+// trace:BUG-1672 | ai:codex
+#[test]
+fn missing_times_cannot_clear_a_blocker() {
+    use super::review_candidates_approved;
+    let at = Utc::now();
+    for candidates in [
+        vec![(true, Some(at)), (false, None)],
+        vec![(true, None), (false, Some(at))],
+        vec![(true, None), (false, None)],
+    ] {
+        assert!(!review_candidates_approved(&candidates));
+        let reversed: Vec<_> = candidates.into_iter().rev().collect();
+        assert!(!review_candidates_approved(&reversed));
+    }
+    assert!(review_candidates_approved(&[(true, None)]));
+    assert!(!review_candidates_approved(&[]));
+}
+
+// trace:BUG-1672 | ai:codex
+#[test]
+fn all_spec_alias_files_participate_in_ordering() {
+    let tmp = TempDir::new().unwrap();
+    let mut req = spec_with("", Vec::new());
+    req.agreed_id = Some("BUG-2".to_string());
+    let approval = write_verdict(tmp.path(), SPEC, r#"{"verdict":"approved"}"#);
+    let blocker = write_verdict(tmp.path(), "BUG-2", r#"{"verdict":"request-changes"}"#);
+    age_file(&approval, 30);
+    age_file(&blocker, 10);
+    assert!(!spec_review_approved(tmp.path(), &req, SPEC, PR));
+    age_file(&approval, 1);
+    assert!(spec_review_approved(tmp.path(), &req, SPEC, PR));
+}
