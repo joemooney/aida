@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-26T18:23:23.194789197Z
+modified_at: 2026-09-27T01:48:00.854872345Z
 req_type: Story
 tags:
 - aida:history
@@ -85,4 +85,42 @@ comments:
   created_at: 2026-09-26T18:23:23.194789197Z
   modified_at: 2026-09-26T18:23:23.194789197Z
   session_id: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
+- id: 01a0e08c-37d6-75e3-b4b7-2ef14d6ed106
+  author: joe
+  content: |
+    SKETCH — STORY-1477 (awaiting independent advisor signoff; sketch only)
+
+    Basis: Joe's 2026-09-26 operator comment fixes project storage at tracked `.aida/config.toml`; TASK-1512 is Completed. Current `Command::History` has digest, single-spec progression, and full-event paths; `--full` selects events, `--oneline` changes rendering and can select events, `--json`/`--format json` selects JSON, and MCP `history` defaults to a structured JSON event ledger. Keep those defaults and all existing filter semantics when the new flags are absent.
+
+    CLI grammar and precedence
+    - Add global history options `--template <NAME|STRING>`, `--fields <CSV>`, `--save-as-template [user:|project:]NAME`, and `--force`, including after `history events`. Add `history templates` and `history templates rm [user:|project:]NAME` subcommands. `templates` is a reserved subcommand; retain positional SPEC-ID handling.
+    - A template argument containing `{` is inline; otherwise it is a name. Explicit `user:`, `project:`, `builtin:` qualifiers are legal only for lookup. Reject unknown qualifiers and malformed braces. `{{` and `}}` emit literal braces. A literal-only inline string has no `{`, so require a placeholder or use a named template; document this grammar limit.
+    - `--template` is human output only. Reject it with `--fields`, `--oneline`, `--full`/`events`, `--json`/`--format json`, `--format toon`, and `--kind` with an actionable error rather than silently ignoring a flag. Treat a custom/inline template as a request for the full event feed, including with `--id`; filters act first, then formatting. Builtins `oneline` and `full` are special mode aliases: route them through the existing `--oneline` and `--full` paths, including their mode selection, window sizing, headers/footers and colors, to meet byte-identical alias acceptance. `--template builtin:full` is equivalent to `--full`; `builtin:oneline` to `--oneline`. An unqualified `full`/`oneline` can be shadowed, so byte identity is asserted when they resolve to builtin.
+    - `--fields <csv>` selects ordered event columns in human and TOON tables and ordered keys in each JSON `events[]` row; retain the existing top-level JSON envelope (`count`, `window_exhausted`, `source`, `index_tip`). It selects the event feed, including with `--id`; filtering, order, and bounds stay as today. Reject `--fields` with `--oneline`, `--kind`, and `--template`; `--full`/`events` may coexist as an explicit spelling of the same feed. `--fields` composes with `--json`/`--format json|toon|human` and all event filters, including `--to`, `--from`, `--opened`. No implicit output-format change. Keep unflagged digest/progression/JSON byte-stable.
+    - Save requires an inline `--template` on the same run, never a named lookup or builtin; validate before writing, then execute the requested history query. `--force` has meaning only with save; refuse it elsewhere. An existing name in the target scope fails unless forced, even if shadowed by another scope. Print saved scope/path; project save adds a commit reminder. `templates` lists all three scopes with name, raw format, and shadowed-by scope; `rm` requires an explicit writable scope to prevent deleting the wrong shadowed name, refuses builtins and nonexistent names, and never removes another scope's entry.
+
+    Template language and field safety
+    - Whitelist exactly `{commit}`, `{date}` or `{date:<strftime>}`, `{author}`, `{id}`, `{type}`, `{priority}`, `{title}`, `{kind}`, `{event}`, `{from}`, `{to}`, `{comment}`. No arbitrary paths, expressions, command execution, environment expansion, or recursive template expansion. Unknown token/date directive/field errors before the git walk and lists valid names. Reject empty CSV, empty entries, duplicates, and empty/overlong template names; use a documented ASCII name grammar (proposed `[A-Za-z][A-Za-z0-9_-]*`), case-sensitive. Bound template length and rendered line length; escape/control-character handling must prevent terminal injection and preserve one event per template line (reject literal newlines and normalize substituted newlines). Use the existing event timestamp and local-time convention for date formatting; check strftime directives rather than trusting permissive formatting.
+    - `--fields` gets its own history-event whitelist, not the requirement-list whitelist. Proposed canonical set: `commit,date,author,id,type,priority,title,kind,event,from,to,comment`; same accessors as placeholders. For JSON, preserve JSON value types (null for unavailable event-local values); human/TOON show empty cells. `{event}` is the current event summary. `{from}`/`{to}` come from transition detail only. Never fill historical title/priority from current spec state. Current `Event` only carries title/priority for certain kinds and `CommentsAdded` carries count/author, not body text. Recommended bounded semantics: title/priority only when present in that event; `{comment}` is a comment-event summary/count, empty otherwise, with help text stating that it is not a comment body. This must be approved as a design fork below, or the richer decoder/cache work must be scoped explicitly.
+
+    Scopes, persistence, and ADR
+    - Builtins are compiled in and immutable. Read user templates from `~/.aida/config.toml`, project templates from the tracked project-root `.aida/config.toml`; no `global:` scope. Resolve an unqualified name user > project > builtin. Qualified names bypass precedence. Do not put templates in `.aida-store` or the requirements graph.
+    - Schema in both files: `[history.templates]` with TOML string keys and string values, e.g. `approvals = "{date:%Y-%m-%d} {id} {event}"`. Read only this table; wrong table/value types and invalid entries fail clearly with file/key context. No legacy template schema exists, so migration is additive/no rewrite on read. Writes use `toml_edit`/atomic save to preserve unrelated sections and comments; create missing user file/table, and modify only the chosen scope/key. Do not auto-copy or migrate existing config. Project save must resolve the actual project root, including sibling worktrees, and never write the orphan store. Document how to commit/share the tracked change.
+    - Implementing PR includes an accepted ADR in the repository's decision log before code lands: tracked project config chosen because this is reviewable project formatting config; reject aida-store META because it expands the requirement graph for a presentation preference. Include scope precedence, file schema, trust/escape limits, and no-migration rule in the ADR.
+
+    MCP parity and compatibility
+    - Add optional `template` and `fields` strings to MCP `history` schema. Reuse the same resolver, parser, field accessors, and validation as CLI; return invalid_arg for bad values/combinations. An explicit `template` yields a human text response in the existing MCP text envelope; an explicit `fields` yields the existing JSON envelope with projected `events[]` rows. Reject both together. With neither, keep the existing JSON contract and defaults byte-stable. MCP has no save/rm operations in this story; the parity criterion concerns read/render parameters, not remote config mutation. Document that its ledger remains all-inclusive and its default limit/window differ from CLI, so parity comparisons use matching filters and explicit limits.
+
+    Verification matrix
+    - Parser: inline/named/qualified forms, escaped braces, invalid braces/tokens/directives, exact one-line rendering, malformed/duplicate/unknown CSV, and conflict/error messages across human/TOON/JSON.
+    - Golden output: `--oneline` vs builtin oneline and `--full` vs builtin full at TTY and captured output, single-spec and multi-spec, with no shadowing. Existing unflagged digest/progression/event/JSON output unchanged.
+    - Filters and source: `--since/--until/--limit/--id/--type/--author/--all/--archived/--deferred/--include-meta`, plus TASK-1512 `--to/--from/--opened` union; history cache and git-walk render the same selected rows.
+    - Persistence: fresh/malformed configs, round-trip TOML quoting, unrelated comments preserved, user/project/builtin shadowing and explicit lookup, overwrite refusal/force, project commit reminder, scoped deletion, builtin refusal, and sibling-worktree project root.
+    - MCP: descriptor/schema and stdio calls for inline/named/qualified template, fields projection, invalid_arg classification, unchanged default payload, and CLI equivalence on the same event set. Update help/reporting docs and MCP contract docs.
+
+    Non-goals: saved filters/views, templates for list/search, a new output encoding named `template`, a third writable scope, store objects, shell-style expansion, arbitrary JSON paths, and changing history filters, event decoding, or default windows beyond what the chosen field semantics require.
+
+    Advisor forks to close before implementation: (1) approve event-local/summary-only semantics for `{title}`, `{priority}`, `{comment}` or explicitly expand EventKind/cache decoder for historical values and comment bodies; (2) confirm explicit scoped `templates rm` rather than the spec's optional unqualified removal; (3) confirm opt-in human MCP template text despite the tool's normally JSON-only response; (4) confirm custom templates and `--fields` always select full events rather than attempting to format the digest/progression. These are API choices; the storage decision is already closed by Joe.
+  created_at: 2026-09-27T01:48:00.854872345Z
+  modified_at: 2026-09-27T01:48:00.854872345Z
 execution_mode: drive
