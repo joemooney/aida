@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:57:53.754613048Z
-modified_at: 2026-09-27T04:03:25.620993099Z
+modified_at: 2026-09-27T04:11:54.939972728Z
 req_type: Bug
 comments:
 - id: 01a0e101-bf24-7c71-882a-a9e28b9b08e6
@@ -97,6 +97,12 @@ comments:
   content: 'PROXY DECISION (product for Joe): Independent lock-model sketch and advisor signoff 01a0e104-7ab9-7a73-b79b-1843eb5bcee1 are accepted with all binding amendments. Queue isolated implementation of membership/persistence fix only; no transactional placement expansion. Run fake-HOME cross-process tests and Windows CI, then fresh strict reviewer and advisor before a batch merge. Never touch the live global queue in tests.'
   created_at: 2026-09-27T04:00:16.539937658Z
   modified_at: 2026-09-27T04:00:16.539937658Z
+- id: 01a0e10f-f6bb-7810-b9b7-b61fdb437c31
+  author: codex
+  content: 'Implementation is in leased branch bug-1682: permanent sidecar guard, atomic read/write, fail-closed mutation pre-reads, and the eight named fenced cross-process fixtures. Placement remains outside the lock as approved. Brief acknowledged. Targeted test build is queued behind the machine-wide Cargo slot gate; no test-pass claim yet. Cross-platform PR paths include the queue and fixture so Windows runtime verification runs on this branch. No self-review or merge will be performed.'
+  created_at: 2026-09-27T04:11:54.939972728Z
+  modified_at: 2026-09-27T04:11:54.939972728Z
+  session_id: 01a0e1082f96
 history:
 - id: 01a0e108-3134-78a3-974e-6e28c13fbe1b
   author: aida-session-start
