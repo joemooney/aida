@@ -12,7 +12,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::models::{RequirementsStore, TraceLink};
+use crate::scaffolding::inventory::portable_skill_inventory;
 use crate::scaffolding::{ScaffoldConfig, ScaffoldPreview, Scaffolder};
+use crate::templates::EMBEDDED_TEMPLATES;
 
 /// Report output format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -877,9 +879,39 @@ pub fn check_scaffold_status(
     // have real files here, so this only triggers in the source repo.
     // trace:BUG-917 | ai:claude
     let templates_root = fs::canonicalize(project_root.join("aida-core").join("templates")).ok();
+    // TASK-1520: in this source checkout `.agents/skills` is a generated
+    // regular-file mirror of the portable inventory. Compare those copies to
+    // their raw masters; preview artifacts add scaffold headers downstream.
+    // trace:TASK-1520 | ai:codex
+    let portable_inventory = templates_root
+        .as_ref()
+        .map(|_| portable_skill_inventory(config));
 
     for artifact in &preview.artifacts {
         let full_path = crate::scaffolding::resolve_artifact_path(project_root, &artifact.path);
+
+        if let Some(inventory) = &portable_inventory {
+            let path = artifact.path.to_string_lossy();
+            if let Some(rest) = path.strip_prefix(".agents/skills/") {
+                if let Some((name, rel_path)) = rest.split_once('/') {
+                    if let Some(source_key) = inventory
+                        .get(name)
+                        .and_then(|skill| skill.files.iter().find(|f| f.rel_path == rel_path))
+                        .map(|file| file.source_key.as_str())
+                    {
+                        if let (Some(expected), Ok(actual)) = (
+                            EMBEDDED_TEMPLATES.get(source_key),
+                            fs::read_to_string(&full_path),
+                        ) {
+                            if actual == *expected {
+                                status.matching.push(artifact.path.clone());
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         if let Some(root) = &templates_root {
             let symlinked_master = fs::symlink_metadata(&full_path)

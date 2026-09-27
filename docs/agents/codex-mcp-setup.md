@@ -355,8 +355,9 @@ aida scaffold refresh          # every installed pack, this project + ~/.codex/p
 aida init --refresh            # same refresh, as part of a re-init
 ```
 
-Refresh covers `.claude/skills/`, `.claude/commands/`, `.codex/skills/`,
-`.antigravity/skills/` and `~/.codex/prompts/` in one pass, and it is safe by
+Refresh covers `.claude/skills/`, `.claude/commands/`, the shared
+`.agents/skills/` pack, any already-installed legacy `.codex/skills/` or
+`.antigravity/skills/` pack, and `~/.codex/prompts/` in one pass, and it is safe by
 construction:
 
 - a pack file whose body still hashes to the scaffold checksum it was written

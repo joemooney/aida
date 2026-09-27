@@ -207,11 +207,10 @@ As an **Experimental-tier** agent (per STORY-408):
 
 ## Keeping the Antigravity Skill Pack Current
 
-`.antigravity/skills/` is scaffolded by `aida init` and is then skip-existing,
-so a later fix to a skill template never reaches a project that already has the
-file. The delivery path is an **edit-preserving refresh** — the same one that
-keeps Claude's skills/commands, `.codex/skills/` and `~/.codex/prompts` level
-with the binary:
+`.agents/skills/` is the shared skill directory discovered by Antigravity and
+Codex. The delivery path is an **edit-preserving refresh** — the same one that
+keeps Claude's skills/commands, installed portable and legacy packs, and
+`~/.codex/prompts` level with the binary:
 
 ```bash
 aida scaffold refresh          # every installed pack, in one pass

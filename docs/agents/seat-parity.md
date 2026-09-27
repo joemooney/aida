@@ -79,6 +79,13 @@ Consequences:
 An earlier note claimed `.codex/skills/` was the Codex discovery surface; the
 matrix above supersedes it.
 
+In the AIDA source repository, `make sync-templates` populates
+`.agents/skills/aida-*/` with regular-file copies from the portable inventory.
+`make check-templates` compares those copies byte-for-byte with their source,
+rejects symlinked `SKILL.md` files, and reports missing or stale AIDA entries.
+The directory is gitignored here; third-party and `local/` entries are left
+alone.
+
 ## Evidence captured on 2026-09-19
 
 SCOPE OF THIS EVIDENCE, stated so the matrix is not read as more proven than it is:

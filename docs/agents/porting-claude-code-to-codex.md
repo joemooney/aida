@@ -755,6 +755,10 @@ silently skips a `SKILL.md` that is itself a symlink, so write a regular file.
 Antigravity 1.2.11 reads the same `.agents/skills/` directory. See the skill
 discovery matrix in `docs/agents/seat-parity.md`:
 
+In the AIDA development checkout, `make sync-templates` writes regular-file
+copies from the derived portable inventory into `.agents/skills/aida-*/`;
+`make check-templates` detects byte drift and symlinked `SKILL.md` files.
+
 ```markdown
 ---
 name: aida-review

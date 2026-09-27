@@ -411,6 +411,9 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 		echo "  Linked: .claude/commands/$$name -> aida-core/templates/commands/$$name"; \
 	done
 	@echo "Template sync complete!"
+	@echo "Syncing portable skill copies to .agents/skills/..."
+	@scripts/sync-portable-skills.sh sync
+	@cp aida-core/templates/docs/agents/cross-agent-onboarding.md docs/agents/cross-agent-onboarding.md
 
 check-templates: ## Check if .claude/ templates are properly linked
 	@echo "Checking template symlinks..."
@@ -492,6 +495,8 @@ check-templates: ## Check if .claude/ templates are properly linked
 		echo "Run 'make sync-templates' to fix issues"; \
 		exit 1; \
 	fi
+	@scripts/sync-portable-skills.sh check
+	@cmp aida-core/templates/docs/agents/cross-agent-onboarding.md docs/agents/cross-agent-onboarding.md
 	@echo "All templates OK!"
 
 #==============================================================================

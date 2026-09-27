@@ -14,6 +14,10 @@ and safe default write-tool posture, see
 `docs/agents/aida-mcp-install-matrix.md`. Keep that matrix updated whenever a
 major agent client changes its MCP config path or marketplace model.
 
+For a deeper Claude Code to Codex CLI migration analysis, including hook
+capability gaps and how to respond if a vendor-standardization policy requires
+moving off Claude Code, see `docs/agents/porting-claude-code-to-codex.md`.
+
 ## What AIDA is
 
 AIDA (AI Design Assistant) is a **spec-graph-backed agent-collaboration layer**. The visible surface is a Rust CLI (`aida`) and a small TUI; the actual product is the substrate underneath:
@@ -34,25 +38,25 @@ AIDA's MCP server exposes **58 tools** in six clusters:
 
 ### Cluster 1 — Spec graph (12 tools)
 
-- `list_requirements({status})` → list specs (optionally filtered)
+- `list_requirements({status, archived?, deferred?, all?, ...})` → list specs (optionally filtered). Mirrors `aida list`: archived (STORY-441) and deferred (STORY-584) specs are hidden by DEFAULT; pass `archived` / `deferred` to surface that one tier, or `all` for the union.
 - `show_requirement({id})` → full spec content, relationships, comments
 - `add_requirement({title, description, type, ...})` → file a new spec. `type` is required and must be one of the canonical taxonomy values: `functional`, `non-functional`, `system`, `user`, `change-request`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `principle`, `vision`, `constraint`, `decision`, `term`, `doc` (the last five — `principle`/`vision`/`constraint`/`decision`/`term` — are the ADR + knowledge-graph family). AIDA auto-assigns the ID prefix from that type (for example, `task` → `TASK-N`), so agents should not invent generic `SPEC-N` IDs.
 - `update_requirement({id, ...})` → edit
-- `search_requirements({query})` → FTS5 search
+- `search_requirements({query, archived?, deferred?, all?, ...})` → FTS5 search. Like `list_requirements`, archived/deferred specs are hidden by default; `archived` / `deferred` / `all` surface them.
 - `add_comment({id, text})` → comment on a spec  *(arg is `text`, not `body`)*
 - `add_relationship({spec_id, relationship_type, target_spec_id, bidirectional?, force_parent?})` → add a typed relationship between existing specs. Built-ins include `parent`, `child`, `duplicate`, `verifies`, `verified-by`, `references`, `blocked-by`, and `blocks`; `depends-on` aliases to `blocked-by`, and custom non-empty names are accepted for CLI parity.
 - `query_graph({spec_id, mode?, depth?, follow?})` → query the cross-spec relationship graph from a root spec, equivalent to `aida graph`. `mode` ∈ `tree` (Parent/Child descendants + status rollup, default), `blocked-by` / `blocks` (transitive chains), `impact` (reverse closure — what is blocked by the root). `follow` (array of type names, e.g. `["begets"]`) traverses arbitrary custom/built-in edge types outgoing, overriding `mode` (FR-282). Returns JSON `{root, mode, count, nodes:[{id,title,status,resolved}], rollup}`. The typed-graph query a flat per-feature spec store can't answer.
 - `send_message({body, to?, broadcast?, thread?, in_reply_to?, from?})` → send an inter-agent peer message, equivalent to `aida mailbox send`. Address one agent via `to` or set `broadcast: true`. Distinct from briefs (operator→agent work) and directives (top-down control): agent↔agent conversation.
 - `read_inbox({agent?})` → an agent's inbox (messages to it + broadcasts, excluding own-sent, oldest-first), equivalent to `aida mailbox inbox`. Returns JSON `{agent, count, messages}`.
 - `list_features()` → list project features
-- `history({spec_id?, since?})` → structured event ledger, equivalent to `aida history events`
+- `history({spec_id?, events?, type?, author?, since?, until?, limit?, shipped?, to?, from?, opened?, status_changes?, comments?, oneline?})` → structured event ledger, equivalent to `aida history events`. Mirrors the CLI filter surface (type/author/since/until/limit/shipped/to/from/opened/status-changes/comments); `to`/`from` take a status name and select transitions by target/source status, `opened` selects spec-creation events; `spec_id` accepts a raw UUID (resolved to its SPEC-ID). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all`.
 
 These mirror the `aida list / show / add / edit / search / comment / history` CLI verbs. **Use them for any spec-graph interaction.** Don't shell out to `aida` for these. *(STORY-82 and EPIC-27 will modernize the older spec-graph tools to match the coordination tools' vocabulary and capability — until then, expect a thinner surface than the coordination cluster.)*
 
 ### Cluster 2 — Coordination (17 tools, STORY-361 + STORY-426)
 
 - **Punt channel:**
-  - `post_punt({spec_id, detail, category?, lean?, raised_by?})` — required: `spec_id`, `detail`. Append a punt record to `.aida/punts.jsonl`. Does NOT modify spec status — pair with `update_requirement` to flip to `needs-attention`.
+  - `post_punt({spec_id, detail, reason?, category?, lean?, raised_by?})` — required: `spec_id`, and one of `detail` / `reason` (`reason` is an accepted alias for `detail`; `detail` wins if both are given). Append a punt record to `.aida/punts.jsonl`. Does NOT modify spec status — pair with `update_requirement` to flip to `needs-attention`.
   - `list_punts({status?})` — list punt records
   - `read_punt({spec_id})` — read the most recent punt for a spec
   - `resolve_punt({spec_id, answer, reasoning, classification?})` — required: `spec_id`, `answer`, `reasoning`. Write a PuntResponse marking the punt resolved.
@@ -146,6 +150,7 @@ Resources are a **distinct MCP concept from tools**: addressable read-only state
 - `aida://pr/{n}` *(template)* — git-canonical, gh-free PR linkage for PR number N: merged specs whose squash-merge subject carries `(#N)`, plus review findings tagged `from-review:PR-N`.
 - `aida://batch/{name}` *(template)* — progress buckets (Shipped / In flight / Working now / Remaining) for the `batch:<name>` tag set (mirrors `aida queue progress --batch`).
 - `aida://schema/{object}` *(template)* — per-object schema detail (mirrors `aida schema <object> --json`); every catalog kind is a reflection-derived field table, `requirement` additionally carries the controlled-vocabulary enums (TASK-715).
+- `aida://protocol/{type}` and `aida://protocol/{type}/{lane}` *(templates)* — the resolved editable work protocol, byte-identical to `aida protocol show <type> [--lane <lane>]`; the combined type/lane body is capped at 40 lines and labels precedence explicitly.
 
 The `{…}` URIs are **resource templates** (advertised on `resources/templates/list`); the `resources/read` handler matches them by prefix and parses the tail (`aida://pr/<n>`, `aida://batch/<name>`, `aida://schema/<object>`).
 
@@ -215,7 +220,7 @@ Different agent types have different conventions for invoking AIDA workflows (th
 
 | Workflow | Claude Code (slash) | Codex CLI | Antigravity CLI / MCP agents | What it does |
 |---|---|---|---|---|
-| **aida-pickup** | `/aida-pickup [SPEC]` | `aida queue work [SPEC]` (or `.codex/skills/aida-pickup` when scaffolded) | `aida queue work [SPEC]` | Read spec + transition to in-progress + drive implementation |
+| **aida-pickup** | `/aida-pickup [SPEC]` | `aida queue work [SPEC]` (or `$aida-pickup` / `/skills` when `.agents/skills/` is scaffolded) | `aida queue work [SPEC]` | Read spec + transition to in-progress + drive implementation |
 | **aida-pr / pr ship** | `/aida-pr` | `aida pr ship` | `aida pr ship` | Commit + push + open PR + auto-queue reviewer story |
 | **aida-req** | `/aida-req` | `aida add --type <T> --title <S>` | `aida add ...` (or MCP `add_requirement`) | File a new spec |
 | **aida-commit** | `/aida-commit` | `git commit` with trailer | `git commit` with trailer | Enforce `[AI:tool] type(scope): subject (SPEC-ID)` format |
@@ -224,9 +229,10 @@ Different agent types have different conventions for invoking AIDA workflows (th
 | **aida-search** | `/aida-search <q>` | `aida search <q>` (or MCP `search_requirements`) | `aida search <q>` (or MCP) | FTS5 search across specs |
 | **aida-plan** | `/aida-plan [SPEC]` | `aida plan verify` / `aida ultraplan` | same | Plan an implementation; verify against template |
 | **aida-findings** | (slash variants) | `aida findings add/list/promote/dismiss` (or MCP `file_finding`) | `aida findings ...` (or MCP) | Advisor observation entry + triage flow |
+| **aida-capture** | `/aida-capture` | `$aida-capture` / `/skills` when `.agents/skills/` is scaffolded; otherwise run the underlying `aida ...` verbs from the generated checklist | same CLI verbs | End-of-session safety net for un-traced work |
 | **aida-onboard** | `/aida-onboard` | read AGENTS.md + this doc | read AGENTS.md + this doc | First-session orientation |
 
-**Foundational rule**: `aida` CLI verbs are the substrate — Claude Code's slash commands and Codex's skill descriptors wrap them. If you don't know the slash/skill name for your agent type, run the CLI verb directly. It works for every agent type.
+**Foundational rule**: `aida` CLI verbs are the substrate — Claude Code's slash commands and Codex's skill descriptors wrap them. Codex CLI does not discover AIDA workflows as custom `/aida-*` slash commands from `~/.codex/prompts`; use `$aida-*`, `/skills`, or the CLI verb directly. It works for every agent type. <!-- trace:BUG-1095 | ai:codex -->
 
 **MCP path (always available)**: regardless of agent type, the `aida mcp-serve` MCP tools (the 58 documented above) are the canonical machine-to-machine surface. Use MCP for spec-graph and queue operations; use CLI for orchestration verbs that manage live process state (`aida session start`, `aida pr ship`, and the actual launch behind `aida queue work`, etc.) since those manage substrate state that doesn't fit a stateless MCP call.
 
@@ -253,14 +259,14 @@ If you hit a rough edge in any of these areas, **file it via `file_finding`** ra
 In priority order for an agent boarding the project:
 
 1. **`CLAUDE.md`** (project root) — the project's own orientation; conventions, architecture, the MCP positioning. *Required reading.*
-2. **`.aida/discipline/`** — six canonical guides on workflow, lifecycle vocabulary, advisor role, session discipline. The conventions that make an AIDA project run well.
+2. **`docs/aida/discipline/`** — six canonical guides on workflow, lifecycle vocabulary, advisor role, session discipline. The conventions that make an AIDA project run well.
 3. **`docs/agents/aida-mcp-install-matrix.md`** — per-client MCP setup, marketplace/package surface, and safe write-tool posture for Claude, Codex, Cursor, Windsurf, Continue, Cline, Copilot, Devin, and others.
 4. **`docs/spikes/2026-05-20-spike-9-mcp-as-bus.md`** — the architectural verdict on filesystem-canonical + MCP-as-transport. Explains *why* the surface looks the way it does.
 5. **`docs/spikes/2026-05-20-spike-11-session-forking.md`** — fork-from-live advisor (STORY-360, shipped). Lets a live advisor session be consulted during a drain.
 6. **`docs/multi-advisor-coordination.md`** — SPIKE-10 verdict on subsystem-scoping + sibling-advisor initiation. The shape this brief is the first concrete instance of.
 7. **`docs/writeups/2026-05-20-autonomy-keystone-day.md`** — narrative of the autonomy keystone shipping. Useful context for how the project ships work end-to-end.
 8. **`OVERVIEW.md`** — strategic vision, public face, surface inventory.
-9. **`aida-core/templates/.aida/discipline/lifecycle-vocabulary.md`** — the precise verbs (Draft / Approved / Planned / In Progress / Done / Completed / Released) and the auto-bump mechanics that turn Done → Completed.
+9. **`aida-core/templates/docs/aida/discipline/lifecycle-vocabulary.md`** — the precise verbs (Draft / Approved / Planned / In Progress / Done / Completed / Released) and the auto-bump mechanics that turn Done → Completed.
 
 ## The strategic context — why this matters
 

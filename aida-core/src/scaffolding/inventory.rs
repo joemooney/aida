@@ -371,6 +371,32 @@ mod tests {
         portable_skill_inventory(&ScaffoldConfig::default())
     }
 
+    /// Keep the dev-repo generator on the exact same derived skill set as the
+    /// Rust scaffolder. The script reads the shared TOML exclusions and master
+    /// directory; any inventory drift fails this test.
+    // trace:TASK-1520 | ai:codex
+    #[test]
+    fn sync_portable_skills_script_matches_rust_inventory() {
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let output = std::process::Command::new(repo.join("scripts/sync-portable-skills.sh"))
+            .arg("list")
+            .current_dir(repo)
+            .output()
+            .expect("portable skill sync script runs");
+        assert!(
+            output.status.success(),
+            "script failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let script: BTreeSet<String> = String::from_utf8(output.stdout)
+            .expect("script output is UTF-8")
+            .lines()
+            .map(str::to_owned)
+            .collect();
+        let rust: BTreeSet<String> = default_inventory().into_keys().collect();
+        assert_eq!(script, rust);
+    }
+
     /// The acceptance guard: a skill master is either shipped to the
     /// portable packs or excluded on purpose, so a new skill can never
     /// silently miss Codex and Antigravity.
