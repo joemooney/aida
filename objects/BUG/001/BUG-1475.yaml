@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-09-20T20:21:02.383291521Z
+modified_at: 2026-09-27T14:51:01.964023066Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -259,6 +259,24 @@ comments:
   created_at: 2026-09-20T20:21:02.383291521Z
   modified_at: 2026-09-20T20:21:02.383291521Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0e359-17cc-7720-9ef0-40fcf0828457
+  author: joe
+  content: |-
+    ORCHESTRATOR NOTE (proxy for Joe, 2026-09-27 07:52): fresh evidence for this spec, which records that cross-platform nightly has been red for consecutive nights with nobody triaging. Today's instance has a clear root cause and it is not a flake.
+
+    PR #2233 (TASK-1543) failed Build (windows-latest) with ALL THREE of that branch's own new tests red — run 36317032776's sibling run 36302477932, job 108572597820:
+    1. task_1543_worktree_is_locked_detects_newline_in_path — 'git worktree add' cannot create a path containing newlines on Windows ('could not create leading directories ... Invalid argument'). Newlines are not legal in Windows paths at all.
+    2. task_1543_teardown_does_not_prune_sibling_missing_worktree — the listing reports C:/Users/runneradmin/... while the fixture path is C:/Users/RUNNER~1/..., an 8.3 short-name versus long-name mismatch, so the substring assertion misses.
+    3. task_1543_reap_missing_worktree_scopes_removal_preserving_sibling_missing_worktree — the same short-name mismatch.
+
+    The pattern this spec is really about: TASK-1543 carried an APPROVED review verdict claiming 'Three fixture tests and cargo fmt pass'. That verdict was recorded from a Linux-only run, so the reviewer was honest about what it ran and simply never ran Windows. Required checks on main are only merge-hold-gate and Build (ubuntu-latest), so nothing structurally prevents a Linux-verified branch from landing Windows-red tests. That is the mechanism by which a DIFFERENT Windows-only fixture defect appears night after night: each one arrives with a genuine-looking approval.
+
+    Two candidate systemic fixes worth considering when this spec is worked, offered as evidence not as a decision: make Build (windows-latest) a required check, or require reviewers to state which platforms they actually ran and treat an unstated platform as unproven. The second is cheaper and catches the honest-reviewer case directly.
+
+    Windows-portability rework for TASK-1543 is in flight; a new reviewer must confirm all three platforms before it batches.
+  created_at: 2026-09-27T14:51:01.964023066Z
+  modified_at: 2026-09-27T14:51:01.964023066Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 deferred: true
 deferred_at: 2026-09-20T20:16:19.421517335Z
 deferred_until: 'ADR-47''s revisit condition: the queue is empty (no specs in rework, no held PRs awaiting a merge decision), OR a release becomes necessary, OR a non-Linux user exists'
