@@ -864,6 +864,10 @@ fn disk_headroom_light_report_with(
 #[path = "tests/bug_1675_disk_headroom_light_tests.rs"]
 mod bug_1675_disk_headroom_light_tests;
 
+#[cfg(test)]
+#[path = "tests/task_1534_worktree_gc_batch_landed_tests.rs"]
+mod task_1534_worktree_gc_batch_landed_tests;
+
 /// TASK-1124: which deployed Codex prompts in `dir` (normally `~/.codex/prompts`)
 /// have drifted from the current source templates. A prompt that EXISTS but
 /// whose content differs from `expected_codex_prompts()` is rot (a stale
@@ -4218,7 +4222,7 @@ fn patch_id_pairs(project_root: &std::path::Path, log_p_output: &[u8]) -> Option
 /// removal stays gated behind --yes --force + the STORY-666 sign-off) or Keep
 /// (flagged for the operator, never auto-removed). The project's own worktree
 // and the `aida-store` worktree are skipped. trace:TASK-878
-fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     use std::process::Command as PCmd;
 
     let git = |args: &[&str]| -> Option<u32> {
@@ -4246,6 +4250,8 @@ fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFind
     let project_canon = project_root
         .canonicalize()
         .unwrap_or_else(|_| project_root.to_path_buf());
+
+    let leases = list_leases(project_root);
 
     let mut findings = Vec::new();
     for wt in list_worktrees(project_root) {
@@ -4280,10 +4286,114 @@ fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFind
             .unwrap_or(false);
         let unique_unmerged_commits =
             git(&["rev-list", "--count", &format!("{default_ref}..{branch}")]).unwrap_or(0);
-        // Only consult the forge when the cheap ancestry probe was inconclusive
-        // (covers the squash-merge case) and the worktree is clean — a dirty
-        // worktree is kept regardless, so skip the network call.
-        let pr_merged = if !ancestor_of_main && !dirty {
+
+        // Candidate spec IDs for this worktree / branch.
+        let mut candidate_specs = Vec::new();
+        if let Some(spec) = spec_id_from_work_branch(branch) {
+            candidate_specs.push(spec);
+        }
+        for id in crate::pr_ship::extract_spec_ids_from_text(branch) {
+            if !candidate_specs.iter().any(|s| s.eq_ignore_ascii_case(&id)) {
+                candidate_specs.push(id);
+            }
+        }
+        for lease in &leases {
+            let lease_wt = lease
+                .worktree_path
+                .canonicalize()
+                .unwrap_or_else(|_| lease.worktree_path.clone());
+            if lease.branch == branch
+                || (!lease.worktree_path.as_os_str().is_empty() && lease_wt == wt_canon)
+            {
+                let scope = lease.scope.trim().to_string();
+                if !scope.is_empty()
+                    && !candidate_specs
+                        .iter()
+                        .any(|s| s.eq_ignore_ascii_case(&scope))
+                {
+                    candidate_specs.push(scope);
+                }
+            }
+        }
+        if let Some(log_raw) = PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args([
+                "log",
+                "--format=%B%x00",
+                "-n",
+                "25",
+                &format!("{default_ref}..{branch}"),
+            ])
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        {
+            for msg in log_raw.split('\0').map(str::trim).filter(|m| !m.is_empty()) {
+                if is_plan_commit_subject(msg.lines().next().unwrap_or("")) {
+                    continue;
+                }
+                for id in extract_spec_ids_from_commit(msg)
+                    .into_iter()
+                    .chain(crate::extract_referenced_spec_ids_from_commit(msg))
+                {
+                    if !candidate_specs.iter().any(|s| s.eq_ignore_ascii_case(&id)) {
+                        candidate_specs.push(id);
+                    }
+                }
+            }
+        }
+        if candidate_specs.is_empty() {
+            if let Some(log_raw) = PCmd::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args(["log", "--format=%B%x00", "-n", "10", branch])
+                .stderr(std::process::Stdio::null())
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            {
+                for msg in log_raw.split('\0').map(str::trim).filter(|m| !m.is_empty()) {
+                    if is_plan_commit_subject(msg.lines().next().unwrap_or("")) {
+                        continue;
+                    }
+                    for id in extract_spec_ids_from_commit(msg)
+                        .into_iter()
+                        .chain(crate::extract_referenced_spec_ids_from_commit(msg))
+                    {
+                        if !candidate_specs.iter().any(|s| s.eq_ignore_ascii_case(&id)) {
+                            candidate_specs.push(id);
+                        }
+                    }
+                }
+            }
+        }
+
+        // BUG-1657 / TASK-1534: a spec landed through a batched integration PR
+        // has no merge of its own branch and no PR of its own; the landing commit
+        // on the default branch names it in a trailer instead. Local and cheap, so
+        // it runs before (and can spare) the forge lookup.
+        // trace:TASK-1534 | ai:antigravity
+        let spec_trailer_on_main = if !ancestor_of_main && !dirty {
+            candidate_specs.iter().any(|spec| {
+                crate::session_reap::spec_trailer_landed_on(
+                    project_root,
+                    &default_ref,
+                    branch,
+                    spec,
+                )
+            })
+        } else {
+            false
+        };
+
+        // Only consult the forge when the cheap ancestry/trailer probes were
+        // inconclusive (covers the single-PR squash-merge case) and the worktree
+        // is clean — a dirty worktree is kept regardless, so skip the network call.
+        let pr_merged = if !ancestor_of_main && !dirty && !spec_trailer_on_main {
             matches!(
                 detect_merged_pr_for_branch_via_forge(project_root, branch),
                 PrLookup::Found(_)
@@ -4292,11 +4402,18 @@ fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFind
             false
         };
 
+        let merge_signal = pr_merged || spec_trailer_on_main;
+
         // Only pay for the content probe when it could actually change the
-        // verdict: a confirmed merged PR with a positive (ancestry-only)
-        // commit count is exactly the case ancestry can never clear on its own.
-        let content_fully_landed = if pr_merged && unique_unmerged_commits > 0 {
+        // verdict: a confirmed merged PR or spec landing trailer with a
+        // positive (ancestry-only) commit count is exactly the case ancestry
+        // can never clear on its own. `branch_content_fully_landed` proves
+        // patch-id equivalence; `branch_paths_match_default` proves per-path
+        // equivalence when batched squashes combine multiple specs into one commit.
+        // trace:TASK-1534 | ai:antigravity
+        let content_fully_landed = if merge_signal && unique_unmerged_commits > 0 {
             branch_content_fully_landed(project_root, &default_ref, branch)
+                || branch_paths_match_default(project_root, &default_ref, branch)
         } else {
             false
         };
@@ -4307,7 +4424,7 @@ fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFind
             pr_merged,
             unique_unmerged_commits,
             content_fully_landed,
-            spec_trailer_on_main: false,
+            spec_trailer_on_main,
         };
 
         match classify_agent_worktree(&facts) {
