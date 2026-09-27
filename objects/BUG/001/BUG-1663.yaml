@@ -8,8 +8,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:34.548951365Z
-modified_at: 2026-09-27T04:07:26.330344967Z
+modified_at: 2026-09-27T04:08:51.189412900Z
 req_type: Bug
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a0df0e-7bdb-7aa3-a0ed-95c5e5ac6b34
+  created_at: 2026-09-27T04:08:51.189402017Z
+  created_by: joe
 comments:
 - id: 01a0dea0-6f6e-78a3-ae49-563b56513f63
   author: joe
