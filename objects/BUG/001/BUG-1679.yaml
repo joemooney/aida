@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-27T04:23:22.190441684Z
+modified_at: 2026-09-27T04:23:35.862252514Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -63,6 +63,11 @@ comments:
     Platform references consulted to constrain the requested tests: Rust Command documents relative-path/current_dir ambiguity and inherited environment (https://doc.rust-lang.org/std/process/struct.Command.html); Linux access(2) documents real/effective-ID differences and check/use races (https://man7.org/linux/man-pages/man2/access.2.html); Microsoft CreateProcessW describes executable/module and batch/interpreter behavior (https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw). These support the correctness constraints, not certification of a protected design.
   created_at: 2026-09-27T04:17:29.589401821Z
   modified_at: 2026-09-27T04:17:29.589401821Z
+- id: 01a0e11a-a8b6-7de1-a987-b8bdcec6b079
+  author: joe
+  content: 'OPERATOR DECISION (Joe, 2026-09-26 21:23 MST): Wait for BUG-1669''s protected binary-admission design; do not narrow BUG-1679 now to a pre-architecture repair or resume its implementer. Product added blocked-by BUG-1669. Current PR #2226 at e63efc3997a85df8cb1ff463f48222900ed5f7d6 remains open on operator hold after strict REQUEST_CHANGES and advisor decision 01a0e115-11f5-7281-b3d2-a76d51b8ec1e. No merge, unhold, acceptance weakening, or completion is authorized. Revisit only after protected admission architecture and implementation gates, then fresh exact-head review and explicit Joe hold release.'
+  created_at: 2026-09-27T04:23:35.862252514Z
+  modified_at: 2026-09-27T04:23:35.862252514Z
 history:
 - id: 01a0e0fd-3532-7760-9c08-3b79df618a20
   author: aida-session-start
