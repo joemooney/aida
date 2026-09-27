@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:58:05.809657428Z
-modified_at: 2026-09-27T04:50:55.771910909Z
+modified_at: 2026-09-27T05:04:02.205951020Z
 req_type: Task
 relationships:
 - rel_type: Blocks
@@ -105,6 +105,18 @@ comments:
   content: Commit b51b8f0e54 references this requirement
   created_at: 2026-09-27T04:50:55.771910909Z
   modified_at: 2026-09-27T04:50:55.771910909Z
+- id: 01a0e13f-ae9d-76f3-8e29-4acc860014f9
+  author: codex-independent-strict-reviewer
+  content: |
+    BATCH103 REWORK DELTA — independent strict code review. VERDICT: APPROVE (code only).
+
+    Reviewed source replacement 0e8b4ee714e7282a9cb9f4d248c6468eafb7b5c5 -> 6d42dc67d8cbb1174d1476b7ce08327ad969c0b0 (two test-only commits) and draft PR #2228 assembly 9f0b49295bd9c9952c601d592889268c393b16e9 -> ad3cef0379f0f8f7c8fcd3959650c87bf9da65b8. Read owning acceptance, advisor rework comment 01a0e12e-32e8-7700-937c-d12e85d8c0a7 and resolver-guard addendum. Assembly includes the exact new source head; its TASK file delta matches the source replacement. No production code or prior behavioral assertion was removed.
+
+    The nonexistent lease path is now under the owned temp root. The shared fixture writer uses aida_core::toml_quote::toml_string, with round trips through the production lease reader for Windows backslashes, spaces and embedded quotes. The stopped-wave reader fixture now writes the real existing worktree path directly and asserts it parsed; creator identity and custom_key remain. Lock ownership, first/second signal, deadline, no-signal, stopped-vs-stalled, resume/no-dead-process hints and real SIGTERM child assertions remain. The child launcher now uses crate::aida_exe_path(), which resolves to the current test harness under cargo test; the child filter and isolated HOME inheritance remain valid. Exact source and assembly diff checks passed. On the assembled SHA, isolated-HOME focused TASK tests passed (19/19, including real SIGTERM child); resolver raw-current-executable guard passed; cargo fmt --all -- --check, both portability checks (including allowlist growth against 43c0429198401473e0cfab73267fc413883b3e1b), and git diff --check passed.
+
+    PR head was rechecked immediately before this verdict and remained ad3cef0379f0f8f7c8fcd3959650c87bf9da65b8, draft. This approves only the reviewed code delta. Required CI and native Windows execution remain pending/unverified; this is not merge readiness or a waiver. Prior old-head approval provenance remains intact.
+  created_at: 2026-09-27T05:04:02.205951020Z
+  modified_at: 2026-09-27T05:04:02.205951020Z
 history:
 - id: 01a0de70-412f-71b2-a0d8-b5ceffefddc0
   author: joe
