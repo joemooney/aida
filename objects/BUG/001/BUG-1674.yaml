@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:20:32.787349526Z
-modified_at: 2026-09-26T21:32:59.074992092Z
+modified_at: 2026-09-27T03:39:53.107873362Z
 req_type: Bug
 tags:
 - performance
@@ -83,3 +83,77 @@ comments:
   created_at: 2026-09-26T21:32:59.074992092Z
   modified_at: 2026-09-26T21:32:59.074992092Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e0f2-a393-7910-a5e0-35d4e87e5d6c
+  author: mcp
+  content: |
+    SKETCH (awaiting independent advisor signoff) — BUG-1674
+    Author: Codex, separate sketch-author seat; store/cache correctness analysis with Astra. This is a proposal and evidence record, not approval, implementation, queue authorization, or a dependency decision.
+
+    1. Owner / trigger / evidence
+    Owner: aida-core's bounded read/resolution boundary plus aida-cli-lib's entire show dispatch/render path. Trigger: show opens or consults a stale/unusable cache while a foreign process holds SQLite's write transaction or a refresh is running.
+    Read AGENTS.md, two-seat-protocol.md, BUG-1674 --full, BUG-1606, STORY-1484 including independent signoff A1–A13/Q answers, and TASK-1526. Source inspected at local HEAD 854b7e26f7222c73845064275a18c293c9895283; historical 7c6faed690 checked with git show. TASK-1526 currently Needs Attention, slice B; this sketch does not assume it has landed.
+
+    Reported evidence from this bug: 24,484 ms / 13,094 ms / 13,072 ms calls on BUG-1606-containing binaries, clustered with slow writers; median 143 ms, 7.6% of 487 calls above 1 s. These are reported correlations, not a captured blocking stack.
+    Refine the description's attribution: on current HEAD show calls get_requirement_unambiguous_for_read; even historical 7c6faed690's get_requirement_unambiguous called tolerant id_candidates. Thus show is not uniformly strict “since BUG-1606.” The exact code-supported hypothesis is conditional entry into strict refresh:
+    - handle_git_backend_command opens CachedGitBackend::with_inner before dispatch; with_inner -> ensure_cache_fresh_for_read_with_schema_retry.
+    - ensure_cache_fresh_for_read skips only for healthy-schema cache plus foreign_writer_holds_lock_at diagnostic sidecar. Otherwise it calls ensure_cache_fresh.
+    - ensure_cache_fresh -> try_incremental_update -> with_cache_write retry ladder; an incremental error can escalate to full_rebuild and another ladder/full YAML scan. DEFAULT_CACHE_RETRY_DELAYS_MS totals 25.5 s before execution time; “unbounded” here means unbounded by show's ceiling, not an infinite single ladder.
+    - Cache::open can itself retry or migrate; with_inner_cache_snapshot still calls Cache::open, so is not sufficient alone.
+    - Subsequent notice/list_summaries, ID candidates, degrees, and show_cached_context can re-enter freshness independently. resolve_unambiguous error fallback uses inner.load; get_requirement_targeted misses use find_by_uuid; GitBackend::get_requirement_by_spec_id misses scan agreed_id. All can defeat a nominal read-wait cap.
+    BUG-1606 removed epic ancestor and upstream-notice whole-store scans in normal catch-up; preserve its targeted stored_status_for_spec_id UUID check and fresh-head notice-marker guard. It did not establish a command-wide cache deadline.
+    Before coding, reproduce on isolated fixture and attribute elapsed time to open, refresh, resolution, render enrichment, linkage and exit hooks. Do not claim the historical 24.5 s stack is proved from correlation alone.
+
+    2. Common bounded contract proposed for either alternative
+    One monotonic command deadline, armed before backend/cache open and all pre-dispatch notices, with a proposed 4 s operational budget and 1 s headroom to meet external wall-clock <5 s. This allocation is for advisor review. Cache wait is at most min(1500 ms, remaining budget), total across the invocation, not per helper. Env overrides may reduce it but may not enlarge show's hard cap. No normal writer ladder, inline full rebuild, automatic schema repair, full-store fallback, or repeated fresh wait may escape this command-scoped policy.
+    Default show, --full, --json/global JSON and TOON must be exercised, with default git linkage enabled as well as --no-git to isolate the cache limb. Existing branch/trace/forge limits are independent and cannot be added as if they guaranteed <5 s; pass remaining budget and retain existing incomplete-linkage reporting. Best-effort notice/enrichment skips must not cause a fresh marker or false zero/current value. Strict mutations, collision checks before writes, gates and claims retain their existing correctness and retry policies.
+    The valid-spec, healthy-last-committed-cache foreign-writer acceptance fixture must return a successful useful spec under 5 s, authoritative or explicitly stale-labelled. Merely timing out every show is NOT an acceptance pass. For exceptional inability to establish safe identity/readability/schema, a bounded nonzero, specific retry/upgrade/ambiguity error is allowed as a proposed fail-closed rule requiring advisor agreement; never “not found” or “Parse failed” for an unresolved lock/freshness error.
+    A cooperative timer cannot interrupt uninterruptible filesystem I/O. Do not claim it alone bounds full scans: remove those from the bounded path, and bound subprocesses at their execution boundary. Validate end-to-end under real contention.
+
+    3. Open design fork — no alternative selected
+    A. Bounded authoritative show path (strict object reads, no cache refresh).
+    Open a non-mutating bounded cache snapshot only as a locator; direct object_store::read_object for the selected file, verify UUID/spec identity. Render stored status and outgoing relationships from that YAML, keeping stored status distinct from effective/derived epic status; never substitute stored status under the existing rollup field without an explicit unavailable/incomplete indication. Never silently override them with stale epic rollup/relationship metadata. Derived fields must be verified within budget, explicitly identified as unavailable, or labelled stale under an approved output contract.
+    This is NOT “just bypass the cache”: direct native-path existence does not prove that another object's agreed_id also claims the requested ID. UUID/alias misses, unseen colliding IDs and relationship-target mapping need a completeness proof. A possible strict-by-delta resolver uses one coherent cache snapshot plus changed object identities, but committed HEAD diff alone is insufficient (see races). Non-ancestor/empty stamp, dirty worktree, migration or incomplete diff must not invoke a whole-store scan. Bound and fail closed if proof cannot be completed. Preserving useful success during a writer's cache-only hold is required; behavior during an actual in-flight YAML rewrite needs an explicit advisor-approved epoch/identity policy. Do not weaken BUG-1535 ambiguity refusal to make the benchmark pass.
+    B. Extend TASK-1526's labelled reader protocol to show.
+    Use its scoped StaleServe collector, refresh flock and fast-fail SQLite arbitration, bounded wait, then labelled last committed projection. Main object YAML may still be reread for current fields, but the result must clearly mark any stale identity/derived data; no presentation implies an all-current graph. Cache head/built_at must describe the same committed snapshot as the rows read.
+    Explicit show-specific bounded exception is essential: signed-off Q1 permits TTY inline full rebuild with normal ladder; Q2 permits 15 s migration polling. Neither fits BUG-1674. B must not inherit either, nor slice C's strict fallback after worker crash/backoff or no-detach override where that breaches the cap. For incompatible old schema, do not serve it stale; use safe authoritative route if provable, otherwise bounded explicit error.
+    Follow A9: CLI one stderr emit; object JSON/TOON gets always-present top-level cache metadata (stale:false for genuinely fresh), retaining object shape; any touched tolerant MCP call gets per-call structuredContent cache plus text note if MCP show is included. Never claim refreshing solely from lock-info. Default show is object-shaped; do not introduce a parallel stale-label format.
+
+    4. TASK-1526 boundaries / sequencing — decision requested, no edges changed
+    B already owns flock/single-flight, double-check, fast-fail refresh and no lock-error escalation, bounded reader waits, labels/collector, lock identity and refresh nits; BUG-1674 should consume those rather than duplicate them. Durable requests/detached workers/backoff belong to TASK-1527, not this bug.
+    If advisor selects alternative B: wait for reviewed TASK-1526 APIs, or authorize a stack on its exact reviewed base; record BUG-1674 blocked-by TASK-1526 before implementation. Stacking is not permission to merge first. Record the show stale-allowed addition and bounded Q1/Q2 exception on STORY-1484, coordinated with TASK-1526. This sketch posts only to BUG-1674; that story amendment follows independent signoff.
+    If advisor selects A: a standalone strict object route may avoid a hard dependency, but it must first solve bounded collision/epoch completeness and avoid conflicting edits to B's constructors/resolvers. Advisor decides whether to wait/stack or add blocked-by based on that design; do not infer independence from one-file reads. TASK-1514 was assigned deferred strict-by-delta work by A1; coordinate ownership rather than implement competing resolvers in both.
+    Existing slice B prerequisite gates (BUG-1664, BUG-1670, TASK-1515) remain intact. No approval, queue change, relationship mutation or signoff is made here.
+
+    5. Races and fail-closed invariants
+    - Snapshot rows + source_head_sha + built_at must be read in one SQLite read snapshot; do not sample metadata after a writer commits and label older rows fresh.
+    - Store HEAD equality alone is not a worktree snapshot proof: GitBackend writes YAML before commit, and object_store::write_object uses fs::write. HEAD can remain unchanged during a partial write; committed changed_object_files misses uncommitted alias/collision changes. Avoid claiming strict global identity from that diff alone. Immutable commit reads versus current working YAML is itself a semantic choice needing advisor agreement, not an invisible optimization.
+    - Recheck targeted UUID/spec identity and distinguish parse/permission/missing/ambiguous evidence. Partial YAML or disappearing/renamed targets must not produce a guessed object, false not-found or complete-looking graph. Limit retries to the shared deadline. Multiple targeted reads do not imply one transactional graph epoch.
+    - No full scan on cache miss/mismatch/error under this policy; stale metadata cannot prove a newly introduced collision is absent. Known ambiguity remains an error; unknown completeness is surfaced, not silently resolved.
+    - Do not restamp/repair cache while serving a bounded read. Refresh lock is single-flight only; retain TASK-1526's inside-IMMEDIATE head recheck as correctness guard. Lock-info is diagnostic only (Alive/Unknown/missing are not freshness proofs).
+    - No blocking flock acquisition while holding store lock/SQLite write transaction; preserve B's reentrancy handling and cross-worktree canonical sidecar. Unsupported flock/schema/corrupt cache must not fall back to an over-budget strict refresh or destructive repair in show.
+    - Epic cached rollup can legitimately differ from stored epic status even when fresh. Preserve/document that derived meaning; a stale rollup must never silently replace stored/current fields without a stale indication.
+
+    6. Named implementation surfaces and proposed tests (names are proposed, not added)
+    aida-cli-lib/src/git_backend_cmd.rs: handle_git_backend_command, Command::Show arm, CacheOnlyReads, show_cached_context, relationship rendering; existing show_latency_regression_tests.
+    aida-core/src/db/cached_git_backend.rs: with_inner/with_inner_cache_snapshot, ensure_cache_fresh_for_read, resolve_unambiguous, id_candidates, get_requirement_targeted, degrees/list_summaries, strict resolver regression tests.
+    aida-core/src/db/cache.rs: Cache::open/open_connection_inner, with_cache_write, with_cache_retry_observed, scoped fast-fail restoration and non-writing snapshot open. Keep writer delays and busy_timeout=0 unchanged.
+    aida-core/src/db/git_backend.rs and aida-core/src/object_store.rs: authoritative targeted-read semantics; audit existing methods' scans, do not globally alter writer resolution.
+    aida-cli-lib/src/report_cmd.rs: maybe_print_upstream_recheck_notice/marker checks; lib.rs: show linkage budgets/dispatcher emit and exit work. mcp.rs only if extending show MCP contract. cache_lock.rs and collector APIs remain B-owned.
+
+    Tests:
+    - show_live_foreign_writer_over_20s_returns_under_5s: isolated temp git store/cache + fake HOME; prime old status/relationships, commit changed authoritative YAML without cache refresh; spawn a REAL separate process opening WAL SQLite and BEGIN IMMEDIATE; readiness handshake confirms actual lock, hold at least 22 s. Launch show after handshake; external monotonic timing starts before exec and ends on exit; assert <5000 ms, success and useful spec, holder still alive/transaction held at return. Run both real sidecar and absent sidecar variants; do not simulate with a dead PID or shortened retry ladder. Verify authoritative new status/relationships OR explicit stale label and matching stale fields. Keep writer alive for the required hold, then clean up.
+    - show_live_refresh_holder_over_20s_returns_under_5s: B-mode refresh-flock holder and stalled refresh with old committed WAL readable; same success/label assertions.
+    - show_stale_epic_status_and_relationships_never_unlabelled; show_stale_alias_collision_does_not_silently_pick; show_uuid_locator_mismatch_never_full_scans.
+    - show_deadline_covers_open_notice_resolution_enrichment_and_linkage (one shared budget, including repeated helpers); show_wait_env_cannot_extend_ceiling.
+    - show_pending_migration_or_corrupt_cache_fails_bounded_without_old_schema; show_nonancestor_or_missing_cache_never_full_scans; show_partial_yaml_and_head_move_fail_closed.
+    - show_snapshot_rows_and_stale_metadata_share_transaction; show_labels_human_json_toon_and_rearms_each_mcp_call (if in scope); strict_mutation_collision_guard_unchanged.
+    Preserve existing read_path_epic_rollup_refresh_never_scans_the_whole_store and epic_targeted_miss_makes_incremental_catch_up_decline regressions. Add dirty-YAML-without-HEAD-movement and deleted-target cases. Use deterministic barriers/counters for race tests and assert no full-rebuild/whole-store fallback; elapsed-only assertions can miss the wrong path on tiny fixtures. Add a large-store/cold-cache regression for BUG-1606's bounded object-read count; retain B's single-flight/inside-txn/nested-lock tests. No fixtures against the live repo or user HOME.
+
+    7. Dogfood closure plan
+    After independent review, merge and installation by their owning seats, record installed binary SHA/version, lineage, activation time and normal concurrency. Confirm aida dev status when source/runtime disagree. Collect a complete fresh in-lineage 24 h window of normal dogfood traffic after activation; do not substitute quiet synthetic runs, shorten the window, filter failures, or discard a slow call to pass. Run aida doctor check performance and --json; paste actual outputs here with eligible show count, window bounds, worst_ms, count/proportion over 1000 ms and ceiling status. Acceptance needs BOTH <=10% over 1 s and no call breaching the 5 s ceiling; preserve current policy values. Correlate any residual tail with writer/open/refresh/linkage evidence and reopen the hypothesis if needed. BUG-1606/STORY-1423 closure holds are independently owned; this sketch clears none. No passing performance measurement is claimed now.
+
+    8. Out of scope / advisor decision
+    No writer retry-policy changes, YAML format/atomic-write overhaul, immutable whole-store snapshot, worker implementation, general list/search overhaul, mutation relaxation, lease changes, budget increase, or unrelated queue/findings work. PR-number lookup, --sync network pulls and arbitrarily large --tree traversal need an explicit scope ruling; do not claim their wall-clock behavior is solved by bounding normal show <SPEC-ID>. Existing options must not silently regress.
+    Independent advisor must choose A versus B, resolve identity/epoch semantics and bounded exceptional errors, ratify the end-to-end budget/output contract, and determine wait/stack/blocked-by sequencing. Author and Astra supplied analysis only; neither signs off this sketch.
+  created_at: 2026-09-27T03:39:53.107839761Z
+  modified_at: 2026-09-27T03:39:53.107839761Z
