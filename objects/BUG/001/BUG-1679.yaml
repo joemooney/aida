@@ -3,12 +3,12 @@ spec_id: BUG-1679
 agreed_id: BUG-1679
 title: AIDA_BIN is exported for child processes but never read, so the coordinating-binary contract only holds via the PATH prepend
 description: 'Found by the planner: export_coordinating_bin_env (lib.rs ~101499) sets AIDA_BIN but resolve_aida_exe_from never reads it. Acceptance: 1. resolve_aida_exe_from prefers AIDA_BIN when it names an executable file, else falls back as today. 2. Test with a fake binary path.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-27T03:51:25.746290860Z
+modified_at: 2026-09-27T04:10:51.135310080Z
 req_type: Bug
 comments:
 - id: 01a0e0fc-362d-7862-b492-3e3a6e7df3a6
@@ -24,3 +24,18 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e10e-fd7f-7602-9829-ca0f0ba24091
+  author: aida-orchestrator
+  timestamp: 2026-09-27T04:10:51.135343375Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Authority-changing AIDA_BIN redirects managed self/vendor launches; operator-held PR required. Relative-path identity mismatch, executable validation gaps, inherited-env test failure.
+  recovery_hint: address the review findings, move BUG-1679 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-27T04:10:51.135310080Z
