@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:33:06.937954090Z
-modified_at: 2026-09-27T14:45:17.442707554Z
+modified_at: 2026-09-27T14:53:21.480426471Z
 req_type: Task
 comments:
 - id: 01a0e2dc-58ea-7fe1-b3d2-32cf8cf68fba
@@ -202,6 +202,39 @@ comments:
     The rework has been sent back to the SAME architect session so it keeps its context, with all six binding amendments. A NEW reviewer will re-check it, not the advisor who wrote the verdict.
   created_at: 2026-09-27T14:45:17.442707554Z
   modified_at: 2026-09-27T14:45:17.442707554Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e35b-38c8-7170-b190-3e0e7031d223
+  author: joe
+  content: |
+    REWORK COMPLETE — A1-A6 applied, under advisor verdict 01a0e351-5a7c-78a3-a0fb-bb79f078cb6a. Where that verdict differs from my sketch 01a0e345, the verdict governs. Design content was not rewritten; the verdict approved sections 1-10, the fifteen settled decisions, the rejected alternatives and the honest-limits section as amended, and the changes below are the record-identity fix plus the four text amendments.
+
+    A1 (BLOCKING) CLOSED. I was wrong on both halves and the verdict is right. An ADR here is a first-class AIDA `decision` spec at .aida-store/objects/ADR/000/ADR-N.yaml with a draft/approved/superseded lifecycle (docs/agents/aida-repository-guide.md 345-349; aida-core/src/models.rs:941); docs/plans markdown is the optional companion, not the ADR. And ADR-60 was not free: I confirmed it is "Cross-machine cycle-time evidence: keep the live event log local, publish a per-spec timing record to the store at terminal state", Approved, created 2026-09-27T14:36:40Z — about seven minutes after my sketch. Asserting a number in a filename reserved nothing and a concurrent decision took it.
+
+    Fixed by allocating through the dispenser: `aida add --type decision` returned ADR-61, "P-enrolled-host is the protected boundary for every AIDA-managed full-access agent launch". I did not assert the number. The spec carries the full Context / Decision (ten numbered parts) / Consequences / Rejected-alternatives / Revisit-when / Recorded-by text, with References edges to TASK-1549, BUG-1669, SPIKE-91, TASK-1550 and BUG-1679. It was created at draft and set approved only after A2 and A3 landed, in a separate action, as A1 directs. The companion doc is renamed to docs/plans/2026-09-27-adr-61-p-enrolled-host-protected-launch-boundary.md with its heading and trace marker corrected, and it now opens with a "Canonical record" box naming ADR-61 as the decision, this file as the companion, and the ADR-60 collision as a corrected error rather than silently dropping it. A correction comment is posted on BUG-1669 so 01a0e344's "(ADR-60)" no longer sends the next reader to the cycle-time ADR.
+
+    A2 (BLOCKING) CLOSED. BUG-1669's description now carries reconciled AC1-AC5, citing 01a0e351. AC2 no longer calls orchestrator::detect unforgeable; AC4's positive fixture is reversed into a required forgery negative, so the spec no longer names the artefact that demonstrates the forgery as its positive security test. Status stays Approved, all three blockers stay in place, blocked: true, and the 01a0e125 implementation hold stands. I accept the verdict's reasoning on why proposal-only was the wrong caution here: with 01a0e33d already on the record, leaving AC4 live was a hazard, not prudence.
+
+    A3 (BLOCKING) CLOSED. Struck "unless it *is* that separately protected endpoint" from AC2 in both the ADR and BUG-1669. Replaced with: a terminal is a request and display surface only; no terminal, PTY or socket reachable from any login session in which an agent can execute may serve as the approval endpoint, which must be a separately authenticated surface under a principal distinct from the agent's. The verdict is right that the clause was dead text at best and a reopening of 01a0e0a3 at worst, sitting in the sentence most likely to be copied into code.
+
+    A4 (BINDING) DONE. Refusal-only insufficiency is now structural in both AC3 and AC4: refusing affected routes does not by itself satisfy the acceptance, the positive protected path must exist and be evidenced, and option H / deny-only cannot close BUG-1669.
+
+    A5 (BINDING) DONE. M4's jailer citation is restored as the URL from 01a0e11e rather than a paraphrase. 01a0e11e's stale-source-anchor note is carried into the read-this-first box: symbols are authoritative, line numbers refer to the sketch's earlier HEAD (854b7e26f7, spot-checked at 43c0429198), and implementation and release must refresh them. The status line now reads "Accepted IN PRINCIPLE as design direction only — NOT approved for implementation, installation, credential migration, deployment or merge", and "Decision owner: operator (Joe)" is replaced by "Decision relayed from: operator (Joe), decisions 01a0e0a3 / 01a0e103 / 01a0e10c", since this seat relayed rather than made the decision.
+
+    A6 (BINDING) DONE. Added the twelfth NOT-YET-GRANTED row: explicit, dated operator acceptance of AIDA's continued full exposure to BUG-1669 for the entire duration of SPIKE-91, TASK-1550, implementation, gate-3 proof and cutover, on a host currently running many unattended agents — marked as requiring an explicit dated risk acceptance, not a residue. Extended the rollback row to cover restoring the pre-cutover launch behaviour and made it jointly owned by SPIKE-91 and TASK-1550. Added the References edge SPIKE-91 -> BUG-1679. Also added, per the verdict's gate-4 remark, that gate 4 must arrive with a named window, a pre-published list of exactly which unattended work stops, and a rollback restoring current launch behaviour.
+
+    Mis-framing corrected (verdict's trade judgment). The ADR no longer presents the interruption of unattended work as "a consequence product must weigh". It now states that the acceptance text creates no refusal-only interim, so the interruption is a gate-4 cutover consequence already accepted in principle by 01a0e10c, that the only alternative is a launch path authorised by same-user-forgeable state which 01a0e0a3 forbids in those words, and that product has no latitude without reopening an operator decision.
+
+    SPIKE-91 gating — answered either way, as asked. SPIKE-91 has no blocked-by edge and is pickup-ready today; I confirmed it. I did NOT add one. The record supports leaving it ungated: its O2/O3/O4/O7 scope is read-only research that needs nothing from this ADR, and its own acceptance is self-contained. The ADR now says so explicitly in a "Gating correction" paragraph — this ADR gates three of four downstream specs, not four — and notes that if product intends SPIKE-91 to wait, that is a deliberate sequencing choice needing an explicit edge. Adding a blocker on my own initiative would have been a queue decision, not a documentation one.
+
+    Cheap subset written up, not built. §8 of the ADR now records that scripts/aida-demo.sh and the four scripts/ablations/gate-vs-rule*.sh build full-access argv directly with no legitimate unattended caller, that gating them costs zero unattended work and needs no broker or backend, that it is an ordinary defect fix in shipped scripts rather than a deployment decision, and that it is neither authorised nor built by this ADR and cannot close BUG-1669. The Option H bullet in Rejected alternatives is reframed so rejecting H as *the* answer no longer reads as rejecting that subset. The proposed spec text is in my report to the coordinator for filing; I did not file it.
+
+    BUG-1679 O7 recorded, not edited. Posted a comment on BUG-1679 recording that its AC1 is superseded by the identity-admission contract, that the contract lives in SPIKE-91's existing "pinned executable/dependency identity admission" deliverable, and that the References edge now makes it walkable. I did NOT edit BUG-1679's acceptance: 01a0e115 routed that to product and 01a0e11a forbids narrowing it now, and the advisor's A2 blessing was specific to BUG-1669. Also relayed the verdict's observation that BUG-1679's store status is still NeedsAttention although its 07:30 proxy comment says DEFERRED.
+
+    Unchanged and verified after the rework: BUG-1669 Approved, blocked: true, three unsatisfied blockers, implementation-held. BUG-1679 parked behind BUG-1669. TASK-1550 Approved, blocked-by TASK-1549. PR #2226 OPEN at e63efc3997a85df8cb1ff463f48222900ed5f7d6 with aida:merge-hold, operator-held. Gates 2-5 open, gate 4 never granted, no protection deployed. Nothing queued, unblocked, dispatched or merged; no production code, launch-path edit, installation, credential, host inventory or probe.
+
+    A new reviewer re-checks this, not the advisor who wrote 01a0e351.
+  created_at: 2026-09-27T14:53:21.480426471Z
+  modified_at: 2026-09-27T14:53:21.480426471Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e341-4fed-7d50-adbd-9cbfc71cc7b2
