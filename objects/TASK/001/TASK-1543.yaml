@@ -3,12 +3,12 @@ spec_id: TASK-1543
 agreed_id: TASK-1543
 title: 'Reap polish: scope prune to the lease''s own worktree entry, and read worktree locks from the -z listing'
 description: 'Follow-up from the BUG-1657 round-6 review. Acceptance: 1. Where reap/teardown prunes a missing worktree, use ''git worktree remove --force -- <lease path>'' (scoped to that entry) instead of a repo-wide ''git worktree prune'', so another session''s temporarily unavailable worktree keeps its registration. 2. worktree_is_locked parses ''git worktree list --porcelain -z'' so paths with newlines are detected. 3. Fixture tests for both.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:16:14.364445449Z
-modified_at: 2026-09-27T07:44:30.479079331Z
+modified_at: 2026-09-27T07:48:34.892639751Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -29,3 +29,18 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e1d6-53cc-74b1-b745-6c3376fa5ac9
+  author: aida-orchestrator
+  timestamp: 2026-09-27T07:48:34.892669516Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'REQUEST_CHANGES: runtime scope/lock probes pass on Linux, but new fixtures are not Windows-portable. Full merge-base diff reviewed against main 7201317922f4023c53b8410661a25f4a6d0391ee (merge-base 88f9a8eaabe86108763231ef131b97b4a06d63e0; one commit behind). Focused suite 3/3, session_reap 54/54, core worktree_pool_destroy 11/11, cargo fmt --all -- --check pass. Fixture probes preserve missing/locked/live-dirty siblings and validate whitespace/newline paths, multiline reasons, bare locks, and lock-record isolation.'
+  recovery_hint: address the review findings, move TASK-1543 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-09-27T07:48:34.892639751Z
