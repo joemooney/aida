@@ -82,6 +82,26 @@ pub(crate) fn handle_doctor_command(
             {
                 return doctor_check_disk_headroom_light(*json, *fail_on_findings);
             }
+            // trace:TASK-1544 | ai:codex
+            if !all && !*sub_all {
+                match normalize_doctor_category(category).ok().as_deref() {
+                    Some("performance") => {
+                        return doctor_check_store_free_light(
+                            "performance",
+                            *json,
+                            *fail_on_findings,
+                        );
+                    }
+                    Some("remote-drift") => {
+                        return doctor_check_store_free_light(
+                            "remote-drift",
+                            *json,
+                            *fail_on_findings,
+                        );
+                    }
+                    _ => {}
+                }
+            }
             doctor_multi_agent(DoctorRunOptions {
                 heal: false,
                 yes,
@@ -739,6 +759,83 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
     }
     Ok(())
 }
+
+// trace:TASK-1544 | ai:codex
+fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: bool) -> Result<()> {
+    let project_root = main_worktree_root_from(&find_project_root()?);
+    let report = match category {
+        "performance" => performance_light_report(&project_root),
+        "remote-drift" => remote_drift_light_report(&project_root),
+        _ => unreachable!("only store-free categories dispatch here"),
+    };
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        render_doctor_report(&report, false)?;
+    }
+    if fail_on_findings && !report.findings.is_empty() {
+        anyhow::bail!(
+            "{} finding(s) in {category} — failing because --fail-on-findings was requested",
+            report.findings.len()
+        );
+    }
+    Ok(())
+}
+
+// trace:TASK-1544 | ai:codex
+fn performance_light_report(project_root: &std::path::Path) -> DoctorReport {
+    let cfg = crate::read_project_config_value(project_root);
+    let budgets = performance_budgets(cfg.as_ref());
+    let policy = performance_policy(cfg.as_ref());
+    if budgets.is_empty() {
+        return DoctorReport::from_findings(Vec::new());
+    }
+    let events = crate::usage::read_events();
+    let now = chrono::Utc::now();
+    let lineage = resolve_binary_lineage(project_root, &events, &budgets, &policy, now);
+    performance_light_report_with(&events, &budgets, &policy, now, &lineage)
+}
+
+// Same inputs and report fields as the full append path, with telemetry and
+// lineage supplied by the caller for deterministic tests.
+// trace:TASK-1544 | ai:codex
+fn performance_light_report_with(
+    events: &[crate::usage::UsageEvent],
+    budgets: &[PerformanceBudget],
+    policy: &PerformancePolicy,
+    now: chrono::DateTime<chrono::Utc>,
+    lineage: &BinaryLineage,
+) -> DoctorReport {
+    let mut findings = performance_findings(events, budgets, policy, now, lineage);
+    findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    let mut report = DoctorReport::from_findings(findings);
+    report.performance_audits = performance_audit_records(events, budgets, policy, now, lineage);
+    report
+}
+
+// trace:TASK-1544 | ai:codex
+fn remote_drift_light_report(project_root: &std::path::Path) -> DoctorReport {
+    remote_drift_light_report_with(
+        project_root,
+        scan_remote_drift,
+        scan_store_mirror_fanout_failures,
+    )
+}
+
+fn remote_drift_light_report_with(
+    project_root: &std::path::Path,
+    drift: impl Fn(&std::path::Path) -> Vec<DoctorFinding>,
+    fanout: impl Fn(&std::path::Path) -> Vec<DoctorFinding>,
+) -> DoctorReport {
+    let mut findings = drift(project_root);
+    findings.extend(fanout(project_root));
+    findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    DoctorReport::from_findings(findings)
+}
+
+#[cfg(test)]
+#[path = "tests/task_1544_light_doctor_tests.rs"]
+mod task_1544_light_doctor_tests;
 
 /// The whole of the light path's work, pure over `project_root`: config read
 /// + disk probe → report. Split out so a fixture can pin that it never needs

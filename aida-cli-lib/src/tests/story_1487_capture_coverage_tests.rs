@@ -25,13 +25,17 @@ fn store_with(reqs: Vec<Requirement>) -> RequirementsStore {
 fn tokens(criterion: &[&str], comments: usize) -> TraceTokens {
     TraceTokens {
         criterion_tokens: criterion.iter().map(|s| s.to_ascii_uppercase()).collect(),
+        test_criterion_tokens: criterion.iter().map(|s| s.to_ascii_uppercase()).collect(),
         trace_comments: comments,
         source: "fixture".to_string(),
     }
 }
 
 fn git(root: &Path, args: &[&str]) {
+    // trace:TASK-1546 | ai:codex
     let out = std::process::Command::new("git")
+        .env("HOME", root)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
         .arg("-C")
         .arg(root)
         .args(args)
@@ -97,6 +101,16 @@ fn story_1487_trailer_share_counts_only_trailing_spec_groups() {
     assert!(subject_has_spec_trailer("feat: x (TASK-1)"));
     assert!(!subject_has_spec_trailer("feat: x TASK-1"));
     assert_eq!(trailer_share(&[]).percent(), None);
+}
+
+// trace:TASK-1546 | ai:codex
+#[test]
+fn task_1546_trailer_drift_can_accumulate_across_history() {
+    let prose_trailers = vec![
+        "feat: first (TASK-1 / TASK-2 slice 1a)".to_string(),
+        "feat: second (TASK-3 / TASK-4 slice 1b)".to_string(),
+    ];
+    assert_eq!(trailer_share(&prose_trailers).numerator, 2);
 }
 
 // --- (b) authored work specs ----------------------------------------------------------
@@ -376,7 +390,7 @@ fn story_1487_git_grep_counts_tracked_traces() {
     assert_eq!(
         report.windows[0].criteria_with_traced_test,
         Share {
-            numerator: 2,
+            numerator: 1,
             denominator: 3
         }
     );
@@ -418,6 +432,76 @@ fn story_1487_filesystem_fallback_outside_git() {
         }
     );
     assert!(report.head.is_none());
+}
+
+// trace:TASK-1546 | ai:codex
+#[test]
+fn task_1546_huge_window_clamps_without_panic() {
+    let now = Utc::now();
+    assert_eq!(window_start(now, u64::MAX), DateTime::<Utc>::MIN_UTC);
+    let report = coverage_from_parts(
+        &store_with(vec![]),
+        now,
+        u64::MAX,
+        &[],
+        &[],
+        &tokens(&[], 0),
+        None,
+    );
+    assert_eq!(report.windows[0].window_days, Some(u64::MAX));
+    let tmp = tempfile::tempdir().unwrap();
+    init_repo(tmp.path());
+    commit_file(
+        tmp.path(),
+        "README.md",
+        "fixture\n",
+        "docs: fixture (TASK-1)",
+    );
+    let report = build_coverage_report(tmp.path(), &store_with(vec![]), now, u64::MAX);
+    assert_eq!(
+        report.windows[0].commits_with_trailer,
+        report.windows[1].commits_with_trailer
+    );
+    assert_eq!(report.windows[0].commits_with_trailer.denominator, 1);
+}
+
+// trace:TASK-1546 | ai:codex
+#[test]
+fn task_1546_only_test_attached_tokens_count_for_share() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    init_repo(root);
+    commit_file(
+        root,
+        "tests/traces.rs",
+        "// trace:TASK-1.A1\n#[test]\nfn attached() {}\n\n// trace:TASK-1.A2\nfn helper() {}\n",
+        "test: fixture (TASK-1)",
+    );
+    commit_file(
+        root,
+        "notes.md",
+        "trace:TASK-1.A3 in prose\n",
+        "docs: fixture",
+    );
+    let store = store_with(vec![spec(
+        "TASK-1",
+        RequirementType::Task,
+        "## Acceptance\n- A1. first\n- A2. second\n- A3. third\n",
+        1,
+    )]);
+    let report = build_coverage_report(root, &store, Utc::now(), 90);
+    assert_eq!(report.criterion_trace_tokens, 3);
+    assert_eq!(
+        report.windows[0].criteria_with_traced_test,
+        Share {
+            numerator: 1,
+            denominator: 3
+        }
+    );
+    let criteria =
+        crate::criteria::build_criteria_report(root, "TASK-1", &store.requirements[0].description)
+            .unwrap();
+    assert_eq!(criteria.untested.len(), 2);
 }
 
 #[test]
