@@ -1,0 +1,41 @@
+id: 01a0e374-20e2-73a2-a6ec-1180208e5879
+spec_id: ADR-63
+agreed_id: ADR-63
+title: 'Model tiering for dispatch: cheapest model that can do the job, strongest reserved for integrity-class review'
+description: |
+  OPERATOR DECISION (Joe, 2026-09-27 08:18 MST): "we need to be more conservative on our token use, use a cheaper model where possible".
+
+  How the orchestrator seat applies it from now on.
+
+  DISPATCH AT THE CHEAPEST TIER THAT CAN DO THE JOB
+  - Cheaper tier (sonnet/haiku): reporting-surface fixes, documentation, scaffold and template polish, test-fixture work, read-only investigations, mechanical reworks with findings already written out, and label/wording changes.
+  - Strongest tier: STRICT reviews and implementation of integrity-class code only — store and cache writes, locks, drain logic, merge-gate logic, authority and identity, and anything that launches unattended work. A cheap review of lock code is a false economy; today's TASK-1529 review is the case in point, because it found a wrong-PR retraction that three cheaper passes had not.
+  - Architecture sketches and advisor signoff stay at the strong tier, because a wrong design record costs more than the tokens saved.
+
+  ALSO REDUCE VOLUME, NOT JUST UNIT PRICE
+  - Fewer concurrent agents. A dozen at once on a 6-core host mostly buys queue wait, and each waiting agent still burns tokens polling its own build.
+  - Shorter briefs. Point at the spec and the verdict file instead of restating findings at length.
+  - Do not re-verify what the substrate already records.
+  - The single biggest saving already applied: implementers no longer run `cargo test --workspace` or `cargo clippy --workspace`; targeted tests only, with the full suite once at integration. That removed roughly a dozen redundant full suites per wave.
+
+  WHAT DOES NOT CHANGE
+  - Every branch still gets a reviewer that did not write it.
+  - Proven-fail-without-fix evidence is still required.
+  - Cost is never a reason to skip a gate, to merge with a required check red, or to accept a verdict that did not state what it ran.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T15:20:33.762152743Z
+modified_at: 2026-09-27T15:20:33.762152743Z
+req_type: Decision
+tags:
+- policy cost dispatch operator-decision
+filed_at:
+  code_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: da36c066-c384-494e-a7cf-abffb3cfe52d
