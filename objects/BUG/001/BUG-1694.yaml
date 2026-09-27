@@ -17,13 +17,15 @@ description: |-
   - A test recreates the path in the window AFTER the final exists() check and BEFORE registration removal (injected via the existing before_clear-style hook, or an equivalent seam) and asserts the registration survives. A test that only recreates the path earlier does not satisfy this — TASK-1543 already covers that case.
   - The TASK-1543 test continues to pass unchanged.
   - Fixture-based, no sleeps and no polling loops.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T19:29:58.004516622Z
-modified_at: 2026-09-27T19:30:26.521730888Z
+modified_at: 2026-09-27T19:30:27.099685432Z
 req_type: Bug
+tags:
+- needs-sketch
 comments:
 - id: 01a0e458-e659-76e2-9eb0-234d37f6126c
   author: joe
@@ -31,6 +33,14 @@ comments:
   created_at: 2026-09-27T19:30:26.521730888Z
   modified_at: 2026-09-27T19:30:26.521730888Z
   session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
+history:
+- id: 01a0e458-e89b-7d73-88ff-54128f30291b
+  author: joe
+  timestamp: 2026-09-27T19:30:27.099504064Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 4b8f4e5bd0714c70cffa67a81f2e952dd8d6a9a7
   branch: main
