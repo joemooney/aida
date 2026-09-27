@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T01:04:41.671496965Z
-modified_at: 2026-09-27T01:12:49.710762914Z
+modified_at: 2026-09-27T01:33:30.557975965Z
 req_type: Bug
 tags:
 - build-time
@@ -25,3 +25,17 @@ comments:
   content: 'PR #2219 contains the target-level RUSTC_WRAPPER override. Verified RUSTC_WRAPPER= CARGO_INCREMENTAL=1 cargo build -p aida-core --release succeeds under the global sccache configuration. Awaiting independent review and merge.'
   created_at: 2026-09-27T01:08:51.696445090Z
   modified_at: 2026-09-27T01:08:51.696445090Z
+- id: 01a0e07e-f03d-7412-8ea2-0b9a1a1eca7e
+  author: mcp
+  content: |-
+    ADVISOR DISPOSITION: PASS TO INTEGRATOR
+
+    Read the recorded first-class verdict via `aida review verdict BUG-1684` and .aida/review-verdicts/BUG-1684.json: approved, recorded 2026-09-27T01:29:12.739953818+00:00, reviewed_branch bug-1684, reviewed_sha 6a6d8150c4c9ef612c0b41faab311b13fe65aa44. Summary: build-fast clears the global sccache wrapper while retaining CARGO_INCREMENTAL=1; build-release unchanged; local reproduction and PR CI pass. This is the spec verdict record; GitHub has no submitted review and there is no PR-2219.json artifact. Neither substitutes for nor invalidates the existing exact-head spec verdict.
+
+    Independently queried https://github.com/joemooney/aida/pull/2219: OPEN, MERGEABLE/CLEAN, current head exactly 6a6d8150c4c9ef612c0b41faab311b13fe65aa44, no labels/merge-hold label. Read main's required_status_checks: Build (ubuntu-latest) and merge-hold-gate. Both completed SUCCESS on that exact SHA, confirmed both by `gh pr checks 2219 --required` and commit check-runs. Build: https://github.com/joemooney/aida/actions/runs/36284628565/job/108522924705 ; merge-hold: https://github.com/joemooney/aida/actions/runs/36284628587/job/108522924834 . Release matrix is skipped and is not a required check.
+
+    Inspected the PR diff: only Makefile changes; build-fast adds the target-local RUSTC_WRAPPER= override alongside CARGO_INCREMENTAL=1 and nearby wrapper documentation/trace. build-release is untouched, consistent with the recorded verdict. I did not rerun the reviewer's local build.
+
+    No head mismatch or required-check/merge-hold blocker found. Disposition is valid for this SHA only; integrator must recheck head and gates at merge time. This comment records readiness only: no merge, branch-protection change, queue mutation, or new work dispatch performed.
+  created_at: 2026-09-27T01:33:30.557969407Z
+  modified_at: 2026-09-27T01:33:30.557969407Z
