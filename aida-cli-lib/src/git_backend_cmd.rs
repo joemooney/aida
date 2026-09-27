@@ -4135,6 +4135,9 @@ pub(crate) fn handle_git_backend_command(
             }
             match lookup? {
                 Some(req) => {
+                    // Share the fallback index across relationships and blockers.
+                    // trace:BUG-1678 | ai:codex
+                    let read_target = backend.requirement_reader();
                     record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
                     // STORY-632: deterministic local graph-centrality, read from
                     // the cache (recomputed on rebuild from the relationship
@@ -4217,7 +4220,7 @@ pub(crate) fn handle_git_backend_command(
                             .relationships
                             .iter()
                             .map(|rel| {
-                                let (id, title) = match backend.get_requirement(&rel.target_id) {
+                                let (id, title) = match read_target(&rel.target_id) {
                                     Ok(Some(t)) => (t.display_id(), t.title.clone()),
                                     _ => ("(unknown)".to_string(), String::new()),
                                 };
@@ -4365,7 +4368,7 @@ pub(crate) fn handle_git_backend_command(
                             .relationships
                             .iter()
                             .filter(|rel| matches!(rel.rel_type, RelationshipType::BlockedBy))
-                            .map(|rel| match backend.get_requirement(&rel.target_id) {
+                            .map(|rel| match read_target(&rel.target_id) {
                                 Ok(Some(blocker)) => serde_json::json!({
                                     "id": blocker.display_id(),
                                     "status": blocker.status.to_string(),
@@ -4516,7 +4519,7 @@ pub(crate) fn handle_git_backend_command(
                             let mut rows: Vec<Vec<String>> = Vec::new();
                             for rel in &req.relationships {
                                 let label = rel_type_label(&rel.rel_type);
-                                let (tid, ttitle) = match backend.get_requirement(&rel.target_id) {
+                                let (tid, ttitle) = match read_target(&rel.target_id) {
                                     Ok(Some(t)) => (t.display_id(), t.title.clone()),
                                     _ => ("(unknown)".to_string(), String::new()),
                                 };
@@ -4541,9 +4544,7 @@ pub(crate) fn handle_git_backend_command(
                             let mut rows = Vec::new();
                             let mut unsatisfied = 0usize;
                             for target in blocker_targets {
-                                let (id, status, satisfied) = match backend
-                                    .get_requirement(&target)?
-                                {
+                                let (id, status, satisfied) = match read_target(&target)? {
                                     Some(blocker) => {
                                         let satisfied =
                                             matches!(blocker.status, RequirementStatus::Completed);
@@ -4615,7 +4616,7 @@ pub(crate) fn handle_git_backend_command(
                         // trace:BUG-1471 | ai:claude
                         let mut rels: Vec<CardRel> = Vec::new();
                         for rel in &req.relationships {
-                            let (rid, rtitle) = match backend.get_requirement(&rel.target_id) {
+                            let (rid, rtitle) = match read_target(&rel.target_id) {
                                 Ok(Some(t)) => (t.display_id(), t.title.clone()),
                                 _ => ("(unknown)".to_string(), String::new()),
                             };
@@ -4800,7 +4801,7 @@ pub(crate) fn handle_git_backend_command(
                             println!("{}:", "Relations".bold());
                             for rel in req.relationships.iter().take(TRUNCATE_AT) {
                                 let phrase = relationship_phrase(&rel.rel_type);
-                                match backend.get_requirement(&rel.target_id)? {
+                                match read_target(&rel.target_id)? {
                                     Some(t) => println!(
                                         "  {} {} {} ({})",
                                         crate::glyph(crate::glyphs::Glyph::SubArrow),
@@ -4869,7 +4870,7 @@ pub(crate) fn handle_git_backend_command(
                         println!("\n{}:", "Blockers".bold());
                         let mut unsatisfied = 0;
                         for target in &blocker_targets {
-                            let (sid, status, satisfied) = match backend.get_requirement(target)? {
+                            let (sid, status, satisfied) = match read_target(target)? {
                                 Some(b) => {
                                     let satisfied =
                                         matches!(b.status, RequirementStatus::Completed);
