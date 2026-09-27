@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-27T03:27:19.358139786Z
+modified_at: 2026-09-27T03:27:53.650400027Z
 req_type: Story
 tags:
 - aida:history
@@ -215,4 +215,9 @@ comments:
     4. Advisor reads that fresh verdict and resolves rework sufficiency; only then can an eligible, CI-green change go to the integrator for mechanical merge. HOLD remains until gates are resolved. No implementation approval, self-review, merge, or implementation dispatch is granted by this disposition.
   created_at: 2026-09-27T03:27:19.358111821Z
   modified_at: 2026-09-27T03:27:19.358111821Z
+- id: 01a0e0e7-a7b9-7892-944f-2a8d6f997844
+  author: joe
+  content: 'Independent advisor HOLD / REWORK: see durable disposition and codex brief STORY-1477-2026-09-27T032743Z.md; metadata-only, no dispatch or merge.'
+  created_at: 2026-09-27T03:27:53.273799304Z
+  modified_at: 2026-09-27T03:27:53.273799304Z
 execution_mode: drive
