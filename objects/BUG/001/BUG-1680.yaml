@@ -3,12 +3,12 @@ spec_id: BUG-1680
 agreed_id: BUG-1680
 title: aida ps suggests salvage-committing untracked files onto main for dead harness sessions on the main checkout, repeated once per dead session
 description: 'Seen 2026-09-26 in aida ps: five identical ''Salvageable harness-worktree /home/joe/ai/aida (branch main) ... git add -A && git commit -m "wip: salvage main"'' rows. The only ''uncommitted work'' was untracked tool directories (.agents/, .codegraph/, target-review/). Following the hint commits junk straight to the default branch. Acceptance: 1. Never suggest a salvage commit on the default branch (or any protected branch); instead suggest inspecting the files. 2. Untracked-only trees are not ''uncommitted work'' for salvage purposes unless the files are inside tracked directories touched by the session (or say ''untracked files only''). 3. Rows for the same worktree path are shown once with a count. 4. Fixture tests for each.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:51:41.252866288Z
-modified_at: 2026-09-27T11:00:23.766939970Z
+modified_at: 2026-09-27T11:00:55.110180886Z
 req_type: Bug
 comments:
 - id: 01a0e232-2b80-7730-9a95-c52e76d1616b
@@ -2227,3 +2227,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a0e286-6ac6-78d0-b670-72bfefa8e853
+  author: aida-session-start
+  timestamp: 2026-09-27T11:00:55.110180472Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
