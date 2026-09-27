@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:47:36.637006946Z
-modified_at: 2026-09-26T21:04:24.210835289Z
+modified_at: 2026-09-27T10:25:09.322938853Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -22,3 +22,8 @@ comments:
   created_at: 2026-09-26T21:04:24.210835289Z
   modified_at: 2026-09-26T21:04:24.210835289Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e265-acca-7853-beaf-320b695c1847
+  author: joe
+  content: 'PROXY DECISION (orchestrator for operator): queue TASK-1533 as the next bounded configuration follow-up now that BUG-1655 is completed. Scope is limited to the five named route bindings plus fixture/dry-run verification; do not enable or schedule any job, and do not change live routes outside the versioned project configuration. Verify compatibility with the installed AIDA binary before applying the binding; if it lacks CronJobFailed:<job> support, stop and report the install/post-merge dependency instead of risking a broken config. Windows/macOS are not required for this backlog wave.'
+  created_at: 2026-09-27T10:25:09.322938853Z
+  modified_at: 2026-09-27T10:25:09.322938853Z
