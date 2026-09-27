@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:01:08.750080015Z
-modified_at: 2026-09-27T15:30:39.985238186Z
+modified_at: 2026-09-27T15:32:54.443567686Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -90,6 +90,21 @@ comments:
     — Reviewed by Claude (independent reviewer session), 2026-09-27.
   created_at: 2026-09-27T15:30:39.985238186Z
   modified_at: 2026-09-27T15:30:39.985238186Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e37f-6e2b-7663-98db-b6f437e49bac
+  author: joe
+  content: |-
+    Review: APPROVE (independent review, 2026-09-27, branch claude/task-1521 at f3f0c5989e). Queued for the next integration batch.
+
+    The reviewer did not take the finding on trust — it re-ran the decisive checks itself against the installed Codex 0.157.1 and agy 1.2.12 binaries on this host, read-only, without starting a vendor session. Corroborated: a string census of the agy binary gives ZERO hits for '.antigravity/skills', '.claude/skills' and '.codex/skills', while '.codex/skills' IS present in the Codex wrapper and native binary and '.claude/skills' is entirely absent from both. Versions and the 44 conversation stores matched this host exactly. The 46-versus-23 duplicate-entry arithmetic is internally consistent and follows from the observed no-dedup behaviour.
+
+    Mirror safety verified, which was the review's main risk: 'find aida-core/templates -iname "*seat-parity*"' returns nothing, so seat-parity.md genuinely has no template master and editing it directly was correct; antigravity-mcp-setup.md, codex-mcp-setup.md and aida-mcp-install-matrix.md DO have masters under aida-core/templates/docs/agents/ and the diff leaves them untouched. Evidence-class discipline held: every answer carries direct-observation, vendor-documentation or UNVERIFIED, and the single UNVERIFIED item is never presented as settled elsewhere.
+
+    One honest non-blocking discrepancy the reviewer reported rather than smoothing over: its own '.agents/skills' literal count on the agy binary was 8 against the document's 13. That does not touch a load-bearing claim, since the decisive counts are zero-versus-nonzero and those reproduced exactly. Worth a one-line correction if anyone edits the document.
+
+    NOTE FOR TASK-1519: this finding INVERTS BUG-1639's decision (b). That decision kept maintaining a real .codex/skills because 'keeping it identical is strictly safer than leaving stale duplicates'. Measured against a real pack, identical does not remove the duplicate, it makes it undetectable — Codex lists both copies under the same name with no dedup. So TASK-1519 should PRUNE for Codex, not freeze. That is a design decision to revisit deliberately, not something an implementer should fold in silently.
+  created_at: 2026-09-27T15:32:54.443567686Z
+  modified_at: 2026-09-27T15:32:54.443567686Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0de73-4407-7a81-8820-ee688e7504f1
