@@ -9,12 +9,12 @@ description: |+
   2. For identical since/until filters, indexed and Git-walk history results match, including the far-future bound.
   3. Ordinary past/future bounds retain existing boundary semantics; use fixture events only and add tests that fail against the current Git-walk behavior.
 
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T02:19:20.422469520Z
-modified_at: 2026-09-27T12:08:27.911827063Z
+modified_at: 2026-09-27T16:53:33.294095888Z
 req_type: Task
 tags:
 - from-implementer:STORY-1477
@@ -53,3 +53,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0e3c9-43bc-7d01-b670-8fe1615f6e03
+  author: aida-auto-bump
+  timestamp: 2026-09-27T16:53:33.244406080Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0e3c9-43ee-71b1-a3ff-7a00dfe3b4d9
+  timestamp: 2026-09-27T16:53:33.294086109Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/antigravity/SPEC-441-2026-09-27T115239Z.md.acked
+  commit_sha: a1582e8edf5c0eddc68703ba4e1d46ea46ad3f69
+  summary: AC1 2030/2100 fixture includes 2025+2026; AC2 index/git parity and all-filter test pass; AC3 past, exact until/since boundaries pass; fmt clean. RFC3339 offsets normalize to epoch; numeric/@ use seconds; CLI resolves local ISO forms; invalid raw falls back to Git walk.
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T16:53:33.244379162Z
+  completion_sha: a1582e8edf5c0eddc68703ba4e1d46ea46ad3f69
