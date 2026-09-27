@@ -20,15 +20,23 @@ description: |
   2. `aida list --status deferred` returns every spec with deferred = true; a fixture test proves it.
   3. Un-deferring restores the prior status rather than stranding the spec; a fixture test covers the round trip.
   4. A fixture test asserts the defer path and the show/list surfaces agree on one answer.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:44:26.230904362Z
-modified_at: 2026-09-27T14:44:26.230904362Z
+modified_at: 2026-09-27T14:44:39.029955123Z
 req_type: Bug
 tags:
 - reporting cli defer
+history:
+- id: 01a0e353-3ff5-7c90-88e4-2cfa5ee01388
+  author: joe
+  timestamp: 2026-09-27T14:44:39.029952701Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
   branch: main
