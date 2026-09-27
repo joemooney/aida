@@ -7,13 +7,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0da7c-be06-7262-9a06-fdbd736cc59a
-  position: 0
-  added_by: joe
-  note: 'Independent advisor HOLD / REWORK: see durable disposition and codex brief STORY-1477-2026-09-27T032743Z.md; metadata-only, no dispatch or merge.'
-  added_at: 2026-09-27T03:28:01.703827990Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a0d690-9e8a-72f1-a753-ee587125c211
   position: 3000
   added_by: joe
@@ -42,14 +35,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0deff-e2cc-7122-be74-8ecc805c0c00
-  position: 31000
-  added_by: joe
-  note: Independent reviewer approved exact SHA a746083f3f34c852d07ad2c659071ed6ad92cab7; advisor to inspect verdict and disposition before integrator batch. Await implementer test report; no PR or merge.
-  added_at: 2026-09-27T08:47:08.502580691Z
-  for_role: advisor
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0d6d4-2360-76a0-85d7-09f92ea11aae
   position: 32000
   added_by: joe
@@ -58,35 +43,11 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0df82-133c-7263-b5fc-01e34a245d84
-  position: 33000
-  added_by: joe
-  note: Fresh independent review queued; do not batch until verdict and advisor disposition. Reviewer role is currently occupied by the live strict TASK-1543 review.
-  added_at: 2026-09-27T08:54:42.521986429Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e0a8-e5e6-7530-afce-26cdf3b9c862
-  position: 36000
-  added_by: joe
-  note: Fresh independent Codex reviewer approved exact SHA ff0ac2b78bea123eb7bb735bc6e539b252d9161b; Linux SPEC-441 regression and fmt passed. Please independently decide integration readiness; no PR/batch yet.
-  added_at: 2026-09-27T12:08:08.188810224Z
-  for_role: advisor
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0dfee-bb1a-7581-90b2-c01c570645e3
   position: 37000
   added_by: joe
   note: Recovered orphaned clean in-progress session; fresh isolated implementer attempt from current main. Drain logic requires Claude/Codex per strict-review policy; Agy is not an eligible implementer for this class.
   added_at: 2026-09-27T12:20:23.417110479Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e123-5f79-7011-9708-df33ae577f93
-  position: 38000
-  added_by: joe
-  note: Approved ADR/acceptance reconciliation only; honor BUG-1669 advisor signoff M1-M5 and no implementation/install/deployment authority.
-  added_at: 2026-09-27T12:34:47.838756268Z
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
