@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:52.109830507Z
-modified_at: 2026-09-27T02:15:30.330525885Z
+modified_at: 2026-09-27T05:57:50.379782183Z
 req_type: Bug
 comments:
 - id: 01a0e075-dce9-7d13-a5d5-6314b8f958e6
@@ -47,3 +47,17 @@ comments:
   content: 'PRODUCT ROUTE (2026-09-26): Independent review and required CI are green at 6022ac539facfc0d5a60168f7df545ef779e71fa. Per Joe''s batching preference, do not merge PR #2221 standalone. Hold its exact reviewed branch for the next integration batch after batch 103, together with other reviewed post-103 work; rerun combined CI and advisor gate there. Keep this PR open as review evidence.'
   created_at: 2026-09-27T02:15:30.330525885Z
   modified_at: 2026-09-27T02:15:30.330525885Z
+- id: 01a0e170-f0ab-7550-95ad-69c9c1b4552e
+  author: codex (independent batch reviewer)
+  content: |
+    BATCH104 COMBINED-HEAD CODE REVIEW: APPROVE — draft PR #2229, exact assembly SHA 679928a9543e37719d71ca1ff65cc3766d3cfaa5 on main base f936ea71e5132079950712c82d94d2eb2a581635. This is an independent integration verdict, separate from the original source verdicts and advisor gates. Rechecked GitHub immediately before recording: PR OPEN/DRAFT and head/base unchanged.
+
+    All four exact approved source heads are ancestors: BUG-1678 6022ac539facfc0d5a60168f7df545ef779e71fa; BUG-1683 645c260d6206cbfaaa969d5305bc2eefd3f922cf; TASK-1535 dd21f4342b50990a1ac25234f19bc8b88e500033; BUG-1682 11bd80bea5bd50490009ccdfdda9dbe005982406. Read the source acceptance and advisor PASS comments 01a0e0a1-47d5-70a0-a51b-56ec5a7c862b, 01a0e0ac-6d0e-74d0-b743-6979dd4a20b0, 01a0e0eb-ffa6-7862-a986-fa001d1b2684, 01a0e143-b6de-7a81-9926-7db3273300ee.
+
+    Inspected exact main-to-assembly diff and merge ancestry. queue_cmd.rs combines the BUG-1682 fail-closed global queue pre-reads with BUG-1683 main-worktree drain-lock acquisition for queue integrate. The queue load occurs before global add/remove; add/remove acquire the permanent per-role sidecar before rereading and publishing atomically. No lock-order inversion or nested global lock is introduced by the combined diff. Corrupt queue/read errors propagate from the CLI pre-reads and from guarded mutation. Position selection remains outside the guard, an expressly accepted BUG-1682 limit. Drain acquisition now refuses an observed-live PID/start identity regardless of age, including the integration path; shared TTL remains distinct. The BUG-1678 command-scoped reader and TASK-1535 route/diagnostic changes are in independent files without semantic conflict.
+
+    The sole manual conflict is OVERVIEW.md in the final merge. Its Drain ownership and Global queue persistence paragraphs are both retained, with the BUG-1682 trace intact and accurate scope limits. git diff --check passed. Integrator reported focused 9 BUG-1682 and 2 BUG-1683 tests, formatting and portability checks passing; these are integrator evidence, not independently rerun here. No broad workspace or CI claim is made.
+
+    No blocking combined-head finding. CI Ubuntu/macOS/Windows is PENDING and remains a mandatory separate gate. Code APPROVE is not merge readiness. No code, PR, status, or merge action performed by this reviewer.
+  created_at: 2026-09-27T05:57:50.379782183Z
+  modified_at: 2026-09-27T05:57:50.379782183Z
