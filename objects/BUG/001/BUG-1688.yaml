@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:58:26.483962647Z
-modified_at: 2026-09-27T14:58:46.374948559Z
+modified_at: 2026-09-27T14:58:47.499010242Z
 req_type: Bug
 tags:
 - authority security launch scripts from:TASK-1549
@@ -49,3 +49,13 @@ filed_at:
   aida_build_sha: 7c6faed690
   vendor: antigravity
   session: da36c066-c384-494e-a7cf-abffb3cfe52d
+decision_request:
+  question: Gate the five shipped scripts that construct full-access vendor argv, ahead of the protected broker?
+  choices:
+  - label: Approve
+    consequence: removes the cheap part of BUG-1669's exposure now; no broker, backend or install needed; interrupts no unattended work
+    resolution: approve and queue BUG-1688
+  - label: Wait for the broker
+    consequence: exposure stays on the demo and ablation scripts until the protected boundary ships
+    resolution: leave BUG-1688 unapproved, revisit after SPIKE-91
+  asked_at: 2026-09-27T14:58:47.499010242Z
