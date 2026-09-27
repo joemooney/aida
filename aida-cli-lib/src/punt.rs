@@ -186,6 +186,16 @@ pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Res
                 },
             ),
         );
+        // STORY-1480: a punt parks the spec until a human or the advisor
+        // answers it. `on` follows the record's escalation: an escalated punt
+        // waits on a human, an unescalated design fork waits on the advisor.
+        // trace:STORY-1480 | ai:claude
+        let on = if record.escalation_reason.is_some() {
+            crate::events::PARKED_ON_HUMAN
+        } else {
+            crate::events::PARKED_ON_ADVISOR
+        };
+        crate::events::record_spec_parked(project_root, &record.spec, on, &record.detail, "punt");
     }
     // Check telemetry opt-out
     if !crate::usage::is_enabled(Some(project_root)) {

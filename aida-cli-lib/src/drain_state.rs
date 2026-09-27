@@ -843,6 +843,55 @@ fn set_phase_inner(
     );
 }
 
+/// STORY-1480: parse a `current_phase` label (`"{idx} ({slug})"`) back into its
+/// parts. Pure so the round-trip with the label this module writes is testable.
+/// `None` for anything that is not that shape, so a legacy or hand-edited
+/// drain-state file yields no phase-end record rather than a wrong one.
+// trace:STORY-1480 | ai:claude
+pub(crate) fn parse_phase_label(label: &str) -> Option<(i32, String)> {
+    let (idx, rest) = label.split_once(' ')?;
+    let idx: i32 = idx.trim().parse().ok()?;
+    let slug = rest.trim().strip_prefix('(')?.strip_suffix(')')?.trim();
+    if slug.is_empty() {
+        return None;
+    }
+    Some((idx, slug.to_string()))
+}
+
+/// STORY-1480: record the measured END of the phase the drain is leaving.
+///
+/// `PhaseEntered` alone gives a phase a start and no end, so its length could
+/// only be guessed from whatever event happened to come next — and the LAST
+/// phase of a run had no next event at all. This emits the closing half at the
+/// two moments a phase demonstrably stops: the drain announcing another phase,
+/// and the member reaching a terminal outcome.
+///
+/// Emitted only when the phase being closed belongs to `spec`, so a drain
+/// advancing to a DIFFERENT member cannot close the previous member's phase
+/// twice (that member's own terminal outcome already closed it).
+// trace:STORY-1480 | ai:claude
+fn emit_phase_ended(project_root: &Path, state: &DrainState, spec: &str, outcome: &'static str) {
+    if state.current.as_deref() != Some(spec) {
+        return;
+    }
+    let Some((idx, slug)) = state.current_phase.as_deref().and_then(parse_phase_label) else {
+        return;
+    };
+    crate::events::emit(
+        project_root,
+        &crate::events::Event::new(
+            Some(spec.to_string()),
+            state.run_uuid.clone(),
+            crate::events::EventKind::PhaseEnded {
+                idx,
+                slug,
+                attempt: state.phase_attempt.unwrap_or(1),
+                outcome: outcome.to_string(),
+            },
+        ),
+    );
+}
+
 /// BUG-1290: the ONE site that announces a phase entry and emits
 /// `PhaseEntered`. Every announcing caller (`set_phase`, `set_phase_with_tuning`,
 /// and `set_phase_session_vendor`'s `announce: true` shape) routes through
@@ -875,6 +924,20 @@ fn set_phase_inner_with_tuning(
     // `SpecRetried` event happening to sit next to it in the feed.
     let same_entry = state.current.as_deref() == Some(spec)
         && state.current_phase.as_deref() == Some(phase_label.as_str());
+    // STORY-1480: close the phase we are leaving BEFORE its label is
+    // overwritten. Re-entering the SAME phase means that attempt did not
+    // finish; entering a later one means it did. Both are observations, not an
+    // invented success flag. trace:STORY-1480 | ai:claude
+    emit_phase_ended(
+        project_root,
+        &state,
+        spec,
+        if same_entry {
+            crate::events::PHASE_REENTERED
+        } else {
+            crate::events::PHASE_ADVANCED
+        },
+    );
     let attempt = if same_entry {
         state.phase_attempt.unwrap_or(1).saturating_add(1)
     } else {
@@ -1029,6 +1092,12 @@ pub(crate) fn set_member_outcome(
         }
         member.finished_at = Some(chrono::Utc::now().to_rfc3339());
     }
+    // STORY-1480: the member is terminal, so whatever phase it was in ends
+    // here. Emitted before the label is cleared, and before `PhaseDonePr`, so
+    // the phase's end is on record even when the run stops at phase 6 (which
+    // no later `PhaseEntered` would ever close).
+    // trace:STORY-1480 | ai:claude
+    emit_phase_ended(project_root, &state, spec, crate::events::PHASE_RUN_ENDED);
     // The member is no longer the active pipeline — clear the phase so a stale
     // `current_phase` does not outlive the run that set it.
     state.current_phase = None;
@@ -3043,5 +3112,124 @@ mod tests {
         assert!(predict_batch("autonomy-modes").contains("batch:autonomy-modes"));
         assert!(predict_batch("autonomy-modes").contains("NOT"));
         assert!(predict_next_n(3).contains("next 3"));
+    }
+}
+
+/// STORY-1480: a drain phase now has a measured END, not just a start.
+#[cfg(test)]
+mod story_1480_phase_end_tests {
+    use super::*;
+    use crate::events::{self, EventKind};
+
+    fn ended(root: &std::path::Path) -> Vec<(i32, String, u32, String)> {
+        events::read_all(root)
+            .into_iter()
+            .filter_map(|e| match e.kind {
+                EventKind::PhaseEnded {
+                    idx,
+                    slug,
+                    attempt,
+                    outcome,
+                } => Some((idx, slug, attempt, outcome)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn state() -> DrainState {
+        let mut s = DrainState::new_single("STORY-1", "run-1", true);
+        s.members = vec![DrainMember::queued("STORY-1")];
+        s
+    }
+
+    /// Advancing to a later phase closes the previous one as `advanced`.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn advancing_closes_the_previous_phase() {
+        let _on = crate::test_env::EnvVarGuard::unset(events::EVENTS_DISABLE_ENV);
+        let dir = tempfile::tempdir().unwrap();
+        state().write(dir.path()).unwrap();
+
+        set_phase(dir.path(), "STORY-1", 1, "implementer");
+        assert!(
+            ended(dir.path()).is_empty(),
+            "the first entry closes nothing"
+        );
+
+        set_phase(dir.path(), "STORY-1", 2, "ci");
+        let closed = ended(dir.path());
+        assert_eq!(closed.len(), 1);
+        assert_eq!(closed[0].0, 1);
+        assert_eq!(closed[0].1, "implementer");
+        assert_eq!(closed[0].3, events::PHASE_ADVANCED);
+    }
+
+    /// Re-entering the SAME phase records that the attempt did not finish —
+    /// an observation, not an invented failure flag.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn a_retry_closes_the_attempt_as_reentered() {
+        let _on = crate::test_env::EnvVarGuard::unset(events::EVENTS_DISABLE_ENV);
+        let dir = tempfile::tempdir().unwrap();
+        state().write(dir.path()).unwrap();
+        set_phase(dir.path(), "STORY-1", 3, "reviewer");
+        set_phase(dir.path(), "STORY-1", 3, "reviewer");
+        let closed = ended(dir.path());
+        assert_eq!(closed.len(), 1);
+        assert_eq!(closed[0].2, 1, "the FIRST attempt is the one that closed");
+        assert_eq!(closed[0].3, events::PHASE_REENTERED);
+    }
+
+    /// The LAST phase of a run — which no later `PhaseEntered` would ever
+    /// close — is closed by the member's terminal outcome. Before this, phase 6
+    /// had a start and no end on every run that ever shipped.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn a_terminal_outcome_closes_the_last_phase() {
+        let _on = crate::test_env::EnvVarGuard::unset(events::EVENTS_DISABLE_ENV);
+        let dir = tempfile::tempdir().unwrap();
+        state().write(dir.path()).unwrap();
+        set_phase(dir.path(), "STORY-1", 6, "build");
+        set_member_outcome(dir.path(), "STORY-1", true, Some(42));
+        let closed = ended(dir.path());
+        assert_eq!(closed.len(), 1);
+        assert_eq!(closed[0].1, "build");
+        assert_eq!(closed[0].3, events::PHASE_RUN_ENDED);
+    }
+
+    /// A drain advancing to a DIFFERENT member must not close that member's
+    /// phase a second time — its own terminal outcome already did.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn advancing_to_another_member_does_not_double_close() {
+        let _on = crate::test_env::EnvVarGuard::unset(events::EVENTS_DISABLE_ENV);
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = state();
+        s.members.push(DrainMember::queued("STORY-2"));
+        s.write(dir.path()).unwrap();
+        set_phase(dir.path(), "STORY-1", 6, "build");
+        set_member_outcome(dir.path(), "STORY-1", true, None);
+        set_phase(dir.path(), "STORY-2", 1, "implementer");
+        let closed = ended(dir.path());
+        assert_eq!(
+            closed.len(),
+            1,
+            "exactly one close for STORY-1, none attributed across members"
+        );
+    }
+
+    /// The phase label round-trips, and anything else yields no record rather
+    /// than a wrong one.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn phase_label_parsing_is_total() {
+        assert_eq!(
+            parse_phase_label("3 (reviewer)"),
+            Some((3, "reviewer".to_string()))
+        );
+        assert_eq!(parse_phase_label("reviewer"), None);
+        assert_eq!(parse_phase_label("3 reviewer"), None);
+        assert_eq!(parse_phase_label("x (reviewer)"), None);
+        assert_eq!(parse_phase_label("3 ()"), None);
     }
 }

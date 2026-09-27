@@ -205,4 +205,14 @@ pub(crate) fn emit_spec_completed(
             },
         ),
     );
+    // STORY-1480 / ADR-60: the spec is terminal, so its finished span list is
+    // published to the store alongside the completion write. Until now every
+    // span lived only in this clone's `.aida/events.jsonl`, so a spec completed
+    // on one machine had no measurable cycle time on any other.
+    //
+    // Emitted AFTER `SpecCompleted` deliberately: the publish folds the local
+    // stream, and the completion event is itself part of the record's window.
+    // Best-effort by contract — a timing record can never fail a completion.
+    // trace:STORY-1480 | ai:claude
+    crate::spec_timing::publish_best_effort(project_root, spec_id);
 }

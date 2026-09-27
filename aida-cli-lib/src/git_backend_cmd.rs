@@ -7802,6 +7802,7 @@ pub(crate) fn handle_git_backend_command(
             archived,
             deferred,
             include_meta,
+            timing,
             cmd,
         } => {
             // TASK-1480: `aida history <SPEC-ID>` is shorthand for `aida
@@ -7814,6 +7815,17 @@ pub(crate) fn handle_git_backend_command(
             // BUG-1631: `--json` / `--format json` is the events feed's
             // JSON projection. trace:BUG-1631 | ai:claude
             let json = *json || crate::output_format_is_json();
+            // STORY-1480: the published timing record is a store artifact, not
+            // the spec git log, so it answers before any commit walk.
+            // trace:STORY-1480 | ai:claude
+            if *timing {
+                let Some(requested) = requested_id else {
+                    anyhow::bail!(
+                        "`--timing` shows one spec's published timing record — pass a SPEC-ID"
+                    );
+                };
+                return crate::spec_timing::report(requested, json);
+            }
             if let Some(kind) = kind {
                 if json {
                     anyhow::bail!(

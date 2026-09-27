@@ -2576,6 +2576,17 @@ fn finish_escalated(
                 },
             ),
         );
+        // STORY-1480: the escalation also parks the spec until a human
+        // decides, and that wait was reported as unknown time. Recorded beside
+        // the escalation rather than inferred from it.
+        // trace:STORY-1480 | ai:claude
+        crate::events::record_spec_parked(
+            root,
+            spec,
+            crate::events::PARKED_ON_HUMAN,
+            reason,
+            "escalation",
+        );
     }
     // The escalation surfaced in a specific phase — phase 3 for a merge
     // decision, phase 1 (the punt) for a design-fork.

@@ -64,6 +64,39 @@ whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude /
 
 ## Migration notes
 
+- `1.6.0` — three new event kinds make cycle time measurable, and one
+  additive field carries a wait's start (STORY-1480, ADR-60):
+  - `PhaseEnded` (`idx`, `slug`, `attempt`, `outcome`) is the closing half of
+    `PhaseEntered`. `outcome` is `advanced` (a later phase was entered, so this
+    one finished), `reentered` (the same phase was entered again, so this
+    attempt did not finish), or `run-ended` (the member went terminal while in
+    this phase). Before `1.6.0` a phase had a start and no end, so the LAST
+    phase of every run — and any phase followed by a gap — had **no measured
+    duration at all**; a duration computed from an older log is an inference
+    from the next event, not a measurement.
+  - `ActivitySpan` (`activity`, `started_at`, `outcome`, optional `detail`) is
+    one COMPLETE span of an activity that is not a numbered drain phase: an
+    interactive session (`aida session end`), an `aida integrate --run` member,
+    a planning session or `aida plan verify`, and the compile/guard step inside
+    the implementer phase. It is emitted once, at the end, and its event `ts`
+    is the span's end — so both stamps come from one host in one process.
+  - `SpecParked` (`on` = `human`|`advisor`, `reason`, `via` = `shelve`|`punt`|
+    `pr-hold`|`loop-guard`|`escalation`) is the "waiting since" marker. It sits
+    BESIDE the parking site's own actionable verb, never instead of it.
+    `SpecRequeued` clears it and now carries an additive `parked_since`. An
+    absent `parked_since` means the park was **not recorded**, never that the
+    wait was zero.
+  - All three are **not actionable** (absorbed by `aida watch`). An `aida watch`
+    older than `1.6.0` reads them as `Unknown`, which is actionable and wakes
+    the supervisor, so upgrade those binaries.
+  - Also in `1.6.0`: `.aida/events.jsonl` is resolved to the MAIN worktree for
+    every linked worktree of a repository, so one repo has one stream. Before
+    this, an event emitted inside a session worktree landed in that worktree's
+    own file and no reader in the main checkout ever saw it — measured on
+    2026-09-27 as four worktrees each holding a single orphaned
+    `DispositionChanged` line. Any activity count over a log written before
+    `1.6.0` is a lower bound for that reason too.
+  - Additive only; no covered field changed shape. // trace:STORY-1480 | ai:claude
 - `1.5.0` — the new `SpecRequeued` event kind records a spec leaving
   NeedsAttention and going back into flight (`via`, optional `actor`, `from`,
   `to`, plus `cleared_tags`/`kept_tags` when present). Dropping a parked

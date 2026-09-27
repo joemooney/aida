@@ -325,6 +325,31 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
         EventKind::PhaseEntered { idx, slug, .. } => {
             ("phase-entered", format!("phase {} ({})", idx, slug))
         }
+        // trace:STORY-1480 | ai:claude
+        EventKind::PhaseEnded {
+            idx, slug, outcome, ..
+        } => (
+            "phase-ended",
+            format!("phase {idx} ({slug}) ended: {outcome}"),
+        ),
+        // trace:STORY-1480 | ai:claude
+        EventKind::ActivitySpan {
+            activity,
+            started_at,
+            outcome,
+            ..
+        } => (
+            "activity-span",
+            // `describe` is pure and cannot see the event's own `ts` (the
+            // span's END), so the label states the start rather than
+            // differencing against the wall clock at print time — which would
+            // report a stale replayed line as if it had just happened.
+            format!("{activity} {outcome}, started {}", started_at.to_rfc3339()),
+        ),
+        // trace:STORY-1480 | ai:claude
+        EventKind::SpecParked { on, reason, via } => {
+            ("spec-parked", format!("parked on {on} via {via}: {reason}"))
+        }
         EventKind::CiTerminal { green } => (
             "ci-terminal",
             if *green { "CI green" } else { "CI red" }.to_string(),

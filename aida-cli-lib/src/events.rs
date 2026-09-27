@@ -195,6 +195,15 @@ pub enum EventKind {
         /// stays parked until one clears them.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         kept_tags: Vec<String>,
+        /// STORY-1480: the timestamp of the [`SpecParked`](Self::SpecParked)
+        /// this requeue clears, so the wait has a measured START and is
+        /// attributed to `parked` rather than reported as unknown time.
+        /// `None` when no park marker was found in the local stream — an
+        /// absent value means the park was not recorded, never that the wait
+        /// was zero.
+        // trace:STORY-1480 | ai:claude
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parked_since: Option<DateTime<Utc>>,
     },
     /// STORY-1051: the supervisor gave up on a transient park after the cap and
     /// reclassified it to needs-human triage. **Actionable.**
@@ -456,6 +465,80 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         redrive_held: Option<String>,
     },
+    /// STORY-1480: the measured END of a numbered drain phase — the companion
+    /// `PhaseEntered` never had. Without it a phase's duration can only be
+    /// inferred from whatever event happens to come next, so the LAST phase of
+    /// a run, and any phase followed by a gap, have no measured length at all.
+    ///
+    /// `outcome` states HOW the phase ended, as observed, with no invented
+    /// success flag:
+    /// - `advanced` — a LATER phase was entered, so this one finished.
+    /// - `reentered` — the SAME phase was entered again, so this attempt did
+    ///   not finish.
+    /// - `run-ended` — the member reached a terminal outcome while in this
+    ///   phase (shipped, shelved, escalated); the phase ended with the run.
+    ///
+    /// **Silent**: a phase boundary is benign churn, exactly like
+    /// [`PhaseEntered`](Self::PhaseEntered).
+    // trace:STORY-1480 | ai:claude
+    PhaseEnded {
+        /// 1-based phase index, matching the `PhaseEntered` it closes.
+        idx: i32,
+        /// Phase machine name, e.g. `implementer`.
+        slug: String,
+        /// The attempt this closes, matching `PhaseEntered.attempt`.
+        #[serde(default = "default_phase_attempt")]
+        attempt: u32,
+        /// `advanced`, `reentered` or `run-ended` — see the variant docs.
+        outcome: String,
+    },
+    /// STORY-1480: one COMPLETE span of an activity that is not a numbered
+    /// drain phase — an interactive implementer session, an `aida integrate`
+    /// member, a planning step, or the compile/guard step inside the
+    /// implementer phase.
+    ///
+    /// It is emitted once, at the END of the activity, and carries its own
+    /// `started_at`. Both stamps therefore come from ONE host in ONE process,
+    /// which is what makes the span a single-clock measurement; an emitter
+    /// that dies mid-activity records nothing rather than leaving a dangling
+    /// start that a reader would have to guess an end for.
+    ///
+    /// Deliberately NOT modelled as a `PhaseEntered`/`PhaseEnded` pair: those
+    /// are read as pipeline phases by the token ledger and the watch feed, and
+    /// an activity with no pipeline index must not be mistaken for one.
+    ///
+    /// **Silent**: a finished span is a measurement, not a decision point.
+    // trace:STORY-1480 | ai:claude
+    ActivitySpan {
+        /// Activity name, e.g. `implementer`, `integrate`, `plan`, `compile`.
+        activity: String,
+        /// When the activity started, on this same host's clock. The event's
+        /// own `ts` is its end.
+        started_at: DateTime<Utc>,
+        /// How it ended: `completed`, `failed`, `refused` or `abandoned`.
+        outcome: String,
+        /// Free-text detail, when the emitter has one worth keeping.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
+    },
+    /// STORY-1480: work PARKED on a human or the advisor — the "waiting since"
+    /// marker that makes a wait attributable instead of reported as unknown
+    /// time. Cleared by the matching [`SpecRequeued`](Self::SpecRequeued),
+    /// whose `parked_since` carries this event's timestamp back.
+    ///
+    /// **Silent**: every parking door that needs a human already emits its own
+    /// actionable verb (`SpecShelved`, `PuntFiled`, `AdvisorEscalated`,
+    /// `GateHeld`). This is the wait-attribution record that sits beside it, so
+    /// making it actionable too would double-wake the supervisor.
+    // trace:STORY-1480 | ai:claude
+    SpecParked {
+        /// Who the work is waiting on: `human` or `advisor`.
+        on: String,
+        /// Why it parked, as the parking site stated it.
+        reason: String,
+        /// The door: `shelve`, `punt`, `pr-hold`, `loop-guard`, `escalation`.
+        via: String,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -520,7 +603,13 @@ impl EventKind {
             // for the trail, not a new decision point.
             | EventKind::SpecRequeued { .. }
             // STORY-1436: a correct refusal is recorded for counting, not a wake.
-            | EventKind::GateHeld { .. } => false,
+            | EventKind::GateHeld { .. }
+            // STORY-1480: timing records. A phase boundary and a finished span
+            // are measurements; a park marker sits beside an already-actionable
+            // verb. None of them is a new decision point.
+            | EventKind::PhaseEnded { .. }
+            | EventKind::ActivitySpan { .. }
+            | EventKind::SpecParked { .. } => false,
             // STORY-1218: a tick wakes only for what needs a human.
             EventKind::ShiftTick {
                 breaker,
@@ -579,6 +668,9 @@ impl EventKind {
         match self {
             EventKind::RunStarted => "RunStarted",
             EventKind::PhaseEntered { .. } => "PhaseEntered",
+            EventKind::PhaseEnded { .. } => "PhaseEnded",
+            EventKind::ActivitySpan { .. } => "ActivitySpan",
+            EventKind::SpecParked { .. } => "SpecParked",
             EventKind::CiTerminal { .. } => "CiTerminal",
             EventKind::PhaseDonePr { .. } => "PhaseDonePr",
             EventKind::SpecShelved { .. } => "SpecShelved",
@@ -616,6 +708,9 @@ impl EventKind {
         &[
             "RunStarted",
             "PhaseEntered",
+            "PhaseEnded",
+            "ActivitySpan",
+            "SpecParked",
             "CiTerminal",
             "PhaseDonePr",
             "SpecShelved",
@@ -719,8 +814,71 @@ pub fn active_seat() -> Option<String> {
 }
 
 /// Path to the event stream for a project, given its root directory.
+///
+/// STORY-1480: the root is first resolved through [`stream_root`], so every
+/// clone of one repository — the main checkout and every linked worktree —
+/// appends to and reads ONE stream. Before this, an event emitted from inside a
+/// session worktree landed in that worktree's own `.aida/events.jsonl` and was
+/// invisible to every reader in the main checkout, which is why interactively
+/// worked specs showed the `In Progress -> Done` transition nowhere and their
+/// timelines were mostly unknown time.
 pub fn events_path(project_root: &Path) -> PathBuf {
-    project_root.join(".aida").join("events.jsonl")
+    stream_root(project_root).join(".aida").join("events.jsonl")
+}
+
+/// Resolve the root whose `.aida/` holds the one event stream for this
+/// repository: the MAIN worktree's root when `project_root` is a linked git
+/// worktree, otherwise `project_root` unchanged.
+///
+/// A linked worktree's `.git` is a FILE reading `gitdir: <main>/.git/worktrees/
+/// <name>`, so the main root is that path with the `/.git/worktrees/<name>`
+/// tail removed. Resolution is one small file read — no `git` subprocess —
+/// because this sits on the emit hot path, and it is total: anything it cannot
+/// parse (no `.git`, a `.git` directory, a bare or unusual layout, a temp
+/// fixture) yields `project_root` unchanged.
+// trace:STORY-1480 | ai:claude
+pub fn stream_root(project_root: &Path) -> PathBuf {
+    main_worktree_root(project_root).unwrap_or_else(|| project_root.to_path_buf())
+}
+
+/// The pure half of [`stream_root`]: `Some(main_root)` only when
+/// `project_root` is demonstrably a linked worktree of another checkout.
+// trace:STORY-1480 | ai:claude
+fn main_worktree_root(project_root: &Path) -> Option<PathBuf> {
+    let dot_git = project_root.join(".git");
+    // A main checkout has `.git` as a directory — nothing to resolve.
+    if dot_git.is_dir() {
+        return None;
+    }
+    let pointer = std::fs::read_to_string(&dot_git).ok()?;
+    let gitdir = pointer
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("gitdir:"))?
+        .trim();
+    if gitdir.is_empty() {
+        return None;
+    }
+    let gitdir = Path::new(gitdir);
+    // <main>/.git/worktrees/<name> -> <main>
+    let worktrees = gitdir.parent()?;
+    if worktrees.file_name()? != "worktrees" {
+        return None;
+    }
+    let git_dir = worktrees.parent()?;
+    if git_dir.file_name()? != ".git" {
+        return None;
+    }
+    let main = git_dir.parent()?;
+    // A relative `gitdir:` pointer resolves against the worktree itself.
+    let main = if main.is_absolute() {
+        main.to_path_buf()
+    } else {
+        project_root.join(main)
+    };
+    if main == project_root {
+        return None;
+    }
+    Some(main)
 }
 
 /// STORY-1051: read every event from `.aida/events.jsonl`, oldest first
@@ -791,7 +949,11 @@ pub fn supervisor_redrive_state(project_root: &Path, spec: &str) -> (u32, Option
 /// on-disk footprint is bounded at ~2× the cap.
 // trace:TASK-993 | ai:claude
 pub fn events_archive_path(project_root: &Path) -> PathBuf {
-    project_root.join(".aida").join("events.jsonl.1")
+    // STORY-1480: the archive sits beside the stream it rotates, so it resolves
+    // through the same root.
+    stream_root(project_root)
+        .join(".aida")
+        .join("events.jsonl.1")
 }
 
 /// Default size cap (bytes) above which the event stream is rotated at the next
@@ -1058,6 +1220,146 @@ fn try_emit(project_root: &Path, ev: &Event) -> std::io::Result<()> {
         .open(&path)?;
     file.write_all(line.as_bytes())?;
     Ok(())
+}
+
+/// STORY-1480: activity names carried by [`EventKind::ActivitySpan`]. Kept as
+/// constants because the aggregate cycle-time breakdown classifies by exactly
+/// these strings — a typo at one emit site would otherwise silently become a
+/// new, unclassified activity that reports as unknown time.
+// trace:STORY-1480 | ai:claude
+/// An interactive (non-drain) implementer session: `aida session start` to
+/// `aida session end`.
+pub const ACTIVITY_IMPLEMENTER: &str = "implementer";
+/// One `aida integrate --run` member, start of its drive to its verdict.
+pub const ACTIVITY_INTEGRATE: &str = "integrate";
+/// A planning session or an `aida plan promote`.
+pub const ACTIVITY_PLAN: &str = "plan";
+/// An `aida plan verify` pass.
+pub const ACTIVITY_PLAN_VERIFY: &str = "plan-verify";
+/// The compile + guard step inside the implementer phase — measured
+/// separately from the rest of that phase.
+pub const ACTIVITY_COMPILE: &str = "compile";
+
+/// [`EventKind::ActivitySpan::outcome`] values.
+pub const OUTCOME_COMPLETED: &str = "completed";
+/// The activity ran and failed.
+pub const OUTCOME_FAILED: &str = "failed";
+/// The activity was refused before doing its work (a gate, a guard).
+pub const OUTCOME_REFUSED: &str = "refused";
+/// The activity ended without a verdict (killed, timed out, abandoned).
+pub const OUTCOME_ABANDONED: &str = "abandoned";
+
+/// [`EventKind::PhaseEnded::outcome`] values — see the variant docs.
+pub const PHASE_ADVANCED: &str = "advanced";
+/// The same phase was entered again, so this attempt did not finish.
+pub const PHASE_REENTERED: &str = "reentered";
+/// The member reached a terminal outcome while in this phase.
+pub const PHASE_RUN_ENDED: &str = "run-ended";
+
+/// STORY-1480: who a park is waiting on, carried by
+/// [`EventKind::SpecParked::on`].
+pub const PARKED_ON_HUMAN: &str = "human";
+/// Waiting on the advisor seat.
+pub const PARKED_ON_ADVISOR: &str = "advisor";
+
+/// Build a completed [`EventKind::ActivitySpan`] (pure — the emit is separate so
+/// a test can assert the shape without touching disk). `started_at` MUST come
+/// from the same process that stamps the event, so both ends of the span are one
+/// host's clock.
+// trace:STORY-1480 | ai:claude
+pub fn activity_span_event(
+    spec: Option<String>,
+    activity: &str,
+    started_at: DateTime<Utc>,
+    outcome: &str,
+    detail: Option<String>,
+) -> Event {
+    let mut ev = Event::new(
+        spec,
+        "",
+        EventKind::ActivitySpan {
+            activity: activity.to_string(),
+            started_at,
+            outcome: outcome.to_string(),
+            detail: detail
+                .map(|d| d.trim().to_string())
+                .filter(|d| !d.is_empty()),
+        },
+    );
+    ev.seat = active_seat();
+    ev
+}
+
+/// STORY-1480: record one finished activity span. Best-effort like every other
+/// emit — a failed write can never change what the activity did.
+///
+/// `started_at` is the caller's own [`Utc::now`] from before the work began. A
+/// caller that cannot supply one must not call this: a span with an invented
+/// start is worse than no span at all.
+// trace:STORY-1480 | ai:claude
+pub fn record_activity_span(
+    project_root: &Path,
+    spec: Option<String>,
+    activity: &str,
+    started_at: DateTime<Utc>,
+    outcome: &str,
+    detail: Option<String>,
+) {
+    emit(
+        project_root,
+        &activity_span_event(spec, activity, started_at, outcome, detail),
+    );
+}
+
+/// Build a [`EventKind::SpecParked`] marker (pure).
+// trace:STORY-1480 | ai:claude
+pub fn spec_parked_event(spec: &str, on: &str, reason: &str, via: &str) -> Event {
+    let mut ev = Event::new(
+        Some(spec.to_string()),
+        "",
+        EventKind::SpecParked {
+            on: on.to_string(),
+            reason: reason.trim().to_string(),
+            via: via.to_string(),
+        },
+    );
+    ev.seat = active_seat();
+    ev
+}
+
+/// STORY-1480: record that a spec parked on a human or the advisor, so the wait
+/// that follows has a measured start. Call it beside the parking site's own
+/// actionable event, never instead of it.
+// trace:STORY-1480 | ai:claude
+pub fn record_spec_parked(project_root: &Path, spec: &str, on: &str, reason: &str, via: &str) {
+    emit(project_root, &spec_parked_event(spec, on, reason, via));
+}
+
+/// The timestamp of the most recent [`EventKind::SpecParked`] for `spec` that
+/// has not already been cleared by a later [`EventKind::SpecRequeued`].
+///
+/// `None` means no OPEN park marker is in the local stream — because the spec
+/// was never parked, because the park predates this instrumentation, or because
+/// the stream was rotated. A caller must read `None` as "the wait start was not
+/// recorded", never as "there was no wait".
+// trace:STORY-1480 | ai:claude
+pub fn open_park_since(events: &[Event], spec: &str) -> Option<DateTime<Utc>> {
+    let mut since = None;
+    for ev in events {
+        if !ev
+            .spec
+            .as_deref()
+            .is_some_and(|s| s.eq_ignore_ascii_case(spec))
+        {
+            continue;
+        }
+        match ev.kind {
+            EventKind::SpecParked { .. } => since = Some(ev.ts),
+            EventKind::SpecRequeued { .. } => since = None,
+            _ => {}
+        }
+    }
+    since
 }
 
 /// STORY-1436: gate slugs carried by [`EventKind::GateHeld`]. The first two
@@ -2470,5 +2772,203 @@ mod tests {
         assert_eq!(DEFAULT_EVENTS_MAX_BYTES, 5 * 1024 * 1024);
         // The env parse tolerates surrounding whitespace.
         assert_eq!("  42  ".trim().parse::<u64>().unwrap(), 42);
+    }
+}
+
+/// STORY-1480: the instrumentation gaps this story closed.
+#[cfg(test)]
+mod story_1480_instrumentation_tests {
+    use super::*;
+
+    /// A linked worktree's events land in the MAIN checkout's stream.
+    ///
+    /// This is the measured gap: on 2026-09-27 four session worktrees each held
+    /// a single orphaned `DispositionChanged` line (the `In Progress -> Done`
+    /// transition that closes an implementer span) while every reader looked at
+    /// the main checkout's stream. Those transitions were the reason
+    /// interactively worked specs showed almost nothing but unknown time.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn a_linked_worktree_appends_to_the_main_stream() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        let wt = tmp.path().join("wt-spec-1");
+        std::fs::create_dir_all(main.join(".git").join("worktrees").join("wt-spec-1")).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::write(
+            wt.join(".git"),
+            format!(
+                "gitdir: {}\n",
+                main.join(".git")
+                    .join("worktrees")
+                    .join("wt-spec-1")
+                    .display()
+            ),
+        )
+        .unwrap();
+
+        assert_eq!(stream_root(&wt), main, "a linked worktree resolves to main");
+        assert_eq!(
+            events_path(&wt),
+            main.join(".aida").join("events.jsonl"),
+            "the worktree must not get a stream of its own"
+        );
+        assert_eq!(
+            events_archive_path(&wt),
+            main.join(".aida").join("events.jsonl.1"),
+            "the archive follows the stream it rotates"
+        );
+
+        let _on = crate::test_env::EnvVarGuard::unset(EVENTS_DISABLE_ENV);
+        emit(
+            &wt,
+            &Event::new(Some("S-1".into()), "", EventKind::RunStarted),
+        );
+        assert_eq!(
+            read_all(&main).len(),
+            1,
+            "an event emitted in the worktree must be readable from main"
+        );
+        assert!(
+            !wt.join(".aida").join("events.jsonl").exists(),
+            "no second stream may be created inside the worktree"
+        );
+    }
+
+    /// Resolution is total: a main checkout, a missing `.git`, a pointer that
+    /// is not a worktree gitdir, and a self-referential pointer all leave the
+    /// root alone rather than guessing.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn stream_root_never_guesses() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // No .git at all (a test fixture).
+        let bare = tmp.path().join("bare");
+        std::fs::create_dir_all(&bare).unwrap();
+        assert_eq!(stream_root(&bare), bare);
+
+        // .git is a directory — a main checkout.
+        let main = tmp.path().join("main");
+        std::fs::create_dir_all(main.join(".git")).unwrap();
+        assert_eq!(stream_root(&main), main);
+
+        // A .git file that is not a worktree pointer.
+        let odd = tmp.path().join("odd");
+        std::fs::create_dir_all(&odd).unwrap();
+        std::fs::write(odd.join(".git"), "gitdir: /somewhere/else\n").unwrap();
+        assert_eq!(stream_root(&odd), odd);
+
+        // A pointer with no gitdir line.
+        let junk = tmp.path().join("junk");
+        std::fs::create_dir_all(&junk).unwrap();
+        std::fs::write(junk.join(".git"), "not a pointer\n").unwrap();
+        assert_eq!(stream_root(&junk), junk);
+    }
+
+    /// The three new kinds are silent: a measurement is not a decision point,
+    /// and a park marker sits beside an already-actionable verb.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn timing_kinds_never_wake_the_supervisor() {
+        assert!(!EventKind::PhaseEnded {
+            idx: 1,
+            slug: "implementer".into(),
+            attempt: 1,
+            outcome: PHASE_ADVANCED.into(),
+        }
+        .is_actionable());
+        assert!(!EventKind::ActivitySpan {
+            activity: ACTIVITY_COMPILE.into(),
+            started_at: Utc::now(),
+            outcome: OUTCOME_COMPLETED.into(),
+            detail: None,
+        }
+        .is_actionable());
+        assert!(!EventKind::SpecParked {
+            on: PARKED_ON_HUMAN.into(),
+            reason: "ci red".into(),
+            via: "shelve".into(),
+        }
+        .is_actionable());
+    }
+
+    /// Every new kind is listed for `[schedule]` `on = [...]` matching, so a
+    /// job can route on it and a name typo is caught.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn new_kinds_are_registered_by_name() {
+        for name in ["PhaseEnded", "ActivitySpan", "SpecParked"] {
+            assert!(
+                EventKind::known_names().contains(&name),
+                "{name} is missing from known_names"
+            );
+        }
+    }
+
+    /// An event line written before these fields existed still parses — the
+    /// additive-field contract every other kind in this module keeps.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn a_legacy_requeue_line_still_parses() {
+        let line = r#"{"ts":"2026-09-01T10:00:00Z","spec":"S-1","kind":{"event":"SpecRequeued","via":"edit","from":"Needs Attention","to":"Approved"}}"#;
+        let ev: Event = serde_json::from_str(line).expect("legacy line parses");
+        match ev.kind {
+            EventKind::SpecRequeued { parked_since, .. } => assert!(
+                parked_since.is_none(),
+                "an absent marker means not recorded, not zero wait"
+            ),
+            other => panic!("expected SpecRequeued, got {other:?}"),
+        }
+    }
+
+    /// The open-park scan reports the LATEST uncleared park, and reports
+    /// nothing once a requeue has cleared it.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn open_park_since_tracks_only_an_uncleared_park() {
+        let park = |when: &str| {
+            let mut ev = spec_parked_event("S-1", PARKED_ON_HUMAN, "r", "shelve");
+            ev.ts = DateTime::parse_from_rfc3339(when)
+                .unwrap()
+                .with_timezone(&Utc);
+            ev
+        };
+        let requeue = || {
+            Event::new(
+                Some("S-1".into()),
+                "",
+                EventKind::SpecRequeued {
+                    via: "edit".into(),
+                    actor: None,
+                    from: "Needs Attention".into(),
+                    to: "Approved".into(),
+                    cleared_tags: vec![],
+                    kept_tags: vec![],
+                    parked_since: None,
+                },
+            )
+        };
+
+        assert!(open_park_since(&[], "S-1").is_none());
+        assert!(open_park_since(&[park("2026-09-01T10:00:00Z")], "S-1").is_some());
+        // A second park replaces the first — the newest uncleared one is the
+        // wait actually running.
+        let two = open_park_since(
+            &[park("2026-09-01T10:00:00Z"), park("2026-09-02T10:00:00Z")],
+            "S-1",
+        );
+        assert_eq!(
+            two.map(|t| t.to_rfc3339()),
+            Some("2026-09-02T10:00:00+00:00".to_string())
+        );
+        assert!(
+            open_park_since(&[park("2026-09-01T10:00:00Z"), requeue()], "S-1").is_none(),
+            "a cleared park is no longer open"
+        );
+        assert!(
+            open_park_since(&[park("2026-09-01T10:00:00Z")], "S-2").is_none(),
+            "another spec's park is not this spec's wait"
+        );
     }
 }

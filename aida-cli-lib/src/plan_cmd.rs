@@ -898,6 +898,10 @@ fn plan_fan_out(
 /// (pre-commit-hook-able).
 // trace:TASK-93 | ai:claude
 fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()> {
+    // STORY-1480: the planning step had no event of any kind, so plan time was
+    // unattributed. Stamped before the work so both ends of the span come off
+    // this one process's clock. trace:STORY-1480 | ai:claude
+    let span_started = chrono::Utc::now();
     let content = std::fs::read_to_string(plan_file)
         .with_context(|| format!("could not read plan file {}", plan_file.display()))?;
     let root = plan_repo_root(plan_file);
@@ -994,10 +998,57 @@ fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()
     };
     println!("{} {}", "Verdict:".bold(), verdict);
 
+    // STORY-1480: record the verify span against every spec the plan's
+    // `Specs:` header claims, with the verdict as the outcome. Emitted before
+    // the failure exit so a FAILED verify is measured too — a plan that keeps
+    // failing verification is exactly the planning time worth seeing.
+    // trace:STORY-1480 | ai:claude
+    record_plan_span(
+        plan_file,
+        &content,
+        span_started,
+        if errors > 0 {
+            crate::events::OUTCOME_FAILED
+        } else {
+            crate::events::OUTCOME_COMPLETED
+        },
+        crate::events::ACTIVITY_PLAN_VERIFY,
+    );
+
     if errors > 0 {
         std::process::exit(1);
     }
     Ok(())
+}
+
+/// STORY-1480: emit one activity span per spec a plan file claims.
+///
+/// A plan that names no spec records nothing: a span with no spec cannot be
+/// attributed to a timeline, and an unattributable measurement is noise.
+// trace:STORY-1480 | ai:claude
+fn record_plan_span(
+    plan_file: &std::path::Path,
+    content: &str,
+    started_at: chrono::DateTime<chrono::Utc>,
+    outcome: &str,
+    activity: &str,
+) {
+    let root = plan_repo_root(plan_file);
+    for spec in parse_plan_specs(content) {
+        crate::events::record_activity_span(
+            &root,
+            Some(spec),
+            activity,
+            started_at,
+            outcome,
+            Some(
+                plan_file
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+            ),
+        );
+    }
 }
 
 /// `aida plan helpers <spec>` — render a `## Reusable helpers` section

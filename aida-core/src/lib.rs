@@ -136,6 +136,8 @@ pub mod rollup;
 pub mod scaffolding;
 #[cfg(feature = "native")]
 pub mod storage;
+// trace:STORY-1480 | ai:claude
+pub mod spec_timing;
 // trace:TASK-1141 | ai:claude
 pub mod store_locate;
 // trace:STORY-648 | ai:claude

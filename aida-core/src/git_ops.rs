@@ -393,6 +393,8 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
                 && !is_oplog_path(path)
                 && !is_queue_registry_path(path)
                 && !is_schedule_ledger_path(path)
+                // trace:STORY-1480 | ai:claude
+                && !is_spec_timing_path(path)
             {
                 let _ = git(repo, &["rebase", "--abort"]);
                 anyhow::bail!(
@@ -409,6 +411,9 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
             } else if is_schedule_ledger_path(path) {
                 // trace:STORY-1226 | ai:claude
                 resolve_schedule_ledger_conflict(repo, path)
+            } else if is_spec_timing_path(path) {
+                // trace:STORY-1480 | ai:claude
+                resolve_spec_timing_conflict(repo, path)
             } else {
                 resolve_spec_conflict(repo, path)
             };
@@ -754,6 +759,64 @@ fn is_schedule_ledger_path(path: &str) -> bool {
     }
 }
 
+/// True when `path` is a published per-spec timing record
+/// (`timings/<SPEC-ID>.yaml`, STORY-1480 / ADR-60). Resolved by UNION of the
+/// span sets, never last-writer-wins: the store has no causal clock, so a
+/// machine whose wall clock is behind must not be able to delete another
+/// machine's measurements.
+// trace:STORY-1480 | ai:claude
+fn is_spec_timing_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    let rel = p
+        .rsplit_once(&format!("/{}/", crate::spec_timing::TIMINGS_DIR))
+        .map(|(_, r)| r)
+        .or_else(|| p.strip_prefix(&format!("{}/", crate::spec_timing::TIMINGS_DIR)));
+    match rel {
+        Some(r) => !r.contains('/') && r.ends_with(".yaml"),
+        None => false,
+    }
+}
+
+/// Resolve a conflicted `timings/<SPEC-ID>.yaml` by unioning both sides' span
+/// sets on each span's content-derived id.
+///
+/// This is the append-union merge class, not the scalar last-write-wins class:
+/// the result is a pure function of the two inputs, so both clones converge on
+/// the same record whichever one runs the merge, and no span is dropped because
+/// one host's clock disagrees with the other's. An unparseable side is treated
+/// as contributing nothing rather than failing the merge — a corrupt timing
+/// record must never be able to wedge a store sync.
+// trace:STORY-1480 | ai:claude
+#[cfg(feature = "native")]
+fn resolve_spec_timing_conflict(repo: &Path, path: &str) -> Result<String> {
+    use crate::spec_timing::TimingRecord;
+
+    let parse = |text: Option<String>| -> Option<TimingRecord> {
+        serde_yaml::from_str::<TimingRecord>(&text?).ok()
+    };
+    let ours = parse(git_show_stage(repo, 2, path)?);
+    let theirs = parse(git_show_stage(repo, 3, path)?);
+
+    let merged = match (ours, theirs) {
+        (Some(o), Some(t)) => crate::spec_timing::union(&o, &t),
+        (Some(o), None) => o,
+        (None, Some(t)) => t,
+        (None, None) => anyhow::bail!("neither side of {path} is a readable timing record"),
+    };
+    let yaml = serde_yaml::to_string(&merged)
+        .with_context(|| format!("serialize unioned timing record for {path}"))?;
+    let abs = repo.join(path);
+    if let Some(parent) = abs.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    crate::write_atomic(&abs, yaml.as_bytes()).with_context(|| format!("write merged {path}"))?;
+    Ok(format!(
+        "auto-unioned timing record `{path}`: {} span(s) from {} node(s)",
+        merged.spans.len(),
+        merged.nodes().len()
+    ))
+}
+
 /// True when a merge is currently in progress in `repo` (MERGE_HEAD exists).
 #[cfg(feature = "native")]
 fn merge_in_progress(repo: &Path) -> bool {
@@ -782,6 +845,8 @@ fn merge_in_progress(repo: &Path) -> bool {
 ///   (disjoint-range union, max-`next`; range collisions abort)
 /// - `registry/nodes.toml` → [`crate::node::union_node_registries`]
 ///   (3-way by node id; same-id-two-machines collisions abort)
+/// - `timings/<SPEC-ID>.yaml` → [`crate::spec_timing::union`] (span-set union
+///   by content id — STORY-1480, the two-machines-published-the-same-spec case)
 ///
 /// SAFETY: any conflict outside those paths, or any structured merge failure,
 /// aborts the merge (`git merge --abort`) and returns Err — the caller parks
@@ -812,6 +877,8 @@ pub fn merge_union_auto(repo: &Path, ref_: &str, message: &str) -> Result<StoreP
             && !is_registry_blocks_path(path)
             && !is_registry_nodes_path(path)
             && !is_schedule_ledger_path(path)
+            // trace:STORY-1480 | ai:claude
+            && !is_spec_timing_path(path)
         {
             let _ = git(repo, &["merge", "--abort"]);
             anyhow::bail!(
@@ -832,6 +899,9 @@ pub fn merge_union_auto(repo: &Path, ref_: &str, message: &str) -> Result<StoreP
             resolve_nodes_conflict(repo, path)
         } else if is_schedule_ledger_path(path) {
             resolve_schedule_ledger_conflict(repo, path)
+        } else if is_spec_timing_path(path) {
+            // trace:STORY-1480 | ai:claude
+            resolve_spec_timing_conflict(repo, path)
         } else {
             resolve_spec_conflict(repo, path)
         };
@@ -5719,6 +5789,13 @@ mod tests {
         assert!(is_schedule_ledger_path("schedule/mailbox-triage.yaml"));
         assert!(!is_schedule_ledger_path("schedule/nested/x.yaml"));
         assert!(!is_schedule_ledger_path("objects/TASK/000/TASK-1.yaml"));
+        // trace:STORY-1480 | ai:claude
+        assert!(is_spec_timing_path("timings/STORY-1.yaml"));
+        assert!(is_spec_timing_path("store/timings/STORY-1.yaml"));
+        assert!(!is_spec_timing_path("timings/nested/STORY-1.yaml"));
+        assert!(!is_spec_timing_path("timings/STORY-1.yaml.bak"));
+        assert!(!is_spec_timing_path("objects/TASK/000/TASK-1.yaml"));
+        assert!(!is_spec_timing_path("schedule/night-shift.yaml"));
     }
 
     /// Two clones that both wrote `schedule/<job>.yaml` must auto-resolve on

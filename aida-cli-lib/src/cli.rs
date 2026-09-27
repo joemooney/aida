@@ -13078,6 +13078,15 @@ pub enum Command {
         #[clap(long, global = true)]
         include_meta: bool,
 
+        /// Show the spec's PUBLISHED timing record instead of its history —
+        /// the span list any machine can read after `aida pull`, with which
+        /// host measured each span. Requires a SPEC-ID. A span with no
+        /// duration was never closed and is reported as unmeasured, not as
+        /// zero.
+        // trace:STORY-1480 | ai:claude
+        #[clap(long, global = true)]
+        timing: bool,
+
         /// History view. `events` switches to the full chronological feed
         /// (same as `--full`); most day-to-day use never needs it — the
         /// bare command (digest) or a SPEC-ID (status progression) covers

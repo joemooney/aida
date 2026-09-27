@@ -90,6 +90,8 @@ mod supervisor;
 // trace:STORY-1218 | ai:claude
 mod schedule_driver;
 mod shift;
+// trace:STORY-1480 | ai:claude
+mod spec_timing;
 mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;
@@ -41915,6 +41917,23 @@ fn session_end(
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
+    // STORY-1480: an interactive session was the largest unmeasured span in a
+    // timeline — `aida session start` to `aida session end` left no event at
+    // all, so a spec worked by hand showed only its status transitions. The
+    // lease already records `started_at`, so the span needs no new state: it is
+    // one host measuring both ends. Skipped when a live drain holds the spec,
+    // whose per-phase records are the more precise account of the same time.
+    // trace:STORY-1480 | ai:claude
+    if !spec_timing::drain_owns_spec(&project_root, &target.scope) {
+        crate::events::record_activity_span(
+            &project_root,
+            Some(target.scope.clone()),
+            &spec_timing::interactive_activity_for_role(target.role.as_deref()),
+            target.started_at,
+            crate::events::OUTCOME_COMPLETED,
+            None,
+        );
+    }
     match std::fs::remove_file(lease_target) {
         Ok(_) => eprintln!(
             "{} lease deleted",
@@ -90886,6 +90905,82 @@ mod story_1436_gate_held_tests {
     }
 }
 
+/// STORY-1480: the emit sites that close an instrumentation gap inside a
+/// function too large to drive end-to-end in a unit test. Each assertion pins
+/// the ORDER that makes the record correct, which is the part a refactor can
+/// silently break.
+#[cfg(test)]
+mod story_1480_emit_site_tests {
+    /// The interactive session span is recorded BEFORE the lease file is
+    /// deleted — the lease is where `started_at` comes from, so recording after
+    /// the unlink would lose the span's start.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn session_end_records_its_span_before_deleting_the_lease() {
+        let src = include_str!("lib.rs");
+        let record = src
+            .find(concat!(
+                "spec_timing::drain_owns_spec",
+                "(&project_root, &target.scope)"
+            ))
+            .expect("session-end span recorded");
+        let tail = &src[record..];
+        let unlink = tail
+            .find(concat!("std::fs::remove_file", "(lease_target)"))
+            .expect("lease unlink follows");
+        assert!(unlink > 0, "the span must be recorded before the unlink");
+        assert!(
+            tail[..unlink].contains(concat!("target.", "started_at")),
+            "the span's start must come from the lease, not from now()"
+        );
+    }
+
+    /// The compile span brackets the preflight call, so its duration is the
+    /// guard run and nothing else.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn the_compile_span_brackets_the_preflight_run() {
+        let src = include_str!("lib.rs");
+        let start = src
+            .find(concat!("let compile_started", " = chrono::Utc::now();"))
+            .expect("compile span start");
+        let tail = &src[start..];
+        let run = tail
+            .find(concat!("implementer_preflight::run", "(&worktree_path)"))
+            .expect("preflight run");
+        let record = tail
+            .find(concat!("crate::events::", "ACTIVITY_COMPILE"))
+            .expect("compile span recorded");
+        assert!(
+            run < record,
+            "the span must be recorded AFTER the preflight, not around nothing"
+        );
+    }
+
+    /// The plan prelude's span is recorded whether the plan session succeeded
+    /// or failed — it is emitted before the bail, so a failing plan loop is
+    /// measured rather than invisible.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn the_plan_prelude_span_is_recorded_before_the_bail() {
+        let src = include_str!("lib.rs");
+        let start = src
+            .find(concat!("let plan_started", " = chrono::Utc::now();"))
+            .expect("plan span start");
+        let tail = &src[start..];
+        let record = tail
+            .find(concat!("crate::events::", "ACTIVITY_PLAN,"))
+            .expect("plan span recorded");
+        let bail = tail
+            .find(concat!("the plan session", " exited with status"))
+            .expect("plan failure bail");
+        assert!(
+            record < bail,
+            "a failed plan session must still be measured"
+        );
+    }
+}
+
 #[cfg(test)]
 mod task_1450_review_verdict_event_tests {
     use super::*;
@@ -94733,6 +94828,12 @@ fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Resul
     for step in steps {
         match step {
             PlanPreludeStep::PlanSession { spec: s, headless } => {
+                // STORY-1480: the planning prelude is deliberately NOT a
+                // numbered phase, so it emitted no `PhaseEntered` and its time
+                // was invisible. AIDA launches this session itself, so it can
+                // measure both ends on one clock.
+                // trace:STORY-1480 | ai:claude
+                let plan_started = chrono::Utc::now();
                 let mut args: Vec<String> = vec![
                     "queue".into(),
                     "work".into(),
@@ -94749,6 +94850,21 @@ fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Resul
                     .args(&args)
                     .status()
                     .with_context(|| format!("could not launch the plan session for {s}"))?;
+                // trace:STORY-1480 | ai:claude
+                if let Ok(root) = find_project_root() {
+                    crate::events::record_activity_span(
+                        &root,
+                        Some(s.clone()),
+                        crate::events::ACTIVITY_PLAN,
+                        plan_started,
+                        if status.success() {
+                            crate::events::OUTCOME_COMPLETED
+                        } else {
+                            crate::events::OUTCOME_FAILED
+                        },
+                        None,
+                    );
+                }
                 if !status.success() {
                     anyhow::bail!(
                         "the plan session exited with status {} — no plan file was produced",
@@ -106454,7 +106570,32 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 );
             }
         } else {
+            // STORY-1480: the preflight builds the worktree binary and runs the
+            // fmt/clippy/ratchet guards — the compile step INSIDE the
+            // implementer phase, which the phase's own span folds invisibly
+            // into agent time. Measured separately here so the two are
+            // distinguishable. It does not measure compile time inside the
+            // agent's own session, which AIDA never observes.
+            // trace:STORY-1480 | ai:claude
+            let compile_started = chrono::Utc::now();
             let results = implementer_preflight::run(&worktree_path);
+            if let Some(root) = self.events_root() {
+                let failed = results
+                    .iter()
+                    .any(|r| matches!(r, implementer_preflight::GuardResult::Failed { .. }));
+                crate::events::record_activity_span(
+                    &root,
+                    Some(self.spec.clone()),
+                    crate::events::ACTIVITY_COMPILE,
+                    compile_started,
+                    if failed {
+                        crate::events::OUTCOME_FAILED
+                    } else {
+                        crate::events::OUTCOME_COMPLETED
+                    },
+                    None,
+                );
+            }
             if !self.json {
                 for result in &results {
                     match result {

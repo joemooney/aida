@@ -93,6 +93,18 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
     punt::write_hold_signal(&signal_path, &signal)
         .with_context(|| format!("could not write the PR-hold marker to {:?}", signal_path))?;
 
+    // STORY-1480: a deliberate hold parks the spec on a human with no event at
+    // all today, so the wait that follows read as unknown time. Recorded beside
+    // the marker, cleared by the requeue that resumes it.
+    // trace:STORY-1480 | ai:claude
+    crate::events::record_spec_parked(
+        &project_root,
+        &spec,
+        crate::events::PARKED_ON_HUMAN,
+        reason.unwrap_or("PR deliberately not opened"),
+        "pr-hold",
+    );
+
     eprintln!(
         "{} {} held — branch `{}` pushed, PR deliberately not opened{}",
         "⏸".yellow().bold(),
@@ -1394,6 +1406,20 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                     n
                 }
             };
+            // STORY-1480: "PR opened" had exactly one producer, the drain's
+            // `set_member_outcome`, so the interactive ship left no record of
+            // when a spec's PR went up — the boundary between implementer work
+            // and the wait for review. Reuses the existing kind rather than
+            // adding a second one. trace:STORY-1480 | ai:claude
+            if let Ok(pr32) = u32::try_from(pr) {
+                let mut ev = crate::events::Event::new(
+                    Some(spec.clone()),
+                    "",
+                    crate::events::EventKind::PhaseDonePr { pr: pr32 },
+                );
+                ev.seat = crate::events::active_seat();
+                crate::events::emit(&project_root, &ev);
+            }
             eprintln!(
                 "{} aida ship — PR-{} open for {} (--no-merge; not merged). Review + merge it, \
                  or finish with `aida ship`.",

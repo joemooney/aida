@@ -167,16 +167,66 @@ another path that pretends to be a different node.
 
 ## What doesn't matter (so you don't chase it)
 
-- **`~/.aida/node.toml`** — the per-machine node identity. Used for HLC
-  timestamps and short-ID assignment in the merge gate; **not** used in queue
-  routing. Different nodes can write queue items routed to the same shell
-  user without any node-id conflict.
+- **`~/.aida/node.toml`** — the per-machine node identity. Used for short-ID
+  assignment in the merge gate and to say WHICH machine measured a published
+  timing span; **not** used in queue routing. Different nodes can write queue
+  items routed to the same shell user without any node-id conflict. (It is not
+  used for hybrid-logical-clock timestamps: there is no HLC in the codebase —
+  the module was removed rather than wired in, BUG-578.)
 - **`.aida/cache.db`** — silently auto-rebuilt by `ensure_cache_fresh()` on
   every list/search/load (`aida-core/src/db/cached_git_backend.rs:85`). Stale
   cache cannot cause an empty queue because queue reads bypass it entirely.
 - **Local `aida-store` worktree state** — a fresh `git worktree add` against
   `origin/aida-store` reconstructs everything. The orphan branch on origin is
   the source of truth; the local worktree is convenience.
+
+## Cycle-time evidence across machines
+
+A spec's phase events live in `.aida/events.jsonl`, which is **per-clone and
+local-only**. Work done on one machine is not in another machine's stream, and
+never will be — the live log is not synced (ADR-60 rejected making it a store
+branch: that would put a git commit on the drain's hot path).
+
+What crosses machines is the **per-spec timing record**. When a spec reaches a
+terminal state, the machine that completed it writes
+`.aida-store/timings/<SPEC-ID>.yaml` — the finished span list, lifecycle
+activities only, no mail/cron/shift noise — and commits it **locally**. The next
+`aida push` / `aida db sync` carries it, and any other clone reads it after
+`aida pull`:
+
+```bash
+aida history STORY-1234 --timing          # the published span list
+aida history STORY-1234 --timing --format json
+```
+
+### What the two clocks mean
+
+The store has **no causal clock**. Two things follow, and the record is built
+around them rather than hiding them:
+
+- Each span records the node that measured it. A span's `duration_s` is that ONE
+  host's start-to-end measurement, so it survives skew.
+- The interval **between** two different nodes' spans is not a measurement — it
+  mixes two clocks and can even be negative. It is reported as unknown time with
+  both nodes named, never clamped to a plausible-looking wait.
+
+Two machines that both publish for the same spec keep BOTH span sets: the
+record merges by **union on each span's content-derived id**, not
+last-writer-wins, so a machine whose clock is behind cannot delete another
+machine's measurements. (Compare a spec's scalar fields, which ARE wall-clock
+last-write-wins with a content-hash tie-break — under skew the wall-clock-later
+write wins there even when it is causally earlier.)
+
+### What is still not measured
+
+- **In-flight work on another machine.** Only terminal specs publish. A spec
+  being worked on host X is invisible on host Y until it completes.
+- **A spec completed before this instrumentation existed**, or one whose local
+  event log was rotated away first, publishes nothing. An absent record means
+  "not measured", never "took no time".
+- **Compile time inside an agent's own session.** AIDA measures the preflight
+  build/guard step it runs itself; what the agent compiles inside its session is
+  not observable from outside it.
 
 ## See also
 

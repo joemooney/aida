@@ -423,6 +423,10 @@ pub(crate) fn requeued_event(
             to: to.to_string(),
             cleared_tags: cleared.removed_tags.clone(),
             kept_tags: cleared.kept_tags.clone(),
+            // STORY-1480: filled in by the emitting caller, which has the
+            // project root the local stream lives under. The pure builder
+            // deliberately does not read the filesystem.
+            parked_since: None,
         },
     );
     ev.seat = crate::events::active_seat();
@@ -438,7 +442,19 @@ pub(crate) fn emit_requeued(
     ctx: &ReturnCtx,
     outcome: &ReturnOutcome,
 ) {
-    if let Some(ev) = requeued_event(spec, ctx, outcome) {
+    if let Some(mut ev) = requeued_event(spec, ctx, outcome) {
+        // STORY-1480: carry the wait's measured START back, so the park→resume
+        // interval is attributed as `parked` instead of reported as unknown
+        // time. A missing marker leaves the field absent — "not recorded", not
+        // "no wait". trace:STORY-1480 | ai:claude
+        if let crate::events::EventKind::SpecRequeued {
+            ref mut parked_since,
+            ..
+        } = ev.kind
+        {
+            *parked_since =
+                crate::events::open_park_since(&crate::events::read_all(project_root), spec);
+        }
         crate::events::emit(project_root, &ev);
     }
 }

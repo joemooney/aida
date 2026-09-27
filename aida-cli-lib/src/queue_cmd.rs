@@ -8304,6 +8304,17 @@ pub(crate) fn handle_queue_rework(
                     );
                     return Ok(());
                 }
+                // STORY-1480: the loop guard parks on the ADVISOR — only an
+                // advisor can break the dispute — and emitted no event at all,
+                // so the wait for that judgment read as unknown time.
+                // trace:STORY-1480 | ai:claude
+                crate::events::record_spec_parked(
+                    &root,
+                    &display_id,
+                    crate::events::PARKED_ON_ADVISOR,
+                    "identical reviewer findings recurred twice",
+                    "loop-guard",
+                );
                 let note = format!(
                     "Identical reviewer findings recurred twice for {display_id}; do not \
                      requeue a third implementer round until an advisor chooses a different \
@@ -14853,6 +14864,12 @@ pub(crate) fn handle_queue_integrate(
             // reviewer phase via `--from-pr`. The routing argv is a pure helper
             // so the `orchestration_routing` guardrail can assert it.
             // trace:ADR-7 trace:ADR-9 | ai:claude
+            // STORY-1480: an `aida integrate --run` member had no span of its
+            // own. The child drive emits the pipeline phases it runs (ADR-7 —
+            // it IS the same engine), but nothing recorded the integrate
+            // member's own boundaries, including the time spent before the
+            // child starts. trace:STORY-1480 | ai:claude
+            let integrate_started = chrono::Utc::now();
             let status = std::process::Command::new(&aida)
                 .current_dir(drive_cwd)
                 .env("AIDA_DRAIN_FORCE", "1")
@@ -14863,6 +14880,19 @@ pub(crate) fn handle_queue_integrate(
                 .env("AIDA_DRAIN_BORROW", "1")
                 .args(integrate::drive_args(pr_num, integrate_headless))
                 .status();
+            // trace:STORY-1480 | ai:claude
+            crate::events::record_activity_span(
+                &project_root,
+                Some(id.clone()),
+                crate::events::ACTIVITY_INTEGRATE,
+                integrate_started,
+                match &status {
+                    Ok(s) if s.success() => crate::events::OUTCOME_COMPLETED,
+                    Ok(_) => crate::events::OUTCOME_FAILED,
+                    Err(_) => crate::events::OUTCOME_ABANDONED,
+                },
+                None,
+            );
             match status {
                 Ok(s) if s.success() => {
                     integrated_total += 1;
@@ -15203,4 +15233,62 @@ pub(crate) fn evaluate_review_verdict_gate(
     );
     let gate = review_verdict::queue_done_verdict_gate(display_id, Some(&verdict), relation);
     (gate, Some(verdict))
+}
+
+/// STORY-1480: the integrate path's own span, and the loop guard's park.
+#[cfg(test)]
+mod story_1480_integrate_span_tests {
+    /// The integrate member's span brackets the child drive, and its outcome
+    /// distinguishes a clean integration from a shelved one and from a launch
+    /// that never ran — three different facts, not one boolean.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn the_integrate_span_brackets_the_child_drive() {
+        let src = include_str!("queue_cmd.rs");
+        let start = src
+            .find(concat!("let integrate_started", " = chrono::Utc::now();"))
+            .expect("integrate span start");
+        let tail = &src[start..];
+        let drive = tail
+            .find(concat!(
+                "integrate::drive_args",
+                "(pr_num, integrate_headless)"
+            ))
+            .expect("child drive");
+        let record = tail
+            .find(concat!("crate::events::", "ACTIVITY_INTEGRATE"))
+            .expect("integrate span recorded");
+        assert!(
+            drive < record,
+            "the span must close after the drive returns"
+        );
+        let span_block = &tail[record..];
+        for outcome in ["OUTCOME_COMPLETED", "OUTCOME_FAILED", "OUTCOME_ABANDONED"] {
+            assert!(
+                span_block[..600].contains(outcome),
+                "the integrate span must distinguish {outcome}"
+            );
+        }
+    }
+
+    /// The loop guard parks on the ADVISOR, and records it before the finding
+    /// is filed, so the wait's start is on record even if the finding write
+    /// fails.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn the_loop_guard_park_is_recorded_on_the_advisor() {
+        let src = include_str!("queue_cmd.rs");
+        let park = src
+            .find(concat!("crate::events::", "PARKED_ON_ADVISOR"))
+            .expect("loop-guard park recorded on the advisor");
+        let tail = &src[park..];
+        assert!(
+            tail.contains(concat!("\"loop", "-guard\"")),
+            "the park must name the loop-guard door"
+        );
+        let finding = tail
+            .find(concat!("Repeated unchanged", " review findings"))
+            .unwrap_or(0);
+        assert!(finding > 0, "the park precedes the finding write");
+    }
 }

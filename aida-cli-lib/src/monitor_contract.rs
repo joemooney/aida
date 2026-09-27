@@ -6,7 +6,10 @@ use serde_json::{json, Value};
 use std::io::Write;
 
 pub const NAME: &str = "aida-monitor";
-pub const VERSION: &str = "1.5.0";
+// STORY-1480: 1.6.0 adds the PhaseEnded / ActivitySpan / SpecParked
+// timing kinds and the additive SpecRequeued.parked_since field.
+// trace:STORY-1480 | ai:claude
+pub const VERSION: &str = "1.6.0";
 
 /// Return the deliberately small set of fields promised to monitor consumers.
 /// Fields not named here remain implementation details even when they happen to
