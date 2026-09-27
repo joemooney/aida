@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-27T04:23:35.862252514Z
+modified_at: 2026-09-27T14:20:59.786511397Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -68,6 +68,22 @@ comments:
   content: 'OPERATOR DECISION (Joe, 2026-09-26 21:23 MST): Wait for BUG-1669''s protected binary-admission design; do not narrow BUG-1679 now to a pre-architecture repair or resume its implementer. Product added blocked-by BUG-1669. Current PR #2226 at e63efc3997a85df8cb1ff463f48222900ed5f7d6 remains open on operator hold after strict REQUEST_CHANGES and advisor decision 01a0e115-11f5-7281-b3d2-a76d51b8ec1e. No merge, unhold, acceptance weakening, or completion is authorized. Revisit only after protected admission architecture and implementation gates, then fresh exact-head review and explicit Joe hold release.'
   created_at: 2026-09-27T04:23:35.862252514Z
   modified_at: 2026-09-27T04:23:35.862252514Z
+- id: 01a0e33d-980a-7270-9cd5-b0129da2cc5c
+  author: joe
+  content: |-
+    CORRECTION (orchestrator proxy for Joe, 2026-09-27 07:20): I MIS-DISPATCHED this spec. At 07:12 I sent an implementer to do a rework round on branch bug-1679, on the mistaken premise that PR #2226's hold lifts once a fresh APPROVED verdict is recorded at its head. That premise is wrong on two counts, and the implementer correctly REFUSED to act and made no changes — the worktree /home/joe/ai/aida-bug-1679 is clean and still at e63efc3997, no commit, no push, no substrate mutation.
+
+    What I had failed to read:
+    - OPERATOR DECISION 01a0e11a (Joe, 2026-09-26 21:23): 'do not narrow BUG-1679 now to a pre-architecture repair or resume its implementer … No merge, unhold, acceptance weakening, or completion is authorized.'
+    - ADVISOR DECISION 01a0e115: 'PR #2226 MUST STAY OPERATOR-HELD EVEN AFTER REPAIR … neither green CI, mechanical P2 repairs, revised acceptance, nor a future reviewer pass removes it.'
+    - The substrate itself already refused: status needs-attention, blocked: true behind BUG-1669, and no pickup path offered.
+
+    Also load-bearing: finding P1 is a finding AGAINST this spec's own acceptance criterion 1 ('resolve_aida_exe_from prefers AIDA_BIN when it names an executable file'). No implementer can close it, because fixing it means deleting the behaviour the spec asks for. That is a product acceptance change, routed to product by the advisor, and it depends on BUG-1669 defining the identity/admission contract.
+
+    BUG-1679 stays PARKED. The proxy will not dispatch it again, and the correct next step is product acceptance reconciliation, not implementation. The refusing agent did re-verify all four findings read-only and found each technically valid; it also noted one consequence not in the verdict — export_coordinating_bin_env early-returns when AIDA_BIN is not absolute, so a relative value silently disables the PATH/AIDA_BIN export altogether, a second failure mode on the same input. Recording that here so the eventual gate has it.
+  created_at: 2026-09-27T14:20:59.786511397Z
+  modified_at: 2026-09-27T14:20:59.786511397Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e0fd-3532-7760-9c08-3b79df618a20
   author: aida-session-start
