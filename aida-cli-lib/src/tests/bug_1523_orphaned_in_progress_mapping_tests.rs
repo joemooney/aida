@@ -36,6 +36,8 @@ fn lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 

@@ -110,6 +110,8 @@ fn test_lease(id: &str, scope: &str, worktree: std::path::PathBuf, pid: u32) -> 
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 

@@ -70,6 +70,8 @@ mod doctor_cmd;
 mod drain_caps;
 mod drain_cmd;
 mod drain_lock;
+// trace:TASK-1518 | ai:claude
+mod drain_signal;
 mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
 mod git_arg_guard;
@@ -31769,6 +31771,21 @@ pub(crate) struct SessionLease {
     // trace:BUG-778 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     manual_enter_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// TASK-1518: stamped by the drain's SIGTERM handler on every lease the
+    /// stopped wave created (`creator_pid` match) as it releases the drain
+    /// lock — an INTERRUPTED session, not an abandoned one. `aida ps` reads
+    /// it: a stamped lease with no live process and a clean tree classifies
+    /// `stopped` (worktree intact, resume as normal) instead of a dead agent.
+    /// Written as a generic TOML key by `drain_signal`, so a lease this
+    /// binary does not otherwise model keeps its other keys.
+    // trace:TASK-1518 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    interrupted_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// TASK-1518: why the lease was interrupted (`sigterm`). Informational;
+    /// the classifier keys on `interrupted_at`.
+    // trace:TASK-1518 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    interrupted_reason: Option<String>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -31877,6 +31894,8 @@ fn session_harness_worktree_register(
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -37245,6 +37264,8 @@ fn session_start(
         review_verb: is_review_session,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
     let lease_file = lease_path(&project_root, &id);
     // STORY-1429: atomic, so a reader never sees a half-written lease.
@@ -63073,6 +63094,8 @@ fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         review_verb: false,
         claim_verb: true,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -66615,6 +66638,15 @@ fn build_running_work(
                     dispatch_health_ps::DEFAULT_AWAITING_AGENT_GRACE_SECS,
                     dirty_movement_fresh,
                 );
+                // TASK-1518: a lease the drain's SIGTERM handler stamped on
+                // its way out is a stopped wave, not a crashed agent — the
+                // dead-process/clean-tree arm reads `stopped`.
+                // trace:TASK-1518 | ai:claude
+                let ds = dispatch_health_ps::apply_interruption(
+                    ds,
+                    pid_alive,
+                    l.interrupted_at.is_some(),
+                );
                 let hint = dispatch_health_ps::next_command_hint(
                     ds,
                     &l.worktree_path,
@@ -67203,6 +67235,14 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         // informational nudge (start one), never an alarm.
                         // trace:BUG-778 | ai:claude
                         dispatch_health_ps::DispatchState::AwaitingAgent => (
+                            crate::glyph(crate::glyphs::Glyph::Info),
+                            d.state.label().cyan(),
+                        ),
+                        // TASK-1518: the wave was stopped and the lease marked
+                        // on the way out — informational (resume as normal),
+                        // not the dead-agent alarm.
+                        // trace:TASK-1518 | ai:claude
+                        dispatch_health_ps::DispatchState::Stopped => (
                             crate::glyph(crate::glyphs::Glyph::Info),
                             d.state.label().cyan(),
                         ),
@@ -79258,6 +79298,8 @@ mod story_1043_unshipped_work_tests {
             review_verb: false,
             claim_verb: false,
             manual_enter_at: None,
+            interrupted_at: None,
+            interrupted_reason: None,
         };
         std::fs::create_dir_all(leases_dir(root)).unwrap();
         std::fs::write(
@@ -89150,6 +89192,8 @@ fn acquire_review_lease_with_mode(
         review_verb: true,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
     std::fs::create_dir_all(leases_dir(project_root))?;
     let path = lease_path(project_root, &id);

@@ -29,6 +29,8 @@ fn claim(id: &str, scope: &str, pid: Option<u32>) -> SessionLease {
         review_verb: false,
         claim_verb: true,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 
