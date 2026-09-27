@@ -14010,8 +14010,10 @@ pub(crate) fn handle_queue_integrate(
     let _drain_guard = if dry_run {
         None
     } else {
+        // Linked worktrees share the main checkout's merge authority.
+        // trace:BUG-1683 | ai:codex
         Some(drain_lock::acquire_drain_lock(
-            &project_root,
+            &find_main_worktree_root()?,
             "queue integrate",
         )?)
     };

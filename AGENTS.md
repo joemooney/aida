@@ -153,6 +153,11 @@ brief, follow this path (the same one used for TASK-132 and BUG-406):
 8. End the session; verify the spec reached Completed.
 9. Architecture-class work → sketch first and wait for master sign-off (see Sketch-First Protocol).
 
+Local drain locks use PID/start identity, never launch age, to retain a live
+holder. Integration takes the main worktree's lock even from a sibling checkout.
+`AIDA_DRAIN_LOCK_STALE_SECS` controls shared claims only; see
+[lock regression coverage](docs/testing/bug-1683-drain-lock.md) for scope and limits.
+
 ## Code Traceability
 
 When code implements a spec, add a trace comment in the touched code:
