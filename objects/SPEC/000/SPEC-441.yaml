@@ -9,12 +9,12 @@ description: |+
   2. For identical since/until filters, indexed and Git-walk history results match, including the far-future bound.
   3. Ordinary past/future bounds retain existing boundary semantics; use fixture events only and add tests that fail against the current Git-walk behavior.
 
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T02:19:20.422469520Z
-modified_at: 2026-09-27T08:12:12.724948237Z
+modified_at: 2026-09-27T08:12:14.071816123Z
 req_type: Task
 tags:
 - from-implementer:STORY-1477
@@ -26,3 +26,11 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): This is an independent, reproduced history correctness bug on current main, not a STORY-1477 renderer issue. Current main still feeds validated RFC3339 bounds to git log; read-only check at store head 170cadffd6 returned no commit for --until=2100-01-01 while --until=2030-01-01 returned the 2026 head. The expanded fixture acceptance requires Git-walk/index parity. Approve and queue for implementation as an independent backlog item.'
   created_at: 2026-09-27T08:12:12.724948237Z
   modified_at: 2026-09-27T08:12:12.724948237Z
+history:
+- id: 01a0e1eb-fb77-73d3-b326-fa477ea6b0fd
+  author: joe
+  timestamp: 2026-09-27T08:12:14.071813569Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
