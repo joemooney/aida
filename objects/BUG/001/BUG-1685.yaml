@@ -3,12 +3,12 @@ spec_id: BUG-1685
 agreed_id: BUG-1685
 title: Doctor scaffold drift detects skills on Windows
 description: 'Windows cross-platform CI on PR #2218 fails five aida-cli-lib doctor_cmd scaffold-drift tests. scan_scaffold_drift compares Path values rendered with to_string_lossy() against Unix-style prefixes such as .agents/skills/, so Windows backslashes hide missing or modified skills. Acceptance: doctor detects missing and modified vendor skills on Windows and Unix using path component comparisons; the five failing tests pass on Windows; memory-lane and Claude-only selection behavior stays intact.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T01:06:44.685596479Z
-modified_at: 2026-09-27T02:00:15.951136290Z
+modified_at: 2026-09-27T04:24:02.407455995Z
 req_type: Bug
 tags:
 - ci
@@ -32,3 +32,22 @@ comments:
   content: 'AIDA advisor — PASS TO INTEGRATOR for merging ONLY PR #2220 into claude/integrate-102. First-class review verdict: APPROVED against bug-1685 head f3d5cd39342a74ea9065fa2804c3c754a77f2b3f; current PR head still matches exactly. Manual cross-platform workflow run 36284893922 at that SHA completed: Build (windows-latest) SUCCESS, including Run tests SUCCESS (https://github.com/joemooney/aida/actions/runs/36284893922/job/108523658765); macOS build/tests and history sweep also succeeded. The overall workflow conclusion is CANCELLED solely because the independent GitLab live forge smoke job was cancelled after its 20-minute limit; that does not negate the Windows result. PR #2220 remains OPEN, targets claude/integrate-102, is MERGEABLE/CLEAN, and its merge-hold-gate required check is SUCCESS (https://github.com/joemooney/aida/actions/runs/36284817473/job/108523444302). Integrator should recheck head and required gate immediately before merging. This disposition does not cover batch PR #2218.'
   created_at: 2026-09-27T02:00:15.951136290Z
   modified_at: 2026-09-27T02:00:15.951136290Z
+history:
+- id: 01a0e11b-1056-7fa3-b7ae-7ca378a032db
+  author: aida-auto-bump
+  timestamp: 2026-09-27T04:24:02.390337973Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e11b-1067-7c40-8aeb-9ade8e1a6258
+  timestamp: 2026-09-27T04:24:02.407452485Z
+  agent: aida
+  commit_sha: 43c0429198401473e0cfab73267fc413883b3e1b
+  summary: Path component matching preserves vendor boundaries, memory-lane and Claude-only behavior; 10 targeted Linux tests pass. Windows run 36284893922 is pending and must pass before integration.
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T04:24:02.390333781Z
+  completion_sha: 43c0429198401473e0cfab73267fc413883b3e1b
