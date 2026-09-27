@@ -8,5 +8,58 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:24:57.765790728Z
-modified_at: 2026-09-27T00:24:57.765790728Z
+modified_at: 2026-09-27T01:28:13.389337868Z
 req_type: Bug
+comments:
+- id: 01a0e07a-194d-7082-bb95-7e42ae4b61cc
+  author: mcp
+  content: |-
+    SKETCH (awaiting advisor signoff):
+
+    Author scope: sketch only; no implementation or gate disposition. An independent advisor must verify this proposal before implementation. Basis: AGENTS.md, .aida/discipline/two-seat-protocol.md, aida show BUG-1683 --full, and source at 9791e5eaac5cb4b0083aeaa32744c5900e396fc1.
+
+    Owner and trigger
+    The long-lived launcher owns the per-clone .aida/drain.lock through DrainGuard. A competing launch must refuse while that owner's PID/start-time identity remains live, even after hours of work. A separate implementer owns the eventual fix; this sketch author does not approve it. The concrete trigger is a second direct queue work --auto-complete or burndown run after the holder's started_at_utc exceeds 1800 seconds (or the configured horizon). decide_lock currently computes pid_dead || aged_out. The existing aged_out_lock_reclaims_even_when_pid_alive test explicitly enshrines the bug. started_at_utc is written on acquisition and never refreshed; the background heartbeat refreshes the shared store claim, not this local timestamp.
+
+    Proposed bounded design
+    Use acceptance option 1's live-identity rule, without adding a local heartbeat or changing the lock JSON schema. Remove age as a local acquisition authority: absent lock => Acquire; explicit force => existing override; present lock with process_identity_is_alive == true => Refuse regardless of age; false => existing stale-reclaim behavior. Remove now/stale_secs from the private decide_lock signature if no longer used, and remove the local age helper if unused. Keep stale_secs()/AIDA_DRAIN_LOCK_STALE_SECS for the shared claim TTL; update comments so the setting no longer promises local live-PID eviction.
+
+    This intentionally chooses the conservative variant of the acceptance: no local age fallback, rather than inventing an unknown state from the current boolean probe. A live PID with missing recorded or readable start identity remains held, matching TASK-1284 compatibility. An available mismatched start identity still identifies a recycled PID and permits reclamation. started_at_utc stays an immutable launch/display timestamp.
+
+    Affected surface, files, and symbols
+    - aida-cli-lib/src/drain_lock.rs: decide_lock, LockDecision documentation, acquire_drain_lock_with_specs, acquire_drain_lock, age_secs if obsolete, stale-setting/module comments, and inline tests. Correct the misleading read_pid_live_lock comment: probe_lock already ignores age.
+    - aida-cli-lib/src/queue_cmd.rs: auto-complete acquisition before dispatch covers single, batch/batches, nextN, --drain, --from-pr, and real --resume-drain; handle_queue_integrate also uses the same lock (including --watch). These are wiring/fixture verification targets, not reasons to duplicate policy.
+    - aida-cli-lib/src/lib.rs: handle_burndown_run uses acquire_drain_lock_with_specs before launching its agent.
+    - aida-cli-lib/src/drain_cmd.rs: handle_drain_start already refuses LockStatus::Running through probe_lock before delegating to queue work; preserve this behavior and cover it as an entry-point regression.
+    - aida-cli-lib/src/process_probe.rs and aida-core/src/liveness.rs: process_identity_is_alive/process_start_identity supply the existing identity contract; inspect/test compatibility, do not change the shared probe contract in this bounded proposal.
+    - aida-cli-lib/src/coordination.rs: acquire_lock_claim/decide_claim/heartbeat_lock_claim retain their separate cross-clone heartbeat/TTL semantics.
+    - Add process-level fixtures in aida-cli/tests/bug_1683_live_drain_lock.rs, with local decision/acquisition cases in drain_lock.rs::tests. No runtime handler edits expected outside drain_lock.rs unless fixtures uncover missing acquisition wiring.
+
+    Races and fail-closed limits
+    Elapsed time, missing start identity on an otherwise live PID, invalid timestamps, and future timestamps must never authorize replacing a live local holder. Refusal must preserve the existing local lock bytes and launch no worker/merge phase. A holder exiting immediately after a live probe can cause a harmless refusal; retry can reclaim once dead. Confirmed identity mismatch handles PID reuse instead of age guessing. Borrowed child guards must continue observing the parent without rewriting or releasing its lock; explicit AIDA_DRAIN_FORCE remains an intentional exception, not evidence that normal acquisition passes.
+
+    Do not claim this fixes atomic mutual exclusion: acquisition currently reads the local lock before shared coordination and later uses write_atomic, which prevents torn JSON but is not compare-and-swap/exclusive acquisition. Concurrent absent/stale acquisitions, replacement between read/probe/write, and PID-only cleanup in DrainGuard::drop/remove_lock_if_ours are pre-existing races. Also, shared acquisition precedes local refusal and may refresh/replace a same-clone claim; local refusal is not a promise of zero shared-store writes. Broad transaction/reordering changes require their own reviewed scope.
+
+    The current boolean liveness API conflates some probe failures with dead (Unix unexpected errno, non-Unix process lookup failure). Likewise read_lock conflates missing, unreadable, and malformed records. Therefore the proposal is fail-closed for observed-live/identity-unavailable holders, NOT a complete fail-closed design for all unknown/error states. Those limitations must be explicitly accepted or the sketch revised before signoff; silently treating false as proof of death would overstate the guarantee.
+
+    Named fixture tests (proposed, not yet run)
+    1. live_two_hour_identity_lock_refuses: replace the age-reclaims-live test; fixed clock, matching PID/start identity, started_at two hours ago => Refuse.
+    2. live_lock_refuses_with_zero_stale_override: isolate AIDA_DRAIN_LOCK_STALE_SECS plus FORCE/BORROW; tiny TTL must not evict the local live holder.
+    3. recycled_pid_lock_reclaims_even_when_fresh and dead_pid_lock_reclaims: retain immediate recovery and assert the recorded identity is passed to the probe.
+    4. live_legacy_lock_without_start_identity_refuses_when_old: backward-compatible JSON with no pid_start_time; live PID remains held. Retain the existing missing-current-start-identity liveness test.
+    5. live_lock_with_invalid_or_future_timestamp_refuses: neither timestamp parsing nor clock skew weakens refusal.
+    6. two_hour_live_lock_blocks_all_launch_entry_points: isolated temporary git/AIDA repository, lock naming a real fixture-holder process and its actual kernel start identity, started_at backdated two hours. Invoke real CLI routes for queue work --auto-complete, burndown run, drain start, and queue integrate. Supply eligible fixture specs/queue and required configuration so each reaches its lock gate; assert the specific holder-conflict diagnostic, non-success exit, unchanged local lock bytes, and zero worker/merge sentinel invocations. Use a store-unavailable/local-only fixture to prove the local gate itself refuses, rather than passing because cross-clone coordination rejected first. Cover queue auto-complete variants through the shared acquisition boundary and route wiring checks, without running real agents.
+    7. old_live_parent_borrow_preserves_lock_on_drop: borrow at two hours retains identical parent record; retain force_overrides_a_live_fresh_lock, successor-lock cleanup, and guard-lifetime tests.
+
+    Use the existing environment isolation guard for in-process acquisition tests (extend its applied keys for the stale override), explicit child-process env isolation for CLI fixtures, no sleeps to simulate age, and guaranteed fixture-child cleanup. Run targeted drain-lock/liveness/CLI fixture tests plus cargo fmt --all -- --check once implemented.
+
+    Out of scope
+    No implementation, approval, queueing, dispatch, or merge in this authoring session. Proposed implementation excludes heartbeat/schema migration, global liveness API redesign, shared claim TTL redesign, distributed/shared-filesystem locking, force/borrow removal, scheduler behavior, and atomic acquisition/cleanup redesign. Dry-run routes continue to skip acquisition.
+
+    Open questions for independent advisor
+    1. Accept removal of the local age fallback entirely (shared TTL retained), or require a typed Alive/Dead/Unknown probe and an explicit unknown-age policy? The present bool cannot implement “age only when liveness cannot be determined” accurately. Recommendation: bounded removal; typed uncertainty is a separately reviewed expansion.
+    2. Confirm existing force override is exempt from “not reclaimable by any entry point,” and borrow means observation without reclamation.
+    3. Is preserving existing unreadable/corrupt-lock and probe-error behavior acceptable for this bug, with the above limits recorded, or must fail-closed uncertainty be included before implementation?
+    4. Confirm the existing acquisition/shared-claim/cleanup races are separate scope rather than a prerequisite for this specific live-age regression fix.
+  created_at: 2026-09-27T01:28:13.389300846Z
+  modified_at: 2026-09-27T01:28:13.389300846Z
