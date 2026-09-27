@@ -8,13 +8,29 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:31.845994217Z
-modified_at: 2026-09-27T00:14:10.940057953Z
+modified_at: 2026-09-27T17:24:47.599798104Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
   target_id: 01a0e035-fb49-7152-81dd-a9e1bff1eab4
   created_at: 2026-09-27T00:14:10.940050170Z
   created_by: joe
+comments:
+- id: 01a0e3e5-dd6f-7ae1-94b4-4e7d3920a08b
+  author: joe
+  content: |-
+    Review: REQUEST_CHANGES (independent reviewer: CODEX seat, cross-vendor, 2026-09-27; did not write the code). Orchestrator INDEPENDENTLY CONFIRMED the blocker by reading the code.
+
+    BLOCKER -- existing stores never receive the new staging-ignore rules. aida-cli-lib/src/doctor_cmd.rs:5667 (fn ensure_store_tracked_runtime_gitignore): the function early-returns Ok(false) when .gitignore already contains the line '.aida/node.toml', which it uses as its 'load-bearing pattern' idempotence sentinel from BUG-563. The new BUG-1677 staging patterns (store_staging_ignore_block(): objects/**/*.tmp.*, registry/**/*.tmp.*, schedule/**/*.tmp.*, mailbox/**/*.tmp.*, oplog.tmp.*) are appended in the SAME block, AFTER that check. Failure scenario: any store already healed by BUG-563 -- i.e. every existing store, which is exactly BUG-1677's target population -- has '.aida/node.toml' present, so the guard returns early and the *.tmp.* patterns are NEVER written. A lock-free 'git add -A .' (db sync / auto-push) can then stage a write_atomic temp file into the store. The doc comment's claim 'Idempotent -- no-op if the load-bearing patterns are already present' is now false: the sentinel was not updated when a second, independent concern was added to the same block.
+
+    Fix direction (implementer's call): make the idempotence check per-concern rather than one sentinel -- append whichever of the two blocks is missing, keyed on a pattern actually owned by that block (e.g. check for 'objects/**/*.tmp.*' independently of '.aida/node.toml'). Add a regression test that starts from a .gitignore containing ONLY the BUG-563 patterns and asserts the staging patterns are appended; it must fail without the fix.
+
+    CONFIRMED CORRECT, no action needed: (1) all four queue writers take lock_queue_write() BEFORE the read and hold the guard through write + auto-commit (git_backend.rs:1804, 1866, 1904, 1942), so the whole read-modify-write is covered, not just the write; (2) the guard is RAII -- StoreWriteGuard::drop (store_lock.rs:49) releases on every early return and '?' path, so no stale lock; (3) no self-deadlock: the lock is re-entrant per thread (store_lock.rs:36), cached-backend and doctor/init paths take no outer lock, and a nested-lock test covers all five writers (git_backend.rs:5037); (4) the staging patterns are correctly scoped per store area and do NOT broadly ignore *.tmp.* across the store (fs_atomic.rs:111); (6) the concurrency tests are real -- a barrier launches concurrent add/remove/bulk-remove/reorder writers and asserts all entries and positions survive (git_backend.rs:4725), so they can fail without the fix.
+
+    NON-BLOCKING: queue_clear is tested for lock blocking and same-thread re-entrancy but is NOT in the concurrent barrier mix -- add it. Also note the reviewer could not run 'aida show' under its sandbox (the CLI failed to enable WAL mode on its cache) and read the canonical object from .aida-store directly instead; it ran no tests, so this verdict is a static-reading review.
+  created_at: 2026-09-27T17:24:47.599798104Z
+  modified_at: 2026-09-27T17:24:47.599798104Z
+  session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
 history:
 - id: 01a0dfac-b643-7391-abd2-9048fefe3a9a
   author: aida-session-start
