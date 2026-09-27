@@ -31,6 +31,11 @@ needs direct git-canonical access:
 ln -s /home/joe/ai/aida/.aida-store .aida-store
 ```
 
+Global role queues use permanent `~/.aida/queue/<role>.lock` sidecars and
+atomic YAML replacement (BUG-1682). Never unlink those sidecars or add a
+snapshot-save writer. Corrupt queues fail closed on mutation; position
+placement is still computed by callers outside the lock. See OVERVIEW.md.
+
 ## Requirements Management
 
 Before implementing, read the owning requirement:

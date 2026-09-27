@@ -31,6 +31,18 @@ The defensible niche is the **agent-collaboration layer**: stable spec IDs, type
 
 **Type protocols.** AIDA stores concise work contracts for spikes, bugs, stories, tasks, decisions, and docs as editable META requirements, with optional `research`, `docs`, and `keystone` lane overlays. Interactive pickup and headless implementer/reviewer prompts inject the resolved protocol before work begins, cite its META ids, cap the combined body at 40 lines, and label the precedence `type < lane < spec acceptance`; a leased session receives the compact type reminder again in its per-turn notice. Inspect them with `aida protocol show <type> [--lane <lane>]`; MCP clients read the identical text at `aida://protocol/<type>[/<lane>]`, and editing either META body changes the next pickup without rebuilding AIDA.
 
+<!-- trace:BUG-1682 | ai:codex -->
+**Global queue persistence.** The per-home role queues in `~/.aida/queue/`
+serialize cooperating writers with a permanent `<role>.lock` sidecar held
+across reading, validation, mutation, and atomic YAML replacement. Successful
+reads observe complete published content; only a final missing-file error
+initializes an empty queue. Corrupt documents and other I/O failures propagate
+from mutations, including CLI and autopilot pre-reads. Blocking locks release
+on process death but provide no fairness or bounded wait guarantee. This
+protects membership, not concurrent top/append placement, power-loss durability,
+or writes by older binaries that ignore the sidecar. Never delete a live
+sidecar to clear contention.
+
 **Honest scope.** AIDA is alpha. The core graph, traceability, queue, and MCP workflows have held under this repository's own multi-agent dogfood; broader-team scale, turnkey unattended reliability, and onboarding outside this project are still being validated. Selective gating, not blanket: a programmatic gate beats a stated rule only when the invariant sits *far from the point of action* (attention-distance; [2026-06-18-gate-vs-rule-pilot.md](docs/research/ablations/2026-06-18-gate-vs-rule-pilot.md) falsified the blanket form). Every claim above traces to a finding or a shipped command.
 
 ---
