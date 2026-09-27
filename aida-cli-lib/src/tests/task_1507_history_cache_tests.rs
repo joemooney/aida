@@ -529,6 +529,14 @@ fn history_cache_parity_with_git_walk_all_filters() {
     o.since = Some(since);
     o.id_filter = Some("FR-1".into());
     assert_parity(&fx, &o, "since + until + id");
+
+    // SPEC-441: Far-future bounds parity (2030 vs 2100).
+    // trace:SPEC-441 | ai:antigravity
+    let mut o = opts();
+    o.until = Some("2030-01-01T00:00:00+00:00".into());
+    assert_parity(&fx, &o, "until 2030");
+    o.until = Some("2100-01-01T00:00:00+00:00".into());
+    assert_parity(&fx, &o, "until 2100");
 }
 
 #[test]
@@ -3355,4 +3363,86 @@ mod sweep {
             "{probes} boundary probes for {K} non-boundary descendants"
         );
     }
+}
+
+// trace:SPEC-441 | ai:antigravity
+#[test]
+fn spec_441_far_future_until_parity() {
+    let mut fx = Fixture::new();
+    let ts_2025: i64 = 1_748_736_000; // 2025-06-01T00:00:00Z
+    let ts_2026: i64 = 1_780_272_000; // 2026-06-01T00:00:00Z
+
+    let mut spec1 = Spec::new("FR-1", "Functional", "Requirement 1");
+    spec1.modified_at = "2025-06-01T00:00:00Z".into();
+    fx.put(&spec1);
+    fx.commit_at(ts_2025, "add FR-1 in 2025");
+
+    let mut spec2 = Spec::new("FR-2", "Functional", "Requirement 2");
+    spec2.modified_at = "2026-06-01T00:00:00Z".into();
+    fx.put(&spec2);
+    fx.commit_at(ts_2026, "add FR-2 in 2026");
+
+    history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+
+    // 1. Comparison bound 2030 RFC3339:
+    let mut o_2030 = opts();
+    o_2030.until = Some("2030-01-01T00:00:00+00:00".into());
+    let (events_2030, _, _) = collect_filtered_events_git(&fx.store, &o_2030).unwrap();
+    assert_eq!(
+        events_2030.len(),
+        2,
+        "query through 2030 must include both 2025 and 2026 events"
+    );
+    assert_parity(&fx, &o_2030, "until 2030 RFC3339");
+
+    // 2. Far-future regression bound 2100 RFC3339:
+    // Git approxidate misinterprets years >= 2100 as time-of-day (21:00) in current year,
+    // which previously caused git log to drop 2026 commits.
+    let mut o_2100 = opts();
+    o_2100.until = Some("2100-01-01T00:00:00+00:00".into());
+    let (events_2100, _, _) = collect_filtered_events_git(&fx.store, &o_2100).unwrap();
+    assert_eq!(
+        events_2100.len(),
+        2,
+        "query through 2100 must include all events at or before the bound; git-walk must not omit 2026 rows"
+    );
+    assert_parity(&fx, &o_2100, "until 2100 RFC3339");
+
+    // Both 2030 and 2100 bounds must yield identical history results:
+    assert_eq!(
+        events_2030, events_2100,
+        "2030 and 2100 bounds should match"
+    );
+
+    // 3. Preserve ordinary boundary semantics:
+    // Past bound before 2026 (only 2025 event present):
+    let mut o_past = opts();
+    o_past.until = Some("2025-12-31T23:59:59+00:00".into());
+    let (events_past, _, _) = collect_filtered_events_git(&fx.store, &o_past).unwrap();
+    assert_eq!(events_past.len(), 1);
+    assert_eq!(events_past[0].spec_id, "FR-1");
+    assert_parity(&fx, &o_past, "until past bound");
+
+    // Exact second boundary: inclusive at exact timestamp
+    let mut o_exact = opts();
+    o_exact.until = Some(rfc3339(ts_2025));
+    let (events_exact, _, _) = collect_filtered_events_git(&fx.store, &o_exact).unwrap();
+    assert_eq!(events_exact.len(), 1);
+    assert_eq!(events_exact[0].spec_id, "FR-1");
+    assert_parity(&fx, &o_exact, "until exact 2025 timestamp");
+
+    // Exact second boundary: exclusive one second before timestamp
+    let mut o_before = opts();
+    o_before.until = Some(rfc3339(ts_2025 - 1));
+    let (events_before, _, _) = collect_filtered_events_git(&fx.store, &o_before).unwrap();
+    assert_eq!(events_before.len(), 0);
+    assert_parity(&fx, &o_before, "until 1 second before 2025 timestamp");
+
+    // Since filter: inclusive at exact timestamp
+    let mut o_since = opts();
+    o_since.since = Some(rfc3339(ts_2026));
+    let (events_since, _, _) = collect_filtered_events_git(&fx.store, &o_since).unwrap();
+    assert_eq!(events_since.len(), 1);
+    assert_eq!(events_since[0].spec_id, "FR-2");
+    assert_parity(&fx, &o_since, "since exact 2026 timestamp");
 }

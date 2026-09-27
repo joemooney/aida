@@ -76,6 +76,8 @@ mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
 mod git_arg_guard;
 mod git_backend_cmd;
+// trace:TASK-1522 | ai:antigravity
+pub(crate) mod intent_capture;
 mod machine_readiness;
 mod mcp_cmd;
 mod orchestrator_cmd;
@@ -17237,6 +17239,16 @@ fn init_store_mirror_config_section() -> &'static str {
      #\n\
      # [store.sync]\n\
      # mirror_remotes = [\"gitlab\"]\n"
+}
+
+// trace:TASK-1522 | ai:antigravity
+pub(crate) fn init_capture_config_section() -> &'static str {
+    "\n# Effort-balance intent-capture target (TASK-1522): advisory floor on the\n\
+     # share of newly completed specs with at least one traced test criterion.\n\
+     # Reported by `aida criteria coverage` and `aida status`; not enforced.\n\
+     #\n\
+     # [capture]\n\
+     # criterion_test_floor_pct = 50\n"
 }
 
 /// The `[worktree]` scaffold section. AIDA-created worktrees are expected to be
@@ -34968,7 +34980,7 @@ fn find_main_worktree_root() -> Result<std::path::PathBuf> {
 ///    `git rev-parse --verify` succeeds against
 ///    Returns None if no reasonable default is detectable (e.g. no remotes,
 ///    no main/master locally).
-fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
+pub(crate) fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
     let try_cmd = |args: &[&str]| -> Option<String> {
         let o = std::process::Command::new("git")
             .arg("-C")
@@ -47609,6 +47621,11 @@ mod bug_1523_orphaned_in_progress_mapping_tests;
 #[cfg(test)]
 #[path = "tests/bug_1656_subagent_liveness_tests.rs"]
 mod bug_1656_subagent_liveness_tests;
+
+// trace:BUG-1680 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/bug_1680_salvage_main_tests.rs"]
+mod bug_1680_salvage_main_tests;
 
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
@@ -64937,6 +64954,7 @@ struct PsDispatch {
     hint: Option<String>,
     dirty: bool,
     ahead_of_main: u32,
+    untracked_only: bool,
 }
 
 /// TASK-1451: whether a live seat's resolved mail identity is a stable seat
@@ -66670,19 +66688,21 @@ fn build_running_work(
                     pid_alive,
                     l.interrupted_at.is_some(),
                 );
-                let hint = dispatch_health_ps::next_command_hint(
+                let hint = dispatch_health_ps::next_command_hint_with_untracked(
                     ds,
                     &l.worktree_path,
                     &l.branch,
                     probe.last_commit_subject.as_deref(),
                     spec.as_deref(),
                     manual_enter_secs.is_some(),
+                    probe.untracked_only,
                 );
                 Some(PsDispatch {
                     state: ds,
                     hint,
                     dirty: probe.dirty,
                     ahead_of_main: probe.ahead_of_main,
+                    untracked_only: probe.untracked_only,
                 })
             };
             // TASK-1143: the worktree lock owner (if any) for this row, read
@@ -66780,6 +66800,109 @@ fn build_running_work(
     (rows, orphans)
 }
 
+/// BUG-1680: Group salvageable rows by worktree path to collapse duplicates.
+/// Rows for the same worktree path are shown once with a count, preserving all spec IDs.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) struct CollapsedSalvageRow<'a> {
+    pub(crate) row: &'a PsRow,
+    pub(crate) count: usize,
+    pub(crate) spec_ids: Vec<String>,
+    pub(crate) untracked_only: bool,
+}
+
+impl<'a> CollapsedSalvageRow<'a> {
+    pub(crate) fn display_spec(&self) -> String {
+        if !self.spec_ids.is_empty() {
+            self.spec_ids.join(", ")
+        } else {
+            self.row
+                .spec
+                .clone()
+                .unwrap_or_else(|| self.row.lease.scope.clone())
+        }
+    }
+
+    pub(crate) fn display_spec_with_count(&self) -> String {
+        let spec = self.display_spec();
+        if self.count > 1 {
+            format!("{spec} ({} sessions)", self.count)
+        } else {
+            spec
+        }
+    }
+}
+
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn collapse_salvageable_by_worktree<'a>(
+    rows: &[&'a PsRow],
+) -> Vec<CollapsedSalvageRow<'a>> {
+    let mut collapsed: Vec<CollapsedSalvageRow<'a>> = Vec::new();
+    for row in rows {
+        let wt = &row.lease.worktree_path;
+        if wt.as_os_str().is_empty() {
+            let mut spec_ids = Vec::new();
+            if let Some(ref s) = row.spec {
+                spec_ids.push(s.clone());
+            }
+            let untracked_only = row
+                .dispatch
+                .as_ref()
+                .map(|d| d.untracked_only)
+                .unwrap_or(false);
+            collapsed.push(CollapsedSalvageRow {
+                row,
+                count: 1,
+                spec_ids,
+                untracked_only,
+            });
+            continue;
+        }
+
+        if let Some(pos) = collapsed
+            .iter()
+            .position(|c| &c.row.lease.worktree_path == wt)
+        {
+            collapsed[pos].count += 1;
+            if matches!(row.state, LeaseState::Live)
+                && !matches!(collapsed[pos].row.state, LeaseState::Live)
+            {
+                collapsed[pos].row = row;
+            } else if collapsed[pos].row.dispatch.is_none() && row.dispatch.is_some() {
+                collapsed[pos].row = row;
+            }
+            if let Some(ref s) = row.spec {
+                if !collapsed[pos].spec_ids.contains(s) {
+                    collapsed[pos].spec_ids.push(s.clone());
+                }
+            }
+            if let Some(d) = &row.dispatch {
+                if collapsed[pos].row.dispatch.is_none() {
+                    collapsed[pos].untracked_only = d.untracked_only;
+                } else if !d.untracked_only {
+                    collapsed[pos].untracked_only = false;
+                }
+            }
+        } else {
+            let mut spec_ids = Vec::new();
+            if let Some(ref s) = row.spec {
+                spec_ids.push(s.clone());
+            }
+            let untracked_only = row
+                .dispatch
+                .as_ref()
+                .map(|d| d.untracked_only)
+                .unwrap_or(false);
+            collapsed.push(CollapsedSalvageRow {
+                row,
+                count: 1,
+                spec_ids,
+                untracked_only,
+            });
+        }
+    }
+    collapsed
+}
+
 fn handle_ps(json: bool, all: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -66806,13 +66929,24 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             }),
             None => serde_json::Value::Null,
         };
-        let sessions: Vec<serde_json::Value> = rows
+        let row_refs: Vec<&PsRow> = rows.iter().collect();
+        let collapsed_rows = collapse_salvageable_by_worktree(&row_refs);
+        let sessions: Vec<serde_json::Value> = collapsed_rows
             .iter()
-            .map(|row| {
+            .map(|item| {
+                let row = item.row;
+                let spec_val = if item.spec_ids.is_empty() {
+                    row.spec.clone()
+                } else {
+                    Some(item.spec_ids.join(", "))
+                };
                 serde_json::json!({
                     "session_id": row.lease.id,
                     "scope": row.lease.scope,
-                    "spec": row.spec,
+                    "spec": spec_val,
+                    "specs": item.spec_ids,
+                    "count": item.count,
+                    "untracked_only": item.untracked_only,
                     "role": row.role,
                     "lease_role": row.lease_role,
                     "worktree": row.lease.worktree_path.display().to_string(),
@@ -66969,12 +67103,14 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 println!("operator_presence: unknown");
             }
         }
-        let run: Vec<Vec<String>> = shown
+        let collapsed_shown = collapse_salvageable_by_worktree(&shown);
+        let run: Vec<Vec<String>> = collapsed_shown
             .iter()
-            .map(|r| {
+            .map(|item| {
+                let r = item.row;
                 vec![
                     r.lease.id.clone(),
-                    r.spec.clone().unwrap_or_else(|| "-".to_string()),
+                    item.display_spec_with_count(),
                     r.role.clone().unwrap_or_else(|| "-".to_string()),
                     r.pid
                         .map(|p| p.to_string())
@@ -67055,12 +67191,16 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         );
         // TASK-1090: always-shown (not gated by --all) — dead process +
         // uncommitted work hidden behind the stale-session footer.
-        let salv: Vec<Vec<String>> = salvageable_hidden
+        // BUG-1680: collapse duplicate rows for the same worktree path with a count.
+        // trace:BUG-1680 | ai:antigravity
+        let collapsed = collapse_salvageable_by_worktree(&salvageable_hidden);
+        let salv: Vec<Vec<String>> = collapsed
             .iter()
-            .map(|r| {
+            .map(|item| {
+                let r = item.row;
                 vec![
                     r.lease.id.clone(),
-                    r.spec.clone().unwrap_or_else(|| "-".to_string()),
+                    item.display_spec_with_count(),
                     r.lease.worktree_path.display().to_string(),
                     r.dispatch
                         .as_ref()
@@ -67133,13 +67273,14 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         // instead of pre-truncating every cell to a fixed ~13 visible chars —
         // `harness-worktree` / `general-purpose` are short, bounded identifiers
         // and must render whole. trace:TASK-1168 | ai:claude
-        let spec_cells: Vec<String> = shown
+        let collapsed_shown = collapse_salvageable_by_worktree(&shown);
+        let spec_cells: Vec<String> = collapsed_shown
             .iter()
-            .map(|r| r.spec.clone().unwrap_or_else(|| r.lease.scope.clone()))
+            .map(|item| item.display_spec_with_count())
             .collect();
-        let role_cells: Vec<String> = shown
+        let role_cells: Vec<String> = collapsed_shown
             .iter()
-            .map(|r| r.role.clone().unwrap_or_else(|| "-".to_string()))
+            .map(|item| item.row.role.clone().unwrap_or_else(|| "-".to_string()))
             .collect();
         let spec_w = ps_column_width(&spec_cells, PS_SPEC_MIN_WIDTH, PS_SPEC_MAX_WIDTH);
         let role_w = ps_column_width(&role_cells, PS_ROLE_MIN_WIDTH, PS_ROLE_MAX_WIDTH);
@@ -67162,10 +67303,11 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             rolew = role_w,
         );
         println!("{}", header.dimmed());
-        for row in &shown {
+        for item in &collapsed_shown {
+            let row = item.row;
             let l = &row.lease;
             let prefix_len = unique_prefix_len(&l.id, &all_ids, 8);
-            let spec_col = row.spec.clone().unwrap_or_else(|| l.scope.clone());
+            let spec_col = item.display_spec_with_count();
             let pid_col = row.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into());
             // BUG-763: time-of-day for today's leases, "Jun-26 11:55" for
             // anything older — a June birth must never read as this morning
@@ -67388,15 +67530,26 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
     if !salvageable_hidden.is_empty() {
         let warn = crate::glyph(crate::glyphs::Glyph::Warning);
         println!();
+        // BUG-1680: collapse duplicate rows for the same worktree path with a count.
+        // trace:BUG-1680 | ai:antigravity
+        let collapsed = collapse_salvageable_by_worktree(&salvageable_hidden);
+        let work_desc = if collapsed.iter().all(|c| c.untracked_only) {
+            "untracked files only"
+        } else {
+            "uncommitted work"
+        };
         println!(
             "{}",
-            "Salvageable (dead process, uncommitted work — hidden behind the stale-session count above)"
-                .bold()
-                .red()
+            format!(
+                "Salvageable (dead process, {work_desc} — hidden behind the stale-session count above)"
+            )
+            .bold()
+            .red()
         );
-        for row in &salvageable_hidden {
-            let spec_col = row.spec.clone().unwrap_or_else(|| row.lease.scope.clone());
-            println!("  {} {}", warn.red(), spec_col.red().bold());
+        for item in &collapsed {
+            let row = item.row;
+            let header = item.display_spec_with_count();
+            println!("  {} {}", warn.red(), header.red().bold());
             println!(
                 "      {}",
                 row.lease.worktree_path.display().to_string().dimmed()
@@ -82270,6 +82423,11 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
         "",
         "your personal queue: `aida queue list`".dimmed()
     );
+    if let Some(line) = crate::intent_capture::status_intent_capture_line(
+        &std::env::current_dir().unwrap_or_default(),
+    ) {
+        println!("{line}");
+    }
     println!();
 
     println!("{}", "─── Requirements (cache) ───".bold());

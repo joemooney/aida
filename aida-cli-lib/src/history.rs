@@ -1329,11 +1329,51 @@ fn collect_filtered_events_unresolved(
     ))
 }
 
+/// Parse an RFC3339 string, unix timestamp, or ISO datetime into a unix epoch
+/// timestamp in seconds. Used so git log --since/--until commands receive
+/// unambiguous numeric timestamps, avoiding Git approxidate parser bugs
+/// where years >= 2100 are misinterpreted as times of day (HHMM).
+// trace:SPEC-441 | ai:antigravity
+pub(crate) fn parse_history_timestamp_bound(raw: &str) -> Option<i64> {
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(raw) {
+        return Some(dt.timestamp());
+    }
+    if let Some(stripped) = raw.strip_prefix('@') {
+        if let Ok(ts) = stripped.parse::<i64>() {
+            return Some(ts);
+        }
+    }
+    if let Ok(ts) = raw.parse::<i64>() {
+        return Some(ts);
+    }
+    if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(raw, "%Y-%m-%dT%H:%M:%S") {
+        return Some(dt.and_utc().timestamp());
+    }
+    if let Ok(d) = chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
+        return d.and_hms_opt(0, 0, 0).map(|dt| dt.and_utc().timestamp());
+    }
+    None
+}
+
+/// Convert a time bound string for `git log --since=` or `--until=` into an
+/// unambiguous numeric timestamp if parseable, or retain the raw string.
+/// Passing a numeric timestamp avoids Git's approxidate parser bug where
+/// 4-digit years >= 2100 are misinterpreted as time-of-day (HHMM).
+// trace:SPEC-441 | ai:antigravity
+pub(crate) fn format_git_log_bound(raw: &str) -> String {
+    if let Some(ts) = parse_history_timestamp_bound(raw) {
+        ts.to_string()
+    } else {
+        raw.to_string()
+    }
+}
+
 /// The git-walk implementation of [`collect_filtered_events`]: the
 /// canonical answer, used whenever the history index cannot serve a query,
 /// and the oracle the index's parity tests compare against.
 // trace:BUG-1617 | ai:claude
 // trace:TASK-1507 | ai:claude
+// trace:SPEC-441 | ai:antigravity
 pub(crate) fn collect_filtered_events_git(
     store_path: &Path,
     opts: &HistoryOpts,
@@ -1353,10 +1393,10 @@ pub(crate) fn collect_filtered_events_git(
         format!("-n{}", opts.max_commits.saturating_add(1)),
     ];
     if let Some(s) = &opts.since {
-        log_args.push(format!("--since={}", s));
+        log_args.push(format!("--since={}", format_git_log_bound(s)));
     }
     if let Some(u) = &opts.until {
-        log_args.push(format!("--until={}", u));
+        log_args.push(format!("--until={}", format_git_log_bound(u)));
     }
 
     // Path-scope the log walk to the one spec when `--id` is set. Without
@@ -1723,11 +1763,12 @@ fn build_digest_rows(
         "--pretty=format:%H%x09%aI%x09%ae%x09%s".into(),
         format!("-n{}", opts.max_commits),
     ];
+    // trace:SPEC-441 | ai:antigravity
     if let Some(s) = &opts.since {
-        log_args.push(format!("--since={}", s));
+        log_args.push(format!("--since={}", format_git_log_bound(s)));
     }
     if let Some(u) = &opts.until {
-        log_args.push(format!("--until={}", u));
+        log_args.push(format!("--until={}", format_git_log_bound(u)));
     }
 
     let log_output = run_git(store_path, &log_args)?;
