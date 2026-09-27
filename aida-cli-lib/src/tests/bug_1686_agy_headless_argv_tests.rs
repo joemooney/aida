@@ -84,6 +84,7 @@ fn parse_like_go_flags(argv: &[String]) -> (Option<String>, bool, Vec<String>) {
 /// permission flag first, `-p <prompt>` last. Asserted as a whole vector, so a
 /// reordering (or an extra token wedged between `-p` and the prompt) fails.
 // trace:BUG-1686 | ai:claude
+// trace:BUG-1686.ac8aba70 | ai:claude
 #[test]
 fn agy_headless_argv_is_permission_flag_then_dash_p_then_prompt() {
     let prompt = "/aida-pickup BUG-1680";
@@ -102,6 +103,8 @@ fn agy_headless_argv_is_permission_flag_then_dash_p_then_prompt() {
 /// per-seat tuning) — the model/output-style option flags stay ahead of `-p`
 /// too, so the prompt remains `-p`'s value.
 // trace:BUG-1686 | ai:claude
+// trace:BUG-1686.ac8aba70 | ai:claude
+// trace:BUG-1686.aca70285 | ai:claude
 #[test]
 fn agy_headless_argv_keeps_configured_effort_ahead_of_the_prompt_flag() {
     let prompt = "/aida-pickup BUG-1680";
@@ -134,6 +137,9 @@ fn agy_headless_argv_keeps_configured_effort_ahead_of_the_prompt_flag() {
 /// token immediately after `-p`; each appears exactly once; and nothing trails
 /// the prompt as a stray positional.
 // trace:BUG-1686 | ai:claude
+// trace:BUG-1686.ac8aba70 | ai:claude
+// trace:BUG-1686.aca70285 | ai:claude
+// trace:BUG-1686.ac4341ac | ai:claude
 #[test]
 fn agy_headless_argv_order_invariants_hold_with_and_without_effort() {
     let prompt = "/aida-pickup BUG-1680";
@@ -195,6 +201,7 @@ fn agy_headless_argv_order_invariants_hold_with_and_without_effort() {
 /// permission flag as the PROMPT. Parsing the old shape the way agy 1.2.12 does
 /// reproduces the failure, and the shape we now emit does not.
 // trace:BUG-1686 | ai:claude
+// trace:BUG-1686.ac8aba70 | ai:claude
 #[test]
 fn the_pre_fix_agy_argv_order_is_what_swallowed_the_prompt() {
     let prompt = "/aida-pickup BUG-1680";
@@ -233,6 +240,7 @@ fn the_pre_fix_agy_argv_order_is_what_swallowed_the_prompt() {
 /// not a defect. This test records the distinction rather than widening the
 /// BUG-1686 fix into them.
 // trace:BUG-1686 | ai:claude
+// trace:BUG-1686.ac4341ac | ai:claude
 #[test]
 fn claude_and_codex_arms_do_not_take_the_prompt_as_a_flag_value() {
     let prompt = "/aida-pickup BUG-1680";
@@ -307,6 +315,10 @@ fn read_captured_argv(capture: &std::path::Path) -> Vec<String> {
 /// its own argv, which a bare "the launch succeeded" assertion would miss.
 // The fixture is a `#!/bin/sh` script, unspawnable on Windows (os error 193);
 // same unix gating as the other shell-mock launch tests. trace:BUG-1646
+// trace:BUG-1686 | ai:claude
+// trace:BUG-1686.aca70285 | ai:claude
+// trace:BUG-1686.acb8f1db | ai:claude
+// trace:BUG-1686.ac4341ac | ai:claude
 #[cfg(unix)]
 #[test]
 fn spawned_agy_process_receives_the_ordered_argv() {
@@ -369,6 +381,7 @@ fn spawned_agy_process_receives_the_ordered_argv() {
 /// routes the program through the `AIDA_AGENT_CMD` mock seam. Covers the
 /// queue-work path's argv construction without spawning anything.
 // trace:BUG-1686 | ai:claude
+// trace:BUG-1686.acb8f1db | ai:claude
 #[test]
 fn compose_headless_command_for_agy_orders_flags_before_the_prompt() {
     let tmp = tempfile::tempdir().unwrap();
