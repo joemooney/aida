@@ -105679,6 +105679,33 @@ mod forge_seam_tests {
         );
     }
 
+    // REVIEW PROBE (scratch, not on the branch): the retraction resolves its
+    // target through detect_phase1_pr, whose spec-search fallback can return
+    // a PR on a DIFFERENT branch when the branch-keyed lookup is empty. The
+    // pre-launch snapshot is branch-keyed only, so that PR is never "preexisting".
+    #[test]
+    fn review_probe_spec_search_fallback_retracts_a_pr_on_another_branch() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tempfile::tempdir().unwrap();
+        let gh = bin.path().join("gh");
+        std::fs::write(&gh, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo gh fake; exit 0; fi\nexit 1\n").unwrap();
+        let mut perms = std::fs::metadata(&gh).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&gh, perms).unwrap();
+        let _g = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", gh.to_str().unwrap());
+
+        let mut forge = RecordingForge::new().with_state(ChangeState::Open);
+        forge.open_for_branch = ChangeLookup::NoChange; // implementer opened nothing
+        forge.open_for_spec = ChangeLookup::Found(change(99, "someone-else/mentions-the-spec"));
+        let mut driver = driver_with(tmp.path(), &forge);
+        driver.preexisting_phase1_pr = None; // nothing was open on OUR branch
+
+        let outcome = driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+        eprintln!("PROBE outcome = {outcome:?}; drafted = {:?}; comments = {}", forge.drafted(), forge.comments().len());
+        assert_eq!(forge.drafted(), vec![99], "PROBE: PR-99 on another branch was retracted");
+    }
+
     // TASK-1529: the Done -> In Progress return is pure and only moves Done.
     #[test]
     fn task_1529_retraction_returns_a_done_spec_to_in_progress_only() {
