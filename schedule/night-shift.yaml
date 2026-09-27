@@ -1,6 +1,6 @@
 job: night-shift
-last_run: 2026-09-27T16:43:35.195820236Z
+last_run: 2026-09-27T16:56:25.194438293Z
 last_by:
   seat: substrate
   vendor: tick
-result: failed:124
+result: ok
