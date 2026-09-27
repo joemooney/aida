@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:31.845994217Z
-modified_at: 2026-09-27T17:25:03.508688773Z
+modified_at: 2026-09-27T18:14:00.285231697Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -30,6 +30,21 @@ comments:
     NON-BLOCKING: queue_clear is tested for lock blocking and same-thread re-entrancy but is NOT in the concurrent barrier mix -- add it. Also note the reviewer could not run 'aida show' under its sandbox (the CLI failed to enable WAL mode on its cache) and read the canonical object from .aida-store directly instead; it ran no tests, so this verdict is a static-reading review.
   created_at: 2026-09-27T17:24:47.599798104Z
   modified_at: 2026-09-27T17:24:47.599798104Z
+  session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
+- id: 01a0e412-eb5d-7270-979e-ca4acdf56c04
+  author: joe
+  content: |-
+    Review: APPROVE (fresh independent Claude reviewer, 2026-09-27; wrote neither the branch nor the fix -- codex wrote the fix, so this re-review is a different vendor and a different session). Fix commit ce64bb906e5c570f94bf3dd6d9e2db0da46e584f, verified present on origin.
+
+    All six claims CONFIRMED with file:line. The two guards are now independent: doctor_cmd.rs:5672 keys the BUG-563 concern on '.aida/node.toml', and :5690 keys the BUG-1677 concern on staging_patterns[0] == 'objects/**/*.tmp.*' (fs_atomic.rs:113), a pattern genuinely OWNED by store_staging_ignore_block(), so it cannot drift on BUG-563's sentinel again. The early return is gone; the only return-false is :5694 after BOTH predicates. Three new tests (doctor_cmd.rs:5816, :5831, :5846) plus the pre-existing end-to-end heal test (:9057, which calls the heal four times in a loop) all pass: 4 passed, 0 failed.
+
+    MUTATION PROOF IS REAL AND PINS BEHAVIOUR, not just the bool: the quoted 'assertion failed: ensure_store_tracked_runtime_gitignore(&store).unwrap()' is merely the FIRST assertion to fire; :5821-5827 independently asserts every staging pattern is present as an exact trimmed line, so a mutation that returned true WITHOUT writing would also fail. Byte-identical-content assertion at :5839-5842 pins the no-op case. BUG-563 is not regressed and nothing double-appends across consecutive calls. Trailing-newline idempotence is safe (both blocks are '\n'-prefixed, handle opened append-only, and existing.lines() still yields an unterminated final line). Trace markers are plain '//' at :5662 and :5688.
+
+    queue_clear's exclusion from the concurrent barrier mix is SOUND, not an excuse: that test asserts an exact final entry set (git_backend.rs:4890-4900), which a racing clear makes vacuous; and for completed_only == false the operation is remove_file (:1952), not a read-modify-write, so the lost-update hazard does not apply. It remains covered for lock contention (:4997) and same-thread re-entrancy (:5049), and the reasoning is documented at :4720-4723.
+
+    IMPORTANT SCOPE CORRECTION -- do not report this as 'every existing store now gets the patterns'. ensure_store_tracked_runtime_gitignore is reachable only from heal_doctor_store_tracked_runtime (:5588, :5617), and that heal only runs when the BUG-563 detector still finds a runtime file TRACKED on the orphan branch (lib.rs:23617-23641, via git ls-files). A store ALREADY fully healed by BUG-563 -- no tracked runtime files, 563 patterns present -- produces no finding, so it still never receives the staging block, and git_ops.rs:188's 'git add -A <subdir>' remains the exposure. That residue is exactly TASK-1547 and is documented in-code at workspace.rs:220 and init_cmd.rs:5329. Correct within this commit's path; the remaining population is tracked, not fixed here.
+  created_at: 2026-09-27T18:14:00.285231697Z
+  modified_at: 2026-09-27T18:14:00.285231697Z
   session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
 history:
 - id: 01a0dfac-b643-7391-abd2-9048fefe3a9a
