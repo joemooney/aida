@@ -279,8 +279,8 @@ fn pick_dev_binary_dir(
 /// True when the inactive-side build at `<repo>/target/<other>/aida` is
 /// newer than the active-side build at `<repo>/target/<active>/aida`.
 /// Used for the stale-build warning + PS1 marker.
-// trace:FR-1-068 | ai:claude
-fn alternate_build_is_newer(repo: &std::path::Path, active: &str) -> bool {
+// trace:FR-1-068 trace:TASK-1499 | ai:antigravity
+pub(crate) fn alternate_build_is_newer(repo: &std::path::Path, active: &str) -> bool {
     let other = if active == "debug" {
         "release"
     } else {
@@ -1186,7 +1186,8 @@ pub(crate) fn classify_dev_activation(
     DevActivationState::Active
 }
 
-fn resolve_aida_on_path() -> Option<std::path::PathBuf> {
+// trace:TASK-1499 | ai:antigravity
+pub(crate) fn resolve_aida_on_path() -> Option<std::path::PathBuf> {
     let out = std::process::Command::new("which")
         .arg("aida")
         .output()

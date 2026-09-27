@@ -3,6 +3,9 @@
 // trace:STORY-639 | ai:claude
 #![recursion_limit = "256"]
 
+// trace:TASK-1499 | ai:antigravity
+pub(crate) mod aida_bin;
+
 mod advisor;
 mod advisor_code_gate;
 mod advisor_watch;
@@ -27868,6 +27871,8 @@ fn agent_new_with_config(
             config.agent_type
         )
     })?;
+    // trace:TASK-1499 | ai:antigravity
+    aida_bin::resolve_aida_executable(&aida_bin::ResolveInputs::from_process())?;
     apply_agent_default_flags(
         &mut config,
         &project_root,
@@ -29248,6 +29253,18 @@ fn read_agents_bool_from_file(path: &std::path::Path, key: &str) -> Result<Optio
         .and_then(|b| b.as_bool()))
 }
 
+// trace:TASK-1499 | ai:antigravity
+fn read_agents_string_from_file(path: &std::path::Path, key: &str) -> Result<Option<String>> {
+    let Some(value) = parse_agents_toml(path)? else {
+        return Ok(None);
+    };
+    Ok(value
+        .get("agents")
+        .and_then(|agents| agents.get(key))
+        .and_then(|v| v.as_str())
+        .map(str::to_string))
+}
+
 /// STORY-495: resolve the effective `--permission-mode` for the
 /// `session new` / `session start --launch` interactive launchers. `None`
 /// means honor Claude's native posture (the faithful default). Precedence:
@@ -30539,6 +30556,47 @@ fn render_agent_launch_noexec(
     }
     out.push_str(&format!("cwd: {}\n", plan.launch_cwd.display()));
     out.push_str(&format!("command: {}\n", shell_join_display(&argv)));
+    // trace:TASK-1499 | ai:antigravity
+    let resolved_aida =
+        aida_bin::resolve_aida_executable(&aida_bin::ResolveInputs::from_process())?;
+    if resolved_aida.source == aida_bin::AidaBinSource::PathUnverified {
+        out.push_str(&format!(
+            "aida_executable: {} (not found on PATH; child will fail to exec)\n",
+            resolved_aida.path.display()
+        ));
+    } else {
+        let profile_str = resolved_aida
+            .profile
+            .map(|p| p.as_str())
+            .unwrap_or("n/a");
+        let checkout_str = resolved_aida
+            .checkout_root
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "n/a".to_string());
+        out.push_str(&format!(
+            "aida_executable: {} (source: {}, profile: {profile_str}, checkout: {checkout_str})\n",
+            resolved_aida.path.display(),
+            resolved_aida.source.as_str(),
+        ));
+    }
+    if let Some((alt_profile, alt_path)) = &resolved_aida.newer_alternate {
+        let curr_mtime = resolved_aida.path.metadata().and_then(|m| m.modified()).ok();
+        let alt_mtime = alt_path.metadata().and_then(|m| m.modified()).ok();
+        let age_str = match (curr_mtime, alt_mtime) {
+            (Some(c), Some(a)) if a > c => {
+                let diff = a.duration_since(c).unwrap_or_default().as_secs();
+                crate::agent_registry::humanize_elapsed(diff as i64)
+            }
+            _ => "unknown".to_string(),
+        };
+        let curr_str = resolved_aida.profile.map(|p| p.as_str()).unwrap_or("release");
+        out.push_str(&format!(
+            "aida_build_stale: {} is newer than {} ({age_str}); run cargo build --release or set AIDA_BUILD_PROFILE\n",
+            alt_profile.as_str(),
+            curr_str
+        ));
+    }
     out.push_str("permission_posture:\n");
     out.push_str(&format!("  agents.toml bypass: {agents_bypass}\n"));
     out.push_str(&format!("  agents.toml contained: {agents_contained}\n"));
@@ -101959,11 +102017,69 @@ fn reconcile_orchestrated_branch(
 /// Falls back to the bare "aida" name (PATH search) if the OS lookup
 /// failed or the resolved path doesn't exist on disk.
 ///
-/// trace:BUG-217 | ai:claude
+impl aida_bin::ResolveInputs {
+    // trace:TASK-1499 | ai:antigravity
+    pub(crate) fn from_process() -> Self {
+        let (override_path, override_source) = if let Ok(val) = std::env::var("AIDA_BIN") {
+            let val = val.trim();
+            if !val.is_empty() {
+                (
+                    Some(std::path::PathBuf::from(val)),
+                    Some(aida_bin::AidaBinSource::OverrideEnv),
+                )
+            } else {
+                (None, None)
+            }
+        } else if let Some(home) = aida_home_dir() {
+            let path = home.join(".aida/agents.toml");
+            match read_agents_string_from_file(&path, "aida_bin") {
+                Ok(Some(val)) if !val.trim().is_empty() => (
+                    Some(std::path::PathBuf::from(val.trim())),
+                    Some(aida_bin::AidaBinSource::OverrideConfig),
+                ),
+                _ => (None, None),
+            }
+        } else {
+            (None, None)
+        };
+
+        let profile_request = if let Ok(val) = std::env::var("AIDA_BUILD_PROFILE") {
+            aida_bin::BuildProfile::from_str_opt(&val)
+        } else if let Some(home) = aida_home_dir() {
+            let path = home.join(".aida/agents.toml");
+            match read_agents_string_from_file(&path, "aida_build_profile") {
+                Ok(Some(val)) => aida_bin::BuildProfile::from_str_opt(&val),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        Self {
+            override_path,
+            override_source,
+            profile_request,
+            current_exe: std::env::current_exe().ok(),
+            path_env: std::env::var_os("PATH"),
+        }
+    }
+}
+
+/// trace:BUG-217 trace:TASK-1499 | ai:antigravity
 pub(crate) fn aida_exe_path() -> std::path::PathBuf {
     static AIDA_EXE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     AIDA_EXE
-        .get_or_init(|| resolve_aida_exe_from(std::env::current_exe().ok()))
+        .get_or_init(|| {
+            let inputs = aida_bin::ResolveInputs::from_process();
+            let fallback_current = inputs.current_exe.clone();
+            match aida_bin::resolve_aida_executable(&inputs) {
+                Ok(resolved) => resolved.path,
+                Err(err) => {
+                    eprintln!("warning: could not resolve aida executable: {err:#}");
+                    resolve_aida_exe_from(fallback_current)
+                }
+            }
+        })
         .clone()
 }
 
@@ -102038,6 +102154,10 @@ fn prepend_dir_to_path(dir: &std::path::Path, path: &std::ffi::OsStr) -> std::ff
 #[cfg(test)]
 #[path = "tests/resolve_aida_exe_tests.rs"]
 mod resolve_aida_exe_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1499_aida_bin_tests.rs"]
+mod task_1499_aida_bin_tests;
 
 #[cfg(test)]
 #[path = "tests/story_1418_completion_seam_tests.rs"]
