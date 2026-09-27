@@ -120,11 +120,3 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
-filed_at:
-  code_sha: 2a468d964db9278634eb617438db21932126d10e
-  branch: claude/task-1549
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 7c6faed690
-  vendor: antigravity
-  session: da36c066-c384-494e-a7cf-abffb3cfe52d

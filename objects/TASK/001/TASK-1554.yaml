@@ -18,11 +18,3 @@ feature: Uncategorized
 created_at: 2026-09-27T17:20:00.790572735Z
 modified_at: 2026-09-27T17:20:00.790572735Z
 req_type: Task
-filed_at:
-  code_sha: 6b1dac2a201bae751901ab95ad49e591292465a1
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: '7201317922'
-  vendor: antigravity
-  session: 3266fac0-5feb-463f-a891-7a3a066739c1
