@@ -42,12 +42,12 @@ description: |
 
   ## Groomed decision (proxy, 2026-09-25)
   Project templates live in the tracked .aida/config.toml under [history.templates] (the recommendation). The aida-store alternative is rejected: a formatting preference should not become a requirement-graph object. Added acceptance: the implementing PR files an accepted ADR recording this choice and the rejected alternative before the code lands. Sequencing: after TASK-1512 (its --to/--from/--opened must exist for the compose criterion).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T21:33:23.334328053Z
-modified_at: 2026-09-27T01:51:50.444827554Z
+modified_at: 2026-09-27T02:04:35.705323741Z
 req_type: Story
 tags:
 - aida:history
