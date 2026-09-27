@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-09-26T19:09:12.875417574Z
+modified_at: 2026-09-27T01:42:11.316113094Z
 req_type: Bug
 comments:
 - id: 01a0df0b-e7f8-7193-84a1-2955581faa5f
@@ -24,6 +24,141 @@ comments:
   created_at: 2026-09-26T18:48:14.584891605Z
   modified_at: 2026-09-26T18:48:14.584891605Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e086-e274-7333-9fa5-28891f6a88d0
+  author: mcp
+  content: |-
+    SKETCH — awaiting independent advisor signoff
+    Author seat: design/sketch only. No implementation, approval, queue change, or merge performed.
+    Read AGENTS.md, .aida/discipline/two-seat-protocol.md, and BUG-1669 --full. Code inspected at HEAD 854b7e26f7222c73845064275a18c293c9895283 (2026-09-26). Existing untracked .codegraph/ and target-review/ were left alone. This comment is the sole durable deliverable.
+
+    1. Finding and acceptance interpretation
+
+    The vulnerability is broader than compete/intake/burndown. Authorization belongs at the launch boundary, not in prompt text, argv builders, role strings, queue membership, or a warning banner. Existing workflow/disposition/companion/lease gates remain additional constraints; passing the proposed gate does not approve a spec or confer an advisor seat.
+
+    CRITICAL ambiguity: the existing orchestrator::detect is run corroboration, not demonstrably an unforgeable security credential. In aida-cli-lib/src/orchestrator.rs, detect -> classify -> run_is_live checks a nonempty AIDA_AUTO_COMPLETE, UUID-shaped AIDA_AUTO_COMPLETE_TOKEN, matching DrainState::run_uuid, and process_probe::pid_is_alive(orchestrator_pid). .aida/drain-state.json is ordinary project state. A same-user process with access to it can read/replay a token, or write a UUID and a live PID. No caller ancestry, process start identity, authenticated issuer, or spec-scope check is performed by detect. Likewise a PTY establishes a terminal, not human identity. Do not describe the current mechanism as unforgeable in the implementation or PR.
+
+    The concrete gate below implements the acceptance's named detect mechanism under a trusted-local-state threat model. Literal unforgeability against a malicious same-user agent requires an advisor-selected trust-boundary change before this sketch can satisfy AC2. It must not be silently watered down to a role check.
+
+    2. Production entry-point inventory and present checks
+
+    Paths below are relative to aida-cli-lib/src. This inventory follows bypass flag literals and their builder callers through spawn/status/output/exec, including resumed and detached launches. Pure renderers/tests/config writers are distinguished from process launches.
+
+    A. compete_cmd.rs::handle_compete_command and handle_zen_compete (zen bake-off):
+      - run_compete_arm launches Claude or Codex from compete.rs::vendor_adapter/headless_argv. Claude uses -p --permission-mode bypassPermissions; Codex uses exec --dangerously-bypass-approvals-and-sandbox.
+      - run_compete_judge / zen's direct judge leg -> spawn_judge -> compete.rs::judge_command uses those same bypass postures. AIDA_COMPETE_JUDGE changes the executable, not authority.
+      - Present checks concern target/vendor validity, dry-run, dirty-tree warning and later gates, not terminal confirmation/live-token launch authority. Antigravity compete adapter currently emits a human-run brief, not a process.
+      - Gate before run_compete_arm: that function forcibly removes old worktrees/branches BEFORE spawning. Authorize the whole named arm/judge set once, then pass a permit to both private spawn sinks. Refusal must bubble out, not become a skipped/failed arm followed by a judge.
+
+    B. lib.rs::handle_intake_command (intake assess; also groom/advisor-assess routing):
+      - Direct claude -p status(), default bypassPermissions, explicit permission_mode override. Candidate fence, empty-set and dry-run exits; no launch authority check. Propose-mode text saying "writes NOTHING" is not enforcement.
+      - Gate the actual bypass launch for both propose/apply and --then-drain. An apply, role, candidate fence or on_apply=drain setting grants no launch authority.
+
+    C. lib.rs::handle_burndown_run:
+      - Direct quiet claude -p status() and verbose run_burndown_verbose -> burndown_verbose_claude_args; both default bypassPermissions. Continuation loop launches up to MAX_RESUME_ROUNDS again.
+      - Present companion refusal; !force && !has_dispatch_authority(); readiness/freshness and drain lock. has_dispatch_authority allows product/advisor/integrator roles (effective role can derive from environment/roster), and --force skips it. Neither suffices for AC2.
+      - Add independent non-bypassable launch authorization before sync/preparation/lock/log mutation for a real bypass execution. Preserve companion and dispatch checks; --force only affects the old workflow guard.
+      - Pass one operation-scoped human permit through quiet/verbose/bounded continuation; if authorized by a drain token, revalidate it at each launch.
+
+    D. session.rs shared headless sinks:
+      - spawn_claude_headless -> spawn_vendor_headless -> spawn_vendor_headless_with_seat -> compose_headless_command.
+      - exec_vendor_headless uses the same composition but independently spawns and exits.
+      - spawn_claude_headless_resume uses claude_headless_resume_args_with_posture, independently.
+      - headless_vendor_args dispatches to Claude, Codex, Agy builders; Codex and Agy currently ignore the contained boolean and still emit bypass flags. Gate resolved vendor posture, never merely if !contained.
+      - No shared terminal-confirmation/live-token authorization currently protects these sinks.
+
+    Reachable headless consumers of D, each needing a caller-level guard plus the sink invariant:
+      - lib.rs::handle_research_command; questions_remedy (temporarily assigns advisor role); run_dryrun_ai_pass; generate_intent.
+      - Research/remedy have spec/candidate checks, not this boundary. Dryrun-AI and intent check stdin+stdout TTY and AIDA_HEADLESS != 1, but do not obtain explicit human confirmation. Preserve their existing narrower workflow restrictions rather than silently enabling new batch regeneration.
+      - harvest.rs::handle_harvest_command (live-agent branch), run_harvest_agent via propose_only. Candidate confirmation/--yes-all is not permission to launch bypass; --from with existing candidates does not spawn.
+      - reconstitute.rs::handle_reconstitute_command -> run_headless (probe/match stages). Scratch worktree and dry-run controls are not dispatch authorization.
+      - advisor_watch.rs::run_advisor_watch -> fork_and_run (Claude resume) or cold_boot_and_run (vendor/seat spawn). Presence, awaiting work and fork availability are not launch authority. Explicitly bound any human consent to this watch lifetime; token-backed watches recheck every wake.
+      - queue_cmd.rs::handle_queue_work: fresh --no-human implementer -> exec_vendor_headless; resumed headless implementer -> spawn_claude_headless_resume.
+      - queue_cmd.rs::run_standalone_reviewer: fresh vendor/seat and resumed Claude headless branches. Queue/lease/readiness and headless scope acknowledgement are not substitutes for AC2.
+      - lib.rs::RealPhaseDriver::resume_implementer uses the resume sink.
+
+    E. Additional direct in-drain sinks bypassing D:
+      - lib.rs::RealPhaseDriver::spawn_advisor_session -> session::advisor_tier_program_and_args_with_tuning -> direct Command.status (cold boot and fork).
+      - lib.rs::RealPhaseDriver::attempt_ci_fix -> session::headless_vendor_args -> direct Command.status.
+      - Driver provenance is meaningful only if the controller was authorized before creating the run. Carry the controller's permit into these functions; do not assume the controller process itself has the phase-child environment.
+
+    F. Agent new and interactive surfaces covered by AC1's "every production code path":
+      - lib.rs::agent_new_claude injects bypass for --bg; agent_new_codex/agent_new_antigravity add explicit --bypass-sandbox flags.
+      - agent_new_with_config -> run_tracked_agent and agent_new_bg_dispatch -> Command.output consume merged defaults/extra flags; tool_bypass_flags/apply_agent_default_flags and configured agents.bypass can inject bypass. Foreground is not inherently safe: callers can also supply headless vendor flags.
+      - session.rs::exec_claude / run_claude_session / spawn_claude_session, exec_claude_resume / spawn_claude_resume, exec_codex_session / spawn_codex_session, spawn_reviewer_launch_plan consume optional bypass modes/argv for session/queue/reviewer launches.
+      - Present configuration, singleton, readiness, context/brief and posture prompts do not constitute per-operation AC2 confirmation. launch_authorized_by merely reads brief metadata.
+      - Recommend covering explicit/resolved bypass on these sinks under the same policy; ask advisor to confirm literal AC1/2 scope rather than quietly excluding them because the title says headless.
+
+    G. Non-launch hits and external scripts:
+      - session/compete pure argv builders, queue_cmd deferred_*_launch_hint/headless_launch_hint, dry-run previews, config_cmd.rs posture writers/classifiers, templates/agents.toml: no process launch themselves. Keep previews usable without confirmation. Config remains input, never authority.
+      - scripts/aida-demo.sh has an actual bypass probe; scripts/ablations/gate-vs-rule{,-i2,-i3,-i4}.sh launch bypass Claude/Codex. These are demo/research scripts, outside the production Rust CLI; include this explicit disposition in the eventual PR inventory. If "production" includes shipped demo scripts, they need guarding too, not an omission.
+      - pane_host.rs transports a supplied command into tmux; it does not originate bypass flags. Authorize before handing off to it, preserve credential transport, and test pane/fallback launches.
+      - A printed argv, configured arbitrary executable, or direct user/vendor invocation is not made safe by an AIDA-only gate.
+
+    3. Proposed implementation shape (NOT implemented)
+
+    Add aida-cli-lib/src/launch_authority.rs, registered in lib.rs:
+      - authorize_bypass_launch(canonical_root, launch_description, confirmation_io) -> Result<LaunchPermit>.
+      - validate_for_spawn(permit, canonical_root, resolved_posture) -> Result<()>.
+      - LaunchPermit has private fields, no public boolean constructor, no serialization and no environment "approved" switch. Human variant is scoped to the invocation/root and announced children/continuation policy; drain variant binds root and run identity and rechecks liveness/match before each spawn. Do not persist the human decision globally.
+      - Production root comes from find_main_worktree_root / equivalent git-based resolution for explicit cwd, not a caller-supplied AIDA_DRIVE_ROOT alone. Resolution/read/parse failures deny the drain option.
+      - First use orchestrator::detect(root).is_orchestrated(). Interactive and Uncorroborated both grant NOTHING. If not corroborated, require authority_stdin_is_terminal() AND authority_stdout_is_terminal(), then a dedicated default-no confirmation that reads the same terminal. EOF, I/O error, no/empty answer refuse. Do not use non_interactive_confirm, --yes, --force, no-human acknowledgement files, solo/presence, AIDA_AGENT_MODE, AIDA_SESSION_ROLE, registry token or AIDA_BURNDOWN_LOCK_HELD as grants.
+      - Suggested prompt: "Launch <operation> with permission and sandbox checks bypassed? This permits unrestricted child actions. [y/N]"
+      - Denial: "Refusing to launch an agent with permission or sandbox checks bypassed. Confirm this launch at an interactive terminal, or launch it as a verified child of an authorized drain. No agent was launched."
+      - Nonzero error, no fallback to another vendor or downgraded launch. Avoid printing tokens. Keep the denial stable and uncolored in test assertions.
+
+    Prefer a typed resolved launch posture, carried with the command, over searching every argv string for "dangerous". For config/extra-flag paths normalize both --key value and --key=value, relevant aliases and Codex danger-full-access combinations; inspect option positions, not prompt text. Unknown/custom executable policy needs explicit advisor scope (see below). Existing config_cmd::nuclear_permission_flag alone is insufficient: it matches only three exact strings.
+
+    Thread permits through the named shared and direct sinks. Keep pure argv builders pure. Validate before launch logs/tee threads, destructive worktree preparation, leases, sidecars, role/env writes or subprocess execution associated with the launch; validate token again immediately before the actual spawn. Dry-run/no-exec and no-work exits remain non-launch paths. Earlier read-only resolution is fine. Do not catch denial and continue to another bypass leg.
+
+    4. Preserve the authorized drain, and prevent self-authorization
+
+    lib.rs::run_auto_complete currently mints run_token and writes DrainState / set_run; orchestrator_phase_child_env exports it to phase children. Authorization must precede minting/writing state, ensure_queued_for_implementer and the --with-plan prelude. Otherwise an arbitrary agent can start a controller which manufactures evidence for its own children. Cover handle_auto_complete, batch/nextN/multi-batch, resume/from-PR and pipelined entries at a common boundary; preserve non-launch previews.
+
+    A terminal-confirmed controller retains an in-memory permit; once its valid state is published, fresh/resumed implementer/reviewer children use detect against the canonical main root and retain the existing bypass argv, log/tee/watchdog, vendor/model/effort and exit contracts. Direct advisor, resume, CI-fix and harvest legs use the controller permit rather than failing an ambient-child-env check. Export the standard phase/run credential to authorized child processes that need subsequent AIDA launches. Any structured-input refactor for controller-token validation should share detect's classifier/probe, not invent a weaker check or temporarily set process-global env.
+
+    New security behavior: run-state publication cannot remain best-effort when descendant bypass depends on it. Failure must stop before children launch. Existing scope-acknowledgement markers remain informational, not dispatch authority.
+
+    Burndown complication: handle_burndown_run holds a drain LOCK but deliberately writes no per-phase drain-state; it gives the Claude skill AIDA_BURNDOWN_LOCK_HELD=1. A confirmed parent can authorize its own bounded quiet/verbose relaunches, but that bare flag must NOT authorize further child AIDA launches. The advisor must choose the wave-to-per-spec handoff design. Recommendation: route descendant launch authority through the existing authorized controller/per-spec token lifecycle; if a wave credential is needed, design its coexistence with per-spec run state explicitly. Do not simply stamp a UUID into the shared drain-state and let nested per-spec runs overwrite it, or bless the lock-held env flag. Preserving the whole native burndown fan-out while meeting AC2 is an unresolved design requirement, not something a three-call-site patch proves.
+
+    5. Concrete verification seam and fixture
+
+    Proposed tests: aida-cli-lib/src/tests/bug_1669_launch_authority_tests.rs, existing burndown_run_tests.rs, session.rs/orchestrator.rs unit tests, plus process integration fixture for the real launch handlers.
+
+    Reuse authority_stdin_is_terminal and authority_stdout_is_terminal (BUG-1618/1667), backed by test_ambient/AmbientGuard; add a cfg(test)-only injected confirmation reader and launch recorder. Never add a production AIDA_TEST_TTY or ACCEPT env override. Extend the fixture to own ONE EnvVarsGuard for all environment changes (AmbientGuard already holds this mutex; nesting another deadlocks). Prefer child-process env isolation for CLI tests.
+
+    Each fixture owns a temp git project, temp fake HOME, private .aida and fake roster/config, XDG_CONFIG_HOME and relevant vendor homes. Clear inherited roles/tokens/headless/drive-root/ack flags; poison fake-home defaults with advisor/product/bypass settings in negative cases to prove they grant nothing. No symlink to the live .aida-store. Put recording claude/codex/agy and judge binaries on private PATH; use AIDA_AGENT_CMD where supported, PATH shims for direct hardcoded commands. Record invocation/argv to a sentinel and return deterministic outputs; no real model, network, forge, or user HOME. Set up valid candidate/spec/queue prerequisites so an unrelated early return does not masquerade as authority refusal.
+
+    Parameterized negative matrix for EVERY spawning branch in A–F:
+      - no TTY/no token, each role including advisor/product/integrator, forged registry/lock-held/headless/ack vars, --force/--yes-all, bypass from defaults and explicit flags;
+      - bare AUTO_COMPLETE, empty/malformed/mismatched UUID, missing/corrupt state, dead PID, token without AUTO_COMPLETE, wrong project;
+      - stdin-only or stdout-only TTY; both true but confirmation false/EOF/error.
+    Assert the authority denial, nonzero result and zero child sentinel calls. Snapshot worktrees/leases/logs/state/sidecars to prove guard ordering. Exercise compete judge independently as well as arms/zen, intake propose/apply/then-drain, burndown quiet/verbose/continuation, and each vendor/fresh/resume branch. A unit test of authorize() alone is not AC4 coverage.
+
+    Positive matrix:
+      - Inject both TTY checks true + explicit yes: scoped permit reaches fake child; never prompts for previews.
+      - Use real DrainState::new_single/write in a temp root, random UUID and a fixture-owned live process/PID with both standard env values. Call actual detect (not a stubbed "orchestrated=true"); with TTY false assert the fake child runs with expected bypass flags and no confirmation.
+      - Full authorized controller -> phase child -> canonical-root detect, including sibling worktree, resumed reviewer/implementer, direct advisor/CI-fix/harvest and pane/fallback paths.
+      - Authorized continuation works while identity remains live; kill owner/rotate token between preparation and next launch and assert no next spawn.
+      - Contained Claude remains contained; contained=true Codex/Agy still gets gated because their actual argv is bypass. Safe modes preserve existing behavior.
+      - Parallel tests must not share HOME, temp root, PATH sentinels or process-global env without the common guard.
+
+    No tests were run here; this is a read-only design pass.
+
+    6. Races, limitations and independent-advisor questions
+
+    - detect currently accepts local-state forgery/replay as described above. Is the threat model accidental/confused agents with trusted state, or a malicious same-UID agent with shell/file/PTY access? Literal unforgeability needs a protected issuer/capability boundary (e.g. privileged/isolated broker and authenticated child channel), not chmod 0600 on files accessible to the same user. Keep detect as the single verifier API if its internals are strengthened; do not certify the current UUID/PID scheme as security.
+    - PID reuse and state/token rotation create stale positives/false denials. Rechecking immediately before spawn narrows but cannot eliminate TOCTOU or revoke an already-running child. Stronger guarantees require process identity/credential lifecycle changes. Single shared run-state may conflict with concurrent/pipelined children; test rotation explicitly rather than assuming safe concurrency.
+    - An agent-created PTY can satisfy IsTerminal and send "yes". Does "real terminal" in AC2 accept the project's stdin+stdout-plus-confirmation convention, or require an out-of-agent trusted human approval channel?
+    - Does AC1/2 include all explicit/configured interactive bypass launches, custom argv and shipped scripts, or only AIDA-owned headless bypass? Recommendation: include A–F; explicitly adjudicate G. Native vendor config can itself disable safeguards without flags; guarding that is broader than flag-emitting launchers.
+    - Approve a concrete burndown wave credential/handoff design before implementation; a lock-only launcher cannot supply detect proof to its descendants today. Also define whether long-running advisor-watch consent covers the watch lifetime or each wake.
+    - Existing no-human acknowledgement/scheduler/product-role flows without terminal or a verified dispatch credential will now refuse. Is that intended, or must an authenticated scheduler bootstrap be specified? Role strings and acknowledgement files cannot be grandfathered as authorization under current AC2.
+    - Should a verified drain token authorize any operation in the root or only its spec/phase? detect today is not scoped to spec/phase. This sketch does not silently impose or claim that stronger policy.
+
+    Explicit non-goals: implement/approve/queue/merge this bug; change spec lifecycle or advisor/product separation; redesign vendor permissions, sandbox containment, tool allowlists or arbitrary-shell security; authorize based on prompt claims; modify global vendor config; delete existing competing worktrees; change pure previews; retroactively stop already-running children; declare OS-grade isolation from same-user adversarial code. A privileged credential system is not quietly bundled into this fix—if literal unforgeability is required, it is a signoff-blocking architecture decision, not a waived requirement.
+
+    Requested next action: independent advisor reviews this inventory and answers the trust-boundary/scope/burndown questions, then signs off or returns a bounded revision. This author has not approved its own sketch.
+  created_at: 2026-09-27T01:42:11.316064648Z
+  modified_at: 2026-09-27T01:42:11.316064648Z
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
   author: joe
