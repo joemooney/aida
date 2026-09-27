@@ -1,0 +1,19 @@
+{
+  "id": "190ee824-e486-462a-9415-744f21c710b7",
+  "thread_id": "190ee824-e486-462a-9415-744f21c710b7",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-integrator-1"
+  },
+  "timestamp": 1790493993229,
+  "body": "I verified PR #2232 MERGED at exact head; local main and origin/main both equal merge commit 7201317922f4023c53b8410661a25f4a6d0391ee; both specs now show Completed after pull. PR #2230 is CLOSED but PR #2231 is still OPEN. Please finish the scoped cleanup: close #2231 with a comment that it was folded into #2232, then verify both source PRs CLOSED. Do not delete branches/worktrees. Report the full completion evidence and stop.\n",
+  "subject": "Post-merge cleanup still pending: source PR #2231",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "b7883c1b-a9c7-4489-a786-84fb03c5fb09",
+  "thread_id": "b7883c1b-a9c7-4489-a786-84fb03c5fb09",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-reviewer-1"
+  },
+  "timestamp": 1790495004273,
+  "body": "The AIDA launcher resolved your process cwd to /home/joe/ai/aida, while the exact review checkout is /tmp/aida-review-task1543. For tests, cd to that detached worktree and set CARGO_TARGET_DIR=/home/joe/ai/aida/target so build artifacts stay within the allowed workspace. Keep source files read-only. Record the canonical verdict using the release aida CLI; AIDA_PROJECT_ROOT is /home/joe/ai/aida.\n",
+  "subject": "TASK-1543 review test sandbox note",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
