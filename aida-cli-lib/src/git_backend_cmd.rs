@@ -7806,6 +7806,7 @@ pub(crate) fn handle_git_backend_command(
             archived,
             deferred,
             include_meta,
+            timeline,
             cmd,
         } => {
             // trace:STORY-1477 | ai:codex
@@ -8060,6 +8061,39 @@ pub(crate) fn handle_git_backend_command(
                 Some(raw) => Some(resolve_history_id_filter(&backend, raw)?),
                 None => None,
             };
+            // STORY-1478: the per-spec work/wait/unknown timeline. Checked
+            // here, right after the ID resolves, because it answers a
+            // different question from every other history view and shares
+            // none of their windowing.
+            // trace:STORY-1478 | ai:claude
+            if *timeline {
+                let Some(spec_id) = id_filter.as_deref() else {
+                    anyhow::bail!(
+                        "`aida history --timeline` needs one requirement: \
+                         `aida history <SPEC-ID> --timeline`"
+                    );
+                };
+                if matches!(cmd, Some(HistoryCommand::Events)) {
+                    anyhow::bail!(
+                        "`--timeline` and the `events` feed are different views; pass one or the other"
+                    );
+                }
+                // A narrowed window would still print totals that look whole.
+                if *limit != history_timeline::HISTORY_DEFAULT_LIMIT {
+                    anyhow::bail!(
+                        "`--timeline` covers a requirement's whole recorded life, so `--limit` \
+                         does not apply to it"
+                    );
+                }
+                let output =
+                    history::HistoryOutput::select(json, false, crate::agent_output_mode());
+                // Opt out of the forge lookup for an offline or fixture run.
+                let forge_enabled = std::env::var("AIDA_TIMELINE_NO_FORGE")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty() && v != "0")
+                    .is_none();
+                return history_timeline::run(store_path, spec_id, output, forge_enabled);
+            }
             // TASK-1480: a single spec (`--id` / positional SPEC-ID) without
             // `--full` defaults to the status-progression view — status
             // transitions only, so `aida history TASK-1480` reads as a

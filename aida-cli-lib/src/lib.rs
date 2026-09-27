@@ -182,6 +182,8 @@ mod history;
 mod history_layout;
 // trace:TASK-1507 | ai:claude
 mod history_cache;
+// trace:STORY-1478 | ai:claude — per-spec work/wait/unknown timeline.
+mod history_timeline;
 mod human_audit;
 mod human_cmd;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
