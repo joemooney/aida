@@ -49,11 +49,4 @@ comments:
   modified_at: 2026-09-26T19:10:23.724764959Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
 execution_mode: drive
-filed_at:
-  code_sha: b4984d495336027fed771caed71bc429dc1fd20c
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: c7d35baa35
-  vendor: codex
 human_only: true

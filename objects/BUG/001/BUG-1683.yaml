@@ -10,11 +10,3 @@ feature: Uncategorized
 created_at: 2026-09-27T00:24:57.765790728Z
 modified_at: 2026-09-27T00:24:57.765790728Z
 req_type: Bug
-filed_at:
-  code_sha: 9791e5eaac5cb4b0083aeaa32744c5900e396fc1
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 7c6faed690
-  vendor: antigravity
-  session: 71dca616-6150-461d-b64f-18c8288c6e1c

@@ -40,14 +40,6 @@ processing_record:
   agent: implementer
   commit_sha: 021f4aa48e6433031b99158fe32315a21c3ea631
   summary: Completed via merge 021f4aa4
-filed_at:
-  code_sha: c52d3734833f83e79ff215bca7f42e8b7af227df
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: cb07ece7f0
-  vendor: antigravity
-  session: 67239b78-62f2-41d8-9600-1eea416800a6
 implementation_info:
   implemented: false
   completed_at: 2026-09-25T10:50:02.722820915Z

@@ -3,12 +3,12 @@ spec_id: BUG-1684
 agreed_id: BUG-1684
 title: make build-fast works with a configured sccache wrapper
 description: 'Regression: with build.rustc-wrapper set to sccache in ~/.cargo/config.toml, make build-fast sets CARGO_INCREMENTAL=1 and fails before compilation with sccache: incremental compilation is prohibited. Acceptance: make build-fast preserves incremental release iteration and succeeds with sccache configured globally; the ordinary build-release behavior is unchanged; document the wrapper interaction near the target.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T01:04:41.671496965Z
-modified_at: 2026-09-27T01:04:50.186760135Z
+modified_at: 2026-09-27T01:05:02.023151459Z
 req_type: Bug
 tags:
 - build-time

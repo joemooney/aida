@@ -45,11 +45,3 @@ comments:
 deferred: true
 deferred_at: 2026-09-25T02:07:04.431097669Z
 deferred_until: five nights of real night-shift wave data exist (the shift has been enabled and has run five times)
-filed_at:
-  code_sha: a276969ea936d46b488ec50e058b70773e1ca994
-  branch: claude/story-1218
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: c7d35baa35
-  vendor: antigravity
-  session: 67239b78-62f2-41d8-9600-1eea416800a6

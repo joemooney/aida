@@ -322,14 +322,6 @@ processing_record:
   commit_sha: 2e01ffe4ab06c30ac99d44d18438a1b156ef455d
   summary: Completed via merge 2e01ffe4
 execution_mode: drive
-filed_at:
-  code_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: f9c900b6ff
-  vendor: claude
-  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
 implementation_info:
   implemented: false
   completed_at: 2026-09-26T21:01:27.652706410Z

@@ -35,10 +35,3 @@ comments:
 deferred: true
 deferred_at: 2026-09-24T17:15:29.289812613Z
 deferred_until: a design sketch for the failure-learning event model (record vs later avoidability judgment, storage location outside the canonical store, and correlation keys) is written on the spec and signed off by the advisor. Architecture-class change per CLAUDE.md. Revisit once TASK-1481 and TASK-1484 have shipped the lower-level telemetry it builds on.
-filed_at:
-  code_sha: 64b652e051a639975ced35f04527e83b4bd00d33
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 1c22d30ab1
-  vendor: codex

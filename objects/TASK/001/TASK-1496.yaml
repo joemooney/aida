@@ -36,11 +36,3 @@ comments:
 deferred: true
 deferred_at: 2026-09-25T02:07:10.198006027Z
 deferred_until: the systemd driver (TASK-1491) has merged and a per-wave unit is wanted for isolation or accounting
-filed_at:
-  code_sha: a276969ea936d46b488ec50e058b70773e1ca994
-  branch: claude/story-1218
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: c7d35baa35
-  vendor: antigravity
-  session: 67239b78-62f2-41d8-9600-1eea416800a6

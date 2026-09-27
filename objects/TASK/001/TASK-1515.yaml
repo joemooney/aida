@@ -135,14 +135,6 @@ processing_record:
   agent: implementer
   commit_sha: b13b2c611e810a2ba044efb50b32070667d4b37a
   summary: Completed via merge b13b2c61
-filed_at:
-  code_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
-  branch: claude/spike-90
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: f9c900b6ff
-  vendor: antigravity
-  session: 67239b78-62f2-41d8-9600-1eea416800a6
 implementation_info:
   implemented: false
   completed_at: 2026-09-26T19:27:01.522522962Z

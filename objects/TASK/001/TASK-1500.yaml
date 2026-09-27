@@ -200,13 +200,6 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
-filed_at:
-  code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: cb07ece7f0
-  vendor: codex
 decision_request:
   question: Should AIDA add an init-time setting for prompting before YOLO/autonomous agent mode? It changes the agent permission posture.
   choices:

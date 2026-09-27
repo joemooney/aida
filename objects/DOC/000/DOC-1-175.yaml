@@ -48,10 +48,3 @@ comments:
 deferred: true
 deferred_at: 2026-09-24T17:15:35.549614796Z
 deferred_until: TASK-1485's design sketch is signed off. This doc explains that model and should follow the settled design, not precede it.
-filed_at:
-  code_sha: 64b652e051a639975ced35f04527e83b4bd00d33
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 1c22d30ab1
-  vendor: codex

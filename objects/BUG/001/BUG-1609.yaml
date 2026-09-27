@@ -87,13 +87,6 @@ processing_record:
   agent: aida
   commit_sha: a052addddafee14f59ca10b0db26fb59e68263e9
   summary: Completed via merge a052addd
-filed_at:
-  code_sha: 81c37e2cba9c8e0e6612240141940fd62063f205
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: 81c37e2cb
-  vendor: codex
 implementation_info:
   implemented: false
   completed_at: 2026-09-25T17:01:00.262078651Z

@@ -122,13 +122,6 @@ processing_record:
   commit_sha: f3a00639f786420ed1486f874f7ec79838e73bd4
   summary: Completed via merge f3a00639
 execution_mode: drive
-filed_at:
-  code_sha: 99698621ba5890d30a9d128655537987cfd239d4
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: 1df2e0445e
-  vendor: codex
 implementation_info:
   implemented: false
   completed_at: 2026-09-26T08:13:31.261501628Z

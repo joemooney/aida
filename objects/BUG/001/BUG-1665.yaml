@@ -59,14 +59,6 @@ processing_record:
   commit_sha: 9791e5eaac5cb4b0083aeaa32744c5900e396fc1
   summary: Completed via merge 9791e5ea
 execution_mode: drain
-filed_at:
-  code_sha: 7c6faed6902114a6d1cf1b7843df6e1ef2175da5
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: 7c6faed690
-  vendor: antigravity
-  session: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
 implementation_info:
   implemented: false
   completed_at: 2026-09-26T23:10:20.634685516Z

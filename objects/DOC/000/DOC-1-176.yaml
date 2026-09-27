@@ -127,14 +127,6 @@ processing_record:
   commit_sha: bff399a24868c0f3dee059282ea8c542cc3e17e0
   summary: Completed via merge bff399a2
 execution_mode: drain
-filed_at:
-  code_sha: 68ab16316787b6252da9cfcc6db9bbe72262edec
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: f9c900b6ff
-  vendor: claude
-  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
 custom_fields:
   audience: user,developer
   scenario: side feature work

@@ -51,13 +51,6 @@ processing_record:
   agent: implementer
   commit_sha: ddb82d40b95d7b8764ff6318c215df791196ee8e
   summary: Completed via merge ddb82d40
-filed_at:
-  code_sha: cb07ece7f030325296c865968ba88a115c4a01cc
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: c7d35baa35
-  vendor: codex
 implementation_info:
   implemented: false
   completed_at: 2026-09-25T10:05:46.203413285Z

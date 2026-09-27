@@ -64,14 +64,6 @@ processing_record:
   commit_sha: 8238ac8297483a39f752bd3c675d9364b86dfb48
   summary: Completed via merge 8238ac82
 execution_mode: drain
-filed_at:
-  code_sha: 193a7c9769995ddd7b643b626af8fdb576bbf20b
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: f9c900b6ff
-  vendor: claude
-  session: 01a0d0c8-1a2e-7430-a480-c859ff5cfe99
 implementation_info:
   implemented: false
   completed_at: 2026-09-26T09:24:03.536275197Z

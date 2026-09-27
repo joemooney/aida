@@ -38,11 +38,3 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
-filed_at:
-  code_sha: 4407b947164d02a7a1c617e6d84db8f7aa1211d3
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 7c6faed690
-  vendor: antigravity
-  session: 71dca616-6150-461d-b64f-18c8288c6e1c

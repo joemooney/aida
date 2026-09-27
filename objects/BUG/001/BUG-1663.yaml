@@ -58,11 +58,3 @@ history:
     old_value: Draft
     new_value: Approved
 execution_mode: drive
-filed_at:
-  code_sha: 12138a0403dd4f8150ec45f9c015ba8c8c443f7a
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: b331809ce7
-  vendor: antigravity
-  session: 89567551-def6-4e1a-ad4e-e8bc5675f1fc
