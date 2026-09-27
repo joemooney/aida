@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:47:18.546002720Z
-modified_at: 2026-09-27T14:30:26.944847170Z
+modified_at: 2026-09-27T14:37:22.531783630Z
 req_type: Story
 tags:
 - aida:history
@@ -51,6 +51,12 @@ comments:
   created_at: 2026-09-26T05:28:35.680034894Z
   modified_at: 2026-09-26T05:28:35.680034894Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0e34c-96e3-7841-b443-e43576bdbd47
+  author: joe
+  content: 'SKETCH + ADR (implementer, claude): decision recorded as ADR-60 (option B). Design: (1) new lifecycle event kinds close the four gaps — a PhaseEnded companion to PhaseEntered so a phase has a measured END rather than one inferred from the next entry; SpecParked/clear-on-requeue so a wait on a human or the advisor is attributed instead of unknown; a planning marker; a build span. All ride the existing events.jsonl seam and the existing PhaseEntered/SpecRequeued kinds — no second timing path. (2) At terminal state a per-spec timing record is published to the store at timings/<SPEC>.yaml via the schedule-ledger CAS loop, lifecycle kinds only. (3) Cross-machine: the store''s append-union class (union by stable id) is clock-independent, while its scalar class is wall-clock LWW with a content-hash tie-break and is NOT skew-safe (BUG-578; no HLC in the codebase). So the record is a union-by-content-id span set, each span tagged with the recording node. A span''s duration is one host''s measurement; a gap between spans recorded by DIFFERENT nodes is reported unknown with both nodes named, never clamped and presented as measured.'
+  created_at: 2026-09-27T14:37:22.531783630Z
+  modified_at: 2026-09-27T14:37:22.531783630Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e346-3f80-7321-99e7-c3edaf383f34
   author: aida-session-start
