@@ -29,7 +29,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-27T04:10:57.835863554Z
-modified_at: 2026-09-27T04:10:57.835863554Z
+modified_at: 2026-09-27T09:25:58.787780296Z
 req_type: Task
 tags:
 - exact-head:e63efc3997a85df8cb1ff463f48222900ed5f7d6
@@ -39,3 +39,9 @@ tags:
 - linked:BUG-1669
 - linked:BUG-1679
 - severity:major
+comments:
+- id: 01a0e22f-7f83-7713-a3bb-7bd67ce28f27
+  author: codex
+  content: 'OPERATOR DECISION (2026-09-27): BUG-1679 remains parked until BUG-1669''s protected binary-admission design is available. Do not approve or queue this pre-architecture fix in the meantime; PR #2226 remains on operator hold. Revisit after protected admission is implemented and independently reviewed.'
+  created_at: 2026-09-27T09:25:58.787780296Z
+  modified_at: 2026-09-27T09:25:58.787780296Z
