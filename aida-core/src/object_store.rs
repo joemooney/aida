@@ -1089,8 +1089,22 @@ mod tests {
         })
     }
 
-    fn bug_1673_install_warning_sink(sink: impl FnMut(&str) + 'static) {
+    /// Clears the thread-local warning sink on drop, so an assertion failure
+    /// cannot leave it installed for the next test that runs on this thread.
+    /// A manual clear at the end of the test would be skipped during unwinding.
+    // trace:BUG-1673 | ai:claude
+    struct Bug1673WarningSinkGuard;
+
+    impl Drop for Bug1673WarningSinkGuard {
+        fn drop(&mut self) {
+            BUG_1673_WARNING_SINK.with(|slot| *slot.borrow_mut() = None);
+        }
+    }
+
+    #[must_use = "the sink is uninstalled as soon as the guard is dropped"]
+    fn bug_1673_install_warning_sink(sink: impl FnMut(&str) + 'static) -> Bug1673WarningSinkGuard {
         BUG_1673_WARNING_SINK.with(|slot| *slot.borrow_mut() = Some(Box::new(sink)));
+        Bug1673WarningSinkGuard
     }
 
     /// Install a before-read hook; returns the call counter it increments.
@@ -1225,7 +1239,8 @@ mod tests {
     fn bug_1673_loader_omits_object_deleted_for_good_without_parse_hint() {
         let warnings = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
         let captured = warnings.clone();
-        bug_1673_install_warning_sink(move |line| captured.borrow_mut().push(line.to_owned()));
+        let _sink_guard =
+            bug_1673_install_warning_sink(move |line| captured.borrow_mut().push(line.to_owned()));
 
         let dir = tempfile::tempdir().unwrap();
         let objects_root = dir.path().join("objects");
@@ -1240,7 +1255,6 @@ mod tests {
 
         let loaded = load_all_objects_with_fingerprints(&objects_root);
         bug_1673_clear_hook();
-        BUG_1673_WARNING_SINK.with(|slot| *slot.borrow_mut() = None);
         let warnings = warnings.borrow().join("\n");
         assert!(
             warnings.contains("BUG-5 was removed while loading"),
