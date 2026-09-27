@@ -3,15 +3,23 @@ spec_id: TASK-1543
 agreed_id: TASK-1543
 title: 'Reap polish: scope prune to the lease''s own worktree entry, and read worktree locks from the -z listing'
 description: 'Follow-up from the BUG-1657 round-6 review. Acceptance: 1. Where reap/teardown prunes a missing worktree, use ''git worktree remove --force -- <lease path>'' (scoped to that entry) instead of a repo-wide ''git worktree prune'', so another session''s temporarily unavailable worktree keeps its registration. 2. worktree_is_locked parses ''git worktree list --porcelain -z'' so paths with newlines are detected. 3. Fixture tests for both.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:16:14.364445449Z
-modified_at: 2026-09-26T23:16:24.678938179Z
+modified_at: 2026-09-27T07:02:40.786747958Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0de43-fda7-7f43-84b8-7d40cdd3ebac
   created_at: 2026-09-26T23:16:24.678924851Z
   created_by: joe
+history:
+- id: 01a0e1ac-4d92-7bc0-b685-1538cad58db1
+  author: aida-session-start
+  timestamp: 2026-09-27T07:02:40.786747448Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
