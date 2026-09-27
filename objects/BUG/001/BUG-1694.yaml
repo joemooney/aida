@@ -1,0 +1,34 @@
+id: 01a0e458-76f4-73f2-b4d8-d50e9580d33b
+spec_id: BUG-1694
+agreed_id: BUG-1694
+title: 'reap''s worktree-registration clear is TOCTOU: the path can reappear between the final exists() check and remove_dir_all(admin_dir)'
+description: |-
+  Found by the strict independent review of TASK-1543 (codex, read-only, 2026-09-27). TASK-1543 fixed the destructive half — reap no longer force-removes a worktree PATH that reappeared, and that is covered by task_1543_reap_preserves_worktree_directory_that_reappears_before_registration_clear. This bug is the residual window it did not close.
+
+  SITE: aida-cli-lib/src/session_reap.rs:1036-1039. The function guards with worktree_path.exists() three times — on entry, after before_clear(), and once more immediately before acting — then calls std::fs::remove_dir_all(admin_dir). Between that final check and the remove, another process can recreate the worktree at that path. The reap then deletes the git admin directory (.git/worktrees/<name>) of a LIVE worktree.
+
+  BLAST RADIUS (why this is medium, not high): the user's files are NOT destroyed — only the registration is. The worktree becomes detached from the repository and reports a broken gitdir; 'git worktree repair' generally recovers it. Compare the pre-TASK-1543 behavior, which removed the worktree CONTENT and lost uncommitted work. So this is a recoverable-corruption bug, not a data-loss bug.
+
+  WHY IT IS NOT JUST MORE RECHECKING: adding a fourth exists() check moves the window, it does not close it. exists()-then-act cannot be made safe by repetition. Closing it needs a mutual-exclusion protocol shared with whatever CREATES worktrees, so that registration-clear and worktree-creation cannot interleave — e.g. both sides taking the same lock, or using a git operation that fails closed when the path is occupied rather than a bare directory remove. That is a design decision with a second caller (the worktree-add path), so it needs a sketch and advisor signoff before implementation. That is precisely why it was split out of TASK-1543 instead of being bolted on.
+
+  ## Acceptance
+  - Registration-clear and worktree-creation are mutually exclusive: a worktree recreated at the path after the final check can no longer have its registration removed.
+  - The mechanism fails CLOSED — if the lock or the git operation cannot establish that the path is unoccupied, reap declines to clear the registration and reports that it declined. Leaving a stale registration behind is strictly better than orphaning a live worktree.
+  - A test recreates the path in the window AFTER the final exists() check and BEFORE registration removal (injected via the existing before_clear-style hook, or an equivalent seam) and asserts the registration survives. A test that only recreates the path earlier does not satisfy this — TASK-1543 already covers that case.
+  - The TASK-1543 test continues to pass unchanged.
+  - Fixture-based, no sleeps and no polling loops.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T19:29:58.004516622Z
+modified_at: 2026-09-27T19:29:58.004516622Z
+req_type: Bug
+filed_at:
+  code_sha: 4b8f4e5bd0714c70cffa67a81f2e952dd8d6a9a7
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '7201317922'
+  vendor: antigravity
+  session: d7986875-d11b-4a5b-a34d-75f358d3671e
