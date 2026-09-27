@@ -89,10 +89,3 @@
   added_at: 2026-09-27T12:08:08.188810224Z
   for_role: advisor
   added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0dfee-bb1a-7581-90b2-c01c570645e3
-  position: 37000
-  added_by: joe
-  added_at: 2026-09-27T12:20:16.182549061Z
-  for_role: product
-  added_by_machine: imac
