@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-09-27T03:58:36.404732896Z
+modified_at: 2026-09-27T04:01:19.860803537Z
 req_type: Bug
 comments:
 - id: 01a0df0b-e7f8-7193-84a1-2955581faa5f
@@ -383,6 +383,54 @@ comments:
   content: 'OPERATOR DECISION (Joe, 2026-09-26 20:57 MST): The protected full-access launch mechanism must cover every AIDA-managed agent launch on this host, across projects, not only executions enrolled in this repository. Retain the earlier literal protected-authorization requirement against same-user forgery; no environment flag, writable token/state, or agent-created PTY is enough. This answer does not claim control of unmanaged vendor clients launched outside AIDA and does not itself authorize installation of a privileged service/VM, credential migration, code implementation, or merge. Independent advisor must reconcile this exact host-wide AIDA-managed perimeter with its P-enrolled/P-managed/H alternatives and identify any remaining operator deployment choice before signoff. BUG-1669 remains blocked from implementation.'
   created_at: 2026-09-27T03:58:36.404732896Z
   modified_at: 2026-09-27T03:58:36.404732896Z
+- id: 01a0e106-45f4-7a51-9107-7cadcc06eaf0
+  author: codex-independent-security-advisor
+  content: |
+    ADVISOR — PERIMETER RESOLVED; REVISE / DEPLOYMENT-CONTRACT DECISION STILL REQUIRED. NOT SIGNED OFF. BUG-1669 REMAINS BLOCKED FROM IMPLEMENTATION; NO QUEUE/DISPATCH OR MERGE AUTHORIZATION.
+
+    Fresh independent security advisor: Codex, distinct from product, both sketch authors, prior advisors and implementer. Read AGENTS.md, two-seat protocol, rework-brief craft and recovery playbooks; used /home/joe/ai/aida/target/release/aida to read BUG-1669 --full and all seven existing comments. This is an independent interpretation/design-gate review of that record, not a new source audit or security test result.
+
+    Decision anchors: Joe's literal-protection decision 01a0e0a3-e301-7c72-83e7-68ab14eaf9e0; revised sketch 01a0e0a8-db11-7660-832d-7d55f00f0c21; prior ADVISOR — REVISE 01a0e0ad-9b81-7e61-a3d4-8d00ef3077f8; Joe's latest decision 01a0e103-c774-7620-b1dd-f783c05bcb81 (decision 2026-09-26 20:57 MST, recorded 20:58).
+
+    1. What is now settled
+
+    Joe chooses universal coverage of AIDA-managed launches ON THIS HOST, ACROSS PROJECTS. Repository-local opt-in coverage is insufficient. Literal protection against same-user forgery remains mandatory; writable state, environment, PID/UUID corroboration and fabricated PTY consent remain insufficient. The unmanaged-client exclusion is explicit: this is not a promise to prevent unrelated vendor clients launched outside AIDA with independent authority.
+
+    This maps to the P-enrolled trust-boundary family, with a REQUIRED host-wide coverage variant, which I label here P-enrolled-host. This is a scope clarification, not a new security mechanism or an existing product mode. P-enrolled was not intrinsically limited to this repository, but its previous wording allowed protection of only selected enrolled resources. Joe has closed that gap: every AIDA-managed launch route must participate in the host policy; an unknown/unenrolled project or unsupported launch route must not obtain unprotected full-access execution. Enrollment permits scoped execution; absence of enrollment is refusal, not exemption. Coverage across projects is not a grant across projects: approval for repo A conveys no authority in repo B, and a new repo never inherits existing watch/wave/schedule consent.
+
+    This is NOT P-managed as previously defined (confinement of every agent/vendor client on the workstation). Do not require migration of unrelated unmanaged clients or their independent credentials as an automatic prerequisite. It is also NOT selection of H, nor acceptance of P's deployment machinery. The new answer chooses the perimeter, not installation, a VM backend, approval hardware, credential migration, compatibility changes, implementation or merge.
+
+    The revised sketch must inventory every AIDA-managed launch and resolve posture there, including foreground/background, fresh/resume, direct/shared sinks, wrappers, shipped launch scripts and vendor/config overrides. Full-access paths require protected authority. Any retained contained path must show how it stays contained and cannot escalate or invoke an unmediated descendant. Do not narrow the host perimeter back to this repo or only the three commands in the bug title.
+
+    Critical boundary accounting: stale/global/per-project AIDA binaries, copied CLIs, custom adapters and detached services cannot silently remain supported unmanaged fallbacks. Define the host installation/version admission and migration contract, and test that alternate clients cannot obtain protected execution resources. A replaced CLI invoking an independent vendor outside the protected system illustrates the explicit unmanaged limitation; that limitation must not be used to relabel an official AIDA launch route merely because it evades the new gate. If the proposed deployment cannot enforce the stated distinction, return that precise mismatch for operator resolution rather than claim host-wide coverage.
+
+    2. Smallest remaining operator decision
+
+    The remaining choice is acceptance IN PRINCIPLE of the proposed execution/deployment contract for this already-settled perimeter. Product should present one bounded decision:
+
+    “Accept P-enrolled-host as the design target: an administrator-controlled broker with isolated service-owned workers (the current proposal uses Linux VMs), an approval channel inaccessible to agents, and service-mediated AIDA execution credentials/resources; full access is inside the worker boundary, without unrestricted host HOME/process/credential access. Accept replacement of native burndown dispatch, finite scoped watch/schedule grants with expiry/reapproval, refusal of unsupported or unenrolled launches, and interruption/migration of existing unattended AIDA launches. This accepts a design direction only; a concrete installer, privileged test environment and credential-migration plan return for separate explicit authorization before execution. Or defer this deployment contract, leaving BUG-1669 blocked.”
+
+    Do not ask Joe again whether he wants literal protection, this-repo versus cross-project coverage, or workstation-wide control of unmanaged clients. Those are answered. Do not interpret silence as acceptance. Do not ask for a blanket service-installation permission now: backend, trust root, migration and recovery details are not yet concrete enough to approve execution. Deferral does not itself authorize H's deny-only code change; that remains a separate optional containment decision. Exact runtime ceilings and backend selection need concrete proposals and review, not inferred consent from “every launch.”
+
+    3. Bounded prerequisite recommendations and revised-sketch handoff
+
+    Product may capture/refine these scopes (recommendations only; no IDs invented or new specs created by this comment):
+
+    A. Deployment ADR / acceptance reconciliation. Record P-enrolled-host, the operator's remaining contract answer, and explicit unmanaged exclusion. Reconcile BUG-1669 AC2's terminal/detect wording and AC4's old positive fixture with protected consent; preserve literal protection. Specify host-wide admission, per-repo identity/enrollment, unknown-project refusal, old-binary/service migration, current-run treatment and launch inventory. This is design/documentation work, not an installation ticket.
+
+    B. Protected-backend boundary spike. Select and specify backend, service principals, authenticated approval and worker channels, pinned trusted updates, typed resource adapters, artifact import/export and recovery/rollback. Produce a concrete disposable proof-fixture plan and installer/credential plan for separate authorization. No production service installation or real credential migration is implied. Require independent architecture review before implementation and actual boundary evidence before any protection claim.
+
+    C. Host-wide AIDA admission and migration design. Cover all projects, user/system entry points, existing scheduled/watch/drain activity, CLI versions and supported adapters. Define how the protected authority is inaccessible to an alternate CLI while preserving the stated unmanaged limitation. Prove cross-repo isolation and fail-closed non-enrollment. This replaces the prior conditional suggestion to confine ALL workstation agents; unrelated unmanaged clients are outside this prerequisite.
+
+    After design signoff, product can split dependent grant/state-machine and launch-sink/wave/watch/scheduler work. A separately approved deny-only containment spec is optional, not presumed, and cannot close BUG-1669's authorized-drain requirement.
+
+    Return the revised sketch to an independent advisor with a delta against sections 1-9 of sketch 01a0e0a8 and all seven proof-obligation groups in prior verdict 01a0e0ad. None is waived: concrete trust root/install-update-recovery; mutual worker/broker identity and constrained adapters; scope/delegation transition table and artifact lineage; bounded lifetime/revocation/supervision; mediated burndown fan-out; authenticated watch/scheduler bootstrap; and per-sink hermetic plus actual protected-boundary verification. Add multi-project, unknown-project, stale-client, cross-repo grant replay and host-wide cutover cases. Identify what is needed for architecture signoff versus implementation/release evidence; a mock pass cannot certify deployment isolation.
+
+    The affected design surfaces are the sketch's inventory A-G, notably session.rs launch sinks, orchestrator.rs authority consumption, lib.rs direct/controller launches, advisor_watch.rs pre-fork preparation, solo_cmd.rs refusal propagation and shift/scheduler detached routes. This is a sketch rework handoff, not an implementation requeue: preserve the cited verdict/comment IDs as the review trail. Product owns capture and routing; the sketch author supplies mechanisms; a distinct advisor gates the revision. No agent is launched by this comment.
+
+    Final disposition: the perimeter question is CLOSED; deployment-contract acceptance and the concrete architecture/proof obligations remain OPEN. Approved lifecycle status or any pre-existing queue entry does not override this hold. No code edits, tests, queue changes, services, credential migration, dispatch or merge performed. Only this durable advisor comment is authorized and posted.
+  created_at: 2026-09-27T04:01:19.860803537Z
+  modified_at: 2026-09-27T04:01:19.860803537Z
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
   author: joe
