@@ -23,13 +23,21 @@ description: |-
   4. Findings recorded on CR-7 and in docs/plans/2026-09-22-seat-wake-cross-harness.md so the held items inherit them.
 
   Out of scope: implementing 'aida seat wait', any Stop-hook adapter, the OpenCode plugin, or the resume fallback. No production config is changed. Explicitly forbidden even here: model-side CronCreate / /loop / ScheduleWakeup polling (BUG-1589), tmux scraping, and keystroke injection.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T21:00:26.277371500Z
-modified_at: 2026-09-27T21:00:26.277371500Z
+modified_at: 2026-09-27T21:00:43.328650219Z
 req_type: Spike
+history:
+- id: 01a0e4ab-8dc0-7b02-8fad-ec4635a6d676
+  author: joe
+  timestamp: 2026-09-27T21:00:43.328646495Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 3f4cda41c98eef3c493ba5ffd69d970e5c1a7b9b
   branch: main
