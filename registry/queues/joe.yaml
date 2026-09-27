@@ -1,12 +1,4 @@
 - user_id: joe
-  requirement_id: 01a0db2d-c579-7e33-ab6b-174e64568ccc
-  position: -1000
-  added_by: joe
-  note: Proxy sign-off complete; dispatch after SPEC-441 finishes to avoid history.rs conflict and after disk headroom improves.
-  added_at: 2026-09-27T08:59:44.420381374Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0d690-9e8a-72f1-a753-ee587125c211
   position: 3000
   added_by: joe
