@@ -86,7 +86,7 @@ to every mirror in `[store.sync] mirror_remotes`, by sha, and reports one line p
 branch (pushed / already up to date / failed). It never force-pushes: a diverged hub is
 reported and the command exits non-zero, leaving `aida remote reconcile` (store) or a
 manual reconcile (code) to the operator. `aida pull` runs the same sync best-effort after a
-successful pull, so every drain phase 5, `aida pr ship` and operator catch-up levels the
+successful pull (silent unless a hub fails, and never failing the pull), so every drain phase 5, `aida pr ship` and operator catch-up levels the
 hubs; the hub-drift guard's finding points at it.
 
 ### 3. Code fan-out

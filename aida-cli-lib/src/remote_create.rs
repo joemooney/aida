@@ -1701,10 +1701,20 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
                 ]) // trace:BUG-1622 | ai:claude
                 .output();
             let outcome = match out {
-                Ok(o) if o.status.success() => MirrorSyncOutcome::Pushed {
-                    from: current,
-                    to: source.clone(),
-                },
+                // Verify the hub really moved: a push that "succeeds" without
+                // landing is exactly the silent drift this sync exists to end.
+                Ok(o) if o.status.success() => {
+                    match git_ops::remote_branch_head_sha(project_root, mirror, branch) {
+                        Some(now) if now == *source => MirrorSyncOutcome::Pushed {
+                            from: current,
+                            to: source.clone(),
+                        },
+                        other => MirrorSyncOutcome::Failed(format!(
+                            "push reported success but the hub is at {}",
+                            other.as_deref().unwrap_or("(unreadable)")
+                        )),
+                    }
+                }
                 Ok(o) => MirrorSyncOutcome::Failed(git_push_failure_detail(
                     &String::from_utf8_lossy(&o.stderr),
                 )),
@@ -1749,19 +1759,17 @@ pub fn handle_remote_mirror_sync(project_root: &Path, json: bool) -> Result<()> 
     }
 }
 
-/// Best-effort mirror sync at the end of a successful `aida pull`: prints
-/// what moved (and every failure), never changes the pull's exit code. With
-/// `quiet`, only failures are printed.
+/// Best-effort mirror sync at the end of a successful `aida pull`. Silent on
+/// success (a pushed or up-to-date hub prints nothing); a failure prints the
+/// report and a hint on stderr. Never changes the pull's exit code.
 // trace:BUG-1676 | ai:claude
-pub fn mirror_sync_after_pull(project_root: &Path, quiet: bool) {
+pub fn mirror_sync_after_pull(project_root: &Path) {
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
     match mirror_sync_hubs(project_root) {
         Ok(report) => {
             let failures = report.failures();
-            if !quiet && (!report.pushed().is_empty() || !failures.is_empty()) {
-                print!("{}", report.render());
-            }
             if !failures.is_empty() {
+                eprint!("{}", report.render());
                 eprintln!(
                     "  {warn} {} mirror hub push(es) failed — the mirror is behind origin; see \
                      `aida remote status`, then `aida remote mirror-sync` (or `aida remote \
@@ -3200,7 +3208,7 @@ host = \"should.not.count\"
     // BUG-1676 acceptance 3: after a merge that only origin saw, both `main`
     // and `aida-store` reach the mirror hub; a second sync is a no-op.
     #[test]
-    fn mirror_sync_pushes_main_and_store_to_the_mirror_after_a_forge_side_merge() {
+    fn bug_1676_mirror_sync_pushes_main_and_store_to_the_mirror_after_a_forge_side_merge() {
         let tmp = tempfile::tempdir().unwrap();
         let (project, origin, mirror) = two_hub_fixture(tmp.path());
         let main_sha = advance_on_origin(tmp.path(), &origin, "main", "merged.txt");
@@ -3254,7 +3262,7 @@ host = \"should.not.count\"
     // exit from `aida remote mirror-sync`; the live hub is still synced; a
     // listed-but-missing remote is a named skip, not a failure.
     #[test]
-    fn mirror_sync_reports_failures_and_skips_and_exits_non_zero() {
+    fn bug_1676_mirror_sync_reports_failures_and_skips_and_exits_non_zero() {
         let tmp = tempfile::tempdir().unwrap();
         let (project, origin, mirror) = two_hub_fixture(tmp.path());
         let dead = tmp.path().join("does-not-exist.git");
@@ -3287,10 +3295,56 @@ host = \"should.not.count\"
         assert_eq!(json["rows"].as_array().unwrap().len(), 4);
     }
 
+    // BUG-1676: a hub whose branch has diverged from origin is never
+    // force-pushed — the sync reports it as a failure (non-zero) and leaves
+    // the hub exactly where it was, while the branch that only needs a
+    // fast-forward still lands.
+    #[test]
+    fn bug_1676_mirror_sync_never_force_pushes_a_diverged_hub() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (project, origin, mirror) = two_hub_fixture(tmp.path());
+        // Seed the mirror with origin's main, then give it a commit origin
+        // does not have, then advance origin separately: the hub diverged.
+        git(&project, &["push", "-q", "mirror", "main"]);
+        let hub_only = tmp.path().join("hub-only");
+        git(
+            tmp.path(),
+            &[
+                "clone",
+                "-q",
+                "--branch",
+                "main",
+                mirror.to_str().unwrap(),
+                hub_only.to_str().unwrap(),
+            ],
+        );
+        let diverged_sha = commit_file(&hub_only, "hub.txt", "hub only\n", "hub-only commit");
+        git(&hub_only, &["push", "-q", "origin", "main"]);
+        let origin_main = advance_on_origin(tmp.path(), &origin, "main", "merged.txt");
+        assert_ne!(origin_main, diverged_sha);
+
+        let report = mirror_sync_hubs(&project).unwrap();
+        let failures = report.failures();
+        assert_eq!(failures.len(), 1, "only main diverged: {report:?}");
+        assert_eq!(failures[0].branch, "main");
+        assert_eq!(
+            tip(&mirror, "main").as_deref(),
+            Some(diverged_sha.as_str()),
+            "the diverged hub must be left untouched"
+        );
+        assert_eq!(
+            tip(&mirror, STORE_BRANCH),
+            tip(&origin, STORE_BRANCH),
+            "the store still fast-forwards onto the hub"
+        );
+        assert!(handle_remote_mirror_sync(&project, false).is_err());
+        assert_eq!(tip(&mirror, "main").as_deref(), Some(diverged_sha.as_str()));
+    }
+
     // BUG-1676: nothing configured / no origin are whole-sync skips with a
     // reason, never failures.
     #[test]
-    fn mirror_sync_names_why_it_did_nothing() {
+    fn bug_1676_mirror_sync_names_why_it_did_nothing() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(&project).unwrap();
@@ -3330,7 +3384,7 @@ host = \"should.not.count\"
     // BUG-1676 acceptance 2 for the hook plumbing: each skip names its reason
     // on stdout and a non-origin push is a no-op that says so.
     #[test]
-    fn run_mirror_push_names_every_skip_reason() {
+    fn bug_1676_run_mirror_push_names_every_skip_reason() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(&project).unwrap();

@@ -191,6 +191,8 @@ Here's the thing raw git doesn't know about your AIDA project: **there are two b
 
 **Gotchas.** Non-interactive (no TTY, no route flag) it prints the manual recipe and exits cleanly rather than hanging — so it's CI-safe. Pre-select a route (`--github` / `--gitlab <host>` / `--attach <url>`) to stay scriptable.
 
+**Mirror hubs.** A project can keep a second hub (for example a GitLab mirror) level with `origin`. `aida remote mirror-sync` pushes origin's default branch and spec store to every mirror listed in `[store.sync] mirror_remotes`, one line per hub and branch (`--json` for scripts). It only fast-forwards: a hub that has diverged is reported, left untouched, and the command exits non-zero. `aida pull` runs the same sync quietly after a successful pull, because a merge done on the forge never fires the local pre-push mirror hook.
+
 **Chains with** — typically right after `aida init` on a project with no remote; then `aida push` works.
 
 ---
