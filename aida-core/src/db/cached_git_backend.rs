@@ -283,27 +283,52 @@ impl CachedGitBackend {
         crate::git_ops::head_sha(self.inner.path()).unwrap_or_default()
     }
 
-    /// Resolve a UUID to its `Requirement` WITHOUT the O(n) `find_by_uuid` scan
-    /// over every object file. The cache holds the stable uuid→spec_id mapping,
-    /// so we resolve the spec_id from the cache then read the ONE matching YAML
-    /// object (the read is authoritative — the cache only tells us which file).
-    /// On any cache miss, a spec_id/uuid mismatch (defends against a torn cache
-    /// row), or an unreadable cache, we fall back to the inner full scan so
-    /// correctness never depends on cache freshness. The uuid→spec_id mapping is
-    /// invariant (spec_ids are stable and never reused), so even a stale cache
-    /// row resolves to the right file.
+    /// Resolve one UUID using the cache as a locator and canonical YAML as truth.
     // trace:BUG-634 | ai:claude
+    // trace:BUG-1678 | ai:codex
     fn get_requirement_targeted(&self, id: &Uuid) -> Result<Option<Requirement>> {
-        if let Ok(Some(spec_id)) = self.cache.spec_id_for_uuid(id) {
-            if let Ok(Some(req)) = self.inner.get_requirement_by_spec_id(&spec_id) {
-                if req.id == *id {
-                    return Ok(Some(req));
+        self.requirement_reader()(id)
+    }
+
+    /// Create a reader for one read operation (for example, rendering a spec's
+    /// relationships and blockers). Cache misses share a lazy UUID-to-path index,
+    /// so even an empty or unreadable cache costs at most one full-store parse.
+    /// Each result is read from canonical YAML and its UUID checked. Create a new
+    /// reader after writes: the fallback file inventory is scoped to this reader.
+    // trace:BUG-1678 | ai:codex
+    pub fn requirement_reader(&self) -> impl Fn(&Uuid) -> Result<Option<Requirement>> + '_ {
+        use std::collections::HashMap;
+        use std::sync::OnceLock;
+
+        let paths: OnceLock<Result<HashMap<Uuid, PathBuf>>> = OnceLock::new();
+        let objects_root = self.inner.path().join("objects");
+        move |id| {
+            if let Ok(Some(spec_id)) = self.cache.spec_id_for_uuid(id) {
+                // A missing filename must not trigger the agreed-id full scan.
+                if let Ok(req) = crate::object_store::read_object(&objects_root, &spec_id) {
+                    if req.id == *id {
+                        return Ok(Some(req));
+                    }
                 }
             }
+            let indexed = paths.get_or_init(|| {
+                let mut indexed = HashMap::new();
+                for (_, path) in crate::object_store::list_objects(&objects_root)? {
+                    // Match find_by_uuid's tolerance for unreadable objects and
+                    // its deterministic first-match behavior for duplicate UUIDs.
+                    if let Ok(req) = crate::object_store::read_object_from_path(&path) {
+                        indexed.entry(req.id).or_insert(path);
+                    }
+                }
+                Ok(indexed)
+            });
+            let indexed = indexed.as_ref().map_err(|e| anyhow::anyhow!("{e:#}"))?;
+            Ok(indexed.get(id).and_then(|path| {
+                crate::object_store::read_object_from_path(path)
+                    .ok()
+                    .filter(|req| req.id == *id)
+            }))
         }
-        // Cache miss / mismatch / unreadable — fall back to the authoritative
-        // (but O(n)) scan rather than risk a wrong not-found.
-        self.inner.get_requirement(id)
     }
 
     /// The STORED status of `id`, from one targeted object read: the cache maps
@@ -1269,6 +1294,95 @@ mod tests {
             fake_temp_root.path().join(".aida").join("cache.db"),
             "fixture must be adoptable when nothing is guarded, or this test proves nothing"
         );
+    }
+
+    // trace:BUG-1678 | ai:codex
+    #[test]
+    fn targeted_reader_shares_one_scan_for_stale_cache_targets() {
+        use crate::object_store::{self, OBJECT_LIST_COUNT};
+
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &dir.path().join("cache.db")).unwrap();
+        let objects = store_root.join("objects");
+        let targets: Vec<_> = (1..=8)
+            .map(|n| sample_req(&format!("TASK-{n}"), &format!("Target {n}")))
+            .collect();
+        for target in &targets {
+            object_store::write_object(&objects, target).unwrap();
+        }
+        // One good cache hit; one row points to a missing file; another points
+        // to a different UUID. The remaining targets are absent from the cache.
+        backend.cache.upsert_requirement(&targets[0]).unwrap();
+        let mut missing_file = targets[1].clone();
+        missing_file.spec_id = Some("TASK-99".into());
+        backend.cache.upsert_requirement(&missing_file).unwrap();
+        let mut wrong_uuid = targets[2].clone();
+        // Use a distinct existing file to avoid the cache's spec-id uniqueness.
+        let other = sample_req("TASK-98", "Different UUID");
+        object_store::write_object(&objects, &other).unwrap();
+        wrong_uuid.spec_id = other.spec_id;
+        backend.cache.upsert_requirement(&wrong_uuid).unwrap();
+
+        OBJECT_LIST_COUNT.with(|c| c.set(0));
+        let read = backend.requirement_reader();
+        assert_eq!(
+            read(&targets[0].id).unwrap().unwrap().title,
+            targets[0].title
+        );
+        assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 0);
+        // Render relationships, then blockers (including duplicate/missing IDs).
+        for _ in 0..2 {
+            for target in &targets {
+                let found = read(&target.id).unwrap().unwrap();
+                assert_eq!(found.id, target.id);
+                assert_eq!(found.title, target.title);
+            }
+            assert!(read(&Uuid::now_v7()).unwrap().is_none());
+        }
+        assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 1);
+
+        // The index only locates files; it does not freeze record contents.
+        let mut updated = targets[7].clone();
+        updated.title = "Updated canonical title".into();
+        object_store::write_object(&objects, &updated).unwrap();
+        assert_eq!(read(&updated.id).unwrap().unwrap().title, updated.title);
+        assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 1);
+        // A new operation can discover files added since the previous scan.
+        let added = sample_req("TASK-100", "New target");
+        object_store::write_object(&objects, &added).unwrap();
+        assert_eq!(
+            backend.get_requirement(&added.id).unwrap().unwrap().id,
+            added.id
+        );
+    }
+
+    // trace:BUG-1678 | ai:codex
+    #[test]
+    fn targeted_reader_shares_one_scan_when_cache_is_unreadable() {
+        use crate::object_store::{self, OBJECT_LIST_COUNT};
+
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let targets = [sample_req("TASK-1", "One"), sample_req("TASK-2", "Two")];
+        for target in &targets {
+            object_store::write_object(&store_root.join("objects"), target).unwrap();
+        }
+        rusqlite::Connection::open(&cache_path)
+            .unwrap()
+            .execute_batch("DROP TABLE requirements_cache")
+            .unwrap();
+        OBJECT_LIST_COUNT.with(|c| c.set(0));
+        let read = backend.requirement_reader();
+        for target in &targets {
+            assert_eq!(read(&target.id).unwrap().unwrap().title, target.title);
+        }
+        assert!(read(&Uuid::now_v7()).unwrap().is_none());
+        assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 1);
     }
 
     #[test]

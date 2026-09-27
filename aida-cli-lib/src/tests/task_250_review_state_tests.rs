@@ -29,6 +29,8 @@ fn write_lease(project_root: &std::path::Path, id: &str, scope: &str) {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
     std::fs::write(
         dir.join(format!("{}.toml", id)),

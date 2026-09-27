@@ -278,6 +278,11 @@ pub(crate) struct OrphanedInProgressItem {
     pub title: String,
     pub abandoned: bool,
     pub since_label: String,
+    /// BUG-1656: the lease's recorded pid is dead but a live harness lease is
+    /// in this repo — an Agent-tool subagent may be working the spec.
+    // trace:BUG-1656 | ai:claude
+    #[serde(default)]
+    pub possibly_subagent: bool,
 }
 
 /// TASK-1454: one LIVE seat confirmed blocked on a human approval gate — the
@@ -1963,7 +1968,10 @@ impl AwaitingReport {
                 overflow += 1;
                 continue;
             }
-            let state = if o.abandoned {
+            let state = if o.possibly_subagent {
+                // trace:BUG-1656 | ai:claude
+                "possibly worked by a subagent — lease pid dead, live harness lease in this repo"
+            } else if o.abandoned {
                 "abandoned — lease died"
             } else {
                 "not yet started — no lease"
@@ -2140,6 +2148,8 @@ impl AwaitingReport {
                 "title": o.title,
                 "abandoned": o.abandoned,
                 "since_label": o.since_label,
+                // trace:BUG-1656 | ai:claude
+                "possibly_subagent": o.possibly_subagent,
             })).collect::<Vec<_>>(),
             // trace:TASK-1454 | ai:claude
             "blocked_seats": self.blocked_seats.iter().map(|b| serde_json::json!({
@@ -3612,12 +3622,14 @@ mod tests {
                     title: "crashed session".to_string(),
                     abandoned: true,
                     since_label: "last touched 3h ago".to_string(),
+                    possibly_subagent: false,
                 },
                 OrphanedInProgressItem {
                     spec_id: "TASK-9002".to_string(),
                     title: "never picked up".to_string(),
                     abandoned: false,
                     since_label: "last-touched time unknown".to_string(),
+                    possibly_subagent: false,
                 },
             ],
             ..Default::default()

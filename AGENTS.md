@@ -31,6 +31,11 @@ needs direct git-canonical access:
 ln -s /home/joe/ai/aida/.aida-store .aida-store
 ```
 
+Global role queues use permanent `~/.aida/queue/<role>.lock` sidecars and
+atomic YAML replacement (BUG-1682). Never unlink those sidecars or add a
+snapshot-save writer. Corrupt queues fail closed on mutation; position
+placement is still computed by callers outside the lock. See OVERVIEW.md.
+
 ## Requirements Management
 
 Before implementing, read the owning requirement:
@@ -152,6 +157,11 @@ brief, follow this path (the same one used for TASK-132 and BUG-406):
 7. `aida pr ship` — watches CI, squash-merges, pulls, and auto-bumps the spec to Completed.
 8. End the session; verify the spec reached Completed.
 9. Architecture-class work → sketch first and wait for master sign-off (see Sketch-First Protocol).
+
+Local drain locks use PID/start identity, never launch age, to retain a live
+holder. Integration takes the main worktree's lock even from a sibling checkout.
+`AIDA_DRAIN_LOCK_STALE_SECS` controls shared claims only; see
+[lock regression coverage](docs/testing/bug-1683-drain-lock.md) for scope and limits.
 
 ## Code Traceability
 

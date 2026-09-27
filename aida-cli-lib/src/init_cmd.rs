@@ -1052,6 +1052,31 @@ fn memory_lane_project_name(store: &RequirementsStore) -> &str {
     }
 }
 
+/// The heading that marks an AIDA-AUTOGEN block as the memory-lane block
+/// (as opposed to the full conventions block).
+// trace:BUG-1662 | ai:claude
+const MEMORY_LANE_BLOCK_HEADING: &str = "# AIDA Memory Lane";
+
+/// The current memory-lane block for a file whose AIDA-AUTOGEN block is a
+/// memory-lane block, keeping the storage line it was written with. `None`
+/// when the file has no complete AIDA block, or its block is not the
+/// memory-lane block (refresh then leaves it alone rather than guess).
+// trace:BUG-1662 | ai:claude
+pub(crate) fn current_memory_lane_block(existing: &str) -> Option<String> {
+    let block = aida_core::scaffolding::extract_aida_block(existing)?;
+    if !block
+        .lines()
+        .any(|l| l.trim_end() == MEMORY_LANE_BLOCK_HEADING)
+    {
+        return None;
+    }
+    let label = block
+        .lines()
+        .find_map(|l| l.strip_prefix("Storage: "))?
+        .trim_end();
+    Some(memory_lane_guidance_block(label))
+}
+
 // trace:STORY-1093 | ai:codex
 fn memory_lane_guidance_block(storage_label: &str) -> String {
     format!(

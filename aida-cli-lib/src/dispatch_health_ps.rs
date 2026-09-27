@@ -70,6 +70,16 @@ pub(crate) enum DispatchState {
     /// hand-entered spec starts a SECOND session competing with the human.
     // trace:BUG-778 | ai:claude
     AwaitingAgent,
+    /// The drain wave that ran this session was STOPPED (SIGTERM: systemd
+    /// `RuntimeMaxSec` / `OOMPolicy=stop`, `aida drain stop --now`, a manual
+    /// kill) and its handler stamped the lease `interrupted_at` before
+    /// releasing the drain lock. The process is gone and the tree is clean —
+    /// not a crash, not a stall: an interrupted session whose worktree is
+    /// intact and whose next step is the ordinary resume. A dirty tree still
+    /// reads [`Salvageable`](Self::Salvageable): the diff at risk outranks the
+    /// provenance of the death.
+    // trace:TASK-1518 | ai:claude
+    Stopped,
 }
 
 impl DispatchState {
@@ -83,7 +93,32 @@ impl DispatchState {
             DispatchState::Unknown => "unknown",
             // trace:BUG-778 | ai:claude
             DispatchState::AwaitingAgent => "awaiting-agent",
+            // trace:TASK-1518 | ai:claude
+            DispatchState::Stopped => "stopped",
         }
+    }
+}
+
+/// TASK-1518: fold the lease's interruption stamp into the classified state.
+/// A drain stopped by SIGTERM stamps `interrupted_at` on its in-flight leases
+/// as it releases the drain lock; a lease so stamped whose process is
+/// demonstrably gone and whose tree is clean (the [`DispatchState::Stalled`]
+/// dead-process arm) reads [`DispatchState::Stopped`] instead — an
+/// interrupted session with an intact worktree, not a crashed agent. Every
+/// other state is unchanged: a dirty tree keeps its salvage urgency, a live
+/// process (the wave's vendor child outliving a manual kill) keeps its
+/// movement reading, and undeterminable liveness stays unknown. Pure so the
+/// matrix is unit-testable on fixtures.
+// trace:TASK-1518 | ai:claude
+pub(crate) fn apply_interruption(
+    state: DispatchState,
+    pid_alive: Option<bool>,
+    interrupted: bool,
+) -> DispatchState {
+    if interrupted && state == DispatchState::Stalled && pid_alive == Some(false) {
+        DispatchState::Stopped
+    } else {
+        state
     }
 }
 
@@ -242,6 +277,121 @@ pub(crate) struct WorktreeGitProbe {
     /// last commit" acceptance line. `None` when the worktree has no commits
     /// yet or `git log` fails.
     pub(crate) last_commit_subject: Option<String>,
+    /// BUG-1656: seconds since the NEWEST dirty (modified / untracked) file
+    /// in the worktree was written. `None` when the tree is clean or no dirty
+    /// path could be stat'ed. A small value means the tree is still changing
+    /// under someone's hands — an Agent-tool subagent editing inside a leased
+    /// worktree leaves exactly this signature while its spec lease's pid
+    /// reads dead.
+    // trace:BUG-1656 | ai:claude
+    pub(crate) dirty_newest_mtime_age_secs: Option<u64>,
+}
+
+/// BUG-1656: how recently the newest dirty file must have been written for
+/// the worktree to count as "still moving" regardless of pid liveness. Ten
+/// minutes: an agent mid-change writes files every few seconds to a couple
+/// of minutes apart; a genuinely dead session's diff stops aging-in within
+/// that window and reverts to the ordinary dead-process matrix.
+// trace:BUG-1656 | ai:claude
+pub(crate) const DEFAULT_DIRTY_MOVEMENT_FRESH_SECS: u64 = 10 * 60;
+
+/// BUG-1656: is the dirty tree still changing? Pure over the probe's newest
+/// dirty mtime age; `None` (clean, or unknown) is never fresh.
+// trace:BUG-1656 | ai:claude
+pub(crate) fn dirty_movement_is_fresh(newest_age_secs: Option<u64>, fresh_secs: u64) -> bool {
+    newest_age_secs.is_some_and(|age| age < fresh_secs)
+}
+
+/// BUG-1656: the paths `git status --porcelain -z` reports as changed or
+/// untracked, relative to `worktree`, that count toward "the tree is still
+/// changing". Renames and copies yield the destination path. Empty when the
+/// probe fails.
+///
+/// The output is read raw (never trimmed) and NUL-separated: trimming strips
+/// the leading space of an unstaged ` M` / ` D` record and shifts every
+/// column, which silently cut the first character off the path.
+// trace:BUG-1656 | ai:claude
+pub(crate) fn dirty_paths(worktree: &Path) -> Vec<std::path::PathBuf> {
+    let Ok(out) = Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["status", "--porcelain", "-z", "--untracked-files=all"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    parse_porcelain_z(&String::from_utf8_lossy(&out.stdout))
+        .into_iter()
+        .filter(|(xy, path)| counts_toward_recent_movement(xy, path))
+        .map(|(_, path)| worktree.join(path))
+        .collect()
+}
+
+/// BUG-1656: parse `git status --porcelain -z` into `(XY, path)` records.
+/// Each record is `XY<space>path\0`; a rename or copy (`R` / `C` in either
+/// status column) is followed by one extra `\0`-terminated field holding the
+/// ORIGINAL path, which is consumed and dropped — the first path is the
+/// destination, the file that exists now.
+// trace:BUG-1656 | ai:claude
+pub(crate) fn parse_porcelain_z(out: &str) -> Vec<(String, String)> {
+    let mut records = Vec::new();
+    let mut fields = out.split('\0');
+    while let Some(field) = fields.next() {
+        if field.len() < 4 || !field.is_char_boundary(2) || !field.is_char_boundary(3) {
+            continue;
+        }
+        let xy = &field[..2];
+        let path = &field[3..];
+        if xy.contains('R') || xy.contains('C') {
+            let _original = fields.next();
+        }
+        records.push((xy.to_string(), path.to_string()));
+    }
+    records
+}
+
+/// BUG-1656: does this porcelain record count toward "recent movement"?
+// The exact rule: every TRACKED change (any XY other than `??` untracked and
+// `!!` ignored) counts; an UNTRACKED file (`??`) counts only when no path
+// component is hidden (starts with `.`) and its file name is not editor
+// swap/backup/lock style (`.*.swp`, `*~`, `.#*`). Ignored files never count.
+// So an editor swap file or an unignored tool directory (`.codegraph/`, ...)
+// cannot keep an abandoned worktree looking active forever.
+// trace:BUG-1656 | ai:claude
+pub(crate) fn counts_toward_recent_movement(xy: &str, path: &str) -> bool {
+    match xy {
+        "!!" => false,
+        "??" => {
+            let path = path.trim_end_matches('/');
+            let hidden = path.split('/').any(|c| c.starts_with('.'));
+            let name = path.rsplit('/').next().unwrap_or(path);
+            let swap = (name.starts_with('.') && name.ends_with(".swp"))
+                || name.ends_with('~')
+                || name.starts_with(".#");
+            !hidden && !swap
+        }
+        _ => true,
+    }
+}
+
+/// BUG-1656: age in seconds of the newest file among `paths`, relative to
+/// `now`. Deleted paths (dirty because they are gone) are skipped, and so is
+/// a modification time in the FUTURE (clock skew, a restored archive): it is
+/// unknown, never "recent" — a future stamp would otherwise read as age 0
+/// and keep the tree looking active indefinitely.
+// trace:BUG-1656 | ai:claude
+pub(crate) fn newest_mtime_age_secs(
+    paths: &[std::path::PathBuf],
+    now: std::time::SystemTime,
+) -> Option<u64> {
+    paths
+        .iter()
+        .filter_map(|p| std::fs::metadata(p).ok()?.modified().ok())
+        .filter_map(|m| now.duration_since(m).ok().map(|d| d.as_secs()))
+        .min()
 }
 
 fn git_stdout(worktree: &Path, args: &[&str]) -> Option<String> {
@@ -273,11 +423,54 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
         .and_then(|s| s.parse::<u32>().ok())
         .unwrap_or(0);
     let last_commit_subject = git_stdout(worktree_path, &["log", "-1", "--format=%s"]);
+    // trace:BUG-1656 | ai:claude
+    let dirty_newest_mtime_age_secs = if dirty {
+        newest_mtime_age_secs(&dirty_paths(worktree_path), std::time::SystemTime::now())
+    } else {
+        None
+    };
     WorktreeGitProbe {
         dirty,
         ahead_of_main,
         last_commit_subject,
+        dirty_newest_mtime_age_secs,
     }
+}
+
+/// BUG-1656: [`dispatch_state`] plus the "is the dirty tree still changing"
+/// signal. A worktree whose newest dirty file was written within the
+/// freshness window is MOVING whatever the pid says: the lease's recorded
+/// process may be dead while an Agent-tool subagent (which runs inside the
+/// parent claude process and never appears in the worktree's cwd probe) is
+/// editing in place. Reading that as Salvageable produced the
+/// `git add -A && git commit -m "wip: salvage"` hint against a tree an agent
+/// was still writing — following it would commit half-done work under the
+/// agent and race its edits. The hand-entered AwaitingAgent short-circuit
+/// stays first (it requires a clean tree, so the two never overlap).
+// trace:BUG-1656 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn dispatch_state_with_movement(
+    pid_alive: Option<bool>,
+    worktree_dirty: bool,
+    branch_ahead_of_main: u32,
+    elapsed_secs: u64,
+    stalled_threshold_secs: u64,
+    manual_enter_secs: Option<u64>,
+    awaiting_agent_grace_secs: u64,
+    dirty_movement_fresh: bool,
+) -> DispatchState {
+    if worktree_dirty && dirty_movement_fresh && pid_alive != Some(true) {
+        return DispatchState::Moving;
+    }
+    dispatch_state(
+        pid_alive,
+        worktree_dirty,
+        branch_ahead_of_main,
+        elapsed_secs,
+        stalled_threshold_secs,
+        manual_enter_secs,
+        awaiting_agent_grace_secs,
+    )
 }
 
 /// The exact next command for a row's dispatch state — "no interpretation
@@ -351,6 +544,14 @@ pub(crate) fn next_command_hint(
         }
         DispatchState::Stalled => Some(format!(
             "no branch/dirty movement in {wt} (branch {branch}, last commit \"{last_commit}\") — resume/rebrief: {rebrief}"
+        )),
+        // TASK-1518: the wave was stopped, not crashed — the drain's SIGTERM
+        // handler released the lock and marked this lease on the way out, so
+        // the worktree is intact and the next step is the plain resume.
+        // trace:TASK-1518 | ai:claude
+        DispatchState::Stopped => Some(format!(
+            "drain wave stopped — nothing running in {wt} (branch {branch}, last commit \"{last_commit}\"), \
+             worktree intact — resume/rebrief: {rebrief}"
         )),
         // BUG-752: no pid was recorded and the worktree probe can't see a
         // harness-hosted worker — liveness is unknown, NOT dead. Never emit

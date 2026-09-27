@@ -40,6 +40,8 @@ mod config_edit;
 mod context_prompt;
 mod coordination;
 mod criteria;
+// trace:STORY-1487 | ai:claude
+mod criteria_coverage;
 mod criteria_gate;
 mod criteria_red_run;
 mod db_cmd;
@@ -68,6 +70,8 @@ mod doctor_cmd;
 mod drain_caps;
 mod drain_cmd;
 mod drain_lock;
+// trace:TASK-1518 | ai:claude
+mod drain_signal;
 mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
 mod git_arg_guard;
@@ -4725,6 +4729,10 @@ fn run() -> Result<()> {
             crate::cli::RemoteCommand::MirrorPush { pushed_remote } => {
                 remote_create::handle_remote_mirror_push(&project_root, pushed_remote)
             }
+            // trace:BUG-1676 | ai:claude
+            crate::cli::RemoteCommand::MirrorSync { json } => {
+                remote_create::handle_remote_mirror_sync(&project_root, *json)
+            }
             crate::cli::RemoteCommand::Reconcile { execute, json, yes } => {
                 remote_create::handle_remote_reconcile(&project_root, *execute, *json, *yes)
             }
@@ -5673,11 +5681,17 @@ fn run() -> Result<()> {
                 &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
         }
-        Command::Criteria { spec, json } => {
+        Command::Criteria {
+            spec,
+            json,
+            window_days,
+        } => {
             let store = storage.load()?;
             let project_root = find_project_root()
                 .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
-            criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
+            // `coverage` / `gap` is the project-wide report, never a spec id.
+            // trace:STORY-1487 | ai:claude
+            criteria_coverage::dispatch_criteria(&project_root, &store, spec, *window_days, *json)?;
         }
         Command::Reconstitute {
             spec,
@@ -31757,6 +31771,21 @@ pub(crate) struct SessionLease {
     // trace:BUG-778 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     manual_enter_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// TASK-1518: stamped by the drain's SIGTERM handler on every lease the
+    /// stopped wave created (`creator_pid` match) as it releases the drain
+    /// lock — an INTERRUPTED session, not an abandoned one. `aida ps` reads
+    /// it: a stamped lease with no live process and a clean tree classifies
+    /// `stopped` (worktree intact, resume as normal) instead of a dead agent.
+    /// Written as a generic TOML key by `drain_signal`, so a lease this
+    /// binary does not otherwise model keeps its other keys.
+    // trace:TASK-1518 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    interrupted_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// TASK-1518: why the lease was interrupted (`sigterm`). Informational;
+    /// the classifier keys on `interrupted_at`.
+    // trace:TASK-1518 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    interrupted_reason: Option<String>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -31865,6 +31894,8 @@ fn session_harness_worktree_register(
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -31878,6 +31909,17 @@ fn session_harness_worktree_register(
         "registered harness worktree lease {} scope:{} branch:{}",
         id, lease.scope, lease.branch
     );
+    // BUG-1656: a subagent dispatched INTO a worktree an existing spec lease
+    // owns adopts that lease — its harness pid becomes the spec lease's live
+    // worker, so `aida ps` / `aida awaiting` stop calling the spec dead.
+    // trace:BUG-1656 | ai:claude
+    if let Some(adopted) =
+        adopt_spec_lease_for_subagent(&project_root, &lease.worktree_path, active_pid)
+    {
+        println!(
+            "adopted spec lease {adopted} for this subagent (its worktree is this subagent's cwd)"
+        );
+    }
     // BUG-754: a spec-scoped harness lease means a fanned-out implementer is
     // now working that spec — flip Approved → In Progress at lease-take (the
     // same coherence bump `aida session start` performs per BUG-379) so
@@ -31891,6 +31933,115 @@ fn session_harness_worktree_register(
         );
     }
     Ok(())
+}
+
+/// BUG-1656 (2): is `lease_scope`/`lease_worktree` a spec-scoped lease whose
+/// worktree is exactly the subagent's `cwd`? Pure so the adoption rule is
+/// unit-testable without a lease dir. Generic harness leases and non-spec
+/// scopes are never adopted; neither is a lease for a different worktree.
+// trace:BUG-1656 | ai:claude
+fn subagent_adopts_lease(
+    lease_scope: &str,
+    lease_worktree: &std::path::Path,
+    cwd: &std::path::Path,
+) -> bool {
+    if lease_scope.eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE) {
+        return false;
+    }
+    if worktree_lease::spec_id_from_branch(lease_scope).is_none() {
+        return false;
+    }
+    let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    !lease_worktree.as_os_str().is_empty() && canon(lease_worktree) == canon(cwd)
+}
+
+/// BUG-1656 (2): give an Agent-tool subagent the spec lease of the worktree it
+/// was dispatched into. Walks `.aida/sessions/`, finds the spec-scoped lease
+/// whose `worktree_path` is `cwd`, and — unless that lease already records a
+/// LIVE `active_pid` — stamps `harness_pid` as its `active_pid` (plus the
+/// kernel start identity and an `adopted_by_subagent_at` marker). Patched as
+/// generic TOML key inserts (the `manual_enter_at` pattern) so keys this
+/// binary does not model survive. Returns the adopted lease id. Best-effort:
+/// unreadable leases are skipped, never rewritten.
+// trace:BUG-1656 | ai:claude
+fn adopt_spec_lease_for_subagent(
+    project_root: &std::path::Path,
+    cwd: &std::path::Path,
+    harness_pid: Option<u32>,
+) -> Option<String> {
+    let pid = harness_pid?;
+    let entries = std::fs::read_dir(leases_dir(project_root)).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+            continue;
+        }
+        let Ok(body) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(mut value) = toml::from_str::<toml::Value>(&body) else {
+            continue;
+        };
+        let Some(table) = value.as_table_mut() else {
+            continue;
+        };
+        let scope = table
+            .get("scope")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let worktree = table
+            .get("worktree_path")
+            .and_then(|v| v.as_str())
+            .map(std::path::PathBuf::from)
+            .unwrap_or_default();
+        if !subagent_adopts_lease(&scope, &worktree, cwd) {
+            continue;
+        }
+        let already_live = table
+            .get("active_pid")
+            .and_then(|v| v.as_integer())
+            .and_then(|v| u32::try_from(v).ok())
+            .is_some_and(process_probe::pid_is_alive);
+        if already_live {
+            continue;
+        }
+        table.insert(
+            "active_pid".to_string(),
+            toml::Value::Integer(i64::from(pid)),
+        );
+        match process_probe::process_start_identity(pid) {
+            Some(start) => {
+                table.insert(
+                    "active_pid_start_time".to_string(),
+                    toml::Value::String(start),
+                );
+            }
+            None => {
+                table.remove("active_pid_start_time");
+            }
+        }
+        table.insert(
+            "adopted_by_subagent_at".to_string(),
+            toml::Value::String(chrono::Utc::now().to_rfc3339()),
+        );
+        let id = table
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                path.file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            });
+        let Ok(content) = toml::to_string_pretty(&value) else {
+            continue;
+        };
+        if write_atomic(&path, &content).is_ok() {
+            return Some(id);
+        }
+    }
+    None
 }
 
 // BUG-754: does this harness-lease scope name a spec (vs the generic
@@ -37113,6 +37264,8 @@ fn session_start(
         review_verb: is_review_session,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
     let lease_file = lease_path(&project_root, &id);
     // STORY-1429: atomic, so a reader never sees a half-written lease.
@@ -42459,9 +42612,26 @@ fn kill_process_group(pid: u32) {
 // trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link's bounded
 // `git`/`gh` calls reuse this instead of a second timeout implementation.
 pub(crate) fn command_output_with_timeout(
-    mut cmd: std::process::Command,
+    cmd: std::process::Command,
     timeout: std::time::Duration,
 ) -> Option<std::process::Output> {
+    match command_output_with_timeout_detail(cmd, timeout) {
+        BoundedCommandOutput::Completed(output) => Some(output),
+        BoundedCommandOutput::SpawnFailed | BoundedCommandOutput::TimedOut => None,
+    }
+}
+
+// trace:TASK-1535 | ai:codex
+pub(crate) enum BoundedCommandOutput {
+    Completed(std::process::Output),
+    SpawnFailed,
+    TimedOut,
+}
+
+pub(crate) fn command_output_with_timeout_detail(
+    mut cmd: std::process::Command,
+    timeout: std::time::Duration,
+) -> BoundedCommandOutput {
     use std::io::Read;
 
     #[cfg(unix)]
@@ -42470,17 +42640,20 @@ pub(crate) fn command_output_with_timeout(
         cmd.process_group(0);
     }
 
-    let mut child = cmd
+    let mut child = match cmd
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .ok()?;
+    {
+        Ok(child) => child,
+        Err(_) => return BoundedCommandOutput::SpawnFailed,
+    };
     // Only used to target `killpg` below; on non-unix targets nothing reads
     // it, so it is cfg-gated too rather than left as a dead binding.
     #[cfg(unix)]
     let pid = child.id();
-    let mut stdout_pipe = child.stdout.take()?;
-    let mut stderr_pipe = child.stderr.take()?;
+    let mut stdout_pipe = child.stdout.take().expect("stdout was piped");
+    let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
     let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
     let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -42536,11 +42709,14 @@ pub(crate) fn command_output_with_timeout(
     };
     let stdout = stdout_rx.recv_timeout(read_wait).unwrap_or_default();
     let stderr = stderr_rx.recv_timeout(read_wait).unwrap_or_default();
-    status.map(|status| std::process::Output {
-        status,
-        stdout,
-        stderr,
-    })
+    match status {
+        Some(status) => BoundedCommandOutput::Completed(std::process::Output {
+            status,
+            stdout,
+            stderr,
+        }),
+        None => BoundedCommandOutput::TimedOut,
+    }
 }
 
 /// BUG-1594: the message a forge lookup carries when the scoped
@@ -47428,6 +47604,11 @@ mod task_1454_pending_approval_tests;
 #[cfg(test)]
 #[path = "tests/bug_1523_orphaned_in_progress_mapping_tests.rs"]
 mod bug_1523_orphaned_in_progress_mapping_tests;
+
+// trace:BUG-1656 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1656_subagent_liveness_tests.rs"]
+mod bug_1656_subagent_liveness_tests;
 
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
@@ -58634,6 +58815,181 @@ fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bo
     )
 }
 
+/// BUG-1672: the verdict a review COMMENT on the spec carries, when the
+/// comment is one. Reviewers that only post prose (a fresh reviewer subagent,
+/// a human at the keyboard) write no verdict file at all, so the comment is
+/// the only record of the decision.
+///
+/// Only a comment that is plainly a review counts: its first line starts with
+/// `VERDICT:`, or its head (the text before the first `:`) is `Review` or
+/// begins `Review ` / `Review(` — `Review:`, `Review (fresh Opus reviewer):`,
+/// `Review round 4 (...):`. Anything else (a proxy decision quoting a review,
+/// an orchestrator note, the `REVIEW FINDINGS TO ADDRESS (` rework block) is
+/// not a review. The verdict is read from the first line only: a
+/// request-changes / reject word blocks regardless of anything else on the
+/// line; `PARTIAL` counts as request-changes (as `VerdictKind::parse` does);
+/// an approval word approves unless the line qualifies it (`WITHHELD`,
+/// `PENDING`, `NOT APPROVED`), in which case it is `Unknown`, which never
+/// approves. `APPROVE WITH NITS` is an approval — the wording the review
+/// skill's accepted-with-nits path posts.
+///
+/// Returns `None` for a comment that is not a review at all.
+// trace:BUG-1672 | ai:claude
+fn review_comment_verdict(content: &str) -> Option<review_verdict::VerdictKind> {
+    if review_verdict::is_findings_block(content) {
+        return None;
+    }
+    let first = content.lines().find(|l| !l.trim().is_empty())?.trim();
+    let lower = first.to_ascii_lowercase();
+    let head = lower.split(':').next().unwrap_or(&lower).trim();
+    let is_review = lower.starts_with("verdict:")
+        || head == "review"
+        || head.starts_with("review ")
+        || head.starts_with("review(");
+    if !is_review {
+        return None;
+    }
+    // Word-level scan of the upper-cased first line: verdict words are written
+    // in capitals by every writer, and the whole-word match keeps a prose
+    // "reviewer" or "approved-by" from counting.
+    let upper = first.to_ascii_uppercase();
+    let words: Vec<&str> = upper
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .map(|w| w.trim_matches('_'))
+        .filter(|w| !w.is_empty())
+        .collect();
+    let has = |w: &str| words.contains(&w);
+    let has_seq = |a: &str, b: &str| words.windows(2).any(|p| p[0] == a && p[1] == b);
+    let request_changes = has("REQUEST_CHANGES")
+        || has("REQUESTCHANGES")
+        || has_seq("REQUEST", "CHANGES")
+        || has_seq("CHANGES", "REQUESTED")
+        || has_seq("NEEDS", "CHANGES");
+    if request_changes || has("PARTIAL") {
+        return Some(review_verdict::VerdictKind::RequestChanges);
+    }
+    if has("REJECT") || has("REJECTED") {
+        return Some(review_verdict::VerdictKind::Rejected);
+    }
+    if has("APPROVE") || has("APPROVED") || has("LGTM") {
+        let qualified = has("WITHHELD")
+            || has("PENDING")
+            || has_seq("NOT", "APPROVED")
+            || has_seq("NOT", "APPROVE");
+        return Some(if qualified {
+            review_verdict::VerdictKind::Unknown
+        } else {
+            review_verdict::VerdictKind::Approved
+        });
+    }
+    Some(review_verdict::VerdictKind::Unknown)
+}
+
+/// BUG-1672: the LATEST review comment on the spec and the verdict it
+/// carries. Top-level comments only, newest by `created_at`; the newest
+/// comment that is a review decides, so a round-4 APPROVE after a round-3
+/// REQUEST_CHANGES approves and a REQUEST_CHANGES after an earlier APPROVE
+/// blocks.
+///
+/// Every review comment counts, whoever posted it: the author field is the
+/// operator's name on reviewer and implementer comments alike, and the
+/// session that moved the spec to done is not recorded in its history, so
+/// there is no reliable way to tell the implementer's own "looks good" apart.
+/// The strict first-line shape `review_comment_verdict` requires is the
+/// guard instead.
+// trace:BUG-1672 | ai:claude
+fn latest_review_comment_verdict(
+    comments: &[aida_core::Comment],
+) -> Option<(review_verdict::VerdictKind, chrono::DateTime<chrono::Utc>)> {
+    comments
+        .iter()
+        .filter_map(|c| review_comment_verdict(&c.content).map(|k| (k, c.created_at)))
+        // trace:BUG-1672 | ai:codex — equal timestamps cannot clear a blocker.
+        .max_by_key(|(kind, at)| (*at, !kind.approves()))
+}
+
+/// BUG-1672: when a verdict file was last written, as UTC. `None` when the
+/// file is missing or the filesystem gives no modification time.
+// trace:BUG-1672 | ai:claude
+fn verdict_file_written_at(path: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    Some(chrono::DateTime::<chrono::Utc>::from(modified))
+}
+
+/// BUG-1672: has an open PR for `req` already been approved by an independent
+/// review? The one predicate `reviews_awaiting_human` uses to split
+/// awaiting-review from awaiting-merge. Three records can approve:
+///  1. the drain's PR-keyed verdict file (`PR-<n>.json`, the original signal);
+///  2. the spec-keyed verdict file `aida review <SPEC>` records (not one a
+///     merge has already closed out);
+///  3. the latest review comment on the spec (the fresh-reviewer flow posts
+///     only a comment).
+///
+/// The newest review wins across all eligible sources. An approval must be
+/// strictly newer than every blocking candidate; ties or missing timestamps
+/// cannot clear a blocker. File times remain filesystem mtimes (BUG-1681 owns
+/// switching to recorded_at).
+// trace:BUG-1672 | ai:codex
+fn spec_review_approved(
+    project_root: &std::path::Path,
+    req: &aida_core::Requirement,
+    spec_id: &str,
+    pr_number: u64,
+) -> bool {
+    let mut candidates = Vec::new();
+    if let Some((kind, at)) = latest_review_comment_verdict(&req.comments) {
+        candidates.push((kind.approves(), Some(at)));
+    }
+
+    let pr_path = review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"));
+    if pr_path.is_file() {
+        // Preserve the drain reader's conflict/escalation checks. An unknown
+        // or unreadable verdict is blocking evidence, never an approval.
+        candidates.push((
+            pr_has_approved_verdict(project_root, pr_number),
+            verdict_file_written_at(&pr_path),
+        ));
+    }
+
+    let ids = [
+        Some(spec_id),
+        req.agreed_id.as_deref(),
+        req.spec_id.as_deref(),
+    ];
+    for path in ids
+        .into_iter()
+        .flatten()
+        .filter(|id| !id.trim().is_empty() && *id != "???")
+        .map(|id| review_verdict::verdict_path(project_root, id))
+        .filter(|p| p.is_file())
+    {
+        let record = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|body| review_verdict::parse_recorded_verdict(&body));
+        if record.as_ref().is_some_and(|v| v.is_closed()) {
+            continue;
+        }
+        candidates.push((
+            record.is_some_and(|v| v.kind.approves()),
+            verdict_file_written_at(&path),
+        ));
+    }
+    review_candidates_approved(&candidates)
+}
+
+// trace:BUG-1672 | ai:codex
+fn review_candidates_approved(
+    candidates: &[(bool, Option<chrono::DateTime<chrono::Utc>>)],
+) -> bool {
+    candidates.iter().any(|(approves, at)| {
+        *approves
+            && candidates.iter().all(|(other_approves, other_at)| {
+                *other_approves
+                    || matches!((at, other_at), (Some(at), Some(other_at)) if at > other_at)
+            })
+    })
+}
+
 /// BUG-1291: any valid local reviewer decision means this PR has already
 /// been reviewed. The orphan sweep must not turn RequestChanges or Rejected
 /// back into fresh reviewer work merely because GitHub has no decision.
@@ -58908,7 +59264,12 @@ fn reviews_awaiting_human(
         match surface {
             ReviewSurface::OpenChange { number, .. } => {
                 let forge = crate::forge::resolve_forge_kind(project_root);
-                let reviewed = pr_has_approved_verdict(project_root, number);
+                // BUG-1672: the PR-keyed file is only the drain's record; a
+                // keyboard `aida review` writes the spec-keyed file and a
+                // fresh-reviewer subagent posts only a comment. Read all three
+                // so an already-approved spec lands under awaiting-merge, not
+                // back on the operator's review seat. trace:BUG-1672 | ai:claude
+                let reviewed = spec_review_approved(project_root, req, &spec_id, number);
                 out.push(ReviewAwaiting {
                     spec_id,
                     surface: format!("{}-{}", forge.change_noun(), number),
@@ -62756,6 +63117,8 @@ fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         review_verb: false,
         claim_verb: true,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -64933,6 +65296,7 @@ fn proc_is_stopped(_pid: u32) -> bool {
 /// flag-only / orphaned case. Surfaced by `aida ps` alongside the live table so
 /// a crashed or never-started session can't hide behind a status flag.
 // trace:STORY-696 | ai:claude
+#[derive(Debug)]
 struct PsOrphan {
     spec: String,
     title: String,
@@ -64948,6 +65312,14 @@ struct PsOrphan {
     /// lease — that is a genuine orphan.
     // trace:TASK-1064 | ai:claude
     likely_fanout: bool,
+    /// BUG-1656: `true` when this spec-scoped lease is STALE (its recorded pid
+    /// is dead) but a LIVE generic `harness-worktree` lease exists in this repo
+    /// — the shape an Agent-tool subagent dispatched into the spec's leased
+    /// worktree leaves behind. The spec may well be being worked right now;
+    /// the surface says "possibly worked by a subagent" instead of a flat
+    /// "abandoned".
+    // trace:BUG-1656 | ai:claude
+    possibly_subagent: bool,
 }
 
 /// The flag-only / orphaned verdict for one In-Progress spec, given the
@@ -64973,6 +65345,23 @@ fn ps_orphan_verdict(lease_state: Option<LeaseState>, awaiting_agent: bool) -> O
         Some(_) => Some(true),
         None => Some(false),
     }
+}
+
+/// BUG-1656: [`ps_orphan_verdict`] plus the dirty-movement liveness signal. A
+/// spec-scoped lease whose worktree's dirty files are still being written is
+/// NOT orphaned — something is editing there — however dead its recorded pid
+/// looks (an Agent-tool subagent runs inside the parent claude process and
+/// is invisible to the pid/cwd probes). Pure so the matrix stays testable.
+// trace:BUG-1656 | ai:claude
+fn ps_orphan_verdict_with_movement(
+    lease_state: Option<LeaseState>,
+    awaiting_agent: bool,
+    dirty_movement_fresh: bool,
+) -> Option<bool> {
+    if lease_state.is_some() && dirty_movement_fresh {
+        return None;
+    }
+    ps_orphan_verdict(lease_state, awaiting_agent)
 }
 
 /// TASK-1064: is an advisor Agent-tool fan-out currently running? Detected as a
@@ -66076,6 +66465,8 @@ fn orphaned_in_progress_items(
             spec_id: o.spec,
             title: o.title,
             abandoned: o.stale_lease,
+            // trace:BUG-1656 | ai:claude
+            possibly_subagent: o.possibly_subagent,
         })
         .collect()
 }
@@ -66253,7 +66644,14 @@ fn build_running_work(
                 // orchestrator-spawned lease — those DO expect an agent, so
                 // their crash detection is untouched. trace:BUG-778 | ai:claude
                 let manual_enter_secs = ps_manual_enter_secs(l, now);
-                let ds = dispatch_health_ps::dispatch_state(
+                // BUG-1656: a dirty tree still being written is liveness in
+                // its own right — never offer the salvage-commit while the
+                // files are changing under someone. trace:BUG-1656 | ai:claude
+                let dirty_movement_fresh = dispatch_health_ps::dirty_movement_is_fresh(
+                    probe.dirty_newest_mtime_age_secs,
+                    dispatch_health_ps::DEFAULT_DIRTY_MOVEMENT_FRESH_SECS,
+                );
+                let ds = dispatch_health_ps::dispatch_state_with_movement(
                     pid_alive,
                     probe.dirty,
                     probe.ahead_of_main,
@@ -66261,6 +66659,16 @@ fn build_running_work(
                     dispatch_health_ps::DEFAULT_STALLED_THRESHOLD_SECS,
                     manual_enter_secs,
                     dispatch_health_ps::DEFAULT_AWAITING_AGENT_GRACE_SECS,
+                    dirty_movement_fresh,
+                );
+                // TASK-1518: a lease the drain's SIGTERM handler stamped on
+                // its way out is a stopped wave, not a crashed agent — the
+                // dead-process/clean-tree arm reads `stopped`.
+                // trace:TASK-1518 | ai:claude
+                let ds = dispatch_health_ps::apply_interruption(
+                    ds,
+                    pid_alive,
+                    l.interrupted_at.is_some(),
                 );
                 let hint = dispatch_health_ps::next_command_hint(
                     ds,
@@ -66337,13 +66745,33 @@ fn build_running_work(
         let lease_state = lease.map(|l| lease_state_for(l, live, now));
         // trace:BUG-778 | ai:claude
         let awaiting_agent = lease.is_some_and(|l| ps_row_awaiting_agent(&rows, &l.id));
-        if let Some(stale_lease) = ps_orphan_verdict(lease_state, awaiting_agent) {
+        // BUG-1656: a non-live spec lease whose worktree is still being
+        // written (fresh dirty mtimes) is being worked — by an Agent-tool
+        // subagent the pid probe cannot see — not orphaned. Only probed for
+        // the few non-live spec leases, never for every row.
+        // trace:BUG-1656 | ai:claude
+        let dirty_movement_fresh = lease
+            .filter(|_| !matches!(lease_state, Some(LeaseState::Live)))
+            .filter(|l| !l.review_verb && !l.claim_verb)
+            .map(|l| dispatch_probe(&l.worktree_path))
+            .is_some_and(|p| {
+                p.dirty
+                    && dispatch_health_ps::dirty_movement_is_fresh(
+                        p.dirty_newest_mtime_age_secs,
+                        dispatch_health_ps::DEFAULT_DIRTY_MOVEMENT_FRESH_SECS,
+                    )
+            });
+        if let Some(stale_lease) =
+            ps_orphan_verdict_with_movement(lease_state, awaiting_agent, dirty_movement_fresh)
+        {
             orphans.push(PsOrphan {
                 spec: s.disp.clone(),
                 title: s.title.clone(),
                 stale_lease,
                 // trace:TASK-1064 | ai:claude
                 likely_fanout: ps_orphan_likely_fanout(stale_lease, fanout_active),
+                // trace:BUG-1656 | ai:claude
+                possibly_subagent: stale_lease && fanout_active,
             });
         }
     }
@@ -66441,6 +66869,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // TASK-1064: a flag-only spec while a fan-out is live is most
                     // likely being built by it, not genuinely orphaned.
                     "likely_fanout": o.likely_fanout,
+                    // trace:BUG-1656 | ai:claude
+                    "possibly_subagent": o.possibly_subagent,
                     "live": false,
                     // BUG-1553: an orphan has no lease/worktree to probe a
                     // process against at all, so whether it's blocked or
@@ -66831,6 +67261,14 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                             crate::glyph(crate::glyphs::Glyph::Info),
                             d.state.label().cyan(),
                         ),
+                        // TASK-1518: the wave was stopped and the lease marked
+                        // on the way out — informational (resume as normal),
+                        // not the dead-agent alarm.
+                        // trace:TASK-1518 | ai:claude
+                        dispatch_health_ps::DispatchState::Stopped => (
+                            crate::glyph(crate::glyphs::Glyph::Info),
+                            d.state.label().cyan(),
+                        ),
                         dispatch_health_ps::DispatchState::Moving => unreachable!(
                             "hint is None for Moving — see dispatch_health_ps::next_command_hint"
                         ),
@@ -67017,7 +67455,11 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             // blocked or exited is genuinely undeterminable from here, so
             // say that plainly instead of a bare "flag-only" that reads as
             // "nothing has started". trace:BUG-1553 | ai:claude
-            let why = if o.stale_lease {
+            let why = if o.possibly_subagent {
+                // trace:BUG-1656 | ai:claude
+                "stale lease — recorded pid dead, but a live harness lease is in this repo: \
+                 possibly worked by a subagent; verify before any cleanup"
+            } else if o.stale_lease {
                 "stale lease — process dead"
             } else {
                 "flag-only — cannot determine whether this seat is blocked or exited"
@@ -70785,6 +71227,19 @@ fn handle_pull_command(
                 e,
             );
         }
+    }
+
+    // BUG-1676: the mirror hubs follow ORIGIN, not this machine's pushes. The
+    // default branch advances by forge-side merges that only a pull ever
+    // sees, and the store is pushed to origin by targeted writes that never
+    // fan out, so this is the one place both hubs are brought level on every
+    // regular cadence (drain phase 5, `aida pr ship`, an operator catch-up).
+    // Best-effort and silent on success: a hub failure is printed and never
+    // changes the pull's exit code (the BUG-254 contract below stays bound to
+    // the two legs).
+    // trace:BUG-1676 | ai:claude
+    if code_failed.is_none() && store_failed.is_none() {
+        remote_create::mirror_sync_after_pull(&project_root);
     }
 
     // BUG-254: any leg failure → non-zero exit, so the orchestrator's
@@ -75174,6 +75629,12 @@ mod bug_1651_promote_queue_cas_tests;
 #[path = "tests/bug_1664_stale_sweep_tests.rs"]
 mod bug_1664_stale_sweep_tests;
 
+// BUG-1672: `aida human` reviews-awaiting must not list already-approved
+// specs. trace:BUG-1672 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1672_reviews_awaiting_approved_tests.rs"]
+mod bug_1672_reviews_awaiting_approved_tests;
+
 // BUG-1633: pull/push follow-ups to BUG-1625 and BUG-1626. trace:BUG-1633 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_1633_pull_push_followups_tests.rs"]
@@ -78860,6 +79321,8 @@ mod story_1043_unshipped_work_tests {
             review_verb: false,
             claim_verb: false,
             manual_enter_at: None,
+            interrupted_at: None,
+            interrupted_reason: None,
         };
         std::fs::create_dir_all(leases_dir(root)).unwrap();
         std::fs::write(
@@ -82051,10 +82514,9 @@ fn status_spec_is_exact_draft(raw: &str) -> bool {
 }
 
 fn is_machine_filed_draft(r: &aida_core::RequirementSummary) -> bool {
-    r.tags.iter().any(|tag| tag == "auto-drafted")
-        || r.description
-            .trim_start()
-            .starts_with("Auto-drafted by `aida queue work")
+    // One definition shared with the capture-coverage report.
+    // trace:STORY-1487 | ai:claude
+    criteria_coverage::is_auto_drafted(&r.tags, &r.description)
 }
 
 /// Partition a draft grooming query by provenance. Returns the number hidden
@@ -88753,6 +89215,8 @@ fn acquire_review_lease_with_mode(
         review_verb: true,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
     std::fs::create_dir_all(leases_dir(project_root))?;
     let path = lease_path(project_root, &id);
