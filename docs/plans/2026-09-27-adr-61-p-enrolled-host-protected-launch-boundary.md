@@ -1,16 +1,30 @@
-# ADR-60: P-enrolled-host is the protected boundary for every AIDA-managed full-access agent launch
+# ADR-61: P-enrolled-host is the protected boundary for every AIDA-managed full-access agent launch
 
-**Status:** Accepted as DESIGN DIRECTION ONLY — not approved for implementation, installation, migration or deployment<br>
+**Status:** Accepted **IN PRINCIPLE** as design direction only — **NOT** approved for implementation, installation, credential migration, deployment or merge<br>
 **Date:** 2026-09-27<br>
-**Decision owner:** operator (Joe), on independent architecture signoff<br>
+**Decision relayed from:** operator (Joe), decisions `01a0e0a3` / `01a0e103` / `01a0e10c`, on independent architecture signoff `01a0e11e` (M1-M5); recorded by the architect seat on TASK-1549, corrected under advisor verdict `01a0e351-5a7c-78a3-a0fb-bb79f078cb6a`<br>
 **Linked spec:** TASK-1549<br>
 **Related:** BUG-1669 (owning bug), SPIKE-91 (backend/boundary package), TASK-1550 (host-wide admission and cutover inventory), BUG-1679 + PR #2226 (protected binary identity/admission dependency)
+
+> **Canonical record.** The ADR itself is the AIDA `decision` spec **ADR-61**
+> (`.aida-store/objects/ADR/000/ADR-61.yaml`), allocated through the dispenser and
+> carrying the Context / Decision / Consequences / Rejected-alternatives text. This
+> file is its long-form companion, not the decision. An earlier draft of this
+> document asserted the number `ADR-60` in a filename; a filename reserves nothing,
+> and `ADR-60` was concurrently allocated to an unrelated decision
+> ("Cross-machine cycle-time evidence…", approved 2026-09-27T14:36:40Z). Corrected
+> per amendment A1 of `01a0e351`.
 
 > **Read this first.** This ADR records a boundary that does not exist yet. Nothing
 > in it describes present behaviour, and nothing in it authorises building,
 > installing or deploying anything. AIDA today still launches full-access agents
 > behind same-user-forgeable corroboration. That is the defect BUG-1669 tracks and
 > this ADR does not fix it.
+>
+> **Stale source anchors.** Per `01a0e11e`, the signed sketch's line-number anchors
+> refer to its earlier HEAD (`854b7e26f7`, spot-checked at `43c0429198`). Symbols are
+> authoritative, line numbers are not: implementation and release must refresh every
+> anchor against the then-current HEAD before relying on it.
 
 ## Context
 
@@ -279,10 +293,11 @@ Where each lands in this ADR:
   independent live component to stop admissions and terminate domains. Broker,
   supervisor and guardian kill/hang cases, active adapter closure and
   startup/cleanup races must be qualified. The 10s termination bound and the suspend
-  fence cannot be asserted from configuration — the Firecracker jailer documentation
-  permits a cgroup-v2 configuration with a missing parent cgroup to proceed without
-  moving the process, so an exit-status-only check is insufficient. Owned by
-  SPIKE-91's failure model.
+  fence cannot be asserted from configuration: the Firecracker jailer documentation
+  specifically permits a cgroup-v2 configuration with a missing parent cgroup to
+  proceed without moving the process, so an exit-status-only check is insufficient
+  (<https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md>,
+  the citation carried from `01a0e11e` M4). Owned by SPIKE-91's failure model.
 * **M5 — preserve gate separation in product capture and all dependent work.** §6
   (the five gates) and §§9-10 (acceptance proposal and NOT-YET-GRANTED inventory).
   This ADR is the record M5 requires: the reconciled AC wording and these
@@ -305,11 +320,37 @@ select mechanisms:
   credential-free/custom/local-model route treatment, the current-run
   interruption/migration plan, the cutover manifest and its fixture matrix.
 * **BUG-1669** remains the owning defect and remains implementation-held.
+* **BUG-1679**'s identity-admission contract is specified **inside SPIKE-91**, under
+  its existing acceptance line "pinned executable/dependency identity admission" — no
+  new spec was invented. The dependency is now walkable as a `references` edge from
+  SPIKE-91 to BUG-1679 (amendment A6). A separate spec is warranted only if SPIKE-91's
+  output shows identity admission needs its own installer and update-policy design,
+  which is knowable only after SPIKE-91.
 
 Naming the Firecracker + jailer candidate in the signed sketch is **not** Joe
 selecting a backend. It is a candidate for review.
 
-### 9. Proposed BUG-1669 acceptance update (proposal only)
+**Gating correction.** This ADR gates three of the four downstream specs, not four.
+In the substrate, BUG-1669 is blocked-by TASK-1549, SPIKE-91 and TASK-1550;
+TASK-1550 is blocked-by TASK-1549; BUG-1679 is blocked-by BUG-1669. **SPIKE-91 has no
+`blocked-by` edge at all and is pickup-ready today** (`01a0e351`, scope correction).
+Its O2/O3/O4/O7 scope is read-only research that needs nothing from this ADR, so the
+record supports leaving it ungated; no blocking edge was added. If product intends
+SPIKE-91 to wait on this ADR, that is a deliberate sequencing choice and the edge has
+to be added explicitly.
+
+**A cheap subset is separable from the boundary work.** `scripts/aida-demo.sh` and the
+four `scripts/ablations/gate-vs-rule*.sh` build full-access argv directly and have no
+legitimate unattended caller. Gating or refusing those — and any other route with no
+legitimate unattended caller — cuts exposure on that surface to nearly nothing,
+interrupts no solo, burndown, wave, watch or scheduled work, and needs no broker, no
+backend and no installation. That is an ordinary defect fix in shipped scripts, not a
+deployment decision about the boundary, and per `01a0e351` it belongs in a separate
+additive spec put to Joe rather than left as a footnote reading "optional and
+unapproved". **It is not authorised or built by this ADR, and it cannot close
+BUG-1669** — AC3/AC4 make refusal-only insufficient by construction.
+
+### 9. Reconciled BUG-1669 acceptance (applied)
 
 BUG-1669's acceptance predates the operator decisions. AC2 names
 `orchestrator::detect` and "a human confirmed at a real terminal" as the two
@@ -320,13 +361,16 @@ positive fixture — hand-written `DrainState` plus a matching UUID plus a live
 fixture PID — **demonstrates the forgery** rather than the protection, so keeping
 it as the positive test would certify the vulnerability.
 
-**Acceptance changes are product's call. This ADR proposes text; it does not edit
-BUG-1669, and the same proposal is posted as a comment on BUG-1669 for product to
-adopt, amend or reject.** The proposal strengthens rather than weakens the literal
-requirement.
+Acceptance authoring in this repository is advisor-gated (ADR-3). The text below was
+proposed as a comment on BUG-1669, then **blessed and directed by independent
+advisor verdict `01a0e351-5a7c-78a3-a0fb-bb79f078cb6a` (amendment A2)** — that
+advisor declined to author what it approves — and **applied to BUG-1669 citing that
+comment**. It strengthens rather than weakens the literal requirement, which is why
+`01a0e0a3` (forbidding only weakening) permits it. BUG-1669's status, blockers and
+holds are unchanged by the edit.
 
-Proposed text (the wording is the sketch's §1 interpretation, tightened here for
-the acceptance trail):
+Applied text (the wording is the sketch's §1 interpretation, tightened per A3 and
+A4):
 
 * **AC1 —** Inventory every AIDA-managed production agent launch across projects on
   this host, including configured, foreground, background, resumed, wrapped,
@@ -336,8 +380,11 @@ the acceptance trail):
   through an authenticated, agent-inaccessible approval endpoint that displays the
   exact scoped request, **or** an authenticated, still-live, scope-limited
   controller delegation derived from such an approval. The broker validates and
-  performs the launch atomically. A terminal is a request and display surface only,
-  unless it *is* that separately protected endpoint. `IsTerminal`, a fabricated PTY
+  performs the launch atomically. **A terminal is a request and display surface
+  only. No terminal, PTY or socket reachable from any login session in which an
+  agent can execute may serve as the approval endpoint, which must be a separately
+  authenticated surface under a principal distinct from the agent's.**
+  `IsTerminal`, a fabricated PTY
   answering yes, legacy `orchestrator::detect`, `AIDA_AUTO_COMPLETE` and its token,
   `DrainState` UUID/PID corroboration, effective role, `--force`/`--yes`/`--no-human`
   and any other ambient environment value grant nothing. *(Replaces AC2's
@@ -345,8 +392,10 @@ the acceptance trail):
   at a real terminal"; `detect` is retained as a diagnostic classifier only.)*
 * **AC3 —** Otherwise a typed nonzero refusal and no agent launched, with no
   alternate vendor, backend or local fallback, and no launch-associated mutation
-  before a valid preparation reservation. *(Extends the existing AC3 with the
-  no-fallback and no-side-effect clauses.)*
+  before a valid preparation reservation. **Refusing affected routes does not by
+  itself satisfy this acceptance: the positive protected path of AC4 must exist and
+  be evidenced, so option H / deny-only cannot close BUG-1669.** *(Extends the
+  existing AC3 with the no-fallback, no-side-effect and no-refusal-only clauses.)*
 * **AC4 —** Retain fake HOME, injectable terminal observations and real-handler
   per-sink refusal coverage for every inventoried branch. **Reverse the old
   writable-state / live-PID positive fixture into a required forgery negative** —
@@ -356,16 +405,37 @@ the acceptance trail):
   phase worker → allowed next phase, over the real protected channels. Add both
   hermetic protocol coverage **and** disposable actual-boundary evidence; a
   privileged suite that skips is not a pass. Test injection seams are `cfg(test)`
-  only and never a production authorization feature.
-* **AC5 (new) —** No claim that protection is deployed may appear in code, CLI
-  output, docs, release notes or the PR body until the gate-3 real-boundary
-  evidence exists and has been independently reviewed.
+  only and never a production authorization feature. **A change that only refuses
+  does not satisfy this criterion.**
+* **AC5 (new) —** The PR body states, and the shipped CLI and docs strings confirm,
+  that no protected boundary is deployed; and either the gate-3 real-boundary
+  evidence is attached, or the PR is explicitly marked as claiming no protection.
+  *(This replaces an earlier draft AC5 that forbade any future overclaim in docs,
+  release notes or PR bodies. Per `01a0e351` O5 that is unfalsifiable at review
+  time — you cannot test "no future document overclaims" — so the checkable form
+  lives in acceptance and the broader no-overclaim rule stays where it belongs, in
+  this ADR's Consequences and in release policy.)*
 
-Note the consequence product must weigh when adopting this: under the proposed
-AC2/AC3, closing BUG-1669 without the protected backend means every affected
-full-access route **refuses**, which interrupts today's unattended solo, burndown,
-wave, watch and scheduled work. That consequence was accepted in principle by
-`01a0e10c`; its execution is gate 4 and is NOT YET GRANTED.
+**This is not a trade-off product may weigh; it is structural.** An earlier draft of
+this ADR framed the interruption of unattended work as a consequence product should
+weigh before adopting the AC text. That was a mis-framing, corrected per `01a0e351`.
+The acceptance text creates no refusal-only interim: AC4's positive case requires
+authenticated approval → protected controller → scoped worker → allowed next phase
+over real channels plus disposable boundary evidence, so BUG-1669 cannot be closed by
+shipping refusals. The interruption is therefore not an acceptance consequence at all
+— it is a **gate-4 cutover consequence**, and `01a0e10c` already accepted it in
+principle, naming "interruption/migration of existing unattended AIDA launches" in
+terms. The only way to avoid it is to keep a launch path authorised by
+same-user-forgeable state, which `01a0e0a3` forbids in exactly those words. There is
+no third option, and product has no latitude here without reopening an operator
+decision. A4 makes this structural in the AC text precisely so a future implementer
+cannot ship refusals, point at AC4 as "tests", and interrupt the fleet with the bug
+still open.
+
+**When gate 4 is eventually put to Joe** it must not arrive as one undifferentiated
+"deployment approval". It needs a named window, a pre-published list of exactly which
+unattended work stops, and a rollback that restores the current launch behaviour. The
+hard-to-reverse-operation rule applies.
 
 ### 10. BUG-1679 dependency and PR #2226
 
@@ -437,7 +507,7 @@ These are settled by this ADR and must not be reopened by dependent work:
 15. Grant state is server-side with public handles; there is no portable bearer run
     token.
 
-## Unresolved concrete operator approvals — NOT YET GRANTED
+## Unresolved concrete operator approvals — NOT YET GRANTED (12 rows)
 
 None of the following has been approved. Each requires an independently reviewed
 concrete package returning to Joe for explicit authorization (gate 2 → gate 4).
@@ -449,9 +519,10 @@ concrete package returning to Joe for explicit authorization (gate 2 → gate 4)
 | **Actual credentials** — creating, rotating and scoping real model/forge/artifact adapter credentials, and deciding which AIDA-managed identities move | **NOT YET GRANTED** (no credential migration is authorised) | SPIKE-91 + TASK-1550 |
 | **Disposable privileged test environment** — an authorised disposable Linux host/VM with nested KVM, separate admin/agent/approval principals, fixture-only enrolled device, and its cleanup | **NOT YET GRANTED** (gate 3; mocks and source review are not protection proof) | SPIKE-91 |
 | **Current-run migration and cutover** — the named stop/checkpoint window for existing drains, watches, schedules and detached workers; disabling legacy official routes; revoking AIDA-managed execution credentials; per-project enrollment order | **NOT YET GRANTED** (existing runs are UNPROTECTED and must never be adopted as authorised by PID, UUID, role or state) | TASK-1550 |
-| **Rollback and recovery** — installer/uninstaller, epoch rotation, anti-rollback fence, backup/restore policy that restores configuration and audit for inspection but never active approvals or budgets, device-loss replacement through the same trust root, suspend/reboot fencing | **NOT YET GRANTED** | SPIKE-91 |
+| **Rollback and recovery** — installer/uninstaller, epoch rotation, anti-rollback fence, backup/restore policy that restores configuration and audit for inspection but never active approvals or budgets, device-loss replacement through the same trust root, suspend/reboot fencing, **and restoring the pre-cutover launch behaviour** (the rollback that matters on the night of a cutover) | **NOT YET GRANTED** | SPIKE-91 + TASK-1550 |
 | **Runtime ceilings and budgets** — the proposed 2h/24h ordinary, 1h and 6-start watch, 24h scheduler, 60s preparation, 1s/5s/10s supervision bounds are *proposals to accept and display*, not consent | **NOT YET GRANTED** | SPIKE-91 |
 | **Repository enrollment mappings** — concrete per-repo identity, snapshot/import/export mappings, approved forge identity and allowed refs | **NOT YET GRANTED** | TASK-1550 |
+| **Explicit, dated operator acceptance of continued exposure** — accepting that AIDA knowingly carries the full BUG-1669 exposure (any agent permitted to run `aida *` can start a detached full-access child with a prompt of its own choosing) for the entire duration of SPIKE-91, TASK-1550, implementation, gate-3 proof and cutover, on a host currently running many unattended agents. This is the decision Joe is otherwise left to make by default, and it is a months-long window | **NOT YET GRANTED** — must be an explicit dated risk acceptance, not a residue | product → Joe |
 | **BUG-1669 implementation dispatch** | **NOT YET GRANTED** — held even after TASK-1549, SPIKE-91 and TASK-1550 complete (`01a0e125`) | product → Joe |
 | **BUG-1679 / PR #2226 merge** | **NOT YET GRANTED** — operator-held with `aida:merge-hold`; only Joe releases it | Joe |
 | **Any claim that protection is deployed** | **NOT YET GRANTED** and currently false | — |
@@ -462,10 +533,14 @@ concrete package returning to Joe for explicit authorization (gate 2 → gate 4)
   terminal prompt, with same-user file/env/PTY forgery outside the guarantee. Offered
   as an explicit operator choice in `01a0e08a` and **rejected** by `01a0e0a3`. It is
   settled and is not reopened.
-* **Option H / deny-only containment** — refuse every affected bypass path and leave
-  protected execution unavailable. Not selected; it leaves BUG-1669's
-  authorized-drain functionality absent, so it cannot close the bug. A separately
-  approved deny-only containment change remains *optional and unapproved*, not
+* **Option H / deny-only containment as an answer to BUG-1669** — refuse every
+  affected bypass path and leave protected execution unavailable. Not selected; it
+  leaves BUG-1669's authorized-drain functionality absent, and AC3/AC4 now make
+  refusal-only insufficient by construction, so it cannot close the bug. Rejecting H
+  as *the* answer does **not** reject the narrow subset in §8: routes with no
+  legitimate unattended caller (the shipped demo and ablation scripts first) are
+  worth gating now as a separate additive spec, because that costs no unattended work
+  and needs no backend. The general deny-only interim remains unapproved and not
   presumed.
 * **P-managed / workstation-wide confinement** — moving every agent entry point and
   credential on the workstation into a managed domain. Explicitly **not** required by
@@ -514,6 +589,10 @@ deployment evidence — which does not exist.
 
 ## Related
 
+* **ADR-61** — the canonical decision spec this document accompanies
+  (`aida show ADR-61 --full`).
+* TASK-1549 — the owning spec; advisor verdict `01a0e351-5a7c-78a3-a0fb-bb79f078cb6a`
+  carries amendments A1-A6, which this revision applies.
 * BUG-1669 — owning defect; comments `01a0df0b`, `01a0e086`, `01a0e08a`, `01a0e0a3`,
   `01a0e0a8`, `01a0e0ad`, `01a0e103`, `01a0e106`, `01a0e10c`, `01a0e116`, `01a0e11e`,
   `01a0e125` form the decision trail.
@@ -525,4 +604,5 @@ deployment evidence — which does not exist.
 * `docs/architecture/autonomy-and-escalation.md` — the autonomy ladder whose
   unattended modes gate 4 would interrupt.
 
+<!-- trace:ADR-61 | ai:claude -->
 <!-- trace:TASK-1549 | ai:claude -->
