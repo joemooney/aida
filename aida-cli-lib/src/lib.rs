@@ -47610,6 +47610,11 @@ mod bug_1523_orphaned_in_progress_mapping_tests;
 #[path = "tests/bug_1656_subagent_liveness_tests.rs"]
 mod bug_1656_subagent_liveness_tests;
 
+// trace:BUG-1680 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/bug_1680_salvage_main_tests.rs"]
+mod bug_1680_salvage_main_tests;
+
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_358_escalation_cleanup_tests.rs"]
@@ -66670,13 +66675,14 @@ fn build_running_work(
                     pid_alive,
                     l.interrupted_at.is_some(),
                 );
-                let hint = dispatch_health_ps::next_command_hint(
+                let hint = dispatch_health_ps::next_command_hint_with_untracked(
                     ds,
                     &l.worktree_path,
                     &l.branch,
                     probe.last_commit_subject.as_deref(),
                     spec.as_deref(),
                     manual_enter_secs.is_some(),
+                    probe.untracked_only,
                 );
                 Some(PsDispatch {
                     state: ds,
@@ -66778,6 +66784,32 @@ fn build_running_work(
     orphans.sort_by(|a, b| a.spec.cmp(&b.spec));
 
     (rows, orphans)
+}
+
+/// BUG-1680: Group salvageable rows by worktree path to collapse duplicates.
+/// Rows for the same worktree path are shown once with a count.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) struct CollapsedSalvageRow<'a> {
+    pub(crate) row: &'a PsRow,
+    pub(crate) count: usize,
+}
+
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn collapse_salvageable_by_worktree<'a>(
+    rows: &[&'a PsRow],
+) -> Vec<CollapsedSalvageRow<'a>> {
+    let mut collapsed: Vec<CollapsedSalvageRow<'a>> = Vec::new();
+    for row in rows {
+        if let Some(existing) = collapsed
+            .iter_mut()
+            .find(|c| c.row.lease.worktree_path == row.lease.worktree_path)
+        {
+            existing.count += 1;
+        } else {
+            collapsed.push(CollapsedSalvageRow { row, count: 1 });
+        }
+    }
+    collapsed
 }
 
 fn handle_ps(json: bool, all: bool) -> Result<()> {
@@ -67055,12 +67087,22 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         );
         // TASK-1090: always-shown (not gated by --all) — dead process +
         // uncommitted work hidden behind the stale-session footer.
-        let salv: Vec<Vec<String>> = salvageable_hidden
+        // BUG-1680: collapse duplicate rows for the same worktree path with a count.
+        // trace:BUG-1680 | ai:antigravity
+        let collapsed = collapse_salvageable_by_worktree(&salvageable_hidden);
+        let salv: Vec<Vec<String>> = collapsed
             .iter()
-            .map(|r| {
+            .map(|item| {
+                let r = item.row;
+                let spec = r.spec.clone().unwrap_or_else(|| "-".to_string());
+                let spec_with_count = if item.count > 1 {
+                    format!("{} ({} sessions)", spec, item.count)
+                } else {
+                    spec
+                };
                 vec![
                     r.lease.id.clone(),
-                    r.spec.clone().unwrap_or_else(|| "-".to_string()),
+                    spec_with_count,
                     r.lease.worktree_path.display().to_string(),
                     r.dispatch
                         .as_ref()
@@ -67394,9 +67436,18 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 .bold()
                 .red()
         );
-        for row in &salvageable_hidden {
+        // BUG-1680: collapse duplicate rows for the same worktree path with a count.
+        // trace:BUG-1680 | ai:antigravity
+        let collapsed = collapse_salvageable_by_worktree(&salvageable_hidden);
+        for item in &collapsed {
+            let row = item.row;
             let spec_col = row.spec.clone().unwrap_or_else(|| row.lease.scope.clone());
-            println!("  {} {}", warn.red(), spec_col.red().bold());
+            let header = if item.count > 1 {
+                format!("{} ({} sessions)", spec_col, item.count)
+            } else {
+                spec_col
+            };
+            println!("  {} {}", warn.red(), header.red().bold());
             println!(
                 "      {}",
                 row.lease.worktree_path.display().to_string().dimmed()

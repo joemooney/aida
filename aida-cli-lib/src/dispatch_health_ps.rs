@@ -285,6 +285,10 @@ pub(crate) struct WorktreeGitProbe {
     /// reads dead.
     // trace:BUG-1656 | ai:claude
     pub(crate) dirty_newest_mtime_age_secs: Option<u64>,
+    /// BUG-1680: True when the dirty state consists exclusively of untracked files
+    /// (no tracked modified/deleted/staged changes).
+    // trace:BUG-1680 | ai:antigravity
+    pub(crate) untracked_only: bool,
 }
 
 /// BUG-1656: how recently the newest dirty file must have been written for
@@ -429,12 +433,75 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
     } else {
         None
     };
+    // BUG-1680: distinguish untracked-only files from salvageable changes.
+    // trace:BUG-1680 | ai:antigravity
+    let untracked_only = if dirty {
+        probe_untracked_only(worktree_path)
+    } else {
+        false
+    };
     WorktreeGitProbe {
         dirty,
         ahead_of_main,
         last_commit_subject,
         dirty_newest_mtime_age_secs,
+        untracked_only,
     }
+}
+
+/// BUG-1680: True when an untracked file is inside a directory tracked in git.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn is_untracked_inside_tracked_dir(worktree: &Path, rel_path: &str) -> bool {
+    let path = Path::new(rel_path);
+    let mut current = path.parent();
+    while let Some(parent) = current {
+        let parent_str = parent.to_string_lossy();
+        if parent_str.is_empty() || parent_str == "." {
+            break;
+        }
+        if let Ok(out) = Command::new("git")
+            .arg("-C")
+            .arg(worktree)
+            .args(["ls-files", &parent_str])
+            .output()
+        {
+            if out.status.success() && !out.stdout.is_empty() {
+                return true;
+            }
+        }
+        current = parent.parent();
+    }
+    false
+}
+
+/// BUG-1680: True when every changed path in the worktree is an untracked file (`??`)
+/// outside of tracked directories, and none are tracked modifications, deletions, or staged changes.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn probe_untracked_only(worktree: &Path) -> bool {
+    let Ok(out) = Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["status", "--porcelain", "-z", "--untracked-files=all"])
+        .output()
+    else {
+        return false;
+    };
+    if !out.status.success() {
+        return false;
+    }
+    let records = parse_porcelain_z(&String::from_utf8_lossy(&out.stdout));
+    if records.is_empty() {
+        return false;
+    }
+    let has_tracked_change = records.iter().any(|(xy, _)| xy != "??" && xy != "!!");
+    if has_tracked_change {
+        return false;
+    }
+    let untracked_in_tracked_dir = records
+        .iter()
+        .filter(|(xy, _)| xy == "??")
+        .any(|(_, path)| is_untracked_inside_tracked_dir(worktree, path));
+    !untracked_in_tracked_dir
 }
 
 /// BUG-1656: [`dispatch_state`] plus the "is the dirty tree still changing"
@@ -486,6 +553,49 @@ pub(crate) fn dispatch_state_with_movement(
 /// second session on a spec someone is working by hand.
 // trace:TASK-1090 | ai:claude
 // trace:BUG-778 | ai:claude
+// trace:BUG-1680 | ai:antigravity
+pub(crate) const PROTECTED_BRANCHES: &[&str] =
+    &["main", "master", "trunk", "develop", "aida-store", "HEAD"];
+
+/// BUG-1680: Is `branch` a protected or default branch where automated salvage
+/// commits should never be recommended?
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn is_protected_branch(branch: &str) -> bool {
+    let branch = branch.trim();
+    if branch.is_empty() {
+        return false;
+    }
+    if PROTECTED_BRANCHES
+        .iter()
+        .any(|p| p.eq_ignore_ascii_case(branch))
+    {
+        return true;
+    }
+    if let Some(short_branch) = branch.strip_prefix("refs/heads/") {
+        if PROTECTED_BRANCHES
+            .iter()
+            .any(|p| p.eq_ignore_ascii_case(short_branch))
+        {
+            return true;
+        }
+    }
+    if let Some(remotes) = branch.strip_prefix("refs/remotes/") {
+        if let Some((_remote, name)) = remotes.split_once('/') {
+            return PROTECTED_BRANCHES
+                .iter()
+                .any(|p| p.eq_ignore_ascii_case(name));
+        }
+    }
+    if let Some((remote, name)) = branch.split_once('/') {
+        if remote.eq_ignore_ascii_case("origin") || remote.eq_ignore_ascii_case("upstream") {
+            return PROTECTED_BRANCHES
+                .iter()
+                .any(|p| p.eq_ignore_ascii_case(name));
+        }
+    }
+    false
+}
+
 pub(crate) fn next_command_hint(
     state: DispatchState,
     worktree_path: &Path,
@@ -493,6 +603,28 @@ pub(crate) fn next_command_hint(
     last_commit_subject: Option<&str>,
     spec: Option<&str>,
     manual_enter: bool,
+) -> Option<String> {
+    next_command_hint_with_untracked(
+        state,
+        worktree_path,
+        branch,
+        last_commit_subject,
+        spec,
+        manual_enter,
+        false,
+    )
+}
+
+/// BUG-1680: [`next_command_hint`] with untracked-only distinction and protected-branch guard.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn next_command_hint_with_untracked(
+    state: DispatchState,
+    worktree_path: &Path,
+    branch: &str,
+    last_commit_subject: Option<&str>,
+    spec: Option<&str>,
+    manual_enter: bool,
+    untracked_only: bool,
 ) -> Option<String> {
     let wt = worktree_path.display();
     let last_commit = last_commit_subject.unwrap_or("(no commits yet)");
@@ -531,16 +663,34 @@ pub(crate) fn next_command_hint(
         // is still at risk and still worth salvaging, but the framing must not
         // imply a crash that never happened. trace:BUG-778 | ai:claude
         DispatchState::Salvageable => {
-            let lead = if manual_enter {
-                "nothing running, uncommitted work"
+            // BUG-1680: distinguish untracked-only files from salvageable changes.
+            // trace:BUG-1680 | ai:antigravity
+            let work_desc = if untracked_only {
+                "untracked files only"
             } else {
-                "dead process, uncommitted work"
+                "uncommitted work"
             };
-            Some(format!(
-                "{lead} in {wt} (branch {branch}, last commit \"{last_commit}\") — \
-                 salvage-commit then rebrief: git -C {wt} add -A && git -C {wt} commit -m \"wip: salvage {branch}\" \
-                 — then: {rebrief}"
-            ))
+            let lead = if manual_enter {
+                format!("nothing running, {work_desc}")
+            } else {
+                format!("dead process, {work_desc}")
+            };
+            if is_protected_branch(branch) {
+                // BUG-1680: Never recommend a salvage commit on the default branch
+                // (or any protected branch); instead suggest inspecting the files.
+                // trace:BUG-1680 | ai:antigravity
+                Some(format!(
+                    "{lead} in {wt} (branch {branch}, last commit \"{last_commit}\") — \
+                     inspect the files: git -C {wt} status \
+                     — then: {rebrief}"
+                ))
+            } else {
+                Some(format!(
+                    "{lead} in {wt} (branch {branch}, last commit \"{last_commit}\") — \
+                     salvage-commit then rebrief: git -C {wt} add -A && git -C {wt} commit -m \"wip: salvage {branch}\" \
+                     — then: {rebrief}"
+                ))
+            }
         }
         DispatchState::Stalled => Some(format!(
             "no branch/dirty movement in {wt} (branch {branch}, last commit \"{last_commit}\") — resume/rebrief: {rebrief}"
