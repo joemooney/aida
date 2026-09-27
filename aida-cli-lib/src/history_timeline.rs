@@ -303,6 +303,7 @@ pub(crate) fn build_timeline(input: TimelineInput) -> Result<Timeline> {
             // is a clock-order contradiction when the following transition
             // proves this transition's source state was reached later.
             if !is_status(from, pair[0].status_after())
+                && is_status(next_from, pair[0].status_after())
                 && (is_status(from, next_to) || is_status(to, next_from))
             {
                 contradictory.insert(pair[0].sha.clone());
