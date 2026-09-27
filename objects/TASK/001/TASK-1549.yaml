@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:33:06.937954090Z
-modified_at: 2026-09-27T15:07:13.476893859Z
+modified_at: 2026-09-27T15:32:58.545054372Z
 req_type: Task
 comments:
 - id: 01a0e2dc-58ea-7fe1-b3d2-32cf8cf68fba
@@ -274,6 +274,19 @@ comments:
     VERDICT: APPROVE
   created_at: 2026-09-27T15:07:13.476893859Z
   modified_at: 2026-09-27T15:07:13.476893859Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e37f-7e31-7eb2-85a4-8cff33b955cd
+  author: joe
+  content: |-
+    Review: APPROVE (fresh independent review 01a0e367, 2026-09-27, branch claude/task-1549 at 2dd823f15b). Queued for the next integration batch. Docs-only, one file, 608 lines; the reviewer confirmed the diff contains no production code, launch-path edit, script, test or config, and that all 33 deleted lines were amendment-mandated removals.
+
+    All six binding amendments were verified in the ARTIFACTS rather than from the author's report. The one most likely to have been faked, A2, holds: BUG-1669's AC4 now requires the hand-written DrainState with a matching UUID and live PID to FAIL, so the forgery artefact is a required negative rather than a positive security fixture. Store history proves the ADR-61 lifecycle (created Draft at 07:47:20, six Draft edits, Approved separately at 07:52:39), which is what A1 asked for. BUG-1669 remains Approved and blocked with all three blockers unsatisfied and the 01a0e125 hold intact; PR #2226 remains OPEN at e63efc3997 with its merge-hold.
+
+    The reviewer also independently endorsed the two refusals: declining to add a blocked-by edge from SPIKE-91 (a queue decision, and it would invert the real dependency) and declining to edit BUG-1679's acceptance (required, not merely defensible, since operator decision 01a0e11a bars acceptance weakening and 01a0e115 routed it to product).
+
+    Two non-blocking record wrinkles it flagged, neither caused by this work: this spec went to Done at 07:30:44, twelve minutes BEFORE the CHANGES REQUESTED verdict saying it was not discharged, and stayed Done through the rework — harmless because Done does not satisfy a blocker, but it misreads at a glance. And an approved decision spec still advertises 'aida queue work' in its next block, which is true of all 61 ADRs.
+  created_at: 2026-09-27T15:32:58.545054372Z
+  modified_at: 2026-09-27T15:32:58.545054372Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0e341-4fed-7d50-adbd-9cbfc71cc7b2
