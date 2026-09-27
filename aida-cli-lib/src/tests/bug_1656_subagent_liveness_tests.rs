@@ -40,6 +40,9 @@ fn lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        // trace:TASK-1518 | ai:codex — preserve this fixture's uninterrupted lease.
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 
