@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:56.753902915Z
-modified_at: 2026-09-26T22:56:15.233143546Z
+modified_at: 2026-09-27T02:12:55.589651295Z
 req_type: Bug
 comments:
 - id: 01a0dfa3-2bc6-7c62-9371-a5dfe1014e2b
@@ -35,6 +35,18 @@ comments:
   created_at: 2026-09-26T22:56:15.233143546Z
   modified_at: 2026-09-26T22:56:15.233143546Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e0a3-06a5-7d33-9ff3-ea1ef2a5fd0e
+  author: mcp
+  content: |-
+    Independent AIDA advisor, batch 102 / PR #2218 — HOLD / REWORK for exact head 18b032192bfb4d76d03572249f42830a68d8b110. I read AGENTS.md, the two-seat protocol, the actual approval comments for BUG-1662 TASK-1530 TASK-1524 TASK-1525 BUG-1661 BUG-1672, and BUG-1685's first-class APPROVED verdict at f3d5cd39342a74ea9065fa2804c3c754a77f2b3f plus its advisor handoff. All six original integrated patches match their reviewed cumulative patches; the current tree also exactly matches reviewed PR #2220's tree.
+
+    Blocking acceptance gap found in the integration diff: aida-cli-lib/src/lib.rs:58757-58760 (at the exact PR SHA) returns true immediately when the latest review COMMENT approves, before inspecting either verdict file. Concrete counterexample: an APPROVE comment at T1 followed by a spec-keyed or PR-keyed REQUEST_CHANGES verdict at T2 still returns approved and removes the spec from reviews-awaiting. With no comments, an old approved PR-keyed file also wins before a newer blocking spec-keyed file is inspected (58769-58792). This conflicts with acceptance 2 and the accepted 'newest review wins across files and comments' design. Static control-flow evidence; I did not edit code or add/run a new test. The existing newest_review_wins_between_files_and_comments fixture covers only an approving FILE versus a blocking COMMENT, not these reverse/mixed-file cases. BUG-1681 defers recorded_at-versus-mtime sourcing; that does not explicitly defer ignoring newer blocking verdicts.
+
+    Rework requested: resolve all eligible comment/spec-file/PR-file verdict candidates in temporal order before deciding; a newer REQUEST_CHANGES must keep the spec listed, and ambiguous order must not silently clear a blocker. Add regression cases for older approving comment + newer blocking file (both keys), and older approving file + newer blocking file across keys; obtain fresh independent review and current-head CI before renewed advisor disposition. No dispatch, code/PR edit, merge, or protection bypass performed.
+
+    CI evidence is still pending; the single gh run watch calls for 36287297205 and 36287297209 remain active and I will append final results. Required checks from main protection: Build (ubuntu-latest), merge-hold-gate (already SUCCESS). Windows/macOS are informational under [ci], but are being checked explicitly. Title has all seven specs in one trailing group; PR is OPEN/MERGEABLE, currently BLOCKED by pending checks. This is NOT PASS TO INTEGRATOR, even if CI later turns green.
+  created_at: 2026-09-27T02:12:55.589618979Z
+  modified_at: 2026-09-27T02:12:55.589618979Z
 history:
 - id: 01a0df93-9784-7f82-b31e-9692e353f93a
   author: aida-session-start
