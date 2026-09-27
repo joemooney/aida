@@ -8,9 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T01:04:41.671496965Z
-modified_at: 2026-09-27T01:05:02.023151459Z
+modified_at: 2026-09-27T01:08:51.696445090Z
 req_type: Bug
 tags:
 - build-time
 - developer-experience
 - sccache
+comments:
+- id: 01a0e068-5f70-7f41-8637-095da86d9ef0
+  author: ai:codex:joe
+  content: 'PR #2219 contains the target-level RUSTC_WRAPPER override. Verified RUSTC_WRAPPER= CARGO_INCREMENTAL=1 cargo build -p aida-core --release succeeds under the global sccache configuration. Awaiting independent review and merge.'
+  created_at: 2026-09-27T01:08:51.696445090Z
+  modified_at: 2026-09-27T01:08:51.696445090Z
