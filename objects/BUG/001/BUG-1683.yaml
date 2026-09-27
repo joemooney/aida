@@ -1,0 +1,20 @@
+id: 01a0e040-2ea5-7723-9a84-29ea9bdd4850
+spec_id: BUG-1683
+agreed_id: BUG-1683
+title: A live drain older than 30 minutes can have its lock reclaimed by queue work --auto-complete / burndown run (decide_lock age backstop never refreshed)
+description: 'Found by the TASK-1518 round-3 review: decide_lock (used by direct ''queue work --auto-complete'' and ''burndown run'', not by ''drain start'') applies an 1800 s age backstop on started_at_utc, which is never refreshed, so a still-running drain older than 30 minutes is treated as stale and its lock reclaimed locally — two drivers on main (the BUG-538 class). Acceptance: 1. decide_lock treats a lock whose pid is alive (pid + start-time identity) as held regardless of age; age applies only when liveness can''t be determined. 2. Alternatively/additionally the holder refreshes a heartbeat timestamp and the backstop keys on it. 3. Fixture test: a lock held by a live pid with started_at 2 h ago is not reclaimable by any entry point.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T00:24:57.765790728Z
+modified_at: 2026-09-27T00:24:57.765790728Z
+req_type: Bug
+filed_at:
+  code_sha: 9791e5eaac5cb4b0083aeaa32744c5900e396fc1
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: 71dca616-6150-461d-b64f-18c8288c6e1c
