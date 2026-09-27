@@ -28,13 +28,26 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T21:00:26.277371500Z
-modified_at: 2026-09-27T21:00:44.064912140Z
+modified_at: 2026-09-27T21:26:21.207146567Z
 req_type: Spike
+tags:
+- spike:deliverable-produced
 relationships:
 - rel_type: !Custom child-of
   target_id: 01a0cc94-cd72-7353-8ff8-c4db03f0cbd0
   created_at: 2026-09-27T21:00:44.064908868Z
   created_by: joe
+comments:
+- id: 01a0e4c3-0517-7163-bcdd-72a7e40f2218
+  author: research-agent
+  content: |-
+    [research-lane] source-grounded analysis (agent: claude / deep-research).
+
+    SPIKE-92 could not measure TUI input, cancellation, actual timeout ceilings, or live continuation behavior on any harness. Official docs define the contracts, but current headless risks remain for Antigravity GEMINI_API_KEY runs and OpenCode one-shot runs. Pending human-operated TUI probes, the conservative CR-7 item 6 policy is hold=0 for human-present seats, with bounded long holds only for explicitly headless seats and resume-on-addressed-work as fallback.
+
+    Full analysis + citations: `docs/research/2026-09-27-spike-92-research.md`
+  created_at: 2026-09-27T21:26:21.207146567Z
+  modified_at: 2026-09-27T21:26:21.207146567Z
 history:
 - id: 01a0e4ab-8dc0-7b02-8fad-ec4635a6d676
   author: joe
@@ -44,3 +57,18 @@ history:
     old_value: Draft
     new_value: Approved
 human_only: true
+decision_request:
+  question: What hold policy should CR-7 item 6 adopt for seats where a human may be present while harness behavior remains unmeasured?
+  choices:
+  - label: No interactive hold
+    consequence: Human-present seats use hold=0 and rely on resume-on-addressed-work; longer holds remain headless-only pending measurements.
+    resolution: set:interactive_hold=0
+  - label: Short grace period
+    consequence: Human-present seats wait briefly before resuming, accepting unverified TUI responsiveness risk; 5 seconds is a provisional value only.
+    resolution: set:interactive_hold=5s
+  - label: Long interactive hold
+    consequence: Human-present seats use the held hook as primary wake despite unknown input and cancellation behavior.
+    resolution: set:interactive_hold=long
+  recommended: 0
+  rationale: The research provides no empirical basis to claim that any harness keeps its prompt editor responsive during a sleeping Stop hook. hold=0 avoids imposing an unknown lock on a human-present seat; resume fallback already exists in CR-7's design. Treat a short grace as an experiment, not a safe measured value, and retain headless fallbacks for Antigravity API-key runs and OpenCode one-shot runs until current-version probes pass.
+  asked_at: 2026-09-27T21:26:21.207146567Z
