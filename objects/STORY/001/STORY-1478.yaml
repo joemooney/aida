@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:46:45.113349128Z
-modified_at: 2026-09-26T05:31:49.794939310Z
+modified_at: 2026-09-27T03:43:55.627172074Z
 req_type: Story
 tags:
 - aida:history
@@ -42,4 +42,43 @@ comments:
   created_at: 2026-09-26T05:28:25.619592197Z
   modified_at: 2026-09-26T05:28:25.619592197Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0e0f6-56eb-7c90-9867-ff749639d20d
+  author: Codex (advisor sketch author)
+  content: |-
+    SKETCH — STORY-1478 (awaiting independent advisor signoff; author: Codex advisor sketch seat)
+
+    Owner / trigger
+    - `aida history <SPEC-ID> --timeline` is an explicit, read-only single-spec view. The history command owns ID resolution, source collection, span construction, and rendering; it does not mutate status, queue, events, or PRs. The caller supplies a canonical/alias/UUID ID through the existing resolver. No implicit timeline on bare `aida history`, and `--timeline` requires one spec.
+
+    Source and span boundaries
+    - Store leg: reuse the git-canonical per-spec history decoder/index path (`history::collect_event_records` / `HistoryOpts`) for `Added` and `StatusChange` with the complete path history, independent of the digest's 20-event/250-commit display limits. `Added` is filing; `Draft -> Approved` (or equivalent) ends approval wait; a transition into `Completed` is the elapsed end. A spec filed already Approved has zero approval wait. If filing/completion is absent because history is truncated or compacted, report an incomplete boundary; do not substitute current YAML `last_modified` or call a partial number full elapsed.
+    - Local event leg: read only `.aida/events.jsonl` and its retained `.1` archive, filter exact canonical `spec`, sort by UTC `ts`, correlate by `run_uuid`, deduplicate identical boundary events. `RunStarted` is a marker, not evidence that an implementer was active; `PhaseEntered` opens work for known slugs `implementer`, `ci`, `reviewer`, `merge`, `pull`, `build`. The next phase entry, matching terminal (`CiTerminal`, `PrMerged`, `RunCompleted`), or `SpecShelved` closes it; a missing terminal does not extend work to completion. `SpecRetried`/`SpecReDriven` and re-entry distinguish attempts; across runs, number repeated activities globally (`reviewer #2`, `implementer #2`), with `rework`/`re-review` display labels where applicable. `SpecShelved` opens parked wait until a matching `SpecRequeued` or next `RunStarted`/phase entry; `SpecRetried` is an in-phase retry marker, not a shelve. An empty run UUID on non-drain events never joins an arbitrary drain run.
+    - GitHub leg: derive candidate PR numbers only from spec-attributed `PrMerged`/`SpecCompleted` events or verified trailing-spec credit in local commit/PR metadata; never match an arbitrary PR by title substring. Query targeted `gh pr view <N> --json createdAt,mergedAt,...` and the relevant check-run timestamps for the credited head/attempt; use PR open and merge as milestones, not proof that the entire open interval was work or await-merge. A check with verified start and completion may bound CI; a check verdict without times cannot. Keep this adapter optional; malformed response, missing `gh`, network failure, ambiguous PR attribution, or inconsistent timestamps skips that evidence and produces one diagnostic note.
+
+    Chronology / fail-closed rule
+    - Convert all times to UTC instants; sort by `(timestamp, source priority, stable source order)`, use half-open `[start,end)` intervals, clip to filed -> Completed, and emit a non-overlapping partition. Precedence for *boundaries*: store creation/status/completion owns lifecycle; matched drain phase/shelve/run events own phase and parked boundaries; verified GitHub check times may subdivide/replace only the matching CI interval; PR created/merged is a milestone or a merge boundary when it is clearly for this spec. Never double-count overlapping drain and GitHub CI. Same-time boundaries yield no zero-length span. Negative, reversed, orphaned, or contradictory pairs yield an explicit `unknown` interval and a note, never a guessed work or wait label.
+    - Wait labels require two supporting endpoints: `awaiting approval` (filed -> approved), `queued` (approved -> first evidenced work), `shelved/parked` (shelved -> requeue/restart), `between runs` (known run exit -> next run when no more specific state), and `awaiting merge` only when a review/CI work-done boundary and credited merge boundary exist. Gaps such as TASK-1507's external work remain `unknown`; `UnshippedWorkDetected` alone is not a work start. A phase with no reliable close gives only a known start marker; the uncovered remainder is unknown. If not yet Completed, report `incomplete: true`, an `as_of`/last-observed endpoint, and no completed elapsed claim. Missing event files or rotated-away history likewise show coverage loss/unknown, not zero drain time. Totals must satisfy work + wait + unknown = elapsed over the covered filing-to-completion interval.
+    - Post-merge `pull`/`build` can occur after the store's Completed transition. Proposed contract: display these as explicitly `post_completion` spans when bounded, exclude them from filing-to-completion totals, and show separate post-completion duration. This avoids a total longer than the stated elapsed measure.
+
+    Files / symbols
+    - `aida-cli-lib/src/cli.rs::Command::History`: add `--timeline` and conflicts with `--full`/`events`, `--kind`, and event-only filters; keep `--format` resolution. `aida-cli-lib/src/git_backend_cmd.rs` History arm: resolve one ID and dispatch the new view. `aida-cli-lib/src/history.rs`: use `collect_event_records`, full-history coverage checks and the existing history source fallback; add a dedicated span builder/renderer module (suggest `history_timeline.rs`) rather than changing the current history event JSON. `aida-cli-lib/src/events.rs::{Event,EventKind,events_path,events_archive_path}`: read timestamped drain evidence with malformed/missing-line coverage diagnostics; the existing `read_all` silently drops parse failures, so it is insufficient as the sole timeline reader. `aida-cli-lib/src/forge.rs` / `pr_cmd.rs`: share forge resolution/PR-credit rules where possible; add a read-only, injectable GitHub timestamp fetcher. `aida-cli-lib/src/toon.rs`: emit the same span model as compact rows.
+
+    Fixture tests (fixed UTC clocks, no live `gh`)
+    - `story_1478_drained_bug_1424_two_runs_review_shelve`: filed/approved, implementer/CI/reviewer, reviewer shelve, parked 47m, second implementer/CI/reviewer/merge, pull/build; assert numbered phases, no overlap, totals conservation, and post-completion placement.
+    - `story_1478_rework_retry_and_rereview`: same-phase retry attempt plus later run after request-changes; assert retry does not create false parked time, re-review is #2, and identical boundary deduplication.
+    - `story_1478_shelve_resume_without_phase_terminal`: shelve closes work, `SpecRequeued` or next run closes parked wait, orphaned/reversed events create unknown.
+    - `story_1478_no_drain_task_1507`: only store transitions, credited PR/check milestones, and two sparse local events; assert no fabricated implementer span and uncovered intervals unknown.
+    - `story_1478_missing_gh_and_bad_network_json`: fake absent/failing `gh`; assert same store/event spans, one diagnostic, JSON remains valid, no panic. Add a rotated/malformed event-line fixture and a truncated-store-history fixture so false precision cannot pass.
+
+    Human / TOON / JSON contract
+    - Human: oldest-first rows with activity (including #N), class, start, end, duration, source; one-line source-degradation note; footer work/wait/unknown/elapsed and incomplete/coverage label. TOON: same fields and totals in a compact `spans` table. JSON: a distinct `view: history-timeline`, `id`, `order: oldest-first`, `spans: [{activity,class,start,end,duration_s,source}]`, `totals_s: {work,wait,unknown,elapsed}`, `incomplete`, `coverage_notes`, and optional `post_completion_s`; timestamps RFC3339 UTC, `duration_s` nonnegative numeric seconds. `source` names the decisive boundary evidence (`store`, `events`, `github`); optional evidence references may explain a mixed-source span. Renderers consume one model and produce the same boundaries/totals.
+
+    Out of scope / open design questions for signoff
+    - No aggregate p50/p90 metrics (STORY-1479), no new event emission or cross-machine publication (STORY-1480), no redefinition of queue/drain/merge lifecycle, no generic GitLab timing adapter in this story.
+    - Confirm whether post-completion pull/build should be shown outside the elapsed total as proposed, or whether product wants a second end-to-end-through-build metric.
+    - Confirm the default treatment of an in-progress spec: end at the last observed event (proposed) or a captured `now`; either must label the result incomplete. Confirm whether explicit `--since/--until` should be rejected in timeline mode or supported only with visibly partial totals; proposed first slice rejects them.
+
+    Evidence checked (2026-09-26): STORY-1478 acceptance and EPIC-73 rationale; `.aida/discipline/two-seat-protocol.md`; `history.rs` EventKind/collect_event_records and `history_cache.rs` bounded query; `events.rs` best-effort emit/read_all and one-generation rotation; `git_backend_cmd.rs` History dispatch; `forge.rs` PR metadata and `gh_pr_checks_json` (current checks surface lacks timestamps); `pr_cmd.rs::emit_ship_pr_merged`; `.aida/events.jsonl` BUG-1424 lines 4779-4815 (two run UUIDs, shelve, PR-2015 merge, post-merge phases) and TASK-1507 lines 7140/7203 (detection and completion only). The PATH release CLI is `/home/joe/.local/bin/aida`, version 0.15.0 (sha 0bd634c); it currently exposes `history --id/--events`, not `--timeline`.
+  created_at: 2026-09-27T03:43:55.627172074Z
+  modified_at: 2026-09-27T03:43:55.627172074Z
 execution_mode: drive
