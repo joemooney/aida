@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T03:40:15.706534259Z
-modified_at: 2026-09-27T03:40:15.706534259Z
+modified_at: 2026-09-27T08:17:41.881370390Z
 req_type: Task
 tags:
 - from-implementer:STORY-1477
@@ -19,3 +19,15 @@ filed_at:
   dirty: true
   aida_version: 0.15.0
   aida_build_sha: 7c6faed690
+decision_request:
+  question: 'How should SPEC-442’s event-timestamp parsing fix be sequenced relative to STORY-1477 PR #2224, whose current rework scope was limited to advisor rounds R1–R3?'
+  choices:
+  - label: 'Keep as Draft until #2224 ships'
+    consequence: Preserves the agreed R1–R3 scope and avoids adding code to the held PR; reassess the issue against main after STORY-1477 merges
+    resolution: noop
+  - label: Approve as separate follow-up now
+    consequence: 'Keeps #2224 unchanged but authorizes a separate follow-up branch that may need rebasing after STORY-1477 merges'
+    resolution: status:approved
+  recommended: 0
+  rationale: The current PR rework was explicitly bounded; preserving that boundary avoids proxy scope expansion. The bug is documented and can be re-evaluated once the underlying template behavior lands.
+  asked_at: 2026-09-27T08:17:41.881370390Z
