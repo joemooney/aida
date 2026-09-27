@@ -17,7 +17,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T09:41:03.172727931Z
-modified_at: 2026-09-27T09:41:03.172727931Z
+modified_at: 2026-09-27T09:41:39.490521475Z
 req_type: Bug
 tags:
 - vendor:antigravity headless-launch cli-argv
+comments:
+- id: 01a0e23d-da22-7131-9f87-ec91a5d621eb
+  author: codex
+  content: |-
+    AI Evaluation (product intake): quality 9/10. Strengths: exact reproducer and primary non-TTY caller are named; argv regression is fixture-testable; scope explicitly preserves permission posture and interactive behavior; acceptance covers avoiding orphaned In-Progress state. Minor implementation note: assert the real argument vector with a fake agy executable, including prompt/model/output flags, rather than relying only on a command-string snapshot. No duplicate surfaced in count: 2 results
+    specs[2]{id,title,status,type}:
+      BUG-1686,Fix Antigravity headless launch argument ordering,draft,bug
+      STORY-1033,"Per-seat model and effort tuning: [agents.<vendor>.seats] table, retry escalation, model:<tier> spec tag, and cost-per-seat telemetry",completed,story
+    next[1]{cmd,to}:
+      aida show <id>,detail. Leave Draft for normal product/advisor triage; no approval or queueing implied by this evaluation.
+  created_at: 2026-09-27T09:41:39.490521475Z
+  modified_at: 2026-09-27T09:41:39.490521475Z
