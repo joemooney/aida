@@ -3,12 +3,12 @@ spec_id: BUG-1682
 agreed_id: BUG-1682
 title: Global role queue (~/.aida/queue/<role>.yaml) is a read-modify-write with a bare fs::write and no lock, so concurrent writers drop entries
 description: 'Found by the BUG-1677 review: global_queue.rs ~76 rewrites the home-dir global queue with an unlocked read-modify-write and non-atomic fs::write. Acceptance: 1. Writers take an flock on a sidecar lock file for the whole read-modify-write. 2. Writes use write_atomic; reads use read_atomic (rename-safe on Windows). 3. A concurrency fixture test (fake HOME) loses no entries.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:57:53.754613048Z
-modified_at: 2026-09-27T04:00:16.539937658Z
+modified_at: 2026-09-27T04:03:25.620993099Z
 req_type: Bug
 comments:
 - id: 01a0e101-bf24-7c71-882a-a9e28b9b08e6
@@ -97,3 +97,11 @@ comments:
   content: 'PROXY DECISION (product for Joe): Independent lock-model sketch and advisor signoff 01a0e104-7ab9-7a73-b79b-1843eb5bcee1 are accepted with all binding amendments. Queue isolated implementation of membership/persistence fix only; no transactional placement expansion. Run fake-HOME cross-process tests and Windows CI, then fresh strict reviewer and advisor before a batch merge. Never touch the live global queue in tests.'
   created_at: 2026-09-27T04:00:16.539937658Z
   modified_at: 2026-09-27T04:00:16.539937658Z
+history:
+- id: 01a0e108-3134-78a3-974e-6e28c13fbe1b
+  author: aida-session-start
+  timestamp: 2026-09-27T04:03:25.620992351Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
