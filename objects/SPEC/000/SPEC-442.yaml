@@ -2,12 +2,12 @@ id: 01a0e0f2-fbda-75c3-9869-68a85596eff9
 spec_id: SPEC-442
 title: History strftime templates reject decoded event timestamps
 description: 'Discovered during bounded STORY-1477 R1-R3 rework of PR #2224, not an independent review. Exercising proposed R2 MCP example template={date:%H:%M} {id} {event} against the isolated tests/test_history_templates.py fixture returned history: invalid_arg: invalid event timestamp (log /tmp/story-1477-rework-direct-smoke.log). history.rs decode path constructs Event.timestamp with human_timestamp(&commit.iso_timestamp) around line 2126; event_record copies that string around line 2553. history_layout.rs format_date parses RFC3339 around line 133. Existing unit fixture uses an RFC3339 timestamp and misses the real feed mismatch. This behavior exists in original head 30fb7000634c5d5d3e554dacbae9980e63afa4c6; it is distinct from the earlier far-future Git bound finding SPEC-441. User explicitly limited this rework to advisor R1-R3, so no timestamp/decoder/rendering repair is made. R2 will use valid working string example {id} {event}; report this unresolved acceptance issue to product/advisor for separate authorization/sequencing. Reproduction uses temporary HOME and throwaway git-canonical repo, never operator config. Expected: real CLI/MCP event rows render date strftime placeholders with approved local-time semantics without altering default JSON/history contracts.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T03:40:15.706534259Z
-modified_at: 2026-09-27T14:16:11.857380446Z
+modified_at: 2026-09-27T16:50:51.291765708Z
 req_type: Task
 tags:
 - from-implementer:STORY-1477
@@ -28,6 +28,23 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e3c6-ca5a-7cd3-aceb-6c63d4b39eb3
+  author: aida-auto-bump
+  timestamp: 2026-09-27T16:50:51.098797585Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e3c6-cb1b-7333-b941-e244631db812
+  timestamp: 2026-09-27T16:50:51.291764317Z
+  agent: aida
+  commit_sha: 6b1dac2a201bae751901ab95ad49e591292465a1
+  summary: Completed via merge 6b1dac2a
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T16:50:51.098769547Z
+  completion_sha: 6b1dac2a201bae751901ab95ad49e591292465a1
 decision_request:
   question: 'How should SPEC-442’s event-timestamp parsing fix be sequenced relative to STORY-1477 PR #2224, whose current rework scope was limited to advisor rounds R1–R3?'
   choices:
