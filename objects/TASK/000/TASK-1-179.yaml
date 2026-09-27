@@ -1,5 +1,6 @@
 id: 01a0e18a-b377-78b0-a88c-f3c527a9af5a
 spec_id: TASK-1-179
+agreed_id: TASK-198
 title: 'Resolved prior finding: enabled failure-notice without -route suffix now yields…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1535, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
