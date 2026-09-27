@@ -13,6 +13,16 @@ allowed-tools:
 
 # AIDA Implementation Skill
 
+## Seat status contract
+
+Report one explicit state: **actively working**, **actively watching**,
+**delegated** (name lanes and recipients), **paused**, or **turn ended**. Cite
+current `aida ps` or `aida integrate` output for any ongoing-work claim; if
+there is no evidence, say it cannot be verified. After this turn ends, never
+say “still working,” “continuing,” or equivalent about yourself. Delegated
+work is not your own active work. See `.aida/discipline/advisor-role.md`.
+<!-- trace:TASK-1557 | ai:codex -->
+
 ## Purpose
 
 Implement an approved requirement with full traceability, evolving the requirement database to capture implementation details and creating child requirements as needed.
