@@ -2457,7 +2457,33 @@ pub(crate) fn scheduler_driver_doctor_findings(
         &overdue,
         Utc::now(),
     ));
+    // TASK-1517: an unattended wave's memory ceiling only exists if the user
+    // manager can enforce it. Read only where the systemd timer of this repo
+    // actually exists, so a cron-driven or timer-less repo never looks; the
+    // finding is report-only and never stops a wave.
+    // trace:TASK-1517 | ai:claude
+    if wave_limit_delegation_check_needed(&status.systemd) {
+        out.extend(crate::schedule_driver::build_wave_limit_findings(
+            &crate::schedule_driver::real_wave_limit_delegation(),
+        ));
+    }
     Ok(out)
+}
+
+/// PURE: whether the wave-limit delegation check reads anything at all. Only
+/// a repo whose systemd timer exists can launch a wave in a transient unit,
+/// so nowhere else is there a limit to enforce.
+// trace:TASK-1517 | ai:claude
+pub(crate) fn wave_limit_delegation_check_needed(
+    systemd: &crate::schedule_driver::SystemdDriverStatus,
+) -> bool {
+    use crate::schedule_driver::SystemdDriverStatus;
+    matches!(
+        systemd,
+        SystemdDriverStatus::Installed
+            | SystemdDriverStatus::Disabled
+            | SystemdDriverStatus::Stopped
+    )
 }
 
 /// `aida schedule install-cron` / `install-systemd`. Gated like `aida shift
