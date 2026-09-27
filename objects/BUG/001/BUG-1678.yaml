@@ -3,12 +3,12 @@ spec_id: BUG-1678
 agreed_id: BUG-1678
 title: get_requirement_targeted falls back to a full-store parse on a cache miss, so 'aida show --json' can scan the whole store once per relationship target
 description: 'Found by the planner (cached_git_backend.rs ~257-268): a cache miss calls find_by_uuid, parsing every object; show --json calls it per relationship/blocker target. Acceptance: 1. The fallback resolves all missing targets in one pass (or via a uuid->path index) instead of one full scan per target. 2. Test: a stale cache missing N targets triggers at most one full scan.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:34:52.109830507Z
-modified_at: 2026-09-27T06:23:44.027683586Z
+modified_at: 2026-09-27T06:25:55.096075290Z
 req_type: Bug
 comments:
 - id: 01a0e075-dce9-7d13-a5d5-6314b8f958e6
@@ -71,3 +71,23 @@ comments:
   content: 'ADVISOR MERGE READINESS: PASS — draft PR #2229 at exact head 679928a9543e37719d71ca1ff65cc3766d3cfaa5 and base f936ea71e5132079950712c82d94d2eb2a581635. Independent bounded advisor gate: AIDA_SESSION_ROLE=advisor. Read two-seat-protocol and integrator-role. Verified GitHub OPEN/DRAFT head and base, mergeable=MERGEABLE, base is the merge base, and all four approved source heads are ancestors: BUG-1678 6022ac539facfc0d5a60168f7df545ef779e71fa, BUG-1683 645c260d6206cbfaaa969d5305bc2eefd3f922cf, TASK-1535 dd21f4342b50990a1ac25234f19bc8b88e500033, BUG-1682 11bd80bea5bd50490009ccdfdda9dbe005982406. Source independent advisor PASS comments: 01a0e0a1-47d5-70a0-a51b-56ec5a7c862b, 01a0e0ac-6d0e-74d0-b743-6979dd4a20b0, 01a0e0eb-ffa6-7862-a986-fa001d1b2684, 01a0e143-b6de-7a81-9926-7db3273300ee. Combined-head independent code review APPROVE is BUG-1678 comment 01a0e170-f0ab-7550-95ad-69c9c1b4552e at this SHA; it reports no blocking combined-head finding and documents the sole OVERVIEW.md conflict resolution. Rechecked spec comments and PR metadata: no newer unresolved hold or authority change found. BUG-1678 PROXY DECISION 01a0e182-7041-7243-8f44-1b42079fbb81 records operator direction to proceed without waiting for optional macOS/Windows while backlog drains. Main protection API requires only Build (ubuntu-latest) and merge-hold-gate; both exact-head check runs completed SUCCESS. Optional macOS completed SUCCESS; optional Windows remains IN_PROGRESS at this gate, not claimed passing. GitHub mergeStateStatus=UNSTABLE while optional work remains; required checks are green and mergeable=MERGEABLE. PASS applies only to this SHA/base and policy. Integrator must revalidate head, holds, and required checks before any merge. This advisor did not mark ready, merge, modify code, or waive a required check.'
   created_at: 2026-09-27T06:23:44.027683586Z
   modified_at: 2026-09-27T06:23:44.027683586Z
+history:
+- id: 01a0e18a-a596-7011-98b7-678b6865c745
+  author: aida-auto-bump
+  timestamp: 2026-09-27T06:25:55.094871383Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0e18a-a598-7891-9fcd-c1efe20cffb2
+  timestamp: 2026-09-27T06:25:55.096065617Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/BUG-1678-2026-09-27T012359Z.md.acked
+  commit_sha: 88f9a8eaabe86108763231ef131b97b4a06d63e0
+  summary: 'Independent strict cache-path review of PR #2221: APPROVED at 6022ac539facfc0d5a60168f7df545ef779e71fa. Both acceptance criteria pass: one operation-scoped OnceLock UUID/path index serves all relationship/blocker misses; two targeted_reader_ tests passed (2/2), including stale/missing/wrong-file cache rows and unreadable cache, with actual object-list count exactly one. cargo fmt --all -- --check and git diff --check passed. No blocking cache-path defect found. Gaps: no CLI end-to-end scan-count test; no concurrent file move/delete or duplicate-UUID test. CI build pending; user-reported workspace tests stopped at 25 minutes with no failures are incomplete, NOT green. Scope is cache-path review only; PR untouched and unmerged.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T06:25:55.094841611Z
+  completion_sha: 88f9a8eaabe86108763231ef131b97b4a06d63e0
