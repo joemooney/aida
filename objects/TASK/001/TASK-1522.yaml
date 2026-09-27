@@ -15,12 +15,12 @@ description: |
   3. `aida status` (or the digest) shows a one-line intent-capture indicator when the share is below the floor, and nothing when at or above (test).
   4. Nothing blocks a merge, a drain, or a completion because of this metric (test: a spec completed with no traced criterion still completes).
   5. The current AIDA value at filing is recorded in a comment on this spec once implemented, as the baseline.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:06.828604970Z
-modified_at: 2026-09-27T08:47:07.368948843Z
+modified_at: 2026-09-27T15:29:58.261971058Z
 req_type: Task
 tags:
 - criteria
@@ -132,4 +132,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e37c-bde8-7140-b838-47d06a1c638c
+  author: aida-auto-bump
+  timestamp: 2026-09-27T15:29:58.248928797Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e37c-bdf5-7563-896c-f96bcc129abe
+  timestamp: 2026-09-27T15:29:58.261968188Z
+  agent: implementer
+  commit_sha: a1582e8edf5c0eddc68703ba4e1d46ea46ad3f69
+  summary: Advisory intent-capture floor and coverage reporting verified against all acceptance criteria
+  review_verdict: approved
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-27T15:29:58.248924836Z
+  completion_sha: a1582e8edf5c0eddc68703ba4e1d46ea46ad3f69
