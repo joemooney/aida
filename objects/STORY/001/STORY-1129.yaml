@@ -32,7 +32,8 @@ req_type: Story
 tags:
 - mcp cli agent-surface scaffolding token-economics decision
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0a541-164c-7be2-ac20-eba2d41f07ef
   created_at: 2026-09-15T13:28:27.303871329Z
   created_by: joe
