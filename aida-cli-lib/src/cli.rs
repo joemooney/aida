@@ -9545,14 +9545,24 @@ pub enum Command {
         cmd: Option<GraphCommand>,
     },
 
-    /// Report acceptance criteria traced by Rust, pytest, JS/TS, and Go tests.
+    /// Report acceptance criteria traced by Rust, pytest, JS/TS, and Go tests,
+    /// or — with `coverage` (alias `gap`) in place of a spec — the project's
+    /// capture-coverage figures: trailer share, criteria share, and the
+    /// criterion-to-test share, each as count/total.
     Criteria {
-        /// Requirement ID (UUID or SPEC-ID) whose acceptance criteria to inspect.
+        /// Requirement ID (UUID or SPEC-ID) whose acceptance criteria to
+        /// inspect, or `coverage` / `gap` for the project-wide report.
         spec: String,
 
         /// Emit JSON instead of a human report.
         #[clap(long)]
         json: bool,
+
+        /// Lookback window in days for the project-wide report (the all-time
+        /// figures are always shown alongside). Ignored for a single spec.
+        // trace:STORY-1487 | ai:claude
+        #[clap(long, default_value_t = crate::criteria_coverage::DEFAULT_WINDOW_DAYS, value_name = "DAYS")]
+        window_days: u64,
     },
 
     /// Harvest what a diff established into the spec: a headless agent proposes

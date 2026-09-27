@@ -40,6 +40,8 @@ mod config_edit;
 mod context_prompt;
 mod coordination;
 mod criteria;
+// trace:STORY-1487 | ai:claude
+mod criteria_coverage;
 mod criteria_gate;
 mod criteria_red_run;
 mod db_cmd;
@@ -5673,11 +5675,17 @@ fn run() -> Result<()> {
                 &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
         }
-        Command::Criteria { spec, json } => {
+        Command::Criteria {
+            spec,
+            json,
+            window_days,
+        } => {
             let store = storage.load()?;
             let project_root = find_project_root()
                 .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
-            criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
+            // `coverage` / `gap` is the project-wide report, never a spec id.
+            // trace:STORY-1487 | ai:claude
+            criteria_coverage::dispatch_criteria(&project_root, &store, spec, *window_days, *json)?;
         }
         Command::Reconstitute {
             spec,
@@ -82424,10 +82432,9 @@ fn status_spec_is_exact_draft(raw: &str) -> bool {
 }
 
 fn is_machine_filed_draft(r: &aida_core::RequirementSummary) -> bool {
-    r.tags.iter().any(|tag| tag == "auto-drafted")
-        || r.description
-            .trim_start()
-            .starts_with("Auto-drafted by `aida queue work")
+    // One definition shared with the capture-coverage report.
+    // trace:STORY-1487 | ai:claude
+    criteria_coverage::is_auto_drafted(&r.tags, &r.description)
 }
 
 /// Partition a draft grooming query by provenance. Returns the number hidden
