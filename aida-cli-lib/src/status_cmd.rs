@@ -174,7 +174,7 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
             });
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
+            crate::cache_output::json_pretty(&serde_json::json!({
                 "spec": disp,
                 "status": status_label,
                 "status_lens": status_display::needs_attention_lens(req).map(|lens| lens.label()),
@@ -478,7 +478,7 @@ pub(crate) fn handle_status_command_distributed(
     if cleanup {
         let report = collect_cleanup_report(&project_root, &store);
         if json {
-            println!("{}", serde_json::to_string_pretty(&report.to_json())?);
+            println!("{}", crate::cache_output::json_pretty(&report.to_json())?);
         } else {
             let stdout = std::io::stdout();
             let _ = report.render(verbose, stdout.lock());
@@ -520,7 +520,7 @@ pub(crate) fn handle_status_command_distributed(
     if awaiting {
         let report = collect_awaiting_report(&project_root, backend, &user_ctx, no_ci);
         if json {
-            println!("{}", serde_json::to_string_pretty(&report.to_json())?);
+            println!("{}", crate::cache_output::json_pretty(&report.to_json())?);
         } else if report.is_empty() {
             // Echo a quiet all-clear so `aida status --awaiting` doesn't
             // silently exit with nothing on stdout — the focus-mode user

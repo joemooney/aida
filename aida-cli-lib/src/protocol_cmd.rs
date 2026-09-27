@@ -106,8 +106,10 @@ pub(crate) fn targeted_notice_line_for_scope(
         ..ListFilter::default()
     };
     let summary = backend
-        .cache()
-        .list_summaries(&filter)?
+        .list_summaries_with_budget(
+            &filter,
+            aida_core::db::cache_refresh::ReadBudget(std::time::Duration::ZERO),
+        )?
         .into_iter()
         .find(|candidate| candidate.req_type.eq_ignore_ascii_case("meta"));
     let Some(summary) = summary else {

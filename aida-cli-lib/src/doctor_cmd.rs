@@ -8037,6 +8037,39 @@ hostname = "localhost"
     // TASK-1484: a LIVE owner past its expected duration is reported as
     // diagnostic evidence but never healed; a reused PID reads as dead.
     // trace:TASK-1484 | ai:claude
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn doctor_reports_unknown_foreign_lock_overrun_without_healing() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+        let cache = aida_core::CachedGitBackend::default_cache_path(&root.join(".aida-store"));
+        let path = aida_core::cache_lock_info_path(&cache);
+        let info = aida_core::CacheLockInfo {
+            pid: u32::MAX,
+            boot_id: Some("foreign boot".into()),
+            started_at: (chrono::Utc::now() - chrono::Duration::minutes(10)).to_rfc3339(),
+            expected_duration_secs: Some(60),
+            ..Default::default()
+        };
+        std::fs::write(&path, serde_json::to_vec(&info).unwrap()).unwrap();
+        let findings = collect_doctor_findings(
+            root,
+            &aida_core::models::RequirementsStore::new(),
+            Some("stale-locks"),
+        )
+        .unwrap();
+        assert_eq!(findings.len(), 1);
+        assert!(!findings[0].safe_heal);
+        assert!(findings[0].summary.contains("unknown owner identity"));
+        assert_eq!(
+            heal_doctor_stale_lock(&findings[0]).unwrap().status,
+            "skipped"
+        );
+        assert!(path.exists());
+    }
+
     #[cfg(unix)]
     #[test]
     fn doctor_reports_live_lock_overrun_without_healing_it() {

@@ -16,6 +16,15 @@ context, `CLAUDE.md` for the broad repository guide, and
 context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
+## Cache read behavior
+
+Compatible read snapshots use a single refresh flock and a shared bounded wait.
+Before the detached worker slice lands, non-TTY full-rebuild reads report
+`deferred`; a one-attempt incremental SQLite contention reports `writer_busy`.
+Neither state promises background progress. `worker_running` means an observed
+refresh flock holder (including an inline refresher). `aida cache rebuild` and
+mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
+
 ## Storage Model
 
 The spec graph is git-canonical. The orphan `aida-store` branch stores

@@ -27,8 +27,8 @@ pub struct CachedGitBackend {
 
 impl CachedGitBackend {
     /// Open an existing git store at `git_root` with a SQLite cache at
-    /// `cache_path`. If the cache is missing or stale (HEAD-SHA mismatch),
-    /// it is rebuilt before this constructor returns.
+    /// `cache_path`. Missing caches are rebuilt; compatible stale caches use
+    /// the single-flight read policy. Queries record their snapshot labels.
     pub fn open(git_root: &Path, cache_path: &Path) -> Result<Self> {
         let inner = GitBackend::new(git_root)?;
         Self::with_inner(inner, cache_path)
@@ -36,16 +36,12 @@ impl CachedGitBackend {
 
     /// Wrap an already-configured GitBackend (e.g., one that was built with
     /// `.with_dispenser(...)`). The cache is opened or created at
-    /// `cache_path` and rebuilt if stale before this returns.
+    /// `cache_path` and brought through the single-flight reader protocol.
     pub fn with_inner(inner: GitBackend, cache_path: &Path) -> Result<Self> {
         let cache = Cache::open(cache_path)?;
         let backend = CachedGitBackend { inner, cache };
-        // BUG-664: the constructor is on the hot path of every read command
-        // (`aida status`, `aida list`). Use the read-tolerant freshness check so
-        // a reader serves the last-good snapshot when another process is already
-        // rebuilding the cache, instead of contending for the write lock through
-        // the ~25s retry ladder. Writers re-check freshness strictly on their own
-        // write paths, and the SHA-based stale detection is unchanged.
+        // trace:TASK-1526 | ai:codex
+        // Constructors share the tolerant protocol; mutations recheck strictly.
         backend.ensure_cache_fresh_for_read_with_schema_retry()?;
         Ok(backend)
     }
@@ -148,9 +144,10 @@ impl CachedGitBackend {
     // trace:BUG-1535 | ai:claude
     pub fn id_candidates(&self, id: &str) -> Result<Vec<crate::id_collisions::IdCandidate>> {
         self.with_cache_schema_retry("resolve id candidates", || {
-            self.ensure_cache_fresh_for_read()?;
-            let rows = self.cache.id_rows_for(id)?;
-            Ok(crate::id_collisions::candidates_for_id(rows.iter(), id))
+            self.tolerant_read(|cache| {
+                let rows = cache.id_rows_for(id)?;
+                Ok(crate::id_collisions::candidates_for_id(rows.iter(), id))
+            })
         })
     }
 
@@ -270,9 +267,10 @@ impl CachedGitBackend {
     // trace:BUG-1535 | ai:claude
     pub fn id_collisions(&self) -> Result<Vec<crate::id_collisions::IdCollision>> {
         self.with_cache_schema_retry("scan id collisions", || {
-            self.ensure_cache_fresh_for_read()?;
-            let rows = self.cache.id_rows_all()?;
-            Ok(crate::id_collisions::find_id_collisions(rows.iter()))
+            self.tolerant_read(|cache| {
+                let rows = cache.id_rows_all()?;
+                Ok(crate::id_collisions::find_id_collisions(rows.iter()))
+            })
         })
     }
 
@@ -327,6 +325,12 @@ impl CachedGitBackend {
         id: &Uuid,
         spec_id: Option<String>,
     ) -> Option<crate::models::RequirementStatus> {
+        #[cfg(test)]
+        super::cache_refresh::test_count(if super::cache::holding_write() {
+            "epic_inside_txn"
+        } else {
+            "epic_before_txn"
+        });
         let spec_id = spec_id?;
         // Read exactly that object file. Not `get_requirement_by_spec_id`: on
         // a missing file it falls through to an agreed_id scan of every object.
@@ -390,7 +394,9 @@ impl CachedGitBackend {
                     }
                     head = now;
                 }
-                // Any error, a cache lock error included: fall back to the
+                // trace:TASK-1526 | ai:codex
+                Err(e) if super::cache::is_cache_lock_error(&e) => return Err(e),
+                // Other errors: fall back to the
                 // full rebuild, which re-enters the lock retry ladder and
                 // fails the command if the lock is still held.
                 Err(e) => {
@@ -407,55 +413,219 @@ impl CachedGitBackend {
         // incremental (it re-reads every file changed since the stamp), but
         // not always: a file changed during the load and then reverted shows
         // no net change in that diff, so its newer (or ghost) row persists
-        // until a full rebuild. Tracked separately as a follow-up bug.
+        // until a full rebuild. Tracked separately as BUG-1663.
         // trace:TASK-1515 | ai:claude
         let head = self.current_head_sha();
         if !self.cache.is_stale(&head)? {
             return Ok(());
         }
-        self.full_rebuild(&head)
+        self.full_rebuild(&head, true)
     }
 
-    /// Read-path freshness: like `ensure_cache_fresh`, but when the cache is
-    /// stale AND another LIVE process currently holds the cache write-lock (it is
-    /// mid rebuild/write), skip the rebuild and serve the last-good committed
-    /// snapshot instead of contending for the write lock through the ~25s retry
-    /// ladder (BUG-664). WAL guarantees that snapshot is consistent — a reader
-    /// sees the last COMMITTED state, never a torn mid-rebuild read — and the
-    /// foreign writer is itself bringing the cache current, so a momentary stale
-    /// read is exactly the rebuildable-projection contract, not a correctness
-    /// loss. Pure-read callers use this; writers keep the strict
-    /// `ensure_cache_fresh` so the cache they write through is never weakened.
-    // trace:BUG-664 | ai:claude
+    /// Single-flight pre-C reader protocol. Sidecars are diagnostics only.
+    // trace:TASK-1526 | ai:codex
+    pub fn freshen_for_read(
+        &self,
+        budget: super::cache_refresh::ReadBudget,
+    ) -> Result<Option<super::cache_refresh::RefreshState>> {
+        use super::cache_refresh::{self, RefreshLock, RefreshState};
+        use std::time::Duration;
+        loop {
+            let head = self.current_head_sha();
+            let migration = self.cache.recheck_migration();
+            if migration && budget.0.is_zero() {
+                return Err(cache_refresh::AdvisoryCacheUnavailable.into());
+            }
+            if !migration && !self.cache.is_stale(&head)? {
+                return Ok(None);
+            }
+            match RefreshLock::try_acquire(self.cache.path()) {
+                Err(_) => {
+                    self.ensure_cache_fresh()?;
+                    return Ok(None);
+                }
+                Ok(Some(guard)) => {
+                    if guard.is_nested() {
+                        return Ok(None);
+                    }
+                    // The lock winner always checks again after acquiring it.
+                    if !self.cache.is_stale(&self.current_head_sha())? {
+                        return Ok(None);
+                    }
+                    if migration || !self.cache.has_usable_snapshot() {
+                        self.ensure_cache_fresh()?;
+                        return Ok(None);
+                    }
+                    let head = self.current_head_sha();
+                    let recorded = self.cache.source_head_sha()?;
+                    if let Some(from) = recorded.filter(|s| !s.is_empty()) {
+                        if !head.is_empty()
+                            && crate::git_ops::is_ancestor(self.inner.path(), &from, &head)?
+                        {
+                            let attempt = super::cache::ReadRefreshAttempt::new();
+                            let result = self.try_incremental_update(&from, &head);
+                            drop(attempt);
+                            match result {
+                                Ok(true) => return Ok(None),
+                                Ok(false) => {}
+                                Err(e) if super::cache::is_cache_lock_error(&e) => {
+                                    drop(guard);
+                                    return Ok(if self.cache.is_stale(&self.current_head_sha())? {
+                                        Some(RefreshState::WriterBusy)
+                                    } else {
+                                        None
+                                    });
+                                }
+                                Err(e) => return Err(e),
+                            }
+                        }
+                    }
+                    if cache_refresh::read_policy().0 && !budget.0.is_zero() {
+                        self.ensure_cache_fresh()?;
+                        return Ok(None);
+                    }
+                    return Ok(Some(RefreshState::Deferred));
+                }
+                Ok(None) => {
+                    let limit = if migration && !budget.0.is_zero() {
+                        Duration::from_secs(15)
+                    } else {
+                        budget.0
+                    };
+                    let remaining = cache_refresh::wait_remaining(limit);
+                    if remaining.is_zero() || !cache_refresh::may_wait() {
+                        if migration {
+                            if budget.0.is_zero() {
+                                return Err(cache_refresh::AdvisoryCacheUnavailable.into());
+                            }
+                            anyhow::bail!("the cache is being upgraded; re-run shortly");
+                        }
+                        // Final lock observation: never claim a departed holder.
+                        let state = match RefreshLock::try_acquire(self.cache.path()) {
+                            Ok(None) => RefreshState::WorkerRunning,
+                            Ok(Some(_)) => RefreshState::Deferred,
+                            Err(_) => {
+                                self.ensure_cache_fresh()?;
+                                return Ok(None);
+                            }
+                        };
+                        return Ok(if self.cache.is_stale(&self.current_head_sha())? {
+                            Some(state)
+                        } else {
+                            None
+                        });
+                    }
+                    cache_refresh::wait_poll(remaining.min(Duration::from_millis(100)));
+                    // A departed holder does not transfer its unfinished work to
+                    // this loser or restart the wait with another backend.
+                    match RefreshLock::try_acquire(self.cache.path()) {
+                        Ok(Some(_)) if !migration => {
+                            return Ok(if self.cache.is_stale(&self.current_head_sha())? {
+                                Some(RefreshState::Deferred)
+                            } else {
+                                None
+                            })
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    // Metadata and rows are read through the SAME pinned WAL snapshot.
+    // trace:TASK-1526 | ai:codex
+    fn tolerant_read<T>(&self, read: impl FnMut(&Cache) -> Result<T>) -> Result<T> {
+        self.tolerant_read_with_budget(super::cache_refresh::read_policy().1, read)
+    }
+
+    // trace:TASK-1526 | ai:codex
+    fn tolerant_read_with_budget<T>(
+        &self,
+        budget: super::cache_refresh::ReadBudget,
+        mut read: impl FnMut(&Cache) -> Result<T>,
+    ) -> Result<T> {
+        use super::cache_refresh::{self, StaleServe};
+        let mut schema_retries = 0;
+        loop {
+            let state = self.freshen_for_read(budget)?;
+            let head = self.current_head_sha();
+            let snapshot = match self.cache.read_snapshot() {
+                Ok(snapshot) => snapshot,
+                Err(err) if err.is::<super::cache::CacheSchemaChanged>() && schema_retries == 0 => {
+                    // Re-enter the migration protocol, including its silent
+                    // advisory exit and no-wait-under-write-lock rule.
+                    schema_retries += 1;
+                    continue;
+                }
+                Err(err) => return Err(err),
+            };
+            let cache_head = snapshot.source_head_sha()?;
+            let built_at = snapshot.built_at()?;
+            // HEAD may move between refresh and pinning. Re-enter the same
+            // bounded operation, never attach stale:false to an older snapshot.
+            if state.is_none()
+                && cache_head.as_deref() != Some(head.as_str())
+                && !cache_refresh::RefreshLock::held_by_current_thread(self.cache.path())
+            {
+                continue;
+            }
+            let value = read(&snapshot)?;
+            let state = if state == Some(cache_refresh::RefreshState::WorkerRunning) {
+                match cache_refresh::RefreshLock::try_acquire(self.cache.path()) {
+                    Ok(None) => state,
+                    Ok(Some(_)) => Some(cache_refresh::RefreshState::Deferred),
+                    Err(_) => {
+                        drop(snapshot);
+                        self.ensure_cache_fresh()?;
+                        continue;
+                    }
+                }
+            } else {
+                state
+            };
+            let stale = state
+                .filter(|_| cache_head.as_deref() != Some(head.as_str()))
+                .map(|refreshing| StaleServe {
+                    stale: true,
+                    cache_head: cache_head.filter(|head| !head.is_empty()),
+                    store_head: head,
+                    built_at: built_at.filter(|time| !time.is_empty()),
+                    refreshing,
+                });
+            cache_refresh::record_read(stale);
+            return Ok(value);
+        }
+    }
+
+    // trace:TASK-1526 | ai:codex
     fn ensure_cache_fresh_for_read(&self) -> Result<()> {
-        let head = self.current_head_sha();
-        if !self.cache.is_stale(&head)? {
-            return Ok(());
-        }
-        // Stale, but if another live process is already rebuilding, don't pile
-        // onto the write lock — read the prior consistent snapshot.
-        //
-        // TASK-1515: not while a schema migration is pending. The committed
-        // snapshot is then in the OLD schema, so it is not a snapshot this
-        // binary can serve; take the strict path (which full-rebuilds).
-        // trace:TASK-1515 | ai:claude
-        if !self.cache.migration_pending()
-            && super::cache::foreign_writer_holds_lock_at(self.cache.lock_info_path())
-        {
-            return Ok(());
-        }
-        self.ensure_cache_fresh()
+        // Opening a backend has not served any rows. Labels belong to the
+        // pinned query snapshot, not an earlier constructor observation.
+        self.freshen_for_read(super::cache_refresh::read_policy().1)
+            .map(|_| ())
     }
 
     /// Full authoritative rebuild: load the whole store and re-project every
     /// row. The fallback whenever incremental can't be proven safe.
     // trace:BUG-636
-    fn full_rebuild(&self, head: &str) -> Result<()> {
+    fn full_rebuild(&self, head: &str, refresh_only: bool) -> Result<()> {
+        #[cfg(test)]
+        super::cache_refresh::test_count("full_rebuild");
         let store = self
             .inner
             .load()
             .context("Failed to load git store for cache rebuild")?;
-        self.cache.rebuild_from_store(&store, head)?;
+        // Save-time reconciliation must rebuild even at the same HEAD: it
+        // may have preserved unloaded objects, including uncommitted fixtures.
+        // Only freshness-driven refreshes may skip an already committed refill.
+        // trace:TASK-1526 | ai:codex
+        if refresh_only {
+            self.cache
+                .rebuild_for_refresh(&store, head, self.inner.path())?;
+        } else {
+            self.cache.rebuild_from_store(&store, head)?;
+        }
         Ok(())
     }
 
@@ -494,7 +664,7 @@ impl CachedGitBackend {
     }
 
     // trace:BUG-1097 | ai:codex
-    fn ensure_cache_fresh_with_schema_retry(&self) -> Result<()> {
+    pub fn ensure_cache_fresh_with_schema_retry(&self) -> Result<()> {
         self.with_cache_schema_retry("freshen cache", || self.ensure_cache_fresh())
     }
 
@@ -538,6 +708,8 @@ impl CachedGitBackend {
     /// WRONG about the set of rows or a row's own summary content.
     // trace:BUG-636
     fn try_incremental_update(&self, from: &str, to: &str) -> Result<bool> {
+        #[cfg(test)]
+        super::cache_refresh::test_count("incremental");
         use crate::git_ops::ObjectChange;
 
         let changes = crate::git_ops::changed_object_files(self.inner.path(), from, to)?;
@@ -583,6 +755,23 @@ impl CachedGitBackend {
                 ObjectChange::Deleted => steps.push(Step::Delete(spec_id.to_string())),
             }
         }
+        // Resolve candidate ancestors before BEGIN IMMEDIATE. Newly introduced
+        // hierarchy edges can still reveal an ancestor inside the transaction;
+        // those misses retain the authoritative targeted read.
+        // trace:TASK-1526 | ai:codex
+        let mut epic_statuses = std::collections::HashMap::new();
+        for step in &steps {
+            if let Step::Upsert(req) = step {
+                for id in self.cache.ancestor_epic_ids(&req.id)? {
+                    if let std::collections::hash_map::Entry::Vacant(entry) =
+                        epic_statuses.entry(id)
+                    {
+                        let spec_id = self.cache.spec_id_for_uuid(&id)?;
+                        entry.insert(self.stored_status_for_spec_id(&id, spec_id));
+                    }
+                }
+            }
+        }
         // TASK-1515: the reads above came from the live worktree. If HEAD
         // moved while they ran, some rows may be from a later HEAD than `to`
         // and stamping `to` would mislabel them. Decline; the caller retries
@@ -591,10 +780,14 @@ impl CachedGitBackend {
         // trace:TASK-1515 | ai:claude
         #[cfg(test)]
         tests::task_1515_after_incremental_reads();
+        #[cfg(test)]
+        if super::cache_refresh::INCREMENTAL_ERROR.with(|c| c.get()) {
+            anyhow::bail!("injected incremental failure");
+        }
         if self.current_head_sha() != to {
             return Ok(false);
         }
-        self.cache.apply_incremental(to, |tx| {
+        self.cache.apply_incremental(to, self.inner.path(), |tx| {
             for step in &steps {
                 match step {
                     Step::Upsert(req) => {
@@ -606,7 +799,7 @@ impl CachedGitBackend {
                         // decline (rolling back every row), and the caller does
                         // a full rebuild.
                         // trace:BUG-1606 | ai:claude
-                        if !self.refresh_parent_epic_status_in(tx, req) {
+                        if !self.refresh_parent_epic_status_in(tx, req, &epic_statuses) {
                             return Ok(false);
                         }
                     }
@@ -630,22 +823,27 @@ impl CachedGitBackend {
     /// fail-closed `false` on a miss, but every cache read and write goes
     /// through `tx` (the cache connection is held by the open transaction).
     ///
-    /// Known cost, left for STORY-1484: `stored_status_for_spec_id` reads the
-    /// epic YAML here, INSIDE the write transaction, once per ancestor epic
-    /// per upserted row, which lengthens how long the write lock is held on a
-    /// cold disk. Pre-resolving candidate ancestor epics' stored statuses
-    /// before `apply_incremental`, and reading in here only on a miss, would
-    /// move that I/O out from under the lock.
+    /// Candidate epic statuses are resolved before the transaction. Only
+    /// ancestors introduced by the incoming hierarchy need a targeted read here.
     // trace:TASK-1515 trace:BUG-1606 | ai:claude
     #[must_use]
-    fn refresh_parent_epic_status_in(&self, tx: &CacheTx<'_>, req: &Requirement) -> bool {
+    fn refresh_parent_epic_status_in(
+        &self,
+        tx: &CacheTx<'_>,
+        req: &Requirement,
+        preresolved: &std::collections::HashMap<Uuid, Option<crate::models::RequirementStatus>>,
+    ) -> bool {
         let Ok(ancestor_epics) = tx.ancestor_epic_ids(&req.id) else {
             return false;
         };
         let mut all_resolved = true;
         for epic_id in ancestor_epics {
-            let spec_id = tx.spec_id_for_uuid(&epic_id).ok().flatten();
-            let Some(stored) = self.stored_status_for_spec_id(&epic_id, spec_id) else {
+            // trace:TASK-1526 | ai:codex
+            let stored = preresolved.get(&epic_id).cloned().unwrap_or_else(|| {
+                let spec_id = tx.spec_id_for_uuid(&epic_id).ok().flatten();
+                self.stored_status_for_spec_id(&epic_id, spec_id)
+            });
+            let Some(stored) = stored else {
                 all_resolved = false;
                 continue;
             };
@@ -654,22 +852,40 @@ impl CachedGitBackend {
         all_resolved
     }
 
-    /// Cache-backed list query with filter pushdown. Returns lightweight
-    /// summaries — full Requirement records require a follow-up
-    /// `get_requirement` call. Triggers a stale-check first so callers
-    /// always see fresh data.
+    /// Count rows through the same labelled snapshot as other tolerant reads.
+    // trace:TASK-1526 | ai:codex
+    pub fn requirement_count(&self) -> Result<usize> {
+        self.with_cache_schema_retry("count cached requirements", || {
+            self.tolerant_read(|cache| cache.requirement_count())
+        })
+    }
+
+    /// Read summaries with an explicit wait budget. Zero-budget advisory
+    /// readers defer compatible full rebuilds and refuse pending migrations.
+    // trace:TASK-1526 | ai:codex
+    pub fn list_summaries_with_budget(
+        &self,
+        filter: &ListFilter,
+        budget: super::cache_refresh::ReadBudget,
+    ) -> Result<Vec<RequirementSummary>> {
+        self.with_cache_schema_retry("read bounded cache summaries", || {
+            self.tolerant_read_with_budget(budget, |cache| cache.list_summaries(filter))
+        })
+    }
+
+    /// Cache-backed filter pushdown with invocation-scoped freshness labels.
+    /// A compatible stale snapshot may be returned under the reader policy.
+    // trace:TASK-1526 | ai:codex
     pub fn list_summaries(&self, filter: &ListFilter) -> Result<Vec<RequirementSummary>> {
         self.with_cache_schema_retry("list cached summaries", || {
-            self.ensure_cache_fresh_for_read()?;
-            self.cache.list_summaries(filter)
+            self.tolerant_read(|cache| cache.list_summaries(filter))
         })
     }
 
     /// [`Self::list_summaries`] for a caller that deletes, prunes, files or
     /// gates on the rows: a stale cache is always brought to the store's HEAD
-    /// first. The tolerant read serves the last committed snapshot whenever
-    /// another process holds the cache write lock, and that snapshot can be
-    /// arbitrarily old while other processes keep writing.
+    /// first. Tolerant reads may serve a labelled committed snapshot; this
+    /// strict entry point must never be weakened to that policy.
     // trace:BUG-1670 | ai:claude
     pub fn list_summaries_strict(&self, filter: &ListFilter) -> Result<Vec<RequirementSummary>> {
         self.with_cache_schema_retry("list cached summaries", || {
@@ -681,13 +897,12 @@ impl CachedGitBackend {
     /// TASK-1065: count non-archived specs with a still-pending DecisionRequest,
     /// read from the `has_pending_decision` cache column. Cache-backed so the
     /// `aida status --full` decision-inbox count no longer needs a full
-    /// `backend.load()`. Triggers a stale-check first so the count reflects the
-    /// latest committed store.
+    /// `backend.load()`. The invocation collector describes the committed
+    /// cache snapshot used for this count.
     // trace:TASK-1065 | ai:claude
     pub fn pending_decision_count(&self) -> Result<usize> {
         self.with_cache_schema_retry("count pending decisions", || {
-            self.ensure_cache_fresh_for_read()?;
-            self.cache.pending_decision_count()
+            self.tolerant_read(|cache| cache.pending_decision_count())
         })
     }
 
@@ -709,8 +924,7 @@ impl CachedGitBackend {
     /// trace:STORY-632 | ai:claude
     pub fn degrees(&self, id: &Uuid) -> Result<crate::db::Degrees> {
         self.with_cache_schema_retry("read cached degrees", || {
-            self.ensure_cache_fresh_for_read()?;
-            self.cache.degrees_for_id(id)
+            self.tolerant_read(|cache| cache.degrees_for_id(id))
         })
     }
 
@@ -722,8 +936,7 @@ impl CachedGitBackend {
     // trace:TASK-955 | ai:claude
     pub fn descendant_ids(&self, root: &Uuid) -> Result<std::collections::HashSet<Uuid>> {
         self.with_cache_schema_retry("read cached descendants", || {
-            self.ensure_cache_fresh_for_read()?;
-            self.cache.descendant_ids(root)
+            self.tolerant_read(|cache| cache.descendant_ids(root))
         })
     }
 
@@ -749,8 +962,7 @@ impl CachedGitBackend {
         defer: DeferFilter,
     ) -> Result<Vec<RequirementSummary>> {
         self.with_cache_schema_retry("search cache", || {
-            self.ensure_cache_fresh_for_read()?;
-            self.cache.search(query, limit, archive, defer)
+            self.tolerant_read(|cache| cache.search(query, limit, archive, defer))
         })
     }
 
@@ -1006,7 +1218,9 @@ impl DatabaseBackend for CachedGitBackend {
                 self.cache.rebuild_from_store(store, &head)
             })?;
         } else {
-            self.with_cache_schema_retry("rebuild cache after save", || self.full_rebuild(&head))?;
+            self.with_cache_schema_retry("rebuild cache after save", || {
+                self.full_rebuild(&head, false)
+            })?;
         }
         Ok(())
     }
@@ -1456,10 +1670,16 @@ mod tests {
             .add_requirement(sample_req("FR-1-003", "c"))
             .unwrap();
 
-        // A subsequent read must surface ALL THREE rows — the external one is
-        // not silently dropped. (ensure_cache_fresh rebuilds because restamp_head
-        // cleared the recorded SHA when it saw the pre-write HEAD had drifted.)
-        let all = backend.list_summaries(&ListFilter::default()).unwrap();
+        // trace:TASK-1526 | ai:codex
+        // Pre-C tolerant reads expose the incomplete snapshot honestly until
+        // a strict refresh restores it. The write must not stamp it fresh.
+        let scope = super::super::cache_refresh::CacheReadScope::new();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(scope.metadata()["refreshing"], "deferred");
+        assert!(backend.cache_snapshot_is_stale().unwrap());
+        let all = backend
+            .list_summaries_strict(&ListFilter::default())
+            .unwrap();
         assert_eq!(all.len(), 3, "external row must not be hidden, got {all:?}");
     }
 
@@ -2046,8 +2266,10 @@ mod tests {
             "recorded HEAD must NOT be an ancestor of the amended HEAD"
         );
 
-        // The read takes the non-ancestor fallback (full rebuild) and the cache
-        // is still correct (the amend kept the same tree → one row).
+        // trace:TASK-1526 | ai:codex
+        // The strict path still rebuilds non-ancestor snapshots. The pre-C
+        // tolerant case is covered by the Deferred tests below.
+        backend.ensure_cache_fresh().unwrap();
         let rows = row_snapshot(&backend);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].0, "FR-1-001");
@@ -2421,6 +2643,53 @@ mod tests {
         );
         assert_eq!(rows.len(), 1, "serves the last committed snapshot");
         holder.execute_batch("ROLLBACK").unwrap();
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn refresh_txn_rechecks_head_inside_txn() {
+        let dir = tempdir().unwrap();
+        let (backend, root, path) = task_1515_backend(dir.path());
+        let old = backend.cache.source_head_sha().unwrap().unwrap();
+        let target = task_1515_external_retitle(&root, "gen1");
+        let newer = task_1515_external_retitle(&root, "gen2");
+        backend.ensure_cache_fresh().unwrap();
+        let before = task_1515_read(&rusqlite::Connection::open(&path).unwrap());
+        // Simulate a second refresher arriving after a winner has committed.
+        // Its stale application must not execute, even without a coherent flock.
+        assert!(backend
+            .cache
+            .apply_incremental(&target, &root, |_| panic!("older refresh applied"))
+            .unwrap());
+        assert!(backend
+            .cache
+            .apply_incremental(&newer, &root, |_| panic!("duplicate refresh applied"))
+            .unwrap());
+        assert_eq!(
+            before,
+            task_1515_read(&rusqlite::Connection::open(&path).unwrap())
+        );
+        assert_ne!(old, newer);
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn second_process_skips_refill_after_migration_committed() {
+        let dir = tempdir().unwrap();
+        let (backend, root, path) = task_1515_backend(dir.path());
+        let head = backend.current_head_sha();
+        drop(backend);
+        task_1515_mark_schema_older(&path);
+        let first = Cache::open(&path).unwrap();
+        let second = Cache::open(&path).unwrap();
+        assert!(first.migration_pending() && second.migration_pending());
+        let store = GitBackend::new(&root).unwrap().load().unwrap();
+        first.rebuild_for_refresh(&store, &head, &root).unwrap();
+        let raw = rusqlite::Connection::open(&path).unwrap();
+        raw.execute_batch("CREATE TRIGGER no_refill BEFORE DELETE ON requirements_cache BEGIN SELECT RAISE(ABORT, 'redundant refill'); END;").unwrap();
+        second.rebuild_for_refresh(&store, &head, &root).unwrap();
+        assert!(!second.migration_pending());
+        assert_eq!(second.source_head_sha().unwrap(), Some(head));
     }
 
     // ---------------------------------------------------------------- TASK-1515
@@ -2856,54 +3125,599 @@ mod tests {
         .unwrap();
     }
 
-    // TASK-1515: a lock error that ends the incremental refresh on a READ
-    // path behaves exactly as before this spec: it falls back to the full
-    // rebuild, whose own lock ladder then fails the command. No stale
-    // snapshot is served, and the cache is left untouched.
-    // trace:TASK-1515 | ai:claude
+    // trace:TASK-1526 | ai:codex
     #[test]
-    fn task_1515_read_path_lock_error_falls_back_to_full_rebuild_then_fails() {
-        let dir = tempdir().unwrap();
-        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
-        let from = backend.cache().source_head_sha().unwrap().unwrap();
-        let built_at = backend.cache().built_at().unwrap();
-        let to = task_1515_external_retitle(&store_root, "gen1");
-
-        let holder = rusqlite::Connection::open(&cache_path).unwrap();
-        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
-        // Thread-local short ladder, so the test stays fast without touching
-        // process-wide env vars other tests read.
-        let prev = super::super::cache::set_fast_fail_cache(true);
-        let listed = backend.list_summaries(&ListFilter::default());
-        let opened = CachedGitBackend::open(&store_root, &cache_path);
-        super::super::cache::set_fast_fail_cache(prev);
-        holder.execute_batch("ROLLBACK").unwrap();
-
-        for err in [
-            listed.expect_err("a read must fail, not serve a stale snapshot"),
-            opened
-                .err()
-                .expect("the read-path constructor must fail too"),
-        ] {
-            let msg = format!("{err:#}");
-            assert!(is_cache_lock_error(&err), "{msg}");
-            assert!(
-                msg.contains("rebuild cache"),
-                "no full-rebuild fallback: {msg}"
+    fn reader_incremental_lock_error_does_not_full_rebuild() {
+        use super::super::cache_refresh::*;
+        for sidecar in [false, true] {
+            let dir = tempdir().unwrap();
+            let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+            let from = backend.cache().source_head_sha().unwrap().unwrap();
+            let built_at = backend.cache().built_at().unwrap();
+            task_1515_external_retitle(&store_root, "gen1");
+            if sidecar {
+                task_1515_write_foreign_sidecar(&cache_path);
+            }
+            let holder = rusqlite::Connection::open(&cache_path).unwrap();
+            holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+            for constructor in [false, true] {
+                let scope = CacheReadScope::new();
+                test_counts();
+                if constructor {
+                    let opened = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+                    let counts = test_counts();
+                    assert_eq!(counts.get("write_attempt"), Some(&1));
+                    assert_eq!(counts.get("full_rebuild"), None);
+                    assert!(!scope.touched(), "a constructor has not served rows");
+                    assert_eq!(
+                        opened.list_summaries(&ListFilter::default()).unwrap().len(),
+                        3
+                    );
+                } else {
+                    assert_eq!(
+                        backend
+                            .list_summaries(&ListFilter::default())
+                            .unwrap()
+                            .len(),
+                        3
+                    );
+                }
+                let counts = test_counts();
+                assert_eq!(counts.get("write_attempt"), Some(&1));
+                assert_eq!(counts.get("retry_sleep"), None);
+                assert_eq!(counts.get("full_rebuild"), None);
+                let m = scope.metadata();
+                assert_eq!(m["refreshing"], "writer_busy");
+                assert_eq!(m["cache_head"], from);
+                assert_eq!(m["built_at"], serde_json::json!(built_at));
+            }
+            holder.execute_batch("ROLLBACK").unwrap();
+            assert_eq!(
+                task_1515_read(&holder),
+                (Some(from), vec!["gen0".into(), "gen0".into()])
             );
+            holder.execute_batch("ROLLBACK").ok();
         }
-        assert_eq!(
-            backend.cache().source_head_sha().unwrap().as_deref(),
-            Some(from.as_str())
-        );
-        assert_eq!(backend.cache().built_at().unwrap(), built_at);
+    }
 
-        // Once the lock is free, the next read catches up incrementally.
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn writer_busy_next_reader_retries_incremental_after_lock_release() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        let to = task_1515_external_retitle(&store, "gen1");
+        let holder = rusqlite::Connection::open(&path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        {
+            let s = CacheReadScope::new();
+            backend.list_summaries(&ListFilter::default()).unwrap();
+            assert_eq!(s.metadata()["refreshing"], "writer_busy");
+        }
+        holder.execute_batch("ROLLBACK").unwrap();
+        let s = CacheReadScope::new();
+        test_counts();
         backend.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(s.metadata()["stale"], false);
+        assert_eq!(backend.cache().source_head_sha().unwrap(), Some(to));
+        assert_eq!(test_counts().get("incremental"), Some(&1));
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn strict_incremental_lock_error_propagates_without_full_rebuild() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        let holder = rusqlite::Connection::open(&path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        test_counts();
+        let prev = super::super::cache::set_fast_fail_cache(true);
+        let result = backend.ensure_cache_fresh();
+        super::super::cache::set_fast_fail_cache(prev);
+        assert!(is_cache_lock_error(&result.unwrap_err()));
+        let counts = test_counts();
+        assert!(counts["write_attempt"] > 1, "strict ladder restored");
+        assert!(counts["retry_sleep"] > 0);
+        assert_eq!(counts.get("full_rebuild"), None);
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn non_tty_full_rebuild_winner_serves_deferred_without_worker() {
+        use super::super::cache_refresh::*;
+        for stamp in ["", "missing", "non-ancestor", "large-diff", "decline"] {
+            let dir = tempdir().unwrap();
+            let (backend, store, path) = task_1515_backend(dir.path());
+            task_1515_external_retitle(&store, "gen1");
+            if stamp == "" || stamp == "non-ancestor" {
+                backend.cache().set_source_head_sha(stamp).unwrap();
+            }
+            if stamp == "missing" {
+                rusqlite::Connection::open(&path)
+                    .unwrap()
+                    .execute("DELETE FROM cache_meta WHERE key='source_head_sha'", [])
+                    .unwrap();
+            }
+            if stamp == "large-diff" {
+                for n in 0..501 {
+                    crate::object_store::write_object(
+                        &store.join("objects"),
+                        &sample_req(&format!("TASK-{n}"), "bulk"),
+                    )
+                    .unwrap();
+                }
+                assert!(std::process::Command::new("git")
+                    .args(["add", "."])
+                    .current_dir(&store)
+                    .status()
+                    .unwrap()
+                    .success());
+                assert!(std::process::Command::new("git")
+                    .args(["commit", "-qm", "bulk"])
+                    .current_dir(&store)
+                    .status()
+                    .unwrap()
+                    .success());
+            }
+            if stamp == "decline" {
+                std::fs::remove_file(
+                    crate::object_store::object_path(&store.join("objects"), "FR-1-001").unwrap(),
+                )
+                .unwrap();
+            }
+            // A real unrelated commit is a readable non-ancestor head.
+            if stamp == "non-ancestor" {
+                let other = dir.path().join("other");
+                std::fs::create_dir(&other).unwrap();
+                crate::git_ops::init(&other).unwrap();
+                crate::git_ops::configure_user(&other, "T", "t@t.test").unwrap();
+                std::fs::write(other.join("file"), "other").unwrap();
+                std::process::Command::new("git")
+                    .args(["add", "."])
+                    .current_dir(&other)
+                    .output()
+                    .unwrap();
+                std::process::Command::new("git")
+                    .args(["commit", "-m", "other"])
+                    .current_dir(&other)
+                    .output()
+                    .unwrap();
+                std::process::Command::new("git")
+                    .arg("fetch")
+                    .arg(&other)
+                    .arg("HEAD")
+                    .current_dir(&store)
+                    .output()
+                    .unwrap();
+                backend
+                    .cache()
+                    .set_source_head_sha(&crate::git_ops::head_sha(&other).unwrap())
+                    .unwrap();
+            }
+            let scope = CacheReadScope::new();
+            scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
+            test_counts();
+            let start = std::time::Instant::now();
+            let rows = backend.list_summaries(&ListFilter::default()).unwrap();
+            assert!(start.elapsed() < std::time::Duration::from_secs(2));
+            assert_eq!(rows.len(), 3);
+            assert!(rows.iter().any(|r| r.title == "gen0"));
+            assert_eq!(scope.metadata()["refreshing"], "deferred");
+            let counts = test_counts();
+            assert_eq!(counts.get("full_rebuild"), None);
+            assert_eq!(counts.get("write_attempt"), None);
+            assert!(!path.with_extension("db.refresh-request").exists());
+        }
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn deferred_full_rebuild_repeats_honestly_until_strict_refresh() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, _) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        backend.cache().set_source_head_sha("").unwrap();
+        for _ in 0..2 {
+            let scope = CacheReadScope::new();
+            backend.list_summaries(&ListFilter::default()).unwrap();
+            assert_eq!(scope.metadata()["refreshing"], "deferred");
+        }
+        backend.rebuild_cache().unwrap();
+        let scope = CacheReadScope::new();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(scope.metadata()["stale"], false);
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn tty_full_rebuild_winner_remains_strict_before_c() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, _) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        backend.cache().set_source_head_sha("").unwrap();
+        let scope = CacheReadScope::new();
+        scope.configure(true, None);
+        test_counts();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(scope.metadata()["stale"], false);
+        assert_eq!(test_counts().get("full_rebuild"), Some(&1));
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn flock_unsupported_falls_back_to_strict_refresh() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, _) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        backend.cache().set_source_head_sha("").unwrap();
+        let scope = CacheReadScope::new();
+        UNSUPPORTED.with(|c| c.set(true));
+        test_counts();
+        let result = backend.list_summaries(&ListFilter::default());
+        UNSUPPORTED.with(|c| c.set(false));
+        result.unwrap();
+        assert_eq!(scope.metadata()["stale"], false);
+        assert_eq!(test_counts().get("full_rebuild"), Some(&1));
+    }
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn single_flight_four_readers_one_refresh() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (_, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(4));
+        let threads: Vec<_> = (0..4)
+            .map(|_| {
+                let (store, path, barrier) = (store.clone(), path.clone(), barrier.clone());
+                std::thread::spawn(move || {
+                    let scope = CacheReadScope::new();
+                    let backend = CachedGitBackend::with_inner_cache_snapshot(
+                        GitBackend::new(&store).unwrap(),
+                        &path,
+                    )
+                    .unwrap();
+                    barrier.wait();
+                    test_counts();
+                    let start = std::time::Instant::now();
+                    let rows = backend.list_summaries(&ListFilter::default()).unwrap();
+                    assert!(start.elapsed() < std::time::Duration::from_secs(2));
+                    assert!(rows.iter().any(|r| r.title == "gen1"));
+                    assert_eq!(scope.metadata()["stale"], false);
+                    test_counts().get("incremental").copied().unwrap_or(0)
+                })
+            })
+            .collect();
         assert_eq!(
-            backend.cache().source_head_sha().unwrap().as_deref(),
-            Some(to.as_str())
+            threads
+                .into_iter()
+                .map(|t| t.join().unwrap())
+                .sum::<usize>(),
+            1
         );
-        assert_eq!(backend.cache().built_at().unwrap(), built_at);
+    }
+
+    // trace:TASK-1526 | ai:codex
+    fn held_refresh(path: PathBuf) -> (std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>) {
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (stop_tx, stop_rx) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            let _lock = super::super::cache_refresh::RefreshLock::try_acquire(&path)
+                .unwrap()
+                .unwrap();
+            ready_tx.send(()).unwrap();
+            stop_rx.recv().unwrap();
+        });
+        ready_rx.recv().unwrap();
+        (stop_tx, thread)
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn reader_path_never_calls_with_cache_write() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        let (stop, thread) = held_refresh(path);
+        let scope = CacheReadScope::new();
+        scope.configure(
+            false,
+            Some(ReadBudget(std::time::Duration::from_millis(20))),
+        );
+        test_counts();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(scope.metadata()["refreshing"], "worker_running");
+        assert_eq!(test_counts().get("write_attempt"), None);
+        stop.send(()).unwrap();
+        thread.join().unwrap();
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn lock_winner_rechecks_is_stale_and_skips_work() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        let writer =
+            CachedGitBackend::with_inner_cache_snapshot(GitBackend::new(&store).unwrap(), &path)
+                .unwrap();
+        BEFORE_ACQUIRE.with(|h| {
+            *h.borrow_mut() = Some(Box::new(move || {
+                writer.ensure_cache_fresh().unwrap();
+                test_counts();
+            }))
+        });
+        let scope = CacheReadScope::new();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert!(
+            test_counts().is_empty(),
+            "winner must double-check after another refresher committed"
+        );
+        assert_eq!(scope.metadata()["stale"], false);
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    #[cfg(unix)]
+    fn refresh_holder_exits_without_refresh_returns_deferred() {
+        use super::super::cache_refresh::*;
+        use std::io::{BufRead, Write};
+        for crash in [false, true] {
+            let dir = tempdir().unwrap();
+            let (backend, store, path) = task_1515_backend(dir.path());
+            task_1515_external_retitle(&store, "gen1");
+            let lock_path = super::super::cache_lock::cache_sidecar_path(&path, "refresh.lock");
+            let mut child = std::process::Command::new("python3").args(["-c", "import fcntl,sys; f=open(sys.argv[1],'w'); fcntl.flock(f,fcntl.LOCK_EX); print('ready',flush=True); sys.stdin.readline()"]).arg(lock_path)
+                .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().unwrap();
+            let mut line = String::new();
+            std::io::BufReader::new(child.stdout.take().unwrap())
+                .read_line(&mut line)
+                .unwrap();
+            assert_eq!(line.trim(), "ready");
+            let thread = std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(30));
+                if crash {
+                    child.kill().unwrap();
+                } else {
+                    child.stdin.as_mut().unwrap().write_all(b"\n").unwrap();
+                }
+                child.wait().unwrap();
+            });
+            let scope = CacheReadScope::new();
+            let start = std::time::Instant::now();
+            backend.list_summaries(&ListFilter::default()).unwrap();
+            thread.join().unwrap();
+            assert_eq!(scope.metadata()["refreshing"], "deferred");
+            assert!(start.elapsed() < std::time::Duration::from_secs(1));
+        }
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn stale_rows_and_label_metadata_share_snapshot() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        let from = backend.cache().source_head_sha().unwrap();
+        let built = backend.cache().built_at().unwrap();
+        task_1515_external_retitle(&store, "gen1");
+        let (stop, thread) = held_refresh(path.clone());
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
+        let rows = backend
+            .tolerant_read(|snapshot| {
+                // Commit after the reader pinned metadata, before it reads rows.
+                let writer = CachedGitBackend::with_inner_cache_snapshot(
+                    GitBackend::new(&store).unwrap(),
+                    &path,
+                )
+                .unwrap();
+                writer.rebuild_cache().unwrap();
+                snapshot.list_summaries(&ListFilter::default())
+            })
+            .unwrap();
+        assert!(rows.iter().any(|r| r.title == "gen0"));
+        assert_eq!(scope.metadata()["cache_head"], serde_json::json!(from));
+        assert_eq!(scope.metadata()["built_at"], serde_json::json!(built));
+        assert_eq!(scope.metadata()["stale"], true);
+        stop.send(()).unwrap();
+        thread.join().unwrap();
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn migration_pending_reader_never_serves_old_schema() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        drop(backend);
+        task_1515_mark_schema_older(&path);
+        let backend =
+            CachedGitBackend::with_inner_cache_snapshot(GitBackend::new(&store).unwrap(), &path)
+                .unwrap();
+        // Even without a holder, an advisory invocation cannot do a migration.
+        test_counts();
+        assert!(backend
+            .list_summaries_with_budget(
+                &ListFilter::default(),
+                ReadBudget(std::time::Duration::ZERO)
+            )
+            .unwrap_err()
+            .is::<AdvisoryCacheUnavailable>());
+        assert_eq!(test_counts().get("full_rebuild"), None);
+        let (stop, thread) = held_refresh(path);
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
+        assert!(backend
+            .list_summaries(&ListFilter::default())
+            .unwrap_err()
+            .to_string()
+            .contains("being upgraded"));
+        assert!(!scope.touched());
+        drop(scope);
+        let scope = CacheReadScope::new();
+        let start = std::time::Instant::now();
+        assert!(backend
+            .list_summaries(&ListFilter::default())
+            .unwrap_err()
+            .to_string()
+            .contains("being upgraded"));
+        assert!(start.elapsed() >= std::time::Duration::from_secs(15));
+        assert!(start.elapsed() < std::time::Duration::from_secs(17));
+        assert!(!scope.touched());
+        stop.send(()).unwrap();
+        thread.join().unwrap();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert!(!backend.cache().migration_pending());
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn refresh_wait_refuses_while_store_or_sqlite_write_lock_held() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        let (stop, thread) = held_refresh(path.clone());
+        let _guard = super::super::store_lock::acquire(&store).unwrap();
+        assert!(!may_wait());
+        let start = std::time::Instant::now();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert!(start.elapsed() < std::time::Duration::from_millis(500));
+        drop(_guard);
+        let other =
+            CachedGitBackend::with_inner_cache_snapshot(GitBackend::new(&store).unwrap(), &path)
+                .unwrap();
+        let head = backend.current_head_sha();
+        backend
+            .cache
+            .apply_incremental(&head, &store, |_| {
+                assert!(!may_wait());
+                let start = std::time::Instant::now();
+                assert_eq!(
+                    other.list_summaries(&ListFilter::default()).unwrap().len(),
+                    3
+                );
+                assert!(start.elapsed() < std::time::Duration::from_millis(500));
+                Ok(false)
+            })
+            .unwrap();
+    } // trace:TASK-1526 | ai:codex
+    #[test]
+    fn head_recapture_after_incremental_err_break_stamps_current_head() {
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        task_1515_move_head_during_reads(&store, 1);
+        super::super::cache_refresh::INCREMENTAL_ERROR.with(|c| c.set(true));
+        let result = backend.ensure_cache_fresh();
+        super::super::cache_refresh::INCREMENTAL_ERROR.with(|c| c.set(false));
+        task_1515_clear_hook();
+        result.unwrap();
+        assert_eq!(
+            task_1515_read(&rusqlite::Connection::open(path).unwrap()),
+            (
+                Some(crate::git_ops::head_sha(&store).unwrap()),
+                vec!["hook1".into(), "hook1".into()]
+            )
+        );
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn epic_status_preresolved_before_incremental_txn() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let store = dir.path().join("store");
+        let path = dir.path().join("cache.db");
+        let (backend, _, child) = force_closed_epic_with_open_child(&store, &path);
+        let mut req = backend.get_requirement(&child).unwrap().unwrap();
+        req.title = "changed".into();
+        GitBackend::new(&store)
+            .unwrap()
+            .update_requirement(&req)
+            .unwrap();
+        test_counts();
+        backend.ensure_cache_fresh().unwrap();
+        let counts = test_counts();
+        assert!(counts.get("epic_before_txn").copied().unwrap_or(0) > 0);
+        assert_eq!(counts.get("epic_inside_txn"), None);
+    }
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn nested_freshen_in_lock_holder_does_not_wait() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        let scope = CacheReadScope::new();
+        let _lock = RefreshLock::try_acquire(&path).unwrap().unwrap();
+        test_counts();
+        let start = std::time::Instant::now();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert!(start.elapsed() < std::time::Duration::from_millis(500));
+        assert_eq!(scope.metadata()["stale"], false);
+        assert!(test_counts().is_empty());
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn loser_budget_is_shared_across_backend_opens() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        let (stop, thread) = held_refresh(path.clone());
+        let scope = CacheReadScope::new();
+        scope.configure(
+            false,
+            Some(ReadBudget(std::time::Duration::from_millis(100))),
+        );
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        let start = std::time::Instant::now();
+        let second = CachedGitBackend::open(&store, &path).unwrap();
+        second.list_summaries(&ListFilter::default()).unwrap();
+        assert!(start.elapsed() < std::time::Duration::from_millis(80));
+        assert_eq!(scope.metadata()["refreshing"], "worker_running");
+        stop.send(()).unwrap();
+        thread.join().unwrap();
+    }
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn already_open_schema_change_repairs_or_advisory_exits() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, _, path) = task_1515_backend(dir.path());
+        rusqlite::Connection::open(path)
+            .unwrap()
+            .execute_batch("DROP TABLE requirements_fts")
+            .unwrap();
+        let scope = CacheReadScope::new();
+        test_counts();
+        let err = backend
+            .list_summaries_with_budget(
+                &ListFilter::default(),
+                ReadBudget(std::time::Duration::ZERO),
+            )
+            .unwrap_err();
+        assert!(err.is::<AdvisoryCacheUnavailable>());
+        assert!(!scope.touched());
+        assert_eq!(test_counts().get("write_attempt"), None);
+        assert_eq!(
+            backend
+                .list_summaries(&ListFilter::default())
+                .unwrap()
+                .len(),
+            3
+        );
+        assert_eq!(scope.metadata()["stale"], false);
     }
 }

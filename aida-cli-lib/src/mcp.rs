@@ -1086,6 +1086,10 @@ impl<'a> McpServer<'a> {
     }
 
     fn handle_tools_call(&self, id: &Value, params: &Value) -> JsonRpcResponse {
+        // Re-arm for each call, including calls that return early. A long-lived
+        // server must never inherit a previous call's stale observation.
+        // trace:TASK-1526 | ai:codex
+        let cache_scope = aida_core::db::cache_refresh::CacheReadScope::new();
         let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let mut arguments = params.get("arguments").cloned().unwrap_or(json!({}));
 
@@ -1254,28 +1258,20 @@ impl<'a> McpServer<'a> {
             // (Claude Code) keep working; schema-driven clients (Codex, Cursor)
             // read the same logical payload out of `structuredContent` without
             // parsing the human string. trace:STORY-399 | ai:claude
-            Ok(content) => {
-                let content_array = json!([{
-                    "type": "text",
-                    "text": content
-                }]);
-                JsonRpcResponse::success(
-                    id.clone(),
-                    json!({
-                        "content": content_array,
-                        "structuredContent": {
-                            "content": content_array
-                        }
-                    }),
-                )
-            }
+            Ok(content) => JsonRpcResponse::success(
+                id.clone(),
+                cache_labelled_tool_result(content, &cache_scope),
+            ),
             // STORY-401: render the free-form tool error into a stable,
             // machine-readable envelope — `isError: true`, a short
             // `<tool>: <code>: <message>` text, and a `structuredError`
             // payload clients can branch on. trace:STORY-401 | ai:claude
             Err(e) => JsonRpcResponse::success(
                 id.clone(),
-                McpError::classify(tool_name, &e).to_result_value(),
+                cache_labelled_result(
+                    McpError::classify(tool_name, &e).to_result_value(),
+                    &cache_scope,
+                ),
             ),
         }
     }
@@ -5257,7 +5253,13 @@ impl<'a> McpServer<'a> {
             ));
         }
         let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
-        let cache = aida_core::Cache::open(&cache_path).map_err(|e| e.to_string())?;
+        // trace:TASK-1526 | ai:codex
+        let backend = aida_core::CachedGitBackend::open(&store_path, &cache_path)
+            .map_err(|e| e.to_string())?;
+        backend
+            .ensure_cache_fresh_with_schema_retry()
+            .map_err(|e| e.to_string())?;
+        let cache = backend.cache();
         let recorded_sha = cache
             .source_head_sha()
             .map_err(|e| e.to_string())?
@@ -6824,6 +6826,38 @@ pub fn resolve_mcp_profile(project_root: &Path, override_token: Option<&str>) ->
     McpProfile::default()
 }
 
+// trace:TASK-1526 | ai:codex
+fn cache_labelled_tool_result(
+    content: String,
+    scope: &aida_core::db::cache_refresh::CacheReadScope,
+) -> Value {
+    let content_array = json!([{ "type": "text", "text": content }]);
+    cache_labelled_result(
+        json!({ "content": content_array, "structuredContent": { "content": content_array } }),
+        scope,
+    )
+}
+
+// trace:TASK-1526 | ai:codex
+fn cache_labelled_result(
+    mut result: Value,
+    scope: &aida_core::db::cache_refresh::CacheReadScope,
+) -> Value {
+    if scope.touched() {
+        let note = scope
+            .stale()
+            .map(|s| s.note())
+            .unwrap_or_else(|| "note: cached results are current.".to_string());
+        result["content"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"type": "text", "text": note}));
+        result["structuredContent"] =
+            json!({"content": result["content"], "cache": scope.metadata()});
+    }
+    result
+}
+
 // ============================================================================
 // Tool descriptors (kept at module scope for register-agent + tests)
 // ============================================================================
@@ -6879,9 +6913,21 @@ fn text_envelope_output_schema(payload_description: &str) -> Value {
             },
             "structuredContent": {
                 "type": "object",
-                "description": "Path B (STORY-399): machine-readable mirror of the text envelope, present on success. Absent on error (see `structuredError`).",
+                "description": "Path B (STORY-399): machine-readable mirror of the text envelope, present on success. Also present after a tolerant read on an error response (see `structuredError`).",
                 "properties": {
-                    "content": text_content_array()
+                    "content": text_content_array(),
+                    "cache": {
+                        "type": "object",
+                        "description": "Read-cache freshness for this tools/call, present when the tolerant cache path was touched.",
+                        "properties": {
+                            "stale": { "type": "boolean" },
+                            "cache_head": { "type": ["string", "null"] },
+                            "store_head": { "type": "string" },
+                            "built_at": { "type": ["string", "null"] },
+                            "refreshing": { "type": "string" }
+                        },
+                        "required": ["stale"]
+                    }
                 },
                 "required": ["content"]
             }
@@ -8766,6 +8812,62 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
     use tempfile::tempdir;
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn mcp_read_tool_result_carries_cache_object_each_call() {
+        use aida_core::db::cache_refresh::*;
+        for state in [
+            RefreshState::Deferred,
+            RefreshState::WriterBusy,
+            RefreshState::WorkerRunning,
+        ] {
+            let scope = CacheReadScope::new();
+            record_read(Some(StaleServe {
+                stale: true,
+                cache_head: Some("old".into()),
+                store_head: "new".into(),
+                built_at: None,
+                refreshing: state,
+            }));
+            let result = cache_labelled_tool_result("rows".into(), &scope);
+            assert_eq!(result["structuredContent"]["cache"]["stale"], true);
+            assert_eq!(
+                result["structuredContent"]["cache"]["refreshing"],
+                serde_json::to_value(state).unwrap()
+            );
+            assert_eq!(result["content"].as_array().unwrap().len(), 2);
+            assert_eq!(result["content"][1]["text"], scope.stale().unwrap().note());
+        }
+        {
+            let scope = CacheReadScope::new();
+            record_read(Some(StaleServe {
+                stale: true,
+                cache_head: None,
+                store_head: "new".into(),
+                built_at: None,
+                refreshing: RefreshState::Deferred,
+            }));
+            let result = cache_labelled_result(
+                json!({"isError": true, "content": [{"type": "text", "text": "failed"}], "structuredError": {"code": "failed"}}),
+                &scope,
+            );
+            assert_eq!(result["structuredContent"]["cache"]["stale"], true);
+            assert_eq!(result["isError"], true);
+            assert_eq!(result["structuredError"]["code"], "failed");
+        }
+        let scope = CacheReadScope::new();
+        record_read(None);
+        let result = cache_labelled_tool_result("rows".into(), &scope);
+        assert_eq!(result["structuredContent"]["cache"]["stale"], false);
+        drop(scope);
+        let scope = CacheReadScope::new();
+        assert!(
+            cache_labelled_tool_result("untouched".into(), &scope)["structuredContent"]
+                .get("cache")
+                .is_none()
+        );
+    }
 
     fn mk_server(dir: &Path) -> McpServer<'static> {
         // Cache-backed Storage isn't required for the coordination-only tools;

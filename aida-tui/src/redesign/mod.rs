@@ -99,6 +99,9 @@ fn startup_status(store_available: bool) -> String {
 /// ([`SpecStore`]) so every scope-list + show-modal read is in-process —
 // no per-read `aida` subprocess cold-start. trace:STORY-693 | ai:claude
 pub fn run(theme: Theme, project_root: &std::path::Path) -> Result<()> {
+    // trace:TASK-1526 | ai:codex
+    let cache_scope = aida_core::db::cache_refresh::CacheReadScope::new();
+    cache_scope.configure(true, None);
     term::install_panic_hook();
     term::install_signal_handler()?;
 
@@ -326,6 +329,10 @@ fn refresh(
     focus_set: &mut Option<std::collections::HashSet<String>>,
     project_root: &std::path::Path,
 ) {
+    // A deliberate refresh starts a new operation before any of its reads.
+    // Partial scope/focus changes must preserve earlier stale observations.
+    // trace:TASK-1526 | ai:codex
+    aida_core::db::cache_refresh::reset_cache_read_observations();
     invalidate_scope_cache(cache, loaded);
     st.drain = drain_panel::probe(project_root);
     // Recompute the focus closure + progress so externally-added children and
@@ -2981,6 +2988,11 @@ fn render_hint(
         }
     };
     let text = st.status.clone().unwrap_or_else(|| base.to_string());
+    // trace:TASK-1526 | ai:codex
+    let text = match aida_core::db::cache_refresh::cache_read_note() {
+        Some(note) => format!("{note} | {text}"),
+        None => text,
+    };
     f.render_widget(
         Paragraph::new(Span::styled(text, Style::default().fg(theme.dim))),
         area,

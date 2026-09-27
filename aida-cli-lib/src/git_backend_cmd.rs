@@ -636,7 +636,7 @@ fn list_proxy_approvals(
             .then(a.spec_id.cmp(&b.spec_id))
     });
     if json {
-        println!("{}", serde_json::to_string_pretty(&entries)?);
+        println!("{}", crate::cache_output::json_pretty(&entries)?);
         return Ok(());
     }
     if entries.is_empty() {
@@ -2564,10 +2564,10 @@ pub(crate) fn handle_git_backend_command(
                             serde_json::Value::Object(row)
                         })
                         .collect();
-                    println!("{}", serde_json::to_string_pretty(&narrowed)?);
+                    println!("{}", crate::cache_output::json_pretty(&narrowed)?);
                     return Ok(());
                 }
-                println!("{}", serde_json::to_string_pretty(&out)?);
+                println!("{}", crate::cache_output::json_pretty(&out)?);
                 return Ok(());
             }
 
@@ -4408,7 +4408,7 @@ pub(crate) fn handle_git_backend_command(
                             "queue_membership".to_string(),
                             serde_json::Value::Array(queue_membership),
                         );
-                        println!("{}", serde_json::to_string_pretty(&out)?);
+                        println!("{}", crate::cache_output::json_pretty(&out)?);
                         return Ok(());
                     }
                     // TASK-964: AGENT-MODE token-efficient TOON render for the
@@ -6676,7 +6676,7 @@ pub(crate) fn handle_git_backend_command(
                         tags: &req.tags,
                     })
                     .collect();
-                println!("{}", serde_json::to_string_pretty(&out)?);
+                println!("{}", crate::cache_output::json_pretty(&out)?);
                 return Ok(());
             }
 
@@ -7574,7 +7574,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Db(DbCommand::MigrateRelatedEdges { dry_run, json }) => {
             let outcome = crate::related_edge_migration::run_migration(&backend, *dry_run)?;
             if *json {
-                println!("{}", serde_json::to_string_pretty(&outcome)?);
+                println!("{}", crate::cache_output::json_pretty(&outcome)?);
             } else {
                 print!(
                     "{}",

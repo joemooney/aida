@@ -593,7 +593,18 @@ fn bug_1635_history_formats_agree_on_event_count() {
         let n = json["count"].as_u64().unwrap() as usize;
         assert!(n >= 1, "[{label}] expected events: {json}");
         assert_eq!(rows(&human), n, "[{label}] human:\n{human}");
-        assert_eq!(rows(&toon), n, "[{label}] toon:\n{toon}");
+        // trace:TASK-1526 | ai:codex
+        // Only the event table's rows count; the separate cache object also
+        // has indented fields and must not masquerade as another event.
+        let toon_rows = toon
+            .lines()
+            .skip_while(|line| !line.starts_with("events["))
+            .skip(1)
+            .take_while(|line| line.starts_with("  "))
+            .count();
+        assert_eq!(toon_rows, n, "[{label}] toon:\n{toon}");
+        assert_eq!(json["cache"]["stale"], false);
+        assert!(toon.contains("cache:\n  stale: false"), "{toon}");
         assert_eq!(toon_count(&toon), n, "[{label}] toon:\n{toon}");
         assert!(
             !toon.lines().any(|l| l == "view: history"),

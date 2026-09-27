@@ -54,6 +54,8 @@ pub(crate) fn handle_cache_command(
             );
         }
         CacheCommand::Status => {
+            // trace:TASK-1526 | ai:codex
+            backend.ensure_cache_fresh_with_schema_retry()?;
             let cache = backend.cache();
             let recorded_sha = cache.source_head_sha()?.unwrap_or_default();
             let actual_sha = aida_core::git_ops::head_sha(backend.path()).unwrap_or_default();
