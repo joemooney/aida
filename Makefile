@@ -109,13 +109,16 @@ build-release: ## Build all packages (release mode, optimized)
 # build-release: CARGO_INCREMENTAL slightly reduces cross-codegen-unit
 # optimization, so this is for LOCAL iteration, not shipping. Shipped releases
 # build fresh (non-incremental) via CI (.github/workflows/release.yml).
+# sccache rejects incremental compilation, including when configured globally
+# through Cargo's build.rustc-wrapper. Disable the wrapper for this target.
+# trace:BUG-1684 | ai:codex
 build-fast: ## Build all packages (release + incremental — for iteration, NOT shipping)
 	@if aida dev build-guard --help >/dev/null 2>&1; then \
 		aida dev build-guard release $(if $(filter 1 true yes,$(AFTER_WAVE)),--after-wave,); \
 	else \
 		echo "Note: current aida predates the live-wave build guard; bootstrapping it now."; \
 	fi
-	CARGO_INCREMENTAL=1 cargo build --workspace --release
+	RUSTC_WRAPPER= CARGO_INCREMENTAL=1 cargo build --workspace --release
 	@$(MAKE) --no-print-directory restart-mcp-servers
 
 build-all: build cli-remote ## Build everything including remote features
