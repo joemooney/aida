@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:05:27.587470098Z
-modified_at: 2026-09-27T14:15:35.692935640Z
+modified_at: 2026-09-27T20:59:20.928473787Z
 req_type: Task
 comments:
 - id: 01a0d874-ea9d-7a92-85e1-29059ec6ad72
@@ -59,4 +59,17 @@ decision_request:
   - label: Decline
     consequence: seat work only advances when a session is started by a human
     resolution: mark TASK-1511 deferred with that as the trigger
+  answered: 1
+  note: |-
+    OPERATOR DECISION (Joe, 2026-09-27 13:58, in session — reviewed the orchestrator's recommendation and said 'agreed'). DECLINED FOR NOW. This is a 'not yet', not a 'no', and the conditions to re-ask are written below so the next seat does not have to re-derive them.
+
+    Why not now, in order of weight:
+    1. The guardrails that would make this safe do not exist. Headless cold-boot STARTS a seat with no human present. BUG-1693 (HIGH, approved) records that the merge-hold human-at-TTY floor is ADVISORY ONLY — '.aida/merge-holds/' is 0755-mine with 0644 markers and the agent's gh token reports admin, so a hold can be released by two ordinary commands the CLI never sees, leaving no clearance record. BUG-1669 (HIGH) is blocked on SPIKE-91 and TASK-1550, and ADR-61 states no protection is deployed. Cold-booting a seat that can merge, while merge-holds are decorative, leaves nothing between an unattended process and main.
+    2. This spec says itself that the decision is not ready. Question 5 — the authority a cold-booted seat gets — 'needs Joe's decision and a sketch with advisor signoff before any implementation', and six design questions from the TASK-1492 signoff are still open (seat selection and vendor mapping, source of liveness, the meaning of overdue, the would-drain-or-merge test, the authority granted, and where the daily cap is counted). Approving now would approve a direction whose shape is undecided, which is the opposite of what an authority decision is for.
+    3. Most of the value is available at far lower risk elsewhere. The thing this buys is overnight forward progress, and CR-7's REACTIVE wake gets most of it: it only continues a session a human already started, only on work addressed to the seat, never on idle alone, under a per-hour wake cap. Take that first and measure what is still missing.
+
+    RE-ASK WHEN, and not before: (a) BUG-1693 is Completed, specifically its AC2 — the merge-hold-gate required check must agree with a RECORDED CLEARANCE so dropping the label alone cannot release a PR; and (b) question 5 has a written sketch plus independent advisor signoff fixing the authority a cold-booted seat gets. The existing acceptance already says it must never launch a seat with advisor, approve or merge authority unless Joe explicitly decides otherwise — that line stays, and this decision does not grant that exception.
+
+    Nothing here is rejected on merit and no acceptance is weakened. execution_mode stays guided.
   asked_at: 2026-09-27T14:15:35.692935640Z
+  answered_at: 2026-09-27T20:59:20.928462352Z
