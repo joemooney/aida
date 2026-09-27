@@ -1745,6 +1745,15 @@ fn wave_memory_value(
     parse_wave_memory(&raw).map_err(|e| format!("{key} {e}"))
 }
 
+fn wave_memory_spelling(v: Option<&toml::Value>, default: &str) -> String {
+    match v {
+        None => default.to_string(),
+        Some(toml::Value::String(s)) => s.clone(),
+        Some(toml::Value::Integer(n)) => n.to_string(),
+        Some(other) => other.to_string(),
+    }
+}
+
 fn wave_int_value(
     key: &str,
     v: Option<&toml::Value>,
@@ -1787,6 +1796,8 @@ pub(crate) fn build_wave_limits(input: &WaveLimitInput<'_>) -> (WaveLimits, Opti
         DEFAULT_WAVE_MEMORY_HIGH,
     );
     let max = take_memory("wave_memory_max", input.memory_max, DEFAULT_WAVE_MEMORY_MAX);
+    let high_spelling = wave_memory_spelling(input.memory_high, DEFAULT_WAVE_MEMORY_HIGH);
+    let max_spelling = wave_memory_spelling(input.memory_max, DEFAULT_WAVE_MEMORY_MAX);
     // Keep validation pure: without an injected memory basis, mixed units
     // cannot be ordered safely. Reject them rather than let systemd launch a
     // wave whose throttle may sit above its hard limit.
@@ -1796,8 +1807,8 @@ pub(crate) fn build_wave_limits(input: &WaveLimitInput<'_>) -> (WaveLimits, Opti
         _ => {
             errors.push(format!(
                 "wave_memory_high ({}) and wave_memory_max ({}) use mixed units; express both limits in the same unit",
-                high.render(),
-                max.render()
+                high_spelling,
+                max_spelling
             ));
             false
         }
@@ -1805,8 +1816,8 @@ pub(crate) fn build_wave_limits(input: &WaveLimitInput<'_>) -> (WaveLimits, Opti
     if over {
         errors.push(format!(
             "wave_memory_high ({}) is above wave_memory_max ({}), so the throttle would never bite before the hard limit",
-            high.render(),
-            max.render()
+            high_spelling,
+            max_spelling
         ));
     }
     let mut take_int =

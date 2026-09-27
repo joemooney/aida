@@ -248,24 +248,34 @@ fn limits_are_properties_only_and_never_reach_the_wave_command() {
 
 #[test]
 fn unusable_limits_keep_the_defaults_and_report_one_error() {
-    for body in [
-        "[shift]\nwave_memory_high = \"lots\"\n",
-        "[shift]\nwave_memory_high = \"0%\"\n",
-        "[shift]\nwave_memory_max = \"150%\"\n",
-        "[shift]\nwave_memory_max = \"infinity\"\n",
-        "[shift]\nwave_memory_max = 0\n",
-        "[shift]\nwave_memory_max = true\n",
-        "[shift]\nwave_memory_high = \"60%\"\nwave_memory_max = \"50%\"\n",
-        "[shift]\nwave_memory_high = \"16G\"\nwave_memory_max = \"8G\"\n",
-        "[shift]\nwave_cpu_weight = 0\n",
-        "[shift]\nwave_cpu_weight = 10001\n",
-        "[shift]\nwave_io_weight = -5\n",
-        "[shift]\nwave_io_weight = \"low\"\n",
-        "[shift]\nwave_tasks_max = 0\n",
-        "[shift]\nwave_tasks_max = 1.5\n",
+    for (body, expected_error) in [
+        ("[shift]\nwave_memory_high = \"lots\"\n", "wave_memory_high"),
+        ("[shift]\nwave_memory_high = \"0%\"\n", "wave_memory_high"),
+        ("[shift]\nwave_memory_max = \"150%\"\n", "wave_memory_max"),
+        (
+            "[shift]\nwave_memory_max = \"infinity\"\n",
+            "wave_memory_max",
+        ),
+        ("[shift]\nwave_memory_max = 0\n", "wave_memory_max"),
+        ("[shift]\nwave_memory_max = true\n", "wave_memory_max"),
+        (
+            "[shift]\nwave_memory_high = \"60%\"\nwave_memory_max = \"50%\"\n",
+            "is above wave_memory_max",
+        ),
+        (
+            "[shift]\nwave_memory_high = \"16G\"\nwave_memory_max = \"8G\"\n",
+            "is above wave_memory_max",
+        ),
+        ("[shift]\nwave_cpu_weight = 0\n", "wave_cpu_weight"),
+        ("[shift]\nwave_cpu_weight = 10001\n", "wave_cpu_weight"),
+        ("[shift]\nwave_io_weight = -5\n", "wave_io_weight"),
+        ("[shift]\nwave_io_weight = \"low\"\n", "wave_io_weight"),
+        ("[shift]\nwave_tasks_max = 0\n", "wave_tasks_max"),
+        ("[shift]\nwave_tasks_max = 1.5\n", "wave_tasks_max"),
     ] {
         let (limits, error) = limits_of(body);
-        assert!(error.is_some(), "{body} should not be usable");
+        let error = error.unwrap_or_else(|| panic!("{body} should not be usable"));
+        assert!(error.contains(expected_error), "{body}: {error}");
         assert_eq!(limits, WaveLimits::default(), "{body}");
     }
 }
@@ -278,7 +288,8 @@ fn a_percentage_and_size_mixed_unit_pair_is_rejected() {
         limits_of("[shift]\nwave_memory_high = \"90%\"\nwave_memory_max = \"8G\"\n");
     let error = error.expect("mixed units must refuse the config");
     assert!(error.contains("wave_memory_high (90%)"), "{error}");
-    assert!(error.contains("wave_memory_max (8589934592)"), "{error}");
+    // Byte counts hide the unit spelling the operator needs to correct.
+    assert!(error.contains("wave_memory_max (8G)"), "{error}");
     assert!(error.contains("same unit"), "{error}");
     assert_eq!(limits, WaveLimits::default());
 }
@@ -288,7 +299,7 @@ fn a_lower_percentage_and_size_mixed_unit_pair_is_also_rejected() {
     let (_, error) = limits_of("[shift]\nwave_memory_high = \"10%\"\nwave_memory_max = \"8G\"\n");
     let error = error.expect("mixed units must be rejected even if they may be ordered safely");
     assert!(error.contains("wave_memory_high (10%)"), "{error}");
-    assert!(error.contains("wave_memory_max (8589934592)"), "{error}");
+    assert!(error.contains("wave_memory_max (8G)"), "{error}");
 }
 
 #[test]
@@ -312,14 +323,21 @@ fn memory_sizes_accept_systemd_suffixes() {
 
 #[test]
 fn the_wave_limits_guard_refuses_the_launch_on_both_paths() {
-    for committed in [
-        "[shift]\nwave_memory_max = \"nope\"\n",
-        "[shift]\nwave_tasks_max = 0\n",
+    for (committed, expected_error) in [
+        ("[shift]\nwave_memory_max = \"nope\"\n", "wave_memory_max"),
+        ("[shift]\nwave_tasks_max = 0\n", "wave_tasks_max"),
         // Path-independent: also with the unit switch off.
-        "[shift]\nwave_memory_max = \"nope\"\nwave_unit = \"off\"\n",
+        (
+            "[shift]\nwave_memory_max = \"nope\"\nwave_unit = \"off\"\n",
+            "wave_memory_max",
+        ),
     ] {
         let cfg = cfg_with(committed);
-        assert!(cfg.wave_limits_error.is_some(), "{committed}");
+        let error = cfg
+            .wave_limits_error
+            .as_deref()
+            .unwrap_or_else(|| panic!("{committed}: expected guard error"));
+        assert!(error.contains(expected_error), "{committed}: {error}");
         assert!(cfg.wave_limits_for_launch().is_none(), "{committed}");
         let mut exec = TickExec::new(WaveHost::systemd());
         let mut state = ShiftState::default();
