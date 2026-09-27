@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:00:50.627945754Z
-modified_at: 2026-09-27T14:15:28.783278546Z
+modified_at: 2026-09-27T15:03:24.499292107Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -27,6 +27,19 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): signed off into the drain via ''aida queue add''. The CODE is routine (seed the .agents/skills record from legacy packs, show legacy packs in scaffold status, doctor warning). NOT delegated: actually RUNNING the migration against Joe''s existing Codex/Antigravity installs is a post-merge live action against user-owned files outside this repo, so it stays for Joe. The implementer must make the pruning fail closed: prune only unedited AIDA-headed aida-* directories, dry-run first, and never delete anything it did not verify as unedited.'
   created_at: 2026-09-27T14:15:28.783278546Z
   modified_at: 2026-09-27T14:15:28.783278546Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e364-6c53-7ee0-93bd-0b8bc595ad66
+  author: joe
+  content: |-
+    CROSS-REFERENCE from TASK-1521 (vendor skill-discovery verification, 2026-09-27; Codex 0.157.1, agy 1.2.12; finding note docs/research/2026-09-27-vendor-skill-discovery-paths.md, branch claude/task-1521 sha f3f0c5989e). Read this before implementing the migration — it changes the legacy-pack behaviour this task was sketched with.
+
+    1. Codex 0.157.1 STILL READS .codex/skills as a live first-class root (direct observation), alongside .agents/skills. So BUG-1639 decision (b) — keep maintaining an existing real .codex/skills because 'keeping it identical is strictly safer than leaving stale duplicates' — is inverted in practice. Codex lists BOTH copies as two separate entries under the SAME skill name, with no dedup and no suppression even when the bytes are identical; only the root-prefixed path differs. Measured with a real scaffolder pack: 46 entries where 23 are intended. Making the packs identical does not remove the duplicate, it makes it undetectable. For Codex the safe resting state is exactly ONE pack, so 'freeze and report with a manual removal hint' is the weakest acceptable outcome here and pruning unedited AIDA-headed aida-* dirs from .codex/skills is the right one. The fail-closed pruning rules already on this task (dry-run first, only unedited AIDA-headed aida-* dirs, never anything unverified) are unaffected.
+    2. agy 1.2.12 reads NEITHER .antigravity/skills NOR .claude/skills — only .agents/skills (plus ~/.gemini/config and declared skills.json paths). Evidence: the customization documentation shipped inside the agy binary, a zero-occurrence literal census of .antigravity/skills in that binary, and a direct negative observation from agy's own persisted prompts (a 2026-09-08 market-watcher session ignored >=15 AIDA skills sitting in .antigravity/skills while listing the .agents/skills ones). Retiring .antigravity/skills is therefore risk-free; as far as 1.2.12 can be read it was never a discovery surface at all.
+    3. Codex does NOT read .claude/skills (direct observation: a 56-skill .claude pack contributed zero entries; the literal does not occur in the binary). So duplicate aida-* names across .claude/skills and .agents/skills are a NON-ISSUE for both non-Claude vendors, and no migration logic needs to reason about which aida-orchestrate body a vendor picks — both vendors can only ever see the portable one.
+    4. Two things the migration should carry: (i) the symlink guard ('scaffold-drift/agents-skill-symlink' from the sketch) does not exist in the code yet, and Codex skips a symlinked SKILL.md in .codex/skills exactly as in .agents/skills, so for as long as a legacy pack survives the guard must cover it too; (ii) scaffold status should describe a surviving .codex/skills as actively harmful (duplicate listings in Codex), not merely 'legacy'.
+    5. STILL UNVERIFIED and deliberately not guessed: which copy a Codex $name INVOCATION resolves to when both packs offer the name. Only the LISTING was observed. If this task prunes the legacy pack the question is moot; if it decides to keep the pack, settle it first with a live Codex session before relying on either copy winning.
+  created_at: 2026-09-27T15:03:24.499292107Z
+  modified_at: 2026-09-27T15:03:24.499292107Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0de73-10f7-7d10-b025-301a4cfa0d0a
