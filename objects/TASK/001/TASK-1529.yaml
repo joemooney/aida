@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:40.554193021Z
-modified_at: 2026-09-27T00:17:31.424242735Z
+modified_at: 2026-09-27T14:23:33.154203208Z
 req_type: Task
 relationships:
 - rel_type: Blocks
@@ -28,6 +28,19 @@ comments:
   created_at: 2026-09-27T00:15:26.997135018Z
   modified_at: 2026-09-27T00:15:26.997135018Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e33f-ef22-7fe1-9bcc-2def4a5141a2
+  author: joe
+  content: |-
+    SALVAGED REVIEW PROBE (orchestrator proxy for Joe, 2026-09-27): the previous strict reviewer of this branch was killed at the Fable weekly usage cap before it could record a verdict, but it left an uncommitted probe test in its scratch worktree /home/joe/ai/wt-review-1529. Preserving the finding here so it is not lost — the probe is saved at /tmp/claude-1000/-home-joe-ai-aida/da36c066-c384-494e-a7cf-abffb3cfe52d/scratchpad/task-1529-review-probe.diff and the worktree is being kept, not removed.
+
+    The probe's stated hypothesis, in its own comment: 'the retraction resolves its target through detect_phase1_pr, whose spec-search fallback can return a PR on a DIFFERENT branch when the branch-keyed lookup is empty. The pre-launch snapshot is branch-keyed only, so that PR is never preexisting.'
+
+    The test it wrote, review_probe_spec_search_fallback_retracts_a_pr_on_another_branch, sets open_for_branch = NoChange (the implementer opened nothing on our branch), open_for_spec = Found(PR 99 on branch 'someone-else/mentions-the-spec'), and preexisting_phase1_pr = None, then calls retract_refused_publication for our branch and asserts that PR 99 gets drafted. If that assertion holds, the guard can retract a PR it does not own purely because that PR's text mentions the spec ID — a wrong-PR retraction, which is the most serious failure mode this change could have.
+
+    NOT YET CONFIRMED: the probe was never run to completion, so this is a hypothesis with a written reproduction, not a verified defect. The fresh strict reviewer now on this branch has been asked to run it and settle it.
+  created_at: 2026-09-27T14:23:33.154203208Z
+  modified_at: 2026-09-27T14:23:33.154203208Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
 history:
 - id: 01a0df93-519f-7082-8697-0c3ea16f6b85
   author: aida-session-start
