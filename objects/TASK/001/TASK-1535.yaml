@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:04:26.679365787Z
-modified_at: 2026-09-27T02:16:55.643831254Z
+modified_at: 2026-09-27T02:16:57.861211795Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -54,5 +54,10 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): APPROVED for the next implementer slot. This is a bounded follow-up to completed BUG-1655, with testable doctor and route-noise acceptance; it does not depend on batch 102 or the Windows repair. Queue behind the active cache bug.'
   created_at: 2026-09-27T01:27:47.975072183Z
   modified_at: 2026-09-27T01:27:47.975072183Z
+- id: 01a0e0a6-b797-7782-96eb-740f853f4334
+  author: joe
+  content: 'REWORK for PR #2223 at 060589ef39b48f5b15fbe4d9bc427d6bdd6fe0b7: .aida/review-verdicts/TASK-1535.json requests changes. build_invalid_route_findings omits invalid enabled routes without the -route suffix, contrary to approved PLAN. Concrete implementer brief: .aida/agent-briefs/codex/TASK-1535-2026-09-27T021635Z.md. Keep review gate open pending independent re-review.'
+  created_at: 2026-09-27T02:16:57.495632781Z
+  modified_at: 2026-09-27T02:16:57.495632781Z
 test_coverage_notes: 'TASK-1535 focused tests: 2 passed; BUG-1655 regression tests: 7 passed; cargo fmt --all -- --check passed; cargo test --workspace --no-fail-fast passed with fake HOME.'
 implementation_summary: 'Pushed task-1535 at 060589ef39: doctor finds invalid bound routes, safe unbound-route hints, user-disabled routes stay quiet, and exit 124 distinguishes spawn failure from timeout; corrected CLI documentation.'
