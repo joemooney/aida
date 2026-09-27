@@ -5791,9 +5791,21 @@ const STORE_RUNTIME_GITIGNORE_PATTERNS: &[&str] = &[
 ];
 
 fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> Result<bool> {
+    ensure_store_tracked_runtime_gitignore_with_patterns(
+        store_worktree,
+        aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS,
+    )
+}
+
+// trace:TASK-1556 | ai:codex
+fn ensure_store_tracked_runtime_gitignore_with_patterns(
+    store_worktree: &std::path::Path,
+    staging_patterns: &[&str],
+) -> Result<bool> {
     use std::io::Write;
     let gitignore_path = store_worktree.join(".gitignore");
-    let existing = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
+    let existing_bytes = std::fs::read(&gitignore_path).unwrap_or_default();
+    let existing = String::from_utf8_lossy(&existing_bytes);
     let lines: Vec<&str> = existing.lines().map(str::trim).collect();
     let mut blocks = String::new();
 
@@ -5818,7 +5830,6 @@ fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> R
     // lock-free `git add -A .` cannot stage a temp file or hide user files.
     // trace:TASK-1547 | ai:codex
     // trace:TASK-1556 | ai:codex
-    let staging_patterns = aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS;
     let missing_staging_patterns: Vec<_> = staging_patterns
         .iter()
         .filter(|pattern| !lines.contains(pattern))
@@ -5838,9 +5849,36 @@ fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> R
         .append(true)
         .open(&gitignore_path)
         .with_context(|| format!("opening {}", gitignore_path.display()))?;
-    f.write_all(blocks.as_bytes())
+    if !existing_bytes.is_empty() {
+        f.write_all(b"\n").with_context(|| {
+            format!("separating appended rules in {}", gitignore_path.display())
+        })?;
+    }
+    f.write_all(blocks.trim_start_matches('\n').as_bytes())
         .with_context(|| format!("appending to {}", gitignore_path.display()))?;
     Ok(true)
+}
+
+// A git -C on a missing/non-repository store path walks upward. Require the
+// exact `.aida-store` directory to be the repository root before any writes.
+// trace:TASK-1547 | ai:codex
+fn is_intended_store_worktree(store_worktree: &std::path::Path) -> bool {
+    let Ok(expected_root) = std::fs::canonicalize(store_worktree) else {
+        return false;
+    };
+    let Ok(output) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(store_worktree)
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+    else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let reported = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    std::fs::canonicalize(reported).is_ok_and(|root| root == expected_root)
 }
 
 // TASK-1547: repair the independent staging-ignore finding on the orphan
@@ -5851,6 +5889,18 @@ fn heal_doctor_store_staging_ignore(
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
     let store_worktree = project_root.join(".aida-store");
+    if !is_intended_store_worktree(&store_worktree) {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "failed".to_string(),
+            detail: Some(
+                ".aida-store is not the root of an attached git worktree; left unchanged"
+                    .to_string(),
+            ),
+        });
+    }
     let appended = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
     if appended {
         let add = std::process::Command::new("git")
@@ -5867,9 +5917,12 @@ fn heal_doctor_store_staging_ignore(
             .arg(&store_worktree)
             .args([
                 "commit",
+                "--only",
                 "--quiet",
                 "-m",
                 "chore(store): ignore atomic staging files (TASK-1547 TASK-1556)",
+                "--",
+                ".gitignore",
             ])
             .status()
             .with_context(|| "committing staging ignores on store worktree".to_string())?;
@@ -6072,7 +6125,12 @@ mod story_462_doctor_tests {
             .unwrap()
             .success());
 
-        assert!(!crate::detect_store_missing_staging_ignores(project).is_empty());
+        let findings =
+            collect_doctor_findings(project, &aida_core::RequirementsStore::default(), None)
+                .unwrap();
+        assert!(findings
+            .iter()
+            .any(|finding| finding.category == "store-staging-ignore"));
         assert!(detect_store_tracked_runtime(project).is_empty());
     }
 
@@ -6093,6 +6151,82 @@ mod story_462_doctor_tests {
             std::fs::read_to_string(store.join(".gitignore")).unwrap(),
             repaired
         );
+    }
+
+    #[test]
+    fn task_1547_crlf_user_bytes_are_preserved_with_one_separator() {
+        let original = b"# user rule\r\ncustom/**\r\n";
+        let (_dir, store) = bug_1677_store_gitignore(std::str::from_utf8(original).unwrap());
+        assert!(ensure_store_tracked_runtime_gitignore(&store).unwrap());
+        let repaired = std::fs::read(store.join(".gitignore")).unwrap();
+        assert!(repaired.starts_with(original));
+        assert_eq!(&repaired[original.len()..original.len() + 1], b"\n");
+        assert!(String::from_utf8_lossy(&repaired[original.len()..])
+            .starts_with("\n# Per-clone runtime state"));
+    }
+
+    #[test]
+    fn task_1547_missing_final_newline_is_added_as_one_separator() {
+        let original = b"# user rule\ncustom/**";
+        let (_dir, store) = bug_1677_store_gitignore(std::str::from_utf8(original).unwrap());
+        assert!(ensure_store_tracked_runtime_gitignore(&store).unwrap());
+        let repaired = std::fs::read(store.join(".gitignore")).unwrap();
+        assert!(repaired.starts_with(original));
+        assert_eq!(&repaired[original.len()..original.len() + 1], b"\n");
+        assert!(String::from_utf8_lossy(&repaired[original.len()..])
+            .starts_with("\n# Per-clone runtime state"));
+    }
+
+    #[test]
+    fn task_1547_non_worktree_store_fails_closed_without_writes_or_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path();
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
+        let run_git = |cwd: &std::path::Path, args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(cwd)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        assert!(run_git(project, &["init", "-q"]).status.success());
+        assert!(run_git(project, &["config", "user.name", "AIDA Fixture"])
+            .status
+            .success());
+        assert!(run_git(
+            project,
+            &["config", "user.email", "aida-fixture@example.invalid"]
+        )
+        .status
+        .success());
+        assert!(run_git(project, &["add", ".aida-store/.gitignore"])
+            .status
+            .success());
+        assert!(run_git(project, &["commit", "-qm", "parent baseline"])
+            .status
+            .success());
+        let before = std::fs::read(store.join(".gitignore")).unwrap();
+        let head_before = run_git(project, &["rev-parse", "HEAD"]);
+        let finding = DoctorFinding {
+            category: "store-staging-ignore".into(),
+            id: ".gitignore".into(),
+            summary: "missing staging ignores".into(),
+            action: "append staging ignores".into(),
+            safe_heal: true,
+        };
+
+        let result = heal_doctor_store_staging_ignore(project, &finding).unwrap();
+
+        assert_eq!(result.status, "failed");
+        assert_eq!(std::fs::read(store.join(".gitignore")).unwrap(), before);
+        assert_eq!(
+            run_git(project, &["rev-parse", "HEAD"]).stdout,
+            head_before.stdout
+        );
+        assert!(run_git(project, &["diff", "--quiet"]).status.success());
     }
 
     #[test]
@@ -6143,7 +6277,11 @@ mod story_462_doctor_tests {
                 .success()
         );
         assert!(git(&["add", ".gitignore"]).status.success());
+        std::fs::write(store.join("unrelated.txt"), "baseline\n").unwrap();
+        assert!(git(&["add", "unrelated.txt"]).status.success());
         assert!(git(&["commit", "-qm", "fixture baseline"]).status.success());
+        std::fs::write(store.join("unrelated.txt"), "user staged change\n").unwrap();
+        assert!(git(&["add", "unrelated.txt"]).status.success());
 
         let finding = DoctorFinding {
             category: "store-staging-ignore".to_string(),
@@ -6156,6 +6294,13 @@ mod story_462_doctor_tests {
 
         assert_eq!(result.status, "healed");
         assert!(git(&["diff", "--quiet"]).status.success());
+        assert!(!git(&["diff", "--cached", "--quiet"]).status.success());
+        assert_eq!(
+            String::from_utf8(git(&["diff", "--cached", "--name-only"]).stdout)
+                .unwrap()
+                .trim(),
+            "unrelated.txt"
+        );
         let head = String::from_utf8(git(&["log", "-1", "--format=%s"]).stdout).unwrap();
         assert!(head.contains("TASK-1547 TASK-1556"));
         let content = std::fs::read_to_string(store.join(".gitignore")).unwrap();
@@ -6176,6 +6321,29 @@ mod story_462_doctor_tests {
             );
         }
         assert_eq!(content.matches("objects/**/*.tmp.*").count(), 1);
+    }
+
+    #[test]
+    fn task_1556_injected_sixth_pattern_is_appended_when_first_five_exist() {
+        let five = aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS;
+        let sixth = "new-area/**/*.tmp.*";
+        let mut injected = five.to_vec();
+        injected.push(sixth);
+        let contents = format!("{}\n", five.join("\n"));
+        let (_dir, store) = bug_1677_store_gitignore(&contents);
+
+        assert!(ensure_store_tracked_runtime_gitignore_with_patterns(&store, &injected).unwrap());
+        let repaired = std::fs::read_to_string(store.join(".gitignore")).unwrap();
+        assert!(repaired.lines().any(|line| line.trim() == sixth));
+        for pattern in five {
+            assert_eq!(
+                repaired
+                    .lines()
+                    .filter(|line| line.trim() == *pattern)
+                    .count(),
+                1
+            );
+        }
     }
 
     #[test]
