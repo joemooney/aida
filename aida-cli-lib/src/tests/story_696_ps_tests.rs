@@ -168,19 +168,20 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
     assert!(d.hint.is_none());
 }
 
-/// TASK-152: when the same live pid has both a harness-worktree lease role
-/// and a transcript role, `aida ps` displays the transcript role because the
-/// lease role here is the harness's generic Agent-tool placeholder
-/// (`tail_cmd::HARNESS_AGENT_TYPE`, "general-purpose") — it names no real
-/// role, so it carries no information worth defending. The original lease
-/// role remains present for structured provenance (`lease_role`). Restored
-/// after the BUG-1521 strict-review PROXY DECISION: a REAL recorded lease
-/// role is authoritative (see `ps_real_lease_role_beats_derived_jsonl_role`
-/// below), but the placeholder itself is not real and must not mask a
-/// derived signal that actually names the role.
-// trace:TASK-152 trace:BUG-1521 | ai:claude
+/// BUG-1681 supersedes TASK-152's expectation for this shape. The fixture is
+/// an Agent-tool subagent lease: the placeholder agent type as its recorded
+/// role, and the PARENT claude process as its pid (a subagent executes inside
+/// that process — BUG-752), whose cwd is the parent project root rather than
+/// the isolation worktree. The transcript that pid resolves is therefore the
+/// HOST session's, so displaying its role made every fan-out row wear the
+/// parent's identity (`advisor` for an advisor-led fan-out). The row now says
+/// what it is — a subagent — while the recorded placeholder stays visible as
+/// provenance (`lease_role`). A REAL recorded role is still authoritative
+/// (`ps_real_lease_role_beats_derived_jsonl_role`), and the per-lease manifest
+/// join still outranks the generic label (TASK-153, below).
+// trace:TASK-152 trace:BUG-1521 trace:BUG-1681 | ai:claude
 #[test]
-fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
+fn ps_placeholder_lease_role_never_inherits_the_host_transcript_role() {
     let tmp = tempfile::tempdir().unwrap();
     let repo = tmp.path().join("repo");
     let wt = tmp.path().join(".claude/worktrees/agent-abc123");
@@ -215,7 +216,12 @@ fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].pid, Some(std::process::id()));
-    assert_eq!(rows[0].role.as_deref(), Some("advisor"));
+    // trace:BUG-1681 | ai:claude
+    assert_eq!(
+        rows[0].role.as_deref(),
+        Some("subagent"),
+        "a subagent row must not borrow the host session's role"
+    );
     assert_eq!(rows[0].lease_role.as_deref(), Some("general-purpose"));
 }
 

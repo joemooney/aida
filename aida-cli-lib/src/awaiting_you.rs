@@ -1970,7 +1970,8 @@ impl AwaitingReport {
             }
             let state = if o.possibly_subagent {
                 // trace:BUG-1656 | ai:claude
-                "possibly worked by a subagent — lease pid dead, live harness lease in this repo"
+                // trace:BUG-1681 | ai:claude
+                "possibly worked by a subagent — lease pid dead, a live subagent holds this worktree"
             } else if o.abandoned {
                 "abandoned — lease died"
             } else {
