@@ -1,0 +1,32 @@
+id: 01a0e379-fde8-7261-b0a8-4957d9558167
+spec_id: BUG-1690
+agreed_id: BUG-1690
+title: Nothing ever un-drafts a PR, so a drafted retraction leaves a PR GitHub will refuse to merge
+description: |
+  Found by the strict independent review of TASK-1529 (2026-09-27), non-blocking for that spec but a real product gap.
+
+  `gh pr ready` without `--undo` appears NOWHERE in the tree. `is_draft` is parsed at pr_rebase.rs:224 but no merge or review path acts on it. Consequence chain after a verified draft retraction: the spec returns to InProgress, the retry reuses the same PR, phase 1 accepts a draft as already published, and GitHub then refuses to merge a draft PR. So the work stalls with no signal.
+
+  This also makes `draft_notice`'s wording at preflight_retraction.rs:261 ("or let the drain retry") misleading, because the retry cannot succeed. The previous close-only behaviour forced a fresh PR and did not have this trap. Draft-first was an operator-approved change, but this consequence appears not to have been considered.
+
+  Acceptance:
+  1. Either a retry un-drafts the PR it is reusing, or phase 1 stops treating a draft PR as published and opens a fresh one. Pick one deliberately and record why.
+  2. A fixture test proves a retry after a draft retraction reaches a mergeable state rather than stalling.
+  3. `draft_notice`'s text matches whatever behaviour is chosen.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-27T15:26:58.024538426Z
+modified_at: 2026-09-27T15:26:58.024538426Z
+req_type: Bug
+tags:
+- preflight forge from-review:TASK-1529
+filed_at:
+  code_sha: 7201317922f4023c53b8410661a25f4a6d0391ee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7c6faed690
+  vendor: antigravity
+  session: da36c066-c384-494e-a7cf-abffb3cfe52d
