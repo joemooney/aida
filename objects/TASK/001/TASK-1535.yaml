@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:04:26.679365787Z
-modified_at: 2026-09-27T03:30:03.078345255Z
+modified_at: 2026-09-27T03:32:37.926047087Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -87,5 +87,17 @@ comments:
   content: 'Independent review of PR #2223 at dd21f4342b50990a1ac25234f19bc8b88e500033 (base main): APPROVED. Rework removes the -route suffix filter from build_invalid_route_findings, so the enabled failure-notice fixture with CronJobFailed:missing-guard is disabled by load_registry and reported as schedule-route-invalid:failure-notice with the missing name. The same fixture checks suffix route coverage, registry-gated bind suggestions, and that explicitly disabled routes have no invalid finding and no skipped tick line. Runner separates spawn failure and timeout exit-124 labels; docs stray parenthesis is fixed. Exact-head CI Build (ubuntu-latest) and merge-hold-gate passed, release job skipped; mergeStateStatus CLEAN; git diff --check clean. No independent local test rerun because exact-head CI ran the workspace tests. Prior 060589ef finding is resolved. No merge performed.'
   created_at: 2026-09-27T03:30:03.078345255Z
   modified_at: 2026-09-27T03:30:03.078345255Z
+- id: 01a0e0eb-ffa6-7862-a986-fa001d1b2684
+  author: ai:codex:advisor
+  content: |-
+    PASS TO BATCH INTEGRATOR — PR #2223, exact head dd21f4342b50990a1ac25234f19bc8b88e500033. Independent advisor gate after first-class APPROVED verdict .aida/review-verdicts/TASK-1535.json for this SHA.
+
+    Prior blocking finding at 060589ef39b48f5b15fbe4d9bc427d6bdd6fe0b7 is resolved: dd21f434 removes the -route suffix filter from build_invalid_route_findings. The fixture now checks an enabled suffixless failure-notice bound to missing-guard produces schedule-route-invalid:failure-notice, while explicitly user-disabled bad bindings produce no finding or skipped tick line. Reviewer evidence in the approved verdict and TASK-1535 review comment confirms the other acceptance coverage, docs fix, and exact-head CI.
+
+    GitHub PR state rechecked: OPEN, head unchanged at dd21f4342b50990a1ac25234f19bc8b88e500033, mergeable=true, mergeable_state=clean. Required Build (ubuntu-latest) and merge-hold-gate checks both SUCCESS on this head; Release job SKIPPED. Main branch protection requires those two checks, with no required reviews; branch rules API reports no additional rules. No unhandled protection issue found.
+
+    Hold for Joe's post-batch-103 batched integration. This is an advisor readiness handoff, not authorization for a standalone merge. Integrator should recheck head, verdict, checks, and protection at integration time. No code edit, self-review, merge, or dispatch performed.
+  created_at: 2026-09-27T03:32:37.926047087Z
+  modified_at: 2026-09-27T03:32:37.926047087Z
 test_coverage_notes: 'TASK-1535 focused tests: 2 passed; BUG-1655 regression tests: 7 passed; cargo fmt --all -- --check passed; cargo test --workspace --no-fail-fast passed with fake HOME.'
 implementation_summary: 'Pushed task-1535 at 060589ef39: doctor finds invalid bound routes, safe unbound-route hints, user-disabled routes stay quiet, and exit 124 distinguishes spawn failure from timeout; corrected CLI documentation.'
