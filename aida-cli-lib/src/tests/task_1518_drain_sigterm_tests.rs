@@ -56,12 +56,32 @@ fn fake_drain(pid: u32) -> tempfile::TempDir {
 }
 
 fn write_lease(root: &Path, id: &str, creator_pid: u32, scope: &str) {
+    let missing_worktree = root.join(format!("missing-worktree-{id}"));
+    assert!(!missing_worktree.exists());
+    write_lease_with_worktree_path(
+        root,
+        id,
+        creator_pid,
+        scope,
+        missing_worktree.to_str().unwrap(),
+    );
+}
+
+// trace:TASK-1518 | ai:codex
+fn write_lease_with_worktree_path(
+    root: &Path,
+    id: &str,
+    creator_pid: u32,
+    scope: &str,
+    worktree_path: &str,
+) {
     let body = format!(
         "id = \"{id}\"\nscope = \"{scope}\"\nslug = \"{}\"\nowner = \"t\"\n\
-         worktree_path = \"/tmp/none\"\nbranch = \"claude/{}\"\n\
+         worktree_path = {}\nbranch = \"claude/{}\"\n\
          started_at = \"2026-09-26T00:00:00Z\"\nhostname = \"h\"\n\
          creator_pid = {creator_pid}\ncustom_key = \"kept\"\n",
         scope.to_ascii_lowercase(),
+        aida_core::toml_quote::toml_string(worktree_path),
         scope.to_ascii_lowercase()
     );
     std::fs::write(
@@ -71,6 +91,29 @@ fn write_lease(root: &Path, id: &str, creator_pid: u32, scope: &str) {
         body,
     )
     .unwrap();
+}
+
+#[test]
+fn task_1518_fixture_worktree_paths_round_trip_through_the_lease_reader() {
+    let tmp = fake_drain(std::process::id());
+    let root = tmp.path();
+    for path in [
+        r"C:\Users\Runner\AppData\Local\Temp\worktree",
+        "worktree with spaces",
+        "worktree with \"quotes\"",
+        "C:\\Users\\Runner\\a \"quoted\" worktree",
+    ] {
+        write_lease_with_worktree_path(root, "aaaa11112222", std::process::id(), "TASK-1", path);
+        let lease = crate::list_leases(root)
+            .into_iter()
+            .find(|lease| lease.id == "aaaa11112222")
+            .expect("fixture must parse through the production lease reader");
+        assert_eq!(lease.worktree_path, PathBuf::from(path));
+        let body = std::fs::read_to_string(lease_path(root, "aaaa11112222")).unwrap();
+        let parsed: toml::Table = toml::from_str(&body).unwrap();
+        assert_eq!(parsed["worktree_path"].as_str(), Some(path));
+        assert_eq!(parsed["custom_key"].as_str(), Some("kept"));
+    }
 }
 
 fn lease_path(root: &Path, id: &str) -> PathBuf {
@@ -514,17 +557,13 @@ fn task_1518_ps_reads_a_marked_lease_as_stopped_not_dead() {
     // dispatch probe has something to classify.
     let wt = root.join("wt-task-1");
     std::fs::create_dir_all(&wt).unwrap();
-    let raw = std::fs::read_to_string(lease_path(root, "aaaa11112222")).unwrap();
-    let raw = raw.replace(
-        "worktree_path = \"/tmp/none\"",
-        &format!("worktree_path = \"{}\"", wt.display()),
-    );
-    std::fs::write(lease_path(root, "aaaa11112222"), raw).unwrap();
+    write_lease_with_worktree_path(root, "aaaa11112222", pid, "TASK-1", wt.to_str().unwrap());
 
     let before = crate::list_leases(root)
         .into_iter()
         .find(|l| l.id == "aaaa11112222")
         .unwrap();
+    assert_eq!(before.worktree_path, wt);
     assert!(before.interrupted_at.is_none());
 
     assert_eq!(
@@ -686,7 +725,7 @@ fn task_1518_real_sigterm_in_a_child_process_releases_lock_and_marks_leases() {
     use std::os::unix::process::ExitStatusExt as _;
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().to_path_buf();
-    let exe = std::env::current_exe().unwrap();
+    let exe = crate::aida_exe_path();
     let output = std::process::Command::new(exe)
         .args(["real_sigterm_child_body", "--nocapture", "--test-threads=1"])
         .env(CHILD_ROOT_ENV, &root)
