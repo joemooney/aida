@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:04:26.679365787Z
-modified_at: 2026-09-27T02:16:57.861211795Z
+modified_at: 2026-09-27T02:16:59.433801552Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -59,5 +59,17 @@ comments:
   content: 'REWORK for PR #2223 at 060589ef39b48f5b15fbe4d9bc427d6bdd6fe0b7: .aida/review-verdicts/TASK-1535.json requests changes. build_invalid_route_findings omits invalid enabled routes without the -route suffix, contrary to approved PLAN. Concrete implementer brief: .aida/agent-briefs/codex/TASK-1535-2026-09-27T021635Z.md. Keep review gate open pending independent re-review.'
   created_at: 2026-09-27T02:16:57.495632781Z
   modified_at: 2026-09-27T02:16:57.495632781Z
+- id: 01a0e0a6-bdba-7412-a585-7d4c09a6e652
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1535):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 060589ef39b4
+    Recorded: 2026-09-27T02:10:19.320208914+00:00
+    Findings:
+    1. aida-cli-lib/src/maintenance_schedule.rs:2413 filters build_invalid_route_findings to names ending in -route. The approved TASK-1535 PLAN explicitly requires a finding for any route with a missing bound job, including a route without that suffix. Remove the suffix gate for invalid bindings and add a fixture test using a non-suffix route name.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-27T02:16:59.066166851Z
+  modified_at: 2026-09-27T02:16:59.066166851Z
 test_coverage_notes: 'TASK-1535 focused tests: 2 passed; BUG-1655 regression tests: 7 passed; cargo fmt --all -- --check passed; cargo test --workspace --no-fail-fast passed with fake HOME.'
 implementation_summary: 'Pushed task-1535 at 060589ef39: doctor finds invalid bound routes, safe unbound-route hints, user-disabled routes stay quiet, and exit 124 distinguishes spawn failure from timeout; corrected CLI documentation.'
