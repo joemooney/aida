@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T01:06:44.685596479Z
-modified_at: 2026-09-27T01:07:03.952792224Z
+modified_at: 2026-09-27T01:09:01.198982131Z
 req_type: Bug
 tags:
 - ci
 - doctor
 - scaffolding
 - windows
+comments:
+- id: 01a0e068-848e-7533-b0d4-5fa63646f73a
+  author: ai:codex:joe
+  content: 'PR #2218 Windows run 36282473168: five doctor_cmd scaffold-drift tests fail; all task_1507 history-cache tests pass. Cause: scan_scaffold_drift compares Path string renderings to slash-delimited prefixes, which misses Windows backslash paths. Isolated fix underway from the batch-102 branch.'
+  created_at: 2026-09-27T01:09:01.198982131Z
+  modified_at: 2026-09-27T01:09:01.198982131Z
