@@ -231,6 +231,56 @@ fn task_1543_reap_missing_worktree_scopes_removal_preserving_sibling_missing_wor
     );
 }
 
+/// A directory that reappears at the final absence-check boundary is preserved.
+// trace:TASK-1543 | ai:codex
+#[test]
+fn task_1543_reap_preserves_worktree_directory_that_reappears_before_registration_clear() {
+    let (tmp, root) = create_fixture_repo();
+    let wt = tmp.path().join("wt-reappeared");
+    git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "spec-reappeared",
+            wt.to_str().unwrap(),
+        ],
+    );
+    let wt = canonical_for_git(&wt);
+    commit_file(&wt, "landed.txt", "landed\n", "work");
+    let gitfile = std::fs::read_to_string(wt.join(".git")).unwrap();
+    git(&root, &["checkout", "-q", "main"]);
+    git(&root, &["merge", "-q", "--squash", "spec-reappeared"]);
+    git(&root, &["commit", "-q", "-m", "land work"]);
+    std::fs::remove_dir_all(&wt).unwrap();
+
+    let (_, tip) = gather_merge_facts_pinned(
+        &root,
+        Some("main"),
+        "spec-reappeared",
+        "TASK-1543",
+        false,
+        true,
+        |_| false,
+    );
+    let lease = fixture_lease(&wt, "spec-reappeared", "TASK-1543");
+    let outcome = reap_one_with_missing_worktree_hook(&root, &lease, tip.as_deref(), || {
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::write(wt.join(".git"), &gitfile).unwrap();
+        std::fs::write(wt.join("precious.txt"), "preserve me").unwrap();
+    });
+    assert!(
+        wt.join("precious.txt").exists(),
+        "reappeared worktree content must remain after reap_one"
+    );
+    assert!(
+        outcome.contains("worktree path reappeared"),
+        "expected safe skip, got: {outcome}"
+    );
+}
+
 /// Acceptance 1: teardown_worktree_path does not run repo-wide prune, preserving
 /// another session's temporarily unavailable worktree.
 // trace:TASK-1543 | ai:antigravity
