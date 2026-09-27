@@ -77,13 +77,15 @@ pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
 }
 
 /// Exclude the store's runtime lock files (`.aida/*.lock`, e.g. the store
-/// write lock) from git in a store worktree, so `git add -A` (db sync,
-/// auto-push) can never commit them, even in a store whose `.gitignore`
-/// lacks the pattern. Idempotent; returns whether it wrote anything.
-// trace:BUG-1612 | ai:claude
+/// write lock) and atomic-write staging files (`*.tmp.*`, see
+/// `fs_atomic::write_atomic`) from git in a store worktree, so `git add -A`
+/// (db sync, auto-push) can never commit them, even in a store whose
+/// `.gitignore` lacks the patterns. Idempotent; returns whether it wrote
+/// anything.
+// trace:BUG-1612 trace:BUG-1677 | ai:claude
 pub fn ensure_store_lock_excluded(store_root: &Path) -> Result<bool> {
     let exclude_path = resolve_exclude_path(store_root)?;
-    append_exclude_entries(&exclude_path, &[".aida/*.lock"])
+    append_exclude_entries(&exclude_path, &[".aida/*.lock", "*.tmp.*"])
 }
 
 /// `git rev-parse --git-path info/exclude`, absolutized.

@@ -616,11 +616,21 @@ impl GitBackend {
     /// left intact for inspection. A genuinely absent file is still the empty
     /// queue (returns `Ok(vec![])`). trace:TASK-712
     fn read_queue_file(path: &Path) -> Result<Vec<QueueEntry>> {
-        if !path.exists() {
-            return Ok(Vec::new());
-        }
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read queue file {}", path.display()))?;
+        // No `exists()` pre-check: a lock-free reader (`queue_list`) can race a
+        // writer's temp+rename of this file, and on Windows the open itself
+        // can transiently fail (`NotFound` / `PermissionDenied`) while the
+        // rename is in flight. `read_atomic` retries those there (and returns
+        // immediately on Unix, where they are never transient); a `NotFound`
+        // that survives the retry is a genuinely absent file, i.e. the empty
+        // queue. trace:BUG-1677 | ai:claude
+        let content = match crate::fs_atomic::read_atomic(path) {
+            Ok(content) => content,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => {
+                return Err(e)
+                    .with_context(|| format!("Failed to read queue file {}", path.display()))
+            }
+        };
         if content.trim().is_empty() {
             return Ok(Vec::new());
         }
@@ -993,6 +1003,9 @@ impl GitBackend {
     // read and the write-back and have its entries dropped. The write-back
     // itself is temp+rename (`fs_atomic::write_atomic`), so a lock-free reader
     // (`queue_list`) sees either the old file or the new one, never a torn one.
+    // On Linux/macOS the rename is atomic for the open too; on Windows the
+    // reader's open can transiently fail while the rename is in flight, which
+    // `read_queue_file` absorbs by reading through `fs_atomic::read_atomic`.
     //
     // Lock order: the store write lock is the ONLY lock a queue writer takes.
     // Nothing else is acquired inside it: `read_queue_file`, `get_requirement`
@@ -4922,6 +4935,27 @@ mod tests {
                 .flatten()
                 .all(|d| d.path().extension().and_then(|x| x.to_str()) == Some("yaml")),
             "atomic-write staging files must not be left behind"
+        );
+    }
+
+    // An absent queue file is the empty queue (the writer may not have
+    // created it yet), and a missing parent directory is too: the read no
+    // longer depends on an `exists()` pre-check that a concurrent rename can
+    // invalidate.
+    #[test]
+    fn bug_1677_absent_queue_file_reads_as_empty_queue() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = bug1677_backend(&root);
+        assert!(backend.queue_list("nobody", false).unwrap().is_empty());
+        let missing = root.join("registry/queues/nobody.yaml");
+        assert!(GitBackend::read_queue_file(&missing).unwrap().is_empty());
+        std::fs::create_dir_all(root.join("registry/queues")).unwrap();
+        assert!(GitBackend::read_queue_file(&missing).unwrap().is_empty());
+        let unreadable = root.join("registry/queues");
+        assert!(
+            GitBackend::read_queue_file(&unreadable).is_err(),
+            "a real read error (a directory) must still surface"
         );
     }
 

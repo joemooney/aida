@@ -5295,8 +5295,10 @@ pub(crate) fn handle_init_distributed_sibling(
         std::fs::write(store_dir.join("objects/.gitkeep"), "")?;
         git_ops::add(&store_dir, &["objects/.gitkeep"])?;
 
-        // Create .gitignore for node-local files
-        let gitignore_content = "# Node-local state (not shared)\n.aida/\n*.lock\n";
+        // Create .gitignore for node-local files. `*.tmp.*` is the atomic-write
+        // staging name (`fs_atomic::write_atomic`), so a lock-free `git add -A .`
+        // (db sync, auto-push) can never stage one. trace:BUG-1677 | ai:claude
+        let gitignore_content = "# Node-local state (not shared)\n.aida/\n*.lock\n*.tmp.*\n";
         std::fs::write(store_dir.join(".gitignore"), gitignore_content)?;
         git_ops::add(&store_dir, &[".gitignore"])?;
 

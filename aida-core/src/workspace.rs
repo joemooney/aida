@@ -217,7 +217,10 @@ pub fn init_workspace(
     std::fs::write(store_full.join("objects/.gitkeep"), "")?;
     git_ops::add(&store_full, &["objects/.gitkeep"])?;
 
-    let gitignore = "# Node-local state\n.aida/\n*.lock\n";
+    // `*.tmp.*` is the atomic-write staging name (`fs_atomic::write_atomic`),
+    // so a lock-free `git add -A .` (db sync, auto-push) can never stage one.
+    // trace:BUG-1677 | ai:claude
+    let gitignore = "# Node-local state\n.aida/\n*.lock\n*.tmp.*\n";
     std::fs::write(store_full.join(".gitignore"), gitignore)?;
     git_ops::add(&store_full, &[".gitignore"])?;
     git_ops::commit(&store_full, "chore: initialize AIDA workspace store")?;

@@ -5349,6 +5349,8 @@ fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> R
     if existing.lines().any(|l| l.trim() == ".aida/node.toml") {
         return Ok(false);
     }
+    // `*.tmp.*` is the atomic-write staging name (`fs_atomic::write_atomic`),
+    // so a lock-free `git add -A .` can never stage one. trace:BUG-1677 | ai:claude
     let block =
         "\n# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n\
          .aida/node.toml\n\
@@ -5357,7 +5359,9 @@ fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> R
          .aida/cache.db\n\
          .aida/cache.db-journal\n\
          .aida/cache.db-shm\n\
-         .aida/cache.db-wal\n";
+         .aida/cache.db-wal\n\
+         # Atomic-write staging files (temp+rename) — never tracked\n\
+         *.tmp.*\n";
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -8728,6 +8732,7 @@ hostname = "localhost"
         assert!(gi.contains(".aida/dispenser.toml"));
         assert!(gi.contains(".aida/*.lock"));
         assert!(gi.contains(".aida/cache.db"));
+        assert!(gi.lines().any(|l| l.trim() == "*.tmp.*"));
     }
 
     /// BUG-563 GUARD: with distributed-mode config but NO attached `.aida-store`
