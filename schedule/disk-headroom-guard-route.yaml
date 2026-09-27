@@ -1,9 +1,7 @@
 job: disk-headroom-guard-route
-last_run: 2026-09-26T23:51:11.890727028Z
+last_run: 2026-09-27T14:03:24.530965957Z
 last_by:
   seat: advisor
   session: 71dca616-6150-461d-b64f-18c8288c6e1c
   vendor: antigravity
 result: done
-due_since: 2026-09-27T00:58:28.011385161Z
-due_reason: on CronJobFailed
