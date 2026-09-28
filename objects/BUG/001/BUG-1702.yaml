@@ -38,12 +38,12 @@ description: |
        that would break a link step, so this is caught before a seat burns a dispatch on it.
   AC4. A seat that fails a build for lack of disk reports that distinctly from a compile error, so
        the orchestrator does not retry it as if the code were wrong.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T03:16:18.098775711Z
-modified_at: 2026-09-28T03:16:52.971817522Z
+modified_at: 2026-09-28T05:50:12.233102672Z
 req_type: Bug
 history:
 - id: 01a0e603-f06b-7b82-92a0-b23f36312993
@@ -53,3 +53,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e690-4e45-72e2-a344-550ad1b459b5
+  author: aida-auto-bump
+  timestamp: 2026-09-28T05:50:12.037670557Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e690-4f09-73a0-bece-1c5ba117c88a
+  timestamp: 2026-09-28T05:50:12.233085980Z
+  agent: aida
+  commit_sha: 7324a5b437c2cd60d7fe73d4ab01cbee6c5e33ec
+  summary: 'Request changes on PR #2247 at exact head; blocker recorded on BUG-1703.'
+  review_verdict: request-changes
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T05:50:12.037659783Z
+  completion_sha: 7324a5b437c2cd60d7fe73d4ab01cbee6c5e33ec
