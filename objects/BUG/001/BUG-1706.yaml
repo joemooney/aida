@@ -57,7 +57,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T06:24:01.976398623Z
-modified_at: 2026-09-28T11:49:15.870790224Z
+modified_at: 2026-09-28T11:49:17.320710406Z
 req_type: Bug
 comments:
 - id: 01a0e6bd-9d74-71d1-9ce4-64bec03d0629
@@ -181,6 +181,11 @@ history:
 execution_mode: drive
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo fmt --all -- --check
+    cargo test -p aida-cli-lib mirror_hook_forwards_dry_run_spellings_as_preview_only
+    cargo test -p aida-cli-lib mirror_push_dry_run_does_not_update_mirror_ref
+    cargo test -p aida-cli-lib remote_mirror_push_hook_plumbing_parses
   implemented_at: 2026-09-28T11:49:13.785773677Z
   implemented_by: joe
 interface_changes: {}
