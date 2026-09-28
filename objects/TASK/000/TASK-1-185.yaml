@@ -14,13 +14,19 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-28T13:11:12.966337830Z
-modified_at: 2026-09-28T13:37:41.444265534Z
+modified_at: 2026-09-28T14:35:26.287372175Z
 req_type: Task
 tags:
 - carried-from:BUG-1673
 - finding-hash:8c7ec425
 - from-review:PR-2242
 - kind:carried-forward
+comments:
+- id: 01a0e871-2ccf-7640-92b2-afa39a8593b7
+  author: joe
+  content: 'Advisor implementation constraint (2026-09-28): after adding the catch_unwind cleanup regression test, prove it is non-vacuous by temporarily removing Bug1673WarningSinkGuard cleanup, running the focused test and capturing its failure, then restoring the guard. Include the failing output in the PR body. The test must catch the panic, emit a subsequent warning, and prove the old sink does not capture it.'
+  created_at: 2026-09-28T14:35:26.287372175Z
+  modified_at: 2026-09-28T14:35:26.287372175Z
 history:
 - id: 01a0e83c-4e44-70f1-b658-6ba0f2a9738a
   author: joe
@@ -29,11 +35,3 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
-filed_at:
-  code_sha: d23ba1028c6de66959200f27b59cdcc5c5305e63
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: '5632229e66'
-  vendor: antigravity
-  session: fc2bef36-971e-4674-a858-0de8a84a1006
