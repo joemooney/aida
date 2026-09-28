@@ -57,12 +57,12 @@ description: |
   AC6. Audit sibling parsers for the same byte-slice-after-byte-length-check shape. This is a CLASS:
        any `split_at`/`[..n]` guarded only by `len() >= n` on operator- or agent-authored text has
        the same defect. List what was checked, so the audit is evidence rather than an intention.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T12:37:30.204565123Z
-modified_at: 2026-09-28T12:57:26.082333478Z
+modified_at: 2026-09-28T12:57:53.795512278Z
 req_type: Bug
 comments:
 - id: 01a0e806-0e19-7d81-9f34-9ee81d69d89a
@@ -107,6 +107,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e817-debc-7a83-916e-4144ec94f3c6
+  author: aida-auto-bump
+  timestamp: 2026-09-28T12:57:53.596984869Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e817-df83-70b3-bd68-0f076494cf64
+  timestamp: 2026-09-28T12:57:53.795493668Z
+  agent: aida
+  commit_sha: 2977885c6be396b5f3dab23c0417675decca2b71
+  summary: 'APPROVED under the operator''s explicit emergency merge authorization (2026-09-28 05:40: ''merge and fix everything you can''). DISCLOSURE: I authored this, so this is not an independent review - it is the operator''s gate being exercised through me, and I am recording that plainly rather than implying a second pair of eyes. What makes it safe to merge on that basis: the change is ONE expression, split_at(n) -> get(..n), removing a panic; it cannot make behaviour worse because the old code aborted the process on this input. Four regression tests, one using the EXACT production string that crashed, one sweeping every byte offset near the prefix boundary, one for short non-ASCII input, and one asserting a real why-open: comment whose reason contains an em-dash still parses - so the panic is not traded for a wrong answer. Verified on the live store: aida human now completes and surfaces 11 open items that were unreachable. This also unblocks the burndown itself, which is why it is being merged during the emergency: parse_why_open_comment sits in collect_open_facts, so the crash blinded the very loop that is supposed to be draining the backlog. Required Build and merge-hold-gate green. Recorded audit on the spec shows this is a recurrence of the BUG-525 class with two sibling sites verified clean.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 5632229e663b9d782e1f2c427a3176792f8447ae
@@ -116,3 +130,7 @@ filed_at:
   aida_build_sha: 304ca777b1
   vendor: antigravity
   session: fc2bef36-971e-4674-a858-0de8a84a1006
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T12:57:53.596974217Z
+  completion_sha: 2977885c6be396b5f3dab23c0417675decca2b71
