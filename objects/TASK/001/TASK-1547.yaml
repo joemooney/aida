@@ -21,19 +21,20 @@ description: |
   6. `ensure_lock_excluded`'s info/exclude behaviour for `.aida/*.lock` is left alone unless a concrete cross-clone problem is demonstrated: a lock file IS genuinely per-clone, so info/exclude is arguably right there. If it is changed, say why in the spec first.
 
   Out of scope: the queue-writer locking in BUG-1677 itself, and the TASK-1556 predicate fix.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:13:49.257295434Z
-modified_at: 2026-09-28T04:37:57.881662251Z
+modified_at: 2026-09-28T13:10:05.129830901Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0dfa4-25a5-7f30-a113-2dced517a3ff
   created_at: 2026-09-27T00:14:03.690646359Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0e64e-032c-7853-92da-abc640bf53f3
   created_at: 2026-09-28T04:37:57.881657242Z
   created_by: joe
@@ -52,3 +53,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e823-0820-7441-bbfb-2b405e0b2bab
+  author: aida-auto-bump
+  timestamp: 2026-09-28T13:10:05.088532196Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e823-0849-7643-b761-e93c118006f0
+  timestamp: 2026-09-28T13:10:05.129794984Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/TASK-1547-2026-09-28T015139Z.md.acked
+  commit_sha: 4f8b0de60bbbc5ef83854a5e6376e235da487965
+  summary: 'APPROVED at exact head c4ea3c9038 (advisor confirmation, 2026-09-27 22:3x). This RE-RECORDS the prior approval to clear a STALE FINDING that made the record self-contradicting: the summary said the foreign linked-worktree boundary was covered while the attached finding said the code ''never checks that the common-dir belongs to this project'' and asked for a rejection fixture. A seat reading that record would have believed an open gap remained. Verified against the source at this exact sha -- the finding is stale on BOTH halves, and the summary is the accurate part: 1. is_intended_store_worktree DOES compare canonical common-dirs now. doctor_cmd.rs ends the function with a matches! over canonical_common_dir(store_worktree) vs canonical_common_dir(project_root), requiring equality. That is exactly the check the finding said was absent, so a foreign repository linked at .aida-store on branch aida-store no longer passes. 2. The prescribed fixture EXISTS, added in the same commit: task_1547_foreign_linked_store_fails_closed_without_file_index_or_head_changes. So c4ea3c9038 is the commit that FIXED the finding, not a head that still carries it. The finding was carried over from a review at an earlier head (d7364cace3 or before) and never cleared when the fix landed. Merge readiness at this sha: Build (ubuntu-latest) pass, merge-hold-gate pass, no labels, mergeStateStatus CLEAN. Merges BEFORE PR #2242. Sequenced behind PR #2247 only to avoid forcing a rebase on the emergency branch, which also touches doctor_cmd.rs -- not for any gate reason.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T13:10:05.088489839Z
+  completion_sha: 4f8b0de60bbbc5ef83854a5e6376e235da487965
