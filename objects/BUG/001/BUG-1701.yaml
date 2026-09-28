@@ -51,14 +51,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T03:16:09.883864860Z
-modified_at: 2026-09-28T06:42:35.113611649Z
+modified_at: 2026-09-28T08:10:08.131556174Z
 req_type: Bug
 relationships:
 - rel_type: Parent
   target_id: 01a0e65f-184c-73d2-9509-83f0d6ff6a6f
   created_at: 2026-09-28T04:56:29.466947434Z
-- rel_type:
-    custom: carved-out-to
+- rel_type: !Custom carved-out-to
   target_id: 01a0e65f-184c-73d2-9509-83f0d6ff6a6f
   created_at: 2026-09-28T06:42:35.113566392Z
   created_by: joe
@@ -112,6 +111,11 @@ comments:
   created_at: 2026-09-28T06:42:35.113596202Z
   modified_at: 2026-09-28T06:42:35.113596202Z
   session_id: fc2bef36-971e-4674-a858-0de8a84a1006
+- id: 01a0e710-6b83-7472-abf6-90d75f469edf
+  author: joe
+  content: 'Review: APPROVE (5632229e663b9d782e1f2c427a3176792f8447ae, PR #2249). Verified drain-only fail-open routing and both launch sites before side effects; foreground/--bg messages are truthful and promote ; long-help claims are pinned by direct assertions; AC5 is owned by BUG-1704 via one carved-out-to edge. Store lookup errors are not exercised by the tests, as the test comments accurately disclose, but the implementation handles them fail-open.'
+  created_at: 2026-09-28T08:10:08.131556174Z
+  modified_at: 2026-09-28T08:10:08.131556174Z
 history:
 - id: 01a0e603-e772-7db1-8f2e-ed88ef0a8747
   author: joe
