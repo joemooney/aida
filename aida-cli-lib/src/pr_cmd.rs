@@ -1037,23 +1037,22 @@ pub(crate) fn fetch_pr_info_via_gh_bin(
     gh_bin: &std::ffi::OsStr,
 ) -> Result<serde_json::Value> {
     let n_str = n.to_string();
-    let out = std::process::Command::new(gh_bin)
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "view",
-            n_str.as_str(),
-            "--json",
-            "baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
-        ])
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
-            } else {
-                anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
-            }
-        })?;
+    let mut command = std::process::Command::new(gh_bin);
+    command.current_dir(project_root).args([
+        "pr",
+        "view",
+        n_str.as_str(),
+        "--json",
+        "baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+    ]);
+    // trace:BUG-1689 | ai:codex
+    let out = crate::process_retry::command_output_retrying_etxtbsy(&mut command).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+        } else {
+            anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
+        }
+    })?;
     if !out.status.success() {
         anyhow::bail!(
             "`gh pr view {}` exited {} — {}",
@@ -1441,17 +1440,17 @@ pub(crate) fn pr_ship_target_branch(pr: u64) -> String {
 /// to say so.
 // trace:TASK-1416 | ai:claude
 fn finish_ceremony_pr_base(pr: u64) -> Option<String> {
-    std::process::Command::new("gh")
-        .args([
-            "pr",
-            "view",
-            &pr.to_string(),
-            "--json",
-            "baseRefName",
-            "-q",
-            ".baseRefName",
-        ])
-        .output()
+    let mut command = std::process::Command::new("gh");
+    command.args([
+        "pr",
+        "view",
+        &pr.to_string(),
+        "--json",
+        "baseRefName",
+        "-q",
+        ".baseRefName",
+    ]);
+    crate::process_retry::command_output_retrying_etxtbsy(&mut command)
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -3496,17 +3495,17 @@ pub(crate) fn fetch_pr_ship_metadata_via_gh(
     n: u64,
 ) -> Result<PrShipMetadata> {
     let n_str = n.to_string();
-    let out = std::process::Command::new("gh")
+    let mut command = std::process::Command::new("gh");
+    command
         .current_dir(project_root)
-        .args(["pr", "view", &n_str, "--json", "title,body"])
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
-            } else {
-                anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
-            }
-        })?;
+        .args(["pr", "view", &n_str, "--json", "title,body"]);
+    let out = crate::process_retry::command_output_retrying_etxtbsy(&mut command).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+        } else {
+            anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
+        }
+    })?;
     if !out.status.success() {
         anyhow::bail!(
             "`gh pr view {}` exited {} — {}",
