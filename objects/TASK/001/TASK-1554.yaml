@@ -16,8 +16,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T17:20:00.790572735Z
-modified_at: 2026-09-28T01:27:44.510078999Z
+modified_at: 2026-09-28T01:29:27.068411382Z
 req_type: Task
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a0e5a1-6769-70e0-8955-99752fb5887b
+  created_at: 2026-09-28T01:29:27.068405409Z
+  created_by: joe
 comments:
 - id: 01a0e58d-f407-77a3-8a5f-e6ebf2122e96
   author: joe
