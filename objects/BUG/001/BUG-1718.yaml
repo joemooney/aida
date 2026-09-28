@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T18:17:29.160704399Z
-modified_at: 2026-09-28T19:15:06.756638938Z
+modified_at: 2026-09-28T19:21:13.717700659Z
 req_type: Bug
 comments:
 - id: 01a0e94d-080c-75c1-99ce-22b0b207afb5
@@ -188,6 +188,120 @@ comments:
   created_at: 2026-09-28T19:15:06.756638938Z
   modified_at: 2026-09-28T19:15:06.756638938Z
   session_id: 14957d0e-54c4-4671-94b1-589b8c033f43
+- id: 01a0e976-d2f5-71f0-81f9-802dec53a6a7
+  author: joe
+  content: |
+    ADVISOR REVIEW — round 2 (BUG-1718 rework, head 9c28221473) — VERDICT: REQUEST CHANGES
+
+    Reviewed by the advisor seat (Claude), independently of the implementer (codex). Round 1's four
+    findings were all addressed correctly. A NEW blocking regression was found by running tests codex
+    did not run, and one of round 1's own findings was WRONG and must be retracted.
+
+    ## BLOCKING — the branch breaks five BUG-1657 protections that exist to prevent losing work
+
+    `cargo test -p aida-cli-lib --lib bug_1657` → **14 passed, 5 FAILED**:
+
+    - bug_1657_revert_after_the_batch_is_kept
+    - bug_1657_deletion_after_the_batch_is_kept
+    - bug_1657_per_path_probe_keeps_reverted_work
+    - bug_1657_merge_ours_driver_does_not_hide_unshipped_edit
+    - bug_1657_removed_worktree_dir_reaps_only_landed_work
+
+    All five assert `ReapVerdict::Skip` (KEEP the work). They now get a reap verdict. Every one of them
+    is a case where the branch carries an edit that provably did NOT ship — a revert, a deletion, an
+    unshipped edit hidden by a merge-ours driver.
+
+    **Proof this is a regression and not a pre-existing failure:** `no_commits_after_landing` does not
+    exist anywhere on `origin/main` (`git show origin/main:aida-cli-lib/src/doctor_cmd.rs | grep
+    no_commits_after_landing` → no output), and on main `spec_trailer_on_main` only feeds
+    `merged_reason`; the `unique_unmerged_commits > 0 && !content_fully_landed` path returns
+    `Keep(... operator decision)` unconditionally. The field, the fact, and the new `Removable` arm at
+    doctor_cmd.rs:4405 are all introduced by this branch. The five tests are therefore green on main by
+    construction and red here.
+
+    ### Root cause: the recency guard's timestamp proxy is unsound, not just imprecise
+
+    `no_commits_after_landing` compares `%ct` (committer date) of each branch-unique commit against the
+    landing commit's `%ct` and passes when every branch date is `<= landing`. In
+    `bug_1657_revert_after_the_batch_is_kept` the revert commit is created *after* the batch landed and
+    the guard still reports "nothing postdates the landing", because both commits land in the same
+    wall-clock second. Second granularity is enough to defeat it, and committer dates are not monotonic
+    in general (clock skew, `GIT_COMMITTER_DATE`, `git am`).
+
+    This matters more than a normal guard bug because of where the arm sits: it fires **only when
+    `content_fully_landed` is false** (doctor_cmd.rs:4396 takes the content-verified case first). So the
+    timestamp comparison is the *sole* gate protecting a branch whose content is NOT provably on main.
+    When it is wrong, the worktree and branch are deleted and the work is gone.
+
+    ### The same defect was papered over in an existing test — do not do this again
+
+    `task_1534_branch_with_unshipped_commit_is_not_reclaimable` was changed from `commit_file` to
+    `commit_file_at(..., "2035-01-01T00:00:00Z")`. That test was failing for exactly the reason above,
+    and dating the commit eleven years into the future makes it pass without making the guard correct.
+    A test edited to accommodate a defective predicate hides the defect instead of reporting it. Revert
+    that hunk; the test must pass on real timestamps or the predicate is wrong.
+
+    ## RETRACTED — round 1 finding 4 was WRONG, and acting on it caused this regression
+
+    Round 1 called `gather_merge_facts_pinned`'s hardcoded `no_commits_after_landing: false`
+    "conservative and safe, but acceptance #1 is only half-delivered", and the rework brief asked for
+    the real fact to be wired in (FIX3). That was my error. The hardcoded `false` was load-bearing: it
+    kept the reap path on BUG-1657's `Keep(... operator decision)` arm, which is what those five tests
+    guard. Wiring the real fact is what turned them red. **The implementer did exactly what the brief
+    asked and the brief was wrong.** No fault attaches to codex for FIX3.
+
+    ## Round 1 findings — all four VERIFIED FIXED (do not redo these)
+
+    1. FIXED. `spec_landing_commit` (session_reap.rs:411) is the hardened body verbatim — merge-base
+       range, `--fixed-strings`, `is_plan_commit_subject`, shared ID extraction — and
+       `spec_trailer_landed_on` is reduced to `spec_landing_commit(..).is_some()` at line 405. One body,
+       no drift. doctor_cmd.rs:4943 calls the shared probe; the inline reimplementation is gone.
+       `matches.pop()` on a newest-first list correctly yields the oldest qualifying commit.
+    2. FIXED, with a real non-vacuity proof I re-ran:
+       `bug_1718_oldest_landing_match_keeps_branch_commit_between_mentions` dates the landing 2020-02-01,
+       the branch commit 2020-03-01, a later mention 2020-04-01, and asserts Keep.
+    3. FIXED. `git worktree prune --expire now` is gone from `scan_merged_agent_worktrees`; the scan is
+       read-only again and the renamed test asserts the stale registration is left `prunable`.
+    4. Retracted — see above.
+
+    ## Non-blocking, carry into the rework
+
+    - **P2 drift risk, same shape as round 1 finding 1.** The `no_commits_after_landing` computation is
+      now duplicated verbatim in doctor_cmd.rs:4948 and session_reap.rs:716. Whatever the guard becomes,
+      it must live in one function in session_reap.rs and be called from both, exactly as
+      `spec_landing_commit` now is.
+    - **P3.** Commit `ca1823924f` carries the prepared commit *body* as its subject, with no
+      `[AI:codex] type(scope):` prefix and no `(BUG-1718)` trailer; `9c28221473` is an empty corrective
+      commit. Completion still resolves via 9c28221473's trailer, so this is cosmetic, but it should be
+      collapsed when the PR is squash-merged rather than landing on main as-is.
+    - **P3.** doctor_cmd.rs:659 counts reclaimable worktrees with
+      `finding.summary.contains("is mergeable-and-gone")`, a string coupling to the format string at
+      doctor_cmd.rs:5026. It works today (verified both sites), but a verdict/category field would be
+      the durable seam.
+    - codex reported "spec-trailer 2 passed" as coverage of the delegating probe. Those two tests
+      (`statusline_tests::trace_gate_reports_every_id_in_a_multi_spec_trailer`,
+      `auto_bump_done_tests::auto_bump_multi_spec_trailer_emits_one_terminal_event_per_spec`) are
+      coincidental name matches and exercise neither probe. The real direct coverage is
+      `bug_1657_batched_reap_tests.rs:283-296` — which is in the suite that fails.
+
+    ## What the rework must decide (advisor sketch required before implementing)
+
+    The narrow, safe move is to revert FIX3 and the 2035 test date, keep FIX1/FIX2/FIX4, and ship
+    BUG-1718 as the doctor-path fix only — but that leaves the *doctor* path relying on the same unsound
+    timestamp proxy, so it is not sufficient on its own either.
+
+    The real question is whether the new `Removable` arm at doctor_cmd.rs:4405 can exist at all. The
+    sound formulation of "no commit on this branch postdates the landing" is ancestry, not dates: every
+    branch-unique commit must be an ancestor of the landing commit. But if the batch merged the branch,
+    those commits *are* ancestors of main, `unique_unmerged_commits` is 0 and `ancestor_of_main` is
+    true — so control never reaches this arm. If the batch cherry-picked or squashed, they are not
+    ancestors and the guard is false. Under a sound predicate the arm appears to be unreachable, which
+    means BUG-1718's premise — that a batched landing can make a content-undecidable branch safely
+    reapable — may not be expressible. That is an architecture question, not an implementation detail:
+    it needs a sketch on this spec and advisor signoff before any more code is written.
+  created_at: 2026-09-28T19:21:13.717700659Z
+  modified_at: 2026-09-28T19:21:13.717700659Z
+  session_id: e9acd7c2-3db1-4cdf-8831-f1ed5f7d4200
 history:
 - id: 01a0e93c-a0a1-7810-b4e2-ac74ccca876e
   author: joe
