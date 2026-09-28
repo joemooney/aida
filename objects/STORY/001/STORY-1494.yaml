@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T08:50:07.919713651Z
-modified_at: 2026-09-28T08:50:12.120674608Z
+modified_at: 2026-09-28T12:43:13.939044245Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0e3a8-534d-78f0-a57d-6b7acc818783
   created_at: 2026-09-28T08:50:12.120666184Z
   created_by: joe
+comments:
+- id: 01a0e80a-7293-7523-9e92-09a729b84add
+  author: joe
+  content: 'Reviewer dispatch refused by the stale-base preflight at PR head 9ba1729f30fca101d5a41806a11b21774f9a48ca: PR is one commit behind origin/main and overlaps a changed file. Integrator rebase is required before a fresh exact-head review. No review verdict recorded.'
+  created_at: 2026-09-28T12:43:13.939044245Z
+  modified_at: 2026-09-28T12:43:13.939044245Z
