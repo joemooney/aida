@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e82a-632d-7280-b39e-60fcc0468459
+  author: aida-auto-bump
+  timestamp: 2026-09-28T13:18:07.149904415Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 - id: 01a0e82d-4b90-74d2-8a6c-f2b5e3b24c81
   author: aida-auto-bump
   timestamp: 2026-09-28T13:21:17.712681484Z
@@ -46,6 +53,12 @@ history:
     old_value: InProgress
     new_value: Completed
 processing_record:
+- id: 01a0e82a-633a-7a01-bd07-8d26ac0fce74
+  timestamp: 2026-09-28T13:18:07.162047156Z
+  agent: aida
+  commit_sha: 6dd405d4a5f0b2a49de050c0a6e9f57ecab452ba
+  summary: 'APPROVED (advisor, exact head). This rewrites no_direct_home_resolution_in_crate - the guard that caught a real non-hermetic HOME read in my OWN work earlier today - so I reviewed it specifically for weakening. It does the opposite, in four ways: (1) it scans the WHOLE WORKSPACE (aida-core, aida-cli-lib, aida-server, aida-tui, aida-cli, aida-crate) where the old version only walked aida-cli-lib/src, (2) it adds ''std::env::home_dir'' to the needles, which was an uncovered hole, (3) the exemption list is now FULL PATHS (aida-core/src/home.rs, aida-cli-lib/src/test_home.rs) instead of the old ends_with("test_home.rs") filename match, which any file of that name anywhere could satisfy, and (4) it detects a lookup split across lines, which the old line-by-line scan could not see. It also extracts raw_home_lookup_offenders so the scanner itself is testable, and tests it with DECOYS: three fixture files where the genuinely-exempt path is skipped while a same-named file in a subdirectory and a multiline var_os(\n \"HOME\"\n) are both caught, asserting exactly 2 offenders. That is a test of the detector, not just of the rule, which is what this kind of guard needs. The two production call sites gain #[cfg(test)] assert_hermetic checks on the resolved config dir - test-only, no release behaviour change. Required Build and merge-hold-gate green.'
+  review_verdict: approved
 - id: 01a0e82d-4ba7-7291-92eb-4956de9ab199
   timestamp: 2026-09-28T13:21:17.735177950Z
   agent: aida
