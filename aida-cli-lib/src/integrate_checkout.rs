@@ -84,6 +84,7 @@ pub(crate) fn ensure_integrator_checkout(project_root: &Path) -> Result<PathBuf>
         lease_ttl_secs: Some(crate::worktree_pool_config_lease_ttl_secs(project_root)),
         post_create_hooks: crate::worktree_pool_global_hooks("post_create"),
         init_submodules: crate::worktree_config_init_submodules(project_root),
+        parent_dir: crate::worktree_pool_config_worktree_parent(project_root),
     };
     aida_core::worktree_pool::acquire(project_root, &opts)
         .context("acquire a dedicated integrator worktree (BUG-650)")
