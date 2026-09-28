@@ -18,12 +18,12 @@ description: |-
   - `normalize_volatile` also drops the cache-provenance fields (`source`, `index_tip`) — or the history probe pins `AIDA_HISTORY_CACHE=0` — so the two spellings are compared on the answer, not on which source happened to serve it.
   - The test still fails if the two spellings genuinely disagree about `count` or any event field.
   - A regression test (or a comment recording the measurement above) states why the provenance fields are excluded, so a later reader does not re-add them.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:17:34.541546385Z
-modified_at: 2026-09-28T08:36:42.235715173Z
+modified_at: 2026-09-28T08:37:04.770094741Z
 req_type: Bug
 comments:
 - id: 01a0e456-ab17-70d3-bc37-0cb9ef98bf01
@@ -41,11 +41,3 @@ history:
     old_value: Draft
     new_value: Approved
 execution_mode: drive
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: tool-exit
-  detail: the implementer session exited 1 — it was aborted or errored (attempt 3/3)
-  recovery_hint: 'Continue the implementer session: `aida queue work BUG-1692 --resume`'
-  shelved_by: product
-  shelved_at: 2026-09-28T08:36:42.235715173Z
