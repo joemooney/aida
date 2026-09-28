@@ -3,12 +3,12 @@ spec_id: TASK-1537
 agreed_id: TASK-1537
 title: Baseline build timings for aida-cli-lib (STORY-1488 T1)
 description: 'Per the ADVISOR SIGNOFF on STORY-1488 (amendments 4-5): protocol a-d — clean build (sccache disabled), one-line lib.rs edit rebuild, one-line leaf-module edit rebuild, unit-test build --no-run; 3 runs each in a quiet window; record on STORY-1488 and in docs/plans/.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:16:56.745444346Z
-modified_at: 2026-09-28T15:51:05.851432427Z
+modified_at: 2026-09-28T15:53:41.611368652Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -113,12 +113,17 @@ comments:
     salvageable[0]{session,spec,worktree,hint}: has no implementer seats. No code changes or timings recorded.
   created_at: 2026-09-28T15:27:22.905712971Z
   modified_at: 2026-09-28T15:27:22.905712971Z
+- id: 01a0e8b8-d1eb-7643-9def-54f57ff6e935
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/lease-conflict: phase 1 retry cannot reclaim predecessor lease 01a0e89f on `TASK-1537` after 3 liveness re-probe(s); worktree: /tmp/aida-pool-aida-nightshift-0. No triage reason was given.'
+  created_at: 2026-09-28T15:53:41.611367272Z
+  modified_at: 2026-09-28T15:53:41.611367272Z
+history:
+- id: 01a0e8b8-d1eb-7643-9def-54e6edac92a7
+  author: joe
+  timestamp: 2026-09-28T15:53:41.611357738Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: lease-conflict
-  detail: 'phase 1 retry cannot reclaim predecessor lease 01a0e89f on `TASK-1537` after 3 liveness re-probe(s); worktree: /tmp/aida-pool-aida-nightshift-0'
-  recovery_hint: 'Continue the implementer session: `aida queue work TASK-1537 --resume 01a0e89fb0a8`'
-  shelved_by: product
-  shelved_at: 2026-09-28T15:43:17.643984221Z
