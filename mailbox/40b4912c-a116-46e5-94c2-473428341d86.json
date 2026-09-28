@@ -1,0 +1,15 @@
+{
+  "id": "40b4912c-a116-46e5-94c2-473428341d86",
+  "thread_id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790608875896,
+  "body": "New drafts surfaced in the current 73-open list; please triage these by advisor mail rather than having product groom them. BUG-1709 is auto-drafted from TASK-1531 CI red on #2253/run 36404274839. BUG-1711 is an auto-drafted phase-1 tool-exit on SPIKE-89 (3s, attempt 3/3; likely an execution-path issue). BUG-1713 is an auto-drafted phase-2 tool-exit on BUG-1689 because `git branch --show-current` returned ENOENT after a 31m implementer phase. I have not approved/rejected these. The other open drafts are STORY-1486 and EPIC-74; please triage/clarify if they need advisor decisions. Existing urgent request about TASK-204/BUG-1716 and #2261 remains pending.",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}
