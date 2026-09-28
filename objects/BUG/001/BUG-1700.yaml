@@ -60,12 +60,12 @@ description: |
        two distinct project roots sharing one parent not colliding.
   AC7. `aida doctor` (or the launch path) tells the operator plainly what to trust once: the resolved
        worktree parent directory. No silent hang on a modal.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T02:46:35.422630850Z
-modified_at: 2026-09-28T04:53:25.250989986Z
+modified_at: 2026-09-28T04:54:15.233215658Z
 req_type: Bug
 comments:
 - id: 01a0e5f3-ff30-7b32-844e-2156b8c85154
@@ -120,6 +120,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e65d-15c1-7223-883d-d716da7b2a62
+  author: joe
+  timestamp: 2026-09-28T04:54:15.233214173Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: bb445e1236ce2ea95f8427abca110ec4dd250960
   branch: main
