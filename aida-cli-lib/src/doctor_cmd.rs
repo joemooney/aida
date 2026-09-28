@@ -5862,10 +5862,21 @@ fn ensure_store_tracked_runtime_gitignore_with_patterns(
 // A git -C on a missing/non-repository store path walks upward. Require the
 // exact `.aida-store` directory to be the repository root before any writes.
 // trace:TASK-1547 | ai:codex
-fn is_intended_store_worktree(store_worktree: &std::path::Path) -> bool {
+fn is_intended_store_worktree(
+    project_root: &std::path::Path,
+    store_worktree: &std::path::Path,
+) -> bool {
+    let Some(canonical_store) =
+        aida_core::store_locate::detect_distributed_store_from(project_root)
+    else {
+        return false;
+    };
     let Ok(expected_root) = std::fs::canonicalize(store_worktree) else {
         return false;
     };
+    if std::fs::canonicalize(canonical_store).ok().as_ref() != Some(&expected_root) {
+        return false;
+    }
     let Ok(output) = std::process::Command::new("git")
         .arg("-C")
         .arg(store_worktree)
@@ -5878,7 +5889,35 @@ fn is_intended_store_worktree(store_worktree: &std::path::Path) -> bool {
         return false;
     }
     let reported = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    std::fs::canonicalize(reported).is_ok_and(|root| root == expected_root)
+    if !std::fs::canonicalize(reported).is_ok_and(|root| root == expected_root) {
+        return false;
+    }
+    // A standalone repository at `.aida-store` can pass the root check too.
+    // An attached linked worktree has a `.git` file and resolves a distinct
+    // git-dir and common-dir; require both, plus the canonical orphan branch.
+    if !std::fs::symlink_metadata(store_worktree.join(".git"))
+        .is_ok_and(|metadata| metadata.file_type().is_file())
+    {
+        return false;
+    }
+    let git_value = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(store_worktree)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    };
+    let (Some(git_dir), Some(common_dir), Some(branch)) = (
+        git_value(&["rev-parse", "--git-dir"]),
+        git_value(&["rev-parse", "--git-common-dir"]),
+        git_value(&["symbolic-ref", "--quiet", "--short", "HEAD"]),
+    ) else {
+        return false;
+    };
+    git_dir != common_dir && branch == "aida-store"
 }
 
 // TASK-1547: repair the independent staging-ignore finding on the orphan
@@ -5889,7 +5928,7 @@ fn heal_doctor_store_staging_ignore(
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
     let store_worktree = project_root.join(".aida-store");
-    if !is_intended_store_worktree(&store_worktree) {
+    if !is_intended_store_worktree(project_root, &store_worktree) {
         return Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
@@ -6051,6 +6090,50 @@ mod story_462_doctor_tests {
                 .map(|pattern| format!("{pattern}\n"))
                 .collect::<String>()
         )
+    }
+
+    fn task_1547_linked_store(
+        branch: &str,
+        contents: &str,
+    ) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path();
+        let run_git = |cwd: &std::path::Path, args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(cwd)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        run_git(project, &["init", "--initial-branch=main", "-q"]);
+        run_git(project, &["config", "user.name", "AIDA Fixture"]);
+        run_git(
+            project,
+            &["config", "user.email", "aida-fixture@example.invalid"],
+        );
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        run_git(project, &["add", ".aida/config.toml"]);
+        run_git(project, &["commit", "-qm", "fixture project"]);
+        let store = project.join(".aida-store");
+        run_git(
+            project,
+            &["worktree", "add", "-b", branch, store.to_str().unwrap()],
+        );
+        std::fs::write(store.join(".gitignore"), contents).unwrap();
+        run_git(&store, &["add", ".gitignore"]);
+        run_git(&store, &["commit", "-qm", "fixture store"]);
+        (dir, store)
     }
 
     #[test]
@@ -6230,6 +6313,100 @@ mod story_462_doctor_tests {
     }
 
     #[test]
+    fn task_1547_standalone_store_repo_fails_closed_without_file_index_or_head_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path();
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output
+        };
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&store)
+            .args(["init", "-b", "aida-store", "-q"])
+            .status()
+            .unwrap()
+            .success());
+        git(&["config", "user.name", "AIDA Fixture"]);
+        git(&["config", "user.email", "aida-fixture@example.invalid"]);
+        git(&["add", ".gitignore"]);
+        git(&["commit", "-qm", "fixture baseline"]);
+        let before_file = std::fs::read(store.join(".gitignore")).unwrap();
+        let before_head = git(&["rev-parse", "HEAD"]).stdout;
+        let before_index = git(&["write-tree"]).stdout;
+        let finding = DoctorFinding {
+            category: "store-staging-ignore".into(),
+            id: ".gitignore".into(),
+            summary: "missing staging ignores".into(),
+            action: "append staging ignores".into(),
+            safe_heal: true,
+        };
+
+        let result = heal_doctor_store_staging_ignore(project, &finding).unwrap();
+
+        assert_eq!(result.status, "failed");
+        assert_eq!(
+            std::fs::read(store.join(".gitignore")).unwrap(),
+            before_file
+        );
+        assert_eq!(git(&["rev-parse", "HEAD"]).stdout, before_head);
+        assert_eq!(git(&["write-tree"]).stdout, before_index);
+    }
+
+    #[test]
+    fn task_1547_wrong_branch_store_fails_closed_without_file_index_or_head_changes() {
+        let (_dir, store) = task_1547_linked_store("wrong-store", &bug_563_runtime_patterns());
+        let project = store.parent().unwrap();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        let before_file = std::fs::read(store.join(".gitignore")).unwrap();
+        let before_head = git(&["rev-parse", "HEAD"]).stdout;
+        let before_index = git(&["write-tree"]).stdout;
+        let finding = DoctorFinding {
+            category: "store-staging-ignore".into(),
+            id: ".gitignore".into(),
+            summary: "missing staging ignores".into(),
+            action: "append staging ignores".into(),
+            safe_heal: true,
+        };
+
+        let result = heal_doctor_store_staging_ignore(project, &finding).unwrap();
+
+        assert_eq!(result.status, "failed");
+        assert_eq!(
+            std::fs::read(store.join(".gitignore")).unwrap(),
+            before_file
+        );
+        assert_eq!(git(&["rev-parse", "HEAD"]).stdout, before_head);
+        assert_eq!(git(&["write-tree"]).stdout, before_index);
+    }
+
+    #[test]
     fn task_1547_fully_guarded_store_is_byte_identical() {
         let contents = format!(
             "{}\n{}",
@@ -6254,11 +6431,8 @@ mod story_462_doctor_tests {
 
     #[test]
     fn task_1547_repair_commits_store_gitignore_on_orphan_branch() {
-        let dir = tempfile::tempdir().unwrap();
-        let project = dir.path();
-        let store = project.join(".aida-store");
-        std::fs::create_dir_all(store.join("objects")).unwrap();
-        std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
+        let (_dir, store) = task_1547_linked_store("aida-store", &bug_563_runtime_patterns());
+        let project = store.parent().unwrap();
         let git = |args: &[&str]| {
             std::process::Command::new("git")
                 .arg("-C")
