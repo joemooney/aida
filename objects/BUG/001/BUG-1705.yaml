@@ -1,0 +1,70 @@
+id: 01a0e68a-df5c-7073-ba6c-4593e16daeb4
+spec_id: BUG-1705
+agreed_id: BUG-1705
+title: 'A recorded request-changes verdict does not hold the PR: the merge gate reads the aida:merge-hold label, not the verdict, so a rejected PR stays mergeable and unlisted'
+description: |
+  A recorded `request-changes` verdict at a PR's exact head does NOT hold the PR. The hold is
+  derived from the `aida:merge-hold` LABEL, so a verdict recorded without someone also applying the
+  label leaves the PR listed as mergeable and absent from the coordination view.
+
+  OBSERVED 2026-09-27 (advisor seat, this is a real instance, not a hypothetical)
+
+  PR #2242 (BUG-1673) had `request-changes` recorded against `9cd65761d7`, its exact current head,
+  at 2026-09-28T05:11Z, with a specific finding (a missing non-vacuous unwind test for RAII
+  warning-sink cleanup). At the same time:
+
+    * `gh pr view 2242` reported `mergeStateStatus: CLEAN` with NO labels — merge-hold-gate passes
+      when the label is absent, so nothing blocked the merge.
+    * `aida awaiting` listed `held_prs[1]` containing ONLY #2226 — which does carry the label — and
+      did NOT list #2242, despite both having `request-changes` at their exact heads.
+
+  So the rejection was invisible to the view whose job is to surface it, and unenforced by the gate
+  whose job is to enforce it. I applied the label by hand to stop the merge, which is exactly the
+  manual step that should not be load-bearing.
+
+  WHY THIS MATTERS MORE THAN A MISSING LIST ENTRY
+
+  `aida review record`'s own help text sells the feature as enforcement: "A verdict written only as
+  prose cannot be enforced. Recording it here stores the verdict, the commit the review examined,
+  and the time — and `aida queue done` then REFUSES to mark the spec done while the branch still
+  sits at that commit." That promise covers `aida queue done`. It does NOT cover PR merge, and
+  nothing in the recorded-verdict path applies the label. A reviewer who records a rejection
+  reasonably believes the substrate now holds the PR. It does not.
+
+  This is the substrate-as-bouncer principle failing at exactly the gate that matters: the merge.
+  An orchestrator draining merges, or a human reading a green PR, can land a PR that an independent
+  review rejected at that very sha.
+
+  ACCEPTANCE
+
+  AC1. A `request-changes` (or `rejected`) verdict recorded against a sha that is a PR's current
+       head causes that PR to be HELD, without anyone applying a label by hand.
+  AC2. The same PR appears in `aida awaiting` under `held_prs` with reason_kind `rework`, the sha,
+       and the finding count — matching how #2226 already presents.
+  AC3. The hold lifts automatically when the head MOVES PAST the rejected sha and a later
+       `approved` verdict is recorded at the new head. Moving the head alone must NOT lift it (that
+       would let a no-op commit clear a real rejection), and neither must an `approved` verdict
+       recorded at the OLD rejected sha.
+  AC4. Whatever mechanism is chosen is explicit about label vs. verdict as the source of truth. If
+       the label stays the enforcement point, then recording a rejecting verdict must APPLY the
+       label as part of the same operation, so the two cannot disagree. If the verdict becomes the
+       source of truth, the label becomes advisory and the gate reads the verdict.
+  AC5. A verdict recorded for a spec with no open PR is not an error and holds nothing.
+  AC6. Covered by tests over the decision inputs (verdict, verdict sha, PR head sha, presence of a
+       later verdict) with no network — including the AC3 cases, which are the ones that can
+       wrongly release a hold.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T05:44:15.964379833Z
+modified_at: 2026-09-28T05:44:15.964379833Z
+req_type: Bug
+filed_at:
+  code_sha: 241d657212009800e2cce153a52dd589ee5260eb
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f398fd1226
+  vendor: antigravity
+  session: fc2bef36-971e-4674-a858-0de8a84a1006
