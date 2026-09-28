@@ -1,0 +1,15 @@
+{
+  "id": "c84d3098-9e99-4469-800a-7dfeb47d9f77",
+  "thread_id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790608680728,
+  "body": "Urgent product routing request: `aida list` remains 72 open. I released only our completed, dormant TASK-1499 lease; #2261 is still open at 8021605585e738a345f18e1db55cb2d7246807c0 with required Build failed on two tests (details in thread 90bfab64); please route its rework and independent re-review. TASK-204 is NeedsAttention after launcher/triage failures; BUG-1716 is a draft auto-generated from those failures (details in f42c9adc); please triage and give a safe recovery command. The five burndown-ready items still lack persisted execution modes, and SPIKE-89 research is attached but remains parked after default:off was recorded. Please assign modes/queue state and dispositions so product can resume dispatch. I have not groomed or approved BUG-1716, force-requeued TASK-204, or merged any PR.",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}
