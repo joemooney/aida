@@ -1107,6 +1107,60 @@ mod tests {
         Bug1673WarningSinkGuard
     }
 
+    /// A panic unwinding past the guard MUST leave the sink uninstalled.
+    ///
+    /// This is the assertion the RAII guard exists for, and it is deliberately
+    /// non-vacuous: `bug_1673_capture_warning` returns whether a sink took the
+    /// message, so if `Drop` stopped clearing the slot the post-unwind call would
+    /// return `true` and the old sink would collect a second string. Both are
+    /// asserted, so removing `impl Drop for Bug1673WarningSinkGuard` fails this
+    /// test rather than silently passing it.
+    ///
+    /// Without this, a leaked sink outlives its test and captures warnings
+    /// belonging to whatever runs next on the thread — the failure mode is a
+    /// confusing pass somewhere else, not a failure here.
+    // trace:BUG-1673 | ai:claude
+    #[test]
+    fn bug_1673_warning_sink_is_cleared_when_a_panic_unwinds_past_the_guard() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let captured: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let sink_log = Rc::clone(&captured);
+
+        // The deliberate panic below would otherwise print a scary backtrace line
+        // into an otherwise-passing run; silence it just for this scope.
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard =
+                bug_1673_install_warning_sink(move |m| sink_log.borrow_mut().push(m.to_string()));
+            assert!(
+                bug_1673_capture_warning("captured while the sink is installed"),
+                "precondition: the sink must be live inside the scope, or the test \
+                 proves nothing about clearing it"
+            );
+            panic!("bug-1673: unwind past the warning-sink guard");
+        }));
+        std::panic::set_hook(previous_hook);
+
+        assert!(
+            unwound.is_err(),
+            "the scope must actually panic, otherwise this exercises the normal \
+             drop path and not the unwind path"
+        );
+        assert!(
+            !bug_1673_capture_warning("emitted after the unwind"),
+            "the guard must clear the sink while unwinding: a warning after the \
+             panic was still captured, so the sink leaked"
+        );
+        assert_eq!(
+            captured.borrow().as_slice(),
+            ["captured while the sink is installed".to_string()],
+            "the post-unwind warning must not have reached the old sink"
+        );
+    }
+
     /// Install a before-read hook; returns the call counter it increments.
     // trace:BUG-1673 | ai:claude
     #[cfg(feature = "native")]
