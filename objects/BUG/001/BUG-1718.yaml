@@ -21,12 +21,12 @@ description: |
   2. A worktree registration whose directory no longer exists is pruned without emitting a finding.
   3. `aida pr ship` step 6 does not print per-finding detail for this category on the success path; a one-line summary pointing at `aida doctor --category merged-agent-worktrees` is enough. The ship result must not be buried.
   4. A branch with GENUINELY unmerged work still surfaces, proven by a test that asserts the real case is not swallowed by the fix for (1).
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T18:17:29.160704399Z
-modified_at: 2026-09-28T19:24:29.119169382Z
+modified_at: 2026-09-28T19:57:50.838631859Z
 req_type: Bug
 comments:
 - id: 01a0e94d-080c-75c1-99ce-22b0b207afb5
@@ -397,6 +397,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e998-596e-71c2-bb61-6f6a1777500e
+  author: aida-auto-bump
+  timestamp: 2026-09-28T19:57:50.830884346Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e998-5976-73a3-93f1-fbb6a8f107b7
+  timestamp: 2026-09-28T19:57:50.838631019Z
+  agent: implementer
+  commit_sha: 8a6608bc1c4431ea9d2087663a52037c6370441f
+  summary: Completed via merge 8a6608bc
 execution_mode: drive
 filed_at:
   code_sha: b04601845909f555a23c71fa3548fc5c967d8659
@@ -406,3 +419,7 @@ filed_at:
   aida_build_sha: b046018459
   vendor: antigravity
   session: 7121c883-8051-4f5d-bccc-4953b9b1748d
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T19:57:50.830859244Z
+  completion_sha: 8a6608bc1c4431ea9d2087663a52037c6370441f
