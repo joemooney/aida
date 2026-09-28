@@ -4732,9 +4732,10 @@ fn run() -> Result<()> {
             crate::cli::RemoteCommand::Mirror { name, url } => {
                 remote_create::handle_remote_mirror(&project_root, name, url.as_deref())
             }
-            crate::cli::RemoteCommand::MirrorPush { pushed_remote } => {
-                remote_create::handle_remote_mirror_push(&project_root, pushed_remote)
-            }
+            crate::cli::RemoteCommand::MirrorPush {
+                pushed_remote,
+                dry_run,
+            } => remote_create::handle_remote_mirror_push(&project_root, pushed_remote, *dry_run),
             // trace:BUG-1676 | ai:claude
             crate::cli::RemoteCommand::MirrorSync { json } => {
                 remote_create::handle_remote_mirror_sync(&project_root, *json)
