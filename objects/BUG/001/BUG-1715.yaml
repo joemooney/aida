@@ -122,14 +122,6 @@ processing_record:
   summary: 'APPROVED under the operator''s explicit emergency merge authorization (2026-09-28 05:40: ''merge and fix everything you can''). DISCLOSURE: I authored this, so this is not an independent review - it is the operator''s gate being exercised through me, and I am recording that plainly rather than implying a second pair of eyes. What makes it safe to merge on that basis: the change is ONE expression, split_at(n) -> get(..n), removing a panic; it cannot make behaviour worse because the old code aborted the process on this input. Four regression tests, one using the EXACT production string that crashed, one sweeping every byte offset near the prefix boundary, one for short non-ASCII input, and one asserting a real why-open: comment whose reason contains an em-dash still parses - so the panic is not traded for a wrong answer. Verified on the live store: aida human now completes and surfaces 11 open items that were unreachable. This also unblocks the burndown itself, which is why it is being merged during the emergency: parse_why_open_comment sits in collect_open_facts, so the crash blinded the very loop that is supposed to be draining the backlog. Required Build and merge-hold-gate green. Recorded audit on the spec shows this is a recurrence of the BUG-525 class with two sibling sites verified clean.'
   review_verdict: approved
 execution_mode: drive
-filed_at:
-  code_sha: 5632229e663b9d782e1f2c427a3176792f8447ae
-  branch: claude/bug-1701-drain-routing
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: 304ca777b1
-  vendor: antigravity
-  session: fc2bef36-971e-4674-a858-0de8a84a1006
 implementation_info:
   implemented: false
   completed_at: 2026-09-28T12:57:53.596974217Z
