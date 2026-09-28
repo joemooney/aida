@@ -1,4 +1,11 @@
 - user_id: joe
+  requirement_id: 01a0df46-c67a-7fa2-bb7e-918ab66f7ece
+  position: 1000
+  added_by: joe
+  note: Independent exact-head review at 9cd6576 requests focused panic-unwind test for warning-sink RAII cleanup; see .aida/review-verdicts/BUG-1673.json and codex brief.
+  added_at: 2026-09-28T05:25:47.288528220Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 01a0e478-2afd-7970-af85-43c7d289536e
   position: 2000
   added_by: joe
