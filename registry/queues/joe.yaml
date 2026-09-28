@@ -1,4 +1,12 @@
 - user_id: joe
+  requirement_id: 01a0df11-73db-7ee0-b73d-53657f742324
+  position: -6000
+  added_by: joe
+  note: 'PR #2252 exact head ed0e5edd7d24 has independent Codex request-changes: Claude-only saved-selection report wiring lacks a fixture test. Focused tests passed.'
+  added_at: 2026-09-28T11:27:29.663094399Z
+  for_role: advisor
+  added_by_machine: imac
+- user_id: joe
   requirement_id: 01a0de72-a5c3-7492-a40a-661419255153
   position: -5000
   added_by: joe
@@ -127,13 +135,6 @@
   note: auto-queued by `session end` (01a0e729); covers 1 spec
   added_at: 2026-09-28T08:50:14.758635232Z
   for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0df11-73db-7ee0-b73d-53657f742324
-  position: 47000
-  added_by: joe
-  added_at: 2026-09-28T08:54:05.936168349Z
-  for_role: implementer
   added_by_machine: imac
 - user_id: joe
   requirement_id: 01a0e740-00de-7fd2-8b43-287f8a65c44a
