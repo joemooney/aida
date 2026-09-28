@@ -51,7 +51,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T03:16:09.883864860Z
-modified_at: 2026-09-28T08:10:08.131556174Z
+modified_at: 2026-09-28T08:10:26.172286389Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -116,6 +116,11 @@ comments:
   content: 'Review: APPROVE (5632229e663b9d782e1f2c427a3176792f8447ae, PR #2249). Verified drain-only fail-open routing and both launch sites before side effects; foreground/--bg messages are truthful and promote ; long-help claims are pinned by direct assertions; AC5 is owned by BUG-1704 via one carved-out-to edge. Store lookup errors are not exercised by the tests, as the test comments accurately disclose, but the implementation handles them fail-open.'
   created_at: 2026-09-28T08:10:08.131556174Z
   modified_at: 2026-09-28T08:10:08.131556174Z
+- id: 01a0e710-b1fc-7360-bada-a1f59be4271e
+  author: joe
+  content: 'Correction to the review note: the first comment lost the literal command due to shell backtick expansion. The refusal promotes aida do <SPEC> as the first backticked command. Exact-head verdict remains APPROVED for 5632229e663b9d782e1f2c427a3176792f8447ae.'
+  created_at: 2026-09-28T08:10:26.172286389Z
+  modified_at: 2026-09-28T08:10:26.172286389Z
 history:
 - id: 01a0e603-e772-7db1-8f2e-ed88ef0a8747
   author: joe
