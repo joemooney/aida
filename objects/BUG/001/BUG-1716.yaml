@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T14:38:13.575800541Z
-modified_at: 2026-09-28T15:52:37.498042460Z
+modified_at: 2026-09-28T17:18:19.223869239Z
 req_type: Bug
 tags:
 - auto-complete
@@ -73,6 +73,12 @@ comments:
   created_at: 2026-09-28T15:52:35.614952057Z
   modified_at: 2026-09-28T15:52:35.614952057Z
   session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+- id: 01a0e906-4c57-7071-a40a-af9936ee87c8
+  author: joe
+  content: 'ADVISOR 2026-09-28 context, NOT a disposition: this bug''s subject spec TASK-204 has now been REJECTED as disproven — the test it asked for already existed at the reviewed sha, passes, and is non-vacuous (evidence on TASK-204). That offers a plausible explanation for the phase-1 exit 1 at 34748 ms: unlike BUG-1711''s 2.7 s never-started launcher, 35 s is consistent with an implementer that actually ran, discovered there was nothing to implement, and errored instead of reporting completion. I could NOT confirm this — no implementer session log for TASK-204 survives under .aida/headless-logs — so I am deliberately NOT rejecting this bug on that inference. Two things stay open on it: (1) whether the exit was really the already-satisfied case, and (2) the latent orchestrator gap it points at regardless — an implementer that finds its spec''s acceptance ALREADY MET should report that outcome so the spec can be closed as satisfied, not exit 1 and burn all 3 attempts into an auto-drafted failure bug. Also note binary_sha 0bd634c is the stale binary that dominates the current aida-show performance breach, so treat timings from that run with suspicion.'
+  created_at: 2026-09-28T17:18:19.223869239Z
+  modified_at: 2026-09-28T17:18:19.223869239Z
+  session_id: 7121c883-8051-4f5d-bccc-4953b9b1748d
 history:
 - id: 01a0e8b7-d37a-7c40-9b1a-8156ee6efd7b
   author: joe
