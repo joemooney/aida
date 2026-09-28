@@ -104393,6 +104393,21 @@ struct ResumeEntry {
     from_pr: bool,
 }
 
+/// What the ownership probe concluded about a same-branch open change before
+/// TASK-1529 retracts it. `Foreign` and `Unverified` both refuse the close, but
+/// they are different operator situations: a change we could not identify may
+/// still be ours and still carries failing guards, so it is reported as loudly
+/// as a failed close, while somebody else's change is left alone quietly.
+// trace:TASK-1529 | ai:claude
+enum RetractionOwnership {
+    /// Open, and its author is this forge identity.
+    Ours,
+    /// Resolved, and not ours to close.
+    Foreign,
+    /// The probe itself failed, or the forge withheld the author.
+    Unverified,
+}
+
 impl RealPhaseDriver {
     /// Set the PR number AND, if the spec is supervised, stamp the merge-hold
     /// marker the MOMENT the PR becomes known (fresh creation or recovery/detect)
@@ -104527,16 +104542,63 @@ impl RealPhaseDriver {
         }
     }
 
-    /// TASK-1289: the publication guards refused, but the implementer may
+    /// TASK-1529: the publication guards refused, but the implementer may
     /// already have opened the PR. Retract an OPEN change through the forge so
     /// "the guards refused" and "nothing is published" are the same state. An
     /// already-merged change is left alone: closing is meaningless there and
     /// the drive's AlreadyMerged handling owns it. Best-effort: a failed
     /// close is reported and the phase still fails. Split out of
     /// `run_implementer` so a test can drive it with an injected forge.
-    // trace:TASK-1289 trace:TASK-1421 | ai:claude
+    // trace:TASK-1529 trace:TASK-1421 | ai:codex
     fn retract_refused_publication(&mut self, branch: &str, detail: &str) {
         if let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(branch) {
+            // A same-branch PR may have been opened by an operator while the
+            // implementer was running. Branch presence alone does not prove
+            // the agent published it. Require both forge identities to resolve
+            // and match before applying this destructive lifecycle action.
+            let forge = self.project_forge();
+            let mut sink = crate::network_retry::NoopSink;
+            let metadata = forge.change_metadata(pr.number, &mut sink);
+            let owner = forge.authenticated_user_login();
+            let ownership = match (metadata, owner) {
+                (Ok(meta), Ok(owner)) if meta.state == crate::forge::ChangeState::Open => {
+                    match meta.author.as_deref() {
+                        Some(author) if author.eq_ignore_ascii_case(&owner) => {
+                            RetractionOwnership::Ours
+                        }
+                        Some(_) => RetractionOwnership::Foreign,
+                        None => RetractionOwnership::Unverified,
+                    }
+                }
+                // A change that is no longer open needs no retraction, and the
+                // AlreadyMerged path owns the merged case.
+                (Ok(_), Ok(_)) => RetractionOwnership::Foreign,
+                _ => RetractionOwnership::Unverified,
+            };
+            match ownership {
+                RetractionOwnership::Ours => {}
+                RetractionOwnership::Foreign => {
+                    if !self.json {
+                        eprintln!(
+                            "  {} left PR-{} open — this forge identity did not open it",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            pr.number,
+                        );
+                    }
+                    return;
+                }
+                RetractionOwnership::Unverified => {
+                    if !self.json {
+                        eprintln!(
+                            "  {} PR-{} is OPEN and its publication guards FAILED, but who \
+                             opened it could not be confirmed — check it by hand",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            pr.number,
+                        );
+                    }
+                    return;
+                }
+            }
             let change = crate::forge::ChangeRef {
                 id: pr.number,
                 url: pr.url.clone(),
@@ -104545,7 +104607,7 @@ impl RealPhaseDriver {
                 title: Some(pr.title.clone()),
             };
             let note = implementer_preflight::retraction_notice(detail);
-            match self.project_forge().close_change(&change, &note) {
+            match forge.close_change(&change, &note) {
                 Ok(()) => {
                     if !self.json {
                         eprintln!(
@@ -106676,6 +106738,38 @@ mod forge_seam_tests {
             forge.closed().is_empty(),
             "a merged change must never be closed: {:?}",
             forge.closed()
+        );
+    }
+
+    #[test]
+    fn refused_preflight_leaves_same_branch_pr_by_another_user_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(43, "claude/task-1421"));
+        forge.author = Some("operator".into());
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+
+        assert!(
+            forge.closed().is_empty(),
+            "same-branch PR by a different forge user must remain untouched"
+        );
+    }
+
+    #[test]
+    fn refused_preflight_fails_closed_when_pr_author_is_unknown() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(44, "claude/task-1421"));
+        forge.author = None;
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+
+        assert!(
+            forge.closed().is_empty(),
+            "unknown ownership must fail closed"
         );
     }
 }
