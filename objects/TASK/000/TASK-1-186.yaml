@@ -8,18 +8,34 @@ description: |-
 
   PR: #2217
   Reviewed sha: ade1cecfb67c8bcb02345a8d2cbed91ae2825cc2
-status: Approved
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-28T13:55:27.574560889Z
-modified_at: 2026-09-28T14:00:19.971413320Z
+modified_at: 2026-09-28T14:04:14.440469493Z
 req_type: Task
 tags:
 - carried-from:STORY-1476
 - finding-hash:e1b008a0
 - from-review:PR-2217
 - kind:carried-forward
+comments:
+- id: 01a0e854-9cf0-7fe1-8d0e-cb13c258aa14
+  author: joe
+  content: |-
+    Dismissed by joe 2026-09-28: DISPROVEN, not waived. The finding claimed the fail-closed tests at story_1476_acceptance_trust_tests.rs:550-559 are vacuous because cases `*\r`/`*\n` 'produce literal backslash-r/backslash-n' caught by the separate backslash rule, so they never prove a real trailing CR/LF is rejected pre-trim.
+
+    The reasoning stops one layer early. The Rust literal is indeed `*`, `\`, `r`, but format! interpolates it into a TOML body as acceptance_command_allow = ["*\r"], and \r IS a valid escape in a TOML basic string, so the parser decodes it. Verified with tomllib (TOML 1.0): rust literal '*\\r' -> TOML ["*\r"] -> parsed bytes b'*\r'. No backslash survives into the value.
+
+    DECISIVE CHECK: I reverted the production fix to the pre-fix ordering (trim first, then contains_refused_chars(trimmed)) and re-ran the test. It FAILED on the FIRST case — the one called inert: 'panicked at story_1476_acceptance_trust_tests.rs:560:9: entry "*\\r" must deny the whole policy; test result: FAILED. 0 passed; 1 failed'. Mechanism: Rust str::trim treats CR as whitespace, so without the fix `*\r`.trim() == `*`, contains_refused_chars("*") is false, and the entry is accepted as FULL TRUST — the exact escalation STORY-1476 exists to prevent. The test is therefore the load-bearing proof of the fix, not vacuous. Fix restored; nothing from the experiment was committed.
+
+    RESIDUE, recorded but not worth a spec: of the six cases in that loop, `cargo test\u0007` (BEL) WOULD still pass without the fix, since trim does not strip BEL. The CR and LF cases carry the proof. Anyone extending that loop should know which cases are load-bearing; this is noted on STORY-1476.
+
+    PR #2217 merged at 1e594926d8c8 after an independent cross-vendor re-review (codex, read-only) returned APPROVE with line citations, plus 21/21 local story_1476 tests. Dismissed by the advisor seat 2026-09-28.
+  created_at: 2026-09-28T14:04:14.440469493Z
+  modified_at: 2026-09-28T14:04:14.440469493Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
 history:
 - id: 01a0e851-0903-79e3-b4eb-109413db8348
   author: joe
@@ -28,6 +44,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e854-9d0c-7242-81b3-721b098a8514
+  author: joe
+  timestamp: 2026-09-28T14:04:14.476055717Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 1e594926d8c8a7246caa07afc93ac003e83f0f0b
   branch: main
