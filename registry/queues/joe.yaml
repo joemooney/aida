@@ -101,3 +101,10 @@
   added_at: 2026-09-28T13:40:24.602085160Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e824-1146-72f1-81d4-97ab0749672b
+  position: 61000
+  added_by: joe
+  added_at: 2026-09-28T14:35:53.926962111Z
+  for_role: implementer
+  added_by_machine: imac
