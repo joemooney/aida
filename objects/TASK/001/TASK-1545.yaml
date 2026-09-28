@@ -8,11 +8,38 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:25:56.262077452Z
-modified_at: 2026-09-28T15:51:03.342505863Z
+modified_at: 2026-09-28T15:58:54.985527714Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0d99d-2d6d-7353-aff2-5dec706adddf
   created_at: 2026-09-26T23:26:02.930945313Z
   created_by: joe
+comments:
+- id: 01a0e8bd-9a09-7a41-94c5-02abd2b36012
+  author: joe
+  content: |-
+    REOPENED — marked Done with acceptance item 4 unmet. Items 1-3 are genuinely satisfied, but incidentally, by STORY-1476 (#2217) merging; item 4 was never touched.
+
+    VERIFIED ITEM BY ITEM at main 1e594926d8:
+
+    1. 'An allow entry with a trailing CR or other refused char denies the whole policy (check before trim)' — DONE. acceptance_command_policy_from_toml now calls contains_refused_chars(entry) on the RAW entry before entry.trim(), carrying 'trace:STORY-1476 trace:TASK-1545'. I proved it non-vacuous by reverting the ordering and watching story_1476_allow_entry_refused_char_checked_before_trim fail on the '*\r' case.
+
+    2. 'aida config show's [review] source label resolves the same home the policy uses' — DONE. config_cmd.rs:2309 calls crate::acceptance_command_policy_global_quiet() — literally the same loader graded review uses — and its declared-check resolves through aida_home_dir(). Comment says so explicitly.
+
+    3. 'The repo opt-in notice uses a local default-branch read (no gh call) or is cached per run' — DONE. acceptance_command_policy_repo_optin reads .aida/config.toml directly and falls back to crate::trusted_config::read_trusted_config_toml(project_root). No gh invocation and no Command::new in that path.
+
+    4. 'Docs: unset HOME under the same uid falls back to the passwd home (correct the fail closed wording)' — **NOT DONE.** Evidence:
+       - docs/security/config-trust-boundary.md:46 still reads '... Machine-global ~/.aida/config.toml only (repo copy — branch-local and default-branch — ignored; fail-closed to denied)'.
+       - `grep -rn -iE 'passwd' docs/` returns NOTHING, so the passwd-home fallback is documented nowhere.
+       - `git log --all --grep=TASK-1545 --since=2026-09-27` shows only store metadata commits ('update TASK-1545', 'claim lease TASK-1545') — no code or docs commit ever landed for this spec.
+
+    WHY ITEM 4 IS A REAL CORRECTION, not a nit. aida_core::home::home_dir() is `$HOME`, then `$USERPROFILE`, then platform_home_dir() — which on unix resolves the passwd entry for the uid. So with HOME UNSET the policy does NOT fail closed: it still finds and reads ~/.aida/config.toml via the passwd home. A reader of line 46 would reasonably conclude that clearing HOME denies the policy, and that is wrong. The doc needs a sentence saying an unset HOME falls back to the passwd home for the same uid, so 'fail-closed' means 'denied when the config cannot be READ', not 'denied when HOME is absent'.
+
+    REMAINING WORK is docs-only and roughly one paragraph. Heft is effectively 1, not the original 4. execution_mode=drain is already persisted, so it is dispatchable as-is.
+
+    Reopened by the advisor seat, 2026-09-28. Recording this rather than leaving a false Done, because a spec that claims completion it does not have is the failure mode that makes the whole burndown untrustworthy.
+  created_at: 2026-09-28T15:58:54.985527714Z
+  modified_at: 2026-09-28T15:58:54.985527714Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
 execution_mode: drain
