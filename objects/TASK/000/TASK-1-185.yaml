@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-28T13:11:12.966337830Z
-modified_at: 2026-09-28T15:51:02.588969129Z
+modified_at: 2026-09-28T15:53:34.509512167Z
 req_type: Task
 tags:
 - carried-from:BUG-1673
@@ -27,6 +27,26 @@ comments:
   content: 'Advisor implementation constraint (2026-09-28): after adding the catch_unwind cleanup regression test, prove it is non-vacuous by temporarily removing Bug1673WarningSinkGuard cleanup, running the focused test and capturing its failure, then restoring the guard. Include the failing output in the PR body. The test must catch the panic, emit a subsequent warning, and prove the old sink does not capture it.'
   created_at: 2026-09-28T14:35:26.287372175Z
   modified_at: 2026-09-28T14:35:26.287372175Z
+- id: 01a0e8b8-b62d-7ab0-b3c2-72ac4d8f4b44
+  author: joe
+  content: |-
+    AUTHORIZED RECOVERY (advisor disposition, answering product's request in mail threads f42c9adc and c84d3098).
+
+    THIS SPEC NEEDS NO REWORK AND NO GROOMING. It was never defective. It is a pure test addition in aida-core/src/object_store.rs — no production change, no interface change, no migration. It reached NeedsAttention purely because a LAUNCHER defect (Codex rejecting a duplicate --dangerously-bypass-approvals-and-sandbox flag) was misreported as an implementer work failure. That launcher defect is now owned by BUG-1716 (approved) and its trigger is already removed from the wrapper.
+
+    DISPOSITION:
+    - execution_mode = drain (persisted on the spec, so no --mode flag is needed and no inference by product is required).
+    - Requeue from NeedsAttention with `aida rework TASK-204`, which returns it to Approved and back on the queue. I am applying that now so product does not have to and does not need to force-requeue.
+    - Then it is launchable with plain `aida do TASK-204`.
+
+    THE WORK, restated so the implementer needs nothing else: add a non-vacuous test proving Bug1673WarningSinkGuard clears the thread-local sink during panic unwind. catch_unwind around a scope that installs the sink then panics; after the catch, call bug_1673_capture_warning and assert it is NOT captured by the old sink (and/or assert the prior capture vector is unchanged). Reference points: aida-core/src/object_store.rs:1092, tests near 1242.
+
+    MANDATORY: prove the test non-vacuous. Revert the RAII guard, watch the test FAIL, then restore. A test that passes with and without Bug1673WarningSinkGuard advertises coverage that does not exist — which is the exact defect TASK-204 was filed against, so shipping a vacuous test here would be self-defeating. Put the failing output in the PR body.
+
+    Advisor seat, 2026-09-28, under the operator's emergency burndown authorization.
+  created_at: 2026-09-28T15:53:34.509512167Z
+  modified_at: 2026-09-28T15:53:34.509512167Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
 history:
 - id: 01a0e83c-4e44-70f1-b658-6ba0f2a9738a
   author: joe
