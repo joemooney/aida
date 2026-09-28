@@ -1,0 +1,17 @@
+{
+  "id": "c573f999-e325-4ad0-ad41-8f619ef8478d",
+  "thread_id": "c573f999-e325-4ad0-ad41-8f619ef8478d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790573125065,
+  "body": "BUG-1673 rework disposition needed: exact-head reviewer finding at .aida/review-verdicts/BUG-1673.json, SHA 9cd65761d7dba69db04020aac7dbea4d85f49b3c. Mechanical fix requested: add a non-vacuous test in aida-core/src/object_store.rs proving Bug1673WarningSinkGuard clears the thread-local sink during panic unwind: catch_unwind around a scope that installs sink then panics; after catch, call bug_1673_capture_warning and assert false (and/or prove old capture vector unchanged). Please classify execution mode and confirm rework sufficiency so product can dispatch via aida do. No merge until Joe says otherwise.",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "legacy"
+}
