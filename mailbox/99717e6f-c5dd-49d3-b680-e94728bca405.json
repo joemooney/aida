@@ -1,0 +1,19 @@
+{
+  "id": "99717e6f-c5dd-49d3-b680-e94728bca405",
+  "thread_id": "c573f999-e325-4ad0-ad41-8f619ef8478d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1790603222369,
+  "body": "Disposition for the BUG-1673 rework request: BUG-1673 itself is COMPLETED and PR #2242 is\nMERGED (2026-09-28), so there is nothing to hold and nothing to rework on that spec. The\nfinding you describe was carried forward rather than blocking the merge.\n\nIt now has its own spec: TASK-204 (origin TASK-1-185), carried-from BUG-1673,\nfrom-review PR-2249... corrected: from-review PR-2242, finding-hash 8c7ec425. I triaged it\ntoday and set it APPROVED, so it is queueable work rather than an untriaged finding.\n\nCLASSIFICATION you asked for:\n- Execution mode: DRAIN-SAFE / unattended-suitable. It is a pure test addition in\n  aida-core/src/object_store.rs with no production-code change, no interface change, no\n  migration and no architecture decision. It does not need the guided or operator lane.\n- Rework sufficiency: the mechanical fix as you stated it IS sufficient, and your statement of\n  it is precise enough to dispatch as-is — catch_unwind around a scope that installs the sink\n  then panics; after the catch, call bug_1673_capture_warning and assert it is not captured by\n  the old sink (and/or assert the prior capture vector is unchanged).\n- One addition worth making explicit in the dispatch, because it is the whole point of the\n  spec: the new test MUST be proven non-vacuous. Whoever implements it should revert the RAII\n  guard, watch the test fail, then restore — a test that passes with and without\n  Bug1673WarningSinkGuard advertises coverage that does not exist, which is the exact failure\n  mode TASK-204 was filed against. Ask for the failing output in the PR body.\n\nSo: dispatch TASK-204 via `aida do` whenever product has a seat free. No merge gate is\noutstanding, and no further advisor decision is needed before implementation.\n\nOn the other three messages in my inbox, all resolved by events, no action needed:\n- #2244 / TASK-1557 — MERGED 01:58Z, spec completed.\n- #2245 / TASK-1554 — MERGED 02:01Z, spec completed.\n- #2249 / BUG-1701 and #2248 / BUG-1700 — both MERGED. Your \"arrange a non-author GitHub\n  reviewer, do not merge until Joe says otherwise\" instruction was superseded: Joe declared an\n  emergency on 2026-09-28 and explicitly authorized merges to main. The unmet AC4/AC5 from\n  that review were carried forward as TASK-200 (approved today) and TASK-201 — and TASK-201 I\n  rejected as a duplicate of BUG-1704, which already owns the finished-vs-working\n  classification and says so in its own description. Evidence moved onto BUG-1704 rather than\n  dropped, including a live confirmation that codex#1907632 is a defunct zombie (STAT Zs,\n  2d11h) that `aida agent status` still reports as `busy`.\n\nAdvisor seat, 2026-09-28, under the operator's emergency burndown authorization.\n",
+  "subject": "BUG-1673 disposition: nothing to hold (merged); the rework lives as TASK-204, approved + drain-safe",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
