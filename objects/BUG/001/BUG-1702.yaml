@@ -1,0 +1,55 @@
+id: 01a0e603-6832-7182-b11f-92328c0932b8
+spec_id: BUG-1702
+agreed_id: BUG-1702
+title: Cargo target directories are being written into the /run/user tmpfs slot-lock directory, filling it to 0 bytes free and failing builds at link time
+description: |
+  `/run/user/1000` is a 7.1 GB tmpfs. The Cargo slot coordination directory
+  `/run/user/1000/cargo-slots-1000/` is meant to hold advisory lock files (`slot-0.lock`,
+  `slot-1.lock`, `queue.lock`). Something pointed a Cargo target directory at it instead.
+
+  Measured 2026-09-27 20:15, before cleanup:
+
+      tmpfs  7.1G  7.1G  0  100%  /run/user/1000
+
+      6.8G  /run/user/1000/cargo-slots-1000/debug
+      280M  /run/user/1000/cargo-slots-1000/aida-review-623ee41
+
+  A Cargo `debug/` profile directory and a per-review target directory, 7.1 GB total, on the tmpfs
+  that also backs the user session's runtime state.
+
+  Consequence: the BUG-1695 implementer seat reported "The required Cargo slot at
+  /run/user/1000/cargo-slots-1000 is a shared 7.1 GB tmpfs with 0 bytes free. The targeted build
+  failed at link time with 'Disk full?' and a bus error, so I made no code changes and did not commit
+  or open a PR." A full /run/user/1000 also risks the systemd user session, dbus sockets, and
+  anything else writing runtime state there — this is not only a build failure mode.
+
+  Cleared manually 2026-09-27 20:15 after confirming no live build held it (no open files under it,
+  nothing written in 20 minutes, no process carrying it as CARGO_TARGET_DIR): 7.1 GB free, all lock
+  files preserved. That is a manual recovery, not a fix.
+
+  ACCEPTANCE
+
+  AC1. The slot directory holds only coordination state. No AIDA-launched build or test writes a
+       Cargo target directory under `/run/user/1000`, and the seat briefs AIDA generates do not
+       suggest it. `--add-dir <slot dir>` grants lock access and must not be read as a target hint.
+  AC2. A guard refuses, or loudly warns, when a build is about to use a target directory on a tmpfs
+       under `/run/user`, naming the free space.
+  AC3. `aida doctor` reports free space on the slot filesystem and fails its check below a threshold
+       that would break a link step, so this is caught before a seat burns a dispatch on it.
+  AC4. A seat that fails a build for lack of disk reports that distinctly from a compile error, so
+       the orchestrator does not retry it as if the code were wrong.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T03:16:18.098775711Z
+modified_at: 2026-09-28T03:16:18.098775711Z
+req_type: Bug
+filed_at:
+  code_sha: 9099f64c8c97b0e9b00de5d73fe6a347fb96bf26
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 9099f64c8c
+  vendor: antigravity
+  session: 79f15ecb-4580-4277-9778-648c50ac17b4
