@@ -8,10 +8,32 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:17:12.775257717Z
-modified_at: 2026-09-27T00:17:23.934196619Z
+modified_at: 2026-09-28T23:13:06.427003070Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0df20-71aa-7963-851b-9b79abcb3965
   created_at: 2026-09-27T00:17:23.934184576Z
   created_by: joe
+comments:
+- id: 01a0ea4b-1d7b-7690-a839-1dce7bb5f1e7
+  author: joe
+  content: |
+    PR #2270 (TASK-1529) implements this spec's three acceptance criteria in full:
+
+    1. `ChangeMetadata.author` now carries the login (`author.login` on GitHub,
+       `author.username` on GitLab), parsed in both backends and asserted in both
+       metadata parse tests.
+    2. `retract_refused_publication` closes the change only when it is still OPEN
+       and its author matches `Forge::authenticated_user_login()`; every other
+       outcome fails closed.
+    3. `refused_preflight_leaves_same_branch_pr_by_another_user_open` is the
+       fake-forge test for an operator PR on the same branch (author `operator`,
+       identity `codex-bot`, zero `close_change` calls). A companion test covers
+       the author-is-`None` fail-closed case.
+
+    Recommend marking this Completed once #2270 merges, rather than re-opening the
+    same code path. Verify against the merged diff before closing.
+  created_at: 2026-09-28T23:13:06.427003070Z
+  modified_at: 2026-09-28T23:13:06.427003070Z
+  session_id: 71214fd6-ec84-46cf-87bf-fa8de48d6877
