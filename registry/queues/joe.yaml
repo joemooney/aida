@@ -123,3 +123,10 @@
   added_at: 2026-09-28T15:44:47.985183219Z
   for_role: product
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e00a-24a6-78d3-baa7-d2678b52cdc3
+  position: 64000
+  added_by: joe
+  added_at: 2026-09-28T15:45:21.073327695Z
+  for_role: implementer
+  added_by_machine: imac
