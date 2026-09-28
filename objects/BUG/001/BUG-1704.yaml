@@ -69,17 +69,25 @@ description: |
   AC6. Stale-lease accumulation is addressed or explicitly ruled out of scope: if the 99 stale leases
        are what make rule 3 fire universally, a sweep may be the smaller fix and should be compared
        against changing the classifier.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T04:56:26.956029730Z
-modified_at: 2026-09-28T04:56:26.956029730Z
+modified_at: 2026-09-28T04:56:38.936400501Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a0e603-481b-7670-a653-89bc492df94c
   created_at: 2026-09-28T04:56:29.466947434Z
+history:
+- id: 01a0e65f-4718-7fd1-9586-f0a804429302
+  author: joe
+  timestamp: 2026-09-28T04:56:38.936398632Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6c7683ec7c41907fbaddbe0a7eafb8ff31e9715c
   branch: claude/bug-1700-worktree-trust-parent
