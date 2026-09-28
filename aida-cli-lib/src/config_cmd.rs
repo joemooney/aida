@@ -395,6 +395,14 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "security-relevant — edit ~/.aida/agents.toml deliberately",
         },
     },
+    // trace:TASK-1500 | ai:codex
+    KnobSpec {
+        section: "agents",
+        key: "confirm_bypass",
+        doc: "Require interactive confirmation before supervised launches disable permission prompts.",
+        default: "true",
+        edit: EditSafety::ReadOnly { reason: "human consent setting — edit ~/.aida/config.toml deliberately" },
+    },
     // trace:STORY-807 | ai:codex
     KnobSpec {
         section: "agents",
@@ -814,6 +822,8 @@ fn render_effective_policy(project_root: &std::path::Path) {
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct PermissionPostureReport {
     pub agents: Vec<PermissionPostureRow>,
+    pub confirm_bypass: String,
+    pub confirm_bypass_source: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub findings: Vec<PermissionPostureFinding>,
 }
@@ -1315,7 +1325,13 @@ pub(crate) fn permission_posture_report(project_root: &std::path::Path) -> Permi
         .iter()
         .flat_map(|a| a.findings.iter().cloned())
         .collect();
-    PermissionPostureReport { agents, findings }
+    let confirm = crate::bypass_confirm::load(project_root);
+    PermissionPostureReport {
+        agents,
+        findings,
+        confirm_bypass: if confirm.on { "on" } else { "off" }.to_string(),
+        confirm_bypass_source: confirm.source,
+    }
 }
 
 fn render_permission_posture_report(report: &PermissionPostureReport) {
@@ -1323,6 +1339,10 @@ fn render_permission_posture_report(report: &PermissionPostureReport) {
     println!(
         "  {}",
         "Read-only view of AIDA agent launch defaults and native Codex sandbox config.".dimmed()
+    );
+    println!(
+        "  Confirm bypass: {} ({})",
+        report.confirm_bypass, report.confirm_bypass_source
     );
     println!();
     println!(

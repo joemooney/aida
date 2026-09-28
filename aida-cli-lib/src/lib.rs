@@ -21,6 +21,8 @@ mod awaiting_you;
 mod backlog;
 mod brief_cmd;
 mod burndown;
+// trace:TASK-1500 | ai:codex
+mod bypass_confirm;
 mod cache_cmd;
 mod calibration;
 mod changelog;
@@ -3978,6 +3980,21 @@ fn run() -> Result<()> {
                     e
                 );
             }
+            if let Err(e) = maybe_prompt_confirm_bypass() {
+                eprintln!(
+                    "  {} bypass confirmation setting skipped: {}",
+                    "Note:".dimmed(),
+                    e
+                );
+            }
+        }
+        if init_footprint == cli::InitFootprint::Full {
+            let setting = bypass_confirm::load(&statusline_project_root());
+            println!(
+                "  Agent bypass confirmation: {} ({})",
+                if setting.on { "on" } else { "off" },
+                setting.source
+            );
         }
         // STORY-1463: a registered `[schedule]` job only ever runs when
         // something invokes `aida schedule tick`; nothing does that by
@@ -25907,7 +25924,24 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             // STORY-495: faithful default — resolve to None (native) unless an
             // explicit `--permission-mode` or the uniform `[agents] bypass`
             // knob says otherwise.
-            let mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            let mut mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            let mut argv = mode
+                .mode
+                .iter()
+                .flat_map(|m| ["--permission-mode".to_string(), m.clone()])
+                .collect::<Vec<_>>();
+            gate_agent_bypass(
+                &find_main_worktree_root().unwrap_or(std::env::current_dir()?),
+                "claude",
+                &mut argv,
+                false,
+                permission_mode.is_some(),
+            )?;
+            if mode.mode.as_deref() == Some("bypassPermissions")
+                && !argv.iter().any(|a| a == "bypassPermissions")
+            {
+                mode.mode = None;
+            }
             if mode.mode.is_none() && !mode.contained {
                 maybe_show_faithful_launcher_notice();
             }
@@ -25942,7 +25976,26 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             let args: Vec<String> = std::env::args().collect();
             validate_session_start_args(&args)?;
             // STORY-495: faithful default for the `--launch` path.
-            let mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            let mut mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            if *launch {
+                let mut argv = mode
+                    .mode
+                    .iter()
+                    .flat_map(|m| ["--permission-mode".to_string(), m.clone()])
+                    .collect::<Vec<_>>();
+                gate_agent_bypass(
+                    &find_main_worktree_root().unwrap_or(std::env::current_dir()?),
+                    "claude",
+                    &mut argv,
+                    false,
+                    permission_mode.is_some(),
+                )?;
+                if mode.mode.as_deref() == Some("bypassPermissions")
+                    && !argv.iter().any(|a| a == "bypassPermissions")
+                {
+                    mode.mode = None;
+                }
+            }
             if *launch && mode.mode.is_none() && !mode.contained {
                 maybe_show_faithful_launcher_notice();
             }
@@ -28155,6 +28208,14 @@ fn agent_new_with_config(
         );
     }
 
+    gate_agent_bypass(
+        &project_root,
+        config.agent_type,
+        &mut config.default_args,
+        false,
+        explicit_permission,
+    )?;
+
     // STORY-717: focus-scope drift guard at the agent-launch work-start moment.
     // Spawning an agent on `--spec` outside the active focus subtree applies the
     // [focus] out_of_scope policy (warn nudges + proceeds, block refuses without
@@ -28381,6 +28442,14 @@ fn agent_new_bg_dispatch(
             context.enabled,
         );
     }
+
+    gate_agent_bypass(
+        &project_root,
+        config.agent_type,
+        &mut config.default_args,
+        true,
+        false,
+    )?;
 
     // STORY-717: focus-scope drift guard (same as the foreground path) for the
     // `--bg` dispatch. trace:STORY-717 | ai:claude
@@ -28735,6 +28804,49 @@ fn apply_agent_default_flags(
     Ok(())
 }
 
+// Apply the consent decision to the final argv, after every configured and
+// explicit flag has been assembled. Preview callers only report this result.
+// trace:TASK-1500 | ai:codex
+fn gate_agent_bypass(
+    root: &std::path::Path,
+    agent: &str,
+    args: &mut Vec<String>,
+    background: bool,
+    explicit: bool,
+) -> Result<()> {
+    use bypass_confirm::{BypassSource, Decision};
+    let has_bypass = args.iter().any(|a| {
+        matches!(
+            a.as_str(),
+            "bypassPermissions"
+                | "--dangerously-bypass-approvals-and-sandbox"
+                | "--dangerously-skip-permissions"
+        )
+    });
+    let source = if background {
+        BypassSource::Background
+    } else if explicit {
+        BypassSource::Explicit
+    } else {
+        BypassSource::Configured
+    };
+    let setting = bypass_confirm::load(root);
+    let tty = authority_stdin_is_terminal() && authority_stdout_is_terminal();
+    match bypass_confirm::decide(has_bypass, source, setting.on, tty) {
+        Decision::Proceed => Ok(()),
+        Decision::Prompt if bypass_confirm::prompt(agent) => {
+            eprintln!("  bypass confirmed at prompt");
+            Ok(())
+        }
+        Decision::Prompt if matches!(source, BypassSource::Background) => {
+            anyhow::bail!("background bypass needs affirmative terminal confirmation; pass --permission-mode <mode> for an explicit foreground launch")
+        }
+        Decision::Prompt => { bypass_confirm::strip_bypass_flags(args); eprintln!("  bypass declined; continuing with native permissions"); Ok(()) }
+        Decision::DowngradeNative => { bypass_confirm::strip_bypass_flags(args); eprintln!("  bypass confirmation needs a terminal; continuing with native permissions"); Ok(()) }
+        Decision::Refuse => anyhow::bail!("bypass needs confirmation at a terminal; run from an interactive shell or set [agents] confirm_bypass = false in your user config"),
+    }
+}
+
 fn load_agent_default_flags(
     project_root: &std::path::Path,
     agent_type: &str,
@@ -29053,6 +29165,47 @@ impl AgentPermissionPosture {
     fn agents_bypass(self) -> bool {
         matches!(self, Self::Bypass)
     }
+}
+
+/// Initialize the human's fail-closed choice for supervised bypass launches.
+// trace:TASK-1500 | ai:codex
+fn maybe_prompt_confirm_bypass() -> Result<()> {
+    let Some(home) = aida_home_dir() else {
+        return Ok(());
+    };
+    let path = home.join(".aida/config.toml");
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    if bypass_confirm::has_user_setting(&existing) {
+        return Ok(());
+    }
+    if !authority_stdin_is_terminal() || !authority_stdout_is_terminal() {
+        return Ok(());
+    }
+    eprint!("\nAsk before launching agents with permission prompts turned off (bypass)? [Y/n] ");
+    use std::io::Write as _;
+    let _ = std::io::stderr().flush();
+    let mut answer = String::new();
+    if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+        return Ok(());
+    }
+    let value = match answer.trim().to_ascii_lowercase().as_str() {
+        "" | "y" | "yes" => true,
+        "n" | "no" => false,
+        _ => return Ok(()),
+    };
+    config_edit::set_kv(
+        &path,
+        "agents",
+        "confirm_bypass",
+        toml_edit::Value::from(value),
+    )?;
+    if !value {
+        eprintln!(
+            "  Warning: bypass confirmation is off in {}; bypass launches will not ask.",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 /// TASK-698: first-machine-setup prompt for the agent permission posture.
@@ -30353,6 +30506,27 @@ fn print_dry_launch_context(
          A dedicated worktree + lease are created (and the spec flips to InProgress) \
          only on a real launch (drop `--show-context`).\n"
     );
+    let confirm = bypass_confirm::load(project_root);
+    let has_bypass = config.default_args.iter().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "bypassPermissions"
+                | "--dangerously-bypass-approvals-and-sandbox"
+                | "--dangerously-skip-permissions"
+        )
+    });
+    let decision = bypass_confirm::decide(
+        has_bypass,
+        bypass_confirm::BypassSource::Configured,
+        confirm.on,
+        authority_stdin_is_terminal() && authority_stdout_is_terminal(),
+    );
+    println!(
+        "confirm_bypass: {} ({}) · preview decision: {:?} (stdin was not read)",
+        if confirm.on { "on" } else { "off" },
+        confirm.source,
+        decision
+    );
     println!("{body}");
     Ok(())
 }
@@ -30877,6 +31051,29 @@ fn render_agent_launch_noexec(
     out.push_str(&format!("cwd: {}\n", plan.launch_cwd.display()));
     out.push_str(&format!("command: {}\n", shell_join_display(&argv)));
     out.push_str("permission_posture:\n");
+    let confirm = bypass_confirm::load(&plan.project_root);
+    out.push_str(&format!(
+        "  confirm bypass: {} ({})\n",
+        if confirm.on { "on" } else { "off" },
+        confirm.source
+    ));
+    let bypass_in_argv = exec_args.iter().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "bypassPermissions"
+                | "--dangerously-bypass-approvals-and-sandbox"
+                | "--dangerously-skip-permissions"
+        )
+    });
+    let preview_decision = bypass_confirm::decide(
+        bypass_in_argv,
+        bypass_confirm::BypassSource::Configured,
+        confirm.on,
+        authority_stdin_is_terminal() && authority_stdout_is_terminal(),
+    );
+    out.push_str(&format!(
+        "  confirm decision: {preview_decision:?} (preview; stdin was not read)\n"
+    ));
     out.push_str(&format!("  agents.toml bypass: {agents_bypass}\n"));
     out.push_str(&format!("  agents.toml contained: {agents_contained}\n"));
     out.push_str(&format!(
