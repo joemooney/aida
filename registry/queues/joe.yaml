@@ -1,4 +1,12 @@
 - user_id: joe
+  requirement_id: 01a0e6af-47b8-70c2-b9ea-6189dce9ffc2
+  position: -2000
+  added_by: joe
+  note: High-priority dry-run side-effect integrity fix; queued by product for Joe.
+  added_at: 2026-09-28T11:00:09.784506427Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: joe
   requirement_id: 01a0de72-a5c3-7492-a40a-661419255153
   position: -1000
   added_by: joe
