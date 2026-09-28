@@ -180,3 +180,10 @@
   added_at: 2026-09-28T12:32:46.609155994Z
   for_role: advisor
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e3e1-5cfd-7262-9371-174948cbdb1f
+  position: 57000
+  added_by: joe
+  added_at: 2026-09-28T12:38:25.854652779Z
+  for_role: implementer
+  added_by_machine: imac
