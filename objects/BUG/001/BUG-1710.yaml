@@ -1,0 +1,50 @@
+id: 01a0e768-c0e3-7b61-9278-fbec43505431
+spec_id: BUG-1710
+agreed_id: BUG-1710
+title: 'auto-complete failure: phase 1 (implementer) on TASK-1543'
+description: |
+  Auto-drafted by `aida queue work TASK-1543 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  the headless vendor exited 1 before emitting any output - retried phase 1 twice and released the empty session lease
+
+  Failure kind: `environmental`
+
+  ## Recovery hint shown to the user
+
+  Continue the implementer session: `aida queue work TASK-1543 --resume 01a0e768a425`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-28T09:46:35.929836990+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 168810 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"TASK-1543","started_at":"2026-09-28T09:43:46.341211409+00:00","completed_at":"2026-09-28T09:46:35.929836990+00:00","outcome":"failed","variant":"through-ci","failed_phase":1,"failure_kind":"environmental","failure_message":"the headless vendor exited 1 before emitting any output - retried phase 1 twice and released the empty session lease","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":168810}],"total_ms":168811,"binary_sha":"0bd634c"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T09:46:37.155167410Z
+modified_at: 2026-09-28T09:46:37.155167410Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-1
+- failure-kind:environmental
+- implementer
