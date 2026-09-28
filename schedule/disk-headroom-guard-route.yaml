@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: Resolved. Configured floor is [doctor.disk_headroom] min_free_gib = 60; current free on / is 230G (74% used), so the breach condition no longer holds. Root cause was the worktree target/ accumulation reclaimed earlier (251G across 29 non-main worktree target dirs). No budget change made — the floor stands at 60 GiB deliberately. Verified by the advisor seat 2026-09-28.
+due_since: 2026-09-28T15:28:44.273530522Z
+due_reason: on CronJobFailed
