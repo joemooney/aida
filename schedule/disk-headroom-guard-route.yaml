@@ -1,9 +1,8 @@
 job: disk-headroom-guard-route
-last_run: 2026-09-27T14:03:24.530965957Z
+last_run: 2026-09-28T13:40:56.307115974Z
 last_by:
   seat: advisor
-  session: 71dca616-6150-461d-b64f-18c8288c6e1c
+  session: a5a527f3-5c70-4d4d-a90c-22ec47246f13
   vendor: antigravity
 result: done
-due_since: 2026-09-27T14:05:15.176684893Z
-due_reason: on CronJobFailed
+note: Resolved. Configured floor is [doctor.disk_headroom] min_free_gib = 60; current free on / is 230G (74% used), so the breach condition no longer holds. Root cause was the worktree target/ accumulation reclaimed earlier (251G across 29 non-main worktree target dirs). No budget change made — the floor stands at 60 GiB deliberately. Verified by the advisor seat 2026-09-28.
