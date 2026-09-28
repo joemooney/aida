@@ -30,8 +30,32 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T15:57:57.871292534Z
-modified_at: 2026-09-28T15:58:07.439722005Z
+modified_at: 2026-09-28T16:00:27.325022881Z
 req_type: Bug
+comments:
+- id: 01a0e8bf-02bd-7603-a368-da75497f8a16
+  author: joe
+  content: |-
+    STRONGER EVIDENCE — the predicate ignores TWO of the four conditions its own heading advertises, and my attempted mitigation failed, which makes 'aida burndown run' unsafe right now rather than merely mislabelled.
+
+    The heading is: 'Ready (queued + bounded + unblocked + decision-free)'.
+
+    DEFECT 1 — mode is ignored. STORY-1484 has execution_mode=guided (verified by 'aida show') and is listed as Ready while the supervised bucket reads 0. Already recorded above.
+
+    DEFECT 2 — 'queued' is ignored. I ran 'aida queue remove STORY-1484'. It succeeded ('pickup: n/a (entry removed from queue)'). I then re-ran 'aida burndown plan': STORY-1484 is STILL listed under 'Ready (queued + ...)' and the total was unchanged at 11. So the predicate does not consult queue membership either, even though 'queued' is the FIRST word of its own contract. (I have since re-added the entry, to avoid leaving queue state altered as a side effect of diagnosis.)
+
+    OPERATIONAL CONSEQUENCE, which is why this is high and not medium: 'aida burndown plan' ends by advising 'run aida burndown run to drain the ready set above (kick off and walk away)'. Taking that advice today would dispatch a heft-17 guided architecture spec (flock-guarded single-flight cache refresh, detached worker, bounded reader wait, labelled stale reads) unattended — and there is NO operator-side mitigation, because dequeuing does not remove it from the set. The only safe path until this is fixed is to dispatch by explicit ID and never to fan out the computed set.
+
+    WHY IT WENT UNNOTICED. Both defects are invisible while nothing has an execution_mode: the supervised bucket is then trivially empty and every approved spec looks alike. The 2026-09-28 deadlock (ten specs undispatchable for want of an advisor-owned mode) is what kept the set homogeneous. Assigning modes is what made the mis-partition visible.
+
+    ADDITIONAL ACCEPTANCE
+    AC6. A spec that is NOT in the queue never appears under a heading claiming 'queued'; either the predicate consults queue membership or the heading stops claiming it.
+    AC7. A test asserts that 'aida queue remove <ID>' followed by 'aida burndown plan' no longer lists that ID as ready.
+
+    Recorded by the advisor seat, 2026-09-28, from direct measurement rather than reading.
+  created_at: 2026-09-28T16:00:27.325022881Z
+  modified_at: 2026-09-28T16:00:27.325022881Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
 history:
 - id: 01a0e8bc-ddc6-7ad2-aa57-b7518fdccae1
   author: joe
