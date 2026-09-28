@@ -22,10 +22,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T13:04:07.495788263Z
-modified_at: 2026-09-28T13:04:12.187650248Z
+modified_at: 2026-09-28T13:05:28.141454751Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0e3e1-5cfd-7262-9371-174948cbdb1f
   created_at: 2026-09-28T13:04:12.187644842Z
   created_by: joe
+comments:
+- id: 01a0e81e-ce4d-7991-aab1-863211c9e2a7
+  author: joe
+  content: |-
+    Pre-review check at PR head 6f384307ad99eed516934d1fcab144b64ea1fef2: Build (ubuntu-latest) and merge-hold-gate pass, but origin/main advanced 6 commits and overlaps aida-cli-lib/src/remote_create.rs and scaffold_cmd.rs. Reviewing TASK-1553 — Harden the raw-home-lookup ratchet and route the last unrouted site
+      Surface open PR-2258 on branch task-1553 https://github.com/joemooney/aida/pull/2258
+
+      → review the diff yourself: gh pr diff 2258 warns stale-base refusal. Integrator rebase and post-rebase CI are required before independent review.
+  created_at: 2026-09-28T13:05:28.141454751Z
+  modified_at: 2026-09-28T13:05:28.141454751Z
