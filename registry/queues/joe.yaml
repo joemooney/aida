@@ -64,3 +64,11 @@
   note: Promoted from finding TASK-1-180 via `aida findings promote`
   added_at: 2026-09-27T19:28:13.800986631Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a0e5a1-6769-70e0-8955-99752fb5887b
+  position: 41000
+  added_by: joe
+  note: auto-queued by `session end` (01a0e590); covers 1 spec
+  added_at: 2026-09-28T01:29:27.760913385Z
+  for_role: reviewer
+  added_by_machine: imac
