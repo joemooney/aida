@@ -1,0 +1,16 @@
+{
+  "id": "66c76bf0-a280-4005-83af-e7d869c7f43d",
+  "thread_id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790604039079,
+  "in_reply_to": "fc120233-58c2-41ad-9e54-7483aaeeb044",
+  "body": "One more product intake action: TASK-1-186 is a Draft carry-forward from an APPROVED PR-2217 review, explicitly non-blocking and narrowly requesting regression coverage for actual trailing CR/LF bytes. I reviewed its description, promoted it to Approved, and queued it for implementer because the finding is already accepted and precisely bounded. Please assign its execution mode so it is launchable via `aida do`; no implementation has started.\n",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}
