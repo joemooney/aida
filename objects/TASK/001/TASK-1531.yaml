@@ -3,12 +3,12 @@ spec_id: TASK-1531
 agreed_id: TASK-1531
 title: Make the bypass posture write reachable only through the human gate (defence in depth)
 description: 'Follow-up from the BUG-1667 strict review. apply_permission_posture is crate-visible and ungated; today no caller passes bypass, but a future one could. Acceptance: 1. The bypass write is split into a function only the terminal gate can call (or apply_permission_posture refuses bypass itself). 2. A source-scan test fails if any other code path passes the bypass tier to the writer. 3. Existing native/contained callers unchanged.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:36:46.531543123Z
-modified_at: 2026-09-28T12:57:01.311377197Z
+modified_at: 2026-09-28T16:15:46.140423936Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -50,39 +50,17 @@ comments:
   content: 'Implemented and pushed as commit 537472bd89; PR #2253 opened for TASK-1531. Local targeted Cargo test remains unverified: mandatory /run/user/1000/cargo-slots-1000 mount is read-only, so opening queue.lock failed (Read-only file system), followed by fd: ambiguous redirect. Cargo slot lock was not bypassed. Required Ubuntu Build is pending; no merge performed.'
   created_at: 2026-09-28T09:33:54.196468273Z
   modified_at: 2026-09-28T09:33:54.196468273Z
+- id: 01a0e8cd-07dc-7000-9902-cdcb29fee7c9
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES (advisor). The PR''s own new test fails, and I reproduced it locally on the branch so this is neither CI infrastructure nor a flake: config_cmd::bug_1667_bypass_gate_tests::task_1531_bypass_writer_has_a_defence_in_depth_gate, assert_eq left 0 right 1.. No triage reason was given.'
+  created_at: 2026-09-28T16:15:46.140422734Z
+  modified_at: 2026-09-28T16:15:46.140422734Z
+history:
+- id: 01a0e8cd-07dc-7000-9902-cdb8c8a6f08c
+  author: joe
+  timestamp: 2026-09-28T16:15:46.140413674Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    REQUEST CHANGES (advisor). The PR's own new test fails, and I reproduced it locally on the branch so this is neither CI infrastructure nor a flake: config_cmd::bug_1667_bypass_gate_tests::task_1531_bypass_writer_has_a_defence_in_depth_gate, assert_eq left 0 right 1.
-
-    EXACT DIAGNOSIS - the test's notion of 'production' is wrong, the production code is fine.
-
-      let production = src.split("#[cfg(test)]").next().unwrap();   // config_cmd.rs:4799
-
-    That means 'everything before the FIRST #[cfg(test)]'. In config_cmd.rs the first #[cfg(test)] is at
-    line 775, while every call site the audit wants to count is AFTER it: 989, 1025 (the writer itself),
-    1049 (write_permission_posture bypass call), 1326, 3152. So 'production' is only lines 1-775 and
-    contains none of them - hence count 0 against an expected 1. Both assert_eq!s in this test fail for
-    the same reason (the second one, at :4812, looks for the write_permission_posture bypass call that
-    lives at 1049).
-
-    So the gate itself is implemented correctly; the self-audit cannot see it.
-
-    FIX GUIDANCE. 'Everything before the first test module' is not 'production' in a file with
-    interleaved #[cfg(test)] blocks. Options, best first:
-      1. Drop the redundant count. The test ALREADY asserts the single caller lives inside
-         set_permission_posture_gated (gate.contains(call) at :4810), which is the property that
-         matters; the whole-file count adds little and is what breaks.
-      2. If you keep a count, strip #[cfg(test)] blocks by BRACE MATCHING rather than by splitting on
-         the first occurrence - and be careful, because the literal string "#[cfg(test)]" appears
-         inside this very test (:4799, :4815), so a naive stripper desynchronises on its own source.
-      3. Whichever you choose, make the test fail for the RIGHT reason: verify it still fails if a
-         second unguarded caller is added, otherwise the audit is decorative.
-
-    Everything else in the PR looks reasonable; this is the single blocker.
-  recovery_hint: address the review findings, move TASK-1531 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-09-28T12:57:01.311377197Z
