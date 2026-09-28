@@ -38,13 +38,21 @@ description: |
        that would break a link step, so this is caught before a seat burns a dispatch on it.
   AC4. A seat that fails a build for lack of disk reports that distinctly from a compile error, so
        the orchestrator does not retry it as if the code were wrong.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T03:16:18.098775711Z
-modified_at: 2026-09-28T03:16:18.098775711Z
+modified_at: 2026-09-28T03:16:52.971817522Z
 req_type: Bug
+history:
+- id: 01a0e603-f06b-7b82-92a0-b23f36312993
+  author: joe
+  timestamp: 2026-09-28T03:16:52.971815124Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 9099f64c8c97b0e9b00de5d73fe6a347fb96bf26
   branch: main
