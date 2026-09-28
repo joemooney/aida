@@ -1,5 +1,6 @@
 id: 01a0e824-1146-72f1-81d4-97ab0749672b
 spec_id: TASK-1-185
+agreed_id: TASK-204
 title: The final commit adds RAII warning-sink cleanup, but no test deliberately panic…
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1673, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
