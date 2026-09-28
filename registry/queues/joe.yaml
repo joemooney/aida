@@ -1,4 +1,11 @@
 - user_id: joe
+  requirement_id: 01a0e001-439c-7d92-8bdf-202d939603d9
+  position: 0
+  added_by: joe
+  note: Picked as a bounded, independent implementation task after the root-worktree pickup was blocked by existing sibling worktree state.
+  added_at: 2026-09-28T09:43:38.581275645Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 01a0df46-c67a-7fa2-bb7e-918ab66f7ece
   position: 1000
   added_by: joe
