@@ -3,12 +3,12 @@ spec_id: TASK-1531
 agreed_id: TASK-1531
 title: Make the bypass posture write reachable only through the human gate (defence in depth)
 description: 'Follow-up from the BUG-1667 strict review. apply_permission_posture is crate-visible and ungated; today no caller passes bypass, but a future one could. Acceptance: 1. The bypass write is split into a function only the terminal gate can call (or apply_permission_posture refuses bypass itself). 2. A source-scan test fails if any other code path passes the bypass tier to the writer. 3. Existing native/contained callers unchanged.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:36:46.531543123Z
-modified_at: 2026-09-28T16:16:06.887613984Z
+modified_at: 2026-09-28T17:35:23.389683427Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -118,4 +118,24 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a0e915-ecdd-7723-9355-f26d92eece31
+  author: aida-auto-bump
+  timestamp: 2026-09-28T17:35:23.357778967Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e915-ecfd-7b52-b244-1fafdeb8dff8
+  timestamp: 2026-09-28T17:35:23.389661601Z
+  agent: aida
+  commit_sha: da7a224a95b765f1fe282ff5a690fbb683bee59f
+  summary: 'Cleared: prior request-changes was against 537472bd (stale). Fix at d561b35 makes Build (ubuntu) green. Independent cross-vendor codex review APPROVED; advisor separately traced all four runtime call sites (config_cmd 989/1326/3152, doctor_cmd 5736, lib.rs 29536) and confirmed none can reach apply_permission_posture with Bypass.'
+  punted:
+  - 'punted: REQUEST CHANGES (advisor). The PR''s own new test fails, and I reproduced it locally on the branch so this is neither CI infrastructure nor a flake: config_cmd::bug_1667_bypass_gate_tests::task_1531_bypass_writer_has_a_defence_in_depth_gate, assert_eq left 0 right 1. EXACT DIAGNOSIS - the test''s notion of ''production'' is wrong, the production code is fine. let production = src.split("#[cfg(test)]").next().unwrap(); // config_cmd.rs:4799 That means ''everything before the FIRST #[cfg(test)]''. In config_cmd.rs the first #[cfg(test)] is at line 775, while every call site the audit wants to count is AFTER it: 989, 1025 (the writer itself), 1049 (write_permission_posture bypass call), 1326, 3152. So ''production'' is only lines 1-775 and contains none of them - hence count 0 against an expected 1. Both assert_eq!s in this test fail for the same reason (the second one, at :4812, looks for the write_permission_posture bypass call that lives at 1049). So the gate itself is implemented correctly; the self-audit cannot see it. FIX GUIDANCE. ''Everything before the first test module'' is not ''production'' in a file with interleaved #[cfg(test)] blocks. Options, best first: 1. Drop the redundant count. The test ALREADY asserts the single caller lives inside set_permission_posture_gated (gate.contains(call) at :4810), which is the property that matters; the whole-file count adds little and is what breaks. 2. If you keep a count, strip #[cfg(test)] blocks by BRACE MATCHING rather than by splitting on the first occurrence - and be careful, because the literal string "#[cfg(test)]" appears inside this very test (:4799, :4815), so a naive stripper desynchronises on its own source. 3. Whichever you choose, make the test fail for the RIGHT reason: verify it still fails if a second unguarded caller is added, otherwise the audit is decorative. Everything else in the PR looks reasonable; this is the single blocker.'
+  review_verdict: approved
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T17:35:23.357693302Z
+  completion_sha: da7a224a95b765f1fe282ff5a690fbb683bee59f
