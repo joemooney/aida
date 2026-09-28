@@ -653,7 +653,12 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     }
 
     if opts.quiet_output {
-        println!("  ✓ merged-agent-worktrees cleanup checked; details: `aida doctor --category merged-agent-worktrees`");
+        let reclaimed = report
+            .findings
+            .iter()
+            .filter(|finding| finding.summary.contains("is mergeable-and-gone"))
+            .count();
+        eprintln!("  ✓ merged-agent-worktrees cleanup checked ({reclaimed} reclaimable); details: `aida doctor --category merged-agent-worktrees`");
     } else if opts.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -4804,14 +4809,6 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
     let leases = list_leases(project_root);
 
     let mut findings = Vec::new();
-    // trace:BUG-1718 | ai:codex
-    let _ = PCmd::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["worktree", "prune", "--expire", "now"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
     for wt in list_worktrees(project_root) {
         // Missing registrations are stale bookkeeping, not actionable findings.
         // trace:BUG-1718 | ai:codex
@@ -4943,36 +4940,7 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
         // trace:BUG-1718 | ai:codex
         let landing_commit = if !ancestor_of_main && !dirty {
             candidate_specs.iter().find_map(|spec| {
-                let out = PCmd::new("git")
-                    .arg("-C")
-                    .arg(project_root)
-                    .args([
-                        "log",
-                        "--format=%H%x00%B",
-                        "-i",
-                        "--grep",
-                        spec,
-                        "-n",
-                        "50",
-                        &default_ref,
-                    ])
-                    .stderr(std::process::Stdio::null())
-                    .output()
-                    .ok()?;
-                if !out.status.success() {
-                    return None;
-                }
-                let raw = String::from_utf8_lossy(&out.stdout);
-                let mut parts = raw.split('\0');
-                while let (Some(sha), Some(body)) = (parts.next(), parts.next()) {
-                    let ids = extract_spec_ids_from_commit(body)
-                        .into_iter()
-                        .chain(crate::extract_referenced_spec_ids_from_commit(body));
-                    if ids.into_iter().any(|id| id.eq_ignore_ascii_case(spec)) {
-                        return Some(sha.trim().to_string());
-                    }
-                }
-                None
+                crate::session_reap::spec_landing_commit(project_root, &default_ref, branch, spec)
             })
         } else {
             None
