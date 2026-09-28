@@ -717,6 +717,7 @@ pub(crate) fn gather_merge_facts_pinned(
             unique_unmerged_commits,
             content_fully_landed,
             spec_trailer_on_main,
+            no_commits_after_landing: false,
         },
         tip,
     )

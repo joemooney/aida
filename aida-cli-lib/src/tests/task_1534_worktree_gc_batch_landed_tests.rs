@@ -12,6 +12,65 @@
 use super::*;
 use std::path::Path;
 
+#[test]
+// trace:BUG-1718 | ai:codex
+fn bug_1718_classify_agent_worktree_requires_landing_recency_guard() {
+    let facts = AgentWorktreeFacts {
+        dirty: false,
+        ancestor_of_main: false,
+        pr_merged: false,
+        unique_unmerged_commits: 1,
+        content_fully_landed: false,
+        spec_trailer_on_main: true,
+        no_commits_after_landing: true,
+    };
+    assert!(matches!(
+        classify_agent_worktree(&facts),
+        AgentWorktreeVerdict::Removable(_)
+    ));
+    let later_work = AgentWorktreeFacts {
+        no_commits_after_landing: false,
+        ..facts
+    };
+    assert!(matches!(
+        classify_agent_worktree(&later_work),
+        AgentWorktreeVerdict::Keep(_)
+    ));
+}
+
+#[test]
+// trace:BUG-1718 | ai:codex
+fn bug_1718_missing_agent_worktree_registration_is_pruned_silently() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("repo");
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.name", "Test"]);
+    git(&root, &["config", "user.email", "test@example.com"]);
+    commit_file(&root, "README.md", "base\n", "init");
+    git(&root, &["branch", "-M", "main"]);
+    let wt = root.join(".claude/worktrees/gone");
+    std::fs::create_dir_all(wt.parent().unwrap()).unwrap();
+    git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "worktree-agent-gone-9010",
+            wt.to_str().unwrap(),
+            "main",
+        ],
+    );
+    std::fs::remove_dir_all(&wt).unwrap();
+    let findings = scan_merged_agent_worktrees(&root);
+    assert!(
+        findings.is_empty(),
+        "missing worktree emitted findings: {findings:?}"
+    );
+    assert!(!git(&root, &["worktree", "list", "--porcelain"]).contains("gone"));
+}
+
 fn git(root: &Path, args: &[&str]) -> String {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -39,7 +98,8 @@ fn commit_file(root: &Path, file: &str, content: &str, message: &str) {
 }
 
 #[test]
-fn task_1534_batch_landed_branch_is_reported_reclaimable() {
+// trace:BUG-1718 | ai:codex
+fn bug_1718_batch_landed_branch_is_reported_reclaimable_until_later_commit() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("repo");
     std::fs::create_dir_all(&root).unwrap();
@@ -91,6 +151,14 @@ fn task_1534_batch_landed_branch_is_reported_reclaimable() {
     );
     // Unrelated commit on main afterwards.
     commit_file(&root, "after.txt", "after\n", "chore: later update");
+    // Make the branch's file differ after landing, forcing BUG-1718's date guard.
+    // trace:BUG-1718 | ai:codex
+    commit_file(
+        &root,
+        "feature.txt",
+        "later main edit\n",
+        "chore: edit landed file later",
+    );
 
     // Scan merged agent worktrees via doctor_cmd.
     let findings = scan_merged_agent_worktrees(&root);
@@ -109,13 +177,13 @@ fn task_1534_batch_landed_branch_is_reported_reclaimable() {
     assert!(
         finding
             .summary
-            .contains("its spec landed on origin/main through an integration merge"),
+            .contains("its spec landed on origin/main through a batched integration merge"),
         "expected integration merge reason in summary, got: {}",
         finding.summary
     );
     assert!(
-        finding.summary.contains("content-verified fully landed"),
-        "expected content-verified in summary, got: {}",
+        finding.summary.contains("postdates that landing commit"),
+        "expected date-guard removal: {}",
         finding.summary
     );
     assert!(
@@ -124,6 +192,38 @@ fn task_1534_batch_landed_branch_is_reported_reclaimable() {
             .contains("--category merged-agent-worktrees --yes --force"),
         "expected reclaimable heal action, got: {}",
         finding.action
+    );
+
+    // A real branch commit dated after landing must keep the worktree.
+    // trace:BUG-1718 | ai:codex
+    let future_commit = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&wt_path)
+        .args([
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "--allow-empty",
+            "-q",
+            "-m",
+            "post landing work",
+        ])
+        .env("GIT_COMMITTER_DATE", "2035-01-01T00:00:00Z")
+        .env("GIT_AUTHOR_DATE", "2035-01-01T00:00:00Z")
+        .output()
+        .unwrap();
+    assert!(
+        future_commit.status.success(),
+        "future commit failed: {}",
+        String::from_utf8_lossy(&future_commit.stderr)
+    );
+    let findings = scan_merged_agent_worktrees(&root);
+    assert!(
+        findings[0].summary.contains("flagged:"),
+        "post-landing commit must stay kept: {}",
+        findings[0].summary
     );
 }
 

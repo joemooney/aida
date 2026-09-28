@@ -42,6 +42,7 @@ pub(crate) fn handle_doctor_command(
             all,
             since: since.map(str::to_string),
             fail_on_findings: false,
+            quiet_output: false,
         });
     };
     match cmd {
@@ -111,6 +112,7 @@ pub(crate) fn handle_doctor_command(
                 all: all || *sub_all,
                 since: since.map(str::to_string),
                 fail_on_findings: *fail_on_findings,
+                quiet_output: false,
             })
         }
         cli::DoctorCommand::Heal {
@@ -128,6 +130,7 @@ pub(crate) fn handle_doctor_command(
             all: all || *sub_all,
             since: since.map(str::to_string),
             fail_on_findings: false,
+            quiet_output: false,
         }),
         cli::DoctorCommand::MigrateCounterScope {
             to,
@@ -309,6 +312,22 @@ pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -
         all: false,
         since: None,
         fail_on_findings: false,
+        quiet_output: false,
+    })
+}
+
+// trace:BUG-1718 | ai:codex
+pub(crate) fn run_merged_agent_worktree_gc_quiet() -> Result<()> {
+    doctor_multi_agent(DoctorRunOptions {
+        heal: true,
+        yes: true,
+        category: Some("merged-agent-worktrees".to_string()),
+        json: false,
+        force: true,
+        all: false,
+        since: None,
+        fail_on_findings: false,
+        quiet_output: true,
     })
 }
 
@@ -333,6 +352,8 @@ struct DoctorRunOptions {
     /// rather than a contract change to a shared surface.
     // trace:STORY-1422 | ai:claude
     fail_on_findings: bool,
+    // trace:BUG-1718 | ai:codex
+    quiet_output: bool,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -631,7 +652,9 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
     }
 
-    if opts.json {
+    if opts.quiet_output {
+        println!("  ✓ merged-agent-worktrees cleanup checked; details: `aida doctor --category merged-agent-worktrees`");
+    } else if opts.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         render_doctor_report(&report, opts.heal)?;
@@ -648,6 +671,11 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         if opts.category.is_none() {
             print_doctor_status_diagnostics(&project_root, &store);
         }
+    }
+
+    // trace:BUG-1718 | ai:codex
+    if opts.quiet_output {
+        return Ok(());
     }
 
     // STORY-1127: permission posture is intended as a check/gate category: a
@@ -4314,6 +4342,9 @@ pub(crate) struct AgentWorktreeFacts {
     /// `unique_unmerged_commits` still needs `content_fully_landed` to clear.
     // trace:BUG-1657 | ai:claude
     pub(crate) spec_trailer_on_main: bool,
+    /// No commit on this branch has a committer date later than the spec's landing commit.
+    // trace:BUG-1718 | ai:codex
+    pub(crate) no_commits_after_landing: bool,
 }
 
 /// Pure squash-aware classification of one agent-managed worktree. No git/forge
@@ -4362,6 +4393,15 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
             return AgentWorktreeVerdict::Removable(format!(
                 "{merged_reason}, {} commit(s) content-verified fully landed on origin/main \
                  (ancestry alone can't clear a squash-merged branch)",
+                facts.unique_unmerged_commits
+            ));
+        }
+        // trace:BUG-1718 | ai:codex
+        if facts.spec_trailer_on_main && facts.no_commits_after_landing {
+            return AgentWorktreeVerdict::Removable(format!(
+                "its spec landed on origin/main through a batched integration merge and no commit \
+                 on this branch postdates that landing commit ({} commit(s) are a squash-ancestry \
+                 artifact a batched merge makes content-undecidable)",
                 facts.unique_unmerged_commits
             ));
         }
@@ -4764,7 +4804,20 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
     let leases = list_leases(project_root);
 
     let mut findings = Vec::new();
+    // trace:BUG-1718 | ai:codex
+    let _ = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "prune", "--expire", "now"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
     for wt in list_worktrees(project_root) {
+        // Missing registrations are stale bookkeeping, not actionable findings.
+        // trace:BUG-1718 | ai:codex
+        if !wt.path.exists() {
+            continue;
+        }
         let wt_canon = wt.path.canonicalize().unwrap_or_else(|_| wt.path.clone());
         // Never touch the main worktree or the store worktree.
         if wt_canon == project_canon || wt.branch.as_deref() == Some("aida-store") {
@@ -4887,18 +4940,76 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
         // on the default branch names it in a trailer instead. Local and cheap, so
         // it runs before (and can spare) the forge lookup.
         // trace:TASK-1534 | ai:antigravity
-        let spec_trailer_on_main = if !ancestor_of_main && !dirty {
-            candidate_specs.iter().any(|spec| {
-                crate::session_reap::spec_trailer_landed_on(
-                    project_root,
-                    &default_ref,
-                    branch,
-                    spec,
-                )
+        // trace:BUG-1718 | ai:codex
+        let landing_commit = if !ancestor_of_main && !dirty {
+            candidate_specs.iter().find_map(|spec| {
+                let out = PCmd::new("git")
+                    .arg("-C")
+                    .arg(project_root)
+                    .args([
+                        "log",
+                        "--format=%H%x00%B",
+                        "-i",
+                        "--grep",
+                        spec,
+                        "-n",
+                        "50",
+                        &default_ref,
+                    ])
+                    .stderr(std::process::Stdio::null())
+                    .output()
+                    .ok()?;
+                if !out.status.success() {
+                    return None;
+                }
+                let raw = String::from_utf8_lossy(&out.stdout);
+                let mut parts = raw.split('\0');
+                while let (Some(sha), Some(body)) = (parts.next(), parts.next()) {
+                    let ids = extract_spec_ids_from_commit(body)
+                        .into_iter()
+                        .chain(crate::extract_referenced_spec_ids_from_commit(body));
+                    if ids.into_iter().any(|id| id.eq_ignore_ascii_case(spec)) {
+                        return Some(sha.trim().to_string());
+                    }
+                }
+                None
             })
         } else {
-            false
+            None
         };
+        let spec_trailer_on_main = landing_commit.is_some();
+        let no_commits_after_landing = landing_commit
+            .as_deref()
+            .and_then(|sha| {
+                let landing = PCmd::new("git")
+                    .arg("-C")
+                    .arg(project_root)
+                    .args(["log", "-1", "--format=%ct", sha])
+                    .output()
+                    .ok()?;
+                if !landing.status.success() {
+                    return None;
+                }
+                let landing_date = String::from_utf8_lossy(&landing.stdout)
+                    .trim()
+                    .parse::<i64>()
+                    .ok()?;
+                let branch_dates = PCmd::new("git")
+                    .arg("-C")
+                    .arg(project_root)
+                    .args(["log", "--format=%ct", &format!("{default_ref}..{branch}")])
+                    .output()
+                    .ok()?;
+                if !branch_dates.status.success() {
+                    return None;
+                }
+                Some(
+                    String::from_utf8_lossy(&branch_dates.stdout)
+                        .lines()
+                        .all(|date| date.trim().parse::<i64>().is_ok_and(|d| d <= landing_date)),
+                )
+            })
+            .unwrap_or(false);
 
         // Only consult the forge when the cheap ancestry/trailer probes were
         // inconclusive (covers the single-PR squash-merge case) and the worktree
@@ -4935,6 +5046,7 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
             unique_unmerged_commits,
             content_fully_landed,
             spec_trailer_on_main,
+            no_commits_after_landing,
         };
 
         match classify_agent_worktree(&facts) {
@@ -7519,6 +7631,7 @@ mod story_462_doctor_tests {
             unique_unmerged_commits: 0,
             content_fully_landed: false,
             spec_trailer_on_main: false,
+            no_commits_after_landing: false,
         }
     }
 
@@ -8226,6 +8339,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9541,6 +9655,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9613,6 +9728,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9651,6 +9767,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9708,6 +9825,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9970,6 +10088,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -10016,6 +10135,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -10118,6 +10238,7 @@ hostname = "localhost"
             all: false,
             since: None,
             fail_on_findings: false,
+            quiet_output: false,
         };
         let result = heal_doctor_finding(project_root, &finding, &opts).unwrap();
         assert_eq!(result.status, "healed");
