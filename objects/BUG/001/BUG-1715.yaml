@@ -65,6 +65,35 @@ created_at: 2026-09-28T12:37:30.204565123Z
 modified_at: 2026-09-28T12:57:26.082333478Z
 req_type: Bug
 comments:
+- id: 01a0e806-0e19-7d81-9f34-9ee81d69d89a
+  author: joe
+  content: |-
+    AC6 AUDIT DONE — and this is a RECURRENCE of a class already fixed once, which is the more useful finding.
+
+    Searched every byte-slice-by-prefix-length site in aida-cli-lib and aida-core:
+
+      1. aida-cli-lib/src/lib.rs:33482 — ALREADY FIXED, under BUG-525, with a comment naming this exact
+         failure mode: 'str::get(..n) returns None when n is out of bounds OR not a char boundary, so a
+         non-ASCII title (e.g. an em-dash straddling byte 10) no longer panics the way a raw
+         title[..PREFIX.len()] byte-slice did.'
+      2. aida-cli-lib/src/autopilot_audit.rs:307 — already correct; uses entry.get(..PREFIX.len())?.
+      3. aida-cli-lib/src/burndown.rs:707 — the surviving instance. Now fixed with the SAME idiom as
+         BUG-525 for consistency.
+
+    No other instances remain. The trailing '&trimmed[WHY_OPEN_PREFIX.len()..]' is safe because it runs
+    only after get(..len) succeeded, which proves that offset is a char boundary.
+
+    SO: BUG-525 diagnosed this class correctly and fixed it in ONE place. burndown.rs was written (or
+    left) with the old shape and panicked the same way months later. A one-off fix plus a comment did not
+    propagate. Recommend a GUARD rather than a third point-fix — the repository already has the right
+    pattern for this in test_home.rs's 'no_direct_home_resolution_in_crate', which fails the build on a
+    forbidden construct. A test that rejects 'split_at(<CONST>.len())' and '[..<CONST>.len()]' on
+    non-ASCII-safe paths would make the class structurally unrepeatable instead of relying on the next
+    author remembering BUG-525. Filing that as a follow-up is cheap; re-finding this bug a third time is
+    not.
+  created_at: 2026-09-28T12:38:26.073728869Z
+  modified_at: 2026-09-28T12:38:26.073728869Z
+  session_id: fc2bef36-971e-4674-a858-0de8a84a1006
 - id: 01a0e817-414d-7b71-ab3d-567a255971c2
   author: joe
   content: 'PROXY DECISION (orchestrator for Joe): approved and queued. The reported panic is reproducible from the production parser: origin/main still guards byte-length then calls split_at(9), and a multi-byte character at that boundary panics. Acceptance is specific (all boundary offsets, valid why-open text, live aida human check, exact reproducer, sibling-parser audit); this is a bounded bug fix with no unresolved product or architecture fork.'
