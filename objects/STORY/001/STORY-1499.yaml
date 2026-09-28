@@ -17,15 +17,16 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2258` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T13:04:07.495788263Z
-modified_at: 2026-09-28T13:05:28.141454751Z
+modified_at: 2026-09-28T13:21:18.284967922Z
 req_type: Story
 relationships:
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 01a0e3e1-5cfd-7262-9371-174948cbdb1f
   created_at: 2026-09-28T13:04:12.187644842Z
   created_by: joe
@@ -39,3 +40,20 @@ comments:
       → review the diff yourself: gh pr diff 2258 warns stale-base refusal. Integrator rebase and post-rebase CI are required before independent review.
   created_at: 2026-09-28T13:05:28.141454751Z
   modified_at: 2026-09-28T13:05:28.141454751Z
+- id: 01a0e82d-4dcc-70b2-99c1-1d757c0198d4
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2258 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
+  created_at: 2026-09-28T13:21:18.284965816Z
+  modified_at: 2026-09-28T13:21:18.284965816Z
+history:
+- id: 01a0e82d-4dcc-70b2-99c1-1d6a05525b3b
+  author: aida-auto-bump
+  timestamp: 2026-09-28T13:21:18.284954268Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T13:21:18.284944217Z
+  completion_sha: 6dd405d4a5f0b2a49de050c0a6e9f57ecab452ba
