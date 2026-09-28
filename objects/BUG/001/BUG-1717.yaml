@@ -25,12 +25,12 @@ description: |-
   AC5. Unit-tested as a pure partition over (status, mode, blocked, queued), without launching a drain.
 
   CROSS-REFERENCE. Adjacent to but distinct from the mode-assignment deadlock that surfaced it: on 2026-09-28 ten specs were undispatchable because no execution_mode was persisted and mode assignment is advisor-owned, which is why this mis-partition went unnoticed — almost nothing had a mode, so the supervised bucket was always trivially empty.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T15:57:57.871292534Z
-modified_at: 2026-09-28T16:00:27.325022881Z
+modified_at: 2026-09-28T16:46:26.808112782Z
 req_type: Bug
 comments:
 - id: 01a0e8bf-02bd-7603-a368-da75497f8a16
@@ -64,6 +64,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e8e9-1dee-7ce1-a2e4-fe06b341597e
+  author: aida-auto-bump
+  timestamp: 2026-09-28T16:46:26.798690899Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e8e9-1df8-7743-b582-386a9ac89fb9
+  timestamp: 2026-09-28T16:46:26.808098571Z
+  agent: aida
+  commit_sha: 2166ffe1f509181f13df943d6b5f2eb215a7cf0c
+  summary: 'APPROVE at 97c87e5d72, on an INDEPENDENT CROSS-VENDOR review (codex, read-only sandbox) — NOT self-approval. I authored this change at the operator''s explicit request during the emergency burndown, which is out of seat for advisor, so the approval deliberately does not rest on my own reading. The reviewer was asked five specific questions, including the two where I judged myself most likely to be wrong. All five came back with line citations: A PREDICATE: CORRECT — is_autonomous() matches ladder ranks 0 and 1 (Drain, Drive); Decide''s None does not match (models.rs:599-605, 619-620). Some(0 | 1) is a valid nested or-pattern. B ORDERING: PRESERVED — archived/deferred/type/status/tag/batch all return Skip before the supervised-tag check, and the new mode check follows it (burndown.rs:100-157). A Done/Completed spec or a knowledge-class type cannot reach EITHER supervised bucket. This was the real risk: the module''s own doc comment says the filter order is load-bearing and cites BUG-551 and BUG-784. C UNGROOMED: DEFENSIBLE — None retains its prior Candidate disposition; the separate ungroomed-labelling issue stays on BUG-1717. D CALLER: CORRECT — req.execution_mode into the matching field; ExecutionMode derives Copy so the move is valid (lib.rs:68531-68532, models.rs:573-575). E OTHER DEFECTS: NONE. TESTS VACUOUS: NO — reverting the production gate would fail the supervised-mode test (burndown.rs:2578-2637). Local evidence: cargo test -p aida-cli-lib burndown:: = 118 passed, 0 failed. WHAT SHIPS: guided/operator/decide no longer reach the fan-out set. AC1 and AC2 are met; AC3-AC7 (supervised count/list consistency, the ungroomed case, and the ''queued'' claim that never consults queue membership) are explicitly NOT in this change and remain open on the spec — this closes the SAFETY hole, not the whole labelling defect. The measured trigger is gone: STORY-1484 (guided, heft 17) can no longer be listed as Ready to fan out. STILL TRUE AFTER THIS MERGE: defect 2 is unfixed — aida queue remove succeeded on STORY-1484 and it still appeared under ''Ready (queued + ...)''. Anyone relying on burndown plan''s headings should know ''queued'' is not yet enforced.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 1e594926d8c8a7246caa07afc93ac003e83f0f0b
@@ -73,3 +87,7 @@ filed_at:
   aida_build_sha: 1e594926d8
   vendor: antigravity
   session: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T16:46:26.798648115Z
+  completion_sha: 2166ffe1f509181f13df943d6b5f2eb215a7cf0c
