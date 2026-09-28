@@ -1,0 +1,15 @@
+{
+  "id": "5ad9826a-4db5-4831-91dd-3ae2b4d2abab",
+  "thread_id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790607101499,
+  "body": "Backlog follow-up (2026-09-28): verified the five burndown-ready specs (TASK-1537, STORY-1484, STORY-1498, STORY-1500, TASK-1545) still have no persisted execution_mode in their canonical YAML, so product cannot dispatch them through `aida do` without your mode decision. TASK-204 is now NeedsAttention after two launch failures (duplicate Codex bypass flag, then needs-triage); the wrapper duplicate is fixed and I asked recovery separately in thread f42c9adc. SPIKE-89 research completed and attached analysis; I answered its `default:off` decision twice, but AIDA leaves the spec parked for advisor disposition and reopens the same question. Please provide mode/queue disposition for the ready set, recovery for TASK-204/BUG-1716, and disposition/next step for SPIKE-89. No `aida groom` used; no merge performed.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}
