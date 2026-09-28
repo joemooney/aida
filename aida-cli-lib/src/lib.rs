@@ -22,6 +22,8 @@ mod awaiting_you;
 mod backlog;
 mod brief_cmd;
 mod burndown;
+// trace:TASK-1500 | ai:codex
+mod bypass_confirm;
 mod cache_cmd;
 mod calibration;
 mod changelog;
@@ -3979,6 +3981,21 @@ fn run() -> Result<()> {
                     e
                 );
             }
+            if let Err(e) = maybe_prompt_confirm_bypass() {
+                eprintln!(
+                    "  {} bypass confirmation setting skipped: {}",
+                    "Note:".dimmed(),
+                    e
+                );
+            }
+        }
+        if init_footprint == cli::InitFootprint::Full {
+            let setting = bypass_confirm::load(&statusline_project_root());
+            println!(
+                "  Agent bypass confirmation: {} ({})",
+                if setting.on { "on" } else { "off" },
+                setting.source
+            );
         }
         // STORY-1463: a registered `[schedule]` job only ever runs when
         // something invokes `aida schedule tick`; nothing does that by
@@ -25990,7 +26007,24 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             // STORY-495: faithful default — resolve to None (native) unless an
             // explicit `--permission-mode` or the uniform `[agents] bypass`
             // knob says otherwise.
-            let mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            let mut mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            let mut argv = mode
+                .mode
+                .iter()
+                .flat_map(|m| ["--permission-mode".to_string(), m.clone()])
+                .collect::<Vec<_>>();
+            gate_agent_bypass(
+                &find_main_worktree_root().unwrap_or(std::env::current_dir()?),
+                "claude",
+                &mut argv,
+                false,
+                permission_mode.is_some(),
+            )?;
+            if mode.mode.as_deref() == Some("bypassPermissions")
+                && !argv.iter().any(|a| a == "bypassPermissions")
+            {
+                mode.mode = None;
+            }
             if mode.mode.is_none() && !mode.contained {
                 maybe_show_faithful_launcher_notice();
             }
@@ -26025,7 +26059,26 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             let args: Vec<String> = std::env::args().collect();
             validate_session_start_args(&args)?;
             // STORY-495: faithful default for the `--launch` path.
-            let mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            let mut mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            if *launch {
+                let mut argv = mode
+                    .mode
+                    .iter()
+                    .flat_map(|m| ["--permission-mode".to_string(), m.clone()])
+                    .collect::<Vec<_>>();
+                gate_agent_bypass(
+                    &find_main_worktree_root().unwrap_or(std::env::current_dir()?),
+                    "claude",
+                    &mut argv,
+                    false,
+                    permission_mode.is_some(),
+                )?;
+                if mode.mode.as_deref() == Some("bypassPermissions")
+                    && !argv.iter().any(|a| a == "bypassPermissions")
+                {
+                    mode.mode = None;
+                }
+            }
             if *launch && mode.mode.is_none() && !mode.contained {
                 maybe_show_faithful_launcher_notice();
             }
@@ -28239,8 +28292,18 @@ fn agent_new_with_config(
     }
 
     // Validate before any real agent launch even when --verbose is absent;
-    // preview mode validates in its renderer above. trace:TASK-1499 | ai:codex
+    // preview mode validates in its renderer above. Resolve the binary BEFORE
+    // the consent gate so an unresolvable build fails fast rather than after a
+    // human has already answered the bypass prompt. trace:TASK-1499 | ai:codex
     let _resolved_aida = aida_bin::process()?;
+
+    gate_agent_bypass(
+        &project_root,
+        config.agent_type,
+        &mut config.default_args,
+        false,
+        explicit_permission,
+    )?;
 
     // STORY-717: focus-scope drift guard at the agent-launch work-start moment.
     // Spawning an agent on `--spec` outside the active focus subtree applies the
@@ -28472,8 +28535,17 @@ fn agent_new_bg_dispatch(
         );
     }
 
-    // Validate before the detached/background launch too.
+    // Validate before the detached/background launch too, and before the
+    // consent gate for the same fail-fast reason. trace:TASK-1499 | ai:codex
     let _resolved_aida = aida_bin::process()?;
+
+    gate_agent_bypass(
+        &project_root,
+        config.agent_type,
+        &mut config.default_args,
+        true,
+        false,
+    )?;
 
     // STORY-717: focus-scope drift guard (same as the foreground path) for the
     // `--bg` dispatch. trace:STORY-717 | ai:claude
@@ -28831,6 +28903,49 @@ fn apply_agent_default_flags(
     Ok(())
 }
 
+// Apply the consent decision to the final argv, after every configured and
+// explicit flag has been assembled. Preview callers only report this result.
+// trace:TASK-1500 | ai:codex
+fn gate_agent_bypass(
+    root: &std::path::Path,
+    agent: &str,
+    args: &mut Vec<String>,
+    background: bool,
+    explicit: bool,
+) -> Result<()> {
+    use bypass_confirm::{BypassSource, Decision};
+    let has_bypass = args.iter().any(|a| {
+        matches!(
+            a.as_str(),
+            "bypassPermissions"
+                | "--dangerously-bypass-approvals-and-sandbox"
+                | "--dangerously-skip-permissions"
+        )
+    });
+    let source = if background {
+        BypassSource::Background
+    } else if explicit {
+        BypassSource::Explicit
+    } else {
+        BypassSource::Configured
+    };
+    let setting = bypass_confirm::load(root);
+    let tty = authority_stdin_is_terminal() && authority_stdout_is_terminal();
+    match bypass_confirm::decide(has_bypass, source, setting.on, tty) {
+        Decision::Proceed => Ok(()),
+        Decision::Prompt if bypass_confirm::prompt(agent) => {
+            eprintln!("  bypass confirmed at prompt");
+            Ok(())
+        }
+        Decision::Prompt if matches!(source, BypassSource::Background) => {
+            anyhow::bail!("background bypass needs affirmative terminal confirmation; pass --permission-mode <mode> for an explicit foreground launch")
+        }
+        Decision::Prompt => { bypass_confirm::strip_bypass_flags(args); eprintln!("  bypass declined; continuing with native permissions"); Ok(()) }
+        Decision::DowngradeNative => { bypass_confirm::strip_bypass_flags(args); eprintln!("  bypass confirmation needs a terminal; continuing with native permissions"); Ok(()) }
+        Decision::Refuse => anyhow::bail!("bypass needs confirmation at a terminal; run from an interactive shell or set [agents] confirm_bypass = false in your user config"),
+    }
+}
+
 fn load_agent_default_flags(
     project_root: &std::path::Path,
     agent_type: &str,
@@ -29149,6 +29264,47 @@ impl AgentPermissionPosture {
     fn agents_bypass(self) -> bool {
         matches!(self, Self::Bypass)
     }
+}
+
+/// Initialize the human's fail-closed choice for supervised bypass launches.
+// trace:TASK-1500 | ai:codex
+fn maybe_prompt_confirm_bypass() -> Result<()> {
+    let Some(home) = aida_home_dir() else {
+        return Ok(());
+    };
+    let path = home.join(".aida/config.toml");
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    if bypass_confirm::has_user_setting(&existing) {
+        return Ok(());
+    }
+    if !authority_stdin_is_terminal() || !authority_stdout_is_terminal() {
+        return Ok(());
+    }
+    eprint!("\nAsk before launching agents with permission prompts turned off (bypass)? [Y/n] ");
+    use std::io::Write as _;
+    let _ = std::io::stderr().flush();
+    let mut answer = String::new();
+    if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+        return Ok(());
+    }
+    let value = match answer.trim().to_ascii_lowercase().as_str() {
+        "" | "y" | "yes" => true,
+        "n" | "no" => false,
+        _ => return Ok(()),
+    };
+    config_edit::set_kv(
+        &path,
+        "agents",
+        "confirm_bypass",
+        toml_edit::Value::from(value),
+    )?;
+    if !value {
+        eprintln!(
+            "  Warning: bypass confirmation is off in {}; bypass launches will not ask.",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 /// TASK-698: first-machine-setup prompt for the agent permission posture.
@@ -30449,6 +30605,27 @@ fn print_dry_launch_context(
          A dedicated worktree + lease are created (and the spec flips to InProgress) \
          only on a real launch (drop `--show-context`).\n"
     );
+    let confirm = bypass_confirm::load(project_root);
+    let has_bypass = config.default_args.iter().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "bypassPermissions"
+                | "--dangerously-bypass-approvals-and-sandbox"
+                | "--dangerously-skip-permissions"
+        )
+    });
+    let decision = bypass_confirm::decide(
+        has_bypass,
+        bypass_confirm::BypassSource::Configured,
+        confirm.on,
+        authority_stdin_is_terminal() && authority_stdout_is_terminal(),
+    );
+    println!(
+        "confirm_bypass: {} ({}) · preview decision: {:?} (stdin was not read)",
+        if confirm.on { "on" } else { "off" },
+        confirm.source,
+        decision
+    );
     println!("{body}");
     Ok(())
 }
@@ -30986,6 +31163,29 @@ fn render_agent_launch_noexec(
         out.push_str("aida_build_stale: alternate build is newer than selected build\n");
     }
     out.push_str("permission_posture:\n");
+    let confirm = bypass_confirm::load(&plan.project_root);
+    out.push_str(&format!(
+        "  confirm bypass: {} ({})\n",
+        if confirm.on { "on" } else { "off" },
+        confirm.source
+    ));
+    let bypass_in_argv = exec_args.iter().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "bypassPermissions"
+                | "--dangerously-bypass-approvals-and-sandbox"
+                | "--dangerously-skip-permissions"
+        )
+    });
+    let preview_decision = bypass_confirm::decide(
+        bypass_in_argv,
+        bypass_confirm::BypassSource::Configured,
+        confirm.on,
+        authority_stdin_is_terminal() && authority_stdout_is_terminal(),
+    );
+    out.push_str(&format!(
+        "  confirm decision: {preview_decision:?} (preview; stdin was not read)\n"
+    ));
     out.push_str(&format!("  agents.toml bypass: {agents_bypass}\n"));
     out.push_str(&format!("  agents.toml contained: {agents_contained}\n"));
     out.push_str(&format!(
@@ -64399,6 +64599,162 @@ fn worktree_pool_hooks_from_config(value: &toml::Value, key: &str) -> Vec<String
 #[path = "tests/task_1010_prewarm_tests.rs"]
 mod task_1010_prewarm_tests;
 
+/// Trust policy for spec-authored acceptance commands, sourced ONLY from the
+/// machine-global `~/.aida/config.toml` `[review]` table — the same sourcing
+/// rule as [`worktree_pool_global_hooks`]. Repo config (branch-local AND the
+/// trusted default-branch copy), the store, env vars and CLI flags are
+/// deliberately not trust sources: an unattended-drain PR could otherwise
+/// merge the opt-in through the very review it switches on. Every failure
+/// (no home, no file, unreadable, malformed, wrong types) resolves to the
+/// denied default and is reported once on stderr.
+// trace:STORY-1476 | ai:claude
+pub(crate) fn acceptance_command_policy_global() -> graded_review::AcceptanceCommandPolicy {
+    match acceptance_command_policy_global_quiet() {
+        Ok(policy) => policy,
+        Err(reason) => {
+            eprintln!(
+                "  {} graded review: spec-authored acceptance commands will not run ({reason}); \
+                 criteria that need them go to the reviewer seat as manual checks",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+            graded_review::AcceptanceCommandPolicy::default()
+        }
+    }
+}
+
+/// [`acceptance_command_policy_global`] without the stderr notice: `Err` names
+/// why the policy is denied. Used by `aida config show` to render the value.
+// trace:STORY-1476 | ai:claude
+pub(crate) fn acceptance_command_policy_global_quiet(
+) -> std::result::Result<graded_review::AcceptanceCommandPolicy, String> {
+    let Some(home) = crate::home_dir() else {
+        return Err("home directory could not be resolved".to_string());
+    };
+    let path = home.join(".aida").join("config.toml");
+    let body = match std::fs::read_to_string(&path) {
+        Ok(body) => body,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err("no [review] opt-in in ~/.aida/config.toml".to_string());
+        }
+        Err(e) => return Err(format!("could not read ~/.aida/config.toml: {e}")),
+    };
+    let value = toml::from_str::<toml::Value>(&body)
+        .map_err(|e| format!("~/.aida/config.toml did not parse: {e}"))?;
+    acceptance_command_policy_from_toml(&value)
+}
+
+/// Pure parse of `[review] run_acceptance_commands` +
+/// `acceptance_command_allow`. Fail-closed: anything other than a well-typed,
+/// enabled, non-empty allowlist of clean entries is `Err` (denied), never a
+/// partially-honoured policy — a bad element does not get skipped. Refused
+/// characters are checked on the entry as written, before trimming, so a
+/// malformed entry cannot be normalised into an accepted one.
+// trace:STORY-1476 | ai:claude
+pub(crate) fn acceptance_command_policy_from_toml(
+    value: &toml::Value,
+) -> std::result::Result<graded_review::AcceptanceCommandPolicy, String> {
+    let Some(review) = value.get("review") else {
+        return Err("no [review] table in ~/.aida/config.toml".to_string());
+    };
+    if !review.is_table() {
+        return Err("[review] is not a table".to_string());
+    }
+    let enabled = match review.get("run_acceptance_commands") {
+        None => return Err("[review] run_acceptance_commands is not set".to_string()),
+        Some(v) => v.as_bool().ok_or_else(|| {
+            "[review] run_acceptance_commands must be a boolean (true/false)".to_string()
+        })?,
+    };
+    // Type-check the allowlist even when disabled, so a wrong type anywhere
+    // in the pair is reported rather than silently tolerated.
+    let allow: Vec<String> = match review.get("acceptance_command_allow") {
+        None => Vec::new(),
+        Some(v) => {
+            let arr = v
+                .as_array()
+                .ok_or_else(|| "[review] acceptance_command_allow must be an array".to_string())?;
+            let mut out = Vec::with_capacity(arr.len());
+            for item in arr {
+                let entry = item.as_str().ok_or_else(|| {
+                    "[review] acceptance_command_allow entries must all be strings".to_string()
+                })?;
+                // Fail closed on the RAW entry, before any trimming: `*\r`
+                // would otherwise normalise to `*` and be accepted as full
+                // trust even though CR is refused.
+                // trace:STORY-1476 trace:TASK-1545 | ai:claude
+                if graded_review::contains_refused_chars(entry) {
+                    return Err(format!(
+                        "[review] acceptance_command_allow entry `{}` contains a shell \
+                         metacharacter or control character",
+                        entry.escape_debug()
+                    ));
+                }
+                let trimmed = entry.trim();
+                if trimmed.is_empty() {
+                    return Err("[review] acceptance_command_allow has an empty entry".to_string());
+                }
+                // `*` is either the whole entry (full trust) or the last word
+                // (any trailing arguments); anywhere else it is a typo.
+                let words: Vec<&str> = trimmed.split_whitespace().collect();
+                if words
+                    .iter()
+                    .enumerate()
+                    .any(|(i, w)| *w == "*" && i + 1 != words.len())
+                {
+                    return Err(format!(
+                        "[review] acceptance_command_allow entry `{trimmed}`: `*` may only be the \
+                         last word"
+                    ));
+                }
+                out.push(trimmed.to_string());
+            }
+            out
+        }
+    };
+    if !enabled {
+        return Err("[review] run_acceptance_commands = false".to_string());
+    }
+    if allow.is_empty() {
+        return Err(
+            "[review] run_acceptance_commands = true but acceptance_command_allow is missing or \
+             empty"
+                .to_string(),
+        );
+    }
+    Ok(graded_review::AcceptanceCommandPolicy {
+        enabled: true,
+        allow,
+        repo_optin_ignored: false,
+    })
+}
+
+/// Display-only detection of a repo-level `[review]` opt-in — the branch-local
+/// `.aida/config.toml` or its trusted default-branch copy naming
+/// `run_acceptance_commands` / `acceptance_command_allow`. The result feeds a
+/// one-line notice in the verdict summary and NEVER the policy itself.
+// trace:STORY-1476 | ai:claude
+pub(crate) fn repo_review_optin_present(project_root: &std::path::Path) -> bool {
+    let names_optin = |body: &str| {
+        toml::from_str::<toml::Value>(body)
+            .ok()
+            .and_then(|v| v.get("review").cloned())
+            .is_some_and(|review| {
+                review.get("run_acceptance_commands").is_some()
+                    || review.get("acceptance_command_allow").is_some()
+            })
+    };
+    let local = std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+        .ok()
+        .is_some_and(|body| names_optin(&body));
+    local
+        || crate::trusted_config::read_trusted_config_toml_local(project_root)
+            .is_some_and(|body| names_optin(&body))
+}
+
+#[cfg(test)]
+#[path = "tests/story_1476_acceptance_trust_tests.rs"]
+mod story_1476_acceptance_trust_tests;
+
 #[cfg(test)]
 #[path = "tests/task_1558_agents_mcp_type_tests.rs"]
 mod task_1558_agents_mcp_type_tests;
@@ -68393,6 +68749,8 @@ fn resolve_burndown_sets(
             req_type: &req_type,
             has_unsatisfied_blocker,
             has_pending_decision,
+            // trace:BUG-1717 | ai:claude
+            execution_mode: req.execution_mode,
         };
         match burndown::classify_spec(&input) {
             burndown::SpecDisposition::Skip => {}
@@ -106221,6 +106579,11 @@ fn prepare_graded_review(
     {
         return Ok(None);
     }
+    // Trust snapshot, taken once per review before anything is spawned and
+    // never re-read (no check-then-reread gap). Global config only; the repo
+    // read below is display-only. trace:STORY-1476 | ai:claude
+    let mut policy = acceptance_command_policy_global();
+    policy.repo_optin_ignored = repo_review_optin_present(project_root);
 
     // The branch is a forge-reported PR head and the sha a forge-reported
     // commit; keep both from reading as git options. trace:BUG-1622 | ai:claude
@@ -106290,6 +106653,7 @@ fn prepare_graded_review(
         reviewed_sha,
         &checkout,
         evaluator.as_deref(),
+        &policy,
     )
     .map_err(|e| auto_complete::PhaseFailure::new(format!("graded review failed closed: {e:#}")));
     let _ = std::process::Command::new("git")

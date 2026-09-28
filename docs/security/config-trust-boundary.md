@@ -43,9 +43,16 @@ applies. The branch-local copy is *never* used as a fallback.
 | `auto_release_dormant_leases`, `stale_lease_threshold_minutes` | `[orchestrator]` | No (toggle / threshold) | Branch-local |
 | `strategy` | `[integrate]` | No (merge-strategy enum) | Branch-local |
 | `workflow_hints` | `[hints]` | No (display toggle) | Branch-local |
+| `run_acceptance_commands`, `acceptance_command_allow` | `[review]` | **Yes** — gate on the spec-authored commands graded review runs via `bash -c` | **Machine-global `~/.aida/config.toml` only** (repo copy — branch-local and default-branch — ignored; fail-closed to denied) |
 
 `[pr-rebase] smoke_check` is the **only** `.aida/config.toml` field that AIDA's
-own drain/CI code reads and then executes as a shell command. The agent backend
+own drain/CI code reads from the *repo* and then executes as a shell command.
+The graded-review opt-in is stricter still: because the commands it gates are
+written into specs in the shared store, and because an unattended-drain PR
+could merge a repo-level opt-in through the very review it enables, it is read
+only from the reviewing machine's `~/.aida/config.toml` (see
+`acceptance_command_policy_global` in `aida-cli-lib/src/lib.rs` and the
+`[review]` section of `docs/autonomous-drain.md`). The agent backend
 is not a per-project config value — it is hardcoded (`claude`) and gated by the
 machine-global `~/.aida/agents.toml`, which is local-trusted and not under a
 pushed branch's control. Git hooks (`.git/hooks/*`) are invoked by git itself,

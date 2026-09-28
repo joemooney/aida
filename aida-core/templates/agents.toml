@@ -22,6 +22,10 @@
 #   3. the agent's native default (faithful)
 # Merge: `~/.aida/agents.toml` is the base; this project file overrides it.
 # Leave it off unless every launch in this project is trusted to run unattended.
+# Supervised launches that resolve to bypass ask for human confirmation by
+# default. The consent setting lives in `.aida/config.toml` as
+# `[agents] confirm_bypass = true`; only the user config may set it false.
+# A project config may require confirmation (`true`) but cannot disable it.
 #
 # Contained posture (mutually exclusive with bypass). This launches Claude
 # with native strict Bash sandboxing and destructive-command deny rules, using

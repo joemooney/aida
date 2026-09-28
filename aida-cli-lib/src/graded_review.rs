@@ -37,6 +37,115 @@ pub enum CriterionStatus {
     Passed,
     Failed,
     Escalated,
+    /// A spec-authored executable command that was NOT spawned because the
+    /// reviewing machine's trusted config did not permit it. Never counts as
+    /// machine-verified; always forces escalation to the reviewer seat.
+    // trace:STORY-1476 | ai:claude
+    NotRun,
+}
+
+/// Per-criterion output recorded when a spec-authored command is refused.
+// trace:STORY-1476 | ai:claude
+pub const NOT_RUN_OUTPUT: &str =
+    "not run: spec-authored command not permitted by ~/.aida/config.toml [review]";
+
+/// Summary line appended whenever a repo-level `[review]` opt-in was seen and
+/// ignored (display-only; the repo copy never feeds the policy).
+// trace:STORY-1476 | ai:claude
+pub const REPO_OPTIN_IGNORED_NOTE: &str =
+    "repo-level opt-in ignored; set it in ~/.aida/config.toml";
+
+/// Characters that make a spec-authored command unsafe to prefix-match: any
+/// of these lets the string the checker split on disagree with what `bash -c`
+/// would actually execute (chaining, substitution, redirection, quoting).
+// trace:STORY-1476 | ai:claude
+const REFUSED_COMMAND_CHARS: &[char] = &[
+    ';', '&', '|', '$', '`', '<', '>', '(', ')', '\\', '\'', '"', '\n',
+];
+
+/// True when `text` contains a refused shell metacharacter or any ASCII
+/// control character other than TAB (a whitespace separator is fine to split
+/// on; every other C0 char and DEL is refused).
+// trace:STORY-1476 | ai:claude
+pub fn contains_refused_chars(text: &str) -> bool {
+    text.chars()
+        .any(|c| REFUSED_COMMAND_CHARS.contains(&c) || (c.is_ascii_control() && c != '\t'))
+}
+
+/// Trust decision for spec-authored acceptance commands. Sourced ONLY from the
+/// machine-global `~/.aida/config.toml` `[review]` table (see
+/// `acceptance_command_policy_global` in the crate root); the default is
+/// denied, so an install with no opt-in never spawns a command written into a
+/// shared-store spec.
+// trace:STORY-1476 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AcceptanceCommandPolicy {
+    /// `[review] run_acceptance_commands = true`.
+    pub enabled: bool,
+    /// `[review] acceptance_command_allow`: exact word-sequence entries, an
+    /// entry whose last word is `*` permits any trailing words, and a lone
+    /// `"*"` entry permits anything (explicit full trust).
+    pub allow: Vec<String>,
+    /// Display-only: a repo-level `[review]` opt-in was present and ignored.
+    /// Set by the caller; never read by [`Self::permits`].
+    pub repo_optin_ignored: bool,
+}
+
+impl AcceptanceCommandPolicy {
+    /// Explicit full trust: run anything. For tests and for callers that have
+    /// already established trust some other way; production review resolves
+    /// its policy from the global config instead.
+    pub fn permissive() -> Self {
+        Self {
+            enabled: true,
+            allow: vec!["*".to_string()],
+            repo_optin_ignored: false,
+        }
+    }
+
+    /// True when a lone `"*"` entry grants full trust.
+    fn full_trust(&self) -> bool {
+        self.allow.iter().any(|e| e.trim() == "*")
+    }
+
+    /// Decide whether `command` may be spawned. The string checked here is the
+    /// exact string `execute_graded_review` runs (no re-parse).
+    ///
+    /// Rules: denied unless enabled with a non-empty allowlist; `"*"` permits
+    /// anything; otherwise the command must contain no refused characters and
+    /// its whitespace-split words must equal some entry's words exactly, or
+    /// start with them when the entry ends in `*`.
+    // trace:STORY-1476 | ai:claude
+    pub fn permits(&self, command: &str) -> bool {
+        if !self.enabled || self.allow.is_empty() {
+            return false;
+        }
+        if self.full_trust() {
+            return true;
+        }
+        if contains_refused_chars(command) {
+            return false;
+        }
+        let words: Vec<&str> = command.split_whitespace().collect();
+        if words.is_empty() {
+            return false;
+        }
+        self.allow.iter().any(|entry| {
+            let mut entry_words: Vec<&str> = entry.split_whitespace().collect();
+            let trailing_star = entry_words.last() == Some(&"*");
+            if trailing_star {
+                entry_words.pop();
+            }
+            if entry_words.is_empty() {
+                return false;
+            }
+            if trailing_star {
+                words.len() >= entry_words.len() && words[..entry_words.len()] == entry_words[..]
+            } else {
+                words == entry_words
+            }
+        })
+    }
 }
 
 /// Result of evaluating an individual criterion.
@@ -65,6 +174,11 @@ pub struct GradedReviewVerdict {
     pub prose_count: usize,
     pub residual_prose_count: usize,
     pub escalated_to_seat: bool,
+    /// Spec-authored commands refused by the trusted-config policy (never
+    /// spawned). Additive: older records deserialize with 0.
+    // trace:STORY-1476 | ai:claude
+    #[serde(default)]
+    pub not_run_count: usize,
     pub results: Vec<CriterionResult>,
     pub summary: String,
 }
@@ -272,8 +386,35 @@ fn is_shell_command(candidate: &str) -> bool {
         || first.ends_with(".sh")
 }
 
+/// Summary tail naming refused commands (and the ignored repo opt-in when
+/// applicable). Empty when nothing was refused.
+// trace:STORY-1476 | ai:claude
+fn not_run_summary_suffix(policy: &AcceptanceCommandPolicy, not_run_count: usize) -> String {
+    if not_run_count == 0 {
+        return String::new();
+    }
+    let mut s = format!(
+        " {} spec-authored command(s) not run: not permitted by ~/.aida/config.toml [review]",
+        not_run_count
+    );
+    if policy.repo_optin_ignored {
+        s.push_str("; ");
+        s.push_str(REPO_OPTIN_IGNORED_NOTE);
+    }
+    s.push('.');
+    s
+}
+
 /// Execute deterministic acceptance checks and evaluate residual prose criteria.
+///
+/// `policy` decides which spec-authored commands may be spawned at all; a
+/// refused command is recorded as [`CriterionStatus::NotRun`], never counts as
+/// machine-verified, and forces the verdict to escalate (STORY-1476).
 // trace:STORY-1424 | ai:antigravity
+// trace:STORY-1476 | ai:claude
+// The trust policy is the eighth parameter; the STORY-1424 signature is
+// otherwise unchanged so its callers and tests keep their shape.
+#[allow(clippy::too_many_arguments)]
 pub fn execute_graded_review(
     spec_id: &str,
     spec_title: &str,
@@ -282,6 +423,7 @@ pub fn execute_graded_review(
     reviewed_sha: &str,
     worktree_path: &Path,
     evaluator: Option<&dyn EvaluatorEngine>,
+    policy: &AcceptanceCommandPolicy,
 ) -> Result<GradedReviewVerdict> {
     let criteria = parse_acceptance_criteria(description);
 
@@ -289,6 +431,7 @@ pub fn execute_graded_review(
     let mut machine_verified_count = 0;
     let mut machine_passed_count = 0;
     let mut machine_failed_count = 0;
+    let mut not_run_count = 0;
 
     let mut residual_prose = Vec::new();
 
@@ -299,6 +442,25 @@ pub fn execute_graded_review(
                 command,
                 description: _,
             } => {
+                // Trusted-config gate: a command the reviewing machine has
+                // not opted into is never spawned. The string checked is the
+                // string that would run. trace:STORY-1476 | ai:claude
+                if !policy.permits(command) {
+                    not_run_count += 1;
+                    results.push(CriterionResult {
+                        criterion: crit.clone(),
+                        status: CriterionStatus::NotRun,
+                        output: Some(NOT_RUN_OUTPUT.to_string()),
+                        exit_code: None,
+                        probability: None,
+                        confidence: None,
+                        heuristic: false,
+                        model: None,
+                        question_payload_hash: None,
+                    });
+                    continue;
+                }
+
                 machine_verified_count += 1;
 
                 let output_res = Command::new("bash")
@@ -367,7 +529,75 @@ pub fn execute_graded_review(
 
     let prose_count = residual_prose.len();
 
-    // If any machine check failed, fast-fail immediately (Rung 2 veto)
+    // Any refused command escalates, ahead of the Rung-2 failure veto AND of
+    // BOTH approve branches. Without the approve guard, one permitted passing
+    // command plus one refused command and no prose would auto-approve on the
+    // Rung-2 branch, and no prose at all would auto-approve on the evaluator
+    // fast-pass. Ahead of the failure veto because a veto's early return used
+    // to drop the refused criteria before the reviewer prompt was built, so
+    // nothing ever asked for them by hand: a failed permitted check keeps its
+    // veto (the verdict stays `rejected` and the seat's prompt says the review
+    // cannot be an approval) while the refused criteria still travel to the
+    // seat as manual-verification obligations. Refused commands never reach
+    // the evaluator either — a model reading a diff cannot verify that a
+    // command passes. Prose is left for the seat unevaluated.
+    // trace:STORY-1476 | ai:claude
+    if not_run_count > 0 {
+        for text in &residual_prose {
+            results.push(CriterionResult {
+                criterion: CriterionKind::Prose { text: text.clone() },
+                status: CriterionStatus::Escalated,
+                output: None,
+                exit_code: None,
+                probability: None,
+                confidence: None,
+                heuristic: false,
+                model: None,
+                question_payload_hash: None,
+            });
+        }
+        let vetoed = machine_failed_count > 0;
+        let summary = if vetoed {
+            format!(
+                "{} of {} deterministic acceptance checks failed, so this review cannot be an \
+                 approval; escalated to the Phase 3 conversational reviewer seat for the \
+                 criteria that need checking by hand.{}",
+                machine_failed_count,
+                machine_verified_count,
+                not_run_summary_suffix(policy, not_run_count)
+            )
+        } else {
+            format!(
+                "Passed {} machine check(s); escalated to Phase 3 conversational reviewer seat.{}",
+                machine_passed_count,
+                not_run_summary_suffix(policy, not_run_count)
+            )
+        };
+        return Ok(GradedReviewVerdict {
+            spec_id: spec_id.to_string(),
+            reviewed_sha: reviewed_sha.to_string(),
+            overall_verdict: if vetoed { "rejected" } else { "escalated" }.to_string(),
+            verdict_kind: format!(
+                "{:?}",
+                if vetoed {
+                    VerdictKind::Rejected
+                } else {
+                    VerdictKind::Unknown
+                }
+            ),
+            machine_verified_count,
+            machine_passed_count,
+            prose_count,
+            residual_prose_count: prose_count,
+            escalated_to_seat: true,
+            not_run_count,
+            results,
+            summary,
+        });
+    }
+
+    // Rung-2 veto: a failed deterministic check with nothing left to check by
+    // hand is a settled rejection and never reaches the seat.
     if machine_failed_count > 0 {
         return Ok(GradedReviewVerdict {
             spec_id: spec_id.to_string(),
@@ -379,10 +609,15 @@ pub fn execute_graded_review(
             prose_count,
             residual_prose_count: prose_count,
             escalated_to_seat: false,
+            not_run_count,
             results,
             summary: format!(
-                "{} of {} deterministic acceptance checks failed.",
-                machine_failed_count, machine_verified_count
+                "{} of {} deterministic acceptance checks failed.{}",
+                machine_failed_count,
+                machine_verified_count,
+                // Always empty here: the refused-command branch above returns
+                // first, so this path has nothing left to check by hand.
+                not_run_summary_suffix(policy, not_run_count)
             ),
         });
     }
@@ -399,6 +634,7 @@ pub fn execute_graded_review(
             prose_count: 0,
             residual_prose_count: 0,
             escalated_to_seat: false,
+            not_run_count,
             results,
             summary: format!(
                 "All {} acceptance criteria verified deterministically via executable checks.",
@@ -514,6 +750,7 @@ pub fn execute_graded_review(
             prose_count,
             residual_prose_count: 0,
             escalated_to_seat: false,
+            not_run_count,
             results,
             summary: format!(
                 "Passed {} machine check(s); residual prose criteria satisfied (p={:.2}, heuristic: true).",
@@ -532,6 +769,7 @@ pub fn execute_graded_review(
             prose_count,
             residual_prose_count: prose_count,
             escalated_to_seat: false,
+            not_run_count,
             results,
             summary: format!(
                 "Residual prose criterion failed evaluation (p={:.2} <= 0.20, confidence={:.2} >= 0.85, heuristic: true).",
@@ -550,6 +788,7 @@ pub fn execute_graded_review(
             prose_count,
             residual_prose_count: prose_count,
             escalated_to_seat: true,
+            not_run_count,
             results,
             summary: format!(
                 "Passed {} machine check(s); residual prose criteria escalated to Phase 3 conversational reviewer seat.",
@@ -564,6 +803,10 @@ pub fn execute_graded_review(
 /// In accordance with STORY-1424:
 /// - Settled machine checks are listed as passed and excluded from judgment.
 /// - The reviewer is asked to evaluate ONLY the residual prose criteria.
+///
+/// Refused (not-run) commands are listed for manual verification, and a
+/// deterministic check that failed is listed as a settled veto so an escalated
+/// review that already carries a rejection cannot be approved at the seat.
 // trace:STORY-1424 | ai:antigravity
 pub fn generate_graded_reviewer_prompt(
     spec_id: &str,
@@ -575,16 +818,66 @@ pub fn generate_graded_reviewer_prompt(
         None => format!("/aida-review --spec {spec_id}"),
     };
 
-    if verdict.machine_passed_count > 0 {
+    // A deterministic check that failed is a settled veto the seat must be
+    // told about: when refused commands escalate a review that also has a
+    // failure, the prompt has to carry both halves. trace:STORY-1476 | ai:claude
+    let has_failed_command = verdict.results.iter().any(|r| {
+        r.status == CriterionStatus::Failed
+            && matches!(r.criterion, CriterionKind::Executable { .. })
+    });
+
+    // The context block is emitted whenever there is something settled OR
+    // something refused: a refused-command list must reach the seat even
+    // when nothing passed (the orchestrator forwards everything after the
+    // first blank line as AIDA_GRADED_REVIEW_CONTEXT). trace:STORY-1476 | ai:claude
+    if verdict.machine_passed_count > 0 || verdict.not_run_count > 0 || has_failed_command {
         prompt.push_str("\n\n[GRADED REVIEW CONTEXT — STORY-1424]");
-        prompt.push_str(&format!(
-            "\nThe following criteria were MACHINE-VERIFIED at commit {} and are already SETTLED (do not re-evaluate):\n",
-            &verdict.reviewed_sha[..std::cmp::min(10, verdict.reviewed_sha.len())]
-        ));
-        for r in &verdict.results {
-            if r.status == CriterionStatus::Passed {
-                if let CriterionKind::Executable { command, .. } = &r.criterion {
-                    prompt.push_str(&format!("  - [PASSED (exit 0)] `{}`\n", command));
+        if has_failed_command {
+            prompt.push_str(
+                "\nThese deterministic checks FAILED at the reviewed commit and are SETTLED: this \
+                 review cannot be an approval — request changes, and report the failures below \
+                 alongside anything else you find:\n",
+            );
+            for r in &verdict.results {
+                if r.status == CriterionStatus::Failed {
+                    if let CriterionKind::Executable { command, .. } = &r.criterion {
+                        prompt.push_str(&format!(
+                            "  - [FAILED (exit {})] `{}`\n",
+                            r.exit_code
+                                .map(|c| c.to_string())
+                                .unwrap_or_else(|| "?".to_string()),
+                            command
+                        ));
+                    }
+                }
+            }
+        }
+        if verdict.machine_passed_count > 0 {
+            prompt.push_str(&format!(
+                "\nThe following criteria were MACHINE-VERIFIED at commit {} and are already SETTLED (do not re-evaluate):\n",
+                &verdict.reviewed_sha[..std::cmp::min(10, verdict.reviewed_sha.len())]
+            ));
+            for r in &verdict.results {
+                if r.status == CriterionStatus::Passed {
+                    if let CriterionKind::Executable { command, .. } = &r.criterion {
+                        prompt.push_str(&format!("  - [PASSED (exit 0)] `{}`\n", command));
+                    }
+                }
+            }
+        }
+
+        if verdict.not_run_count > 0 {
+            prompt.push_str(
+                "\nNeeds manual verification — these spec-authored commands were NOT executed automatically \
+                 (not permitted by ~/.aida/config.toml [review]). Do NOT run them yourself. Judge those \
+                 criteria from the diff and the CI result already observed; if they cannot be judged that \
+                 way, request changes or escalate to a human:\n",
+            );
+            for r in &verdict.results {
+                if r.status == CriterionStatus::NotRun {
+                    if let CriterionKind::Executable { command, .. } = &r.criterion {
+                        prompt.push_str(&format!("  - [NOT RUN] `{}`\n", command));
+                    }
                 }
             }
         }

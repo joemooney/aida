@@ -395,6 +395,14 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "security-relevant — edit ~/.aida/agents.toml deliberately",
         },
     },
+    // trace:TASK-1500 | ai:codex
+    KnobSpec {
+        section: "agents",
+        key: "confirm_bypass",
+        doc: "Require interactive confirmation before supervised launches disable permission prompts.",
+        default: "true",
+        edit: EditSafety::ReadOnly { reason: "human consent setting — edit ~/.aida/config.toml deliberately" },
+    },
     // trace:STORY-807 | ai:codex
     KnobSpec {
         section: "agents",
@@ -557,6 +565,26 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "off",
         edit: EditSafety::ReadOnly {
             reason: "toggle with `aida review mode mass-change on|off` — the on-verb stamps the clock",
+        },
+    },
+    // trace:STORY-1476 | ai:claude — code-exec opt-in: read ONLY from
+    // ~/.aida/config.toml; a repo-level value is ignored on purpose.
+    KnobSpec {
+        section: "review",
+        key: "run_acceptance_commands",
+        doc: "Whether graded review may execute acceptance commands written into a spec (global config only; default off).",
+        default: "false",
+        edit: EditSafety::ReadOnly {
+            reason: "code-exec opt-in: edit ~/.aida/config.toml by hand",
+        },
+    },
+    KnobSpec {
+        section: "review",
+        key: "acceptance_command_allow",
+        doc: "Allowlist of exact command word-sequences graded review may run; a trailing `*` permits any arguments, a lone `*` permits anything.",
+        default: "(none)",
+        edit: EditSafety::ReadOnly {
+            reason: "code-exec allowlist: edit ~/.aida/config.toml by hand",
         },
     },
     // --- [protocol]. trace:TASK-1290 ---
@@ -814,6 +842,8 @@ fn render_effective_policy(project_root: &std::path::Path) {
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct PermissionPostureReport {
     pub agents: Vec<PermissionPostureRow>,
+    pub confirm_bypass: String,
+    pub confirm_bypass_source: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub findings: Vec<PermissionPostureFinding>,
 }
@@ -1315,7 +1345,13 @@ pub(crate) fn permission_posture_report(project_root: &std::path::Path) -> Permi
         .iter()
         .flat_map(|a| a.findings.iter().cloned())
         .collect();
-    PermissionPostureReport { agents, findings }
+    let confirm = crate::bypass_confirm::load(project_root);
+    PermissionPostureReport {
+        agents,
+        findings,
+        confirm_bypass: if confirm.on { "on" } else { "off" }.to_string(),
+        confirm_bypass_source: confirm.source,
+    }
 }
 
 fn render_permission_posture_report(report: &PermissionPostureReport) {
@@ -1323,6 +1359,10 @@ fn render_permission_posture_report(report: &PermissionPostureReport) {
     println!(
         "  {}",
         "Read-only view of AIDA agent launch defaults and native Codex sandbox config.".dimmed()
+    );
+    println!(
+        "  Confirm bypass: {} ({})",
+        report.confirm_bypass, report.confirm_bypass_source
     );
     println!();
     println!(
@@ -2282,18 +2322,69 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                 format!("on until {}", expires_at.format("%Y-%m-%d %H:%M UTC"))
             }
         };
+        // Spec-authored acceptance commands: the effective policy comes from
+        // the same loader graded review uses, so what `config show` says is
+        // exactly what the next review will honour. trace:STORY-1476 | ai:claude
+        let (run_value, allow_value, exec_source) =
+            match crate::acceptance_command_policy_global_quiet() {
+                Ok(policy) => (
+                    "true".to_string(),
+                    format!("[{}]", policy.allow.join(", ")),
+                    PolicySource::GlobalConfig,
+                ),
+                Err(reason) => {
+                    // Match the resolver used by acceptance_command_policy_global_quiet;
+                    // otherwise AIDA_HOME could make the displayed source disagree
+                    // with the policy that graded review actually reads.
+                    // trace:TASK-1545 | ai:codex
+                    let declared = crate::home_dir()
+                        .map(|h| h.join(".aida/config.toml"))
+                        .and_then(|p| std::fs::read_to_string(p).ok())
+                        .and_then(|body| toml::from_str::<toml::Value>(&body).ok())
+                        .is_some_and(|v| {
+                            config_lookup(Some(&v), "review", "run_acceptance_commands").is_some()
+                                || config_lookup(Some(&v), "review", "acceptance_command_allow")
+                                    .is_some()
+                        });
+                    (
+                        if declared {
+                            format!("false ({reason})")
+                        } else {
+                            "false".to_string()
+                        },
+                        "(none)".to_string(),
+                        if declared {
+                            PolicySource::GlobalConfig
+                        } else {
+                            PolicySource::Default
+                        },
+                    )
+                }
+            };
         PolicySection {
             section: "review",
             header: "[review]".to_string(),
-            rows: vec![PolicyRow {
-                key: "mass_change_mode",
-                value,
-                source: if configured {
-                    PolicySource::ProjectConfig
-                } else {
-                    PolicySource::Default
+            rows: vec![
+                PolicyRow {
+                    key: "mass_change_mode",
+                    value,
+                    source: if configured {
+                        PolicySource::ProjectConfig
+                    } else {
+                        PolicySource::Default
+                    },
                 },
-            }],
+                PolicyRow {
+                    key: "run_acceptance_commands",
+                    value: run_value,
+                    source: exec_source,
+                },
+                PolicyRow {
+                    key: "acceptance_command_allow",
+                    value: allow_value,
+                    source: exec_source,
+                },
+            ],
         }
     });
 
