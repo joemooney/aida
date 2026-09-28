@@ -3478,6 +3478,9 @@ pub enum RemoteCommand {
     MirrorPush {
         /// The remote the triggering push targets (hook argument $1).
         pushed_remote: String,
+        /// Preview mirror updates without changing any mirror remote.
+        #[clap(long)]
+        dry_run: bool,
     },
 
     /// Push origin's tips of the default branch and the spec store to every
@@ -14362,8 +14365,9 @@ mod tests {
         let cli = Cli::try_parse_from(["aida", "remote", "mirror-push", "origin"]).unwrap();
         assert!(matches!(
             cli.command,
-            Command::Remote(RemoteCommand::MirrorPush { pushed_remote })
+            Command::Remote(RemoteCommand::MirrorPush { pushed_remote, dry_run })
                 if pushed_remote == "origin"
+                    && !dry_run
         ));
     }
 
