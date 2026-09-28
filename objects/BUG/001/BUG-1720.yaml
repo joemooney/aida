@@ -1,0 +1,87 @@
+id: 01a0e9e7-2ca8-7823-a6f1-cdc8c88ff89a
+spec_id: BUG-1720
+agreed_id: BUG-1720
+title: Bypass consent gate does not detect --permission-mode=bypassPermissions, so the equals form is never confirmed
+description: |
+  The bypass consent gate's DETECTOR does not recognise the `--permission-mode=bypassPermissions`
+  equals form, so the gate never fires on it and no confirmation is ever requested. This is the
+  remaining fail-open direction after TASK-206 closed the stripper side.
+
+  ## Where
+
+  `gate_agent_bypass` in `aida-cli-lib/src/lib.rs:28903-28910`:
+
+  ```rust
+  let has_bypass = args.iter().any(|a| {
+      matches!(a.as_str(),
+          "bypassPermissions"
+          | "--dangerously-bypass-approvals-and-sandbox"
+          | "--dangerously-skip-permissions")
+  });
+  ```
+
+  `decide()` (bypass_confirm.rs:81) short-circuits with `if !bypass || !confirm { return Proceed }`.
+  So `--permission-mode=bypassPermissions` in argv yields `has_bypass == false`, `Decision::Proceed`,
+  and the agent launches with permission prompts disabled having asked the operator nothing.
+
+  ## Why this matters more than the filed severity suggests
+
+  1. TASK-206 taught `strip_bypass_flags` to strip the equals form, but that arm is only reached from
+     `Decision::Prompt` / `Decision::DowngradeNative`, which require `has_bypass == true`. The arm is
+     therefore **unreachable from the real call path** until the detector is fixed. It is correct and
+     should stay, but it is currently defence-in-depth for a door that is never opened.
+  2. `lib.rs:29787` is operator-facing help text that advertises exactly this spelling:
+     `# permissions bypassed (Claude: --permission-mode=bypassPermissions)`. AIDA documents the form
+     its own gate cannot see.
+  3. A grep of the whole crate confirms `--permission-mode=` is handled nowhere in detection logic.
+     Every other site (`config_cmd.rs:1719/1732`, `queue_cmd.rs:10374/10780/12050/12395`,
+     `lib.rs:26019/26072`) matches the bare token or a clap-parsed `permission_mode` value.
+
+  AIDA's own call sites only ever build the space-separated form, so this is hardening against
+  operator-supplied passthrough args rather than a live exploit in AIDA-initiated launches. State it
+  that way; do not overclaim it as exploitable.
+
+  ## Secondary defect: detector/stripper asymmetry on the bare token
+
+  The detector fires on a bare `bypassPermissions` token anywhere in argv, including as an unrelated
+  positional or prompt word. Since TASK-206 the stripper correctly leaves such a token alone. So on a
+  DECLINED confirmation for a bare positional, AIDA prints
+  `bypass declined; continuing with native permissions` while argv is unchanged — the message is false
+  in that case. The pre-TASK-206 behaviour made the message true by over-stripping, which was the wrong
+  fix. The right fix is for the detector to recognise only load-bearing spellings.
+
+  ## Acceptance
+
+  1. Bypass detection recognises `--permission-mode=bypassPermissions` and gates it identically to the
+     space-separated `--permission-mode bypassPermissions` pair: with `confirm_bypass` on and a tty,
+     the operator is prompted; declining strips the flag and continues native.
+  2. Bypass detection treats a bare `bypassPermissions` token as bypass **only** when it is the value
+     of a preceding `--permission-mode`. A bare positional `bypassPermissions` no longer triggers a
+     spurious confirmation prompt.
+  3. Detection and stripping share one predicate or one helper, so the two can no longer drift. A test
+     asserts the symmetry directly: for every argv the detector calls bypass, stripping it yields an
+     argv the detector no longer calls bypass.
+  4. `--dangerously-bypass-approvals-and-sandbox` and `--dangerously-skip-permissions` continue to be
+     detected wherever they appear, unchanged.
+  5. Unit tests cover AC1-AC3, each with a non-vacuity proof stating which test fails against the
+     current implementation and with what message.
+  6. `confirm_bypass_decision_matrix` and the five `strip_bypass_flags` tests added by TASK-206 stay
+     green and unmodified.
+  7. The help text at `lib.rs:29787` remains accurate after the change.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T21:23:56.712646631Z
+modified_at: 2026-09-28T21:23:56.712646631Z
+req_type: Bug
+tags:
+- from-review:PR-2268 carried-from:TASK-206 kind:carried-forward security-path
+filed_at:
+  code_sha: 0605f096f8fed89484ce89aac82ae765733ab6bd
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 0605f096f8
+  vendor: antigravity
+  session: 1382f8b9-66b9-4324-be89-28605c5eb4ac
