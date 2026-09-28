@@ -1,0 +1,30 @@
+id: 01a0e84c-92d6-7b30-ae69-ce488594aeaa
+spec_id: TASK-1-186
+title: aida-cli-lib/src/tests/story_1476_acceptance_trust_tests.rs:550-559 (at reviewe…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1476, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  aida-cli-lib/src/tests/story_1476_acceptance_trust_tests.rs:550-559 (at reviewed head): cases "*\\\\r" and "*\\\\n" contain a literal backslash followed by r/n in Rust; TOML consequently produces backslash-r/backslash-n text, which is refused by the backslash rule. Add cases that produce actual trailing CR and LF bytes in the TOML-parsed allowlist entry (e.g. construct TOML with escaped `\\r`/`\\n` at the TOML layer or insert raw control characters), and assert the raw entry is rejected before trim. Production parser currently checks `contains_refused_chars(entry)` before `entry.trim()`, so the implementation appears correct; this finding is for regression coverage.
+
+  PR: #2217
+  Reviewed sha: ade1cecfb67c8bcb02345a8d2cbed91ae2825cc2
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T13:55:27.574560889Z
+modified_at: 2026-09-28T13:55:27.574560889Z
+req_type: Task
+tags:
+- carried-from:STORY-1476
+- finding-hash:e1b008a0
+- from-review:PR-2217
+- kind:carried-forward
+filed_at:
+  code_sha: 1e594926d8c8a7246caa07afc93ac003e83f0f0b
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 304ca777b1
+  vendor: antigravity
+  session: a5a527f3-5c70-4d4d-a90c-22ec47246f13
