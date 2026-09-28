@@ -1013,7 +1013,11 @@ pub(crate) fn set_permission_posture_gated(
             return Ok(None);
         }
     }
-    apply_permission_posture(project_root, tier, scope).map(Some)
+    if tier == ConfigPermissionTier::Bypass {
+        apply_confirmed_bypass_posture(project_root, scope).map(Some)
+    } else {
+        apply_permission_posture(project_root, tier, scope).map(Some)
+    }
 }
 
 // trace:STORY-1128 | ai:codex
@@ -1049,6 +1053,33 @@ pub(crate) struct PermissionPostureWriteResult {
 
 // trace:STORY-1128 | ai:codex
 pub(crate) fn apply_permission_posture(
+    project_root: &std::path::Path,
+    tier: ConfigPermissionTier,
+    scope: PermissionPostureScope,
+) -> Result<PermissionPostureWriteResult> {
+    // trace:TASK-1531 | ai:codex
+    // Defense in depth: this shared writer is also used by non-interactive
+    // setup/doctor paths. Only set_permission_posture_gated may authorize the
+    // bypass tier after the terminal confirmation.
+    if tier == ConfigPermissionTier::Bypass {
+        anyhow::bail!(
+            "refusing to write the bypass posture outside the terminal confirmation gate"
+        );
+    }
+    write_permission_posture(project_root, tier, scope)
+}
+
+// Private so only this module's typed terminal gate can select the bypass
+// tier. Keep callers on apply_permission_posture for ordinary posture writes.
+// trace:TASK-1531 | ai:codex
+fn apply_confirmed_bypass_posture(
+    project_root: &std::path::Path,
+    scope: PermissionPostureScope,
+) -> Result<PermissionPostureWriteResult> {
+    write_permission_posture(project_root, ConfigPermissionTier::Bypass, scope)
+}
+
+fn write_permission_posture(
     project_root: &std::path::Path,
     tier: ConfigPermissionTier,
     scope: PermissionPostureScope,
@@ -4268,10 +4299,15 @@ mod bug_533_config_show_tests {
             "{contained}"
         );
 
-        apply_permission_posture(
+        let mut input = std::io::Cursor::new(b"yes\n".to_vec());
+        let mut out = Vec::new();
+        set_permission_posture_gated(
             dir.path(),
             ConfigPermissionTier::Bypass,
             PermissionPostureScope::Local,
+            true,
+            &mut input,
+            &mut out,
         )
         .unwrap();
         let bypass = std::fs::read_to_string(dir.path().join(".aida/agents.toml")).unwrap();
@@ -4831,6 +4867,84 @@ mod bug_1667_bypass_gate_tests {
                 assert!(!src.contains(needle), "{name} references {needle}");
             }
         }
+    }
+
+    /// trace:TASK-1531 | ai:codex
+    /// Audit production sources so future call sites cannot bypass the gate.
+    #[test]
+    fn task_1531_bypass_writer_has_a_defence_in_depth_gate() {
+        let src = include_str!("config_cmd.rs");
+        let writer = src
+            .split_once("pub(crate) fn apply_permission_posture(")
+            .unwrap()
+            .1
+            .split_once("fn permission_posture_paths(")
+            .unwrap()
+            .0;
+        assert!(writer.contains("tier == ConfigPermissionTier::Bypass"));
+        assert!(writer.contains("anyhow::bail!"));
+
+        // The gated function is the only production path with authority to
+        // invoke the bypass writer. Audit other Rust modules with writer call
+        // sites too, so a future direct bypass literal fails.
+        //
+        // Split on the first test MODULE, not on any `#[cfg(test)]`: this file
+        // carries a bare `#[cfg(test)] fn known_config_sections()` at ~775,
+        // far above the gate (~969) and the writer's caller (~1049), so
+        // splitting on the attribute alone truncated `production` to a prefix
+        // that contained none of the code this test audits — every assertion
+        // below then read an empty slice.
+        let production = src.split("#[cfg(test)]\nmod ").next().unwrap();
+        let call = "apply_permission_posture(project_root, tier, scope)";
+        let gate = production
+            .split_once("pub(crate) fn set_permission_posture_gated(")
+            .unwrap()
+            .1
+            .split_once("pub(crate) enum PermissionPostureScope")
+            .unwrap()
+            .0;
+        assert!(gate.contains("confirm_bypass_at_terminal"));
+        assert!(gate.contains(call));
+        assert!(gate.contains("apply_confirmed_bypass_posture(project_root, scope)"));
+        assert_eq!(
+            production
+                .matches(
+                    "write_permission_posture(project_root, ConfigPermissionTier::Bypass, scope)"
+                )
+                .count(),
+            1,
+            "the dedicated bypass writer must have one gate-owned caller"
+        );
+
+        for (name, source) in [
+            ("doctor_cmd.rs", include_str!("doctor_cmd.rs")),
+            ("lib.rs", include_str!("lib.rs")),
+        ] {
+            let mut rest = source;
+            while let Some((_, after)) = rest.split_once("apply_permission_posture(") {
+                let args = after.split(')').next().unwrap_or(after);
+                assert!(
+                    !args.contains("ConfigPermissionTier::Bypass"),
+                    "{name} passes Bypass directly to apply_permission_posture"
+                );
+                rest = after;
+            }
+        }
+    }
+
+    /// trace:TASK-1531 | ai:codex
+    #[test]
+    fn task_1531_posture_writer_refuses_bypass_directly() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path());
+        let error = apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Bypass,
+            PermissionPostureScope::Local,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("terminal confirmation gate"));
+        assert_untouched(dir.path());
     }
 }
 
