@@ -173,19 +173,8 @@ fn driver(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
 
 fn fake_gh(root: &std::path::Path, body: &str) -> std::path::PathBuf {
     let path = root.join("gh");
-    write_executable(&path, body);
+    crate::test_exec::write_executable(&path, body);
     path
-}
-
-fn write_executable(path: &std::path::Path, body: &str) {
-    std::fs::write(&path, body).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&path).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&path, perms).unwrap();
-    }
 }
 
 #[test]
@@ -670,7 +659,7 @@ fn phase1_nonzero_implementer_exit_with_open_pr_still_proceeds() {
     git(&root, &["checkout", "-q", "-b", branch]);
 
     let fake_aida = tmp.path().join("aida");
-    write_executable(
+    crate::test_exec::write_executable(
         &fake_aida,
         r#"#!/usr/bin/env bash
 set -euo pipefail
@@ -983,7 +972,7 @@ fn headless_implementer_empty_launch_retries_and_releases_leases() {
     let root = dir.path();
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     let stub = root.join("aida-stub");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &stub,
         r#"#!/usr/bin/env bash
 set -eu
@@ -1032,12 +1021,7 @@ EOF
 printf '%s\n' "$sid" >> .aida/attempts
 exit 1
 "#,
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = std::fs::metadata(&stub).unwrap().permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&stub, permissions).unwrap();
+    );
 
     let mut d = driver(root, "BUG-826");
     d.aida_exe = stub;
@@ -1082,7 +1066,7 @@ fn empty_launch_release_removes_the_matching_lease() {
     assert!(headless_log_is_zero_bytes(root, session_id));
     let mut d = driver(root, "BUG-826");
     let stub = root.join("aida-session-end-stub");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &stub,
         r#"#!/usr/bin/env bash
 set -eu
@@ -1093,12 +1077,7 @@ if [ "${1:-}" = "session" ] && [ "${2:-}" = "end" ]; then
 fi
 exit 1
 "#,
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = std::fs::metadata(&stub).unwrap().permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&stub, permissions).unwrap();
+    );
     d.aida_exe = stub;
     d.release_empty_launch_lease(session_id);
     assert!(
@@ -1154,9 +1133,8 @@ fn repo_with_pushed_branch_ahead_of_origin_default(
 /// can run to COMPLETION instead of stopping at the forge boundary.
 #[cfg(unix)]
 fn fake_gh_that_opens_pr(dir: &std::path::Path, pr_number: u64) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let path = dir.join("fake-gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             "#!/usr/bin/env bash\n\
@@ -1166,11 +1144,7 @@ fn fake_gh_that_opens_pr(dir: &std::path::Path, pr_number: u64) -> std::path::Pa
              esac\n\
              exit 1\n"
         ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&path, perms).unwrap();
+    );
     path
 }
 
@@ -1266,9 +1240,8 @@ fn fake_gh_with_existing_open_pr(
     existing_pr: u64,
     branch: &str,
 ) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let path = dir.join("fake-gh-existing-pr");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             "#!/usr/bin/env bash\n\
@@ -1279,11 +1252,7 @@ fn fake_gh_with_existing_open_pr(
              esac\n\
              exit 1\n"
         ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&path, perms).unwrap();
+    );
     path
 }
 
@@ -1543,7 +1512,7 @@ fn phase1_refuses_when_implementer_ends_on_another_specs_branch() {
     git(&root, &["checkout", "-q", "-b", dispatched_branch]);
 
     let fake_aida = tmp.path().join("aida");
-    write_executable(
+    crate::test_exec::write_executable(
         &fake_aida,
         r#"#!/usr/bin/env bash
 set -euo pipefail
@@ -2234,7 +2203,7 @@ fn phase1_reports_attribution_unknown_for_a_trailerless_rename_not_a_swap() {
     git(&root, &["checkout", "-q", "-b", dispatched_branch]);
 
     let fake_aida = tmp.path().join("aida");
-    write_executable(
+    crate::test_exec::write_executable(
         &fake_aida,
         r#"#!/usr/bin/env bash
 set -euo pipefail

@@ -330,6 +330,8 @@ mod team;
 mod team_cmd;
 #[cfg(test)]
 mod test_env;
+#[cfg(test)]
+mod test_exec;
 // trace:BUG-1642 | ai:claude — lib tests run under a temp HOME, never the real ~/.aida.
 #[cfg(test)]
 mod test_home;
@@ -1551,7 +1553,6 @@ mod task_1244_drain_merge_lease_tests {
 #[cfg(all(test, unix))]
 mod bug_1265_finish_ci_tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
 
     struct Fixture {
         _temp: tempfile::TempDir,
@@ -1700,10 +1701,7 @@ exit 2
                 reads.display(),
                 reads.display()
             );
-            std::fs::write(&gh, script).unwrap();
-            let mut perms = std::fs::metadata(&gh).unwrap().permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&gh, perms).unwrap();
+            crate::test_exec::write_executable(&gh, script);
             merge_hold::write_hold(&root, 1265, "supervised test hold").unwrap();
             Self {
                 _temp: temp,
@@ -1796,8 +1794,7 @@ exit 2
         for args in [&[][..], &["pr"][..]] {
             let mut command = std::process::Command::new(&fixture.gh);
             command.args(args);
-            let output =
-                crate::process_retry::command_output_retrying_etxtbsy(&mut command).unwrap();
+            let output = crate::test_exec::output(&mut command).unwrap();
             assert_eq!(output.status.code(), Some(2));
             let stderr = String::from_utf8_lossy(&output.stderr);
             assert!(stderr.contains("unexpected gh call:"), "stderr: {stderr}");
@@ -43257,15 +43254,7 @@ mod forge_binary_resolution_tests;
 #[cfg(all(test, unix))]
 mod story1163_forge_dispatch_tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
-
-    fn write_executable(path: &std::path::Path, body: &str) {
-        std::fs::write(path, body).unwrap();
-        let mut perms = std::fs::metadata(path).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(path, perms).unwrap();
-    }
 
     fn gitlab_project() -> TempDir {
         let tmp = TempDir::new().unwrap();
@@ -43281,7 +43270,7 @@ mod story1163_forge_dispatch_tests {
         let bin_dir = TempDir::new().unwrap();
         let log = bin_dir.path().join("glab.log");
         let glab = bin_dir.path().join("glab");
-        write_executable(
+        crate::test_exec::write_executable(
             &glab,
             &format!(
                 "#!/bin/sh\n\
@@ -43312,7 +43301,7 @@ mod story1163_forge_dispatch_tests {
         let bin_dir = TempDir::new().unwrap();
         let log = bin_dir.path().join("glab.log");
         let glab = bin_dir.path().join("glab");
-        write_executable(
+        crate::test_exec::write_executable(
             &glab,
             &format!(
                 "#!/bin/sh\n\
@@ -50302,10 +50291,7 @@ mod resolve_gh_binary_tests {
     }
 
     fn make_executable(path: &std::path::Path) {
-        std::fs::write(path, "#!/bin/sh\necho gh fake\n").unwrap();
-        let mut perms = std::fs::metadata(path).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(path, perms).unwrap();
+        crate::test_exec::write_executable(path, "#!/bin/sh\necho gh fake\n");
     }
 
     fn make_non_executable(path: &std::path::Path) {
@@ -50380,14 +50366,10 @@ mod resolve_gh_binary_tests {
         let bad = tmp.path().join("gh");
         // Shebang points at a non-existent interpreter, so spawn errors
         // with ENOENT even though is_executable returns true.
-        std::fs::write(
+        crate::test_exec::write_executable(
             &bad,
             "#!/this/interpreter/does/not/exist\necho should never run\n",
-        )
-        .unwrap();
-        let mut perms = std::fs::metadata(&bad).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&bad, perms).unwrap();
+        );
         assert!(is_executable(&bad));
 
         let _g = scoped_prepend_path(tmp.path());
@@ -50410,10 +50392,7 @@ mod resolve_gh_binary_tests {
         let good_dir = TempDir::new().unwrap();
 
         let broken = broken_dir.path().join("gh");
-        std::fs::write(&broken, "#!/this/does/not/exist\n").unwrap();
-        let mut p = std::fs::metadata(&broken).unwrap().permissions();
-        p.set_mode(0o755);
-        std::fs::set_permissions(&broken, p).unwrap();
+        crate::test_exec::write_executable(&broken, "#!/this/does/not/exist\n");
 
         let good = good_dir.path().join("gh");
         make_executable(&good);
@@ -78421,8 +78400,6 @@ mod bug_1291_orphan_sweep_tests {
     #[cfg(unix)]
     #[test]
     fn real_phase_driver_shelve_handoff_makes_story_1354_claimable() {
-        use std::os::unix::fs::PermissionsExt;
-
         let root = tempfile::tempdir().unwrap();
         let fake_aida = root.path().join("aida");
         let script = r#"#!/bin/sh
@@ -78436,10 +78413,7 @@ if [ "$1" = "queue" ] && [ "$2" = "add" ]; then
 fi
 exit 1
 "#;
-        std::fs::write(&fake_aida, script).unwrap();
-        let mut permissions = std::fs::metadata(&fake_aida).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&fake_aida, permissions).unwrap();
+        crate::test_exec::write_executable(&fake_aida, script);
 
         let mut driver = RealPhaseDriver::new(
             root.path().to_path_buf(),
@@ -78479,13 +78453,12 @@ exit 1
     #[cfg(unix)]
     #[test]
     fn queue_add_failure_is_propagated() {
-        use std::os::unix::fs::PermissionsExt;
         let root = tempfile::tempdir().unwrap();
         let fake = root.path().join("failing-aida");
-        std::fs::write(&fake, "#!/bin/sh\necho queue unavailable >&2\nexit 23\n").unwrap();
-        let mut permissions = std::fs::metadata(&fake).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&fake, permissions).unwrap();
+        crate::test_exec::write_executable(
+            &fake,
+            "#!/bin/sh\necho queue unavailable >&2\nexit 23\n",
+        );
         let err = aida_subcmd_queue_add_for_reviewer_using(
             root.path(),
             "STORY-1354",
@@ -79890,14 +79863,7 @@ mod story_1043_unshipped_work_tests {
 
     fn executable_fake_gh(root: &std::path::Path, body: &str) -> std::path::PathBuf {
         let fake_gh = root.join("fake-gh");
-        std::fs::write(&fake_gh, body).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&fake_gh).unwrap().permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&fake_gh, perms).unwrap();
-        }
+        crate::test_exec::write_executable(&fake_gh, body);
         fake_gh
     }
 

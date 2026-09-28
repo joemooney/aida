@@ -70,17 +70,9 @@ fn mirror_status_description_carries_the_real_result_and_is_short() {
 // --- fake gh/glab plumbing ---
 
 #[cfg(unix)]
-fn make_executable(path: &std::path::Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let mut perms = std::fs::metadata(path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms).unwrap();
-}
-
-#[cfg(unix)]
 fn write_fake_glab_pipelines(dir: &std::path::Path, body: &str) -> std::path::PathBuf {
     let path = dir.join("glab");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             "#!/bin/sh\n\
@@ -91,9 +83,7 @@ fn write_fake_glab_pipelines(dir: &std::path::Path, body: &str) -> std::path::Pa
              echo unexpected glab args: \"$@\" >&2\n\
              exit 1\n"
         ),
-    )
-    .unwrap();
-    make_executable(&path);
+    );
     path
 }
 
@@ -104,8 +94,7 @@ fn write_fake_glab_pipelines(dir: &std::path::Path, body: &str) -> std::path::Pa
 #[cfg(unix)]
 fn write_failing_glab(dir: &std::path::Path) -> std::path::PathBuf {
     let path = dir.join("glab");
-    std::fs::write(&path, "#!/bin/sh\nexit 1\n").unwrap();
-    make_executable(&path);
+    crate::test_exec::write_executable(&path, "#!/bin/sh\nexit 1\n");
     path
 }
 
@@ -120,7 +109,7 @@ fn write_fake_gh(
     record_path: &std::path::Path,
 ) -> std::path::PathBuf {
     let path = dir.join("gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             "#!/bin/sh\n\
@@ -132,9 +121,7 @@ fn write_fake_gh(
              exit 0\n",
             record_path.display()
         ),
-    )
-    .unwrap();
-    make_executable(&path);
+    );
     path
 }
 
@@ -204,7 +191,7 @@ fn looks_up_the_exact_pushed_sha_not_just_the_branch() {
     // args" failure path instead, which would make this test fail loudly if
     // the sha-filter regressed back to a branch-ref lookup.
     let path = root.join("glab");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             "#!/bin/sh\n\
@@ -221,9 +208,7 @@ EOF\n\
                  ;;\n\
              esac\n"
         ),
-    )
-    .unwrap();
-    make_executable(&path);
+    );
 
     let record = root.join("gh-calls.log");
     let gh = write_fake_gh(root, &pr_line_open("feature-x"), &record);
@@ -303,12 +288,10 @@ fn no_open_pr_skips_entirely_without_ever_asking_gitlab() {
     // glab would answer with a real pipeline if asked — but it must never be
     // asked, because there is no open PR to carry the status.
     let glab_path = root.join("glab");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &glab_path,
         "#!/bin/sh\necho glab must not be called >&2\nexit 1\n",
-    )
-    .unwrap();
-    make_executable(&glab_path);
+    );
 
     let record = root.join("gh-calls.log");
     // Empty pr_line == `gh pr list` found nothing (no open PR).
@@ -336,19 +319,15 @@ fn default_branch_is_always_skipped() {
     init_github_repo(root);
 
     let glab_path = root.join("glab");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &glab_path,
         "#!/bin/sh\necho glab must not be called >&2\nexit 1\n",
-    )
-    .unwrap();
-    make_executable(&glab_path);
+    );
     let gh_path = root.join("gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &gh_path,
         "#!/bin/sh\necho gh must not be called >&2\nexit 1\n",
-    )
-    .unwrap();
-    make_executable(&gh_path);
+    );
 
     let _env = crate::test_env::EnvVarsGuard::set(&[
         ("AIDA_TEST_GLAB_BINARY", glab_path.to_str().unwrap()),

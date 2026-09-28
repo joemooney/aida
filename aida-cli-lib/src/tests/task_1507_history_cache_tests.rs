@@ -867,7 +867,7 @@ fn history_cache_unwritable_dir_falls_back_to_git_walk() {
     std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o555)).unwrap();
     if std::fs::write(ro.join("probe"), "x").is_ok() {
         // Running with privileges that ignore permissions: nothing to test.
-        std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_exec::mark_executable(&ro);
         return;
     }
     let db = ro.join(history_cache::history_db_file_name());
@@ -878,7 +878,7 @@ fn history_cache_unwritable_dir_falls_back_to_git_walk() {
         .unwrap()
         .0
         .is_empty());
-    std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_exec::mark_executable(&ro);
 }
 
 #[test]
