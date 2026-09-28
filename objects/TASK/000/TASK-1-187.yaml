@@ -42,12 +42,12 @@ description: |
      following argument that does not exist). Each new assertion carries a non-vacuity proof:
      state which one fails against the current implementation.
   7. No behaviour change for the `Decision` matrix — `confirm_bypass_decision_matrix` stays green.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-28T16:59:50.313491425Z
-modified_at: 2026-09-28T21:04:16.520823231Z
+modified_at: 2026-09-28T21:04:37.998755638Z
 req_type: Task
 tags:
 - carried-from:TASK-1500
@@ -62,6 +62,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e9d5-7e6e-7483-b443-c9f2de786737
+  author: aida-session-start
+  timestamp: 2026-09-28T21:04:37.998755130Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ad76e9e46f42c9ce35589ad7c4b7c541cee74884
   branch: main
