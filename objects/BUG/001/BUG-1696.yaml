@@ -1,0 +1,54 @@
+id: 01a0e5ca-347a-7502-9b4c-bc06771af495
+spec_id: BUG-1696
+agreed_id: BUG-1696
+title: aida agent new has no --prompt-file, so orchestrators pass briefs through nested shell quoting and silently launch agents with an empty prompt
+description: |
+  `aida agent new` accepts the launch prompt only as a command-line string (`--prompt <PROMPT>`).
+  Orchestrator seats therefore build it as `--prompt "$(cat /tmp/brief.txt)"` inside a nested
+  `/bin/bash -lc "..."`, and the quoting breaks silently.
+
+  Observed 2026-09-27 in codex thread 01a0e4b3-aefb-7852-9a20-3a9ee8a9caba: the executed line was
+
+      aida agent new codex --role reviewer --name reviewer-pr2243 \
+        --description '"'Independent exact-head review PR 2243' \
+        --prompt \""'$(cat /tmp/independent-review-2243.txt)" --extra-flag ...
+
+  The `$(cat ...)` landed inside single quotes, so no command substitution happened and `--prompt`
+  received a literal fragment. Codex launched into an empty interactive TUI ("Ask Codex to do
+  anything") and idled. Because `aida agent new` is foreground and PTY-attached, the orchestrator's
+  only execution thread blocked for 11,056,217 ms (3h04m) and then exited 0 — reporting success for
+  a seat that never received its brief. Zero specs merged in the 4h50m that followed until the
+  operator intervened.
+
+  The failure is silent in both directions: nothing warns that the prompt is empty or malformed, and
+  the exit status is 0.
+
+  ACCEPTANCE
+
+  AC1. `aida agent new {claude,codex,antigravity} --prompt-file <PATH>` reads the launch prompt from
+       PATH verbatim, so no shell quoting is involved.
+  AC2. `--prompt-file` and `--prompt` are mutually exclusive; supplying both is a usage error from
+       argument parsing, not a silent precedence rule.
+  AC3. A `--prompt-file` whose path is missing or unreadable fails the launch with the path named,
+       before any agent process is spawned.
+  AC4. A prompt that resolves to empty or whitespace-only — from `--prompt-file` OR from `--prompt` —
+       fails the launch with an actionable message instead of spawning an agent that will idle.
+       This is the regression guard for the 3h stall.
+  AC5. `--show-prompt` prints the prompt resolved from `--prompt-file` and exits without spawning.
+  AC6. `--no-prompt` continues to suppress the initial message, and is a usage error when combined
+       with `--prompt-file`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T02:13:49.306342486Z
+modified_at: 2026-09-28T02:13:49.306342486Z
+req_type: Bug
+filed_at:
+  code_sha: bb445e1236ce2ea95f8427abca110ec4dd250960
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 3f4cda41c9
+  vendor: antigravity
+  session: 79f15ecb-4580-4277-9778-648c50ac17b4
