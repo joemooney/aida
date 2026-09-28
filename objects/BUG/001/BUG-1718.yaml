@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T18:17:29.160704399Z
-modified_at: 2026-09-28T19:21:13.717700659Z
+modified_at: 2026-09-28T19:24:29.119169382Z
 req_type: Bug
 comments:
 - id: 01a0e94d-080c-75c1-99ce-22b0b207afb5
@@ -301,6 +301,86 @@ comments:
     it needs a sketch on this spec and advisor signoff before any more code is written.
   created_at: 2026-09-28T19:21:13.717700659Z
   modified_at: 2026-09-28T19:21:13.717700659Z
+  session_id: e9acd7c2-3db1-4cdf-8831-f1ed5f7d4200
+- id: 01a0e979-ce3f-7890-99bb-8ce2c36c2d04
+  author: joe
+  content: |
+    ADVISOR SKETCH + SIGNOFF — BUG-1718 (required by CLAUDE.md before the round-2 rework)
+
+    This supersedes the round-1 rework brief where they conflict. Written by the advisor seat after the
+    round-2 review found that the `Removable` arm introduced by this branch breaks five BUG-1657
+    protections (see the preceding ADVISOR REVIEW comment).
+
+    ## The decision: BUG-1718 is a PRESENTATION fix, not a classification fix. Drop the Removable arm.
+
+    Re-reading this spec's own description: "The harm is that a hot path prints 80 lines of unanswerable
+    output on every ship, training everyone to skim past doctor findings." And: "There is no answer the
+    operator can give." The spec already diagnoses the batched case as **undecidable**. A fix that
+    decides it anyway — by comparing commit timestamps — invents certainty the spec says does not exist,
+    and the five red BUG-1657 tests are what that invented certainty costs: a revert, a deletion and an
+    unshipped edit all get reaped.
+
+    Acceptance #1 says the branch "is NOT reported as needing an operator decision. Decide it by the
+    signal the finding already has ... or by content equivalence". It does **not** say decide it
+    *Removable*. "Keep — the batch landed the spec, the extra commits are a squash-ancestry artifact,
+    there is nothing for you to do" is a decision. It satisfies #1 and costs nothing if wrong.
+
+    Acceptance #1 and #4 are in direct tension exactly on the undecidable set: #1 wants it decided, #4
+    wants genuinely-unmerged work to still surface, and in that set the two are indistinguishable. The
+    tension resolves only one way that does not risk work: decide it as a no-action Keep and stop
+    printing it on the hot path.
+
+    ### AC1 is hereby NARROWED (advisor signoff, this comment is the record)
+
+    > 1. A branch whose spec landed via a BATCHED integration merge is NOT reported as *needing an
+    >    operator decision*. Where content equivalence proves the branch's contribution already landed,
+    >    it is Removable (the existing `content_fully_landed` arm). Where content equivalence is
+    >    inconclusive, it is classified as a **no-action Keep** — worded so no operator adjudication is
+    >    implied — and MUST NOT be reported Removable or reaped. Commit identity, patch-id, and commit
+    >    timestamps are all disallowed as the deciding signal.
+
+    ## Scope of the round-2 rework
+
+    KEEP, already verified correct:
+    - `spec_landing_commit` in session_reap.rs as the single hardened probe, with
+      `spec_trailer_landed_on` delegating to it (round-1 finding 1). Still needed for the finding text.
+    - The read-only scan: no `git worktree prune` in `scan_merged_agent_worktrees`; missing
+      registrations skipped without a finding (round-1 finding 3, satisfies AC2's operator-visible
+      intent without mutating repo state on a diagnostic).
+    - The `quiet_output` one-line summary on the ship path (AC3).
+    - `bug_1718_plan_commit_is_not_a_landing_signal_and_worktree_is_kept` and
+      `bug_1718_oldest_landing_match_keeps_branch_commit_between_mentions` — both have real
+      non-vacuity proofs; the latter still holds under a Keep-only classification.
+
+    REMOVE:
+    - The `AgentWorktreeFacts::no_commits_after_landing` field, both copies of its timestamp computation
+      (doctor_cmd.rs:4948 and session_reap.rs:716), and the `Removable` arm at doctor_cmd.rs:4405.
+    - `gather_merge_facts_pinned` goes back to not carrying the fact at all — the hardcoded `false` was
+      load-bearing for BUG-1657 and there is now nothing to hardcode.
+    - The `commit_file_at(..., "2035-01-01T00:00:00Z")` hunk in
+      `task_1534_branch_with_unshipped_commit_is_not_reclaimable`. That test must pass on real
+      timestamps. `commit_file_at` itself stays — the oldest-landing test needs it.
+
+    ADD:
+    - Reword the `unique_unmerged_commits > 0 && !content_fully_landed && spec_trailer_on_main` Keep so
+      it does not say "operator decision". It should state the decision: the spec landed via a batched
+      integration merge, the N unique commits are a squash-ancestry artifact that batching makes
+      content-undecidable, and no action is required. Keep a distinct wording for the
+      `!spec_trailer_on_main` case, which genuinely is an operator question.
+    - A test for AC4 that a branch with genuinely-unmerged work and NO landed spec trailer still
+      surfaces as an operator-actionable finding, distinct from the no-action wording above.
+
+    ## Exit gate — all of these, no exceptions
+
+    - `cargo test -p aida-cli-lib --lib bug_1657` → **19 passed, 0 failed**. This is the gate that was
+      missed in round 1; 19/19 is the measured baseline on main at 1892671e6e.
+    - `cargo test -p aida-cli-lib --lib bug_1718` and `--lib task_1534` green, with
+      `task_1534_branch_with_unshipped_commit_is_not_reclaimable` passing on undated commits.
+    - `cargo fmt --all -- --check` and `cargo clippy --workspace` clean.
+    - Report the exact test names and counts you ran. Do not report a suite as covering a function
+      because its name matched a substring.
+  created_at: 2026-09-28T19:24:29.119169382Z
+  modified_at: 2026-09-28T19:24:29.119169382Z
   session_id: e9acd7c2-3db1-4cdf-8831-f1ed5f7d4200
 history:
 - id: 01a0e93c-a0a1-7810-b4e2-ac74ccca876e
