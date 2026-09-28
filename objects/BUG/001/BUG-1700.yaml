@@ -53,7 +53,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T02:46:35.422630850Z
-modified_at: 2026-09-28T02:59:28.176356363Z
+modified_at: 2026-09-28T04:02:37.968594554Z
 req_type: Bug
 comments:
 - id: 01a0e5f3-ff30-7b32-844e-2156b8c85154
@@ -61,6 +61,12 @@ comments:
   content: 'Implementation hazard found while diagnosing (2026-09-27): ~/.claude.json is a single large shared file (149 project entries on the dev host) that every live Claude Code process rewrites on its own schedule. A naive read-modify-write from AIDA can clobber a concurrent agent state, and a partial write can break every seat at once. Read AC3 as: atomic replace (write temp + rename in the same directory) under an advisory lock, re-reading immediately before the write, and never rewriting keys AIDA did not set. Deliberately NOT patched in the 2026-09-27 emergency batch (BUG-1696/1697/1698/1699) for exactly that reason: that batch touched only AIDA own argv construction, with no writes to shared vendor state while the fleet was live.'
   created_at: 2026-09-28T02:59:28.176356363Z
   modified_at: 2026-09-28T02:59:28.176356363Z
+  session_id: 79f15ecb-4580-4277-9778-648c50ac17b4
+- id: 01a0e62d-d310-7bc2-a670-fcff4a8888a7
+  author: joe
+  content: 'BETTER DESIGN, operator proposal 2026-09-27, EMPIRICALLY CONFIRMED — supersedes the ~/.claude.json approach in the original acceptance. Probe (claude v2.1.283, isolated HOME, interactive under a PTY): with ONLY the parent directory recorded as hasTrustDialogAccepted=true and NO entry of any kind for the child, a launch with cwd inside the child reached its prompt with NO folder-trust modal. Claude Code folder trust INHERITS down the directory tree. So: place AIDA-created worktrees under one sibling parent (e.g. /home/joe/ai/aida-worktrees/<spec>) instead of scattering them as /home/joe/ai/aida-<spec>, and the operator trusts that parent ONCE. Every future worktree is then trusted on creation with no per-worktree bookkeeping. This is strictly better than what AC1-AC5 originally described, because it removes the write to ~/.claude.json entirely — and with it the hazard recorded in the previous comment (a large shared file that every live Claude process rewrites, where a read-modify-write can clobber a concurrent agent state). AIDA writes nothing to vendor state; it only chooses where to create the worktree. Revised acceptance: (1) AIDA-created session worktrees live under a single configurable parent directory rather than as siblings of the repo; (2) the parent is created if absent and its path is reported at session creation so the operator can trust it once; (3) existing scattered worktrees keep working - this is not a migration requirement; (4) no writes to ~/.claude.json or any other vendor-owned state; (5) the launch tells the operator plainly when the parent is not yet trusted, instead of spawning a seat that will hang on the modal. Note this also tidies the repo neighbourhood, which currently holds 20+ aida-* sibling directories.'
+  created_at: 2026-09-28T04:02:37.968594554Z
+  modified_at: 2026-09-28T04:02:37.968594554Z
   session_id: 79f15ecb-4580-4277-9778-648c50ac17b4
 filed_at:
   code_sha: bb445e1236ce2ea95f8427abca110ec4dd250960
