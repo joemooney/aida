@@ -1,0 +1,86 @@
+id: 01a0e65f-184c-73d2-9509-83f0d6ff6a6f
+spec_id: BUG-1704
+agreed_id: BUG-1704
+title: 'aida agent status calls a finished seat busy: classify_status treats any live lease covering the worktree as activity, never asking whether THIS agent is working'
+description: |
+  `aida agent status` reports `busy` for a seat that has finished its turn, so an orchestrator
+  polling it can never tell a working seat from a stranded one. BUG-1701 shipped the *evidence*
+  (a CPU column, AC5); this spec is the *classification* fix it deliberately did not attempt.
+
+  MECHANISM (read from source, aida-cli-lib/src/agent_registry.rs)
+
+  `classify_status` applies, in order:
+
+      1. ended_at set, or pid not alive        -> Stale
+      2. last_active_at within threshold       -> Busy
+      3. covers(&ctx.live_lease_worktrees, &entry.worktree_path) -> Busy     <-- the defect
+      4. otherwise                             -> Idle
+
+  Rule 3 asks "does ANY live lease cover this worktree?", never "is THIS agent doing anything?".
+  `covers` matches on equality or path prefix:
+
+      agent == w || agent.starts_with(w)
+
+  So a seat whose registry row points at the MAIN checkout is classified Busy for as long as any
+  live lease also points at the main checkout — independent of that seat's own activity. Because
+  leases accumulate (123 live and 99 stale on the dev host on 2026-09-27), the main checkout
+  effectively always has a covering live lease, so a seat there reads `busy` forever. Sibling
+  worktrees are not affected by a main-checkout lease (`/home/joe/ai/aida-bug-1693` does not start
+  with `/home/joe/ai/aida`), which is why this shows up specifically for seats working in main.
+
+  Measured 2026-09-27: three dispatched seats reported `busy` after 48-88 minutes idle. The tell was
+  cumulative CPU: 3-46 SECONDS across hours.
+
+  WHY THE OBVIOUS FIX IS WRONG
+
+  Letting low cumulative CPU override rule 3 would invite an orchestrator to stop a *working* seat:
+  cumulative CPU cannot distinguish "finished its turn" from "blocked on a long build" — a seat
+  waiting on a cargo build it has been queued behind also shows near-zero CPU growth of its own.
+  BUG-1701 recorded this reasoning on `process_cpu_secs` and deliberately reported the number
+  without reclassifying on it. That restraint should not be undone.
+
+  DIRECTION (not yet a decision — needs a sketch and advisor signoff before implementation)
+
+  Two candidate signals, both of which separate "finished" from "blocked" in a way cumulative CPU
+  cannot:
+
+    a. CPU DELTA between two samples: a finished seat consumes ~0 additional CPU between samples; a
+       seat blocked on its own build still accrues CPU. Needs somewhere to persist the prior sample
+       and a defensible interval.
+    b. DESCENDANT CPU: sum the process subtree. A seat blocked on a build has a live, CPU-consuming
+       child; a finished seat's subtree is quiet. Single-sample, so no persistence — but it must not
+       mistake a *queued* build (blocked on a cargo slot flock, consuming no CPU) for a finished
+       seat. That case matters on this host, where cargo is 2-slot gated.
+
+  ACCEPTANCE
+
+  AC1. A seat that has finished its turn (no further work, quiet subtree) no longer reports `busy`
+       in `aida agent status`, and is distinguishable from a working seat by status alone.
+  AC2. A seat blocked on a long build -- including one QUEUED behind a cargo slot lock and therefore
+       consuming no CPU itself -- is NOT reported as finished/idle. This is the case that must not
+       regress; a false "idle" here gets a working seat stopped.
+  AC3. Rule 3's existing intent is preserved where it is correct: a parked-but-running agent attached
+       to a live lease still reads as occupying scope (the STORY-435 behaviour), rather than being
+       reclassified wholesale.
+  AC4. The decision rule is a PURE function over its sampled inputs, so both AC1 and AC2 are
+       asserted by unit tests without spawning an agent or a build.
+  AC5. Whatever signal is chosen is cheap enough for `aida agent status` to remain a routine poll
+       (no per-call multi-second sampling delay).
+  AC6. Stale-lease accumulation is addressed or explicitly ruled out of scope: if the 99 stale leases
+       are what make rule 3 fire universally, a sweep may be the smaller fix and should be compared
+       against changing the classifier.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T04:56:26.956029730Z
+modified_at: 2026-09-28T04:56:26.956029730Z
+req_type: Bug
+filed_at:
+  code_sha: 6c7683ec7c41907fbaddbe0a7eafb8ff31e9715c
+  branch: claude/bug-1700-worktree-trust-parent
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: bcd7822d28
+  vendor: antigravity
+  session: fc2bef36-971e-4674-a858-0de8a84a1006
