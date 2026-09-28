@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T12:23:45.193848373Z
-modified_at: 2026-09-28T12:23:45.193848373Z
+modified_at: 2026-09-28T15:52:13.686544903Z
 req_type: Bug
 tags:
 - auto-complete
@@ -49,3 +49,30 @@ tags:
 - ci
 - failure-2
 - failure-kind:tool-exit
+comments:
+- id: 01a0e8b7-7a76-7e02-b69c-65ff67afe7a0
+  author: joe
+  content: |-
+    APPROVED — this is a REAL orchestrator bug, and the most expensive of the four auto-drafts. It destroyed 31 minutes of completed implementer work.
+
+    MECHANISM (read from the telemetry): phase 1 (implementer) ran 1,894,039 ms — 31.5 minutes of real work — and then phase 2 failed after 32 ms with:
+
+      could not verify implementer branch before phase-2 CI/teardown:
+      could not invoke `git branch --show-current`: No such file or directory (os error 2)
+
+    ENOENT on *invoking* a program is not git reporting a missing file — it is the exec itself failing. Two candidates, both orchestrator-side:
+      a. the process cwd no longer exists, because the implementer worktree was removed or torn down BEFORE phase 2 tried to read its branch; or
+      b. `git` was not resolvable on PATH in the phase-2 environment, i.e. phase 2 runs with a different env than phase 1.
+
+    The 32 ms duration argues strongly for (a) or (b) rather than any git-level problem: it failed immediately, before doing anything.
+
+    WHY THIS MATTERS MORE THAN ITS SEVERITY SUGGESTS: the failure lands in the teardown/verify path AFTER the work is done, so the orchestrator throws away a completed 31-minute implementer phase over an environment defect. It also burned attempt 3/3, so the retry budget was consumed by a fault that retrying cannot fix — every retry hits the same missing cwd/PATH.
+
+    ACCEPTANCE SUGGESTION: phase 2 must (1) verify the worktree/cwd still exists before invoking git and fail with a diagnostic naming the missing path, (2) not consume retry attempts on an ENOENT-class environment fault, which is not transient, and (3) preserve the phase-1 result so completed work survives a teardown fault.
+
+    Separately: BUG-1689's own code regression (its test-infra refactor breaks preflight_detects_real_stale_overlap_before_reviewer_launch, which passes on main) is a DIFFERENT defect owned by BUG-1689 and PR #2256. This spec is only about the orchestrator losing the phase.
+
+    Triaged by the advisor seat, 2026-09-28.
+  created_at: 2026-09-28T15:52:13.686544903Z
+  modified_at: 2026-09-28T15:52:13.686544903Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
