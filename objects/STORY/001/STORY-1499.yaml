@@ -1,0 +1,26 @@
+id: 01a0e81d-9347-7d11-a0f0-8389ec41a79e
+spec_id: STORY-1499
+agreed_id: STORY-1499
+title: 'Review PR-2258: [AI:codex] fix(home): harden raw lookup ratchet (TASK-1553)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0e807`) for branch `task-1553`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2258>
+  - Branch: `task-1553` → `main`
+
+  ## Covers
+
+  - TASK-1553
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2258` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T13:04:07.495788263Z
+modified_at: 2026-09-28T13:04:07.495788263Z
+req_type: Story
