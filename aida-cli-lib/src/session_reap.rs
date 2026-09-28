@@ -170,7 +170,8 @@ pub(crate) fn classify_session_reap(facts: &ReapFacts) -> ReapVerdict {
         AgentWorktreeVerdict::Removable(reason) => {
             ReapVerdict::Reap(format!("spec finished, process exited, {reason}"))
         }
-        AgentWorktreeVerdict::Keep(reason) => ReapVerdict::Skip(reason),
+        // trace:BUG-1719 | ai:codex
+        AgentWorktreeVerdict::Keep { reason, .. } => ReapVerdict::Skip(reason),
     }
 }
 
