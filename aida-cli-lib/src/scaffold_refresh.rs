@@ -65,6 +65,7 @@ fn plan_refresh_deliveries(
     preview: &aida_core::scaffolding::ScaffoldPreview,
 ) -> BTreeMap<PathBuf, BTreeSet<String>> {
     let mut deliveries = BTreeMap::new();
+    seed_portable_manifest_from_legacy(project_root);
     for install_plan in &preview.skill_packs {
         if !refresh_may_plan_pack(project_root, &install_plan.pack) {
             continue;
@@ -106,6 +107,71 @@ fn plan_refresh_deliveries(
         }
     }
     deliveries
+}
+
+/// Seed the shared pack's manifest from whichever real legacy vendor packs
+/// are installed. Any delivered name carries over; a deletion is an opt-out
+/// only when every legacy manifest that knows that name records it as such.
+/// Unknown names are safe to deliver only when all legacy manifests are v2.
+// trace:TASK-1519 | ai:codex
+fn seed_portable_manifest_from_legacy(project_root: &Path) {
+    use aida_core::scaffolding::refresh::{
+        read_skill_manifest, write_skill_manifest, SkillManifest, DELIVERED_MANIFEST,
+    };
+    let portable = project_root.join(".agents/skills");
+    if !portable.is_dir() || portable.join(DELIVERED_MANIFEST).exists() {
+        return;
+    }
+    let mut manifests = Vec::new();
+    let mut physically_present = BTreeSet::new();
+    for path in [".codex/skills", ".antigravity/skills"] {
+        let dir = project_root.join(path);
+        if !std::fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_dir()) {
+            continue;
+        }
+        let manifest = match read_skill_manifest(&dir) {
+            Ok(m) => m.unwrap_or_default(),
+            Err(_) => return,
+        };
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.starts_with("aida-")
+                    && aida_core::scaffolding::refresh::skill_present(&dir, &name)
+                {
+                    physically_present.insert(name);
+                }
+            }
+        }
+        manifests.push(manifest);
+    }
+    if manifests.is_empty() {
+        return;
+    }
+    let mut seeded = SkillManifest {
+        complete: manifests.iter().all(|m| m.complete),
+        ..Default::default()
+    };
+    let known: BTreeSet<_> = manifests
+        .iter()
+        .flat_map(|m| m.delivered.iter().chain(&m.opted_out))
+        .cloned()
+        .collect();
+    for name in known.union(&physically_present).cloned() {
+        let knowing: Vec<_> = manifests.iter().filter(|m| m.knows(&name)).collect();
+        if physically_present.contains(&name) || knowing.iter().any(|m| m.delivered.contains(&name))
+        {
+            seeded.delivered.insert(name);
+        } else if knowing.iter().all(|m| m.opted_out.contains(&name)) {
+            seeded.opted_out.insert(name);
+        }
+    }
+    if !seeded.complete {
+        for m in &manifests {
+            seeded.unconfirmed.extend(m.unconfirmed.iter().cloned());
+        }
+    }
+    let _ = write_skill_manifest(&portable, &seeded);
 }
 
 /// After refresh wrote newly shipped skills, record the ones whose `SKILL.md`
@@ -679,6 +745,42 @@ pub(crate) fn print_refresh_summary(packs: &[PackRefresh]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn portable_manifest_seeding_merges_legacy_delivery_and_opt_out_state() {
+        use aida_core::scaffolding::refresh::{
+            read_skill_manifest, write_skill_manifest, SkillManifest,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for path in [".agents/skills", ".codex/skills", ".antigravity/skills"] {
+            std::fs::create_dir_all(root.join(path)).unwrap();
+        }
+        let mut codex = SkillManifest {
+            complete: true,
+            ..Default::default()
+        };
+        codex.delivered.insert("aida-kept".into());
+        codex.opted_out.insert("aida-removed".into());
+        codex.opted_out.insert("aida-mixed".into());
+        write_skill_manifest(&root.join(".codex/skills"), &codex).unwrap();
+        let mut antigravity = SkillManifest {
+            complete: true,
+            ..Default::default()
+        };
+        antigravity.delivered.insert("aida-mixed".into());
+        antigravity.opted_out.insert("aida-removed".into());
+        write_skill_manifest(&root.join(".antigravity/skills"), &antigravity).unwrap();
+
+        seed_portable_manifest_from_legacy(root);
+        let seeded = read_skill_manifest(&root.join(".agents/skills"))
+            .unwrap()
+            .unwrap();
+        assert!(seeded.complete);
+        assert!(seeded.delivered.contains("aida-kept"));
+        assert!(seeded.delivered.contains("aida-mixed"));
+        assert!(seeded.opted_out.contains("aida-removed"));
+    }
     use aida_core::scaffolding::wrap_with_aida_header;
 
     #[test]
