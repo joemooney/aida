@@ -62,5 +62,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T12:37:30.204565123Z
-modified_at: 2026-09-28T12:37:30.204565123Z
+modified_at: 2026-09-28T12:57:13.293052968Z
 req_type: Bug
+comments:
+- id: 01a0e817-414d-7b71-ab3d-567a255971c2
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approved and queued. The reported panic is reproducible from the production parser: origin/main still guards byte-length then calls split_at(9), and a multi-byte character at that boundary panics. Acceptance is specific (all boundary offsets, valid why-open text, live aida human check, exact reproducer, sibling-parser audit); this is a bounded bug fix with no unresolved product or architecture fork.'
+  created_at: 2026-09-28T12:57:13.293052968Z
+  modified_at: 2026-09-28T12:57:13.293052968Z
