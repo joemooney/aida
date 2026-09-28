@@ -104393,6 +104393,21 @@ struct ResumeEntry {
     from_pr: bool,
 }
 
+/// What the ownership probe concluded about a same-branch open change before
+/// TASK-1529 retracts it. `Foreign` and `Unverified` both refuse the close, but
+/// they are different operator situations: a change we could not identify may
+/// still be ours and still carries failing guards, so it is reported as loudly
+/// as a failed close, while somebody else's change is left alone quietly.
+// trace:TASK-1529 | ai:claude
+enum RetractionOwnership {
+    /// Open, and its author is this forge identity.
+    Ours,
+    /// Resolved, and not ours to close.
+    Foreign,
+    /// The probe itself failed, or the forge withheld the author.
+    Unverified,
+}
+
 impl RealPhaseDriver {
     /// Set the PR number AND, if the spec is supervised, stamp the merge-hold
     /// marker the MOMENT the PR becomes known (fresh creation or recovery/detect)
@@ -104543,27 +104558,46 @@ impl RealPhaseDriver {
             // and match before applying this destructive lifecycle action.
             let forge = self.project_forge();
             let mut sink = crate::network_retry::NoopSink;
-            let metadata = forge.change_metadata(pr.number as u64, &mut sink);
+            let metadata = forge.change_metadata(pr.number, &mut sink);
             let owner = forge.authenticated_user_login();
-            let is_ours = match (metadata, owner) {
-                (Ok(meta), Ok(owner)) => {
-                    meta.state == crate::forge::ChangeState::Open
-                        && meta
-                            .author
-                            .as_deref()
-                            .is_some_and(|author| author.eq_ignore_ascii_case(&owner))
+            let ownership = match (metadata, owner) {
+                (Ok(meta), Ok(owner)) if meta.state == crate::forge::ChangeState::Open => {
+                    match meta.author.as_deref() {
+                        Some(author) if author.eq_ignore_ascii_case(&owner) => {
+                            RetractionOwnership::Ours
+                        }
+                        Some(_) => RetractionOwnership::Foreign,
+                        None => RetractionOwnership::Unverified,
+                    }
                 }
-                _ => false,
+                // A change that is no longer open needs no retraction, and the
+                // AlreadyMerged path owns the merged case.
+                (Ok(_), Ok(_)) => RetractionOwnership::Foreign,
+                _ => RetractionOwnership::Unverified,
             };
-            if !is_ours {
-                if !self.json {
-                    eprintln!(
-                        "  {} left PR-{} open: could not confirm it was opened by this forge identity",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                        pr.number,
-                    );
+            match ownership {
+                RetractionOwnership::Ours => {}
+                RetractionOwnership::Foreign => {
+                    if !self.json {
+                        eprintln!(
+                            "  {} left PR-{} open — this forge identity did not open it",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            pr.number,
+                        );
+                    }
+                    return;
                 }
-                return;
+                RetractionOwnership::Unverified => {
+                    if !self.json {
+                        eprintln!(
+                            "  {} PR-{} is OPEN and its publication guards FAILED, but who \
+                             opened it could not be confirmed — check it by hand",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            pr.number,
+                        );
+                    }
+                    return;
+                }
             }
             let change = crate::forge::ChangeRef {
                 id: pr.number,
