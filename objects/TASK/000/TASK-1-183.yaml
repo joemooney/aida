@@ -1,0 +1,30 @@
+id: 01a0e823-1e46-7d32-a1b6-fdd1cd594a6e
+spec_id: TASK-1-183
+title: 'TASK-1547: is_intended_store_worktree verifies canonical .aida-store path, a .g…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1547, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  TASK-1547: is_intended_store_worktree verifies canonical .aida-store path, a .git file, distinct git-dir/common-dir, and branch aida-store, but never checks that the common-dir belongs to this project. A separate user repository can be linked at .aida-store on aida-store and pass; the healer then appends and commits there (doctor_cmd.rs:5865, 5943-5965). Compare canonical git common-dir with the main project and add a foreign-linked-worktree rejection fixture.
+
+  PR: #2243
+  Reviewed sha: c4ea3c9038c84ec8a04a2089035d3272e6d883ec
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T13:10:10.758859453Z
+modified_at: 2026-09-28T13:10:10.758859453Z
+req_type: Task
+tags:
+- carried-from:TASK-1547
+- finding-hash:1a5acb05
+- from-review:PR-2243
+- kind:carried-forward
+filed_at:
+  code_sha: d23ba1028c6de66959200f27b59cdcc5c5305e63
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: '5632229e66'
+  vendor: antigravity
+  session: fc2bef36-971e-4674-a858-0de8a84a1006
