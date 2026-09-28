@@ -1,0 +1,74 @@
+id: 01a0e805-33dc-7153-b0f3-79a5144f2e8d
+spec_id: BUG-1715
+agreed_id: BUG-1715
+title: 'aida human and the burndown panic on a spec comment with a multi-byte character at the why-open prefix boundary: one em-dash disables the whole coordination inbox'
+description: |
+  `aida human` and the burndown's open-facts collection PANIC on a spec comment whose 9th BYTE falls
+  inside a multi-byte character. One em-dash in one comment on one spec takes down the whole
+  project's coordination inbox.
+
+  OBSERVED 2026-09-28 (real instance, during an overnight codex backlog burndown)
+
+      $ aida human
+      thread 'main' panicked at core/src/str/mod.rs:833:21:
+      byte index 9 is not a char boundary; it is inside '—' (bytes 7..10) of
+      `SKETCH — awaiting independent advisor signoff ...`
+
+  Backtrace: `burndown::parse_why_open_comment` → `collect_open_facts` → `handle_list_human` →
+  `human_cmd::handle_human_command`.
+
+  ROOT CAUSE, `aida-cli-lib/src/burndown.rs:702`
+
+      const WHY_OPEN_PREFIX: &str = "why-open:";        // 9 BYTES
+      if trimmed.len() < WHY_OPEN_PREFIX.len() { return None; }   // byte-length guard
+      let (head, rest) = trimmed.split_at(WHY_OPEN_PREFIX.len()); // panics off a char boundary
+
+  The length guard compares BYTE lengths, which does not imply byte 9 is a character boundary.
+  `SKETCH ` is 7 ASCII bytes and the following em-dash spans bytes 7..10, so byte 9 is interior and
+  `split_at(9)` panics.
+
+  BLAST RADIUS — worse than one command erroring
+
+    * It is a PANIC, not an error: no graceful degradation, exit 101, no partial output.
+    * The input is ANY comment on ANY spec in the project. A single unlucky comment disables
+      `aida human` for everything, and the offending spec is not named in the panic in a way that
+      tells an operator which spec to go edit.
+    * It sits in `burndown`, so it takes the burndown/open-facts path down with it — an unattended
+      overnight burndown loses its coordination inbox.
+    * This repository's own prose is full of em-dashes, and AIDA itself writes SKETCH / why-open
+      notes, so the trigger is near-certain over time rather than exotic.
+
+  FIX (implemented)
+
+  Use `trimmed.get(..WHY_OPEN_PREFIX.len())`, which returns `None` on a non-boundary instead of
+  panicking. `None` is also the semantically correct answer: a string that cannot be split at that
+  byte cannot begin with a 9-byte ASCII prefix.
+
+  ACCEPTANCE
+
+  AC1. `parse_why_open_comment` returns None — never panics — for a comment with a multi-byte
+       character straddling the prefix boundary, at EVERY byte offset near it.
+  AC2. Short non-ASCII inputs (shorter than the prefix in chars but not in bytes) are safe.
+  AC3. A genuine `why-open:` comment whose REASON contains multi-byte characters still parses, with
+       the reason intact. The fix must not trade a panic for a wrong answer.
+  AC4. `aida human` completes on the live store that reproduced this.
+  AC5. Regression tests use the exact production string that triggered it, so the test documents the
+       real defect rather than a synthetic one.
+  AC6. Audit sibling parsers for the same byte-slice-after-byte-length-check shape. This is a CLASS:
+       any `split_at`/`[..n]` guarded only by `len() >= n` on operator- or agent-authored text has
+       the same defect. List what was checked, so the audit is evidence rather than an intention.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T12:37:30.204565123Z
+modified_at: 2026-09-28T12:37:30.204565123Z
+req_type: Bug
+filed_at:
+  code_sha: 5632229e663b9d782e1f2c427a3176792f8447ae
+  branch: claude/bug-1701-drain-routing
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 304ca777b1
+  vendor: antigravity
+  session: fc2bef36-971e-4674-a858-0de8a84a1006
