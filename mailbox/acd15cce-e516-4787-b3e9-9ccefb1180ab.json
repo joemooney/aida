@@ -1,0 +1,19 @@
+{
+  "id": "acd15cce-e516-4787-b3e9-9ccefb1180ab",
+  "thread_id": "acd15cce-e516-4787-b3e9-9ccefb1180ab",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "task199-runner"
+  },
+  "timestamp": 1790560919743,
+  "body": "Please resume and finish the outstanding TASK-199 work now: run a named nonzero integration test, formatting, rebase if required, commit and open the PR. If a specific gate is blocked, report the exact blocker and next action. You are the implementer; do not merge.",
+  "subject": "Resume TASK-199 and report blocker if any",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
