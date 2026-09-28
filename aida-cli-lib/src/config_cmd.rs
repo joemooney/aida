@@ -2313,7 +2313,11 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                     PolicySource::GlobalConfig,
                 ),
                 Err(reason) => {
-                    let declared = aida_home_dir()
+                    // Match the resolver used by acceptance_command_policy_global_quiet;
+                    // otherwise AIDA_HOME could make the displayed source disagree
+                    // with the policy that graded review actually reads.
+                    // trace:TASK-1545 | ai:codex
+                    let declared = crate::home_dir()
                         .map(|h| h.join(".aida/config.toml"))
                         .and_then(|p| std::fs::read_to_string(p).ok())
                         .and_then(|body| toml::from_str::<toml::Value>(&body).ok())
