@@ -1,12 +1,12 @@
 scope = "TASK-1499"
 node_id = "1"
-clone_path = "/home/joe/ai/aida"
+clone_path = "/tmp/aida-nightshift"
 host = "imac"
-pid = 787747
-pid_start_time = "2026-09-27T08:51:32+00:00"
+pid = 348
+pid_start_time = "2026-09-28T14:12:53+00:00"
 agent = "implementer"
-started_at = "2026-09-27T08:51:43.208163416+00:00"
-heartbeat_at = "2026-09-27T08:51:43.208163416+00:00"
+started_at = "2026-09-28T14:13:14.710547716+00:00"
+heartbeat_at = "2026-09-28T14:13:14.710547716+00:00"
 ttl_secs = 1800
 process_backed = false
 review_verb = false
