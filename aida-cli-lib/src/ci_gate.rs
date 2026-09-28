@@ -616,6 +616,9 @@ mod tests {
         row_reads: std::cell::Cell<usize>,
     }
     impl crate::forge::Forge for FakeForge {
+        fn authenticated_user_login(&self) -> anyhow::Result<String> {
+            Ok("fake-user".into())
+        }
         fn change_metadata(
             &self,
             _: u64,

@@ -517,6 +517,9 @@ impl ReviewDecision {
 pub struct ChangeMetadata {
     pub state: ChangeState,
     pub title: String,
+    /// Forge account that created the change. Missing when the forge omits it.
+    // trace:TASK-1529 | ai:codex
+    pub author: Option<String>,
     /// When the change merged, if the forge exposes it. Used by drain
     /// reconciliation to avoid crediting pre-reopen PRs.
     // trace:BUG-1112 | ai:codex
@@ -781,6 +784,11 @@ pub trait Forge {
         id: u64,
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<ChangeMetadata>;
+
+    /// Login of the account authenticated by this forge CLI. Ownership-sensitive
+    /// operations must fail closed when this identity cannot be resolved.
+    // trace:TASK-1529 | ai:codex
+    fn authenticated_user_login(&self) -> Result<String>;
 
     /// STORY-621 Slice 2: the headline (first line) of each commit on the
     /// change, oldest-first — what the BUG-245/BUG-357 credit reconcile parses
@@ -1261,6 +1269,19 @@ impl GitHubForge {
 }
 
 impl Forge for GitHubForge {
+    // trace:TASK-1529 | ai:codex
+    fn authenticated_user_login(&self) -> Result<String> {
+        let out = self.gh(&["api", "user", "--jq", ".login"])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh api user failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        let login = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        anyhow::ensure!(!login.is_empty(), "gh api user returned an empty login");
+        Ok(login)
+    }
+
     // trace:STORY-1166 | ai:claude
     fn checks_registered(&self, change: &ChangeRef) -> Result<CheckRegistration> {
         let pr = change.id.to_string();
@@ -1440,7 +1461,7 @@ impl Forge for GitHubForge {
                 "view",
                 &id_str,
                 "--json",
-                "state,title,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+                "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
             ]);
             c
         })
@@ -1853,6 +1874,28 @@ impl GitLabForge {
 }
 
 impl Forge for GitLabForge {
+    // trace:TASK-1529 | ai:codex
+    fn authenticated_user_login(&self) -> Result<String> {
+        let out = self.glab_api_get("user", &[])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab api user failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        let user: serde_json::Value =
+            serde_json::from_slice(&out.stdout).context("glab api user returned invalid JSON")?;
+        let login = user
+            .get("username")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        anyhow::ensure!(
+            !login.is_empty(),
+            "glab api user returned an empty username"
+        );
+        Ok(login.to_string())
+    }
+
     // trace:STORY-1166 | ai:claude
     fn checks_registered(&self, change: &ChangeRef) -> Result<CheckRegistration> {
         let out = self.glab_api_get("projects/:id/pipelines", &[("ref", &change.branch)])?;
@@ -2400,6 +2443,11 @@ impl PureGitForge {
 }
 
 impl Forge for PureGitForge {
+    // trace:TASK-1529 | ai:codex
+    fn authenticated_user_login(&self) -> Result<String> {
+        anyhow::bail!("pure-git has no authenticated forge user")
+    }
+
     fn kind(&self) -> ForgeKind {
         ForgeKind::None
     }
@@ -3016,6 +3064,11 @@ fn parse_gh_change_metadata(json: &serde_json::Value) -> ChangeMetadata {
     ChangeMetadata {
         state,
         title: s("title"),
+        author: json
+            .get("author")
+            .and_then(|a| a.get("login"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
         merged_at: json
             .get("mergedAt")
             .and_then(|v| v.as_str())
@@ -3097,6 +3150,11 @@ fn parse_glab_mr_metadata(body: &str) -> Result<ChangeMetadata> {
     Ok(ChangeMetadata {
         state,
         title: s("title"),
+        author: v
+            .get("author")
+            .and_then(|a| a.get("username"))
+            .and_then(|x| x.as_str())
+            .map(str::to_string),
         merged_at: v
             .get("merged_at")
             .and_then(|x| x.as_str())
@@ -3598,6 +3656,7 @@ pub(crate) mod fake {
         pub(crate) open_for_branch: ChangeLookup,
         pub(crate) open_for_spec: ChangeLookup,
         pub(crate) merged_for_branch: ChangeLookup,
+        pub(crate) author: Option<String>,
         /// `(change id, reason)` for every `close_change` call.
         pub(crate) closed: Arc<Mutex<Vec<(u64, String)>>>,
     }
@@ -3608,6 +3667,7 @@ pub(crate) mod fake {
                 open_for_branch: ChangeLookup::NoChange,
                 open_for_spec: ChangeLookup::NoChange,
                 merged_for_branch: ChangeLookup::NoChange,
+                author: Some("codex-bot".into()),
                 closed: Arc::new(Mutex::new(Vec::new())),
             }
         }
@@ -3624,6 +3684,9 @@ pub(crate) mod fake {
     }
 
     impl Forge for RecordingForge {
+        fn authenticated_user_login(&self) -> Result<String> {
+            Ok("codex-bot".to_string())
+        }
         fn kind(&self) -> ForgeKind {
             ForgeKind::GitHub
         }
@@ -3647,7 +3710,18 @@ pub(crate) mod fake {
             _: u64,
             _: &mut dyn crate::network_retry::RetrySink,
         ) -> Result<ChangeMetadata> {
-            anyhow::bail!("RecordingForge: change_metadata not scripted")
+            Ok(ChangeMetadata {
+                state: ChangeState::Open,
+                title: "fake change".into(),
+                author: self.author.clone(),
+                merged_at: None,
+                base_ref: "main".into(),
+                head_ref: "codex/task".into(),
+                head_sha: "abc".into(),
+                is_draft: false,
+                is_cross_repository: false,
+                head_repo: None,
+            })
         }
         fn change_commit_headlines(
             &self,
@@ -5434,6 +5508,7 @@ mod tests {
             r#"{
               "state": "MERGED",
               "title": "[AI:claude] fix(x): y (TASK-1)",
+              "author": {"login": "codex-bot"},
               "mergedAt": "2026-09-12T18:00:00Z",
               "baseRefName": "main",
               "headRefName": "task-1-fix",
@@ -5447,6 +5522,7 @@ mod tests {
         let m = parse_gh_change_metadata(&json);
         assert_eq!(m.state, ChangeState::Merged);
         assert_eq!(m.title, "[AI:claude] fix(x): y (TASK-1)");
+        assert_eq!(m.author.as_deref(), Some("codex-bot"));
         assert_eq!(
             m.merged_at.map(|dt| dt.to_rfc3339()).as_deref(),
             Some("2026-09-12T18:00:00+00:00")
@@ -5465,6 +5541,7 @@ mod tests {
         let m = parse_gh_change_metadata(&json);
         assert_eq!(m.state, ChangeState::Open);
         assert!(m.title.is_empty());
+        assert_eq!(m.author, None);
         assert!(m.base_ref.is_empty());
         assert!(!m.is_draft);
         assert!(!m.is_cross_repository);
@@ -5510,6 +5587,7 @@ mod tests {
               "iid": 7,
               "state": "opened",
               "title": "Fix the thing",
+              "author": {"username": "codex-bot"},
               "target_branch": "main",
               "source_branch": "fix-thing",
               "sha": "def456",
@@ -5521,6 +5599,7 @@ mod tests {
         .unwrap();
         assert_eq!(m.state, ChangeState::Open);
         assert_eq!(m.title, "Fix the thing");
+        assert_eq!(m.author.as_deref(), Some("codex-bot"));
         assert_eq!(m.base_ref, "main");
         assert_eq!(m.head_ref, "fix-thing");
         assert_eq!(m.head_sha, "def456");
