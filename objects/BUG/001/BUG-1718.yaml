@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T18:17:29.160704399Z
-modified_at: 2026-09-28T18:36:15.319974095Z
+modified_at: 2026-09-28T19:02:19.692445363Z
 req_type: Bug
 comments:
 - id: 01a0e94d-080c-75c1-99ce-22b0b207afb5
@@ -114,6 +114,74 @@ comments:
   created_at: 2026-09-28T18:35:34.796904895Z
   modified_at: 2026-09-28T18:35:34.796904895Z
   session_id: c001ab16-8bb6-4302-867d-17d2f0880c82
+- id: 01a0e965-852c-7923-a99c-0387b9b2b52d
+  author: joe
+  content: |
+    ADVISOR REVIEW — REQUEST CHANGES at e0a857287b
+
+    Independent advisor review of e0a857287b (codex implemented, so codex cannot review). VERDICT: REQUEST CHANGES.
+
+    AC2, AC3, AC4 mechanism are accepted. AC1 is NOT: the implementation silently replaced the
+    hardened `session_reap::spec_trailer_landed_on` probe with an inline reimplementation that drops
+    three of its deliberate protections, and it resolves the wrong commit as "the landing commit".
+
+    P1 (blocking) — `spec_trailer_on_main` was weakened, widening a DESTRUCTIVE path.
+    doctor_cmd.rs:~4943 now computes `landing_commit` inline instead of calling
+    `spec_trailer_landed_on` (session_reap.rs:399). Three protections lost:
+      (a) merge-base range restriction. Original searched `merge_base..default_ref`; the new code
+          searches all of `default_ref` with `-n 50`. A commit that predates the branch's divergence
+          can now satisfy the probe.
+      (b) `is_plan_commit_subject` exclusion. VERIFIED on real history: `695a633abb docs(plans):
+          STORY-1178 plan — clear plan-verify warnings (STORY-1178)` and `043f4622f2 ... (STORY-1178)`
+          are plan commits carrying a parenthesized spec trailer on origin/main. The original filter
+          exists precisely to reject these. Without it, `spec_trailer_on_main` flips false→true and
+          the pre-existing BUG-1657 Removable arm (`content_fully_landed && spec_trailer_on_main`)
+          fires on evidence it was written to reject. That arm DELETES worktrees.
+      (c) `--fixed-strings`. Minor, but the original was explicit about literal matching.
+
+    P1 (blocking) — the recency guard uses the NEWEST mention, not the landing commit.
+    `find_map` over newest-first `git log` returns the most recent commit whose extracted IDs include
+    the spec. VERIFIED on real history: STORY-1178 has 2 subject-trailer commits on origin/main,
+    TASK-1130 has 3, SPIKE-78 has 3. So the threshold date becomes the LAST commit that mentions the
+    spec, not the commit that landed it. Any branch commit pushed between the real landing and that
+    later mention satisfies `no_commits_after_landing` and is classified Removable — which is exactly
+    the case acceptance #4 says must not be swallowed. The advisor sketch specified "the landing
+    commit that names the spec"; newest-mention is not that.
+
+      FIX for both: extract `spec_landing_commit(project_root, default_ref, branch, spec) ->
+      Option<String>` in session_reap.rs next to `spec_trailer_landed_on`, reusing that function's
+      body verbatim — merge-base range, `--fixed-strings`, `--regexp-ignore-case`, the
+      `is_plan_commit_subject` filter, the same ID extraction — and return the OLDEST qualifying
+      commit in the range (`--reverse`, or take the last match), because the landing is the first
+      commit on main to carry the spec, not the last. Then reduce `spec_trailer_landed_on` to
+      `spec_landing_commit(..).is_some()` so the two can never drift, and have doctor's scan call
+      `spec_landing_commit`. Net effect: one probe, not two.
+
+    P2 — `git worktree prune --expire now` runs inside `scan_merged_agent_worktrees`, a read-only
+    scan reached by `aida doctor --check`. It mutates repo state on a diagnostic-only path, and it is
+    repo-wide: it prunes EVERY registration whose directory is missing, including a human's own
+    worktree on a temporarily unmounted volume, not just agent-managed ones. The `!wt.path.exists()`
+    `continue` already satisfies "without emitting a finding" on its own. Move the prune to the heal
+    path (it is already gated by `heal: true` there), or drop it and let the existing
+    mergeable-and-gone heal handle removal.
+
+    P3 — `session_reap::gather_merge_facts_pinned` (session_reap.rs:720) hardcodes
+    `no_commits_after_landing: false`, so the reap/awaiting caller of `classify_agent_worktree` can
+    never reach the new arm and still emits "keep, operator decision" for batch-landed branches. The
+    hardcode is conservative and therefore safe, but acceptance #1 is only half-delivered: the same
+    undecidable question survives in the other caller. Either wire the real fact there too, or add a
+    comment stating why that caller is intentionally left conservative.
+
+    ACCEPTED AS-IS: AC2's finding suppression, AC3's `quiet_output` routing (verified
+    `heal_doctor_findings` prints nothing on the success path, so skipping `render_doctor_report` is
+    the right seam, and `category` is pinned to merged-agent-worktrees so no other category is
+    silenced), and the non-vacuity proof (the reverted-classifier failure message is real and
+    specific). One AC3 nit to fix while reworking: the summary goes to stdout via `println!` while
+    pr ship's step lines go to stderr — use `eprintln!` for stream-ordering consistency, and include
+    the reclaimed count rather than the bare word "checked".
+  created_at: 2026-09-28T19:02:19.692445363Z
+  modified_at: 2026-09-28T19:02:19.692445363Z
+  session_id: 14957d0e-54c4-4671-94b1-589b8c033f43
 history:
 - id: 01a0e93c-a0a1-7810-b4e2-ac74ccca876e
   author: joe
