@@ -81,11 +81,3 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
-filed_at:
-  code_sha: 5632229e663b9d782e1f2c427a3176792f8447ae
-  branch: claude/bug-1701-drain-routing
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: 304ca777b1
-  vendor: antigravity
-  session: fc2bef36-971e-4674-a858-0de8a84a1006
