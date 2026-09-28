@@ -1,4 +1,12 @@
 - user_id: joe
+  requirement_id: 01a0e3e1-7d16-7a22-9a54-36f457c60014
+  position: 2000
+  added_by: joe
+  note: Proxy-approved bounded docs task; independent of current store-integrity rework.
+  added_at: 2026-09-28T01:08:01.915483943Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: joe
   requirement_id: 01a0d690-9e8a-72f1-a753-ee587125c211
   position: 3000
   added_by: joe
