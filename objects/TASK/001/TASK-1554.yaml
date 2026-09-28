@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T17:20:00.790572735Z
-modified_at: 2026-09-28T01:10:20.801625176Z
+modified_at: 2026-09-28T01:27:44.510078999Z
 req_type: Task
 comments:
 - id: 01a0e58d-f407-77a3-8a5f-e6ebf2122e96
@@ -25,6 +25,12 @@ comments:
     PROXY DECISION (orchestrator for Joe): queue TASK-1554 as a bounded, unblocked documentation correction. Its acceptance criteria are concrete and explicitly require no behavior change. This gives an independent implementer a small open item while the higher-priority BUG-1693 and TASK-1547 blockers are being handled. Keep all four requested corrections in scope; do not change runtime code.
   created_at: 2026-09-28T01:08:00.647312749Z
   modified_at: 2026-09-28T01:08:00.647312749Z
+- id: 01a0e5a0-047e-7712-97c3-4e5b4f530dff
+  author: joe
+  content: Commit a0b84547bc references this requirement
+  created_at: 2026-09-28T01:27:44.510078999Z
+  modified_at: 2026-09-28T01:27:44.510078999Z
+  session_id: 01a0e5900e26
 history:
 - id: 01a0e590-1781-70c3-b4e6-f0f1b847ee38
   author: aida-session-start
