@@ -15,7 +15,8 @@ relationships:
   target_id: 01a0d99d-2d6d-7353-aff2-5dec706adddf
   created_at: 2026-09-26T23:26:02.930945313Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0e8c7-9ef5-7c03-ada7-2c3d374241a4
   created_at: 2026-09-28T16:09:56.621123848Z
   created_by: joe
@@ -54,6 +55,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a0e8d6-d8cd-70a1-8035-954d691e9f95
+  author: aida-auto-bump
+  timestamp: 2026-09-28T16:26:29.453539183Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 - id: 01a0e8d9-6252-7380-b58e-40cd1b122fda
   author: aida-auto-bump
   timestamp: 2026-09-28T16:29:15.730641102Z
@@ -62,6 +70,12 @@ history:
     old_value: Approved
     new_value: Completed
 processing_record:
+- id: 01a0e8d6-d8e8-7260-9f37-08116783dc7a
+  timestamp: 2026-09-28T16:26:29.480159807Z
+  agent: aida
+  commit_sha: c061b573efcbb4029ccc254fb7a71e9297c4ccb1
+  summary: 'APPROVE at 227c383eabb5. Independent advisor review of a codex-authored PR — proper two-seat separation, no self-review involved. IMPLEMENTS ITEMS 2, 3 AND 4 of TASK-1545 (item 1 landed earlier with STORY-1476). I verified each rather than taking the PR body''s word: ITEM 2 (config-show source label) — CORRECT, and it fixes a real disagreement I had wrongly dismissed. config_cmd.rs switched the declared-check from aida_home_dir() to crate::home_dir(). This matters because aida_home_dir() honors AIDA_HOME FIRST, while acceptance_command_policy_global_quiet resolves through crate::home_dir() (lib.rs:64409). With AIDA_HOME set, config show would report a source the policy loader never reads. Now aligned. ITEM 3 (no gh call per graded review) — CORRECT, and also a gap I had wrongly called done. read_trusted_config_toml resolves the default branch via gh; the new read_trusted_config_toml_local uses local refs only (symbolic-ref refs/remotes/origin/HEAD, falling back through origin/main, origin/master, main, master). SECURITY CHECK ON ITEM 3, because a trusted-config read is exactly where a shortcut would be dangerous: SAFE. Its only consumer is policy.repo_optin_ignored, which is display-only — graded_review.rs:400 uses it solely to append REPO_OPTIN_IGNORED_NOTE to a summary string, and it never gates whether a command may run. The call site comment says so too (''the repo read below is display-only''). It still reads through read_config_at_sha (git show <sha>:.aida/config.toml), never the worktree copy, so the trusted-config boundary holds. NOTED, accepted, not blocking: the fallback chain ends at bare local main/master, which a local commit could influence — acceptable for a cosmetic note, and worth remembering if this helper ever acquires a second, policy-bearing consumer. ITEM 4 (docs) — CORRECT. It removes a FALSE claim. The old text said containers with a different or unset HOME ''fail closed''. They do not: aida_core::home::home_dir() is $HOME, then $USERPROFILE, then the platform lookup, which on unix resolves the passwd [REDACTED] for the uid — so an unset HOME still finds ~/.aida/config.toml. The new wording states the passwd [REDACTED] and that denial happens only when no home can be resolved at all. This was the item I had verified as genuinely outstanding. EVIDENCE RUN LOCALLY at the exact head, in a clean worktree checked out at 227c383eabb5: cargo test -p aida-cli-lib story_1476 = 21 passed, 0 failed. Required Build (ubuntu-latest) and merge-hold-gate both SUCCESS on the PR. PROCESS NOTE, recorded because it corrects me: I had told the implementer items 2 and 3 were already satisfied, after grepping single functions instead of following the call chains. Both were real. This PR is better analysis than my own triage was, and the record should say so. Reviewer lease 01a0e8cc (worktree /tmp/aida-nightshift-pr-2262, which no longer exists) was stale and has been swept; aida doctor now reports 0 stale-lease findings. The blocked review the implementer reported — a Claude Code first-run folder-trust modal opening in a designated review launch — is a launcher gap, not a defect in this PR, and it correctly refused rather than accepting a trust prompt unattended.'
+  review_verdict: approved
 - id: 01a0e8d9-6277-7e11-97ca-681c83910455
   timestamp: 2026-09-28T16:29:15.767023819Z
   agent: aida
