@@ -605,6 +605,20 @@ impl ExecutionMode {
             ExecutionMode::Decide => None,
         }
     }
+
+    /// Whether a spec in this mode may be dispatched WITHOUT a human in the
+    /// loop. Only `Drain` (auto through merge) and `Drive` (auto through CI)
+    /// qualify. `Guided` is an interactive keystone dialog, `Operator` is work
+    /// the human does, and `Decide` is a block rather than a harness — fanning
+    /// any of those out unattended defeats the reason the mode exists.
+    ///
+    /// Expressed over [`ladder_rank`] so the two cannot drift: ranks 0-1 are the
+    /// autonomous rungs, everything above needs a seat, and `Decide`'s `None`
+    /// is never autonomous.
+    // trace:BUG-1717 | ai:claude
+    pub fn is_autonomous(self) -> bool {
+        matches!(self.ladder_rank(), Some(0 | 1))
+    }
 }
 
 impl fmt::Display for ExecutionMode {
