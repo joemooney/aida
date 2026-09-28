@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:36:46.531543123Z
-modified_at: 2026-09-28T09:42:33.486000864Z
+modified_at: 2026-09-28T12:57:01.311377197Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -52,10 +52,37 @@ comments:
   modified_at: 2026-09-28T09:33:54.196468273Z
 execution_mode: drive
 failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-2253: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 36404274839 — view it: `gh run view 36404274839`. Push fixups to the same branch: `aida queue work TASK-1531 --branch task-1531 --steal`'
-  shelved_by: product
-  shelved_at: 2026-09-28T09:42:33.486000864Z
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    REQUEST CHANGES (advisor). The PR's own new test fails, and I reproduced it locally on the branch so this is neither CI infrastructure nor a flake: config_cmd::bug_1667_bypass_gate_tests::task_1531_bypass_writer_has_a_defence_in_depth_gate, assert_eq left 0 right 1.
+
+    EXACT DIAGNOSIS - the test's notion of 'production' is wrong, the production code is fine.
+
+      let production = src.split("#[cfg(test)]").next().unwrap();   // config_cmd.rs:4799
+
+    That means 'everything before the FIRST #[cfg(test)]'. In config_cmd.rs the first #[cfg(test)] is at
+    line 775, while every call site the audit wants to count is AFTER it: 989, 1025 (the writer itself),
+    1049 (write_permission_posture bypass call), 1326, 3152. So 'production' is only lines 1-775 and
+    contains none of them - hence count 0 against an expected 1. Both assert_eq!s in this test fail for
+    the same reason (the second one, at :4812, looks for the write_permission_posture bypass call that
+    lives at 1049).
+
+    So the gate itself is implemented correctly; the self-audit cannot see it.
+
+    FIX GUIDANCE. 'Everything before the first test module' is not 'production' in a file with
+    interleaved #[cfg(test)] blocks. Options, best first:
+      1. Drop the redundant count. The test ALREADY asserts the single caller lives inside
+         set_permission_posture_gated (gate.contains(call) at :4810), which is the property that
+         matters; the whole-file count adds little and is what breaks.
+      2. If you keep a count, strip #[cfg(test)] blocks by BRACE MATCHING rather than by splitting on
+         the first occurrence - and be careful, because the literal string "#[cfg(test)]" appears
+         inside this very test (:4799, :4815), so a naive stripper desynchronises on its own source.
+      3. Whichever you choose, make the test fail for the RIGHT reason: verify it still fails if a
+         second unguarded caller is added, otherwise the audit is decorative.
+
+    Everything else in the PR looks reasonable; this is the single blocker.
+  recovery_hint: address the review findings, move TASK-1531 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-09-28T12:57:01.311377197Z
