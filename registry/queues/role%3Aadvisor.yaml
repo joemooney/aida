@@ -1,1 +1,6 @@
-[]
+- user_id: role:advisor
+  requirement_id: 01a0e373-b0f7-7141-a4e2-9a45bf56df0c
+  position: 1000
+  added_by: role:advisor
+  added_at: 2026-09-28T16:15:51.223705066Z
+  for_role: advisor
