@@ -1,10 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-09-28T13:41:46.639071030Z
+last_run: 2026-09-28T17:08:11.421512797Z
 last_by:
   seat: advisor
-  session: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+  session: 7121c883-8051-4f5d-bccc-4953b9b1748d
   vendor: antigravity
 result: done
-note: 'Resolved. aida-store had diverged (gitlab d31537ee0fa8 vs origin/local). Verified with git merge-base --is-ancestor that gitlab''s tip WAS an ancestor of local HEAD, i.e. a true fast-forward with nothing on the mirror to lose, so no force-push and no union-merge conflict was involved. Ran aida remote reconcile --execute: union ba12f256082c pushed to gitlab. aida remote status now reports all remotes agree on every shared branch and release tag. main was in sync throughout. Likely origin was the BUG-1706 mirror-divergence class (git push --dry-run really pushing the mirror), now fixed on main. Resolved by the advisor seat 2026-09-28.'
-due_since: 2026-09-28T15:28:44.273530522Z
-due_reason: on CronJobFailed
+note: 'Verified and reconciled 2026-09-28 10:09 MST. aida-store differed: gitlab=14ae3c9ef13c origin=a64d87cbddcb. Confirmed NOT a divergence — ''git merge-base --is-ancestor 14ae3c9 a64d87c'' returned true, so gitlab was strictly BEHIND origin and this was the fast-forward case, not the reconcile case. Ran ''aida remote mirror-sync'' (never a force-push); gitlab aida-store 14ae3c9ef13c → a64d87cbddcb, main already at ad76e9e46f42. remote-drift re-check now clean.'
