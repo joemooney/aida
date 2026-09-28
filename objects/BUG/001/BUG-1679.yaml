@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-27T14:52:27.045240915Z
+modified_at: 2026-09-28T04:01:12.515977591Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -114,6 +114,12 @@ comments:
   created_at: 2026-09-27T14:52:27.045240915Z
   modified_at: 2026-09-27T14:52:27.045240915Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e62c-8543-7453-b2e8-160d219fa762
+  author: joe
+  content: 'Independent re-review 2026-09-27 20:50 at head e63efc3997a8 (the same head the CHANGES REQUESTED verdict names). I UPHOLD that verdict; do not merge #2226 as-is. Confirmed from source rather than from the verdict text: (1) P1 is real — resolve_aida_exe_from now reads ambient AIDA_BIN via std::env::var_os and returns it for aida_exe_path(), which is what managed/orchestrated launches spawn, so any process that can set one env var in AIDA environment redirects the binary AIDA executes as itself; that is a code-execution redirect and it needs reconciling with BUG-1669 protected authority before it lands. (2) P2 executable-check is real: is_executable (lib.rs:43212) tests meta.permissions().mode() and 0o111 != 0, so mode 0001 passes for the OWNER who then gets EACCES at spawn; and the cfg(not(unix)) arm accepts any regular file, so on Windows any file at all is honoured. (3) P2 relative-path identity is real: the value is used as PathBuf::from(bin) with no absolute-path requirement, so is_executable resolves it against the CURRENT cwd while the spawn resolves against the child cwd/PATH — the file checked need not be the file run. Suggested shape for the fix, not yet implemented: require an ABSOLUTE path; verify executability for the effective user rather than any exec bit; gate the override behind an explicit opt-in (flag or protected config) instead of an ambient env var so it cannot be inherited; and make the resolver take the value as a parameter so no test reads the live environment (that is finding 4). Reviewed by the Claude advisor seat that authored PRs #2247 batches 1-2; it touched none of these files.'
+  created_at: 2026-09-28T04:01:12.515977591Z
+  modified_at: 2026-09-28T04:01:12.515977591Z
+  session_id: 79f15ecb-4580-4277-9778-648c50ac17b4
 history:
 - id: 01a0e0fd-3532-7760-9c08-3b79df618a20
   author: aida-session-start
