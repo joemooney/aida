@@ -64526,7 +64526,7 @@ pub(crate) fn repo_review_optin_present(project_root: &std::path::Path) -> bool 
         .ok()
         .is_some_and(|body| names_optin(&body));
     local
-        || crate::trusted_config::read_trusted_config_toml(project_root)
+        || crate::trusted_config::read_trusted_config_toml_local(project_root)
             .is_some_and(|body| names_optin(&body))
 }
 

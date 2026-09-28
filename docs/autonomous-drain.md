@@ -180,9 +180,10 @@ value; there is no setter verb and no env var can enable it.
 those reviews escalate to the reviewer seat instead of auto-approving or
 auto-rejecting. Add the `[review]` block above to `~/.aida/config.toml` on each
 reviewer machine to restore it. Two things to know before you do: the policy
-is read from the HOME of the *reviewing process* — night-shift waves launched
-in `systemd-run` transient units or containers with a different or unset
-HOME fail closed; and an allowlist trusts the spec author's *choice* of
+is read from the home directory resolved for the *reviewing process*. A
+different HOME reads a different policy; when HOME is unset, the platform may
+fall back to the passwd home for the current uid (or deny if no home can be
+resolved). And an allowlist trusts the spec author's *choice* of
 command, not the PR's code — a permitted `cargo test` still executes PR-head
 code (build.rs, Makefile, test bodies), exactly as CI does. Stored
 `.aida/review-verdicts/PR-N-graded.json` records gain `not_run_count` and
