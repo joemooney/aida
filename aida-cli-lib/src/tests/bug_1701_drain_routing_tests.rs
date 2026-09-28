@@ -100,3 +100,55 @@ fn agent_mode_help_line_points_at_aida_do_not_the_lower_level_command() {
          it must be the one-shot lane, not `aida queue work`"
     );
 }
+
+// The guard must FAIL OPEN on every path that is not "this spec is drain". An
+// independent review of PR #2249 found a `?` on the store lookup, which turned an
+// unreadable store into an aborted launch — the guard becoming a new way for the
+// whole fleet to fail. These assert the surrounding guard, not just the pure
+// decision, because that is where the defect was.
+// trace:BUG-1701 | ai:claude
+#[test]
+fn guard_passes_through_when_the_project_has_no_store() {
+    let dir = tempfile::tempdir().unwrap();
+    assert!(
+        super::drain_mode_agent_new_guard(dir.path(), "TASK-1", false, true).is_ok(),
+        "no store must not block a launch"
+    );
+}
+
+// A directory holding a malformed `.aida-store` also passes through.
+//
+// HONEST SCOPE: this does NOT cover the store-LOOKUP error path. I wrote a
+// version of this test that claimed to, then checked it by restoring the `?` —
+// it still passed, so it was vacuous. This fixture returns early at
+// `detect_distributed_store_from`, never reaching the lookup, and I could not
+// construct a fixture where the store resolves and the backend opens but the
+// lookup then errors. The `let Ok(Some(..))` in the guard is therefore a
+// DEFENSIVE match on a path no unit test here reaches; it is kept because the
+// guard's contract is to redirect a drain spec, never to become a new way for a
+// launch to fail, and `?` made that contract false. Do not add an assertion here
+// implying the error path is covered without first proving the test fails with
+// `?` restored.
+// trace:BUG-1701 | ai:claude
+#[test]
+fn guard_passes_through_when_the_store_directory_is_malformed() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".aida-store/objects")).unwrap();
+    std::fs::write(
+        dir.path().join(".aida-store/objects/junk.yaml"),
+        "not: [valid",
+    )
+    .unwrap();
+    assert!(
+        super::drain_mode_agent_new_guard(dir.path(), "TASK-1", false, true).is_ok(),
+        "a malformed store must fail OPEN, not abort the launch"
+    );
+}
+
+// `--force` short-circuits before any store work at all.
+// trace:BUG-1701 | ai:claude
+#[test]
+fn force_bypasses_the_guard_entirely() {
+    let dir = tempfile::tempdir().unwrap();
+    assert!(super::drain_mode_agent_new_guard(dir.path(), "TASK-1", true, true).is_ok());
+}

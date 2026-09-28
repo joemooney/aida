@@ -17972,7 +17972,12 @@ fn drain_mode_agent_new_guard(
     let Ok(backend) = advance_backend(&store_path) else {
         return Ok(());
     };
-    let Some(target) = backend.get_requirement_by_spec_id(spec)? else {
+    // Fail OPEN on a lookup failure as well as a miss. `?` here would abort the
+    // launch when the store is unreadable, which is the opposite of this guard's
+    // contract: it exists to REDIRECT a drain-groomed spec, never to become a new
+    // way for every launch in the fleet to fail. An independent review of PR #2249
+    // caught the `?`. trace:BUG-1701 | ai:claude
+    let Ok(Some(target)) = backend.get_requirement_by_spec_id(spec) else {
         return Ok(());
     };
     match drain_mode_agent_new_refusal(target.execution_mode, &target.display_id(), holds_caller) {
