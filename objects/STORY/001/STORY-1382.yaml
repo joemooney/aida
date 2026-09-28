@@ -35,12 +35,12 @@ description: |
   5. Legitimate `.contains` uses from the same files are the negative fixtures; a rule that flags those is too broad and must be narrowed rather than allowlisted.
 
   Filed by the product seat; disposition is the advisor's. Note this does not replace fixing the instances — BUG-1435 and BUG-1297 still need their typed outcomes. It stops the sixth.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T11:27:17.869346098Z
-modified_at: 2026-09-28T15:07:03.333084693Z
+modified_at: 2026-09-28T15:07:04.800728046Z
 req_type: Story
 tags:
 - ci
