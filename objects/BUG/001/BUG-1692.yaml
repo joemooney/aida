@@ -18,12 +18,12 @@ description: |-
   - `normalize_volatile` also drops the cache-provenance fields (`source`, `index_tip`) — or the history probe pins `AIDA_HISTORY_CACHE=0` — so the two spellings are compared on the answer, not on which source happened to serve it.
   - The test still fails if the two spellings genuinely disagree about `count` or any event field.
   - A regression test (or a comment recording the measurement above) states why the provenance fields are excluded, so a later reader does not re-add them.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:17:34.541546385Z
-modified_at: 2026-09-28T11:26:52.634826126Z
+modified_at: 2026-09-28T11:26:53.744986195Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -63,4 +63,11 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a0e7c4-8f30-70c2-9fc5-f13b7165a9f1
+  author: joe
+  timestamp: 2026-09-28T11:26:53.744974203Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
