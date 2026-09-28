@@ -403,6 +403,10 @@ jobs:
       - name: Prose-classification rule fixtures
         run: python3 -m unittest tests/test_prose_classification_rule.py
 
+      # BUG-1689: test fake_gh fixtures must use the ETXTBSY-safe shared writer.
+      - name: Executable fixture ratchet
+        run: python3 -m unittest tests/test_executable_fixture_ratchet.py
+
       - name: Run clippy
         if: steps.changes.outputs.full_ci == 'true'
         # Style/pedantic lints stay warnings; the deny-by-default CORRECTNESS

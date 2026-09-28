@@ -13,15 +13,6 @@
 
 use super::*;
 
-#[cfg(unix)]
-fn write_executable(path: &std::path::Path, body: &str) {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::write(path, body).unwrap();
-    let mut perms = std::fs::metadata(path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms).unwrap();
-}
-
 /// A fake `glab` that answers `api -X GET projects/:id/merge_requests/<n>`
 /// with a real-shaped MR object whose source/target branches are NOT
 /// GitHub-shaped (`mr-1`/`main`) — so a test that still sees those values
@@ -33,7 +24,7 @@ fn fake_glab_mr(
     target_branch: &str,
 ) -> std::path::PathBuf {
     let glab = dir.join("glab");
-    write_executable(
+    crate::test_exec::write_executable(
         &glab,
         &format!(
             "#!/bin/sh\n\
@@ -51,7 +42,7 @@ fn fake_glab_mr(
 fn fake_gh_sentinel(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {
     let marker = dir.join("gh-was-called.marker");
     let gh = dir.join("gh");
-    write_executable(
+    crate::test_exec::write_executable(
         &gh,
         &format!("#!/bin/sh\ntouch '{}'\nexit 1\n", marker.display()),
     );

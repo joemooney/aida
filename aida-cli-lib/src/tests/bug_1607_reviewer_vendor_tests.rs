@@ -26,17 +26,13 @@ use super::*;
 #[cfg(unix)] // trace:BUG-1646 | ai:claude
 fn write_argv_capture_mock(dir: &std::path::Path, capture: &std::path::Path) -> std::path::PathBuf {
     let script = dir.join("mock-agent.sh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &script,
         format!(
             "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\" >> \"{}\"; done\nexit 0\n",
             capture.display()
         ),
-    )
-    .unwrap();
-    // The whole helper is unix-only, so no inner cfg. trace:BUG-1648 | ai:claude
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     script
 }
 
