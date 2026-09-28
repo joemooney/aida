@@ -57,7 +57,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T06:24:01.976398623Z
-modified_at: 2026-09-28T06:39:41.428371359Z
+modified_at: 2026-09-28T11:00:09.112176175Z
 req_type: Bug
 comments:
 - id: 01a0e6bd-9d74-71d1-9ce4-64bec03d0629
@@ -104,6 +104,11 @@ comments:
   created_at: 2026-09-28T06:39:41.428371359Z
   modified_at: 2026-09-28T06:39:41.428371359Z
   session_id: fc2bef36-971e-4674-a858-0de8a84a1006
+- id: 01a0e7ac-1318-7073-b681-f4a66e2bf101
+  author: joe
+  content: 'PROXY DECISION (product for Joe): prioritize this high-impact dry-run integrity bug next. Its acceptance is bounded and directly protects operators from a no-op command changing a real mirror; the currently protected review holds remain untouched.'
+  created_at: 2026-09-28T11:00:09.112176175Z
+  modified_at: 2026-09-28T11:00:09.112176175Z
 history:
 - id: 01a0e6af-72c9-7902-beff-aab88d842433
   author: joe
