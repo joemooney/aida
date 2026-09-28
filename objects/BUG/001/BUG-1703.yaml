@@ -40,12 +40,12 @@ description: |
   AC4. A stale registry entry whose process is genuinely gone is reaped, and `stop` on it reports that
        it was already gone — distinct from AC1's failure.
   AC5. Covered by tests using a real short-lived child process, no vendor binary required.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T03:27:59.954434201Z
-modified_at: 2026-09-28T03:28:13.882974815Z
+modified_at: 2026-09-28T05:50:13.080399513Z
 req_type: Bug
 history:
 - id: 01a0e60e-543a-7871-a349-aa5fc3887444
@@ -55,3 +55,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e690-5185-7622-bde4-6f621decf486
+  author: aida-auto-bump
+  timestamp: 2026-09-28T05:50:12.869320947Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e690-5258-7b33-bca6-fda3c34bacf5
+  timestamp: 2026-09-28T05:50:13.080382812Z
+  agent: aida
+  commit_sha: 7324a5b437c2cd60d7fe73d4ab01cbee6c5e33ec
+  summary: 'Request changes: stale registry launcher PID is handled, but live descendants are not discovered or stopped (AC2).'
+  review_verdict: request-changes
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T05:50:12.869302671Z
+  completion_sha: 7324a5b437c2cd60d7fe73d4ab01cbee6c5e33ec
