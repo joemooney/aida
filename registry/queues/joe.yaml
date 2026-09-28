@@ -101,3 +101,11 @@
   added_at: 2026-09-28T13:40:24.602085160Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e84c-92d6-7b30-ae69-ce488594aeaa
+  position: 61000
+  added_by: joe
+  note: Accepted carry-forward from approved PR-2217 review; add the raw trailing CR/LF rejection regression test per exact finding.
+  added_at: 2026-09-28T14:00:25.837318404Z
+  for_role: implementer
+  added_by_machine: imac
