@@ -35,13 +35,21 @@ description: |
   AC3. `--allow-duplicate` alone does NOT bypass the singleton guard — it only suppresses the
        confirmation prompt, per its own help text.
   AC4. The flag's help text and the behaviour agree, verifiable without spawning an agent.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T02:24:58.719600144Z
-modified_at: 2026-09-28T02:24:58.719600144Z
+modified_at: 2026-09-28T02:28:53.725821312Z
 req_type: Bug
+history:
+- id: 01a0e5d8-015d-7120-8dbd-da7df389bfdd
+  author: joe
+  timestamp: 2026-09-28T02:28:53.725804600Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: bb445e1236ce2ea95f8427abca110ec4dd250960
   branch: main
