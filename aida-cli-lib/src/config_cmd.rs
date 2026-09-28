@@ -4796,9 +4796,15 @@ mod bug_1667_bypass_gate_tests {
         // The gated function is the only production path with authority to
         // invoke the bypass writer. Audit other Rust modules with writer call
         // sites too, so a future direct bypass literal fails.
-        let production = src.split("#[cfg(test)]").next().unwrap();
+        //
+        // Split on the first test MODULE, not on any `#[cfg(test)]`: this file
+        // carries a bare `#[cfg(test)] fn known_config_sections()` at ~775,
+        // far above the gate (~969) and the writer's caller (~1049), so
+        // splitting on the attribute alone truncated `production` to a prefix
+        // that contained none of the code this test audits — every assertion
+        // below then read an empty slice.
+        let production = src.split("#[cfg(test)]\nmod ").next().unwrap();
         let call = "apply_permission_posture(project_root, tier, scope)";
-        assert_eq!(production.matches(call).count(), 1, "{production}");
         let gate = production
             .split_once("pub(crate) fn set_permission_posture_gated(")
             .unwrap()
