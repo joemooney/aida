@@ -1,0 +1,64 @@
+id: 01a0e603-481b-7670-a653-89bc492df94c
+spec_id: BUG-1701
+agreed_id: BUG-1701
+title: 'aida agent new never returns: it holds its caller for the child TUI entire idle lifetime, so completed dispatches and their reports are stranded'
+description: |
+  `aida agent new --help` promises: "This lane spawns a one-shot agent that does its work, ships a PR,
+  and exits." It does not exit. It launches an INTERACTIVE vendor TUI in the foreground on a PTY and
+  returns only when that TUI exits. A vendor TUI does not exit when its turn ends — it returns to its
+  prompt and waits. So a completed dispatch holds its caller forever.
+
+  Measured 2026-09-27 20:14. Eight `aida agent new` launchers were live under the orchestrator, ages
+  57m to 6h10m. Every child had finished its turn; all eight had 3-46 SECONDS of CPU across those
+  hours, i.e. idle at a prompt. Their reports were sitting unread in the TUIs:
+
+    BUG-1688  (idle 5h45m)  "Implemented the BUG-1688 scope ... added a fixture and acceptance audit"
+    TASK-1557 (idle 5h47m)  "State: turn ended. TASK-1557 implemented in 93183c5cb6; PR #2244 open"
+    TASK-199  (idle 63m)    "PR #2246 is open ... named integration harness passed"
+    advisor   (idle 82m)    "PR #2244 / TASK-1557: ready for exact-head merge ... Build and merge-hold-gate green"
+    integrator(idle 73m)    "PR #2245 merged at a0b84547 ... main is at bb445e1236"
+    BUG-1695  (idle 63m)    "couldn't safely complete: cargo slot tmpfs 0 bytes free" (see BUG-1702)
+    TASK-1547 (idle 43m)    "rework committed as d7364cace3 ... 9/9, 2/2, 196/196 ... needs force-push"
+
+  Every one of those is information the orchestrator needed and never received, because the call it
+  was blocked on had not returned. This is the structural reason the burndown produced nothing: the
+  orchestrator seat has ONE execution thread, and each dispatch consumed it for the child's entire
+  idle lifetime.
+
+  Related and already fixed: BUG-1696 (a dispatch could also block with an EMPTY prompt, 3h04m,
+  exit 0). BUG-1696 stops the caller wasting the block on nothing; it does not stop the blocking.
+
+  There is no non-interactive path either: a piped launch fails with `Error: stdin is not a terminal`.
+  So the launcher cannot be run headless, and when given a TTY it will not return.
+
+  `--bg` exists on the claude variant only (Claude Code's own background supervisor); codex and
+  antigravity have no equivalent.
+
+  ACCEPTANCE
+
+  AC1. A dispatch lane exists that returns to the caller as soon as the child's work is done, for all
+       three vendors, without the caller polling a TUI.
+  AC2. The launched seat's final report is retrievable by the caller through the substrate (mailbox,
+       verdict, or brief) rather than only by looking at a terminal.
+  AC3. A seat that has finished its turn does not hold a caller. Either the lane is detached, or the
+       child is a one-shot (headless) invocation that exits on completion.
+  AC4. `aida agent new --help` describes what the lane actually does. If the interactive lane keeps
+       blocking, its help says so plainly instead of promising that it exits.
+  AC5. A caller can distinguish "still working" from "finished and idle" without attaching to the
+       PTY — the 3-46s-CPU-over-6-hours signal should be something the substrate reports.
+  AC6. Covered by a test that does not require a real vendor binary.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T03:16:09.883864860Z
+modified_at: 2026-09-28T03:16:09.883864860Z
+req_type: Bug
+filed_at:
+  code_sha: 9099f64c8c97b0e9b00de5d73fe6a347fb96bf26
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 9099f64c8c
+  vendor: antigravity
+  session: 79f15ecb-4580-4277-9778-648c50ac17b4
