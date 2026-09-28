@@ -1,0 +1,26 @@
+id: 01a0e83e-ae25-7db3-87b7-5160d443736f
+spec_id: STORY-1500
+agreed_id: STORY-1500
+title: 'Review PR-2259: [AI:codex] feat(agent-launch): confirm bypass launches (TASK-1500)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0e80e`) for branch `task-1500`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2259>
+  - Branch: `task-1500` → `main`
+
+  ## Covers
+
+  - TASK-1500
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2259` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T13:40:17.061914765Z
+modified_at: 2026-09-28T13:40:17.061914765Z
+req_type: Story
