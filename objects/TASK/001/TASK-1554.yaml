@@ -16,5 +16,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T17:20:00.790572735Z
-modified_at: 2026-09-27T17:20:00.790572735Z
+modified_at: 2026-09-28T01:08:00.647312749Z
 req_type: Task
+comments:
+- id: 01a0e58d-f407-77a3-8a5f-e6ebf2122e96
+  author: joe
+  content: |
+    PROXY DECISION (orchestrator for Joe): queue TASK-1554 as a bounded, unblocked documentation correction. Its acceptance criteria are concrete and explicitly require no behavior change. This gives an independent implementer a small open item while the higher-priority BUG-1693 and TASK-1547 blockers are being handled. Keep all four requested corrections in scope; do not change runtime code.
+  created_at: 2026-09-28T01:08:00.647312749Z
+  modified_at: 2026-09-28T01:08:00.647312749Z
