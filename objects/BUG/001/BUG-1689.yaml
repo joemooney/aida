@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:20:05.111602861Z
-modified_at: 2026-09-28T16:15:50.502897128Z
+modified_at: 2026-09-28T16:17:09.730822153Z
 req_type: Bug
 tags:
 - flaky ci test-infra etxtbsy linux
@@ -134,6 +134,34 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-28T16:15:50.478716121Z
   modified_at: 2026-09-28T16:15:50.478716121Z
+- id: 01a0e8ce-4e62-7a32-8b20-22c6f16dcc94
+  author: joe
+  content: |-
+    REQUEUED to Approved (mode drive, already persisted). PR #2256 STAYS OPEN — do not restart it. The approach is right; one spawn site remains.
+
+    THE ONE THING TO CHANGE: aida-cli-lib/src/pr_cmd.rs, fn fetch_pr_info_via_gh_bin (begins line 1034). It spawns with bare std::process::Command:
+
+        let out = std::process::Command::new(gh_bin)
+            .current_dir(project_root)
+            .args(["pr", "view", n_str.as_str(), "--json", ...])
+            .output()
+
+    Route that through the retry this PR already added — process_retry::command_output_retrying_etxtbsy (ETXTBSY_MAX_RETRIES = 5, 50 ms). That is the spawn whose error arm formats `gh pr view {} failed to spawn: {}`, verbatim the CI failure, so it is definitively the one losing the race.
+
+    Note there are TWO callers of fetch_pr_info_via_gh_bin that surface the same 'could not resolve PR metadata' context (pr_cmd.rs:3979 and 4154). Fixing the shared function covers both; do not patch the call sites.
+
+    DO NOT re-do the write side. It is already correct and thorough: test_exec::write_executable is the single shared helper, 17 test files are migrated, the ad-hoc fake_gh copies are deleted rather than patched, the CI ratchet is in place, and task_471_stale_base_preflight_tests.rs IS migrated. Acceptance 1's write half and acceptance 2 are met.
+
+    ACCEPTANCE 3 is the part to add with the fix: 'hold the written fd open, then exec, and assert the helper still succeeds.' That test is what proves the retry works rather than that the window merely got smaller. The helper's own doc says closing the writer 'NARROWS the ETXTBSY window' — narrowing is not closing, which is exactly why occurrence five happened after three point fixes. Make the test hold the fd deliberately so it exercises the retry path every run, not by luck.
+
+    ACCEPTANCE 4 — I have answered it for you, on the record in the previous comment. Short version for the PR body: not purely a test-harness concern. fetch_pr_info_via_gh_bin is production code (pub(crate), reached by the preflight paths) spawning without the retry. No realistic production impact, because `gh` is a long-installed system binary nobody has just written, so only a test that writes its own gh can reach the race. Real gap, unreachable in practice, fix it at the spawn.
+
+    MY ERROR, stated plainly so it does not mislead you again: my earlier request-changes said your refactor broke a test that passes on main and guessed at 'the executable bit or the path shape'. That was wrong. I inferred causation from single runs of a known timing race — the same race, at the same test, that this very spec documents as occurrence five. Ignore that diagnosis entirely; the spawn-retry gap above is the real and only remaining item.
+
+    Advisor seat, 2026-09-28.
+  created_at: 2026-09-28T16:17:09.730822153Z
+  modified_at: 2026-09-28T16:17:09.730822153Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
 history:
 - id: 01a0e374-039d-7352-9d0d-65f5b82445f7
   author: joe
