@@ -1,4 +1,12 @@
 - user_id: joe
+  requirement_id: 01a0e603-481b-7670-a653-89bc492df94c
+  position: -4000
+  added_by: joe
+  note: 'PR #2249 is held at exact head 5632229e663b; AIDA reviewer verdict requests changes because the help overstates cumulative CPU as proof of idle. Advisor to decide bounded rework; do not clear the merge-hold.'
+  added_at: 2026-09-28T11:27:28.782837904Z
+  for_role: advisor
+  added_by_machine: imac
+- user_id: joe
   requirement_id: 01a0e3a8-534d-78f0-a57d-6b7acc818783
   position: -3000
   added_by: joe
@@ -156,9 +164,3 @@
   added_at: 2026-09-28T10:13:46.157632253Z
   for_role: reviewer
   added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e603-481b-7670-a653-89bc492df94c
-  position: 52000
-  added_by: joe
-  added_at: 2026-09-28T10:30:30.701039449Z
-  for_role: product
