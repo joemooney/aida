@@ -21,15 +21,35 @@ description: |
   Also worth folding in (same review, note 3): the test constant `BUG_563_RUNTIME_PATTERNS` at doctor_cmd.rs:5805 is a hand-copied twin of the production literal at :5674-5681. Because the assertions go through `trim`, the tests would still pass if the production literal drifted into leading whitespace -- which would break the real gitignore, since git does NOT strip leading whitespace from a pattern. Share one constant, or assert via `git check-ignore`.
 
   Out of scope: the residual coverage gap for stores already fully healed by BUG-563 (that is TASK-1547).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T18:14:11.685245281Z
-modified_at: 2026-09-28T04:38:00.497427879Z
+modified_at: 2026-09-28T13:10:06.035873343Z
 req_type: Task
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0e64e-032c-7853-92da-abc640bf53f3
   created_at: 2026-09-28T04:38:00.497419219Z
   created_by: joe
+history:
+- id: 01a0e823-0aff-7d21-a590-8b423ac6b107
+  author: aida-auto-bump
+  timestamp: 2026-09-28T13:10:05.823020101Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e823-0bd3-7402-a0a8-4ed922260a86
+  timestamp: 2026-09-28T13:10:06.035852533Z
+  agent: aida
+  commit_sha: 4f8b0de60bbbc5ef83854a5e6376e235da487965
+  summary: 'Independent exact-head review approved: guard covers all staging patterns; sixth-pattern and partial-pattern regressions pass.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T13:10:05.823008921Z
+  completion_sha: 4f8b0de60bbbc5ef83854a5e6376e235da487965
