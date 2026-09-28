@@ -137,12 +137,12 @@ description: |
   or a conflation, and I am not going to guess". That restraint was correct — the author
   was neither a third seat nor a threading bug, and guessing either would have produced a
   fifth misattribution while filing the spec about misattribution.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:33:47.079434853Z
-modified_at: 2026-09-28T15:07:22.212451481Z
+modified_at: 2026-09-28T15:07:23.702500467Z
 req_type: Bug
 tags:
 - closure:pending
