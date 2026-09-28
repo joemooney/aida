@@ -70,4 +70,20 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approved and queued. The reported panic is reproducible from the production parser: origin/main still guards byte-length then calls split_at(9), and a multi-byte character at that boundary panics. Acceptance is specific (all boundary offsets, valid why-open text, live aida human check, exact reproducer, sibling-parser audit); this is a bounded bug fix with no unresolved product or architecture fork.'
   created_at: 2026-09-28T12:57:13.293052968Z
   modified_at: 2026-09-28T12:57:13.293052968Z
+history:
+- id: 01a0e805-e12d-7b90-8777-f63c52ddb692
+  author: joe
+  timestamp: 2026-09-28T12:38:14.573594951Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 execution_mode: drive
+filed_at:
+  code_sha: 5632229e663b9d782e1f2c427a3176792f8447ae
+  branch: claude/bug-1701-drain-routing
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 304ca777b1
+  vendor: antigravity
+  session: fc2bef36-971e-4674-a858-0de8a84a1006
