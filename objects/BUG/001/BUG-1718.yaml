@@ -1,0 +1,38 @@
+id: 01a0e93c-7748-78a1-886f-28c72176e02b
+spec_id: BUG-1718
+agreed_id: BUG-1718
+title: merged-agent-worktrees emits permanently-undecidable findings on every aida pr ship, training operators to ignore doctor output
+description: |
+  Every `aida pr ship` runs doctor --heal at step 6 and prints ~80 lines: 36 findings + 36 heal results. 33 read "its spec landed on origin/main through an integration merge, but N unique unmerged commit(s) — keep, operator decision". They are NOT actionable and never will be.
+
+  WHY THEY ARE UNDECIDABLE BY CONSTRUCTION. This repo squash-merges, and integration commits BATCH several specs into one (e.g. 48dac64a77 "chore(integrate): batch 1 - BUG-1510 TASK-1307 TASK-1303 TASK-1304 BUG-1528 BUG-1508 BUG-1514"). So for claude/bug-1514:
+    - git ancestry fails: the original commit f652eb1bfc is not an ancestor of main.
+    - patch-id fails too: `git cherry main claude/bug-1514` reports +1 (not upstream), because an individual branch commit can never match a COMBINED batch commit's patch-id.
+  Verified the same on claude/bug-1527, claude/task-1312, claude/bug-1521 (+1 each) and claude/task-1444 (+4). Note `git diff main..<branch>` is useless here too: it reports ~600 files / ~150k deletions purely because the branches are old, not because they carry unique work.
+
+  So the check already HAS positive evidence the spec landed (it says so in its own finding text) and then asks the operator to adjudicate commit-identity noise that squash+batch merging guarantees. There is no answer the operator can give.
+
+  THE REAL HARM IS NOT DISK: all 73 worktrees total 1.3G with zero target/ dirs, disk at 79% with 184G free. The harm is that a hot path prints 80 lines of unanswerable output on every ship, training everyone to skim past doctor findings — including the day one is real.
+
+  ALSO A PLAIN BUG: 3 entries (agent-a942df7439695a8aa, agent-ab76dad2f2712ef43, agent-ada058a96e1aba25f) are flagged "mergeable-and-gone", then the heal reports "already gone". Those are stale worktree registrations surfaced as findings for directories that do not exist.
+
+  ## Acceptance
+  1. A branch whose spec landed via a BATCHED integration merge is NOT reported as needing an operator decision. Decide it by the signal the finding already has (spec landed on main) or by content equivalence — not by commit identity or patch-id.
+  2. A worktree registration whose directory no longer exists is pruned without emitting a finding.
+  3. `aida pr ship` step 6 does not print per-finding detail for this category on the success path; a one-line summary pointing at `aida doctor --category merged-agent-worktrees` is enough. The ship result must not be buried.
+  4. A branch with GENUINELY unmerged work still surfaces, proven by a test that asserts the real case is not swallowed by the fix for (1).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T18:17:29.160704399Z
+modified_at: 2026-09-28T18:17:29.160704399Z
+req_type: Bug
+filed_at:
+  code_sha: b04601845909f555a23c71fa3548fc5c967d8659
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: b046018459
+  vendor: antigravity
+  session: 7121c883-8051-4f5d-bccc-4953b9b1748d
