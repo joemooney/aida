@@ -18,12 +18,12 @@ description: |-
   - `normalize_volatile` also drops the cache-provenance fields (`source`, `index_tip`) — or the history probe pins `AIDA_HISTORY_CACHE=0` — so the two spellings are compared on the answer, not on which source happened to serve it.
   - The test still fails if the two spellings genuinely disagree about `count` or any event field.
   - A regression test (or a comment recording the measurement above) states why the provenance fields are excluded, so a later reader does not re-add them.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:17:34.541546385Z
-modified_at: 2026-09-28T11:26:41.194967614Z
+modified_at: 2026-09-28T11:26:52.634826126Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -43,6 +43,11 @@ comments:
   content: 'PROXY DECISION (product for Joe): the independent reviewer approved exact PR head 9ba1729f30fc and Build plus merge-hold-gate are green. Route the finished change to the integrator; the non-required Windows nightly result does not gate this merge.'
   created_at: 2026-09-28T11:26:41.194967614Z
   modified_at: 2026-09-28T11:26:41.194967614Z
+- id: 01a0e7c4-8ada-7773-a1fa-a12ae3340be6
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: ci/watchdog: CI on PR-2251 did not reach a terminal state in time (attempt 3/3). No triage reason was given.'
+  created_at: 2026-09-28T11:26:52.634811550Z
+  modified_at: 2026-09-28T11:26:52.634811550Z
 history:
 - id: 01a0e456-b0b4-7a92-84c9-97f0521e0c99
   author: joe
@@ -51,12 +56,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e7c4-8ada-7773-a1fa-a1126f4b1905
+  author: joe
+  timestamp: 2026-09-28T11:26:52.634794644Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 execution_mode: drive
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: watchdog
-  detail: CI on PR-2251 did not reach a terminal state in time (attempt 3/3)
-  recovery_hint: CI never reached a terminal state in the wait window — it may be queued or a runner is slow, CI is not red. Check progress with `gh run list --branch bug-1692-2`, then re-run auto-complete once CI settles.
-  shelved_by: product
-  shelved_at: 2026-09-28T08:46:42.089412064Z
