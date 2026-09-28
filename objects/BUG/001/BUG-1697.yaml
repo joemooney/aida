@@ -1,0 +1,52 @@
+id: 01a0e5d4-6b5f-7f43-a4ee-ba30b5d3478a
+spec_id: BUG-1697
+agreed_id: BUG-1697
+title: aida agent new --no-duplicate-check is documented to skip the duplicate check but the role singleton guard ignores it, leaving no escape hatch
+description: |
+  `aida agent new` documents `--no-duplicate-check` as "Skip the live same-vendor/same-role
+  duplicate check entirely", but the flag never reaches the singleton guard. It is parsed, carried
+  into `AgentResumeOptions.duplicate_check`, consulted by `maybe_handle_agent_resume_or_duplicate`
+  on the RESUME path only, and then ignored by `enforce_agent_singleton` /
+  `enforce_agent_singleton_preflight` (aida-cli-lib/src/lib.rs), which unconditionally bail.
+
+  So on the `agent new` path the role singleton has no escape hatch at all.
+
+  Observed 2026-09-27 in codex thread 01a0e4b3-aefb-7852-9a20-3a9ee8a9caba. A dispatch of a second
+  reviewer was refused because a first reviewer held the role:
+
+      Error: agent role `reviewer` is already active on this scope: reviewer-pr2243 ...
+
+  The orchestrator retried with `--allow-duplicate`, then with `--no-duplicate-check`, and got the
+  byte-identical error all three times. The blocking holder was itself a hung seat that had been
+  launched with an empty prompt (BUG-1696) and would sit for 3h04m. With no way to start a second
+  reviewer, two PRs that each needed an independent review at an exact head were serialized behind
+  a zombie, and neither review happened.
+
+  `--allow-duplicate` is a separate, narrower flag ("skip the live-duplicate confirmation prompt
+  while still checking for duplicates") and should keep refusing. Only `--no-duplicate-check`
+  claims to skip the check.
+
+  ACCEPTANCE
+
+  AC1. `aida agent new <vendor> --no-duplicate-check` skips the same-scope role singleton guard on
+       the new-launch path and proceeds with the launch.
+  AC2. Without `--no-duplicate-check` the guard still refuses a same-vendor/same-role conflict with
+       the existing message naming the live holder. No change to the default posture.
+  AC3. `--allow-duplicate` alone does NOT bypass the singleton guard — it only suppresses the
+       confirmation prompt, per its own help text.
+  AC4. The flag's help text and the behaviour agree, verifiable without spawning an agent.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T02:24:58.719600144Z
+modified_at: 2026-09-28T02:24:58.719600144Z
+req_type: Bug
+filed_at:
+  code_sha: bb445e1236ce2ea95f8427abca110ec4dd250960
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 3f4cda41c9
+  vendor: antigravity
+  session: 79f15ecb-4580-4277-9778-648c50ac17b4
