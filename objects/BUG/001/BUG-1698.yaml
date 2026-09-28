@@ -1,0 +1,61 @@
+id: 01a0e5df-ae4b-7df0-a19e-366aca4a56b1
+spec_id: BUG-1698
+agreed_id: BUG-1698
+title: Every aida agent new claude launch dies on Claude Code project-MCP trust modal, so claude-vendor dispatch has a 0% success rate
+description: |
+  Every `aida agent new claude` launch in this project stops on Claude Code's project-MCP trust
+  modal and never reaches the prompt:
+
+      New MCP server found in this project: aida
+      MCP servers may execute code or access system resources. All tool calls require approval.
+        Use this MCP server
+        Use this and all future MCP servers in this project
+      > Continue without using this MCP server
+      Enter to confirm · Esc to cancel
+
+  Nothing answers it. Observed 2026-09-27 (codex thread 01a0e4b3-aefb-7852-9a20-3a9ee8a9caba): one
+  dispatch sat on the modal for 20m29s, took two Ctrl-C's, and exited 143. Every claude-vendor
+  dispatch in that session either failed at argument parsing or died on this modal — a 0% success
+  rate for the whole vendor.
+
+  Root cause: the project ships `.mcp.json` declaring the `aida` server, and `~/.claude.json`'s
+  entry for the project had `enabledMcpjsonServers: []` / `disabledMcpjsonServers: []` — never
+  approved, never declined, so the modal fires on every launch. `hasTrustDialogAccepted: true` is
+  the FOLDER trust dialog and does not cover it. `contained = true` compounds it: the launcher
+  passes `--setting-sources project` with an inline `--settings` JSON and no permission-mode flag,
+  so the seat launches in a prompting posture.
+
+  Mitigated on this machine 2026-09-27 by adding `aida` to `enabledMcpjsonServers` for
+  /home/joe/ai/aida in `~/.claude.json` — the same write the modal's "Use this MCP server" performs.
+  That is per-machine operator state and does not travel.
+
+  Note `--permission-mode bypassPermissions` does NOT dismiss this modal; project-MCP trust is a
+  separate gate from tool permission mode. Do not close this by flipping the bypass knob.
+
+  ACCEPTANCE
+
+  AC1. A claude seat launched by `aida agent new` in a project whose `.mcp.json` declares AIDA's own
+       server starts without any MCP trust prompt, on a machine that has never approved it.
+  AC2. The mechanism is scoped to the launch AIDA controls — it does not blanket-trust arbitrary
+       `.mcp.json` servers, and does not depend on editing the operator's `~/.claude.json`.
+       Note `.mcp.json` is repository content: trusting any server a checkout happens to declare
+       would be a supply-chain hole, so the fix must key on AIDA's own server definition.
+  AC3. It works in both `contained` and `bypass` postures, since only `contained` passes `--settings`
+       today.
+  AC4. A regression test asserts the resolved claude argv/settings carry the trust for AIDA's server,
+       without spawning claude.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T02:37:16.747515813Z
+modified_at: 2026-09-28T02:37:16.747515813Z
+req_type: Bug
+filed_at:
+  code_sha: bb445e1236ce2ea95f8427abca110ec4dd250960
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 3f4cda41c9
+  vendor: antigravity
+  session: 79f15ecb-4580-4277-9778-648c50ac17b4
