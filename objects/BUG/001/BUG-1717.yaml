@@ -1,0 +1,42 @@
+id: 01a0e8bc-baef-7741-80d1-438ea62893e3
+spec_id: BUG-1717
+agreed_id: BUG-1717
+title: burndown plan lists a guided spec as Ready to fan out and reports 0 supervised, so a drain would dispatch a keystone unattended
+description: |-
+  Discovered while clearing the 2026-09-28 execution-mode deadlock.
+
+  SYMPTOM. After setting STORY-1484 to execution_mode=guided, 'aida burndown plan' reports '10 ready to fan out, 12 awaiting sign-off, 0 supervised, 29 parked' and lists STORY-1484 under 'Ready (queued + bounded + unblocked + decision-free)'. STORY-1484 is status=approved, heft=17, execution_mode=guided (verified with 'aida show STORY-1484'). The supervised bucket reads ZERO while a guided spec sits in Ready.
+
+  WHY THIS IS A SAFETY INVERSION, not cosmetics. 'guided' means interactive keystone dialog — the mode exists precisely to keep a spec OUT of unattended dispatch. STORY-1484 is a heft-17 cache-refresh architecture story (flock-guarded single-flight refresh, detached worker, bounded reader wait, labelled stale reads). If a drain fans out the set burndown calls Ready, it launches exactly the class of work that must not run unattended. The classifier's own vocabulary shows the intent: a 'supervised' bucket EXISTS and is empty while a guided spec is in Ready.
+
+  So either the readiness predicate never consults execution_mode when partitioning ready-vs-supervised, or it reads it but does not treat guided (and presumably operator/decide) as supervised. Note the Ready heading claims 'queued + bounded + unblocked + decision-free': guided is not a decision, and the spec is bounded and unblocked, which suggests the predicate has no supervised term at all and the supervised counter is fed from something else.
+
+  REPRODUCTION
+  1. Pick an approved, queued, unblocked spec.
+  2. aida edit <ID> --mode guided
+  3. aida burndown plan
+  4. Observe the spec under Ready, and supervised still 0.
+
+  ACCEPTANCE
+  AC1. A spec with execution_mode=guided NEVER appears in the Ready-to-fan-out set; it is counted and listed under supervised.
+  AC2. Same for operator and decide modes — any mode requiring a human in the loop is excluded from fan-out.
+  AC3. The supervised COUNT agrees with the supervised LIST; a non-empty supervised set can never report 0.
+  AC4. A spec with NO execution_mode is not advertised as ready either, since aida do already refuses it.
+  AC5. Unit-tested as a pure partition over (status, mode, blocked, queued), without launching a drain.
+
+  CROSS-REFERENCE. Adjacent to but distinct from the mode-assignment deadlock that surfaced it: on 2026-09-28 ten specs were undispatchable because no execution_mode was persisted and mode assignment is advisor-owned, which is why this mis-partition went unnoticed — almost nothing had a mode, so the supervised bucket was always trivially empty.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T15:57:57.871292534Z
+modified_at: 2026-09-28T15:57:57.871292534Z
+req_type: Bug
+filed_at:
+  code_sha: 1e594926d8c8a7246caa07afc93ac003e83f0f0b
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 1e594926d8
+  vendor: antigravity
+  session: a5a527f3-5c70-4d4d-a90c-22ec47246f13
