@@ -3161,7 +3161,7 @@ fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
         "new",
         "codex",
         "--prompt-file",
-        "/tmp/brief.txt",
+        "brief.txt",
     ])
     .unwrap();
     let Command::Agent(AgentCommand::New {
@@ -3172,21 +3172,13 @@ fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
     };
     assert_eq!(
         prompt_file.as_deref(),
-        Some(std::path::Path::new("/tmp/brief.txt"))
+        Some(std::path::Path::new("brief.txt"))
     );
 
     // Every dispatch vendor gets the flag, not just codex.
     for vendor in ["claude", "codex", "antigravity"] {
         assert!(
-            Cli::try_parse_from([
-                "aida",
-                "agent",
-                "new",
-                vendor,
-                "--prompt-file",
-                "/tmp/b.txt"
-            ])
-            .is_ok(),
+            Cli::try_parse_from(["aida", "agent", "new", vendor, "--prompt-file", "b.txt"]).is_ok(),
             "{vendor} should accept --prompt-file"
         );
         assert!(
@@ -3198,7 +3190,7 @@ fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
                 "--prompt",
                 "inline",
                 "--prompt-file",
-                "/tmp/b.txt",
+                "b.txt",
             ])
             .is_err(),
             "{vendor} must reject --prompt with --prompt-file"
@@ -3211,7 +3203,7 @@ fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
                 vendor,
                 "--no-prompt",
                 "--prompt-file",
-                "/tmp/b.txt",
+                "b.txt",
             ])
             .is_err(),
             "{vendor} must reject --no-prompt with --prompt-file"
