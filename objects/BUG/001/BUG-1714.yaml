@@ -1,0 +1,83 @@
+id: 01a0e801-1f36-7161-a76c-e98e52b47fee
+spec_id: BUG-1714
+agreed_id: BUG-1714
+title: 'An inconclusive publication guard closes the PR and claims the guards refused it: a cold-worktree build timeout discards reviewable work whose CI is green'
+description: |
+  An INCONCLUSIVE publication guard CLOSES the pull request and tells the reader the guards
+  "refused" the change. Fail-closed is right; closing is disproportionate, and the message is false.
+  On a cold worktree the build cannot finish inside the guard's 900s budget, so INCONCLUSIVE is the
+  NORMAL outcome for a fresh pool worktree — which turns a safety mechanism into a work shredder.
+
+  OBSERVED 2026-09-28, overnight codex backlog burndown (real instance)
+
+  PR #2255 (BUG-1706, the dry-run mirror fix) was auto-closed at 12:04Z with:
+
+      Closed automatically: the publication guards refused this change before it was reviewed.
+      guard `Run clippy` failed:
+        did not complete: timed out after 900s; binary: /tmp/aida-pool-aida-nightshift-2/target/debug/aida
+        (build timed out after 900s)
+      guard `Check Rust test portability ratchet` failed:
+        did not complete: could not start (No such file or directory (os error 2)); binary: ...
+        (build timed out after 900s)
+
+  GitHub's required Build (ubuntu-latest) was GREEN on that same head. Nothing refused the change.
+  The guards never ran, because the BINARY THEY NEED never built: a cold `target/` in a fresh pool
+  worktree, behind a machine-wide 2-slot cargo gate, does not finish a debug build of this workspace
+  in 900s. The second guard's "could not start (No such file or directory)" is the same root cause
+  one step later — it went looking for a binary the timed-out build never produced.
+
+  WHAT IS CORRECT AND MUST NOT BE "FIXED"
+
+  `decide()` treating `Inconclusive` as refusing is DELIBERATE and right (TASK-1289): "a gate that
+  publishes on 'we could not tell' is not a gate — a guard made to time out becomes a guard made to
+  succeed." Do not make Inconclusive fail open. The `Skipped` vs `Inconclusive` distinction is also
+  already modelled correctly. This spec does not touch any of that.
+
+  WHAT IS WRONG
+
+  1. THE CONSEQUENCE IS DISPROPORTIONATE. `Failed` means a guard looked and objected — closing is
+     defensible. `Inconclusive` means nobody looked. Closing the PR discards reviewable work over an
+     infrastructure timeout, and the branch's only signal to the next reader is a closed PR.
+  2. THE NOTICE IS FACTUALLY FALSE. `retraction_notice` says the guards "refused this change".
+     For an Inconclusive result nothing refused anything. A reader who trusts that message looks for
+     a code problem that does not exist. This is the same class as a doctor check reporting a
+     verdict it could not determine.
+  3. THE 900s BUDGET MAKES THIS THE DEFAULT PATH. It is not a rare edge: EVERY first publication
+     from a fresh pool worktree has a cold target dir and so cannot complete. Overnight this closed
+     real work whose CI was green.
+
+  ACCEPTANCE
+
+  AC1. An all-`Inconclusive` refusal (no `Failed` guard) does NOT close the PR. It leaves the PR
+       OPEN, applies the hold so it cannot merge unreviewed, and states that the guards could not
+       complete and will be retried.
+  AC2. A refusal containing at least one genuine `Failed` guard keeps today's behaviour, including
+       the close. The fail-closed property is preserved in every case: an Inconclusive result never
+       permits a merge.
+  AC3. The notice text distinguishes the two. It must never say "refused" for a guard that did not
+       run; for Inconclusive it names the guard, says it could not complete, and gives the reason
+       (timeout vs could-not-start) and the retry path.
+  AC4. The build budget feeding the guards is sized for a COLD worktree, or the guards reuse an
+       already-built binary rather than each paying for a build. State which, and make the budget
+       configurable rather than a bare literal.
+  AC5. A guard that could not start BECAUSE an earlier build timed out is reported as one root
+       cause, not as two independent guard failures. #2255 showed the same timeout twice under
+       different guard names, which reads as broader breakage than it is.
+  AC6. Covered by tests over `decide()` and the notice text: all-Inconclusive → open+hold, mixed →
+       close, Failed-only → close, and the notice never containing "refused" for an Inconclusive-only
+       outcome.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T12:33:02.774229129Z
+modified_at: 2026-09-28T12:33:02.774229129Z
+req_type: Bug
+filed_at:
+  code_sha: 5632229e663b9d782e1f2c427a3176792f8447ae
+  branch: claude/bug-1701-drain-routing
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 304ca777b1
+  vendor: antigravity
+  session: fc2bef36-971e-4674-a858-0de8a84a1006
