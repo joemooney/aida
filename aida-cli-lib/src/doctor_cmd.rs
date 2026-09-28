@@ -842,7 +842,7 @@ mod task_1544_light_doctor_tests;
 /// a loadable store.
 // trace:BUG-1675 | ai:claude
 pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> DoctorReport {
-    disk_headroom_light_report_with(project_root, disk_free_bytes)
+    disk_headroom_light_report_with(project_root, disk_free_bytes, cargo_slot_dir())
 }
 
 /// [`disk_headroom_light_report`] with the free-space probe injected, so a
@@ -851,14 +851,31 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
 fn disk_headroom_light_report_with(
     project_root: &std::path::Path,
     free_bytes: impl Fn(&std::path::Path) -> Option<u64>,
+    // BUG-1702: injected, not discovered. Reading the real `$XDG_RUNTIME_DIR` here would put
+    // host state back into tests whose whole point is a pinned verdict.
+    // trace:BUG-1702 | ai:claude
+    cargo_slot_dir: Option<std::path::PathBuf>,
 ) -> DoctorReport {
     let cfg = crate::read_project_config_value(project_root);
     let min_free_gib = disk_headroom_min_free_gib(cfg.as_ref());
-    DoctorReport::from_findings(disk_headroom_findings(
-        free_bytes(project_root),
-        min_free_gib,
-    ))
+    let mut findings = disk_headroom_findings(free_bytes(project_root), min_free_gib);
+    // BUG-1702: the runtime tmpfs holding the Cargo slot locks is a separate, much smaller
+    // filesystem than the project's, so the project-root floor above never sees it fill.
+    // trace:BUG-1702 | ai:claude
+    if let Some(slot_dir) = cargo_slot_dir {
+        findings.extend(cargo_slot_findings(
+            free_bytes(&slot_dir),
+            &cargo_slot_target_artifacts(&slot_dir),
+            CARGO_SLOT_MIN_FREE_GIB,
+        ));
+    }
+    DoctorReport::from_findings(findings)
 }
+
+/// A Rust link step for this workspace needs comfortably more than a GiB of scratch; below this
+/// the failure mode is "Disk full?" and a bus error, not a compile error.
+// trace:BUG-1702 | ai:claude
+const CARGO_SLOT_MIN_FREE_GIB: u64 = 1;
 
 #[cfg(test)]
 #[path = "tests/bug_1675_disk_headroom_light_tests.rs"]
@@ -1282,6 +1299,111 @@ fn disk_headroom_finding(free_bytes: u64, min_free_gib: u64) -> Option<DoctorFin
             .to_string(),
         safe_heal: false,
     })
+}
+
+/// The Cargo slot coordination directory, `$XDG_RUNTIME_DIR/cargo-slots-<uid>`.
+///
+/// AIDA does not create this directory — it is a host convention, and seats are handed
+/// `--add-dir <it>` so codex can `flock` the slot files. None when the runtime dir is unset or
+/// the directory does not exist, so hosts without the convention stay silent.
+// trace:BUG-1702 | ai:claude
+fn cargo_slot_dir() -> Option<std::path::PathBuf> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
+    let uid = users_uid()?;
+    let dir = std::path::PathBuf::from(runtime).join(format!("cargo-slots-{uid}"));
+    dir.is_dir().then_some(dir)
+}
+
+fn users_uid() -> Option<u32> {
+    // `id -u` without pulling in a libc dependency for one number.
+    let out = std::process::Command::new("id").arg("-u").output().ok()?;
+    String::from_utf8(out.stdout).ok()?.trim().parse().ok()
+}
+
+/// Entries in the slot directory that mean a Cargo TARGET directory was pointed at it.
+///
+/// The slot directory is for advisory lock files. A target directory there fills the runtime
+/// tmpfs, which is small. Returns `(name, marker)` pairs. Pure over `dir`.
+// trace:BUG-1702 | ai:claude
+fn cargo_slot_target_artifacts(dir: &std::path::Path) -> Vec<String> {
+    const PROFILE_DIRS: [&str; 4] = ["debug", "release", "wasm32-unknown-unknown", "tmp"];
+    const TARGET_MARKERS: [&str; 3] = [".rustc_info.json", "CACHEDIR.TAG", ".cargo-lock"];
+    let mut found = Vec::new();
+    for marker in TARGET_MARKERS {
+        if dir.join(marker).exists() {
+            found.push(marker.to_string());
+        }
+    }
+    for profile in PROFILE_DIRS {
+        let candidate = dir.join(profile);
+        // An EMPTY `tmp/` is normal scratch; only a populated one is a target artifact.
+        let populated = std::fs::read_dir(&candidate)
+            .map(|mut entries| entries.next().is_some())
+            .unwrap_or(false);
+        if candidate.is_dir() && populated {
+            found.push(format!("{profile}/"));
+        }
+    }
+    found.sort();
+    found.dedup();
+    found
+}
+
+/// BUG-1702: the runtime tmpfs holding the Cargo slot locks is small (7.1 GiB on the dev host).
+/// On 2026-09-27 it held a 6.8 GiB `debug/` target directory and a 280 MiB per-review target
+/// directory, at 0 bytes free; an implementer's build died at link time with "Disk full?" and a
+/// bus error, and it correctly refused to commit anything. A full `/run/user` also threatens the
+/// systemd user session and dbus sockets, so this is not only a build failure mode.
+///
+/// Two findings, because they need different actions: the artifacts are the cause, the free space
+/// is the symptom. Pure over its inputs so both verdicts are testable without a real tmpfs.
+// trace:BUG-1702 | ai:claude
+fn cargo_slot_findings(
+    free_bytes: Option<u64>,
+    artifacts: &[String],
+    min_free_gib: u64,
+) -> Vec<DoctorFinding> {
+    let mut findings = Vec::new();
+
+    if !artifacts.is_empty() {
+        findings.push(DoctorFinding {
+            category: "disk-headroom".to_string(),
+            id: "cargo-slot-target-dir".to_string(),
+            summary: format!(
+                "the Cargo slot directory holds build artifacts ({}) — a target directory was \
+                 pointed at the runtime tmpfs, which is for lock files only",
+                artifacts.join(", ")
+            ),
+            action: "never set CARGO_TARGET_DIR under $XDG_RUNTIME_DIR — `--add-dir <slot dir>` \
+                     grants lock access, not a target location. Delete the artifacts and KEEP \
+                     every `*.lock` file"
+                .to_string(),
+            safe_heal: false,
+        });
+    }
+
+    if let Some(free) = free_bytes {
+        let floor = min_free_gib.saturating_mul(1024 * 1024 * 1024);
+        if free < floor {
+            let free_mib = free as f64 / (1024.0 * 1024.0);
+            findings.push(DoctorFinding {
+                category: "disk-headroom".to_string(),
+                id: "cargo-slot-free".to_string(),
+                summary: format!(
+                    "the Cargo slot filesystem has {free_mib:.0} MiB free, below the \
+                     {min_free_gib} GiB a link step needs — builds will fail with \"Disk full?\" \
+                     or a bus error rather than a compile error"
+                ),
+                action: "reclaim the runtime tmpfs (`du -sh $XDG_RUNTIME_DIR/*`), keeping the \
+                         slot `*.lock` files; a seat that fails a build here is not failing on \
+                         your code"
+                    .to_string(),
+                safe_heal: false,
+            });
+        }
+    }
+
+    findings
 }
 
 /// STORY-1367: free space on the filesystem holding `project_root`, via

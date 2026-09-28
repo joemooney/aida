@@ -26524,6 +26524,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_prompt: false,
             verbose: false,
             prompt: None,
+            prompt_file: None,
             no_prompt: false,
             no_resume: false,
             resume: None,
@@ -26549,6 +26550,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_prompt: false,
             verbose: false,
             prompt: None,
+            prompt_file: None,
             no_prompt: false,
             no_resume: false,
             resume: None,
@@ -26572,6 +26574,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_prompt: false,
             verbose: false,
             prompt: None,
+            prompt_file: None,
             no_prompt: false,
             no_resume: false,
             resume: None,
@@ -26661,6 +26664,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_prompt,
             verbose,
             prompt,
+            prompt_file,
             no_prompt,
             no_resume,
             resume,
@@ -26683,7 +26687,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *noexec,
             *show_prompt,
             *verbose,
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentPromptOptions::new(
+                resolve_launch_prompt(prompt.clone(), prompt_file.as_deref(), *no_prompt)?,
+                *no_prompt,
+            ),
             AgentResumeOptions::new(
                 !*no_resume,
                 resume.clone(),
@@ -26709,6 +26716,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_prompt,
             verbose,
             prompt,
+            prompt_file,
             no_prompt,
             no_resume,
             resume,
@@ -26729,7 +26737,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *noexec,
             *show_prompt,
             *verbose,
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentPromptOptions::new(
+                resolve_launch_prompt(prompt.clone(), prompt_file.as_deref(), *no_prompt)?,
+                *no_prompt,
+            ),
             AgentResumeOptions::new(
                 !*no_resume,
                 resume.clone(),
@@ -26753,6 +26764,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_prompt,
             verbose,
             prompt,
+            prompt_file,
             no_prompt,
             no_resume,
             resume,
@@ -26773,7 +26785,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *noexec,
             *show_prompt,
             *verbose,
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentPromptOptions::new(
+                resolve_launch_prompt(prompt.clone(), prompt_file.as_deref(), *no_prompt)?,
+                *no_prompt,
+            ),
             AgentResumeOptions::new(
                 !*no_resume,
                 resume.clone(),
@@ -27071,6 +27086,53 @@ struct AgentPromptOptions {
     auto_prompt: bool,
 }
 
+/// BUG-1696: resolve a launch prompt from `--prompt` or `--prompt-file`.
+///
+/// Orchestrator seats build dispatches as `--prompt "$(cat brief.txt)"` inside a nested
+/// `bash -lc`. When that quoting collapses the launcher receives an empty string, spawns an
+/// interactive agent that sits at an idle prompt, and blocks the caller on it — once for
+/// 3h04m, reporting exit 0. `--prompt-file` takes the shell out of the path, and the
+/// emptiness check makes the remaining failure loud instead of silent.
+// trace:BUG-1696 | ai:claude
+fn resolve_launch_prompt(
+    prompt: Option<String>,
+    prompt_file: Option<&std::path::Path>,
+    no_prompt: bool,
+) -> Result<Option<String>> {
+    if no_prompt {
+        return Ok(None);
+    }
+    let resolved = match prompt_file {
+        Some(path) => Some(
+            std::fs::read_to_string(path)
+                .with_context(|| format!("failed to read --prompt-file `{}`", path.display()))?,
+        ),
+        None => prompt,
+    };
+    let Some(text) = resolved else {
+        return Ok(None);
+    };
+    if text.trim().is_empty() {
+        let (source, fix) = match prompt_file {
+            Some(path) => (
+                format!("--prompt-file `{}` is empty", path.display()),
+                "Write the brief into that file",
+            ),
+            None => (
+                "--prompt resolved to an empty string (nested shell quoting does this)".to_string(),
+                "Pass the brief with `--prompt-file <PATH>` instead of interpolating it into the \
+                 command line",
+            ),
+        };
+        anyhow::bail!(
+            "{source}; refusing to launch an agent with no initial message — it would sit idle \
+             at a prompt while the caller blocks on it. {fix}, or use `--no-prompt` for a \
+             deliberately unprompted seat."
+        );
+    }
+    Ok(Some(text))
+}
+
 impl AgentPromptOptions {
     fn new(explicit_prompt: Option<String>, no_prompt: bool) -> Self {
         Self {
@@ -27115,6 +27177,59 @@ fn tool_bypass_flags(agent_type: &str) -> Vec<String> {
         "antigravity" => vec!["--dangerously-skip-permissions".to_string()],
         _ => Vec::new(),
     }
+}
+
+/// BUG-1699: split per-tool `default_flags` into (kept, dropped-as-conflicting) for a launch
+/// whose posture the launcher already set explicitly. A posture flag and its value are dropped
+/// together, in both the `--flag value` and `--flag=value` spellings, so the emitted argv
+/// carries exactly one posture rather than two that the vendor CLI silently arbitrates.
+/// Pure and total, so the partition is unit-tested without spawning.
+// trace:BUG-1699 | ai:claude
+fn split_posture_flags(agent_type: &str, flags: Vec<String>) -> (Vec<String>, Vec<String>) {
+    // Flags that select an approval/sandbox posture. `true` = consumes a following value.
+    let posture: &[(&str, bool)] = match agent_type {
+        "claude" => &[
+            ("--permission-mode", true),
+            ("--settings", true),
+            ("--setting-sources", true),
+            ("--dangerously-skip-permissions", false),
+        ],
+        "codex" => &[
+            ("--sandbox", true),
+            ("--ask-for-approval", true),
+            ("--dangerously-bypass-approvals-and-sandbox", false),
+            ("--full-auto", false),
+        ],
+        "antigravity" => &[("--dangerously-skip-permissions", false)],
+        _ => &[],
+    };
+    let mut kept = Vec::new();
+    let mut dropped = Vec::new();
+    let mut idx = 0;
+    while idx < flags.len() {
+        let arg = &flags[idx];
+        let matched = posture.iter().find(|(name, takes_value)| {
+            arg == name || (*takes_value && arg.starts_with(&format!("{name}=")))
+        });
+        match matched {
+            Some((name, takes_value)) => {
+                dropped.push(arg.clone());
+                // `--flag value` spends the next token too; `--flag=value` does not.
+                if *takes_value && arg == name {
+                    if let Some(value) = flags.get(idx + 1) {
+                        dropped.push(value.clone());
+                        idx += 1;
+                    }
+                }
+                idx += 1;
+            }
+            None => {
+                kept.push(arg.clone());
+                idx += 1;
+            }
+        }
+    }
+    (kept, dropped)
 }
 
 // trace:BUG-1178 | ai:codex
@@ -27984,7 +28099,8 @@ fn agent_new_with_config(
         spec.as_deref(),
         &project_root,
     );
-    if early_role_instance == RoleInstanceKind::Driver {
+    // trace:BUG-1697 | ai:claude
+    if resume.duplicate_check && early_role_instance == RoleInstanceKind::Driver {
         enforce_agent_singleton_preflight(
             &project_root,
             role.as_deref(),
@@ -27997,7 +28113,7 @@ fn agent_new_with_config(
         config.agent_type,
         plan.native_session_id.as_deref(),
     ));
-    enforce_agent_singleton(&project_root, &plan)?;
+    enforce_agent_singleton(&project_root, &plan, resume.duplicate_check)?;
     let description = resolve_agent_description(plan.role.as_deref(), description)?;
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
@@ -28199,18 +28315,21 @@ fn agent_new_bg_dispatch(
         return Ok(());
     }
 
-    enforce_agent_singleton_preflight(
-        &project_root,
-        role.as_deref(),
-        spec.as_deref(),
-        &project_root,
-    )?;
+    // trace:BUG-1697 | ai:claude
+    if resume.duplicate_check {
+        enforce_agent_singleton_preflight(
+            &project_root,
+            role.as_deref(),
+            spec.as_deref(),
+            &project_root,
+        )?;
+    }
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
     ));
-    enforce_agent_singleton(&project_root, &plan)?;
+    enforce_agent_singleton(&project_root, &plan, resume.duplicate_check)?;
     let _description = resolve_agent_description(plan.role.as_deref(), description)?;
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
@@ -28474,7 +28593,41 @@ fn apply_agent_default_flags(
                     .extend(tool_bypass_flags(config.agent_type));
             }
         }
+        // BUG-1699: per-tool `default_flags` used to be appended AFTER an explicit posture
+        // the launcher had already set, producing one command line carrying both — e.g.
+        // `codex --dangerously-bypass-approvals-and-sandbox --sandbox workspace-write
+        // --ask-for-approval never` — and leaving the real posture to an undocumented
+        // precedence inside the vendor CLI while the preview asserted the opposite. When the
+        // launcher set the posture, the conflicting per-tool flags lose and we say so.
+        // trace:BUG-1699 | ai:claude
+        let per_tool = if explicit_permission {
+            let (kept, dropped) = split_posture_flags(config.agent_type, per_tool);
+            if !dropped.is_empty() {
+                eprintln!(
+                    "  {} explicit launch posture wins — dropped from agents.toml: {}",
+                    "note:".yellow(),
+                    dropped.join(" ")
+                );
+            }
+            kept
+        } else {
+            per_tool
+        };
         config.default_args.extend(per_tool);
+
+        // BUG-1698 / TASK-1558: give a claude seat the configured AIDA surface. The default
+        // (`off`) loads no MCP servers at all — SPIKE-73 measured MCP at ~1.8-2x the CLI's cost
+        // for identical or worse success — and it also closes the project-MCP trust modal that
+        // used to block every claude launch. Inside `use_config_defaults` so
+        // `--no-default-flags` remains the escape hatch to the untouched native launch.
+        // trace:BUG-1698 | ai:claude
+        // trace:TASK-1558 | ai:claude
+        if config.agent_type == "claude" {
+            let surface = load_agents_mcp(project_root)?;
+            config
+                .default_args
+                .extend(session::claude_mcp_flags(surface));
+        }
     }
     let resolved_model = flag_options
         .model_override
@@ -28566,6 +28719,65 @@ fn load_agents_bypass(project_root: &std::path::Path) -> Result<bool> {
         bypass = v;
     }
     Ok(bypass)
+}
+
+/// TASK-1558: resolve `[agents] mcp` with the same user-base-then-project precedence as
+/// `bypass` / `contained`. Absent everywhere means the default surface (`off`).
+// trace:TASK-1558 | ai:claude
+fn load_agents_mcp(project_root: &std::path::Path) -> Result<session::AgentMcpSurface> {
+    let mut surface = session::AgentMcpSurface::default();
+    if let Some(home) = aida_home_dir() {
+        if let Some(raw) = read_agents_string_from_file(&home.join(".aida/agents.toml"), "mcp")? {
+            surface = session::AgentMcpSurface::parse(&raw)?;
+        }
+    }
+    if let Some(raw) = read_agents_string_from_file(&project_root.join(".aida/agents.toml"), "mcp")?
+    {
+        surface = session::AgentMcpSurface::parse(&raw)?;
+    }
+    Ok(surface)
+}
+
+/// Read `[agents] <key>` as a string.
+///
+/// A key that is PRESENT but not a string is an error, not a miss. `as_str()`
+/// alone returns `None` for `mcp = true` exactly as it does for an absent key,
+/// so the caller would silently fall back to its default -- which for
+/// `[agents] mcp` means a seat launches on `off` while the operator believes
+/// they configured `aida` or `native`. TASK-1558's documented contract is that
+/// an unrecognised value FAILS the launch rather than falling back; that has to
+/// cover a wrong TYPE too, or the guard fails open on the most likely typo.
+// trace:TASK-1558 | ai:claude
+fn read_agents_string_from_file(path: &std::path::Path, key: &str) -> Result<Option<String>> {
+    let Some(value) = parse_agents_toml(path)? else {
+        return Ok(None);
+    };
+    let Some(found) = value.get("agents").and_then(|agents| agents.get(key)) else {
+        return Ok(None);
+    };
+    match found.as_str() {
+        Some(s) => Ok(Some(s.to_string())),
+        None => anyhow::bail!(
+            "`[agents] {key}` in {} must be a quoted string, but is {} — \
+             fix the value (or remove the key to take the default) and retry",
+            path.display(),
+            agents_toml_type_name(found)
+        ),
+    }
+}
+
+/// TOML type name for an `[agents]` value, for the wrong-type refusal above.
+// trace:TASK-1558 | ai:claude
+fn agents_toml_type_name(value: &toml::Value) -> &'static str {
+    match value {
+        toml::Value::String(_) => "a string",
+        toml::Value::Integer(_) => "an integer",
+        toml::Value::Float(_) => "a float",
+        toml::Value::Boolean(_) => "a boolean",
+        toml::Value::Datetime(_) => "a datetime",
+        toml::Value::Array(_) => "an array",
+        toml::Value::Table(_) => "a table",
+    }
 }
 
 // trace:STORY-567 | ai:codex
@@ -29685,7 +29897,18 @@ fn resolve_role_instance_for_launch(
 }
 
 // trace:STORY-791 | ai:codex
-fn enforce_agent_singleton(project_root: &std::path::Path, plan: &AgentLaunchPlan) -> Result<()> {
+fn enforce_agent_singleton(
+    project_root: &std::path::Path,
+    plan: &AgentLaunchPlan,
+    duplicate_check: bool,
+) -> Result<()> {
+    // BUG-1697: `--no-duplicate-check` is documented to skip the same-vendor/same-role
+    // check entirely. It used to stop at the resume path, so the new-launch singleton had
+    // no escape hatch and a hung holder could block every later seat on the scope.
+    // trace:BUG-1697 | ai:claude
+    if !duplicate_check {
+        return Ok(());
+    }
     if plan.role_instance == RoleInstanceKind::Companion {
         return Ok(());
     }
@@ -30575,6 +30798,14 @@ fn render_agent_launch_noexec(
         "  resolved: {}\n",
         resolved_agent_permission_summary(config.agent_type, &exec_args)
     ));
+    if config.agent_type == "claude" {
+        // TASK-1558 AC4: never make the operator guess which AIDA surface the seat got.
+        // trace:TASK-1558 | ai:claude
+        let surface = load_agents_mcp(&plan.project_root)
+            .map(|s| s.as_str())
+            .unwrap_or("(invalid — see [agents] mcp)");
+        out.push_str(&format!("  aida surface (agents.toml mcp): {surface}\n"));
+    }
     if config.agent_type == "codex" {
         out.push_str(&format!(
             "  codex sandbox: {}\n",
@@ -30729,7 +30960,7 @@ fn prompt_source_label(prompt: &AgentPromptOptions, prompt_args: &[String]) -> &
         .filter(|p| !p.is_empty())
         .is_some();
     match (explicit, prompt_args.is_empty()) {
-        (true, _) => "explicit (--prompt)",
+        (true, _) => "explicit (--prompt/--prompt-file)",
         // trace:STORY-1471 | ai:claude
         (false, false) => "generated (role launch prompt)",
         (false, true) => "none (--no-prompt)",
@@ -31082,8 +31313,8 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
     }
 
     println!(
-        "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} WORKTREE",
-        "NAME/ID", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "DESC"
+        "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<24} WORKTREE",
+        "NAME/ID", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "CPU", "DESC"
     );
     let now = chrono::Utc::now();
     for agent in agents {
@@ -31142,8 +31373,19 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
                     .unwrap_or_default()
             );
         } else {
+            // BUG-1701 AC5: CPU consumed is what separates a seat still working from one that
+            // finished its turn and is idling at a prompt — 3-46 SECONDS across hours, for seats
+            // the status column called `busy`. Process-backed rows only; a lease has no pid.
+            // trace:BUG-1701 | ai:claude
+            let cpu = if agent.source == "lease" {
+                "-".to_string()
+            } else {
+                agent_registry::process_cpu_secs(agent.pid)
+                    .map(|secs| agent_registry::humanize_elapsed(secs))
+                    .unwrap_or_else(|| "?".to_string())
+            };
             println!(
-                "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} {}{}",
+                "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<24} {}{}",
                 identity,
                 pid_str,
                 terminal,
@@ -31153,6 +31395,7 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
                 scope,
                 agent.status.as_str(),
                 format!("({elapsed})"),
+                cpu,
                 desc,
                 agent.worktree_path.display(),
                 paused_note
@@ -31225,31 +31468,101 @@ fn agent_stop(name: &str) -> Result<()> {
     let agent_ctx = build_agent_classify_context(&project_root, &leases);
     let registry_agents = agent_registry::list_agent_views(&project_root, &agent_ctx);
 
-    let found = registry_agents.into_iter().find(|agent| {
-        if let Some(ref active_name) = agent.name {
-            active_name.eq_ignore_ascii_case(name_trimmed)
-        } else {
-            let fallback_id = format!("{}#{}", agent.agent_type, agent.pid);
-            let fallback_id_alt = format!("{}-{}", agent.agent_type, agent.pid);
-            fallback_id.eq_ignore_ascii_case(name_trimmed)
-                || fallback_id_alt.eq_ignore_ascii_case(name_trimmed)
-        }
-    });
+    // BUG-1703: the registry is PID-keyed, so relaunching a name leaves SEVERAL entries under it.
+    // Taking only the first match signalled a stale pid, reaped that entry, and printed success
+    // while the real seat kept running and kept its caller blocked — observed on 3 of 8 stops.
+    // trace:BUG-1703 | ai:claude
+    let matches: Vec<_> = registry_agents
+        .into_iter()
+        .filter(|agent| {
+            if let Some(ref active_name) = agent.name {
+                active_name.eq_ignore_ascii_case(name_trimmed)
+            } else {
+                let fallback_id = format!("{}#{}", agent.agent_type, agent.pid);
+                let fallback_id_alt = format!("{}-{}", agent.agent_type, agent.pid);
+                fallback_id.eq_ignore_ascii_case(name_trimmed)
+                    || fallback_id_alt.eq_ignore_ascii_case(name_trimmed)
+            }
+        })
+        .collect();
 
-    let agent = match found {
-        Some(agent) => agent,
-        None => {
-            anyhow::bail!("no active agent found with name '{}'", name_trimmed);
-        }
-    };
+    if matches.is_empty() {
+        anyhow::bail!("no active agent found with name '{}'", name_trimmed);
+    }
 
-    println!("Stopping agent '{}' (PID {})...", name_trimmed, agent.pid);
-    terminate_pids_with_grace(&[agent.pid], 5);
-    let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    let all_pids: Vec<u32> = matches.iter().map(|a| a.pid).collect();
+    let alive = live_pids(&all_pids);
+
+    // AC4: an entry whose process is genuinely gone is reaped and reported as already gone —
+    // which is NOT the same as having stopped something.
+    for agent in matches.iter().filter(|a| !alive.contains(&a.pid)) {
+        println!(
+            "  pid {} was already gone — reaping its stale registry entry",
+            agent.pid
+        );
+        let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    }
+
+    if alive.is_empty() {
+        println!(
+            "{} Agent '{}' was already stopped; {} stale registry entr{} reaped.",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            name_trimmed,
+            matches.len(),
+            if matches.len() == 1 { "y" } else { "ies" }
+        );
+        return Ok(());
+    }
+
     println!(
-        "{} Agent '{}' stopped.",
+        "Stopping agent '{}' (PID{} {})...",
+        name_trimmed,
+        if alive.len() == 1 { "" } else { "s" },
+        alive
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let survivors = terminate_pids_with_grace(&alive, 5);
+
+    for agent in matches
+        .iter()
+        .filter(|a| alive.contains(&a.pid) && !survivors.contains(&a.pid))
+    {
+        let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    }
+
+    // AC1: never claim a stop that did not happen.
+    if !survivors.is_empty() {
+        anyhow::bail!(
+            "agent `{}` is STILL ALIVE after SIGTERM and SIGKILL: pid(s) {}. Its registry entries \
+             were left in place. Check for a process that re-parents or respawns, and inspect the \
+             tree with `ps -o pid,ppid,time,args -p {}`.",
+            name_trimmed,
+            survivors
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+            survivors
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+    }
+
+    println!(
+        "{} Agent '{}' stopped (pid{} {}).",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
-        name_trimmed
+        name_trimmed,
+        if alive.len() == 1 { "" } else { "s" },
+        alive
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     Ok(())
 }
@@ -39807,7 +40120,32 @@ fn print_status_working_tree_section(root: &std::path::Path) {
 
 /// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
 /// are still alive. trace:BUG-61 | ai:claude
-fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
+/// Which of `pids` are running right now.
+///
+/// A ZOMBIE does not count. A terminated child stays in the process table until its parent
+/// reaps it, and sysinfo still lists it — so treating "present" as "alive" would make
+/// `agent stop` report that it had failed to kill something it had just killed.
+// trace:BUG-1703 | ai:claude
+fn live_pids(pids: &[u32]) -> Vec<u32> {
+    use sysinfo::{ProcessRefreshKind, ProcessStatus, RefreshKind, System};
+    let mut sys =
+        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    pids.iter()
+        .copied()
+        .filter(|&pid| {
+            sys.process(sysinfo::Pid::from_u32(pid))
+                .is_some_and(|p| !matches!(p.status(), ProcessStatus::Zombie | ProcessStatus::Dead))
+        })
+        .collect()
+}
+
+/// SIGTERM, wait, SIGKILL the survivors, then report who is STILL alive.
+///
+/// BUG-1703: this used to return `()`, and `agent stop` printed success regardless. Callers must
+/// be able to tell a real stop from a signal that landed on nothing.
+// trace:BUG-1703 | ai:claude
+fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) -> Vec<u32> {
     use sysinfo::{ProcessRefreshKind, RefreshKind, Signal, System};
     let mut sys =
         System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
@@ -39828,6 +40166,9 @@ fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
             let _ = p.kill_with(Signal::Kill);
         }
     }
+    // SIGKILL is not instantaneous; give the kernel a moment before judging.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    live_pids(pids)
 }
 
 /// STORY-73: resolution chain for `aida session end` (no arg). Tries in
@@ -41768,7 +42109,7 @@ fn session_end(
             "→".dimmed(),
             leaked.len()
         );
-        terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
+        let _ = terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
     }
 
     // STORY-73: human output to stderr, eval-friendly `unset` to stdout
@@ -63816,6 +64157,10 @@ fn worktree_pool_hooks_from_config(value: &toml::Value, key: &str) -> Vec<String
 #[cfg(test)]
 #[path = "tests/task_1010_prewarm_tests.rs"]
 mod task_1010_prewarm_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1558_agents_mcp_type_tests.rs"]
+mod task_1558_agents_mcp_type_tests;
 
 fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
     let project_root = find_project_root()?;

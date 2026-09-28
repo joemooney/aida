@@ -8195,9 +8195,15 @@ pub enum BriefCommand {
 pub enum AgentCommand {
     /// Launch a new agent process.
     ///
-    /// This lane spawns a one-shot agent that does its work, ships a PR, and
-    /// exits. It is NOT the orchestrated pipeline — it does not run CI, the
-    /// reviewer phase, or the merge for you. For a supervised end-to-end drain
+    /// This lane spawns an INTERACTIVE agent in the foreground and BLOCKS until that
+    /// agent's session exits. A vendor TUI does not exit when its turn ends — it returns
+    /// to its prompt — so a seat that has finished its work still holds this command.
+    /// Budget for that: run it where you can leave it, or stop the seat with
+    /// `aida agent stop <name>` once it reports. `aida agent status` shows `idle` for a
+    /// seat that is waiting at a prompt rather than working.
+    ///
+    /// It is also NOT the orchestrated pipeline — it does not run CI, the reviewer
+    /// phase, or the merge for you. For a supervised end-to-end drain
     /// (implementer → CI → reviewer → merge → pull), use
     /// `aida queue work <SPEC> --auto-complete` instead.
     // trace:TASK-626 | ai:claude — plain `//` keeps the marker out of `--help`.
@@ -8443,8 +8449,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Claude session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]
@@ -8580,8 +8593,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Codex session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]
@@ -8701,8 +8721,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Antigravity session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]

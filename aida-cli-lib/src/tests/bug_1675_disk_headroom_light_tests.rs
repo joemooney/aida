@@ -38,7 +38,7 @@ fn bug_1675_fixture_store_is_unloadable() {
 #[test]
 fn bug_1675_light_path_reports_healthy_without_loading_store() {
     let tmp = project_with_unloadable_store(60);
-    let report = disk_headroom_light_report_with(tmp.path(), |_| Some(100 * GIB));
+    let report = disk_headroom_light_report_with(tmp.path(), |_| Some(100 * GIB), None);
     assert!(report.findings.is_empty(), "{:?}", report.findings);
     assert_eq!(report.total, 0);
     assert!(report.healed.is_empty());
@@ -51,7 +51,7 @@ fn bug_1675_light_path_reports_healthy_without_loading_store() {
 #[test]
 fn bug_1675_light_path_reports_below_floor_without_loading_store() {
     let tmp = project_with_unloadable_store(60);
-    let report = disk_headroom_light_report_with(tmp.path(), |_| Some(16 * 1024));
+    let report = disk_headroom_light_report_with(tmp.path(), |_| Some(16 * 1024), None);
     assert_eq!(report.total, 1);
     assert_eq!(report.findings.len(), 1);
     assert_eq!(report.findings[0].category, DISK_HEADROOM_CATEGORY);
@@ -78,14 +78,14 @@ fn bug_1675_light_path_reports_below_floor_without_loading_store() {
 fn bug_1675_light_path_honors_configured_floor() {
     let tuned = project_with_unloadable_store(40);
     assert!(
-        disk_headroom_light_report_with(tuned.path(), |_| Some(50 * GIB))
+        disk_headroom_light_report_with(tuned.path(), |_| Some(50 * GIB), None)
             .findings
             .is_empty()
     );
     let untuned = tempfile::tempdir().unwrap();
     std::fs::write(untuned.path().join(".aida-store"), b"not a store\n").unwrap();
     assert_eq!(
-        disk_headroom_light_report_with(untuned.path(), |_| Some(50 * GIB))
+        disk_headroom_light_report_with(untuned.path(), |_| Some(50 * GIB), None)
             .findings
             .len(),
         1
@@ -97,7 +97,7 @@ fn bug_1675_light_path_honors_configured_floor() {
 #[test]
 fn bug_1675_light_path_unresolved_disk_is_silent() {
     let tmp = project_with_unloadable_store(60);
-    let report = disk_headroom_light_report_with(tmp.path(), |_| None);
+    let report = disk_headroom_light_report_with(tmp.path(), |_| None, None);
     assert!(report.findings.is_empty());
     assert_eq!(report.total, 0);
 }
@@ -108,7 +108,7 @@ fn bug_1675_light_path_unresolved_disk_is_silent() {
 fn bug_1675_light_path_without_config_uses_default_and_serializes() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join(".aida-store"), b"not a store\n").unwrap();
-    let report = disk_headroom_light_report_with(tmp.path(), |_| Some(59 * GIB));
+    let report = disk_headroom_light_report_with(tmp.path(), |_| Some(59 * GIB), None);
     assert_eq!(report.findings.len(), 1, "default 60 GiB floor applies");
     let json = serde_json::to_value(&report).unwrap();
     assert!(json.get("total").is_some());
@@ -125,6 +125,98 @@ fn bug_1675_light_path_without_config_uses_default_and_serializes() {
 fn bug_1675_light_report_wires_the_real_disk_probe() {
     let tmp = project_with_unloadable_store(u64::MAX / GIB);
     let report = disk_headroom_light_report(tmp.path());
-    assert_eq!(report.findings.len(), 1);
-    assert_eq!(report.findings[0].category, DISK_HEADROOM_CATEGORY);
+    // BUG-1702 added host-dependent Cargo-slot findings to this same category, so assert the
+    // project-root verdict by id rather than by a total count the host can change.
+    // trace:BUG-1702 | ai:claude
+    let headroom = report
+        .findings
+        .iter()
+        .find(|f| f.id == "disk-headroom")
+        .expect("the real disk probe must produce the project-root headroom finding");
+    assert_eq!(headroom.category, DISK_HEADROOM_CATEGORY);
+    assert!(
+        report
+            .findings
+            .iter()
+            .all(|f| f.category == DISK_HEADROOM_CATEGORY),
+        "every finding from this entry belongs to the category: {:?}",
+        report.findings
+    );
+}
+
+/// BUG-1702: the runtime tmpfs holding the Cargo slot locks filled to 0 bytes free because a
+/// Cargo target directory was pointed at it. A seat's build then died at link time with
+/// "Disk full?" and a bus error, which is not a compile failure and must not be read as one.
+/// The artifacts and the free space are separate findings because they need separate actions.
+// trace:BUG-1702 | ai:claude
+#[test]
+fn cargo_slot_findings_separate_the_cause_from_the_symptom() {
+    const GIB: u64 = 1024 * 1024 * 1024;
+
+    // Healthy: room to link, nothing but lock files.
+    assert!(cargo_slot_findings(Some(6 * GIB), &[], 1).is_empty());
+
+    // The observed state: 0 bytes free AND a target directory sitting in the slot dir.
+    let artifacts = vec!["debug/".to_string(), ".rustc_info.json".to_string()];
+    let findings = cargo_slot_findings(Some(0), &artifacts, 1);
+    let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+    assert_eq!(ids, vec!["cargo-slot-target-dir", "cargo-slot-free"]);
+    assert!(findings.iter().all(|f| f.category == "disk-headroom"));
+    assert!(
+        findings.iter().all(|f| !f.safe_heal),
+        "deleting build state is never an automatic heal"
+    );
+
+    // The cause names the artifacts and warns off CARGO_TARGET_DIR; the symptom explains the
+    // failure mode so an orchestrator does not retry it as if the code were wrong.
+    assert!(findings[0].summary.contains("debug/"), "{:?}", findings[0]);
+    assert!(findings[0].action.contains("CARGO_TARGET_DIR"));
+    assert!(findings[0].action.contains(".lock"), "keep the lock files");
+    assert!(
+        findings[1].summary.contains("Disk full?"),
+        "{:?}",
+        findings[1]
+    );
+    assert!(findings[1].action.contains("not failing on"));
+
+    // Artifacts present but plenty of room: still the cause, not yet the symptom.
+    let findings = cargo_slot_findings(Some(6 * GIB), &artifacts, 1);
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].id, "cargo-slot-target-dir");
+
+    // Low space with a clean slot dir: the symptom alone (something else filled the tmpfs).
+    let findings = cargo_slot_findings(Some(100 * 1024 * 1024), &[], 1);
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].id, "cargo-slot-free");
+
+    // An unresolved filesystem stays silent rather than risking a false positive, matching
+    // the BUG-1675 contract above.
+    assert!(cargo_slot_findings(None, &[], 1).is_empty());
+}
+
+/// BUG-1702: only a POPULATED profile directory or a real target marker counts. An empty `tmp/`
+/// is ordinary scratch, and a slot directory holding just its lock files must stay silent.
+// trace:BUG-1702 | ai:claude
+#[test]
+fn cargo_slot_target_artifacts_ignores_lock_files_and_empty_scratch() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let dir = tmp.path();
+
+    // The legitimate contents: advisory lock files only.
+    for lock in ["slot-0.lock", "slot-1.lock", "queue.lock"] {
+        std::fs::write(dir.join(lock), "").unwrap();
+    }
+    std::fs::create_dir_all(dir.join("tmp")).unwrap();
+    assert!(
+        cargo_slot_target_artifacts(dir).is_empty(),
+        "lock files and an empty tmp/ are not build artifacts"
+    );
+
+    // A populated profile directory is.
+    std::fs::create_dir_all(dir.join("debug")).unwrap();
+    std::fs::write(dir.join("debug/aida"), "binary").unwrap();
+    std::fs::write(dir.join(".rustc_info.json"), "{}").unwrap();
+    let found = cargo_slot_target_artifacts(dir);
+    assert!(found.contains(&"debug/".to_string()), "{found:?}");
+    assert!(found.contains(&".rustc_info.json".to_string()), "{found:?}");
 }

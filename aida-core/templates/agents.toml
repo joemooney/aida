@@ -29,9 +29,32 @@
 # native controls; it does not build container infrastructure.
 # contained = false
 
+# AIDA surface for supervised seats (TASK-1558).
+#
+# `mcp = "off"` is the DEFAULT and needs no entry here: a spawned seat loads no
+# MCP servers and uses the `aida` CLI as its AIDA surface. SPIKE-73 measured a
+# 72-cell matrix (4 conditions x 6 tasks x 3 runs) on AIDA's own surfaces and
+# found MCP costs ~1.8-2x the CLI for identical or worse success. The result is
+# structural, not an upfront-schema tax: on-demand schema loading still cost
+# ~1.8x AND more turns, because the round-trips eat the token savings.
+#
+#   off     no MCP servers; the `aida` CLI is the surface (default)
+#   aida    attach only AIDA's own server definition (`aida mcp-serve`)
+#   native  inject nothing; the vendor's own MCP configuration applies
+#
+# `off` and `aida` both suppress Claude Code's project-MCP trust prompt, because
+# neither consults the repository's `.mcp.json` — so a checkout cannot smuggle a
+# command in under the name `aida`. `native` may prompt; that is your choice.
+#
+# SCOPE: only Claude Code exposes launch-time MCP flags. Codex and Antigravity
+# register MCP in their own config files, so this knob cannot enforce a surface
+# at launch for them. `--no-default-flags` bypasses it entirely.
+# mcp = "off"
+
 # [agents]
 # bypass = false
 # contained = false
+# mcp = "off"
 
 # [agents.claude]
 # default_flags = []
