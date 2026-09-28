@@ -419,7 +419,7 @@ impl Templates {
             doc["history"] = toml_edit::Item::Table(toml_edit::Table::new());
         }
         if doc["history"].get("templates").is_none() {
-            // trace:STORY-1477 | ai:codex
+            // trace:TASK-199 | ai:codex
             // Inline parents serialize Values only, so a regular Table child
             // would silently disappear when the document is saved.
             doc["history"]["templates"] = if doc["history"].is_inline_table() {
