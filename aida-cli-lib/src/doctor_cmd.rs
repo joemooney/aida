@@ -1019,6 +1019,41 @@ fn scan_scaffold_drift(
     // Codex skills are missing. trace:BUG-1639 | ai:claude
     let config = crate::init_cmd::scaffold_config_for_project(project_root);
     let portable_selected = config.generate_codex_skills || config.generate_antigravity_skills;
+    // Codex silently skips symlinked SKILL.md files in the shared pack.
+    // Report them without attempting a repair; they may be user-owned links.
+    // trace:TASK-1519 | ai:codex
+    if let Ok(entries) = std::fs::read_dir(project_root.join(".agents/skills")) {
+        let links: Vec<_> = entries
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.path().join("SKILL.md");
+                std::fs::symlink_metadata(&path)
+                    .ok()
+                    .filter(|meta| meta.file_type().is_symlink())
+                    .map(|_| {
+                        path.strip_prefix(project_root)
+                            .unwrap_or(&path)
+                            .display()
+                            .to_string()
+                    })
+            })
+            .collect();
+        if !links.is_empty() {
+            findings.push(DoctorFinding {
+                category: "scaffold-drift".to_string(),
+                id: "scaffold-drift/agents-skill-symlink".to_string(),
+                summary: format!(
+                    "{} .agents/skills SKILL.md file(s) are symlinks; Codex does not load them",
+                    links.len()
+                ),
+                action: format!(
+                    "Replace these links with regular-file copies: {}",
+                    links.join(", ")
+                ),
+                safe_heal: false,
+            });
+        }
+    }
     let db_path = project_root.join(".aida/cache.db");
     let status = check_scaffold_status(store, project_root, &config, &db_path);
     // Compare path components so Windows' backslashes do not hide scaffold
