@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T18:17:29.160704399Z
-modified_at: 2026-09-28T19:02:19.692445363Z
+modified_at: 2026-09-28T19:15:06.756638938Z
 req_type: Bug
 comments:
 - id: 01a0e94d-080c-75c1-99ce-22b0b207afb5
@@ -181,6 +181,12 @@ comments:
     the reclaimed count rather than the bare word "checked".
   created_at: 2026-09-28T19:02:19.692445363Z
   modified_at: 2026-09-28T19:02:19.692445363Z
+  session_id: 14957d0e-54c4-4671-94b1-589b8c033f43
+- id: 01a0e971-3984-72d0-b96b-6fd77806a2b3
+  author: joe
+  content: Commit 9c28221473 references this requirement
+  created_at: 2026-09-28T19:15:06.756638938Z
+  modified_at: 2026-09-28T19:15:06.756638938Z
   session_id: 14957d0e-54c4-4671-94b1-589b8c033f43
 history:
 - id: 01a0e93c-a0a1-7810-b4e2-ac74ccca876e
