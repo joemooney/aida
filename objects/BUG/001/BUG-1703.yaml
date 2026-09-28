@@ -1,0 +1,57 @@
+id: 01a0e60e-1dd2-7551-ba40-4b2b673cbf17
+spec_id: BUG-1703
+agreed_id: BUG-1703
+title: aida agent stop reports success after signalling a stale registry pid, leaving the real agent process alive
+description: |
+  `aida agent stop <name>` printed success for agents it did not stop.
+
+  Observed 2026-09-27 20:20 while clearing eight stranded seats:
+
+      codex-implementer-1   Stopping agent 'codex-implementer-1' (PID 3018465)... ✓ Agent stopped.
+      bug1695-runner        Stopping agent 'bug1695-runner' (PID 3246816)... ✓ Agent stopped.
+
+  Both reported success. Both live processes were still running afterwards: the real
+  `codex-implementer-1` child was PID 3029551, and the real `bug1695-runner` child was PID 3272268.
+  The registry held an EARLIER pid for each name — a pid from a previous launch of that name, or an
+  intermediate that had already exited — and `stop` signalled that stale pid, found nothing to
+  complain about, and reported the agent stopped.
+
+  Three of eight `stop` calls behaved this way; the launchers stayed blocked and had to be cleared by
+  signalling the real children directly, found by walking the process tree from each launcher.
+
+  This is worse than a plain failure. An orchestrator that stops a wedged seat and is told "✓
+  stopped" will proceed as if the scope is free — then hit the singleton guard (see BUG-1697) or
+  double up on a worktree, with no signal that the first seat is still alive.
+
+  Note `aida agent status` also reported three of these as `busy` when their threads had been idle
+  for 48-88 minutes and they had consumed 3-46 SECONDS of CPU across hours, so the registry's liveness
+  view is stale in more than one place. See BUG-1701 AC5.
+
+  ACCEPTANCE
+
+  AC1. `aida agent stop <name>` reports success only when the named agent's live process is actually
+       gone. Signalling a pid that does not exist, or that is not the agent's live process, is a
+       failure with an actionable message.
+  AC2. `stop` resolves the agent's CURRENT process rather than trusting a possibly-stale registry pid;
+       if the registry pid is dead but a descendant of the launch is alive, `stop` either reaches it
+       or says plainly that it could not.
+  AC3. `stop` verifies termination after signalling (bounded wait) and says which pid it signalled and
+       what the outcome was.
+  AC4. A stale registry entry whose process is genuinely gone is reaped, and `stop` on it reports that
+       it was already gone — distinct from AC1's failure.
+  AC5. Covered by tests using a real short-lived child process, no vendor binary required.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T03:27:59.954434201Z
+modified_at: 2026-09-28T03:27:59.954434201Z
+req_type: Bug
+filed_at:
+  code_sha: 9099f64c8c97b0e9b00de5d73fe6a347fb96bf26
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 9099f64c8c
+  vendor: antigravity
+  session: 79f15ecb-4580-4277-9778-648c50ac17b4
