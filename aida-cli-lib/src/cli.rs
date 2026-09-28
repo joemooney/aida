@@ -8199,8 +8199,11 @@ pub enum AgentCommand {
     /// agent's session exits. A vendor TUI does not exit when its turn ends — it returns
     /// to its prompt — so a seat that has finished its work still holds this command.
     /// Budget for that: run it where you can leave it, or stop the seat with
-    /// `aida agent stop <name>` once it reports. `aida agent status` shows `idle` for a
-    /// seat that is waiting at a prompt rather than working.
+    /// `aida agent stop <name>` once it reports. To tell a finished seat from a working
+    /// one without attaching, read the CPU column in `aida agent status`: seconds of CPU
+    /// across hours of age means the seat is idle at its prompt. Do NOT rely on the
+    /// `status` column for that — it reports `busy` for a seat whose worktree any live
+    /// lease covers, which for the main checkout is effectively always.
     ///
     /// It is also NOT the orchestrated pipeline — it does not run CI, the reviewer
     /// phase, or the merge for you. For a supervised end-to-end drain
