@@ -10762,7 +10762,9 @@ pub(crate) fn handle_queue_work(
     if contained {
         std::env::set_var("AIDA_CONTAINED", "1");
     }
-    let (permission_mode, permission_mode_origin) = if contained {
+    let explicit_permission_mode = permission_mode.is_some();
+    let mut bypass_prompt_declined = false;
+    let (mut permission_mode, permission_mode_origin) = if contained {
         (Some("dontAsk".to_string()), "contained sandbox")
     } else {
         resolve_queue_work_permission_mode(
@@ -10773,6 +10775,26 @@ pub(crate) fn handle_queue_work(
             plan_only,
         )
     };
+    // TASK-1500: interactive queue work owns a human consent prompt. Corroborated
+    // orchestrated children already passed dispatch authority and must not hang.
+    if !no_human && !plan_only && permission_mode.as_deref() == Some("bypassPermissions") {
+        let orchestrated = project_root_for_config
+            .as_deref()
+            .is_some_and(|root| crate::orchestrator::detect(root).is_orchestrated());
+        if !orchestrated {
+            if let Some(root) = project_root_for_config.as_deref() {
+                let mut argv = vec![
+                    "--permission-mode".to_string(),
+                    "bypassPermissions".to_string(),
+                ];
+                crate::gate_agent_bypass(root, vendor, &mut argv, false, explicit_permission_mode)?;
+                if !argv.iter().any(|a| a == "bypassPermissions") {
+                    permission_mode = None;
+                    bypass_prompt_declined = true;
+                }
+            }
+        }
+    }
     if permission_mode.is_none() && !contained {
         maybe_show_faithful_launcher_notice();
     }
@@ -11053,7 +11075,16 @@ pub(crate) fn handle_queue_work(
         format!(
             "{} {}",
             permission_mode.as_deref().unwrap_or("native").cyan(),
-            format!("({})", permission_mode_origin).dimmed()
+            format!(
+                "({}{})",
+                permission_mode_origin,
+                if bypass_prompt_declined {
+                    "; prompt declined; native"
+                } else {
+                    ""
+                }
+            )
+            .dimmed()
         ),
     );
     line("skill", prompt.cyan().to_string());
