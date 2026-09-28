@@ -885,6 +885,16 @@ fn reap_one(
     lease: &SessionLease,
     checked_tip: Option<&str>,
 ) -> String {
+    reap_one_with_missing_worktree_hook(project_root, lease, checked_tip, || {})
+}
+
+// trace:TASK-1543 | ai:codex
+fn reap_one_with_missing_worktree_hook(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+    checked_tip: Option<&str>,
+    before_missing_worktree_clear: impl FnOnce(),
+) -> String {
     let has_worktree = !lease.worktree_path.as_os_str().is_empty();
     let branch = lease.branch.trim();
 
@@ -960,22 +970,76 @@ fn reap_one(
     }
     // A worktree directory removed by hand leaves a prunable registration
     // behind; clear it so no dangling entry still names the deleted branch.
-    // `prune` only drops entries whose directories are gone.
-    // trace:BUG-1657 | ai:claude
+    // Scope removal to this lease path rather than a repo-wide prune so
+    // another session's temporarily unavailable worktree keeps its registration.
+    // trace:BUG-1657 trace:TASK-1543 | ai:antigravity
     if worktree_missing {
-        let _ = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(["worktree", "prune"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+        if !clear_missing_worktree_registration(
+            project_root,
+            &lease.worktree_path,
+            before_missing_worktree_clear,
+        ) && lease.worktree_path.exists()
+        {
+            return "reaped — lease released (worktree path reappeared; registration kept)"
+                .to_string();
+        }
     }
     if delete_branch_at(project_root, branch, checked_tip) {
         format!("reaped — worktree removed, lease released, branch `{branch}` deleted")
     } else {
         format!("reaped — worktree removed, lease released (branch `{branch}` kept: gone or moved)")
     }
+}
+
+// Clear only the administrative registration for an absent lease path. Never
+// ask Git to remove a worktree here: the path can reappear after the early scan.
+// trace:TASK-1543 | ai:codex
+fn clear_missing_worktree_registration(
+    project_root: &std::path::Path,
+    worktree_path: &std::path::Path,
+    before_clear: impl FnOnce(),
+) -> bool {
+    if worktree_path.exists() {
+        return false;
+    }
+    before_clear();
+    if worktree_path.exists() {
+        return false;
+    }
+
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--git-common-dir"])
+        .output();
+    let Ok(output) = output else { return false };
+    if !output.status.success() {
+        return false;
+    }
+    let common_dir = std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+    let common_dir = if common_dir.is_absolute() {
+        common_dir
+    } else {
+        project_root.join(common_dir)
+    };
+    let worktrees_dir = common_dir.join("worktrees");
+    let expected_gitdir = worktree_path.join(".git");
+    let Ok(entries) = std::fs::read_dir(worktrees_dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let admin_dir = entry.path();
+        let Ok(gitdir) = std::fs::read_to_string(admin_dir.join("gitdir")) else {
+            continue;
+        };
+        if std::path::Path::new(gitdir.trim()) == expected_gitdir {
+            if worktree_path.exists() {
+                return false;
+            }
+            return std::fs::remove_dir_all(admin_dir).is_ok();
+        }
+    }
+    false
 }
 
 /// Does local branch `branch` still point at `tip`? `None` (never pinned) or
@@ -1486,3 +1550,9 @@ mod task_1179_chain_suggest_tests;
 #[cfg(test)]
 #[path = "tests/bug_1657_batched_reap_tests.rs"]
 mod bug_1657_batched_reap_tests;
+
+// Reap polish: scoped missing worktree removal and porcelain -z lock detection.
+// trace:TASK-1543 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/task_1543_reap_polish_tests.rs"]
+mod task_1543_reap_polish_tests;
