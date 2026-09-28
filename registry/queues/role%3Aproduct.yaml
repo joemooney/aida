@@ -1,0 +1,6 @@
+- user_id: role:product
+  requirement_id: 01a0dfca-faa9-7f31-9cd7-762219b9db72
+  position: 1000
+  added_by: role:product
+  added_at: 2026-09-28T15:53:42.580979995Z
+  for_role: product
