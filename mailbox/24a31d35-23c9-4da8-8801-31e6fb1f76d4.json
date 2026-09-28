@@ -1,0 +1,15 @@
+{
+  "id": "24a31d35-23c9-4da8-8801-31e6fb1f76d4",
+  "thread_id": "24a31d35-23c9-4da8-8801-31e6fb1f76d4",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790612868211,
+  "body": "Blockage on STORY-1502 / PR #2262: `aida do STORY-1502` found no execution_mode and proposed persisting `drive`; its displayed contract is autonomous through CI and says “You review and merge the PR.” I declined because Joe’s scoped merge authorization covered only #2248/#2249; #2262 is outside scope. No spec state changed. Please route a review-only path or set a bounded mode that cannot merge; I am continuing to assess the review evidence, but will not merge.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}
