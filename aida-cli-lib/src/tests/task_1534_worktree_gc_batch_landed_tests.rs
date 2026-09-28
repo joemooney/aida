@@ -14,6 +14,7 @@ use std::path::Path;
 
 #[test]
 // trace:BUG-1718 | ai:codex
+// trace:BUG-1719 | ai:codex
 fn bug_1718_unmerged_without_landing_signal_still_needs_operator_action() {
     let batched = AgentWorktreeFacts {
         dirty: false,
@@ -23,18 +24,28 @@ fn bug_1718_unmerged_without_landing_signal_still_needs_operator_action() {
         content_fully_landed: false,
         spec_trailer_on_main: true,
     };
-    let AgentWorktreeVerdict::Keep(no_action) = classify_agent_worktree(&batched) else {
+    let AgentWorktreeVerdict::Keep {
+        reason: no_action,
+        actionable,
+    } = classify_agent_worktree(&batched)
+    else {
         panic!("batched undecidable work must be kept");
     };
+    assert!(!actionable, "batched landed work is non-actionable");
     assert!(no_action.contains("no action required"), "{no_action}");
 
     let unmerged = AgentWorktreeFacts {
         spec_trailer_on_main: false,
         ..batched
     };
-    let AgentWorktreeVerdict::Keep(actionable) = classify_agent_worktree(&unmerged) else {
+    let AgentWorktreeVerdict::Keep {
+        reason: actionable,
+        actionable: needs_action,
+    } = classify_agent_worktree(&unmerged)
+    else {
         panic!("genuinely unmerged work must be kept");
     };
+    assert!(needs_action, "genuinely unmerged work remains actionable");
     assert!(actionable.contains("operator decision"), "{actionable}");
     assert!(!actionable.contains("no action required"), "{actionable}");
 }

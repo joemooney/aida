@@ -417,6 +417,8 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
+    // trace:BUG-1719 | ai:codex
+    let mut merged_agent_worktrees_reclaimable = 0;
     let mut hidden_completed_without_commit = 0;
     let mut performance_audits = Vec::new();
 
@@ -466,7 +468,10 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // path and appended here where only `aida doctor` reaches it. Honours the
     // same `--category` filter. trace:TASK-878 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "merged-agent-worktrees")? {
-        findings.extend(scan_merged_agent_worktrees(&project_root));
+        // trace:BUG-1719 | ai:codex
+        let scan = scan_merged_agent_worktrees_with_count(&project_root);
+        merged_agent_worktrees_reclaimable = scan.reclaimable_count;
+        findings.extend(scan.findings);
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -653,12 +658,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     }
 
     if opts.quiet_output {
-        let reclaimed = report
-            .findings
-            .iter()
-            .filter(|finding| finding.summary.contains("is mergeable-and-gone"))
-            .count();
-        eprintln!("  ✓ merged-agent-worktrees cleanup checked ({reclaimed} reclaimable); details: `aida doctor --category merged-agent-worktrees`");
+        eprintln!("  ✓ merged-agent-worktrees cleanup checked ({merged_agent_worktrees_reclaimable} reclaimable); details: `aida doctor --category merged-agent-worktrees`");
     } else if opts.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -928,6 +928,11 @@ mod bug_1675_disk_headroom_light_tests;
 #[cfg(test)]
 #[path = "tests/task_1534_worktree_gc_batch_landed_tests.rs"]
 mod task_1534_worktree_gc_batch_landed_tests;
+
+// trace:BUG-1719 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_1719_doctor_prose_tests.rs"]
+mod bug_1719_doctor_prose_tests;
 
 /// TASK-1124: which deployed Codex prompts in `dir` (normally `~/.codex/prompts`)
 /// have drifted from the current source templates. A prompt that EXISTS but
@@ -4295,11 +4300,21 @@ fn heal_doctor_stale_remote_branch(
 
 // The classification verdict for one agent-managed worktree. trace:TASK-878
 #[derive(Debug, Clone, PartialEq, Eq)]
+// trace:BUG-1719 | ai:codex
 pub(crate) enum AgentWorktreeVerdict {
     /// Verified merged AND clean AND no unique unmerged commits → safe to GC.
     Removable(String),
     /// Dirty, carrying unmerged work, or no merge signal → keep, flag operator.
-    Keep(String),
+    Keep { reason: String, actionable: bool },
+}
+
+// trace:BUG-1719 | ai:codex
+fn agent_worktree_keep_action(actionable: bool) -> String {
+    if actionable {
+        "operator decision: review and keep, open a PR, or remove by hand".to_string()
+    } else {
+        "no action required — kept because batched content is undecidable".to_string()
+    }
 }
 
 /// Inputs to the pure agent-worktree classifier — every git/forge probe result
@@ -4354,13 +4369,15 @@ pub(crate) struct AgentWorktreeFacts {
 /// model: a dirty worktree is always kept; removal needs a positive merged
 /// signal AND zero unique unmerged commits; otherwise the worktree is kept and
 // flagged. trace:TASK-878 | ai:claude
+// trace:BUG-1719 | ai:codex
 pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktreeVerdict {
     // KEEP first — uncommitted work is unambiguously "has work". Clean != no
     // work, but dirty is definitely work; never delete it.
     if facts.dirty {
-        return AgentWorktreeVerdict::Keep(
-            "uncommitted changes present — never auto-removed".to_string(),
-        );
+        return AgentWorktreeVerdict::Keep {
+            reason: "uncommitted changes present — never auto-removed".to_string(),
+            actionable: true,
+        };
     }
 
     // A positive "this work has shipped" signal — either suffices.
@@ -4377,7 +4394,10 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
 
     let Some(merged_reason) = merged_reason else {
         // No merged signal at all → never remove; flag for the operator.
-        return AgentWorktreeVerdict::Keep("no merge signal — operator decision".to_string());
+        return AgentWorktreeVerdict::Keep {
+            reason: "no merge signal — operator decision".to_string(),
+            actionable: true,
+        };
     };
 
     // Even with a merged signal, a branch carrying genuinely-unique unmerged
@@ -4400,16 +4420,19 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
         }
         if facts.spec_trailer_on_main {
             // trace:BUG-1718 | ai:codex
-            return AgentWorktreeVerdict::Keep(format!(
+            return AgentWorktreeVerdict::Keep { reason: format!(
                 "{merged_reason}; {} unique unmerged commit(s) are a squash-ancestry artifact from a \
                  batched integration merge, and content is undecidable — no action required",
                 facts.unique_unmerged_commits
-            ));
+            ), actionable: false };
         }
-        return AgentWorktreeVerdict::Keep(format!(
-            "{merged_reason}, but {} unique unmerged commit(s) — keep, operator decision",
-            facts.unique_unmerged_commits
-        ));
+        return AgentWorktreeVerdict::Keep {
+            reason: format!(
+                "{merged_reason}, but {} unique unmerged commit(s) — keep, operator decision",
+                facts.unique_unmerged_commits
+            ),
+            actionable: true,
+        };
     }
 
     AgentWorktreeVerdict::Removable(merged_reason.to_string())
@@ -4773,7 +4796,20 @@ fn patch_id_pairs(project_root: &std::path::Path, log_p_output: &[u8]) -> Option
 /// removal stays gated behind --yes --force + the STORY-666 sign-off) or Keep
 /// (flagged for the operator, never auto-removed). The project's own worktree
 // and the `aida-store` worktree are skipped. trace:TASK-878
+// trace:BUG-1719 | ai:codex
+#[cfg(test)]
 pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    scan_merged_agent_worktrees_with_count(project_root).findings
+}
+
+// trace:BUG-1719 | ai:codex
+struct AgentWorktreeScan {
+    findings: Vec<DoctorFinding>,
+    reclaimable_count: usize,
+}
+
+// trace:BUG-1719 | ai:codex
+fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> AgentWorktreeScan {
     use std::process::Command as PCmd;
 
     let git = |args: &[&str]| -> Option<u32> {
@@ -4795,7 +4831,10 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
     // Without a resolvable default branch we cannot corroborate merges; stay
     // silent rather than risk flagging live worktrees.
     let Some(default_ref) = resolve_default_branch_ref(project_root) else {
-        return Vec::new();
+        return AgentWorktreeScan {
+            findings: Vec::new(),
+            reclaimable_count: 0,
+        };
     };
 
     let project_canon = project_root
@@ -4805,6 +4844,7 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
     let leases = list_leases(project_root);
 
     let mut findings = Vec::new();
+    let mut reclaimable_count = 0;
     for wt in list_worktrees(project_root) {
         // Missing registrations are stale bookkeeping, not actionable findings.
         // trace:BUG-1718 | ai:codex
@@ -4981,6 +5021,7 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
 
         match classify_agent_worktree(&facts) {
             AgentWorktreeVerdict::Removable(reason) => {
+                reclaimable_count += 1;
                 findings.push(DoctorFinding {
                     category: "merged-agent-worktrees".to_string(),
                     id: wt.path.display().to_string(),
@@ -4998,13 +5039,10 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
                     safe_heal: false,
                 });
             }
-            AgentWorktreeVerdict::Keep(reason) => {
+            AgentWorktreeVerdict::Keep { reason, actionable } => {
                 // trace:BUG-1718 | ai:codex
-                let action = if reason.contains("no action required") {
-                    "no action required — kept because batched content is undecidable".to_string()
-                } else {
-                    "operator decision: review and keep, open a PR, or remove by hand".to_string()
-                };
+                // trace:BUG-1719 | ai:codex
+                let action = agent_worktree_keep_action(actionable);
                 findings.push(DoctorFinding {
                     category: "merged-agent-worktrees".to_string(),
                     id: wt.path.display().to_string(),
@@ -5020,7 +5058,10 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
         }
     }
     findings.sort_by(|a, b| a.id.cmp(&b.id));
-    findings
+    AgentWorktreeScan {
+        findings,
+        reclaimable_count,
+    }
 }
 
 /// TASK-878: remove one merged agent worktree + delete its branch. Only
@@ -7609,7 +7650,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -7648,7 +7689,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -7910,7 +7951,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -7924,7 +7965,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
