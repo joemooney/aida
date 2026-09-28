@@ -287,7 +287,7 @@ fn open_pr_for_same_spec_defers_auto_bump() {
     // trace:BUG-1454 | ai:claude
     let gh_log = project_root.join("fake-gh.log");
     let fake_gh = project_root.join("fake-gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &fake_gh,
         format!(
             "#!/bin/sh\n\
@@ -304,8 +304,7 @@ fn open_pr_for_same_spec_defers_auto_bump() {
              esac\n",
             log = gh_log.display()
         ),
-    )
-    .unwrap();
+    );
     // `std::os::unix` does not exist on a Windows target, so an ungated import
     // here is a COMPILE error and takes the whole test binary with it — not a
     // failing test. Verified directly rather than assumed: a file containing
@@ -314,13 +313,6 @@ fn open_pr_for_same_spec_defers_auto_bump() {
     // (The workspace-wide `cargo check --target ...` guard cannot answer this
     // question — it dies in ring's build script.)
     // trace:BUG-1565 | ai:claude
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = std::fs::metadata(&fake_gh).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&fake_gh, permissions).unwrap();
-    }
     let _gh = crate::test_env::EnvVarGuard::set(
         "AIDA_TEST_GH_BINARY",
         fake_gh.to_string_lossy().as_ref(),
@@ -2829,14 +2821,10 @@ fn write_fake_gh_for_pr_states(
         }
         script.push_str("  *)\n    exit 1\n    ;;\nesac\n");
         let path = root.join("gh");
-        std::fs::write(&path, script).unwrap();
         #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&path).unwrap().permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&path, perms).unwrap();
-        }
+        crate::test_exec::write_executable(&path, &script);
+        #[cfg(not(unix))]
+        std::fs::write(&path, script).unwrap();
         path
     }
 }
