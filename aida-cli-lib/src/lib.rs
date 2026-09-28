@@ -31283,8 +31283,8 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
     }
 
     println!(
-        "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} WORKTREE",
-        "NAME/ID", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "DESC"
+        "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<24} WORKTREE",
+        "NAME/ID", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "CPU", "DESC"
     );
     let now = chrono::Utc::now();
     for agent in agents {
@@ -31343,8 +31343,19 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
                     .unwrap_or_default()
             );
         } else {
+            // BUG-1701 AC5: CPU consumed is what separates a seat still working from one that
+            // finished its turn and is idling at a prompt — 3-46 SECONDS across hours, for seats
+            // the status column called `busy`. Process-backed rows only; a lease has no pid.
+            // trace:BUG-1701 | ai:claude
+            let cpu = if agent.source == "lease" {
+                "-".to_string()
+            } else {
+                agent_registry::process_cpu_secs(agent.pid)
+                    .map(|secs| agent_registry::humanize_elapsed(secs))
+                    .unwrap_or_else(|| "?".to_string())
+            };
             println!(
-                "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} {}{}",
+                "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<24} {}{}",
                 identity,
                 pid_str,
                 terminal,
@@ -31354,6 +31365,7 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
                 scope,
                 agent.status.as_str(),
                 format!("({elapsed})"),
+                cpu,
                 desc,
                 agent.worktree_path.display(),
                 paused_note
