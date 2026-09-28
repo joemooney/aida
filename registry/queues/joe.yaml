@@ -65,13 +65,6 @@
   for_role: product
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0e3c6-d2c8-7f21-88da-8a7779bddb26
-  position: 40000
-  added_by: joe
-  note: Promoted from finding TASK-1-180 via `aida findings promote`
-  added_at: 2026-09-27T19:28:13.800986631Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a0e035-fb49-7152-81dd-a9e1bff1eab4
   position: 42000
   added_by: joe
@@ -79,14 +72,6 @@
   added_at: 2026-09-28T01:51:39.642291874Z
   for_role: implementer
   for_session: 01a0e491
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e64e-032c-7853-92da-abc640bf53f3
-  position: 43000
-  added_by: joe
-  note: auto-queued by `session end` (01a0e491); covers 2 specs
-  added_at: 2026-09-28T04:38:01.764899272Z
-  for_role: reviewer
   added_by_machine: imac
 - user_id: joe
   requirement_id: 01a0e669-9c44-7ad3-8ea2-ee00b8f3c6bb
