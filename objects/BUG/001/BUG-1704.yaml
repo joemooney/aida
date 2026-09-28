@@ -76,6 +76,10 @@ feature: Uncategorized
 created_at: 2026-09-28T04:56:26.956029730Z
 modified_at: 2026-09-28T04:56:26.956029730Z
 req_type: Bug
+relationships:
+- rel_type: Child
+  target_id: 01a0e603-481b-7670-a653-89bc492df94c
+  created_at: 2026-09-28T04:56:29.466947434Z
 filed_at:
   code_sha: 6c7683ec7c41907fbaddbe0a7eafb8ff31e9715c
   branch: claude/bug-1700-worktree-trust-parent
