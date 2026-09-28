@@ -28900,14 +28900,7 @@ fn gate_agent_bypass(
     explicit: bool,
 ) -> Result<()> {
     use bypass_confirm::{BypassSource, Decision};
-    let has_bypass = args.iter().any(|a| {
-        matches!(
-            a.as_str(),
-            "bypassPermissions"
-                | "--dangerously-bypass-approvals-and-sandbox"
-                | "--dangerously-skip-permissions"
-        )
-    });
+    let has_bypass = bypass_confirm::args_have_bypass(args);
     let source = if background {
         BypassSource::Background
     } else if explicit {
@@ -30592,14 +30585,8 @@ fn print_dry_launch_context(
          only on a real launch (drop `--show-context`).\n"
     );
     let confirm = bypass_confirm::load(project_root);
-    let has_bypass = config.default_args.iter().any(|arg| {
-        matches!(
-            arg.as_str(),
-            "bypassPermissions"
-                | "--dangerously-bypass-approvals-and-sandbox"
-                | "--dangerously-skip-permissions"
-        )
-    });
+    // trace:BUG-1720 | ai:codex
+    let has_bypass = bypass_confirm::args_have_bypass(&config.default_args);
     let decision = bypass_confirm::decide(
         has_bypass,
         bypass_confirm::BypassSource::Configured,
@@ -31142,14 +31129,8 @@ fn render_agent_launch_noexec(
         if confirm.on { "on" } else { "off" },
         confirm.source
     ));
-    let bypass_in_argv = exec_args.iter().any(|arg| {
-        matches!(
-            arg.as_str(),
-            "bypassPermissions"
-                | "--dangerously-bypass-approvals-and-sandbox"
-                | "--dangerously-skip-permissions"
-        )
-    });
+    // trace:BUG-1720 | ai:codex
+    let bypass_in_argv = bypass_confirm::args_have_bypass(&exec_args);
     let preview_decision = bypass_confirm::decide(
         bypass_in_argv,
         bypass_confirm::BypassSource::Configured,

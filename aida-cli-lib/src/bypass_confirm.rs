@@ -103,40 +103,100 @@ pub(crate) fn prompt(agent: &str) -> bool {
         && matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes")
 }
 
+/// Indices carrying a load-bearing bypass spelling, shared by detection and stripping.
+// trace:BUG-1720 | ai:codex
+pub(crate) fn bypass_arg_indices(args: &[String]) -> Vec<usize> {
+    let mut indices = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--permission-mode" if args.get(i + 1).is_some_and(|v| v == "bypassPermissions") => {
+                indices.extend([i, i + 1]);
+                i += 2;
+            }
+            "--permission-mode=bypassPermissions"
+            | "--dangerously-bypass-approvals-and-sandbox"
+            | "--dangerously-skip-permissions" => {
+                indices.push(i);
+                i += 1;
+            }
+            _ => i += 1,
+        }
+    }
+    indices
+}
+
+pub(crate) fn args_have_bypass(args: &[String]) -> bool {
+    !bypass_arg_indices(args).is_empty()
+}
+
 pub(crate) fn strip_bypass_flags(args: &mut Vec<String>) {
     // trace:TASK-206 | ai:codex
-    let mut clean = Vec::with_capacity(args.len());
-    let mut iter = args.drain(..).peekable();
-    while let Some(arg) = iter.next() {
-        if arg == "--permission-mode" {
-            if iter
-                .peek()
-                .is_some_and(|value| value == "bypassPermissions")
-            {
-                iter.next();
-            } else {
-                clean.push(arg);
-            }
-            continue;
-        }
-        if matches!(
-            arg.as_str(),
-            "--dangerously-bypass-approvals-and-sandbox" | "--dangerously-skip-permissions"
-        ) {
-            continue;
-        }
-        if arg == "--permission-mode=bypassPermissions" {
-            continue;
-        }
-        clean.push(arg);
-    }
-    drop(iter);
-    *args = clean;
+    let bypass_indices = bypass_arg_indices(args);
+    let mut index = 0;
+    args.retain(|_| {
+        let keep = !bypass_indices.contains(&index);
+        index += 1;
+        keep
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detects_equals_bypass_permission_mode() {
+        let args = vec!["--permission-mode=bypassPermissions".into()];
+        assert!(
+            args_have_bypass(&args),
+            "equals-form bypass must trigger confirmation"
+        );
+    }
+
+    #[test]
+    fn detects_only_paired_bare_bypass_permission_mode() {
+        let positional = vec!["bypassPermissions".into()];
+        assert!(
+            !args_have_bypass(&positional),
+            "bare positional token is not a bypass flag"
+        );
+        let pair = vec!["--permission-mode".into(), "bypassPermissions".into()];
+        assert!(
+            args_have_bypass(&pair),
+            "permission-mode pair must trigger confirmation"
+        );
+    }
+
+    #[test]
+    fn bypass_detection_and_stripping_are_symmetric() {
+        let cases = [
+            vec!["--permission-mode=bypassPermissions".into()],
+            vec!["--permission-mode".into(), "bypassPermissions".into()],
+            vec!["--dangerously-bypass-approvals-and-sandbox".into()],
+            vec!["--dangerously-skip-permissions".into()],
+            vec![
+                "bypassPermissions".into(),
+                "--permission-mode".into(),
+                "acceptEdits".into(),
+            ],
+            vec![
+                "prefix".into(),
+                "--permission-mode".into(),
+                "bypassPermissions".into(),
+                "tail".into(),
+            ],
+        ];
+        for mut args in cases {
+            if args_have_bypass(&args) {
+                strip_bypass_flags(&mut args);
+                assert!(
+                    !args_have_bypass(&args),
+                    "stripping detected bypass args must clear detection"
+                );
+            }
+        }
+    }
 
     #[test]
     fn confirm_bypass_decision_matrix() {
