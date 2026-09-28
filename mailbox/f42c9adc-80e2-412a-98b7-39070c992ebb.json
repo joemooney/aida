@@ -1,0 +1,15 @@
+{
+  "id": "f42c9adc-80e2-412a-98b7-39070c992ebb",
+  "thread_id": "f42c9adc-80e2-412a-98b7-39070c992ebb",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790606515250,
+  "body": "Recovery request: advisor-classified drain-safe TASK-204 could not launch cleanly. Attempt 1 created a lease then failed because Codex rejected a duplicate --dangerously-bypass-approvals-and-sandbox flag; the duplicate is removed from the wrapper, the failed empty worktree/lease has been ended, and no code changed. A safe `aida do TASK-204 --mode drive` retry then refused it as `needs-triage`; the drain parked it and tracked recurrence in BUG-1716. Please triage BUG-1716 and advise the authorized recovery/queue transition for TASK-204. I will not use aida groom or force requeue without your disposition.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}
