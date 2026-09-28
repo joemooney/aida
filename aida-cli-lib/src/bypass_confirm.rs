@@ -104,27 +104,33 @@ pub(crate) fn prompt(agent: &str) -> bool {
 }
 
 pub(crate) fn strip_bypass_flags(args: &mut Vec<String>) {
+    // trace:TASK-206 | ai:codex
     let mut clean = Vec::with_capacity(args.len());
-    let mut skip_value = false;
-    for arg in args.drain(..) {
-        if skip_value {
-            skip_value = false;
-            continue;
-        }
+    let mut iter = args.drain(..).peekable();
+    while let Some(arg) = iter.next() {
         if arg == "--permission-mode" {
-            skip_value = true;
+            if iter
+                .peek()
+                .is_some_and(|value| value == "bypassPermissions")
+            {
+                iter.next();
+            } else {
+                clean.push(arg);
+            }
             continue;
         }
         if matches!(
             arg.as_str(),
-            "bypassPermissions"
-                | "--dangerously-bypass-approvals-and-sandbox"
-                | "--dangerously-skip-permissions"
+            "--dangerously-bypass-approvals-and-sandbox" | "--dangerously-skip-permissions"
         ) {
+            continue;
+        }
+        if arg == "--permission-mode=bypassPermissions" {
             continue;
         }
         clean.push(arg);
     }
+    drop(iter);
     *args = clean;
 }
 
@@ -176,5 +182,77 @@ mod tests {
     fn absent_and_unreadable_config_fail_closed() {
         assert!(resolve(None, None, false).on);
         assert!(resolve(Some(false), None, true).on);
+    }
+
+    #[test]
+    fn strips_only_bypass_permission_mode_pair() {
+        // trace:TASK-206 | ai:codex
+        let mut args = vec![
+            "before".into(),
+            "--permission-mode".into(),
+            "bypassPermissions".into(),
+            "after".into(),
+        ];
+        strip_bypass_flags(&mut args);
+        assert_eq!(args, ["before", "after"]);
+    }
+
+    #[test]
+    fn preserves_non_bypass_permission_mode_values() {
+        // trace:TASK-206 | ai:codex
+        let mut args = vec![
+            "--permission-mode".into(),
+            "acceptEdits".into(),
+            "next".into(),
+        ];
+        strip_bypass_flags(&mut args);
+        assert_eq!(args, ["--permission-mode", "acceptEdits", "next"]);
+    }
+
+    #[test]
+    fn strips_equals_bypass_and_preserves_equals_non_bypass() {
+        // trace:TASK-206 | ai:codex
+        let mut args = vec![
+            "--permission-mode=bypassPermissions".into(),
+            "--permission-mode=acceptEdits".into(),
+        ];
+        strip_bypass_flags(&mut args);
+        assert_eq!(args, ["--permission-mode=acceptEdits"]);
+    }
+
+    #[test]
+    fn strips_dangerous_flags_wherever_they_appear() {
+        // trace:TASK-206 | ai:codex
+        let mut args = vec![
+            "--dangerously-skip-permissions".into(),
+            "one".into(),
+            "--dangerously-bypass-approvals-and-sandbox".into(),
+            "two".into(),
+        ];
+        strip_bypass_flags(&mut args);
+        assert_eq!(args, ["one", "two"]);
+    }
+
+    #[test]
+    fn preserves_unpaired_bypass_tokens_and_trailing_permission_flag() {
+        // trace:TASK-206 | ai:codex
+        let mut args = vec![
+            "bypassPermissions".into(),
+            "--permission-mode".into(),
+            "bypassPermissionsExtra".into(),
+            "tail".into(),
+            "--permission-mode".into(),
+        ];
+        strip_bypass_flags(&mut args);
+        assert_eq!(
+            args,
+            [
+                "bypassPermissions",
+                "--permission-mode",
+                "bypassPermissionsExtra",
+                "tail",
+                "--permission-mode"
+            ]
+        );
     }
 }
