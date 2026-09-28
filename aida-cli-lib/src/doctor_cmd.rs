@@ -1497,8 +1497,12 @@ fn normalize_path_lexically(path: &std::path::Path) -> std::path::PathBuf {
 /// file is absent or unparseable — the caller must then stay silent rather than guess.
 // trace:BUG-1700 | ai:claude
 fn claude_trusted_paths() -> Option<Vec<std::path::PathBuf>> {
-    let home = std::env::var_os("HOME")?;
-    let body = std::fs::read_to_string(std::path::PathBuf::from(home).join(".claude.json")).ok()?;
+    // `crate::home_dir()`, not a direct HOME read: it is the crate's single home
+    // resolver and carries the cfg(test) redirect to a temp home, enforced by the
+    // `no_direct_home_resolution_in_crate` guard (TASK-1513). That redirect also
+    // keeps this check from reading a developer's REAL ~/.claude.json under test.
+    let home = crate::home_dir()?;
+    let body = std::fs::read_to_string(home.join(".claude.json")).ok()?;
     let value: serde_json::Value = serde_json::from_str(&body).ok()?;
     let projects = value.get("projects")?.as_object()?;
     Some(

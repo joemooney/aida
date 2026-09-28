@@ -64183,7 +64183,10 @@ pub(crate) fn worktree_pool_config_worktree_parent(
 /// Expand a leading `~` / `~/` in a configured worktree parent against `$HOME`.
 // trace:BUG-1700 | ai:claude
 fn expand_worktree_parent_tilde(raw: &str) -> std::path::PathBuf {
-    expand_tilde_against(raw, std::env::var_os("HOME").map(std::path::PathBuf::from))
+    // `home_dir()`, not a direct HOME read: it is the crate's single home
+    // resolver and carries the cfg(test) redirect to a temp home, which the
+    // `no_direct_home_resolution_in_crate` guard enforces (TASK-1513).
+    expand_tilde_against(raw, home_dir())
 }
 
 /// Pure core of [`expand_worktree_parent_tilde`], with `$HOME` injected so it is
