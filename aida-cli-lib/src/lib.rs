@@ -17947,6 +17947,82 @@ fn epic_agent_new_refusal(req_type: &RequirementType, display_id: &str) -> Optio
     ))
 }
 
+// BUG-1701: route a drain-mode spec away from the interactive lane. `aida agent
+// new --spec <ID>` spawns a vendor TUI and BLOCKS until that TUI exits; a TUI
+// does not exit when its turn ends, so an orchestrator that dispatched a
+// drain-groomed spec here stranded both the seat and itself. The one-shot lane
+// already exists -- `aida do <SPEC>` routes by groomed execution mode, and for
+// drain that is `aida queue work <SPEC> --auto-complete`, which runs headless
+// and returns an exit status. Nothing steered callers there, so this guard does.
+// Sits beside the epic and focus-scope guards: AFTER the dry-preview returns (a
+// preview is never blocked) and BEFORE any worktree/lease/status side effect.
+// trace:BUG-1701 | ai:claude
+fn drain_mode_agent_new_guard(
+    project_root: &std::path::Path,
+    spec: &str,
+    force: bool,
+    holds_caller: bool,
+) -> Result<()> {
+    if force {
+        return Ok(());
+    }
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Ok(());
+    };
+    let Ok(backend) = advance_backend(&store_path) else {
+        return Ok(());
+    };
+    let Some(target) = backend.get_requirement_by_spec_id(spec)? else {
+        return Ok(());
+    };
+    match drain_mode_agent_new_refusal(target.execution_mode, &target.display_id(), holds_caller) {
+        Some(message) => anyhow::bail!("{message}"),
+        None => Ok(()),
+    }
+}
+
+/// Pure decision half of [`drain_mode_agent_new_guard`]: the refusal message for a
+/// spec groomed `execution_mode = drain`, or `None` for every other mode (and for
+/// an ungroomed spec, which must keep working -- the fail-open default).
+///
+/// Only `drain` is refused. The other modes legitimately want a human-attended
+/// seat, which is exactly what this lane provides; refusing them would take away
+/// the only lane they have.
+///
+/// `holds_caller` distinguishes the foreground launch (which blocks the caller on
+/// the child TUI -- the BUG-1701 stall) from `--bg` (which detaches, so the lane
+/// is still wrong but for the pipeline reason alone). Stating only what is true of
+/// the lane actually being refused keeps the message trustworthy.
+// trace:BUG-1701 | ai:claude
+fn drain_mode_agent_new_refusal(
+    mode: Option<aida_core::ExecutionMode>,
+    display_id: &str,
+    holds_caller: bool,
+) -> Option<String> {
+    if mode != Some(aida_core::ExecutionMode::Drain) {
+        return None;
+    }
+    // The first line must stand alone: in agent mode only the first line becomes
+    // the `error:` summary. And `aida do` must be the FIRST backtick-quoted
+    // `aida ...` command in the whole message, because that is what agent mode
+    // lifts into `help:` -- an unbackticked recommendation silently loses to a
+    // backticked one further down. trace:BUG-1701 | ai:claude
+    let lane = if holds_caller {
+        "which spawns an interactive seat and holds your caller until that seat's TUI exits -- \
+         and a TUI does not exit when its turn ends"
+    } else {
+        "which runs neither CI, the reviewer phase, nor the merge for you"
+    };
+    Some(format!(
+        "{display_id} is groomed `execution_mode = drain` -- use `aida do {display_id}`, not this \
+         lane, {lane}.\n  \
+         `aida do` routes by the groomed mode; for drain it runs \
+         `aida queue work {display_id} --auto-complete`, which is headless, runs to completion, \
+         and returns an exit status.\n  \
+         To sit in this spec interactively anyway (to debug it by hand), pass --force."
+    ))
+}
+
 /// STORY-564: read `[zen] auto_exit` from `.aida/config.toml`. Returns the
 /// operator's persistent preference for whether a clean standalone-`--zen`
 /// finish auto-exits (`true`, the default) or always pauses (`false`).
@@ -28142,6 +28218,9 @@ fn agent_new_with_config(
         // BUG-653: an epic isn't directly implementable — give the
         // epic-appropriate message before the readiness gate dead-ends.
         epic_agent_new_guard(&project_root, spec_id)?;
+        // BUG-1701: a drain-groomed spec belongs in the one-shot lane, not here.
+        // trace:BUG-1701 | ai:claude
+        drain_mode_agent_new_guard(&project_root, spec_id, force, true)?;
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
@@ -28364,6 +28443,9 @@ fn agent_new_bg_dispatch(
     if let Some(spec_id) = spec.as_deref() {
         // BUG-653: epic-aware dead-end guard, same as the foreground path.
         epic_agent_new_guard(&project_root, spec_id)?;
+        // BUG-1701: same routing guard; `--bg` detaches, so the message drops the
+        // "holds your caller" clause. trace:BUG-1701 | ai:claude
+        drain_mode_agent_new_guard(&project_root, spec_id, force, false)?;
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
@@ -64223,6 +64305,10 @@ mod task_1010_prewarm_tests;
 #[cfg(test)]
 #[path = "tests/task_1558_agents_mcp_type_tests.rs"]
 mod task_1558_agents_mcp_type_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1701_drain_routing_tests.rs"]
+mod bug_1701_drain_routing_tests;
 
 fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
     let project_root = find_project_root()?;
