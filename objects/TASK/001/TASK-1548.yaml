@@ -3,12 +3,12 @@ spec_id: TASK-1548
 agreed_id: TASK-1548
 title: 'Pre-flight retraction: treat a PR as ours only if its author is the agent identity (add author to ChangeMetadata)'
 description: 'Follow-up from TASK-1529. Acceptance: 1. ChangeMetadata carries the author login (GitHub/GitLab); 2. retraction skips a PR whose author differs from the agent''s forge identity even when it appeared after the pre-launch snapshot; 3. fake-forge tests for same-branch operator PR opened mid-phase (not retracted).'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:17:12.775257717Z
-modified_at: 2026-09-28T23:25:53.304551637Z
+modified_at: 2026-09-28T23:26:16.119728001Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -50,3 +50,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a0ea57-2a30-7331-ac07-0b608d0e631a
+  author: aida-auto-bump
+  timestamp: 2026-09-28T23:26:16.112537448Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ea57-2a37-7853-a0ba-0425e911ece3
+  timestamp: 2026-09-28T23:26:16.119726989Z
+  agent: aida
+  commit_sha: 59e859b49f784a8633a049ad39cf243345289ea9
+  summary: Completed via merge 59e859b4
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T23:26:16.112509777Z
+  completion_sha: 59e859b49f784a8633a049ad39cf243345289ea9
