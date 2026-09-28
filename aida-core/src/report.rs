@@ -158,6 +158,7 @@ pub struct ReportGenerator {
     store: RequirementsStore,
     project_root: Option<PathBuf>,
     database_path: String,
+    scaffold_config: Option<ScaffoldConfig>,
 }
 
 impl ReportGenerator {
@@ -167,12 +168,20 @@ impl ReportGenerator {
             store,
             project_root: None,
             database_path,
+            scaffold_config: None,
         }
     }
 
     /// Set project root for scaffolding status check
     pub fn with_project_root(mut self, root: PathBuf) -> Self {
         self.project_root = Some(root);
+        self
+    }
+
+    /// Configure the agent-specific artifacts included in scaffold drift checks.
+    // trace:TASK-1528 | ai:codex
+    pub fn with_scaffold_config(mut self, config: ScaffoldConfig) -> Self {
+        self.scaffold_config = Some(config);
         self
     }
 
@@ -402,8 +411,9 @@ impl ReportGenerator {
         &self,
         project_root: &Path,
     ) -> (Option<ScaffoldStatus>, Option<ScaffoldConfig>) {
-        // Use default scaffold config
-        let config = ScaffoldConfig::default();
+        // Use the project selection when supplied; retain defaults for core callers.
+        // trace:TASK-1528 | ai:codex
+        let config = self.scaffold_config.clone().unwrap_or_default();
         let db_path = PathBuf::from(&self.database_path);
         let mut scaffolder =
             Scaffolder::with_database(project_root.to_path_buf(), config.clone(), db_path);
@@ -1130,5 +1140,25 @@ mod tests {
             actual,
             expected,
         ));
+    }
+
+    // trace:TASK-1528 | ai:codex
+    #[test]
+    fn report_scaffold_check_uses_selected_agent_config() {
+        let root = tempfile::tempdir().unwrap();
+        let config = ScaffoldConfig {
+            generate_codex_skills: false,
+            generate_antigravity_skills: false,
+            ..ScaffoldConfig::default()
+        };
+        let report = ReportGenerator::new(RequirementsStore::default(), "test.db".into())
+            .with_project_root(root.path().to_path_buf())
+            .with_scaffold_config(config)
+            .generate();
+        let status = report.scaffold_status.unwrap();
+        assert!(status
+            .missing
+            .iter()
+            .all(|p| !p.starts_with(".agents/skills")));
     }
 }

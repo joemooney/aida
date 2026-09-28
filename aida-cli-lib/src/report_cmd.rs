@@ -117,7 +117,9 @@ pub(crate) fn handle_report_command(
             };
 
             if (*include_scaffold || project_root.is_some()) && root.exists() {
-                generator = generator.with_project_root(root.clone());
+                generator = generator
+                    .with_project_root(root.clone())
+                    .with_scaffold_config(crate::init_cmd::scaffold_config_for_project(&root));
             }
 
             // Generate report
