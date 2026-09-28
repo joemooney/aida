@@ -88,11 +88,3 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
-filed_at:
-  code_sha: 6c7683ec7c41907fbaddbe0a7eafb8ff31e9715c
-  branch: claude/bug-1700-worktree-trust-parent
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: bcd7822d28
-  vendor: antigravity
-  session: fc2bef36-971e-4674-a858-0de8a84a1006
