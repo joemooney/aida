@@ -74,12 +74,46 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T04:56:26.956029730Z
-modified_at: 2026-09-28T04:56:38.936400501Z
+modified_at: 2026-09-28T05:40:22.078618154Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a0e603-481b-7670-a653-89bc492df94c
   created_at: 2026-09-28T04:56:29.466947434Z
+comments:
+- id: 01a0e687-4dbe-7c40-9bbe-e58c509f1f42
+  author: joe
+  content: |-
+    AC6 ANSWERED, from source — a stale-lease sweep is NOT the smaller fix. Do not spend a seat on it.
+
+    Rule 3 reads ctx.live_lease_worktrees, and that list is built by live_lease_worktrees
+    (aida-cli-lib/src/lib.rs:76342), which keeps ONLY leases classified LeaseState::Live. The
+    classifier (aida-core/src/liveness.rs:638) is:
+
+        worktree missing            -> Stale
+        live claude in the worktree -> Live
+        age >= 24h                  -> Stale
+        otherwise                   -> Dormant
+
+    So Stale and Dormant leases are ALREADY excluded from the input to rule 3. The 107 stale leases
+    on this host (measured 2026-09-27 via 'aida doctor --category stale-leases', all self-classified
+    [safe]) contribute NOTHING to the false-busy. Sweeping them is worthwhile hygiene but would not
+    move this bug at all.
+
+    The actual mechanism is narrower than 'leases accumulate'. LeaseState::Live requires a LIVE
+    session whose cwd is at or under the lease's worktree. So for the MAIN checkout, rule 3 fires
+    whenever ANY live agent session is sitting in the main checkout -- which, on a host where the
+    orchestrator/advisor seat itself works in main, is continuously true. Every seat whose registry
+    row points at main therefore reads busy regardless of its own activity. Sibling worktrees are
+    unaffected: /home/joe/ai/aida-bug-1693 does not start_with /home/joe/ai/aida, so a
+    main-checkout lease does not cover them.
+
+    That means the fix must distinguish per-AGENT activity, not per-worktree occupancy -- which is
+    what the CPU-delta / descendant-CPU directions in the description are for. Narrowing AC6
+    accordingly.
+  created_at: 2026-09-28T05:40:22.078618154Z
+  modified_at: 2026-09-28T05:40:22.078618154Z
+  session_id: fc2bef36-971e-4674-a858-0de8a84a1006
 history:
 - id: 01a0e65f-4718-7fd1-9586-f0a804429302
   author: joe
