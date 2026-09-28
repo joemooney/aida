@@ -1,0 +1,69 @@
+id: 01a0e6af-47b8-70c2-b9ea-6189dce9ffc2
+spec_id: BUG-1706
+agreed_id: BUG-1706
+title: 'git push --dry-run pushes to the gitlab mirror: the wrapper''s mirror step ignores the flag, so a no-op command mutates a real remote and can create the divergence it was run to avoid'
+description: |
+  `git push --dry-run` MUTATES the gitlab mirror. The mirror-push step in AIDA's git push wrapper does
+  not honour `--dry-run`, so a command whose entire contract is "change nothing" pushes a ref to a
+  real remote.
+
+  OBSERVED 2026-09-27 (advisor seat; this is a real instance, not a hypothetical)
+
+  I built a content-neutral merge commit `4cf02628ae` locally to converge the diverged gitlab mirror,
+  and ran a dry run first specifically to learn whether the protected branch would accept it before
+  changing anything:
+
+      $ git push --dry-run origin main
+        mirrored 1 ref(s) → gitlab: main@4cf02628aeec
+      To https://github.com/joemooney/aida.git
+         2a55e91082..4cf02628ae  main -> main
+
+  The origin line is the correct dry-run report: nothing was pushed to origin (the subsequent REAL
+  push was then rejected by branch protection). But `git ls-remote gitlab main` afterwards returned
+  `4cf02628aeec` -- the mirror had genuinely received the commit.
+
+  So the dry run left gitlab holding a commit that origin does not have, i.e. it CREATED a divergence
+  while being used to avoid creating one.
+
+  WHY THIS MATTERS
+
+  A dry run is what a careful operator or agent reaches for precisely when it is not yet safe to act.
+  Silently performing a side effect there inverts the guarantee, and it does so on the path where the
+  user has signalled maximum caution. Two concrete hazards:
+
+    * It can create the exact mirror divergence the operator was trying to diagnose or fix, which is
+      how this was found.
+    * A rejected or reconsidered push leaves the mirror ahead of origin with no obvious trace, and the
+      only clean repair is a force-push to a shared branch -- which AIDA's own guidance and the local
+      git guardrail both (correctly) refuse.
+
+  ACCEPTANCE
+
+  AC1. `git push --dry-run ...` through the wrapper performs NO mirror push. Nothing on any mirror hub
+       changes.
+  AC2. The dry run still REPORTS what the mirror push would do, clearly marked as a preview, so the
+       output remains useful for exactly the diagnostic purpose that surfaced this.
+  AC3. Detection covers the forms git itself accepts: `--dry-run` and `-n`, in any argument position,
+       including after the remote/refspec.
+  AC4. A real (non-dry) push is unaffected and still mirrors.
+  AC5. Covered by a test asserting the mirror step is not invoked when the dry-run flag is present, in
+       each accepted spelling, and IS invoked without it.
+  AC6. Check whether any other wrapper-driven side effect (hooks, store publish, notifications) also
+       ignores `--dry-run`; fix or explicitly document each. The bug class is "wrapper side effects
+       that do not inspect the flag", and the mirror push is one instance of it, not necessarily the
+       only one.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T06:24:01.976398623Z
+modified_at: 2026-09-28T06:24:01.976398623Z
+req_type: Bug
+filed_at:
+  code_sha: b9b13feddd1715ec96b081c70c391cba5c9ae76e
+  branch: claude/bug-1700-worktree-trust-parent
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f398fd1226
+  vendor: antigravity
+  session: fc2bef36-971e-4674-a858-0de8a84a1006
