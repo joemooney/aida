@@ -9,12 +9,12 @@ description: |-
 
   PR: #2243
   Reviewed sha: c4ea3c9038c84ec8a04a2089035d3272e6d883ec
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-28T13:10:10.758859453Z
-modified_at: 2026-09-28T13:37:31.523295093Z
+modified_at: 2026-09-28T13:37:40.279514711Z
 req_type: Task
 tags:
 - carried-from:TASK-1547
@@ -38,6 +38,14 @@ comments:
   created_at: 2026-09-28T13:37:31.523295093Z
   modified_at: 2026-09-28T13:37:31.523295093Z
   session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+history:
+- id: 01a0e83c-49b7-73d0-9df7-5e2c39de6a14
+  author: joe
+  timestamp: 2026-09-28T13:37:40.279512043Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: d23ba1028c6de66959200f27b59cdcc5c5305e63
   branch: main
