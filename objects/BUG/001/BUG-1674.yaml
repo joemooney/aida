@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:20:32.787349526Z
-modified_at: 2026-09-27T03:45:53.634983447Z
+modified_at: 2026-09-28T17:09:22.031842823Z
 req_type: Bug
 tags:
 - performance
@@ -212,3 +212,9 @@ comments:
   content: 'PROXY DECISION (product for Joe): per independent BUG-1674 ADVISOR SIGNOFF, recorded BlockedBy TASK-1526. Do not dispatch BUG-1674 while slice B changes the same cache read/lock paths. After TASK-1526 is reviewed and merged, re-check the signed show-specific exception and launch BUG-1674 separately with its full <5s live-writer and 24h dogfood acceptance intact. No closure or performance pass is inferred from this dependency.'
   created_at: 2026-09-27T03:45:53.634983447Z
   modified_at: 2026-09-27T03:45:53.634983447Z
+- id: 01a0e8fe-19ef-75a1-8c7c-29bf1bc66e90
+  author: joe
+  content: 'Performance-guard tripped again 2026-09-28T15:24Z (failed:1); advisor confirms this is BUG-1674, not a new regression. Evidence from ''aida doctor check performance'' at 10:10 MST: aida show breached its 1000ms budget on 12.1% of 569 calls in 24h (tolerated 10.0%) and CEILING BREACHED with a single 16855ms call against the 5000ms ceiling — the worst-call trip ADR-53 exists to catch. Per-binary, the breach concentrates in older binaries (0bd634c 19.3% of 322, 3f4cda41c9 14.3% of 14) while current-HEAD 2166ffe1f5 shows 0.0% of 7. That 7-call sample is too small to claim the fix landed, so this stays open. The unbounded wait behind a concurrent writer is the mechanism; STORY-1484 (single-flight cache refresh, bounded wait + labelled stale read) is the fix.'
+  created_at: 2026-09-28T17:09:22.031842823Z
+  modified_at: 2026-09-28T17:09:22.031842823Z
+  session_id: 7121c883-8051-4f5d-bccc-4953b9b1748d
