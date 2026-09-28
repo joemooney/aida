@@ -17,11 +17,19 @@ description: |
   6. Layer 2 (`assert_hermetic`) covers `config_dir`, not just `home_dir`. `aida_core::home::config_dir()` at `scaffold_cmd.rs:400` and `remote_create.rs:879` never passes through `assert_hermetic`. Layer 1's env redirect covers it so there is no leak today, but the "refuse at the source" property should not be home-only.
 
   Out of scope: changing the resolver's precedence, and the Windows/MSYS2 behavior change (separate follow-up).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T17:19:52.573674807Z
-modified_at: 2026-09-28T12:38:04.420603860Z
+modified_at: 2026-09-28T12:38:28.475670413Z
 req_type: Task
+history:
+- id: 01a0e806-1786-7ad3-bd29-351564eab544
+  author: aida-orchestrator-phase1
+  timestamp: 2026-09-28T12:38:28.486445374Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
