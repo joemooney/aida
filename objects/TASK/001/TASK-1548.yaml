@@ -3,12 +3,12 @@ spec_id: TASK-1548
 agreed_id: TASK-1548
 title: 'Pre-flight retraction: treat a PR as ours only if its author is the agent identity (add author to ChangeMetadata)'
 description: 'Follow-up from TASK-1529. Acceptance: 1. ChangeMetadata carries the author login (GitHub/GitLab); 2. retraction skips a PR whose author differs from the agent''s forge identity even when it appeared after the pre-launch snapshot; 3. fake-forge tests for same-branch operator PR opened mid-phase (not retracted).'
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T00:17:12.775257717Z
-modified_at: 2026-09-28T23:13:06.427003070Z
+modified_at: 2026-09-28T23:25:53.304551637Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -37,3 +37,16 @@ comments:
   created_at: 2026-09-28T23:13:06.427003070Z
   modified_at: 2026-09-28T23:13:06.427003070Z
   session_id: 71214fd6-ec84-46cf-87bf-fa8de48d6877
+- id: 01a0ea56-d27c-7281-a31d-58722b8a815c
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit 59e859b), but completion is held at Done: unresolved BlockedBy TASK-1529 (InProgress). BlockedBy gates completion as well as pickup; it releases once every blocker is Completed, Rejected or Superseded (an epic by its child rollup, an ADR once accepted). The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec TASK-1548 --since 59e859b^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit TASK-1548 --status completed`. (merge sha: 59e859b49f784a8633a049ad39cf243345289ea9)'
+  created_at: 2026-09-28T23:25:53.660381460Z
+  modified_at: 2026-09-28T23:25:53.660381460Z
+history:
+- id: 01a0ea56-d27c-7281-a31d-586e381978f5
+  author: aida-auto-bump
+  timestamp: 2026-09-28T23:25:53.660376078Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
