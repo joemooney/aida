@@ -3,12 +3,12 @@ spec_id: TASK-1519
 agreed_id: TASK-1519
 title: 'Migrate existing Codex/Antigravity installs to .agents/skills: seed its record from the legacy packs, show legacy packs in scaffold status, prune only unedited AIDA-headed aida-* dirs, doctor warns on'
 description: Child of BUG-1639 (advisor signoff slice 2, child A). Follow the BUG-1639 ADVISOR SIGNOFF comment, including its rule (e) for merging legacy records. Never touch non-aida-* entries in shared skill dirs. Commits use only this task's ID.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:00:50.627945754Z
-modified_at: 2026-09-28T12:42:39.021753244Z
+modified_at: 2026-09-28T12:47:13.439946769Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -84,11 +84,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: tool-exit
-  detail: implementer worktree `/tmp/aida-pool-aida-nightshift-2` is on `task-1519-3` but phase 2 is driving `task-1519-2` — refusing to push or tear down (attempt 3/3)
-  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0e79b8d5a --skip-ci`'
-  shelved_by: product
-  shelved_at: 2026-09-28T10:42:43.513830051Z
+- id: 01a0e80e-195e-7833-85dd-11df2541228e
+  author: aida-auto-bump
+  timestamp: 2026-09-28T12:47:13.247006019Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0e80e-1a1f-70f3-9ff3-5816d562e0fc
+  timestamp: 2026-09-28T12:47:13.439925578Z
+  agent: aida
+  commit_sha: c4f0cb00b28f90a1a0f056f50aeb35e4c0dabe0c
+  summary: 'APPROVED (advisor, exact head 0500c7ad). Reviewed the risky half: this extends detect_obe_aida_scaffold_files - a PRUNER whose results are DELETED - from .claude/skills to .agents/skills. Five guards, each failing CLOSED on uncertainty: symlink skip preserved (the dogfood per-file symlink layout is never pruned), aida- prefix still required, and for .agents the entry must be a directory, contain a REGULAR-FILE SKILL.md, and that file''s refresh_disposition must be Pristine - AIDA can prove it generated the exact unedited content. Unreadable/non-pristine/non-file is skipped, not pruned. Checked the caller rather than assuming: it branches is_dir() -> remove_dir_all vs remove_file, so a directory path is handled. New doctor finding is read-only, safe_heal=false. Required Build and merge-hold-gate green. One non-blocking finding recorded as a comment.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T12:47:13.246995363Z
+  completion_sha: c4f0cb00b28f90a1a0f056f50aeb35e4c0dabe0c
