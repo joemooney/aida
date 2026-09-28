@@ -169,7 +169,7 @@
   requirement_id: 01a0e7f7-3be1-7092-af1b-cc43876de5af
   position: 55000
   added_by: joe
-  note: auto-queued by `session end` (01a0e7dc); covers 1 spec
-  added_at: 2026-09-28T12:22:52.361867506Z
+  note: 'BUG-1291 recovery: PR #2256 handed off after shelving in phase 2 (ci): could not verify implementer branch before phase-2 CI/teardown: could not invoke `git branch --show-current`: No such file or directory (os error 2) (attempt 3/3)'
+  added_at: 2026-09-28T12:23:42.201709878Z
   for_role: reviewer
   added_by_machine: imac
