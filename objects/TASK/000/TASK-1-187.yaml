@@ -1,0 +1,30 @@
+id: 01a0e8f5-60a9-70b1-8699-183af4a88a43
+spec_id: TASK-1-187
+title: 'strip_bypass_flags() is untested and over-strips: declining bypass also drops a…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1500, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  strip_bypass_flags() is untested and over-strips: declining bypass also drops a non-bypass --permission-mode value (e.g. acceptEdits), silently downgrading further than intended. Fails safe (native), so not merge-blocking, but it is the security-critical path and deserves a unit test.
+
+  PR: #2259
+  Reviewed sha: c94e62801d886cc16c845f1917dd0194d002dc71
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T16:59:50.313491425Z
+modified_at: 2026-09-28T16:59:50.313491425Z
+req_type: Task
+tags:
+- carried-from:TASK-1500
+- finding-hash:2d45ae2b
+- from-review:PR-2259
+- kind:carried-forward
+filed_at:
+  code_sha: ad76e9e46f42c9ce35589ad7c4b7c541cee74884
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 2166ffe1f5
+  vendor: antigravity
+  session: 7121c883-8051-4f5d-bccc-4953b9b1748d
