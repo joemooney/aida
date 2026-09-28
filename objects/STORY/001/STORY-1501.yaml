@@ -1,0 +1,26 @@
+id: 01a0e896-50e4-7a83-ba78-7b7a54283675
+spec_id: STORY-1501
+agreed_id: STORY-1501
+title: 'Review PR-2261: [AI:codex] feat(agent-launch): resolve local AIDA executable portably (TASK-1499)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0e85c`) for branch `task-1499-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2261>
+  - Branch: `task-1499-2` → `main`
+
+  ## Covers
+
+  - TASK-1499
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2261` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T15:16:00.356671114Z
+modified_at: 2026-09-28T15:16:00.356671114Z
+req_type: Story
