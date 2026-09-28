@@ -18,15 +18,16 @@ description: |-
   - `normalize_volatile` also drops the cache-provenance fields (`source`, `index_tip`) — or the history probe pins `AIDA_HISTORY_CACHE=0` — so the two spellings are compared on the answer, not on which source happened to serve it.
   - The test still fails if the two spellings genuinely disagree about `count` or any event field.
   - A regression test (or a comment recording the measurement above) states why the provenance fields are excluded, so a later reader does not re-add them.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:17:34.541546385Z
-modified_at: 2026-09-28T11:26:53.744986195Z
+modified_at: 2026-09-28T12:47:12.536735497Z
 req_type: Bug
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0e735-09af-7a42-915d-5e2fc3498cf0
   created_at: 2026-09-28T08:50:13.589449057Z
   created_by: joe
@@ -69,4 +70,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0e80e-15bc-7b51-9375-89964afc02e7
+  author: aida-auto-bump
+  timestamp: 2026-09-28T12:47:12.316980723Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0e80e-1698-7713-a0d3-a6c61e0ce1fe
+  timestamp: 2026-09-28T12:47:12.536712337Z
+  agent: aida
+  commit_sha: e37187714a270aef198116fe8497c23dcaa210ac
+  summary: APPROVED (advisor, exact head 9ba1729f). Test-only change to aida-cli/tests/bug_1502_format_json_audit.rs. normalize_volatile now also strips source and index_tip, which describe cache PROVENANCE (git-walk vs warmed history cache) rather than the history answer. The concern with widening a normalizer is that it blinds the comparison; the PR answers that itself with a test that keeps two assert_ne! cases - a differing count and a differing event kind both still compare unequal. So provenance is ignored and substance is not. Narrow, self-falsifying, required Build and merge-hold-gate green.
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored (attempt 3/3)'
+  review_verdict: approved
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T12:47:12.316947769Z
+  completion_sha: e37187714a270aef198116fe8497c23dcaa210ac
