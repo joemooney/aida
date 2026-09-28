@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-28T14:24:41.977642135Z
+modified_at: 2026-09-28T14:54:15.585893057Z
 req_type: Task
 tags:
 - agent-launch
@@ -124,6 +124,11 @@ comments:
   content: 'Implemented and pushed as 8021605585; PR #2261 is open: https://github.com/joemooney/aida/pull/2261. Resolver/portable scaffold tests (3) and launch preview diagnostics test passed; fmt check passed. Left the requirement InProgress pending PR review/merge.'
   created_at: 2026-09-28T14:24:41.977642135Z
   modified_at: 2026-09-28T14:24:41.977642135Z
+- id: 01a0e882-6821-75e0-bfc9-f8142b6711cd
+  author: joe
+  content: 'CI report: Build (ubuntu-latest) failed on PR #2261 head 8021605585e738a345f18e1db55cb2d7246807c0 in run 36435738715. Two failing tests: aida_bin::tests::override_running_and_path_precedence_and_layouts expected Profile::Debug for a checkout override but got Release (aida-cli-lib/src/aida_bin.rs:292); resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup expected 0 current_exe() hits outside lib.rs but found 1 in aida-cli-lib/src/aida_bin.rs. The rest of Build tests passed. PR local test commands were run with AIDA_CARGO_NO_SLOT=1 and are not valid evidence.'
+  created_at: 2026-09-28T14:54:15.585893057Z
+  modified_at: 2026-09-28T14:54:15.585893057Z
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
   author: joe
