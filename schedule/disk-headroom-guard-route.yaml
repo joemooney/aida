@@ -1,10 +1,8 @@
 job: disk-headroom-guard-route
-last_run: 2026-09-28T13:40:56.307115974Z
+last_run: 2026-09-28T17:07:37.423129687Z
 last_by:
   seat: advisor
-  session: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+  session: 7121c883-8051-4f5d-bccc-4953b9b1748d
   vendor: antigravity
 result: done
-note: Resolved. Configured floor is [doctor.disk_headroom] min_free_gib = 60; current free on / is 230G (74% used), so the breach condition no longer holds. Root cause was the worktree target/ accumulation reclaimed earlier (251G across 29 non-main worktree target dirs). No budget change made — the floor stands at 60 GiB deliberately. Verified by the advisor seat 2026-09-28.
-due_since: 2026-09-28T15:28:44.273530522Z
-due_reason: on CronJobFailed
+note: 'Verified healthy 2026-09-28 10:05 MST: / at 77% with 203G free (floor not breached); /run/user/1000 tmpfs at 1% (24M of 7.1G) so BUG-1702''s tmpfs-fill mode is clear too. The trip was the 97%-full condition already reclaimed by deleting target/ in non-main worktrees; no further action. Evidence: df -h / /run/user/1000.'
