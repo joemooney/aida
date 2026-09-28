@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:16:14.364445449Z
-modified_at: 2026-09-27T19:30:26.008133899Z
+modified_at: 2026-09-28T04:01:13.075503012Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -110,6 +110,12 @@ comments:
   created_at: 2026-09-27T19:30:26.008133899Z
   modified_at: 2026-09-27T19:30:26.008133899Z
   session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
+- id: 01a0e62c-8773-7881-9fa8-be90b9107b2f
+  author: joe
+  content: 'Independent review 2026-09-27 20:50 at head e01a6e06e53e (PR #2233). NOT mergeable — and the blocker is not the merge-hold label, which is label-only with no marker. Build (windows-latest) FAILS: session_reap::bug_1657_batched_reap_tests::bug_1657_removed_worktree_reaps_without_dangling_entry, at bug_1657_batched_reap_tests.rs:908. macos-latest passes. Root cause, from the failure output: the test asserts no dangling entry remains after reaping a REMOVED worktree, and on Windows git worktree list --porcelain still reports wt-spec-a with "prunable: gitdir file points to non-existent location". This PR replaced repo-wide git worktree prune with a targeted git worktree remove --force -- <path>; when the worktree DIRECTORY is already gone from disk, remove cannot complete and the administrative entry under .git/worktrees/ survives, which prune used to clear. So this is a regression introduced by this PR, in exactly the code it changes, not pre-existing flake. Suggested shape, not yet implemented and preserving the PR intent (never clobber a sibling session whose worktree is only temporarily unavailable): after the targeted remove, if an entry for that path still exists, delete just that path administrative directory under $GIT_COMMON_DIR/worktrees/<id>. git worktree prune has no path scoping, so it must not be the fallback. Needs a Windows CI run to confirm; it cannot be verified on this Linux host.'
+  created_at: 2026-09-28T04:01:13.075503012Z
+  modified_at: 2026-09-28T04:01:13.075503012Z
+  session_id: 79f15ecb-4580-4277-9778-648c50ac17b4
 history:
 - id: 01a0e1ac-4d92-7bc0-b685-1538cad58db1
   author: aida-session-start
