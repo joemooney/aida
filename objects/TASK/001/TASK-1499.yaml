@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-27T08:51:50.162223249Z
+modified_at: 2026-09-28T14:11:48.956678781Z
 req_type: Task
 tags:
 - agent-launch
@@ -109,6 +109,11 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): queue this bounded binary-resolution/diagnostics portability task; its acceptance is explicit and testable, it depends on completed BUG-1662, and the permission-profile half remains explicitly out of scope.'
   created_at: 2026-09-27T08:51:26.155547124Z
   modified_at: 2026-09-27T08:51:26.155547124Z
+- id: 01a0e85b-8c5c-7db3-bec6-b912e6121158
+  author: joe
+  content: 'PROXY DECISION (product, 2026-09-28): recover the stale InProgress status and dispatch through a one-shot drive override. Verified no active local or cross-clone lease, no registered worktree/branch/commits in AIDA linkage, and no TASK-1499 worktree in the canonical worktree list; the only transition was aida-session-start. Preserve the existing advisor-set drain mode; drive increases human involvement and is temporary. Do not auto-merge from product.'
+  created_at: 2026-09-28T14:11:48.956678781Z
+  modified_at: 2026-09-28T14:11:48.956678781Z
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
   author: joe
