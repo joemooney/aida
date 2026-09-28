@@ -1,0 +1,44 @@
+id: 01a0e988-40e5-7e33-b310-e424646dbee2
+spec_id: BUG-1719
+agreed_id: BUG-1719
+title: doctor classifies findings by substring-matching its own operator-facing English
+description: |-
+  `scan_merged_agent_worktrees` decides a finding's ACTION by grepping the human-readable reason string it just built:
+
+  ```rust
+  // doctor_cmd.rs ~5002
+  let action = if reason.contains("no action required") {
+      "no action required — kept because batched content is undecidable"
+  } else {
+      "operator decision: review and keep, open a PR, or remove by hand"
+  };
+  ```
+
+  `classify_agent_worktree` already KNOWS which Keep it produced — BUG-1718 added a distinct no-action arm — and then discards that fact into prose so the caller can parse it back out of English. This is the third instance of classification-by-English in this one file:
+
+  1. doctor_cmd.rs ~5002 — action derived from `reason.contains("no action required")` (BUG-1718)
+  2. doctor_cmd.rs:659 — the ship-path reclaimable COUNT derived from `finding.summary.contains("is mergeable-and-gone")`, coupled to the format string at ~5026
+  3. the Keep/Removable reason strings are themselves the only carrier of which arm fired
+
+  None of these can destroy work and all three are end-to-end test-guarded today, so this is debt, not a defect. But the reason strings are operator-facing prose on a hot path and WILL be reworded — that is the whole point of BUG-1718 — and each rewording is one forgotten matcher away from flipping a no-action item back into the unanswerable operator question BUG-1718 exists to remove.
+
+  ## Acceptance
+  1. `AgentWorktreeVerdict` (or `DoctorFinding`) carries the actionability as a typed field, not as a substring of prose.
+  2. No call site in doctor_cmd.rs derives a count, an action, or a category from `.contains()` on a `summary` or `reason` string. Verified by grep in the test.
+  3. Rewording any operator-facing reason or summary string in this category does not change any finding's action or any ship-path count. Proven by a test that changes the wording and asserts the classification is unmoved — the inverse of a non-vacuity proof.
+  4. The existing BUG-1718 and TASK-1534 behaviour is unchanged: bug_1657, bug_1718 and task_1534 suites stay green.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T19:40:15.973554276Z
+modified_at: 2026-09-28T19:40:15.973554276Z
+req_type: Bug
+filed_at:
+  code_sha: 1892671e6e5523e187f3b390ec02a8f666bfb1a5
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: b046018459
+  vendor: antigravity
+  session: ffc6f5e0-dc29-4896-8286-ae5b2803a88d
