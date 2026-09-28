@@ -45,7 +45,8 @@ use std::sync::OnceLock;
 struct Redirect {
     /// Home locations the operator's environment named at startup: the
     /// `dirs::home_dir()` answer, `$HOME`, `$USERPROFILE`, `$AIDA_HOME`,
-    /// `$AIDA_TEST_HOME`. None of them may be resolved as a home by a test.
+    /// `$AIDA_TEST_HOME`, and the password-database home. None of them may be
+    /// resolved as a home by a test.
     real_homes: Vec<PathBuf>,
     /// The per-process temp home every test inherits.
     test_home: PathBuf,
@@ -118,9 +119,9 @@ const TEST_HOME_PREFIX: &str = "aida-lib-test-home-";
 fn passwd_home() -> Option<PathBuf> {
     use std::os::unix::ffi::OsStrExt;
 
-    // SAFETY: this runs from the init section before `main`, so no other
-    // thread can be using the static `passwd` that `getpwuid` returns, and the
-    // pointer stays valid until the next `getpw*` call on this thread.
+    // SAFETY: after the redirect, `$HOME` is always set and `dirs::home_dir()`
+    // returns it, so no other code in this process calls `getpw*` concurrently.
+    // The pointer stays valid until the next `getpw*` call on this thread.
     let dir = unsafe {
         let pw = libc::getpwuid(libc::getuid());
         if pw.is_null() {

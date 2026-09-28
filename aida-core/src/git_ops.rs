@@ -2628,8 +2628,8 @@ pub const REDACTED_EMAIL_PLACEHOLDER: &str = "redacted@node.invalid";
 /// Read `[node] public_hostname` / `public_email` from the machine-global
 /// `~/.aida/config.toml` (honoring `AIDA_TEST_HOME` for tests). Returns
 /// `(None, None)` when the file/keys are absent — redaction is strictly
-/// opt-in. `dirs` is an optional dep here, so home is resolved from the
-/// environment to stay feature-gate-free.
+/// opt-in. Home resolution delegates to [`crate::home::home_dir`], which
+/// checks the environment before its platform-specific fallback.
 // trace:BUG-715 | ai:claude
 fn read_public_identity() -> (Option<String>, Option<String>) {
     // trace:TASK-1513 | ai:claude
