@@ -1,5 +1,6 @@
 id: 01a0e817-eb95-7f83-9a82-d8931a208cde
 spec_id: TASK-1-181
+agreed_id: TASK-200
 title: 'AC4 is still unmet: this diff adds a refusal only after a drain-mode spec is pa…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1701, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
