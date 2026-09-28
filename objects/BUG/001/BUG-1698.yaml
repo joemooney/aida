@@ -44,13 +44,21 @@ description: |
        today.
   AC4. A regression test asserts the resolved claude argv/settings carry the trust for AIDA's server,
        without spawning claude.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T02:37:16.747515813Z
-modified_at: 2026-09-28T02:37:16.747515813Z
+modified_at: 2026-09-28T02:46:43.015528892Z
 req_type: Bug
+history:
+- id: 01a0e5e8-5247-7d02-809e-c1cef1187498
+  author: joe
+  timestamp: 2026-09-28T02:46:43.015509756Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: bb445e1236ce2ea95f8427abca110ec4dd250960
   branch: main
