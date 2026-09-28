@@ -8,6 +8,7 @@ mod advisor_code_gate;
 mod advisor_watch;
 mod agent_launch_prompt;
 mod agent_registry;
+mod aida_bin;
 mod alias;
 mod archive_cmd;
 mod assign_cmd;
@@ -28237,6 +28238,10 @@ fn agent_new_with_config(
         );
     }
 
+    // Validate before any real agent launch even when --verbose is absent;
+    // preview mode validates in its renderer above. trace:TASK-1499 | ai:codex
+    let _resolved_aida = aida_bin::process()?;
+
     // STORY-717: focus-scope drift guard at the agent-launch work-start moment.
     // Spawning an agent on `--spec` outside the active focus subtree applies the
     // [focus] out_of_scope policy (warn nudges + proceeds, block refuses without
@@ -28466,6 +28471,9 @@ fn agent_new_bg_dispatch(
             context.enabled,
         );
     }
+
+    // Validate before the detached/background launch too.
+    let _resolved_aida = aida_bin::process()?;
 
     // STORY-717: focus-scope drift guard (same as the foreground path) for the
     // `--bg` dispatch. trace:STORY-717 | ai:claude
@@ -30964,6 +30972,19 @@ fn render_agent_launch_noexec(
     }
     out.push_str(&format!("cwd: {}\n", plan.launch_cwd.display()));
     out.push_str(&format!("command: {}\n", shell_join_display(&argv)));
+    // Resolve independently at preview time so operators can see the exact
+    // coordinating executable and profile the child environment will inherit.
+    // trace:TASK-1499 | ai:codex
+    let aida = aida_bin::process()?;
+    out.push_str(&format!(
+        "aida_executable: {} (source: {}, profile: {})\n",
+        aida.path.display(),
+        aida.source,
+        aida.profile.map(|p| p.name()).unwrap_or("n/a")
+    ));
+    if aida.stale {
+        out.push_str("aida_build_stale: alternate build is newer than selected build\n");
+    }
     out.push_str("permission_posture:\n");
     out.push_str(&format!("  agents.toml bypass: {agents_bypass}\n"));
     out.push_str(&format!("  agents.toml contained: {agents_contained}\n"));
@@ -102766,7 +102787,11 @@ fn reconcile_orchestrated_branch(
 pub(crate) fn aida_exe_path() -> std::path::PathBuf {
     static AIDA_EXE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     AIDA_EXE
-        .get_or_init(|| resolve_aida_exe_from(std::env::current_exe().ok()))
+        .get_or_init(|| {
+            aida_bin::process()
+                .map(|r| r.path)
+                .unwrap_or_else(|_| resolve_aida_exe_from(std::env::current_exe().ok()))
+        })
         .clone()
 }
 
@@ -102804,6 +102829,11 @@ fn resolve_aida_exe() -> std::path::PathBuf {
 /// the binary can't be resolved to an absolute existing path.
 // trace:BUG-766 | ai:claude
 fn export_coordinating_bin_env() {
+    // Keep an invalid operator override intact so the launch path can report
+    // it clearly; silently replacing it with current_exe would hide the error.
+    if std::env::var_os("AIDA_BIN").is_some() && aida_bin::process().is_err() {
+        return;
+    }
     let exe = resolve_aida_exe();
     if !exe.is_absolute() || !exe.exists() {
         return;
