@@ -1,0 +1,30 @@
+id: 01a0e824-1146-72f1-81d4-97ab0749672b
+spec_id: TASK-1-185
+title: The final commit adds RAII warning-sink cleanup, but no test deliberately panic…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1673, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  The final commit adds RAII warning-sink cleanup, but no test deliberately panics and verifies the old sink is cleared. Add a non-vacuous test that catches an unwind and proves a subsequent warning is not captured by the old sink (aida-core/src/object_store.rs:1092, tests near 1242).
+
+  PR: #2242
+  Reviewed sha: c0f90a4796d55c6d52345a76763887f33a221801
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T13:11:12.966337830Z
+modified_at: 2026-09-28T13:11:12.966337830Z
+req_type: Task
+tags:
+- carried-from:BUG-1673
+- finding-hash:8c7ec425
+- from-review:PR-2242
+- kind:carried-forward
+filed_at:
+  code_sha: d23ba1028c6de66959200f27b59cdcc5c5305e63
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: '5632229e66'
+  vendor: antigravity
+  session: fc2bef36-971e-4674-a858-0de8a84a1006
