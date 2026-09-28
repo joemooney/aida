@@ -1,0 +1,15 @@
+{
+  "id": "25456b29-2048-40e0-a627-7bae6eae8d10",
+  "thread_id": "90bfab64-f64b-4f63-89a9-46fcde841925",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790607256607,
+  "body": "Update on PR #2261 / TASK-1499: required Build run 36435738715 failed at exact head 8021605585e738a345f18e1db55cb2d7246807c0. Failures: `aida_bin::tests::override_running_and_path_precedence_and_layouts` expected Debug but got Release at aida-cli-lib/src/aida_bin.rs:292; `resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup` found one current_exe() hit in aida_bin.rs while expecting zero outside lib.rs. Other tests passed. I added this evidence to TASK-1499. The implementer lease is dormant and the worktree is clean; please route a fix/re-review when appropriate. Existing PR body local tests used AIDA_CARGO_NO_SLOT=1 and are invalid. No merge.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}
