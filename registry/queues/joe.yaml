@@ -1,11 +1,4 @@
 - user_id: joe
-  requirement_id: 01a0df46-c67a-7fa2-bb7e-918ab66f7ece
-  position: 1000
-  added_by: joe
-  note: Independent exact-head review at 9cd6576 requests focused panic-unwind test for warning-sink RAII cleanup; see .aida/review-verdicts/BUG-1673.json and codex brief.
-  added_at: 2026-09-28T05:25:47.288528220Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a0e478-2afd-7970-af85-43c7d289536e
   position: 2000
   added_by: joe
@@ -63,23 +56,6 @@
   added_by: joe
   added_at: 2026-09-27T12:54:34.977933308Z
   for_role: product
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e035-fb49-7152-81dd-a9e1bff1eab4
-  position: 42000
-  added_by: joe
-  note: 'Rework from exact-head REQUEST-CHANGES on PR #2243; see targeted brief.'
-  added_at: 2026-09-28T01:51:39.642291874Z
-  for_role: implementer
-  for_session: 01a0e491
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e669-9c44-7ad3-8ea2-ee00b8f3c6bb
-  position: 44000
-  added_by: joe
-  note: auto-queued by `session end` (01a0e334); covers 1 spec
-  added_at: 2026-09-28T05:08:02.458827960Z
-  for_role: reviewer
   added_by_machine: imac
 - user_id: joe
   requirement_id: 01a0df20-71aa-7963-851b-9b79abcb3965
