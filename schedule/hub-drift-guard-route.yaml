@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Verified and reconciled 2026-09-28 10:09 MST. aida-store differed: gitlab=14ae3c9ef13c origin=a64d87cbddcb. Confirmed NOT a divergence — ''git merge-base --is-ancestor 14ae3c9 a64d87c'' returned true, so gitlab was strictly BEHIND origin and this was the fast-forward case, not the reconcile case. Ran ''aida remote mirror-sync'' (never a force-push); gitlab aida-store 14ae3c9ef13c → a64d87cbddcb, main already at ad76e9e46f42. remote-drift re-check now clean.'
+due_since: 2026-09-28T21:38:32.031613929Z
+due_reason: on CronJobFailed

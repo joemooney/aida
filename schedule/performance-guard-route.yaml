@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Trip 2026-09-28T15:24Z (failed:1) investigated and routed, not waived. Budget in force per .aida-store/schedule/performance-guard.yaml: aida show 1000ms budget / 10.0% tolerance / 5000ms ceiling. Measured: 12.1% of 569 calls over budget, worst single call 16855ms — a CEILING breach, which trips regardless of proportion (ADR-53). DECISION: real regression, already tracked — this is BUG-1674 (strict stale-cache refresh waits unbounded behind a concurrent writer), NOT a budget that needs raising. Evidence recorded as a comment on BUG-1674. Fix is STORY-1484 (single-flight cache refresh: bounded wait + labelled stale read). Note for the next trip: breach concentrates in older binaries (0bd634c 19.3% of 322) while current HEAD 2166ffe1f5 is 0.0% of 7 — too few calls to conclude the fix landed, so do not close BUG-1674 on that sample.'
+due_since: 2026-09-28T21:38:32.031613929Z
+due_reason: on CronJobFailed

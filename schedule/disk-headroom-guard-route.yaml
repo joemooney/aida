@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Verified healthy 2026-09-28 10:05 MST: / at 77% with 203G free (floor not breached); /run/user/1000 tmpfs at 1% (24M of 7.1G) so BUG-1702''s tmpfs-fill mode is clear too. The trip was the 97%-full condition already reclaimed by deleting target/ in non-main worktrees; no further action. Evidence: df -h / /run/user/1000.'
+due_since: 2026-09-28T21:38:32.031613929Z
+due_reason: on CronJobFailed

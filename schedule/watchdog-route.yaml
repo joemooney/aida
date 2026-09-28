@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Trip was 2026-09-27T14:05Z (CronJobFailed); resolved, not re-armed. Current evidence: ''aida doctor check runaway-seats'' verdict OK at 2026-09-28 10:08 MST — 6 sessions, 1266314 bytes read across 2 transcript files with new bytes, 0 sessions with unknown timing; watchdog.yaml last_run 2026-09-28T16:52:25Z result ok. The seat that tripped it is gone (the stranded/idle seats from that night were swept). No new poll added. Coverage gap worth knowing: the check cannot attribute rates for codex seats (~/.codex/sessions not project-scoped) or via ~/.aida/usage.jsonl (no session id), and 70 worktrees have no transcript dir.'
+due_since: 2026-09-28T21:38:32.031613929Z
+due_reason: on CronJobFailed
