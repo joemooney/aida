@@ -54,6 +54,10 @@ feature: Uncategorized
 created_at: 2026-09-28T03:16:09.883864860Z
 modified_at: 2026-09-28T04:13:33.807499906Z
 req_type: Bug
+relationships:
+- rel_type: Parent
+  target_id: 01a0e65f-184c-73d2-9509-83f0d6ff6a6f
+  created_at: 2026-09-28T04:56:29.466947434Z
 comments:
 - id: 01a0e633-4f20-7453-8748-a4bd3c1dda1c
   author: joe
