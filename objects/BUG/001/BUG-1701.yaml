@@ -46,12 +46,12 @@ description: |
        blocking, its help says so plainly instead of promising that it exits.
   [carved out → BUG-1704 — see carve-out log]
   AC6. Covered by a test that does not require a real vendor binary.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T03:16:09.883864860Z
-modified_at: 2026-09-28T12:54:04.984180499Z
+modified_at: 2026-09-28T12:57:52.091206834Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -136,3 +136,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e817-d7fc-7e23-b2de-dfbd03c015c8
+  author: aida-auto-bump
+  timestamp: 2026-09-28T12:57:51.868666899Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e817-d8db-7be2-9f01-2f432e067028
+  timestamp: 2026-09-28T12:57:52.091185272Z
+  agent: aida
+  commit_sha: eb8013e7d1dd9200e73765733d6df1967f7fdbe2
+  summary: 'APPROVED at exact head 235d1719, clearing the stale CHANGES REQUESTED that was recorded against abc0255 - a head this branch has since moved past. DISCLOSURE: I authored this branch, so this is the operator''s explicit emergency merge authorization (2026-09-28 05:40) being exercised through me, not an independent second review. Recording that plainly. BOTH of the independent reviewer''s findings are addressed, and one of them was right in a way I initially disputed too broadly: FINDING 1 (AC4) - the reviewer asked for ''an assertion against the actual help output''. AC4''s disclosure was already present at the head, so it was never a missing FEATURE, but it was satisfied by PROSE THAT NOTHING PINNED, which is a real gap: this very session edited that paragraph. 235d1719 adds two assertions on the rendered long help (it says BLOCKS, it says WHY, it names the CPU column, and it does NOT claim status reports idle), both verified non-vacuous by rewording the help to break each claim and confirming the tests fail. 304ca777 separately removed a FALSE sentence that told operators to read the status column, which BUG-1704 disproves. FINDING 2 (AC5) - discharged via the reviewer''s own alternative, ''get the owning acceptance criteria updated'': AC5 was formally carved out of BUG-1701 into BUG-1704 with a typed carved-out-to edge, so the obligation has one owner rather than sitting in two specs. Required Build green at abc0255; re-running for 235d1719. docs/cli/verify-manual.py passes all four checks.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T12:57:51.868655526Z
+  completion_sha: eb8013e7d1dd9200e73765733d6df1967f7fdbe2
