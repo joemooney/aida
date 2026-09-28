@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:16:56.745444346Z
-modified_at: 2026-09-28T15:25:58.495993712Z
+modified_at: 2026-09-28T15:27:22.905712971Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -40,3 +40,76 @@ comments:
   created_at: 2026-09-27T14:46:45.141104232Z
   modified_at: 2026-09-27T14:46:45.141104232Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e8a0-bb19-7510-a35c-ce49b95d29ed
+  author: joe
+  content: |-
+    Pickup check (2026-09-28): did not run measurements because the binding STORY-1488 amendment 4/5 quiet-window preconditions are not satisfied in this worktree. status: active
+    command: aida queue work TASK-1537 --auto-complete=through-ci
+    current: TASK-1537
+    members[1]{spec,state,pr}:
+      TASK-1537,in-phase-1,""
+    next[1]{cmd,to}:
+      aida drain tail,watch live reports an active drain (error: "aida do needs a terminal for the interactive implementer — run it from your shell, or add --no-human=both for a headless implementer. (`aida queue work --auto-complete` has the same requirement.)"
+    help: aida queue work --auto-complete); view: ps
+    running: 3
+    stale_hidden: 0
+    orphaned: 19
+    operator_last_seen: 1h ago
+    operator_presence: idle
+    running[3]{session,spec,role,pid,elapsed,live,locked_by,dispatch_state,dispatch_hint}:
+      01a0e758e11d,TASK-1531,implementer,-,5h 58m,dormant,"",stalled,"no branch/dirty movement in /tmp/aida-pool-aida-nightshift-1 (branch task-1531, last commit \"[AI:codex] fix(config): gate bypass posture writer (TASK-1531)\") — resume/rebrief: aida queue work TASK-1531"
+      01a0e7fbbca6,-,reviewer,1,1m 30s,dormant,"","",""
+      01a0e89fb0a8,TASK-1537,implementer,-,1m 7s,dormant,"",stalled,"no branch/dirty movement in /tmp/aida-pool-aida-nightshift-0 (branch task-1537, last commit \"[AI:claude] feat(review): trusted-config opt-in before graded review runs spec commands (STORY-1476) (#2217)\") — resume/rebrief: aida queue work TASK-1537"
+    orphaned[19]{spec,title,liveness,likely_fanout}:
+      BUG-1668,Graded review Rung-2 auto-approves specs whose only executable criteria are trivial (true/echo/test),flag-only,false
+      BUG-1681,"aida ps labels done-and-approved specs waiting for integration as 'stalled — resume/rebrief', guesses fan-out ownership for unrelated specs, and shows fan-out subagents with the parent's role",flag-only,false
+      BUG-1687,"A deferred spec still reports its old status, and 'aida list --status deferred' never matches it",flag-only,false
+      BUG-1688,Gate or refuse full-access launches in shipped scripts that have no legitimate unattended caller,flag-only,false
+      BUG-1693,"The merge-hold human-at-TTY floor is advisory only: any agent can clear a hold by deleting the marker and dropping the label",flag-only,false
+      BUG-1695,"sandbox_create_and_seed_round_trip flakes on teardown: destroy fails with 'Directory not empty' (os error 39)",flag-only,false
+      STORY-1425,"aida reconstitute measures absolute recall against the captured set, so it cannot report the one thing the objective claims: the delta over not using AIDA",flag-only,false
+      STORY-1479,"Aggregate cycle-time breakdown: aida metrics cycle-time (per-activity p50/p90, work vs wait, rework rates, slowest specs)",flag-only,false
+      STORY-1480,Close cycle-time instrumentation gaps and publish per-spec timing records across machines,flag-only,false
+      TASK-1499,Make aida scaffold portable across local binary installations,flag-only,false
+      TASK-1500,Offer configurable YOLO-mode prompt during aida init,flag-only,false
+      TASK-1520,"Dev repo: make sync-templates/check-templates manage .agents/skills as regular-file copies with a drift check, plus the remaining docs",flag-only,false
+      TASK-1526,Single-flight cache refresh and stale labels (slice B),flag-only,false
+      TASK-1529,"Pre-flight guard: retract the published PR when the post-publication pre-flight guard fails",flag-only,false
+      TASK-1532,"Finish the env-guard migration: convert the remaining locked raw set_var/remove_var in tests and add a lint",flag-only,false
+      TASK-1536,"Scaffold refresh footprint follow-ups: gate the minimal footprint, flag already-flooded lane projects, detect pre-footprint lanes by AGENTS.md heading",flag-only,false
+      TASK-1537,Baseline build timings for aida-cli-lib (STORY-1488 T1),stale,false
+      TASK-1542,"Drain stop follow-ups: forward SIGTERM to in-flight vendor children on a manual stop, and record 'stopped' in the drain-state file",flag-only,false
+      TASK-1555,Give agents one local entrypoint for the CI-only gates (make check-ci),flag-only,false
+    salvageable[0]{session,spec,worktree,hint}: reports a TASK-1531 implementer seat plus this TASK-1537 seat (not empty);  is not available in the installed CLI. The exact baseline must wait until the operator/orchestrator declares the window after batch 102, disables shift, stops drain, lets the batch finish, and confirms view: ps
+    running: 3
+    stale_hidden: 0
+    orphaned: 19
+    operator_last_seen: 1h ago
+    operator_presence: idle
+    running[3]{session,spec,role,pid,elapsed,live,locked_by,dispatch_state,dispatch_hint}:
+      01a0e758e11d,TASK-1531,implementer,-,5h 58m,dormant,"",stalled,"no branch/dirty movement in /tmp/aida-pool-aida-nightshift-1 (branch task-1531, last commit \"[AI:codex] fix(config): gate bypass posture writer (TASK-1531)\") — resume/rebrief: aida queue work TASK-1531"
+      01a0e7fbbca6,-,reviewer,1,1m 30s,dormant,"","",""
+      01a0e89fb0a8,TASK-1537,implementer,-,1m 7s,dormant,"",stalled,"no branch/dirty movement in /tmp/aida-pool-aida-nightshift-0 (branch task-1537, last commit \"[AI:claude] feat(review): trusted-config opt-in before graded review runs spec commands (STORY-1476) (#2217)\") — resume/rebrief: aida queue work TASK-1537"
+    orphaned[19]{spec,title,liveness,likely_fanout}:
+      BUG-1668,Graded review Rung-2 auto-approves specs whose only executable criteria are trivial (true/echo/test),flag-only,false
+      BUG-1681,"aida ps labels done-and-approved specs waiting for integration as 'stalled — resume/rebrief', guesses fan-out ownership for unrelated specs, and shows fan-out subagents with the parent's role",flag-only,false
+      BUG-1687,"A deferred spec still reports its old status, and 'aida list --status deferred' never matches it",flag-only,false
+      BUG-1688,Gate or refuse full-access launches in shipped scripts that have no legitimate unattended caller,flag-only,false
+      BUG-1693,"The merge-hold human-at-TTY floor is advisory only: any agent can clear a hold by deleting the marker and dropping the label",flag-only,false
+      BUG-1695,"sandbox_create_and_seed_round_trip flakes on teardown: destroy fails with 'Directory not empty' (os error 39)",flag-only,false
+      STORY-1425,"aida reconstitute measures absolute recall against the captured set, so it cannot report the one thing the objective claims: the delta over not using AIDA",flag-only,false
+      STORY-1479,"Aggregate cycle-time breakdown: aida metrics cycle-time (per-activity p50/p90, work vs wait, rework rates, slowest specs)",flag-only,false
+      STORY-1480,Close cycle-time instrumentation gaps and publish per-spec timing records across machines,flag-only,false
+      TASK-1499,Make aida scaffold portable across local binary installations,flag-only,false
+      TASK-1500,Offer configurable YOLO-mode prompt during aida init,flag-only,false
+      TASK-1520,"Dev repo: make sync-templates/check-templates manage .agents/skills as regular-file copies with a drift check, plus the remaining docs",flag-only,false
+      TASK-1526,Single-flight cache refresh and stale labels (slice B),flag-only,false
+      TASK-1529,"Pre-flight guard: retract the published PR when the post-publication pre-flight guard fails",flag-only,false
+      TASK-1532,"Finish the env-guard migration: convert the remaining locked raw set_var/remove_var in tests and add a lint",flag-only,false
+      TASK-1536,"Scaffold refresh footprint follow-ups: gate the minimal footprint, flag already-flooded lane projects, detect pre-footprint lanes by AGENTS.md heading",flag-only,false
+      TASK-1537,Baseline build timings for aida-cli-lib (STORY-1488 T1),stale,false
+      TASK-1542,"Drain stop follow-ups: forward SIGTERM to in-flight vendor children on a manual stop, and record 'stopped' in the drain-state file",flag-only,false
+      TASK-1555,Give agents one local entrypoint for the CI-only gates (make check-ci),flag-only,false
+    salvageable[0]{session,spec,worktree,hint}: has no implementer seats. No code changes or timings recorded.
+  created_at: 2026-09-28T15:27:22.905712971Z
+  modified_at: 2026-09-28T15:27:22.905712971Z
