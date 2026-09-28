@@ -3,12 +3,12 @@ spec_id: STORY-1476
 agreed_id: STORY-1476
 title: Require trusted-config opt-in before graded review runs spec-authored acceptance commands
 description: 'From the BUG-1624 audit. graded_review::execute_graded_review runs acceptance commands written in the spec itself through bash -c. The store is shared across nodes, so anyone who can write a spec can choose commands that run on the reviewer''s machine, including unattended in the drain. Proposal: run spec-authored commands only when trusted local or repo config opts in (for example an allowlist of command prefixes or a [review] run_acceptance_commands = true in the trusted layer). Otherwise mark those criteria as needing manual verification. Acceptance: default behaviour, the opt-in mechanism, a test showing a spec-authored command does not run without opt-in, and migration notes.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T17:29:11.789280036Z
-modified_at: 2026-09-28T13:45:47.033037700Z
+modified_at: 2026-09-28T13:55:26.543149760Z
 req_type: Story
 relationships:
 - rel_type: Blocks
@@ -246,3 +246,24 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a0e84c-8ec3-7382-b6f5-51f4dc4d95b6
+  author: aida-auto-bump
+  timestamp: 2026-09-28T13:55:26.531122562Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e84c-8ecf-7353-b709-577566bc2d09
+  timestamp: 2026-09-28T13:55:26.543139334Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/STORY-1476-2026-09-28T015227Z.md.acked
+  commit_sha: 1e594926d8c8a7246caa07afc93ac003e83f0f0b
+  summary: 'APPROVE at ade1cecfb67c. Both findings from the prior CHANGES REQUESTED verdict (at add0cf724397) are addressed, confirmed by an INDEPENDENT CROSS-VENDOR re-review (codex, read-only sandbox) whose line citations match my own reading of the diff. Finding 1 (fail-closed allowlist parsing): contains_refused_chars(entry) now runs on the RAW entry before entry.trim() and returns Err, denying the whole policy — so `*\r` can no longer normalise to `*` and be accepted as full trust. lib.rs, acceptance_command_policy_from_toml. Finding 2a (refused criteria reach the human): the not_run_count escalation branch now runs BEFORE the machine-failure early return and returns escalated_to_seat: true, carrying manual-verification obligations. graded_review.rs, execute_graded_review. Finding 2b (Rung-2 veto preserved): when a permitted check also failed, the escalation branch still returns overall_verdict "rejected" / VerdictKind::Rejected and a summary stating the review cannot be an approval. The fix to 2a did NOT come at the cost of the veto — this was checked explicitly because it was the obvious way to regress. New defects in those two functions: none found. EVIDENCE RUN LOCALLY at the merged head: cargo check --workspace --tests exits 0 (warnings only, pre-existing); cargo test -p aida-cli-lib story_1476 = 21 passed, 0 failed. MERGE-READINESS: the PR was CONFLICTING and is now MERGEABLE. I merged origin/main into the branch (a single additive conflict in aida-cli-lib/src/lib.rs where both sides appended module declarations at the same point; resolved by keeping both). GitHub Build is the remaining gate. DISCLOSURE: this PR is claude-authored and I am a claude advisor seat, so I did NOT rely on my own reading alone — the approval rests on the codex cross-vendor re-review plus locally-run tests. Integration work (the main-merge and conflict resolution) is mine and is disclosed here rather than presented as untouched.'
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored (attempt 3/3)'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T13:55:26.531083209Z
+  completion_sha: 1e594926d8c8a7246caa07afc93ac003e83f0f0b
