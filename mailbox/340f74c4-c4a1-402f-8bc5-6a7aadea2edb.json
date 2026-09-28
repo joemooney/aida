@@ -1,0 +1,17 @@
+{
+  "id": "340f74c4-c4a1-402f-8bc5-6a7aadea2edb",
+  "thread_id": "340f74c4-c4a1-402f-8bc5-6a7aadea2edb",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "EPIC-20"
+  },
+  "timestamp": 1790598914233,
+  "body": "You were mentioned on BUG-1689 by joe: CI failure on PR #2256 at 8e136451e3: required Build (ubuntu-latest) failed beca…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
