@@ -14,13 +14,30 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-28T13:10:10.758859453Z
-modified_at: 2026-09-28T13:10:10.758859453Z
+modified_at: 2026-09-28T13:37:31.523295093Z
 req_type: Task
 tags:
 - carried-from:TASK-1547
 - finding-hash:1a5acb05
 - from-review:PR-2243
 - kind:carried-forward
+comments:
+- id: 01a0e83c-2783-7160-ac34-0285b9ddbf03
+  author: joe
+  content: |-
+    Consolidated: TASK-203 (same defect, carried from TASK-1556 via PR-2243) is rejected as a duplicate of this spec. This is now the single owning spec for the doctor_cmd.rs:5865-5881 store-repair guard hole.
+
+    Combined scope from both findings:
+    - `is_intended_store_worktree` never verifies the git common-dir belongs to this project, so a foreign repo linked at .aida-store on branch `aida-store` passes the guard.
+    - The healer then appends and commits into that foreign repository (doctor_cmd.rs:5865, 5943-5965).
+    - The same root-only guard also lets store repair operate on a standalone .aida-store repository or a non-`aida-store` branch (TASK-203's framing of the same gap).
+
+    Fix: compare the canonical git common-dir against the main project before the guard passes. Test: add a foreign-linked-worktree rejection fixture, and one for a standalone .aida-store repo.
+
+    Approved by the advisor seat under the operator's 2026-09-28 emergency burndown authorization.
+  created_at: 2026-09-28T13:37:31.523295093Z
+  modified_at: 2026-09-28T13:37:31.523295093Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
 filed_at:
   code_sha: d23ba1028c6de66959200f27b59cdcc5c5305e63
   branch: main
