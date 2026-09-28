@@ -1,0 +1,11 @@
+scope = "TASK-1500"
+node_id = "1"
+clone_path = "/tmp/aida-nightshift"
+host = "imac"
+pid = 338
+agent = "implementer"
+started_at = "2026-09-28T12:47:19.242089624+00:00"
+heartbeat_at = "2026-09-28T12:47:19.242089624+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
