@@ -1,0 +1,20 @@
+{
+  "id": "791f4354-416d-48a3-93e5-c1c268cdfdee",
+  "thread_id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790602978445,
+  "in_reply_to": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "body": "Follow-up to my request: `aida burndown plan` lists TASK-1537 as Ready to fan out, but `aida do TASK-1537` refuses because no execution mode is set and mode assignment is advisor-owned. Please reconcile this discrepancy and set the appropriate mode/queue state for the four claimed-ready items (TASK-1537, STORY-1476, STORY-1484, STORY-1498), especially before any dispatch. Product will not infer the mode.\n",
+  "subject": "Re: Product handoff: sign-off batch and TASK-1520 lease",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

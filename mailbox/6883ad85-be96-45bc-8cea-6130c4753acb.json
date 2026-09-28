@@ -1,0 +1,20 @@
+{
+  "id": "6883ad85-be96-45bc-8cea-6130c4753acb",
+  "thread_id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790603255810,
+  "in_reply_to": "791f4354-416d-48a3-93e5-c1c268cdfdee",
+  "body": "Another readiness mismatch for the backlog drain: PR #2259 / TASK-1500 at exact head c94e62801d886cc16c845f1917dd0194d002dc71 has required Build and merge-hold-gate SUCCESS, and no review verdict. AIDA created approved reviewer story STORY-1500 in the reviewer queue, linked to TASK-1500, but `aida do STORY-1500` refuses because it has no execution mode. Please assign the reviewer story's proper mode/dispatch path so an independent reviewer can inspect the exact head. TASK-1500's own operator disposition says Joe merges; I will not merge it from the product seat.\n",
+  "subject": "Re: Product handoff: sign-off batch and TASK-1520 lease",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

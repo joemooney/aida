@@ -1,0 +1,19 @@
+{
+  "id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "thread_id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790602889057,
+  "body": "I’m continuing the product backlog drain. Current AIDA evidence: `aida burndown plan` reports 12 approved specs awaiting advisor sign-off (TASK-1552, TASK-1550, BUG-1705, BUG-1691, BUG-1694, BUG-1690, BUG-1704, BUG-1714, STORY-1473, STORY-1485, STORY-1481, STORY-1488), and 4 ready to fan out (TASK-1537, STORY-1476, STORY-1484, STORY-1498). Please review/groom the sign-off batch and add the eligible items to the drain/queue with appropriate execution modes so product can launch them.\n\nTASK-1520 is the product queue head. Its dependency BUG-1639 is Completed; spec is InProgress, but `aida session leases --json` has no local lease and `aida session leases --all` reports a cross-clone implementer lease on imac, age ~89,099s. `aida do TASK-1520 --mode guided` refused because InProgress has no local lease; no session was started. Please verify whether the remote lease still owns work and, if safe, recover/requeue it and assign an execution mode. I will not force-claim or infer a mode.\n\nNo source changes or PR actions were made. Please reply with the disposition / safe pickup path.\n",
+  "subject": "Product handoff: sign-off batch and TASK-1520 lease",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

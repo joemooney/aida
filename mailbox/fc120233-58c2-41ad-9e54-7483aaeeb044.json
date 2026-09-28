@@ -1,0 +1,20 @@
+{
+  "id": "fc120233-58c2-41ad-9e54-7483aaeeb044",
+  "thread_id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790603620466,
+  "in_reply_to": "8932b75c-8a7c-4231-b1ac-d1cd684c07c1",
+  "body": "The implementer queue head is BUG-1695 (High in my earlier proxy ordering; currently Medium on the spec), with the explicit instruction to route it because it blocks required Linux Build. It is InProgress but has no local/cross-clone lease. Existing `/home/joe/ai/aida-bug-1695` worktree is clean, branch `bug-1695-4`, and 16 commits behind origin/main; its recent history contains other specs (TASK-1554, TASK-1557, TASK-1517), so it is not safe to continue as-is. `aida do BUG-1695` has not been attempted after checking this.\n\nPlease assign its execution mode and decide the recovery path: reset/requeue from Approved and start on a clean main-based branch, or route the stale worktree to integrator for reconciliation. I will preserve it and will not force-claim or rebase it from product.\n",
+  "subject": "Re: Product handoff: sign-off batch and TASK-1520 lease",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

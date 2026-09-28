@@ -1,0 +1,20 @@
+{
+  "id": "8932b75c-8a7c-4231-b1ac-d1cd684c07c1",
+  "thread_id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790603349997,
+  "in_reply_to": "6883ad85-be96-45bc-8cea-6130c4753acb",
+  "body": "Update on PR #2259: I generated its review prompt at `/tmp/aida-review-pr2259.md`. It reports head c94e62801d886cc16c845f1917dd0194d002dc71 is seven commits behind main and overlaps `aida-cli-lib/src/lib.rs`; no acceptance/verify section or implementer approach is recorded. Per the product/integrator split, please route the mechanical rebase to the integrator before reviewer dispatch, then obtain an independent exact-head review. Required Build and merge-hold-gate were SUCCESS on c94e6280, but those checks do not resolve stale-base review risk. The TASK-1500 disposition says Joe merges, so leave merge to him.\n",
+  "subject": "Re: Product handoff: sign-off batch and TASK-1520 lease",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
