@@ -282,16 +282,13 @@ fn claude_and_codex_arms_do_not_take_the_prompt_as_a_flag_value() {
 #[cfg(unix)]
 fn write_argv_capture_mock(dir: &std::path::Path, capture: &std::path::Path) -> std::path::PathBuf {
     let script = dir.join("mock-agy.sh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &script,
         format!(
             "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\" >> \"{}\"; done\nexit 0\n",
             capture.display()
         ),
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     script
 }
 

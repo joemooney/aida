@@ -86,7 +86,7 @@ fn driver(root: &std::path::Path, spec: &str, stub: std::path::PathBuf) -> RealP
 #[cfg(unix)]
 fn stub(root: &std::path::Path, first: &str, rest: &str) -> std::path::PathBuf {
     let path = root.join("aida-stub");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             r#"#!/usr/bin/env bash
@@ -111,12 +111,7 @@ else
 fi
 "#
         ),
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = std::fs::metadata(&path).unwrap().permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&path, permissions).unwrap();
+    );
     path
 }
 

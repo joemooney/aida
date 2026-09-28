@@ -73,12 +73,7 @@ pub(crate) fn wrapper_shells() -> &'static [&'static str] {
 pub(crate) fn run_wrapper_in(shell: &str, stub: &str, body: &str) -> (String, String, Option<i32>) {
     let dir = tempfile::tempdir().unwrap();
     let bin = dir.path().join("aida");
-    std::fs::write(&bin, stub).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    crate::test_exec::write_executable(&bin, stub);
     let script = format!(
         "PATH='{path}':\"$PATH\"\nexport PATH\n{helpers}\n{body}\n",
         path = dir.path().display(),
