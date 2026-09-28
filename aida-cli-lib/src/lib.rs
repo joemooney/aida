@@ -93048,8 +93048,8 @@ fn git_log_messages(project_root: &std::path::Path, base: &str, head: &str) -> R
 /// a flat `aida-x.md` and a folder-form `aida-x/` both resolve to `aida-x`.
 /// Symlinks are skipped — the in-repo dogfood `.claude/` is per-file symlinks
 /// into the master templates and must never be pruned. trace:BUG-298 | ai:claude
-// trace:TASK-1519 | ai:codex
 fn detect_obe_aida_scaffold_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    // trace:TASK-1519 | ai:codex
     use std::collections::{HashMap, HashSet};
     const DIRS: [&str; 3] = ["skills", "commands", "hooks"];
 
