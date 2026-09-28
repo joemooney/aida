@@ -14,13 +14,27 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-28T12:57:56.885045802Z
-modified_at: 2026-09-28T13:37:39.014608224Z
+modified_at: 2026-09-28T17:19:26.883459406Z
 req_type: Task
 tags:
 - carried-from:BUG-1701
 - finding-hash:6acf4dac
 - from-review:PR-2249
 - kind:carried-forward
+comments:
+- id: 01a0e907-54a3-7573-9c58-6c2f4bba5b55
+  author: joe
+  content: |-
+    ADVISOR 2026-09-28 — NARROWED, half disproven. The finding has two clauses; they do not share a fate.
+
+    DISPROVEN: 'it does not update the aida agent new --help description to disclose the interactive lane blocks until the TUI exits.' It does. aida-cli-lib/src/cli.rs:8201-8202 carries 'This lane spawns an INTERACTIVE agent in the foreground and BLOCKS until that agent's session exits. A vendor TUI does not exit when its turn ends — it returns to its prompt...', and 'aida agent new --help' prints it today. It was NOT added after the review: it is present at the reviewed sha 5632229e663b9d782e1f2c427a3176792f8447ae, having landed earlier in #2247 (7324a5b437). So AC4's disclosure requirement was already met when the finding was written.
+
+    STILL UNMET: 'Add an assertion against the actual help output.' There is no such test — no file under aida-cli-lib/src/tests/ or tests/ asserts this help text, and nothing invokes 'agent new --help' and inspects it. So the disclosure is real but unguarded: a future clap refactor or doc-comment edit could silently drop it and nothing would fail.
+
+    DISPOSITION: keep this spec open, scoped to the test ONLY. Do not re-edit the help prose. Required: a test that runs 'aida agent new --help' (or asserts on the clap long_about) and fails if the blocking disclosure disappears. Do not assert the whole paragraph verbatim — that makes it a brittle prose ratchet; assert the load-bearing facts (that it BLOCKS, and that a TUI does not exit when its turn ends).
+  created_at: 2026-09-28T17:19:26.883459406Z
+  modified_at: 2026-09-28T17:19:26.883459406Z
+  session_id: 7121c883-8051-4f5d-bccc-4953b9b1748d
 history:
 - id: 01a0e83c-44c6-7583-b71d-3c4340293ef9
   author: joe
