@@ -3,12 +3,12 @@ spec_id: TASK-1545
 agreed_id: TASK-1545
 title: 'Acceptance-command policy polish: check refused characters before trimming, align the config-show source label, avoid a gh call per graded review'
 description: 'Follow-up from the STORY-1476 security review. Acceptance: 1. An allow entry with a trailing CR or other refused char denies the whole policy (check before trim). 2. aida config show''s [review] source label resolves the same home the policy uses. 3. The repo opt-in notice uses a local default-branch read (no gh call) or is cached per run. 4. Docs: unset HOME under the same uid falls back to the passwd home (correct the ''fail closed'' wording).'
-status: Done
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T23:25:56.262077452Z
-modified_at: 2026-09-28T15:58:54.985527714Z
+modified_at: 2026-09-28T15:58:55.835503599Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -42,4 +42,12 @@ comments:
   created_at: 2026-09-28T15:58:54.985527714Z
   modified_at: 2026-09-28T15:58:54.985527714Z
   session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+history:
+- id: 01a0e8bd-9d5b-7f70-a4bb-3a9906a73823
+  author: joe
+  timestamp: 2026-09-28T15:58:55.835497613Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
