@@ -57,8 +57,53 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T06:24:01.976398623Z
-modified_at: 2026-09-28T06:24:13.001433288Z
+modified_at: 2026-09-28T06:39:41.428371359Z
 req_type: Bug
+comments:
+- id: 01a0e6bd-9d74-71d1-9ce4-64bec03d0629
+  author: joe
+  content: |-
+    ROOT CAUSE VERIFIED by probe (advisor seat, 2026-09-27). Implementer: do not re-derive this.
+
+    THE MECHANISM IS NOT 'we ignore a flag we were given'. Git never gives one.
+
+    The component is ours, in two pieces:
+      1. .git/hooks/pre-push — a POSIX-sh shim installed by 'aida remote mirror'. Its whole body is
+         'aida remote mirror-push "$1" || true'. Template master:
+         mirror_pre_push_hook_script() in aida-cli-lib/src/remote_create.rs (~line 1263).
+      2. 'aida remote mirror-push' — the real fan-out logic, same file.
+    Nothing wraps git itself: git is /usr/bin/git, no shim, no alias.
+
+    Probed in a throwaway repo with a logging pre-push hook, dry run vs real push:
+
+      hook runs?        dry-run YES        real YES
+      hook args         'origin ../up'     'origin ../up'      <- IDENTICAL
+      dry-run env var   NONE               NONE
+      parent cmdline    'git push --dry-run origin HEAD:...'   'git push origin HEAD:...'
+
+    So git RUNS pre-push for --dry-run (it must, so a hook can veto) and passes NO indication of it:
+    same $1/$2, same stdin ref lines, no environment variable. The hook then performs a real mirror
+    push. AC1 therefore cannot be satisfied by reading a flag or an env var.
+
+    THE ONLY AVAILABLE SIGNAL is the parent process command line:
+      Linux:        /proc/$PPID/cmdline (NUL-delimited)
+      macOS/BSD:    ps -o args= -p $PPID
+    Detection must match the spellings git accepts for this: '--dry-run' and '-n', in any position.
+    Parse the NUL/space-delimited argv tokens rather than substring-matching the whole line, so a
+    branch or refspec that merely CONTAINS '-n' is not mistaken for the flag.
+
+    FAIL DIRECTION — the real design decision, please make it deliberately: when detection is
+    unavailable (an unsupported platform, no /proc, ps missing), skipping the mirror silently breaks
+    mirroring, while mirroring leaves this bug. Recommendation: mirror when undetectable (preserve
+    today's behaviour) and skip ONLY on a positive detection, printing a preview line instead of
+    pushing (AC2). That keeps the failure mode 'the bug persists on an exotic platform' rather than
+    'mirroring silently stopped working everywhere'. Record whichever choice is made.
+
+    Note the hook already ends '|| true' and 'exit 0' so mirroring never blocks a push — the fix must
+    preserve that.
+  created_at: 2026-09-28T06:39:41.428371359Z
+  modified_at: 2026-09-28T06:39:41.428371359Z
+  session_id: fc2bef36-971e-4674-a858-0de8a84a1006
 history:
 - id: 01a0e6af-72c9-7902-beff-aab88d842433
   author: joe
