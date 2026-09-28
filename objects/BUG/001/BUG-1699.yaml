@@ -36,12 +36,12 @@ description: |
   AC3. When AIDA drops or overrides a per-tool flag to achieve AC1, the preview names what it dropped
        and why, so the override is not silent.
   AC4. Covered by a test over the resolved argv + rendered posture block, no spawn.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T02:37:31.516160683Z
-modified_at: 2026-09-28T02:46:45.366376396Z
+modified_at: 2026-09-28T05:50:11.419139653Z
 req_type: Bug
 history:
 - id: 01a0e5e8-5b76-7193-9ba7-4648447e7fc2
@@ -51,3 +51,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e690-4b1f-7323-80d1-01bbc6e23e72
+  author: aida-auto-bump
+  timestamp: 2026-09-28T05:50:11.231154493Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e690-4bdb-7861-9f7c-b9cf801a8702
+  timestamp: 2026-09-28T05:50:11.419122615Z
+  agent: aida
+  commit_sha: 7324a5b437c2cd60d7fe73d4ab01cbee6c5e33ec
+  summary: 'Request changes on PR #2247 at exact head; blocker recorded on BUG-1703.'
+  review_verdict: request-changes
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T05:50:11.231144676Z
+  completion_sha: 7324a5b437c2cd60d7fe73d4ab01cbee6c5e33ec
