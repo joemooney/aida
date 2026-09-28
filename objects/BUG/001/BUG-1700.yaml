@@ -11,49 +11,61 @@ description: |
           Yes, I trust this folder
       Enter to confirm · Esc to cancel
 
-  AIDA creates a NEW sibling worktree per spec (`/home/joe/ai/aida-bug-1693`, `/home/joe/ai/wt-story-1480`,
+  AIDA creates a NEW worktree per spec (`/home/joe/ai/aida-bug-1693`, `/home/joe/ai/wt-story-1480`,
   ...). Each is a path Claude Code has never been launched in, so `aida agent new claude --spec <ID>`
   lands on this modal, in a PTY nobody is watching, and the caller blocks until it is killed.
 
   Measured 2026-09-27 on this host: of 149 project entries in `~/.claude.json`, only 9 are AIDA
-  worktree paths, and the live spec worktrees (aida-bug-1693, aida-task-1557, wt-story-1480, ...) have
-  no entry at all. So the gate is armed for effectively every fresh spec worktree.
+  worktree paths, and the live spec worktrees have no entry at all. So the gate is armed for
+  effectively every fresh spec worktree.
 
-  Probed with an isolated HOME (claude v2.1.283, interactive under a PTY). The modal fires and NO
-  launch flag dismisses it:
+  No launch flag dismisses it (`--permission-mode bypassPermissions`, `--dangerously-skip-permissions`
+  both still show it), and `hasTrustDialogAccepted: false` does not satisfy it.
 
-      baseline                          -> FOLDER-TRUST modal
-      --permission-mode bypassPermissions -> FOLDER-TRUST modal
-      --dangerously-skip-permissions      -> FOLDER-TRUST modal
+  SCOPE, narrowed by probe 2026-09-27 (see comments for the full evidence + control):
 
-  Writing `hasTrustDialogAccepted: false` for the path does not satisfy it either; only `true` does.
-  So this cannot be fixed with launch flags — it needs the trust record to exist for the worktree
-  path before the seat starts.
+    * Folder trust INHERITS from a parent directory. With ONLY a parent dir marked
+      `hasTrustDialogAccepted: true`, an interactive launch in `<parent>/child` shows NO modal and
+      reaches the prompt. The matching control (nothing trusted) DOES fire the modal, so the
+      observation is real and not a probe artifact.
+    * The HEADLESS lane is immune: `claude -p` in a fully untrusted directory answers normally and
+      never shows the gate. So this bug bites ONLY the interactive TUI lane `aida agent new` uses.
+      The drain lane (`session::spawn_claude_headless`) is unaffected.
 
-  This is distinct from BUG-1698 (the project-MCP trust modal), fires EARLIER, and is the reason a
-  `--spec` claude dispatch cannot work at all today. AIDA is the component that creates the worktree,
-  and the operator has already trusted the parent repository it is derived from, so AIDA marking the
-  worktree trusted at creation carries no new authority.
+  Therefore the fix is NOT for AIDA to write trust records into the operator's shared `~/.claude.json`
+  (the originally-filed AC2-AC5). Instead AIDA gains an OPT-IN setting that places the worktrees it
+  creates under ONE parent directory, which the operator trusts once. AIDA writes nothing to
+  `~/.claude.json` and claims no new authority.
+
+  The single path-derivation site is `pool_path_for` in `aida-core/src/worktree_pool.rs` (one caller,
+  `acquire`), which today returns `project_root.parent()/<name>`.
 
   ACCEPTANCE
 
-  AC1. `aida agent new claude --spec <ID>`, into a worktree AIDA just created, reaches the agent's
-       prompt with no folder-trust modal, on a path Claude Code has never seen.
-  AC2. The trust record is written only for worktrees AIDA itself creates, and only when the parent
-       repository is already trusted. AIDA never marks an arbitrary or operator-supplied directory
-       trusted, and never downgrades an existing record.
-  AC3. The write is idempotent and does not clobber unrelated keys in `~/.claude.json` (it is a
-       large shared file — 149 project entries on the dev host).
-  AC4. If the trust record cannot be written, the launch says so plainly rather than spawning a seat
-       that will hang on a modal.
-  AC5. Covered by a test that asserts the record AIDA would write for a created worktree, without
-       spawning claude.
+  AC1. `[worktree_pool] worktree_parent` in `.aida/config.toml` (opt-in, unset by default) makes
+       every worktree AIDA creates land under that one directory, instead of as a sibling of the
+       project root. A relative value resolves against the project root; the directory is created
+       if missing.
+  AC2. Default behaviour is UNCHANGED when the setting is absent: worktrees are still siblings at
+       `<project_root>/../<name>`. Nothing moves under a live fleet, and existing pool entries keep
+       being found at the paths already recorded in the registry.
+  AC3. Pool names stay collision-free when two repositories share one `worktree_parent`: the name is
+       already namespaced by the project directory slug (`aida-pool-<slug>-<n>`), and this must keep
+       holding when the parent is shared rather than implied.
+  AC4. With `worktree_parent` set to a directory the operator has trusted, an interactive
+       `aida agent new claude --spec <ID>` reaches the agent's prompt with no folder-trust modal.
+  AC5. AIDA never writes to `~/.claude.json` and never marks any directory trusted on the operator's
+       behalf.
+  AC6. Covered by unit tests: the derivation with the setting set and unset, a relative value, and
+       two distinct project roots sharing one parent not colliding.
+  AC7. `aida doctor` (or the launch path) tells the operator plainly what to trust once: the resolved
+       worktree parent directory. No silent hang on a modal.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T02:46:35.422630850Z
-modified_at: 2026-09-28T04:28:30.648859941Z
+modified_at: 2026-09-28T04:28:59.541434689Z
 req_type: Bug
 comments:
 - id: 01a0e5f3-ff30-7b32-844e-2156b8c85154
