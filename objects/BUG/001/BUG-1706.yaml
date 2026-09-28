@@ -52,12 +52,12 @@ description: |
        ignores `--dry-run`; fix or explicitly document each. The bug class is "wrapper side effects
        that do not inspect the flag", and the mirror push is one instance of it, not necessarily the
        only one.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T06:24:01.976398623Z
-modified_at: 2026-09-28T11:37:08.267635363Z
+modified_at: 2026-09-28T11:37:26.475550468Z
 req_type: Bug
 comments:
 - id: 01a0e6bd-9d74-71d1-9ce4-64bec03d0629
@@ -171,4 +171,11 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a0e7ce-36d7-7153-8e8a-121c4bfc2202
+  author: aida-orchestrator-phase1
+  timestamp: 2026-09-28T11:37:26.487182388Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
