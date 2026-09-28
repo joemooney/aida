@@ -1,43 +1,4 @@
 - user_id: joe
-  requirement_id: 01a0df11-73db-7ee0-b73d-53657f742324
-  position: -6000
-  added_by: joe
-  note: 'PR #2252 exact head ed0e5edd7d24 has independent Codex request-changes: Claude-only saved-selection report wiring lacks a fixture test. Focused tests passed.'
-  added_at: 2026-09-28T11:27:29.663094399Z
-  for_role: advisor
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0de72-a5c3-7492-a40a-661419255153
-  position: -5000
-  added_by: joe
-  note: 'PR #2254 exact head 0500c7adccb9 has independent Codex request-changes: legacy Codex skills remain duplicate discovery; status understates this; doctor misses legacy symlinks. Focused test could not acquire the cargo slot lock.'
-  added_at: 2026-09-28T11:27:29.190247884Z
-  for_role: advisor
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e603-481b-7670-a653-89bc492df94c
-  position: -4000
-  added_by: joe
-  note: 'PR #2249 is held at exact head 5632229e663b; AIDA reviewer verdict requests changes because the help overstates cumulative CPU as proof of idle. Advisor to decide bounded rework; do not clear the merge-hold.'
-  added_at: 2026-09-28T11:27:28.782837904Z
-  for_role: advisor
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e3a8-534d-78f0-a57d-6b7acc818783
-  position: -3000
-  added_by: joe
-  note: Independent review approved at 9ba1729f30fc; required Build and merge-hold-gate pass. Integrator to verify exact head and merge.
-  added_at: 2026-09-28T11:26:57.025615273Z
-  for_role: integrator
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e001-439c-7d92-8bdf-202d939603d9
-  position: 0
-  added_by: joe
-  note: Picked as a bounded, independent implementation task after the root-worktree pickup was blocked by existing sibling worktree state.
-  added_at: 2026-09-28T09:43:38.581275645Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a0df46-c67a-7fa2-bb7e-918ab66f7ece
   position: 1000
   added_by: joe
@@ -121,14 +82,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0e740-00de-7fd2-8b43-287f8a65c44a
-  position: 48000
-  added_by: joe
-  note: auto-queued by `session end` (01a0e739); covers 1 spec
-  added_at: 2026-09-28T09:02:12.541253040Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0df20-71aa-7963-851b-9b79abcb3965
   position: 49000
   added_by: joe
@@ -141,21 +94,6 @@
   added_by: joe
   added_at: 2026-09-28T09:28:57.783892957Z
   for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e781-8273-76b1-af6f-ad44101b543a
-  position: 51000
-  added_by: joe
-  note: auto-queued by `session end` (01a0e76f); covers 1 spec
-  added_at: 2026-09-28T10:13:46.157632253Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e6af-47b8-70c2-b9ea-6189dce9ffc2
-  position: 54000
-  added_by: joe
-  added_at: 2026-09-28T12:07:41.721966689Z
-  for_role: advisor
   added_by_machine: imac
 - user_id: joe
   requirement_id: 01a0e7f7-3be1-7092-af1b-cc43876de5af
@@ -180,23 +118,9 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0e735-09af-7a42-915d-5e2fc3498cf0
-  position: 58000
-  added_by: joe
-  added_at: 2026-09-28T12:43:15.632216200Z
-  for_role: integrator
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0d6da-bde3-7191-9401-e376f6d5d1ba
   position: 59000
   added_by: joe
   added_at: 2026-09-28T12:46:57.762781758Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e805-33dc-7153-b0f3-79a5144f2e8d
-  position: 60000
-  added_by: joe
-  added_at: 2026-09-28T12:57:15.185927561Z
   for_role: implementer
   added_by_machine: imac
