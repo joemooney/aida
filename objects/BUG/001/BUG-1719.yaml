@@ -27,13 +27,21 @@ description: |-
   2. No call site in doctor_cmd.rs derives a count, an action, or a category from `.contains()` on a `summary` or `reason` string. Verified by grep in the test.
   3. Rewording any operator-facing reason or summary string in this category does not change any finding's action or any ship-path count. Proven by a test that changes the wording and asserts the classification is unmoved — the inverse of a non-vacuity proof.
   4. The existing BUG-1718 and TASK-1534 behaviour is unchanged: bug_1657, bug_1718 and task_1534 suites stay green.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T19:40:15.973554276Z
-modified_at: 2026-09-28T19:40:15.973554276Z
+modified_at: 2026-09-28T19:40:22.932420507Z
 req_type: Bug
+history:
+- id: 01a0e988-5c14-76d1-b2bb-33d2b03dec66
+  author: joe
+  timestamp: 2026-09-28T19:40:22.932418471Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 1892671e6e5523e187f3b390ec02a8f666bfb1a5
   branch: main
