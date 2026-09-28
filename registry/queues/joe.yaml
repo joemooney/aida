@@ -1,4 +1,12 @@
 - user_id: joe
+  requirement_id: 01a0de72-a5c3-7492-a40a-661419255153
+  position: -5000
+  added_by: joe
+  note: 'PR #2254 exact head 0500c7adccb9 has independent Codex request-changes: legacy Codex skills remain duplicate discovery; status understates this; doctor misses legacy symlinks. Focused test could not acquire the cargo slot lock.'
+  added_at: 2026-09-28T11:27:29.190247884Z
+  for_role: advisor
+  added_by_machine: imac
+- user_id: joe
   requirement_id: 01a0e603-481b-7670-a653-89bc492df94c
   position: -4000
   added_by: joe
@@ -22,13 +30,6 @@
   added_at: 2026-09-28T11:00:09.784506427Z
   for_role: implementer
   added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0de72-a5c3-7492-a40a-661419255153
-  position: -1000
-  added_by: joe
-  note: Re-drive after launch failed because Codex used read-only /home/joe/.codex; retry with clone-local writable CODEX_HOME.
-  added_at: 2026-09-28T09:53:18.330608386Z
-  for_role: implementer
 - user_id: joe
   requirement_id: 01a0e001-439c-7d92-8bdf-202d939603d9
   position: 0
