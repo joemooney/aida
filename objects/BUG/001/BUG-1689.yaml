@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:20:05.111602861Z
-modified_at: 2026-09-28T12:35:10.348630630Z
+modified_at: 2026-09-28T12:45:34.887906355Z
 req_type: Bug
 tags:
 - flaky ci test-infra etxtbsy linux
@@ -80,11 +80,11 @@ implementation_info:
   implemented_at: 2026-09-28T12:20:57.138708481Z
   implemented_by: joe
 failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: tool-exit
-  detail: 'could not verify implementer branch before phase-2 CI/teardown: could not invoke `git branch --show-current`: No such file or directory (os error 2) (attempt 3/3)'
-  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end <session> --skip-ci`'
-  shelved_by: product
-  shelved_at: 2026-09-28T12:23:39.448793918Z
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'REQUEST CHANGES (advisor, exact head). PR #2256''s test-infra refactor (centralize executable fixtures) BREAKS a test that passes on main: pr_cmd::task_471_stale_base_preflight_tests::preflight_detects_real_stale_overlap_before_reviewer_launch, panicking at task_471_stale_base_preflight_tests.rs:131:80. I verified this is NOT a pre-existing flake and NOT CI infrastructure - the same test passes locally on current main - so the regression belongs to this branch. Required Build is therefore legitimately failing and the merge-hold is correct. Most likely the centralized fixture no longer produces the executable bit or the path shape that preflight test depends on. Fix and re-review at the new head.'
+  recovery_hint: address the review findings, move BUG-1689 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-09-28T12:45:34.887906355Z
 interface_changes: {}
