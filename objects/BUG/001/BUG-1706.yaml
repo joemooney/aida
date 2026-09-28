@@ -57,7 +57,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T06:24:01.976398623Z
-modified_at: 2026-09-28T11:00:44.968975273Z
+modified_at: 2026-09-28T11:28:10.903449526Z
 req_type: Bug
 comments:
 - id: 01a0e6bd-9d74-71d1-9ce4-64bec03d0629
@@ -109,6 +109,11 @@ comments:
   content: 'PROXY DECISION (product for Joe): prioritize this high-impact dry-run integrity bug next. Its acceptance is bounded and directly protects operators from a no-op command changing a real mirror; the currently protected review holds remain untouched.'
   created_at: 2026-09-28T11:00:09.112176175Z
   modified_at: 2026-09-28T11:00:09.112176175Z
+- id: 01a0e7c5-bc97-7393-8023-651fc773e9f1
+  author: joe
+  content: 'Dispatch recovery: the aida do implementer started in /tmp, but stopped before editing after the preclaimed lease was reported already_claimed and Codex tool execution hit an app-server socket sandbox error. Verified clean worktree and ended lease; returning this spec to Approved for a clean pickup.'
+  created_at: 2026-09-28T11:28:10.903449526Z
+  modified_at: 2026-09-28T11:28:10.903449526Z
 history:
 - id: 01a0e6af-72c9-7902-beff-aab88d842433
   author: joe
