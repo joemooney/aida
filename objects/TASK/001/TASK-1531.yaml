@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:36:46.531543123Z
-modified_at: 2026-09-28T09:28:58.532190731Z
+modified_at: 2026-09-28T09:33:54.196468273Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -45,4 +45,9 @@ comments:
   created_at: 2026-09-26T21:33:07.404496191Z
   modified_at: 2026-09-26T21:33:07.404496191Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0e75d-1c94-7312-a1bb-0fc9dfa1d2a8
+  author: joe
+  content: 'Implemented and pushed as commit 537472bd89; PR #2253 opened for TASK-1531. Local targeted Cargo test remains unverified: mandatory /run/user/1000/cargo-slots-1000 mount is read-only, so opening queue.lock failed (Read-only file system), followed by fd: ambiguous redirect. Cargo slot lock was not bypassed. Required Ubuntu Build is pending; no merge performed.'
+  created_at: 2026-09-28T09:33:54.196468273Z
+  modified_at: 2026-09-28T09:33:54.196468273Z
 execution_mode: drive
