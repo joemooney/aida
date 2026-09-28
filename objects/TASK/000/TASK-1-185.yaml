@@ -9,12 +9,12 @@ description: |-
 
   PR: #2242
   Reviewed sha: c0f90a4796d55c6d52345a76763887f33a221801
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-28T13:11:12.966337830Z
-modified_at: 2026-09-28T15:53:34.509512167Z
+modified_at: 2026-09-28T15:53:35.753874290Z
 req_type: Task
 tags:
 - carried-from:BUG-1673
@@ -47,6 +47,11 @@ comments:
   created_at: 2026-09-28T15:53:34.509512167Z
   modified_at: 2026-09-28T15:53:34.509512167Z
   session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+- id: 01a0e8b8-bb09-7253-8676-d31c34553dfa
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/tool-exit: the implementer session exited 1 — it was aborted or errored (attempt 3/3). No triage reason was given.'
+  created_at: 2026-09-28T15:53:35.753872929Z
+  modified_at: 2026-09-28T15:53:35.753872929Z
 history:
 - id: 01a0e83c-4e44-70f1-b658-6ba0f2a9738a
   author: joe
@@ -55,12 +60,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e8b8-bb09-7253-8676-d30b9df0beaa
+  author: joe
+  timestamp: 2026-09-28T15:53:35.753864474Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: tool-exit
-  detail: the implementer session exited 1 — it was aborted or errored (attempt 3/3)
-  recovery_hint: 'Continue the implementer session: `aida queue work TASK-204 --resume`'
-  shelved_by: product
-  shelved_at: 2026-09-28T14:41:15.209458441Z
