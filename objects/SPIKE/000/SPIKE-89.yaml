@@ -15,12 +15,12 @@ description: |-
   - The prototype does not emit animation when stdin/stdout are not terminals or when machine-readable output is selected.
   - The prototype documents the terminal assumptions and recommended integration boundary for `aida init` and `aida agent new`.
   - Automated tests cover mode selection and cancellation/cleanup logic where terminal-independent testing is possible; manual verification covers the real terminal interaction.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T03:16:37.130372260Z
-modified_at: 2026-09-28T10:29:47.707681527Z
+modified_at: 2026-09-28T10:46:49.535968172Z
 req_type: Spike
 tags:
 - batch:groom-2026-09-25
