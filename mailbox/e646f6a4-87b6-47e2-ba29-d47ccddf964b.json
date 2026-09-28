@@ -1,0 +1,15 @@
+{
+  "id": "e646f6a4-87b6-47e2-ba29-d47ccddf964b",
+  "thread_id": "e646f6a4-87b6-47e2-ba29-d47ccddf964b",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "task199-runner"
+  },
+  "timestamp": 1790562019480,
+  "body": "Please send an immediate status through AIDA mailbox. Your worktree has staged changes in history_layout.rs and tests/test_history_templates.py; preserve them, run the named tests and fmt, commit/open the PR if complete, and report any blocker. Do not reset or stage unrelated files.",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}

@@ -1,0 +1,15 @@
+{
+  "id": "989f43d3-caaf-4f37-a563-e3b51b76905b",
+  "thread_id": "989f43d3-caaf-4f37-a563-e3b51b76905b",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "bug1695-runner"
+  },
+  "timestamp": 1790562018629,
+  "body": "Please send an immediate status through AIDA mailbox: root cause found, files changed, and next concrete action. Continue the BUG-1695 work in its leased worktree; use --add-dir /run/user/1000/cargo-slots-1000 for every cargo build/test and do not leave unexplained retries. No main merge.",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}

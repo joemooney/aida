@@ -1,0 +1,15 @@
+{
+  "id": "9e85bf0b-1874-4529-a8f7-2676f7ffac2b",
+  "thread_id": "9e85bf0b-1874-4529-a8f7-2676f7ffac2b",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "task1547-rework"
+  },
+  "timestamp": 1790561904368,
+  "body": "HARD STOP before editing: your AIDA process cwd is /home/joe/ai/aida, which contains Joe user changes for emergency BUG-1696 in aida-cli-lib/src/cli.rs and lib.rs. Do not edit, stage, or test in this main worktree. Continue only after you have changed directory to /home/joe/ai/aida-task1547 and verified `git -C /home/joe/ai/aida-task1547 branch --show-current` is task-1547-work. Keep all changes there. Never stage with `git add .`; commit only your implementation files. Keep main untouched.",
+  "urgent": true,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}
