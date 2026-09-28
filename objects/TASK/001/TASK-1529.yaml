@@ -3,12 +3,12 @@ spec_id: TASK-1529
 agreed_id: TASK-1529
 title: 'Pre-flight guard: retract the published PR when the post-publication pre-flight guard fails'
 description: 'Implements the operator''s decision on TASK-1289 (option B, retract on failure; recorded 2026-09-26). TASK-1289 completed with the boundary still advisory. Acceptance: 1. When the pre-flight guard fails after an agent-opened PR is accepted, AIDA converts the PR to draft (or closes it) and comments the failing guard output; the spec returns to in-progress for the same implementer. 2. A passing guard leaves the PR untouched. 3. The retraction is idempotent and never touches a PR the agent did not open. 4. Tests with a fake forge cover fail, pass and not-ours cases.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:40.554193021Z
-modified_at: 2026-09-28T23:12:58.432587466Z
+modified_at: 2026-09-28T23:25:53.336602566Z
 req_type: Task
 relationships:
 - rel_type: Blocks
@@ -125,4 +125,21 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a0ea56-d119-75d3-b17c-5482ae1f219d
+  author: aida-auto-bump
+  timestamp: 2026-09-28T23:25:53.305868158Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0ea56-d138-7dd0-9c1d-b9565cae7f50
+  timestamp: 2026-09-28T23:25:53.336599827Z
+  agent: aida
+  commit_sha: 59e859b49f784a8633a049ad39cf243345289ea9
+  summary: Completed via merge 59e859b4
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T23:25:53.305785593Z
+  completion_sha: 59e859b49f784a8633a049ad39cf243345289ea9
