@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T17:29:11.789280036Z
-modified_at: 2026-09-27T14:26:40.546272780Z
+modified_at: 2026-09-28T13:45:47.033037700Z
 req_type: Story
 relationships:
 - rel_type: Blocks
@@ -185,6 +185,38 @@ comments:
   created_at: 2026-09-27T14:26:40.546272780Z
   modified_at: 2026-09-27T14:26:40.546272780Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e843-b719-7a41-aa39-5121c60ac33f
+  author: joe
+  content: |-
+    DISPROVED the carried finding about vacuous fail-closed tests — recording the evidence so it is not re-raised.
+
+    THE CLAIM (from the CHANGES REQUESTED verdict at df029249e8e0, 2026-09-28T01:43Z):
+    story_1476_acceptance_trust_tests.rs:550-559 cases `"*\\r"` and `"*\\n"` 'contain a literal backslash followed by r/n in Rust; TOML consequently produces backslash-r/backslash-n text, which is refused by the backslash rule' — i.e. the tests allegedly never construct a real CR/LF byte and so prove nothing about the trim-ordering fix.
+
+    WHY IT IS WRONG: the claim stops one layer too early. The Rust literal `"*\\r"` is indeed the three characters `*`, `\`, `r`, and format! interpolates them into the TOML body as `acceptance_command_allow = ["*\r"]`. But `\r` IS a valid escape in a TOML basic string, so the TOML parser decodes it. Verified with tomllib (TOML 1.0):
+
+      rust literal '*\\r'          -> TOML text '["*\r"]'          -> parsed bytes: b'*\r'
+      rust literal 'cargo test\\r' -> TOML text '["cargo test\r"]' -> parsed bytes: b'cargo test\r'
+
+    So the parsed allowlist entry really does carry a trailing U+000D. There is no backslash left in the value for the backslash rule to catch.
+
+    THE DECISIVE TEST (per the revert-the-fix discipline): I reverted the production fix in acceptance_command_policy_from_toml back to the pre-fix ordering (trim first, then contains_refused_chars(trimmed)) and re-ran the test. It FAILS:
+
+      test story_1476_allow_entry_refused_char_checked_before_trim ... FAILED
+      panicked at story_1476_acceptance_trust_tests.rs:560:9:
+      entry "*\\r" must deny the whole policy
+      test result: FAILED. 0 passed; 1 failed
+
+    It fails on the FIRST case, which is precisely the CR case the finding said was inert. Mechanism: Rust's str::trim treats CR as whitespace, so without the fix `*\r`.trim() == `*`, contains_refused_chars("*") is false, and the entry is accepted as full trust — the exact escalation the spec exists to prevent.
+
+    The fix was restored immediately; the branch tree is clean at ade1cecfb67c and nothing from the experiment was committed.
+
+    Caveat worth keeping: of the six cases in that loop, the `cargo test\\u0007` (BEL) case WOULD still pass without the fix, since trim does not strip BEL. The CR and LF cases are the ones carrying the proof. That is sufficient, but anyone adding cases here should know which ones are load-bearing.
+
+    Verified by the advisor seat, 2026-09-28.
+  created_at: 2026-09-28T13:45:47.033037700Z
+  modified_at: 2026-09-28T13:45:47.033037700Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
 history:
 - id: 01a0def4-fc93-7511-9f30-c80d96061f8f
   author: joe
