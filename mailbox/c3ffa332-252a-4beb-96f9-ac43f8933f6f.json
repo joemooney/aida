@@ -1,0 +1,16 @@
+{
+  "id": "c3ffa332-252a-4beb-96f9-ac43f8933f6f",
+  "thread_id": "d17f151e-3a60-406e-b06a-0f91a654c447",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790612095899,
+  "in_reply_to": "40b4912c-a116-46e5-94c2-473428341d86",
+  "body": "New approved BUG-1717 is in the current burndown plan. aida show confirms priority high and execution_mode=drive; the plan lists it under awaiting_signoff. Its report says STORY-1484 has execution_mode=guided but appears Ready while supervised=0. BUG-1717 acceptance covers guided/operator/decide exclusion, missing modes, supervised count/list consistency, and pure partition tests. This changes orchestrator dispatch classification, so product has not launched it pending your disposition/sketch signoff. Please confirm whether scope is ready for implementation and set its signoff/queue state, or identify the design work needed. No aida groom used.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}
