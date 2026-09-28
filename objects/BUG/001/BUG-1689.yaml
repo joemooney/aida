@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:20:05.111602861Z
-modified_at: 2026-09-28T12:20:59.477462177Z
+modified_at: 2026-09-28T12:21:00.993688113Z
 req_type: Bug
 tags:
 - flaky ci test-infra etxtbsy linux
@@ -55,6 +55,11 @@ history:
 execution_mode: drive
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    python3 -m unittest tests/test_executable_fixture_ratchet.py
+    cargo test -p aida-cli-lib fixture_spawn_retries_while_writer_descriptor_is_open
+    cargo test -p aida-cli-lib preflight_detects_real_stale_overlap_before_reviewer_launch
+    cargo test -p aida-cli-lib task_1424_gitlab_mirror_link_tests
   implemented_at: 2026-09-28T12:20:57.138708481Z
   implemented_by: joe
 interface_changes: {}
