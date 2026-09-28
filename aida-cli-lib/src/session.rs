@@ -2065,37 +2065,74 @@ pub fn claude_contained_flags() -> Vec<String> {
     ]
 }
 
-/// BUG-1698: AIDA's own MCP server definition, handed to claude explicitly so a supervised
-/// seat never stops on Claude Code's project-MCP trust modal.
+/// Which AIDA surface a supervised seat gets. TASK-1558 default is `Off`: SPIKE-73 measured MCP at
+/// ~1.8-2x the CLI's cost for identical or worse success over a 72-cell matrix, and the result is
+/// structural — on-demand schema loading does not rescue it. No shipped skill references the MCP
+/// surface, and every generated seat brief already speaks in `aida ...` CLI verbs.
 ///
-/// The modal fires because `.mcp.json` is repository content that the operator has never
-/// approved for this machine: every `aida agent new claude` launch in this repo sat on
+/// Only claude exposes launch-time MCP flags. Codex and antigravity register MCP in their own
+/// config files, so this cannot be enforced at launch for them.
+// trace:TASK-1558 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum AgentMcpSurface {
+    /// No MCP servers at all; the `aida` CLI is the surface.
+    #[default]
+    Off,
+    /// Only AIDA's own server definition (BUG-1698).
+    Aida,
+    /// Inject nothing; the vendor's own MCP configuration applies, trust prompt included.
+    Native,
+}
+
+impl AgentMcpSurface {
+    // trace:TASK-1558 | ai:claude
+    pub(crate) fn parse(raw: &str) -> Result<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "off" | "none" | "cli" => Ok(Self::Off),
+            "aida" => Ok(Self::Aida),
+            "native" | "vendor" => Ok(Self::Native),
+            other => anyhow::bail!(
+                "[agents] mcp value `{other}` is not recognised — expected `off` (no MCP, the \
+                 `aida` CLI is the surface), `aida` (attach AIDA's own server) or `native` (leave \
+                 the vendor's MCP configuration alone)"
+            ),
+        }
+    }
+
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Aida => "aida",
+            Self::Native => "native",
+        }
+    }
+}
+
+/// The MCP launch flags for a claude seat under `surface`.
+///
+/// BUG-1698: every `aida agent new claude` launch in an AIDA repo used to stop on Claude Code's
+/// project-MCP trust modal —
 ///
 ///   New MCP server found in this project: aida
 ///   > Continue without using this MCP server
 ///
-/// in a PTY nobody was watching, and the caller blocked until it was killed — a 0% success
-/// rate for the whole vendor. `--permission-mode bypassPermissions` does NOT dismiss it;
-/// project-MCP trust is a separate gate from tool permission mode (probed on claude v2.1.283).
-///
-/// We do NOT enable the repo's entry — a checkout could declare anything under the name
-/// `aida`. AIDA emits the definition it already knows (`aida mcp-serve`) and pairs it with
-/// `--strict-mcp-config` so nothing from `.mcp.json` is loaded at all. The cost is that other
-/// MCP sources are also ignored for supervised seats, which is the deterministic tool surface
-/// we want for one; `--no-default-flags` is the escape hatch back to the native posture.
-///
-/// Returns empty unless the project actually declares a server named `aida`, so a project
-/// without one keeps the untouched native launch. Pure apart from reading `.mcp.json`.
+/// in a PTY nobody was watching, blocking the caller until it was killed. `--permission-mode
+/// bypassPermissions` does NOT dismiss it; project-MCP trust is a separate gate from tool
+/// permission mode (probed on claude v2.1.283). `--strict-mcp-config` closes the gate under both
+/// `Off` and `Aida` because nothing from `.mcp.json` is consulted — so a checkout cannot smuggle a
+/// command in under the name `aida`.
 // trace:BUG-1698 | ai:claude
-pub(crate) fn claude_mcp_trust_flags(project_root: &Path) -> Vec<String> {
-    if !project_declares_aida_mcp_server(project_root) {
-        return Vec::new();
+// trace:TASK-1558 | ai:claude
+pub(crate) fn claude_mcp_flags(surface: AgentMcpSurface) -> Vec<String> {
+    match surface {
+        AgentMcpSurface::Off => vec!["--strict-mcp-config".to_string()],
+        AgentMcpSurface::Aida => vec![
+            "--mcp-config".to_string(),
+            aida_mcp_server_config_json(),
+            "--strict-mcp-config".to_string(),
+        ],
+        AgentMcpSurface::Native => Vec::new(),
     }
-    vec![
-        "--mcp-config".to_string(),
-        aida_mcp_server_config_json(),
-        "--strict-mcp-config".to_string(),
-    ]
 }
 
 /// The `aida` server definition AIDA vouches for, built here rather than read from the
@@ -2111,22 +2148,6 @@ pub(crate) fn aida_mcp_server_config_json() -> String {
         }
     })
     .to_string()
-}
-
-/// True when the project's `.mcp.json` declares a server named `aida`. Only the NAME is read;
-/// the command it points at is deliberately ignored.
-// trace:BUG-1698 | ai:claude
-fn project_declares_aida_mcp_server(project_root: &Path) -> bool {
-    let Ok(raw) = std::fs::read_to_string(project_root.join(".mcp.json")) else {
-        return false;
-    };
-    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&raw) else {
-        return false;
-    };
-    parsed
-        .get("mcpServers")
-        .and_then(|servers| servers.get("aida"))
-        .is_some()
 }
 
 fn claude_contained_settings_json() -> String {

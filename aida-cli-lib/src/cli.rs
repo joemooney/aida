@@ -8195,9 +8195,15 @@ pub enum BriefCommand {
 pub enum AgentCommand {
     /// Launch a new agent process.
     ///
-    /// This lane spawns a one-shot agent that does its work, ships a PR, and
-    /// exits. It is NOT the orchestrated pipeline — it does not run CI, the
-    /// reviewer phase, or the merge for you. For a supervised end-to-end drain
+    /// This lane spawns an INTERACTIVE agent in the foreground and BLOCKS until that
+    /// agent's session exits. A vendor TUI does not exit when its turn ends — it returns
+    /// to its prompt — so a seat that has finished its work still holds this command.
+    /// Budget for that: run it where you can leave it, or stop the seat with
+    /// `aida agent stop <name>` once it reports. `aida agent status` shows `idle` for a
+    /// seat that is waiting at a prompt rather than working.
+    ///
+    /// It is also NOT the orchestrated pipeline — it does not run CI, the reviewer
+    /// phase, or the merge for you. For a supervised end-to-end drain
     /// (implementer → CI → reviewer → merge → pull), use
     /// `aida queue work <SPEC> --auto-complete` instead.
     // trace:TASK-626 | ai:claude — plain `//` keeps the marker out of `--help`.

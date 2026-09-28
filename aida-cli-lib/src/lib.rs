@@ -28615,14 +28615,18 @@ fn apply_agent_default_flags(
         };
         config.default_args.extend(per_tool);
 
-        // BUG-1698: hand claude AIDA's own MCP server definition so a supervised seat never
-        // stops on the project-MCP trust modal. Inside `use_config_defaults` so
+        // BUG-1698 / TASK-1558: give a claude seat the configured AIDA surface. The default
+        // (`off`) loads no MCP servers at all — SPIKE-73 measured MCP at ~1.8-2x the CLI's cost
+        // for identical or worse success — and it also closes the project-MCP trust modal that
+        // used to block every claude launch. Inside `use_config_defaults` so
         // `--no-default-flags` remains the escape hatch to the untouched native launch.
         // trace:BUG-1698 | ai:claude
+        // trace:TASK-1558 | ai:claude
         if config.agent_type == "claude" {
+            let surface = load_agents_mcp(project_root)?;
             config
                 .default_args
-                .extend(session::claude_mcp_trust_flags(project_root));
+                .extend(session::claude_mcp_flags(surface));
         }
     }
     let resolved_model = flag_options
@@ -28715,6 +28719,35 @@ fn load_agents_bypass(project_root: &std::path::Path) -> Result<bool> {
         bypass = v;
     }
     Ok(bypass)
+}
+
+/// TASK-1558: resolve `[agents] mcp` with the same user-base-then-project precedence as
+/// `bypass` / `contained`. Absent everywhere means the default surface (`off`).
+// trace:TASK-1558 | ai:claude
+fn load_agents_mcp(project_root: &std::path::Path) -> Result<session::AgentMcpSurface> {
+    let mut surface = session::AgentMcpSurface::default();
+    if let Some(home) = aida_home_dir() {
+        if let Some(raw) = read_agents_string_from_file(&home.join(".aida/agents.toml"), "mcp")? {
+            surface = session::AgentMcpSurface::parse(&raw)?;
+        }
+    }
+    if let Some(raw) = read_agents_string_from_file(&project_root.join(".aida/agents.toml"), "mcp")?
+    {
+        surface = session::AgentMcpSurface::parse(&raw)?;
+    }
+    Ok(surface)
+}
+
+// trace:TASK-1558 | ai:claude
+fn read_agents_string_from_file(path: &std::path::Path, key: &str) -> Result<Option<String>> {
+    let Some(value) = parse_agents_toml(path)? else {
+        return Ok(None);
+    };
+    Ok(value
+        .get("agents")
+        .and_then(|agents| agents.get(key))
+        .and_then(|v| v.as_str())
+        .map(str::to_string))
 }
 
 // trace:STORY-567 | ai:codex
@@ -30735,6 +30768,14 @@ fn render_agent_launch_noexec(
         "  resolved: {}\n",
         resolved_agent_permission_summary(config.agent_type, &exec_args)
     ));
+    if config.agent_type == "claude" {
+        // TASK-1558 AC4: never make the operator guess which AIDA surface the seat got.
+        // trace:TASK-1558 | ai:claude
+        let surface = load_agents_mcp(&plan.project_root)
+            .map(|s| s.as_str())
+            .unwrap_or("(invalid — see [agents] mcp)");
+        out.push_str(&format!("  aida surface (agents.toml mcp): {surface}\n"));
+    }
     if config.agent_type == "codex" {
         out.push_str(&format!(
             "  codex sandbox: {}\n",
@@ -31385,31 +31426,101 @@ fn agent_stop(name: &str) -> Result<()> {
     let agent_ctx = build_agent_classify_context(&project_root, &leases);
     let registry_agents = agent_registry::list_agent_views(&project_root, &agent_ctx);
 
-    let found = registry_agents.into_iter().find(|agent| {
-        if let Some(ref active_name) = agent.name {
-            active_name.eq_ignore_ascii_case(name_trimmed)
-        } else {
-            let fallback_id = format!("{}#{}", agent.agent_type, agent.pid);
-            let fallback_id_alt = format!("{}-{}", agent.agent_type, agent.pid);
-            fallback_id.eq_ignore_ascii_case(name_trimmed)
-                || fallback_id_alt.eq_ignore_ascii_case(name_trimmed)
-        }
-    });
+    // BUG-1703: the registry is PID-keyed, so relaunching a name leaves SEVERAL entries under it.
+    // Taking only the first match signalled a stale pid, reaped that entry, and printed success
+    // while the real seat kept running and kept its caller blocked — observed on 3 of 8 stops.
+    // trace:BUG-1703 | ai:claude
+    let matches: Vec<_> = registry_agents
+        .into_iter()
+        .filter(|agent| {
+            if let Some(ref active_name) = agent.name {
+                active_name.eq_ignore_ascii_case(name_trimmed)
+            } else {
+                let fallback_id = format!("{}#{}", agent.agent_type, agent.pid);
+                let fallback_id_alt = format!("{}-{}", agent.agent_type, agent.pid);
+                fallback_id.eq_ignore_ascii_case(name_trimmed)
+                    || fallback_id_alt.eq_ignore_ascii_case(name_trimmed)
+            }
+        })
+        .collect();
 
-    let agent = match found {
-        Some(agent) => agent,
-        None => {
-            anyhow::bail!("no active agent found with name '{}'", name_trimmed);
-        }
-    };
+    if matches.is_empty() {
+        anyhow::bail!("no active agent found with name '{}'", name_trimmed);
+    }
 
-    println!("Stopping agent '{}' (PID {})...", name_trimmed, agent.pid);
-    terminate_pids_with_grace(&[agent.pid], 5);
-    let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    let all_pids: Vec<u32> = matches.iter().map(|a| a.pid).collect();
+    let alive = live_pids(&all_pids);
+
+    // AC4: an entry whose process is genuinely gone is reaped and reported as already gone —
+    // which is NOT the same as having stopped something.
+    for agent in matches.iter().filter(|a| !alive.contains(&a.pid)) {
+        println!(
+            "  pid {} was already gone — reaping its stale registry entry",
+            agent.pid
+        );
+        let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    }
+
+    if alive.is_empty() {
+        println!(
+            "{} Agent '{}' was already stopped; {} stale registry entr{} reaped.",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            name_trimmed,
+            matches.len(),
+            if matches.len() == 1 { "y" } else { "ies" }
+        );
+        return Ok(());
+    }
+
     println!(
-        "{} Agent '{}' stopped.",
+        "Stopping agent '{}' (PID{} {})...",
+        name_trimmed,
+        if alive.len() == 1 { "" } else { "s" },
+        alive
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let survivors = terminate_pids_with_grace(&alive, 5);
+
+    for agent in matches
+        .iter()
+        .filter(|a| alive.contains(&a.pid) && !survivors.contains(&a.pid))
+    {
+        let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    }
+
+    // AC1: never claim a stop that did not happen.
+    if !survivors.is_empty() {
+        anyhow::bail!(
+            "agent `{}` is STILL ALIVE after SIGTERM and SIGKILL: pid(s) {}. Its registry entries \
+             were left in place. Check for a process that re-parents or respawns, and inspect the \
+             tree with `ps -o pid,ppid,time,args -p {}`.",
+            name_trimmed,
+            survivors
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+            survivors
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+    }
+
+    println!(
+        "{} Agent '{}' stopped (pid{} {}).",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
-        name_trimmed
+        name_trimmed,
+        if alive.len() == 1 { "" } else { "s" },
+        alive
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     Ok(())
 }
@@ -39967,7 +40078,32 @@ fn print_status_working_tree_section(root: &std::path::Path) {
 
 /// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
 /// are still alive. trace:BUG-61 | ai:claude
-fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
+/// Which of `pids` are running right now.
+///
+/// A ZOMBIE does not count. A terminated child stays in the process table until its parent
+/// reaps it, and sysinfo still lists it — so treating "present" as "alive" would make
+/// `agent stop` report that it had failed to kill something it had just killed.
+// trace:BUG-1703 | ai:claude
+fn live_pids(pids: &[u32]) -> Vec<u32> {
+    use sysinfo::{ProcessRefreshKind, ProcessStatus, RefreshKind, System};
+    let mut sys =
+        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    pids.iter()
+        .copied()
+        .filter(|&pid| {
+            sys.process(sysinfo::Pid::from_u32(pid))
+                .is_some_and(|p| !matches!(p.status(), ProcessStatus::Zombie | ProcessStatus::Dead))
+        })
+        .collect()
+}
+
+/// SIGTERM, wait, SIGKILL the survivors, then report who is STILL alive.
+///
+/// BUG-1703: this used to return `()`, and `agent stop` printed success regardless. Callers must
+/// be able to tell a real stop from a signal that landed on nothing.
+// trace:BUG-1703 | ai:claude
+fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) -> Vec<u32> {
     use sysinfo::{ProcessRefreshKind, RefreshKind, Signal, System};
     let mut sys =
         System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
@@ -39988,6 +40124,9 @@ fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
             let _ = p.kill_with(Signal::Kill);
         }
     }
+    // SIGKILL is not instantaneous; give the kernel a moment before judging.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    live_pids(pids)
 }
 
 /// STORY-73: resolution chain for `aida session end` (no arg). Tries in
@@ -41928,7 +42067,7 @@ fn session_end(
             "→".dimmed(),
             leaked.len()
         );
-        terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
+        let _ = terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
     }
 
     // STORY-73: human output to stderr, eval-friendly `unset` to stdout
