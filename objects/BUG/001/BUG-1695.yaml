@@ -19,12 +19,12 @@ description: |-
   - Root-cause first: identify WHAT is still writing under the sandbox root at destroy time and state it in the fix. A bare retry loop added without that answer is not acceptable, because it would equally mask a genuine leak of a child process.
   - A test demonstrates the fixed behavior deterministically with fixtures — no sleeps and no polling loops.
   - If the cause is a leaked child process, the fix closes the leak rather than only tolerating it at teardown.
-status: InProgress
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T20:04:35.709308377Z
-modified_at: 2026-09-28T02:05:30.355614949Z
+modified_at: 2026-09-28T02:06:42.088352643Z
 req_type: Bug
 comments:
 - id: 01a0e478-ad0f-7b23-b15a-84aa065137dd
@@ -67,3 +67,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e5c3-afa8-7240-958d-4ac385161bcb
+  author: joe
+  timestamp: 2026-09-28T02:06:42.088333293Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
