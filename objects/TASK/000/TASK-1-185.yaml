@@ -9,12 +9,12 @@ description: |-
 
   PR: #2242
   Reviewed sha: c0f90a4796d55c6d52345a76763887f33a221801
-status: Approved
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-28T13:11:12.966337830Z
-modified_at: 2026-09-28T17:17:45.742700285Z
+modified_at: 2026-09-28T17:17:50.079663471Z
 req_type: Task
 tags:
 - carried-from:BUG-1673
@@ -73,4 +73,11 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a0e905-da7f-7541-a6bb-21236b7ff97e
+  author: joe
+  timestamp: 2026-09-28T17:17:50.079660156Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
 execution_mode: drain
