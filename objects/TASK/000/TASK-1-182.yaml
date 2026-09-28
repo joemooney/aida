@@ -1,0 +1,30 @@
+id: 01a0e817-f046-7410-b48b-026d2b3e53b6
+spec_id: TASK-1-182
+title: 'AC5 is still unmet: this PR does not let callers distinguish a finished/idle ag…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1701, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  AC5 is still unmet: this PR does not let callers distinguish a finished/idle agent from one still working without attaching to its PTY. The PR body explicitly says BUG-1704 tracks this behavior, but BUG-1701 still lists it as acceptance. Either include the status signal here or get the owning acceptance criteria updated before treating BUG-1701 as passed.
+
+  PR: #2249
+  Reviewed sha: 5632229e663b9d782e1f2c427a3176792f8447ae
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T12:57:58.086422678Z
+modified_at: 2026-09-28T12:57:58.086422678Z
+req_type: Task
+tags:
+- carried-from:BUG-1701
+- finding-hash:b33426a8
+- from-review:PR-2249
+- kind:carried-forward
+filed_at:
+  code_sha: 5ed030a3cd22458aaf9984399b09fb4c0c9e1874
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: '5632229e66'
+  vendor: antigravity
+  session: fc2bef36-971e-4674-a858-0de8a84a1006
