@@ -1282,6 +1282,23 @@ relationship at file-time.
 | **Drained with shelved members (EPIC-28)** | **`2`** |
 | **Hard failure — un-shelvable phase fail, build / env / internal (TASK-1054)** | **`3`** |
 | `--max-tokens` / `--max-iterations` / `--max-runtime` cap stop | `7` |
+| Stopped by SIGTERM (systemd `RuntimeMaxSec` / `OOMPolicy=stop`, `aida drain stop --now`, a manual kill) | `143` |
+
+**SIGTERM.** The drain catches SIGTERM: the first one writes the cooperative
+stop request (no further head is picked up) and stamps `interrupted_at` /
+`interrupted_reason = "sigterm"` on every lease this drain created (an
+*interrupted* lease, not an abandoned one). It then waits up to
+`AIDA_DRAIN_TERM_GRACE_SECS` (default 30, at most 60) for the in-flight
+phase to land, holding the drain lock the whole time so no other driver can
+take it while this one may still be integrating on `main`; a second SIGTERM
+or the end of that window releases the lock and forces the exit with `143`.
+`aida drain stop --now` therefore never removes the lock file under a live
+drain: it waits (bounded) for the pid to exit and otherwise leaves the lock
+to the drain to release. `aida ps` reads the mark: a marked lease with no live process and
+a clean worktree shows as `stopped` (worktree intact; resume with the usual
+`aida queue work <spec>`) rather than as a dead agent. Without a signal
+nothing changes. Unix only; on Windows the stop paths are unchanged
+(next-tick reap). <!-- trace:TASK-1518 | ai:claude -->
 
 Exit `2` is the EPIC-28 signal: "the drain did its job — independents shipped,
 failures parked — but you have triage to do." Scripts that wrap a batch

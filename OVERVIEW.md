@@ -1,9 +1,20 @@
 # AIDA — Overview
 
+History supports scoped named templates and ordered event fields across CLI/MCP.
+Template parsing, event-local field projection, and config persistence share
+`aida-cli-lib/src/history_layout.rs`; builtin full/oneline keep legacy CLI modes.
+Template saves preserve inline TOML tables; date formatting consumes the feed's
+already-local minute timestamps without a second timezone conversion.
+See [history layout docs](docs/cli/08-reporting.md#history-layouts-and-columns)
+and the [accepted storage ADR](docs/aida/05-decisions/ADR-history-template-config.md).
+<!-- trace:STORY-1477 | ai:codex -->
+
 <!-- trace:TASK-1187 | ai:codex -->
 > **What this is — read first.** AIDA is the agent-collaboration layer for a codebase: stable spec IDs, typed requirement relationships, code-to-spec trace comments, and a git-canonical graph exposed through CLI and MCP so humans, Claude Code, Codex CLI, and other agents can coordinate from the same project-owned record. It is alpha software: the core graph, traceability, queue, and MCP workflows are proven in this repository's dogfood, while broader-team scale, unattended reliability, and onboarding remain the precise open slices documented in [docs/research/2026-07-08-coordinating-multi-vendor-agent-fleets.md](docs/research/2026-07-08-coordinating-multi-vendor-agent-fleets.md) and [docs/research/ablations/](docs/research/ablations/).
 
-**AIDA is your project's missing index — of intent, not just code.** A hidden kernel that maintains a stable, queryable graph of what exists *and why*, served to AI through MCP and to you through a small CLI. (Auto-derived code-graph tools index what the code *is*; AIDA indexes what it was *for* — and keeps the two linked.)
+**AIDA captures the intent behind your system — requirements, decisions, rejected alternatives, and the links from code back to them — so your coding agents work from it today, and your project is far better placed to be rebuilt tomorrow than it would be from commit messages and a README alone.** The claim is comparative, not absolute: AIDA does not promise to regenerate a whole system; it promises that a project which used AIDA is materially better positioned than the same project without it. The 60-second proof is `aida why <file:line>`. (Auto-derived code-graph tools index what the code *is*; AIDA keeps what it was *for* — and keeps the two linked. The earlier "your project's missing index" headline was superseded on 2026-09-26 by this one; see [the positioning deep-dive](docs/positioning/2026-09-24-spike-86-positioning-from-engineering.md).)
+
+Two value claims sit behind that sentence. **Survival:** the corpus outlives the code. **Collaboration:** the corpus improves agent work in flight, especially through what the code cannot show — rejected alternatives, contradictions, and deferred intent.
 
 **Without it**, coding agents start every session cold, re-deriving the same context they had yesterday; humans rediscover and re-debate decisions for years; cross-references between code and intent rot silently. **With it**, *"does this already exist?"*, *"why did we choose X?"*, and *"is this code still tied to a live requirement?"* are one query away — for the agent and for you.
 
@@ -31,31 +42,37 @@ The defensible niche is the **agent-collaboration layer**: stable spec IDs, type
 
 **Type protocols.** AIDA stores concise work contracts for spikes, bugs, stories, tasks, decisions, and docs as editable META requirements, with optional `research`, `docs`, and `keystone` lane overlays. Interactive pickup and headless implementer/reviewer prompts inject the resolved protocol before work begins, cite its META ids, cap the combined body at 40 lines, and label the precedence `type < lane < spec acceptance`; a leased session receives the compact type reminder again in its per-turn notice. Inspect them with `aida protocol show <type> [--lane <lane>]`; MCP clients read the identical text at `aida://protocol/<type>[/<lane>]`, and editing either META body changes the next pickup without rebuilding AIDA.
 
+**Drain ownership.** Local drain acquisition retains an observed-live PID/start
+identity regardless of launch age. Queue work, burndown and integration share
+the main checkout's lock, including launches from sibling worktrees. Shared
+cross-clone claims retain their own heartbeat/TTL. This is not an atomic lock
+redesign; see [coverage and limits](docs/testing/bug-1683-drain-lock.md).
+
+<!-- trace:BUG-1682 | ai:codex -->
+**Global queue persistence.** The per-home role queues in `~/.aida/queue/`
+serialize cooperating writers with a permanent `<role>.lock` sidecar held
+across reading, validation, mutation, and atomic YAML replacement. Successful
+reads observe complete published content; only a final missing-file error
+initializes an empty queue. Corrupt documents and other I/O failures propagate
+from mutations, including CLI and autopilot pre-reads. Blocking locks release
+on process death but provide no fairness or bounded wait guarantee. This
+protects membership, not concurrent top/append placement, power-loss durability,
+or writes by older binaries that ignore the sidecar. Never delete a live
+sidecar to clear contention.
+
 **Honest scope.** AIDA is alpha. The core graph, traceability, queue, and MCP workflows have held under this repository's own multi-agent dogfood; broader-team scale, turnkey unattended reliability, and onboarding outside this project are still being validated. Selective gating, not blanket: a programmatic gate beats a stated rule only when the invariant sits *far from the point of action* (attention-distance; [2026-06-18-gate-vs-rule-pilot.md](docs/research/ablations/2026-06-18-gate-vs-rule-pilot.md) falsified the blanket form). Every claim above traces to a finding or a shipped command.
 
 ---
 
-## Public face: the TUI is the product (the platform is what makes it work)
+## First surface: `aida why` and the memory lane (the TUI is a view, not the face)
 
-The visible product — what users install, what they look at, what they tell their friends about — is **a TUI that wraps Claude Code sessions** ([EPIC-26](docs/positioning/) for the implementation track). It hosts Claude Code as a child process. Drop out to a status overlay. Drop back in to the same conversation. Quick-action review, queue, merge, pull. List and switch between multiple Claude sessions. *That's the visible product.*
+The humble first surface is **`aida why <file:line>` plus the memory lane**: point at a line, get the decision behind it; let a project remember decisions across ordinary agent chats before any queue, drain or role exists (see the README's *Start here* section and [The Memory Lane](docs/positioning/memory-lane.md)). Depth — the typed graph, stable IDs, trace enforcement, the MCP server, the queue and review lifecycle, the control plane that keeps the store true under unreliable agent writers — is discovered **through the store**, not through a front-end.
 
-The intended reaction on first sight is **"so what? I could write that in a 20-line bash script."**
+The TUI (`aida tui`, [EPIC-26](docs/positioning/)) is **a view onto the control plane, not the product's face**. It hosts Claude Code as a child process, overlays status, and offers quick actions for review, queue, merge and pull; the CLI and MCP cover every operation without it. For the TUI itself — hosting model, keybindings, status overlay, autonomous drains, crash recovery — see [`docs/tui/README.md`](docs/tui/README.md).
 
-That reaction is a feature, not a bug. Three reasons:
+When adding features or polish, the test is **"does this make the store easier to consult?"** — not "does this make the TUI's quiet depth stronger?".
 
-1. **Low barrier to adoption.** Anyone who looks at AIDA's TUI sees a tool that does what they could imagine doing themselves. No learning curve to be convinced it's worth trying. They install it because it's *obviously easy*, not because they've been sold on a platform vision.
-
-2. **The depth is what they discover after.** Once installed, the TUI's status overlay surfaces stable spec IDs, MCP-served requirement graphs, typed relationships, auto-bump lifecycle, queue routing, role-pure sessions, plan templates, integration recommendations for `/ultraplan` and `/ultrareview`, telemetry-informed deprecation hygiene, the auto-queued reviewer hand-off, the worktree-isolated implementer sessions, the orphan-store provenance trail. None of that is visible up front. It's all underneath the "trivial wrapper."
-
-3. **The platform is the durable value; the TUI is just the surface that exposes it.** If a competing tool ships a similar TUI tomorrow, they'd need to also ship: the YAML-canonical store with serializable IDs, the cache + projection model, the node-aware identity scheme with merge-gate promotion, the MCP server, the trace-comment convention, the relationship graph, the role/session/worktree model, the scaffolded skill set, the auto-bump lifecycle, the integration framework. Months of foundational work. The TUI on top of all that is the easy part; building all that without the TUI is what people who try the bash-script version will discover they're now signed up for.
-
-This is the **Trojan-horse positioning**: ship the visible product as humble. Let people install it because it looks simple. Let them discover, over weeks of use, that they're now using a platform with no equivalent. Don't try to convince anyone of the platform upfront — convince them through their own experience.
-
-> *The TUI is what people will think AIDA is. The platform is what AIDA actually is.*
-
-This framing intentionally shapes documentation, marketing, and prioritization: when adding features, the test isn't "is this visible in the TUI?" — it's "does this make the TUI's quiet depth stronger when someone digs in?" See our standalone [Strategic Positioning Statement](docs/competitive-analysis/positioning.md) for the 8 core pillars of this defensible niche.
-
-For the implementation track + child STORYs see EPIC-26 in the requirements DB (`aida show EPIC-26`). For the TUI itself — hosting model, keybindings, status overlay, autonomous drains, crash recovery — see [`docs/tui/README.md`](docs/tui/README.md). Launch it with `aida tui` (shipped default-on as of STORY-137).
+> **Superseded history.** From 2026-05-14 to 2026-09-26 this section was titled *"Public face: the TUI is the product"* and carried the **Trojan-horse positioning**: ship a deliberately humble TUI, let the platform be discovered through use. The positioning deep-dive ([2026-09-24](docs/positioning/2026-09-24-spike-86-positioning-from-engineering.md)) found it unsupported by the engineering record (the TUI took 1,277 of 176,968 attributed changed lines over 30 days and 0.7% of authored specs), and the decision record `ADR-59` replaced it. The *tactic* it carried — look humble, let depth be discovered — survives, moved to `aida why` and the memory lane.
 
 ---
 
@@ -117,7 +134,7 @@ The strategic implication: AIDA should keep doing the vertical depth that the ho
 - **Don't compete with `/goal`** — compose with it via `aida goal` ([TASK-242](docs/plans/)), which derives machine-checkable conditions from the requirement graph
 - **Don't compete with `/ultraplan`** — compose with it via `aida ultraplan SPEC` ([TASK-113](docs/plans/)) for prompt assembly + `/aida-import-plan` ([TASK-114](docs/plans/)) for output persistence
 - **Don't compete with `/ultrareview`** — compose with it via `/aida-review`'s spec-walk + adversarial-pass discipline (STORY-109, shipped) that uses requirement metadata `/ultrareview` doesn't know about
-- **Don't compete with Claude Code's session model** — extend it via worktree-isolated implementer sessions, role-pure boundaries, queue routing, the (planned) TUI that hosts Claude Code itself ([EPIC-26](docs/positioning/))
+- **Don't compete with Claude Code's session model** — extend it via worktree-isolated implementer sessions, role-pure boundaries, queue routing, and the TUI that hosts Claude Code itself as a view onto the control plane ([EPIC-26](docs/positioning/))
 - **Compete vertically only where the platform structurally won't go** — the graph, the IDs, the trace network, the queue/role/session opinions, the requirement lifecycle
 
 ### The risk + how AIDA mitigates
@@ -126,15 +143,24 @@ Two risks worth naming explicitly:
 
 **Risk 1: Anthropic ships a vertical that overlaps AIDA's core (a built-in requirement graph, a `/track` command, etc.).** Mitigation: AIDA's core value is the *composition* of graph + IDs + traces + MCP + queue + lifecycle. A built-in graph alone wouldn't replicate the trace network or the lifecycle. A built-in lifecycle alone wouldn't have the graph. AIDA's moat is the multi-layer stack, not any one feature.
 
-**Risk 2: AIDA's CLI surface keeps growing as Anthropic adds primitives, leading to confused users.** Mitigation: the Trojan-horse TUI positioning ([EPIC-26](docs/positioning/)) collapses the surface back into one coherent visible product. *"You see a TUI wrapping Claude Code. The platform is what you discover."*
+**Risk 2: AIDA's CLI surface keeps growing as Anthropic adds primitives, leading to confused users.** Mitigation: keep one humble front door — `aida why <file:line>` and the memory lane — and let everything else be discovered through the store. Surfaces (CLI, MCP, TUI, web) are views onto the same store and control plane, so a new primitive adds a view, not a second product. (The earlier mitigation, the Trojan-horse TUI positioning, was superseded on 2026-09-26 — see *First surface* above.)
 
 ### Summary
 
-AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the substrate; AIDA composes the substrate into a specific workflow domain (agent-collaboration on project intent). The bet stays sound as long as Anthropic stays horizontal, and Anthropic's structural incentives push them to stay horizontal. The TUI ([EPIC-26](docs/positioning/)) is the visible product; the platform is the vertical depth; the Claude ecosystem is the ground both stand on.
+AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the substrate; AIDA composes the substrate into a specific workflow domain (agent-collaboration on project intent). The bet stays sound as long as Anthropic stays horizontal, and Anthropic's structural incentives push them to stay horizontal. `aida why` and the memory lane are the front door; the intent store and the control plane that keeps it true are the vertical depth; the surfaces — CLI, MCP, TUI ([EPIC-26](docs/positioning/)), web — are views onto them; the Claude ecosystem is the ground all of it stands on.
 
 ---
 
 ## Architecture
+
+### The four layers
+
+For contributors, reviewers of architecture sketches, and anyone choosing what AIDA benchmarks against. The layering is validated by dependency direction (store and intent modules import no control-plane module; the control plane depends heavily on the store) and by the removal test (remove the control plane and the whole memory lane still works; remove the store and nothing meaningful does). Source: the [2026-09-24 positioning deep-dive](docs/positioning/2026-09-24-spike-86-positioning-from-engineering.md), §3.
+
+1. **The intent store (the data plane).** The git-canonical requirement graph: YAML objects on the orphan `aida-store` branch, stable IDs, typed relationships, comments, the rebuildable cache, and the intent layer that makes the store worth keeping — acceptance criteria, `// trace:` comments, reconstitution, contradiction and gap detection. This is what "requirements management" names, and it is the product.
+2. **The control plane (the corpus-integrity layer).** The layer that decides whether work may advance and reports the state of work in flight: the queue, the drain, the orchestrator and its phases, seats, leases, worktree assignment, review verdicts, merge-holds, `BlockedBy` gating, required-check rollups, the event feed, and the surfaces that report on all of it (`aida ps`, drain status, awaiting, doctor). It exists to keep the store true while unreliable agent workers change the code; that is why it takes about half the engineering without being the product. Its two sub-facets have industry names — admission / merge gating (a merge queue) and state reconciliation (actual vs reported vs desired) — and its characteristic defect is a surface asserting a state that is not true: false-green, false-empty, stale reading as current.
+3. **The execution layer.** Isolated worktrees and sessions in which agents (Claude Code, Codex CLI, Antigravity, any harness with a shell) do the work, one spec per worktree, with role-pure seats and deterministic handoffs.
+4. **The surfaces.** CLI, MCP, TUI and web. They display store and control-plane state; none of them is the control plane and none of them is the product's face.
 
 ### Storage (EPIC-1-001) — git-canonical by default
 
@@ -170,6 +196,8 @@ The native desktop and WASM clients (egui-based) were extracted to a separate re
 
 The autonomous-collaboration layer — the three-mode autonomy ladder (default / `--zen` / `--no-human`), the implementer → advisor → human escalation cascade, the advisor's Type A/B/C resolve-vs-escalate calibration, and the file-based handshakes that coordinate the tiers — is described in [docs/architecture/autonomy-and-escalation.md](docs/architecture/autonomy-and-escalation.md). For the practical user guide to `--auto-complete` and `--no-human` see [docs/autonomous-drain.md](docs/autonomous-drain.md); for the MCP transport layer over the same filesystem substrate see [docs/architecture/mcp-coordination-surface.md](docs/architecture/mcp-coordination-surface.md). The **resilient-drain primitive** is EPIC-28 (`docs/autonomous-drain.md` → "Shelving on failure"): a shelvable phase failure parks the spec in `NeedsAttention` with a structured `FailureReason` and the batch drain continues past it, with dependents skipped automatically via the `BlockedBy` pickability gate (STORY-333) — exit 2 + `aida findings list` for triage.
 
+For how this control plane — queue, drain, orchestrator phases, leases, verdicts, merge-holds, required-check rollups, the event feed — compares with the two families it most resembles, durable-execution engines (Temporal-style event history, replay, checkpointing, retries) and merge queues (Bors, Zuul, Mergify, Aviator, the GitHub merge queue), and which of their properties AIDA has, lacks, or deliberately declines because its workers are non-deterministic LLM agents, see [docs/architecture/control-plane-vs-durable-execution-and-merge-queues.md](docs/architecture/control-plane-vs-durable-execution-and-merge-queues.md).
+
 ---
 
 ## Workspace layout
@@ -181,7 +209,7 @@ aida/
 ├── aida-crate/            Published `aida` crate metadata
 ├── aida-server/           REST + gRPC server (port 8080)
 ├── aida-generate-types/   Rust → TypeScript types (ts-rs)
-├── aida-tui/              `aida tui` terminal shell — the public face (EPIC-26)
+├── aida-tui/              `aida tui` terminal shell — a view onto the control plane (EPIC-26)
 ├── aida-web-react/        React 19 + Vite + Tailwind dashboard (port 5173 dev)
 ├── proto/                 Protocol Buffers definitions
 ├── docs/                  Markdown docs (incl. plans/ archive)

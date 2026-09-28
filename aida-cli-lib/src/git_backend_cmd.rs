@@ -3975,10 +3975,21 @@ pub(crate) fn handle_git_backend_command(
                 &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
         }
-        Command::Criteria { spec, json } => {
+        Command::Criteria {
+            spec,
+            json,
+            window_days,
+        } => {
             let store = backend.load()?;
             let project_root = find_project_root()?;
-            criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
+            // trace:STORY-1487 | ai:claude
+            crate::criteria_coverage::dispatch_criteria(
+                &project_root,
+                &store,
+                spec,
+                *window_days,
+                *json,
+            )?;
         }
         Command::Reconstitute {
             spec,
@@ -4101,19 +4112,23 @@ pub(crate) fn handle_git_backend_command(
             // BUG-1535: an ambiguous id is refused (non-zero exit, every
             // candidate listed) — never answered with one of them — and that
             // refusal passes through unwrapped. trace:BUG-1535 | ai:claude
-            let lookup = backend.get_requirement_unambiguous(id).map_err(|e| {
-                if e.downcast_ref::<aida_core::id_collisions::AmbiguousIdError>()
-                    .is_some()
-                {
-                    return e;
-                }
-                anyhow::anyhow!(
-                    "Parse failed: {}\n  Detail: {:#}\n{}",
-                    id,
-                    e,
-                    aida_core::object_store::parse_failure_hint(None),
-                )
-            });
+            // Read-only: the tolerant resolver keeps `show` off the cache
+            // write lock. trace:BUG-1670 | ai:claude
+            let lookup = backend
+                .get_requirement_unambiguous_for_read(id)
+                .map_err(|e| {
+                    if e.downcast_ref::<aida_core::id_collisions::AmbiguousIdError>()
+                        .is_some()
+                    {
+                        return e;
+                    }
+                    anyhow::anyhow!(
+                        "Parse failed: {}\n  Detail: {:#}\n{}",
+                        id,
+                        e,
+                        aida_core::object_store::parse_failure_hint(None),
+                    )
+                });
             if *tree {
                 match lookup? {
                     Some(root) => {
@@ -4131,6 +4146,9 @@ pub(crate) fn handle_git_backend_command(
             }
             match lookup? {
                 Some(req) => {
+                    // Share the fallback index across relationships and blockers.
+                    // trace:BUG-1678 | ai:codex
+                    let read_target = backend.requirement_reader();
                     record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
                     // STORY-632: deterministic local graph-centrality, read from
                     // the cache (recomputed on rebuild from the relationship
@@ -4213,7 +4231,7 @@ pub(crate) fn handle_git_backend_command(
                             .relationships
                             .iter()
                             .map(|rel| {
-                                let (id, title) = match backend.get_requirement(&rel.target_id) {
+                                let (id, title) = match read_target(&rel.target_id) {
                                     Ok(Some(t)) => (t.display_id(), t.title.clone()),
                                     _ => ("(unknown)".to_string(), String::new()),
                                 };
@@ -4361,7 +4379,7 @@ pub(crate) fn handle_git_backend_command(
                             .relationships
                             .iter()
                             .filter(|rel| matches!(rel.rel_type, RelationshipType::BlockedBy))
-                            .map(|rel| match backend.get_requirement(&rel.target_id) {
+                            .map(|rel| match read_target(&rel.target_id) {
                                 Ok(Some(blocker)) => serde_json::json!({
                                     "id": blocker.display_id(),
                                     "status": blocker.status.to_string(),
@@ -4512,7 +4530,7 @@ pub(crate) fn handle_git_backend_command(
                             let mut rows: Vec<Vec<String>> = Vec::new();
                             for rel in &req.relationships {
                                 let label = rel_type_label(&rel.rel_type);
-                                let (tid, ttitle) = match backend.get_requirement(&rel.target_id) {
+                                let (tid, ttitle) = match read_target(&rel.target_id) {
                                     Ok(Some(t)) => (t.display_id(), t.title.clone()),
                                     _ => ("(unknown)".to_string(), String::new()),
                                 };
@@ -4537,9 +4555,7 @@ pub(crate) fn handle_git_backend_command(
                             let mut rows = Vec::new();
                             let mut unsatisfied = 0usize;
                             for target in blocker_targets {
-                                let (id, status, satisfied) = match backend
-                                    .get_requirement(&target)?
-                                {
+                                let (id, status, satisfied) = match read_target(&target)? {
                                     Some(blocker) => {
                                         let satisfied =
                                             matches!(blocker.status, RequirementStatus::Completed);
@@ -4611,7 +4627,7 @@ pub(crate) fn handle_git_backend_command(
                         // trace:BUG-1471 | ai:claude
                         let mut rels: Vec<CardRel> = Vec::new();
                         for rel in &req.relationships {
-                            let (rid, rtitle) = match backend.get_requirement(&rel.target_id) {
+                            let (rid, rtitle) = match read_target(&rel.target_id) {
                                 Ok(Some(t)) => (t.display_id(), t.title.clone()),
                                 _ => ("(unknown)".to_string(), String::new()),
                             };
@@ -4796,7 +4812,7 @@ pub(crate) fn handle_git_backend_command(
                             println!("{}:", "Relations".bold());
                             for rel in req.relationships.iter().take(TRUNCATE_AT) {
                                 let phrase = relationship_phrase(&rel.rel_type);
-                                match backend.get_requirement(&rel.target_id)? {
+                                match read_target(&rel.target_id)? {
                                     Some(t) => println!(
                                         "  {} {} {} ({})",
                                         crate::glyph(crate::glyphs::Glyph::SubArrow),
@@ -4865,7 +4881,7 @@ pub(crate) fn handle_git_backend_command(
                         println!("\n{}:", "Blockers".bold());
                         let mut unsatisfied = 0;
                         for target in &blocker_targets {
-                            let (sid, status, satisfied) = match backend.get_requirement(target)? {
+                            let (sid, status, satisfied) = match read_target(target)? {
                                 Some(b) => {
                                     let satisfied =
                                         matches!(b.status, RequirementStatus::Completed);
@@ -6842,7 +6858,7 @@ pub(crate) fn handle_git_backend_command(
             // trace:TASK-1-020 | ai:claude
             // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
             let req = backend
-                .get_requirement_unambiguous(id)?
+                .get_requirement_unambiguous_for_read(id)? // read-only; trace:BUG-1670 | ai:claude
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
             record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
             println!("{}: {}", "Requirement".cyan(), req.title);
@@ -7764,6 +7780,10 @@ pub(crate) fn handle_git_backend_command(
         }
         Command::History {
             spec,
+            template,
+            fields,
+            save_as_template,
+            force,
             limit,
             max_commits,
             events,
@@ -7786,8 +7806,66 @@ pub(crate) fn handle_git_backend_command(
             archived,
             deferred,
             include_meta,
+            timeline,
             cmd,
         } => {
+            // trace:STORY-1477 | ai:codex
+            use crate::history_layout::{Layout, Templates};
+            // Reject even a parent-position --json before loading or mutating config.
+            if matches!(cmd, Some(HistoryCommand::Templates { .. })) && *json {
+                anyhow::bail!(
+                    "history templates has no JSON projection; use --format human or --format toon"
+                );
+            }
+            let json = &(*json || matches!(cmd, Some(HistoryCommand::Events { json: true })));
+            let templates =
+                if template.is_some() || matches!(cmd, Some(HistoryCommand::Templates { .. })) {
+                    Some(Templates::load(&crate::find_project_root_from(
+                        &std::env::current_dir()?,
+                    )?)?)
+                } else {
+                    None
+                };
+            if let Some(HistoryCommand::Templates { cmd }) = cmd {
+                if template.is_some() || fields.is_some() || save_as_template.is_some() || *force {
+                    anyhow::bail!("invalid combination: templates management cannot be combined with render/save options");
+                }
+                let templates = templates.as_ref().unwrap();
+                match cmd {
+                    Some(crate::cli::HistoryTemplatesCommand::Rm { name }) => {
+                        templates.remove(name)?
+                    }
+                    None => print!("{}", templates.list()),
+                }
+                return Ok(());
+            }
+            if template.is_some()
+                && (*json
+                    || matches!(
+                        crate::output_format_override(),
+                        Some(crate::cli::OutputFormat::Json | crate::cli::OutputFormat::Toon)
+                    )
+                    || matches!(cmd, Some(HistoryCommand::Events { .. })))
+            {
+                anyhow::bail!("invalid combination: --template requires human output and cannot be combined with events; use --format human and omit events");
+            }
+            let layout = template
+                .as_deref()
+                .map(|raw| templates.as_ref().unwrap().resolve(raw))
+                .transpose()?;
+            let selected_fields = fields
+                .as_deref()
+                .map(crate::history_layout::fields)
+                .transpose()?;
+            if let Some(target) = save_as_template {
+                templates
+                    .as_ref()
+                    .unwrap()
+                    .validate_save(target, template.as_deref(), *force)?;
+            }
+            let oneline = &(*oneline || matches!(layout, Some(Layout::Oneline)));
+            let custom_feed =
+                matches!(layout, Some(Layout::Custom(_))) || selected_fields.is_some();
             // TASK-1480: `aida history <SPEC-ID>` is shorthand for `aida
             // history --id <SPEC-ID>` — clap keeps them mutually exclusive
             // (`conflicts_with`), so at most one is ever set here.
@@ -7813,7 +7891,8 @@ pub(crate) fn handle_git_backend_command(
                 );
             }
             let explicit_events = match cmd {
-                Some(HistoryCommand::Events) => true,
+                Some(HistoryCommand::Events { .. }) => true,
+                Some(HistoryCommand::Templates { .. }) => unreachable!(),
                 None => {
                     if *events {
                         note_hidden_alias(
@@ -7823,7 +7902,7 @@ pub(crate) fn handle_git_backend_command(
                     }
                     // trace:TASK-1480 | ai:claude — `--full` is the
                     // discoverable, non-hidden spelling of the same mode.
-                    *events || *full
+                    *events || *full || matches!(layout, Some(Layout::Full)) || custom_feed
                 }
             };
             // TASK-1512: `--to`/`--from` take the status spellings `aida
@@ -7982,6 +8061,39 @@ pub(crate) fn handle_git_backend_command(
                 Some(raw) => Some(resolve_history_id_filter(&backend, raw)?),
                 None => None,
             };
+            // STORY-1478: the per-spec work/wait/unknown timeline. Checked
+            // here, right after the ID resolves, because it answers a
+            // different question from every other history view and shares
+            // none of their windowing.
+            // trace:STORY-1478 | ai:claude
+            if *timeline {
+                let Some(spec_id) = id_filter.as_deref() else {
+                    anyhow::bail!(
+                        "`aida history --timeline` needs one requirement: \
+                         `aida history <SPEC-ID> --timeline`"
+                    );
+                };
+                if matches!(cmd, Some(HistoryCommand::Events { .. })) {
+                    anyhow::bail!(
+                        "`--timeline` and the `events` feed are different views; pass one or the other"
+                    );
+                }
+                // A narrowed window would still print totals that look whole.
+                if *limit != history_timeline::HISTORY_DEFAULT_LIMIT {
+                    anyhow::bail!(
+                        "`--timeline` covers a requirement's whole recorded life, so `--limit` \
+                         does not apply to it"
+                    );
+                }
+                let output =
+                    history::HistoryOutput::select(json, false, crate::agent_output_mode());
+                // Opt out of the forge lookup for an offline or fixture run.
+                let forge_enabled = std::env::var("AIDA_TIMELINE_NO_FORGE")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty() && v != "0")
+                    .is_none();
+                return history_timeline::run(store_path, spec_id, output, forge_enabled);
+            }
             // TASK-1480: a single spec (`--id` / positional SPEC-ID) without
             // `--full` defaults to the status-progression view — status
             // transitions only, so `aida history TASK-1480` reads as a
@@ -8022,7 +8134,37 @@ pub(crate) fn handle_git_backend_command(
                 // default-view drowning. trace:STORY-737 | ai:claude
                 exclude_meta: history_should_exclude_meta(*include_meta, r#type.as_deref()),
             };
-            history::run(store_path, &opts, json)?;
+            if custom_feed {
+                // All parsing, ID/window validation and collection succeed before mutation.
+                let records = history::collect_event_records(store_path, &opts)?;
+                let output = if let Some(Layout::Custom(template)) = &layout {
+                    template.render_records(&records)?
+                } else if json {
+                    format!(
+                        "{}\n",
+                        crate::history_layout::project_json(
+                            &records,
+                            selected_fields.as_ref().unwrap()
+                        )?
+                    )
+                } else {
+                    crate::history_layout::project_table(
+                        &records,
+                        selected_fields.as_ref().unwrap(),
+                        crate::agent_output_mode(),
+                    )
+                };
+                if let Some(target) = save_as_template {
+                    templates.as_ref().unwrap().save(
+                        target,
+                        template.as_deref().unwrap(),
+                        *force,
+                    )?;
+                }
+                print!("{output}");
+            } else {
+                history::run(store_path, &opts, json)?;
+            }
         }
         Command::StateSnapshot {
             spec,

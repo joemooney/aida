@@ -93,6 +93,8 @@ pub mod fs_atomic;
 #[cfg(feature = "native")]
 pub mod git_ops;
 pub mod graph_walk;
+// trace:TASK-1513 | ai:claude
+pub mod home;
 // trace:BUG-1535 | ai:claude
 pub mod id_collisions;
 pub mod idle;
@@ -158,6 +160,15 @@ pub mod worktree_pool_adopt;
 pub mod worktree_pool_destroy;
 pub mod yaml_helpers;
 
+/// The ONE process-wide lock for aida-core tests that mutate the process
+/// environment. `std::env::set_var` is not thread-safe across keys (a
+/// `setenv` can realloc `environ` while another thread reads an unrelated
+/// key, or while a spawned `git` child copies it), so every env-mutating test
+/// in this crate must serialise on the same mutex, not a module-local one.
+// trace:BUG-1666 | ai:claude
+#[cfg(test)]
+pub(crate) static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 // Re-export commonly used types
 pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, DraftSpecResponse, EvaluationResponse, EvaluationResult,
@@ -173,9 +184,10 @@ pub use db::{
     compute_degrees, create_backend, edge_weight, export_to_json, import_from_json,
     migrate_sqlite_to_yaml, migrate_yaml_to_sqlite, observe_cache_lock, observe_lock_info_file,
     open_or_create, read_cache_lock_info, reclaim_dead_lock_info, shared_cache_path,
-    stray_cache_lock_info_path, ArchiveFilter, Cache, CacheLockInfo, CacheLockObservation,
-    CachedGitBackend, DeferFilter, Degrees, GitBackend, ListFilter, LockInfoReclaim,
-    LockOwnerState, RequirementSummary, SortOrder, SqliteBackend, StoreConflictError, YamlBackend,
+    stray_cache_lock_info_path, ArchiveFilter, BulkAtomicReport, Cache, CacheLockInfo,
+    CacheLockObservation, CachedGitBackend, DeferFilter, Degrees, GitBackend, ListFilter,
+    LockInfoReclaim, LockOwnerState, RequirementSummary, SortOrder, SqliteBackend,
+    StoreConflictError, YamlBackend,
 };
 #[cfg(all(feature = "native", feature = "postgres"))]
 pub use db::{migrate_from_postgres, migrate_to_postgres};

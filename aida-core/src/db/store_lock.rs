@@ -192,6 +192,81 @@ mod tests {
         assert!(!held_by_this_thread(dir.path()));
     }
 
+    // trace:BUG-1677 | ai:claude — the store is a linked worktree of the
+    // project repo, so its `info/exclude` is the project's shared one. Taking
+    // the store lock may add the anchored `.aida/*.lock` there and nothing
+    // else: a legitimate `*.tmp.*` file in the project must stay visible.
+    #[test]
+    fn bug_1677_acquire_never_hides_project_files_through_the_shared_exclude() {
+        use std::process::Command;
+        fn git(cwd: &Path, args: &[&str]) -> std::process::Output {
+            Command::new("git")
+                .current_dir(cwd)
+                .args(args)
+                .output()
+                .unwrap_or_else(|e| panic!("git {args:?} in {}: {e}", cwd.display()))
+        }
+        fn git_ok(cwd: &Path, args: &[&str]) -> String {
+            let out = git(cwd, args);
+            assert!(
+                out.status.success(),
+                "git {args:?} failed:\n{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        git_ok(&project, &["init", "-q", "-b", "main"]);
+        git_ok(&project, &["config", "user.email", "aida@example.invalid"]);
+        git_ok(&project, &["config", "user.name", "AIDA Test"]);
+        std::fs::write(project.join("README.md"), "seed\n").unwrap();
+        git_ok(&project, &["add", "-A"]);
+        git_ok(&project, &["commit", "-qm", "seed"]);
+        // The store as `aida init` attaches it: a linked worktree on an
+        // orphan branch, whose .gitignore carries the bare `*.lock` line
+        // (not `.aida/*.lock`), so the exclude fallback really runs.
+        let store = project.join(".aida-store");
+        git_ok(
+            &project,
+            &["worktree", "add", "-q", "--detach", store.to_str().unwrap()],
+        );
+        git_ok(&store, &["checkout", "-q", "--orphan", "aida-store"]);
+        std::fs::write(
+            store.join(".gitignore"),
+            "# Node-local state\n.aida/\n*.lock\n",
+        )
+        .unwrap();
+
+        let guard = acquire(&store).unwrap();
+        drop(guard);
+
+        // The project's own files are untouched by the store lock.
+        std::fs::write(project.join("notes.tmp.txt"), "keep me\n").unwrap();
+        let check = git(&project, &["check-ignore", "-q", "notes.tmp.txt"]);
+        assert!(
+            !check.status.success(),
+            "notes.tmp.txt in the project worktree must not be ignored"
+        );
+        // The lock exclusion itself still lands, anchored to `.aida/`.
+        let exclude = git_ok(&store, &["rev-parse", "--git-path", "info/exclude"]);
+        let exclude = if Path::new(&exclude).is_absolute() {
+            PathBuf::from(exclude)
+        } else {
+            store.join(exclude)
+        };
+        let exclude = std::fs::read_to_string(&exclude).unwrap_or_default();
+        assert!(
+            exclude.lines().any(|l| l.trim() == ".aida/*.lock"),
+            "{exclude}"
+        );
+        assert!(
+            !exclude.lines().any(|l| l.trim().contains("tmp")),
+            "no staging-file pattern may reach the shared exclude: {exclude}"
+        );
+    }
+
     #[test]
     fn lock_excludes_another_thread_until_released() {
         let dir = tempfile::tempdir().unwrap();

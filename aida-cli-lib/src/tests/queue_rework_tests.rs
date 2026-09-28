@@ -1227,6 +1227,8 @@ fn lease_for(scope: &str, active_pid: Option<u32>) -> crate::SessionLease {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 

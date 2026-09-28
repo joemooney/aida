@@ -40,6 +40,8 @@ mod config_edit;
 mod context_prompt;
 mod coordination;
 mod criteria;
+// trace:STORY-1487 | ai:claude
+mod criteria_coverage;
 mod criteria_gate;
 mod criteria_red_run;
 mod db_cmd;
@@ -68,10 +70,14 @@ mod doctor_cmd;
 mod drain_caps;
 mod drain_cmd;
 mod drain_lock;
+// trace:TASK-1518 | ai:claude
+mod drain_signal;
 mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
 mod git_arg_guard;
 mod git_backend_cmd;
+// trace:TASK-1522 | ai:antigravity
+pub(crate) mod intent_capture;
 mod machine_readiness;
 mod mcp_cmd;
 mod orchestrator_cmd;
@@ -173,8 +179,11 @@ mod health_cmd;
 mod health_metrics;
 mod health_vitals_cmd;
 mod history;
+mod history_layout;
 // trace:TASK-1507 | ai:claude
 mod history_cache;
+// trace:STORY-1478 | ai:claude — per-spec work/wait/unknown timeline.
+mod history_timeline;
 mod human_audit;
 mod human_cmd;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
@@ -277,6 +286,7 @@ mod sandbox_cmd;
 mod scaffold_cmd;
 mod scaffold_refresh;
 mod stranded_sweep;
+mod sweep_test_hook;
 // trace:STORY-262 | ai:claude
 mod schedule;
 mod schedule_cmd;
@@ -4722,8 +4732,13 @@ fn run() -> Result<()> {
             crate::cli::RemoteCommand::Mirror { name, url } => {
                 remote_create::handle_remote_mirror(&project_root, name, url.as_deref())
             }
-            crate::cli::RemoteCommand::MirrorPush { pushed_remote } => {
-                remote_create::handle_remote_mirror_push(&project_root, pushed_remote)
+            crate::cli::RemoteCommand::MirrorPush {
+                pushed_remote,
+                dry_run,
+            } => remote_create::handle_remote_mirror_push(&project_root, pushed_remote, *dry_run),
+            // trace:BUG-1676 | ai:claude
+            crate::cli::RemoteCommand::MirrorSync { json } => {
+                remote_create::handle_remote_mirror_sync(&project_root, *json)
             }
             crate::cli::RemoteCommand::Reconcile { execute, json, yes } => {
                 remote_create::handle_remote_reconcile(&project_root, *execute, *json, *yes)
@@ -5673,11 +5688,17 @@ fn run() -> Result<()> {
                 &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
         }
-        Command::Criteria { spec, json } => {
+        Command::Criteria {
+            spec,
+            json,
+            window_days,
+        } => {
             let store = storage.load()?;
             let project_root = find_project_root()
                 .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
-            criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
+            // `coverage` / `gap` is the project-wide report, never a spec id.
+            // trace:STORY-1487 | ai:claude
+            criteria_coverage::dispatch_criteria(&project_root, &store, spec, *window_days, *json)?;
         }
         Command::Reconstitute {
             spec,
@@ -14342,8 +14363,11 @@ fn try_emit_nonblocking_findings_on_completion(
     // `findings_needing_a_successor` decide which of THIS verdict's findings
     // are genuinely new. A re-run over an already-completed spec (the
     // auto-bump scan can re-observe old history) then files nothing.
+    // Strict: a snapshot served while another process writes the cache can
+    // miss a successor filed since, and this set is what prevents a duplicate.
+    // trace:BUG-1670 | ai:claude
     let already_filed: std::collections::HashSet<String> = backend
-        .list_summaries(&aida_core::ListFilter {
+        .list_summaries_strict(&aida_core::ListFilter {
             tags: vec![carried_from_tag.clone()],
             archive: aida_core::ArchiveFilter::Both,
             ..Default::default()
@@ -14927,7 +14951,8 @@ fn resolve_history_id_filter<B: aida_core::db::DatabaseBackend>(
     // `get_requirement_unambiguous` already turns a multi-match into an
     // `anyhow::Error` (AmbiguousIdError's own Display), so `?` here IS the
     // "ambiguous id gets a clear error" behavior. trace:TASK-1480 | ai:claude
-    match backend.get_requirement_unambiguous(trimmed)? {
+    // Read-only: tolerant resolver. trace:BUG-1670 | ai:claude
+    match backend.get_requirement_unambiguous_for_read(trimmed)? {
         Some(req) => Ok(req.spec_id.clone().unwrap_or_else(|| trimmed.to_string())),
         None => Ok(trimmed.to_string()),
     }
@@ -17221,6 +17246,16 @@ fn init_store_mirror_config_section() -> &'static str {
      # mirror_remotes = [\"gitlab\"]\n"
 }
 
+// trace:TASK-1522 | ai:antigravity
+pub(crate) fn init_capture_config_section() -> &'static str {
+    "\n# Effort-balance intent-capture target (TASK-1522): advisory floor on the\n\
+     # share of newly completed specs with at least one traced test criterion.\n\
+     # Reported by `aida criteria coverage` and `aida status`; not enforced.\n\
+     #\n\
+     # [capture]\n\
+     # criterion_test_floor_pct = 50\n"
+}
+
 /// The `[worktree]` scaffold section. AIDA-created worktrees are expected to be
 /// ready for builds, so recursive submodule initialization is default-on with a
 /// visible opt-out.
@@ -17251,6 +17286,13 @@ fn init_worktree_pool_config_section() -> &'static str {
      [worktree_pool]\n\
      enabled = true\n\
      # max_trees = 16   # cap on pooled worktrees (default 16)\n\
+     # worktree_parent = \"../aida-worktrees\"   # nest every AIDA-created worktree\n\
+     #                          # under ONE directory instead of scattering them as\n\
+     #                          # siblings of the repo. An editor/agent folder-trust\n\
+     #                          # grant inherits to children, so you trust this one\n\
+     #                          # directory once and no future worktree prompts\n\
+     #                          # again. Relative paths resolve against the repo\n\
+     #                          # root; unset keeps the sibling layout (default)\n\
      # lease_ttl_secs = 21600   # a durable lease older than this (with no live\n\
      #                          # owner) is treated as EXPIRED and reclaimed by\n\
      #                          # the next acquire — guards against reservation\n\
@@ -17780,10 +17822,13 @@ fn suggested_focus_for(target: &aida_core::Requirement) -> Option<String> {
 /// focus's transitive subtree, apply the configured `[focus] out_of_scope`
 /// policy. `force` ALWAYS overrides. Membership reuses the cache's
 /// `descendant_ids` closure (TASK-955) — the same subtree the focus read-scope
-/// uses — rather than re-walking the hierarchy. Best-effort: an unresolvable
-/// focus spec or a cache error skips the guard rather than blocking real work
-/// (a `Block` policy still returns `Err` on a genuine out-of-scope start).
+/// uses — rather than re-walking the hierarchy. An unresolvable focus spec
+/// skips the guard rather than blocking real work. The subtree is read with a
+/// strict cache refresh, and a cache or refresh error fails the start (fail
+/// closed) instead of judging scope on a stale graph; a `Block` policy also
+/// returns `Err` on a genuine out-of-scope start.
 // trace:STORY-717 | ai:claude
+// trace:BUG-1670 | ai:claude
 fn focus_scope_guard(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
@@ -17805,7 +17850,11 @@ fn focus_scope_guard(
         return Ok(());
     };
     // REUSE the TASK-955 subtree closure (includes the root) for membership.
-    let subtree = backend.descendant_ids(&focus_req.id)?;
+    // Strict: this gates a write, so a child added or re-parented by another
+    // writer since the last cache refresh must be classified on the current
+    // graph, not on a snapshot served while the cache is being written.
+    // trace:BUG-1670 | ai:claude
+    let subtree = backend.descendant_ids_strict(&focus_req.id)?;
     let in_scope = focus::is_in_focus_scope(&target.id, &subtree);
     match focus::decide_focus_action(policy, in_scope, force) {
         focus::FocusGuardAction::Proceed => Ok(()),
@@ -17906,6 +17955,87 @@ fn epic_agent_new_refusal(req_type: &RequirementType, display_id: &str) -> Optio
     ))
 }
 
+// BUG-1701: route a drain-mode spec away from the interactive lane. `aida agent
+// new --spec <ID>` spawns a vendor TUI and BLOCKS until that TUI exits; a TUI
+// does not exit when its turn ends, so an orchestrator that dispatched a
+// drain-groomed spec here stranded both the seat and itself. The one-shot lane
+// already exists -- `aida do <SPEC>` routes by groomed execution mode, and for
+// drain that is `aida queue work <SPEC> --auto-complete`, which runs headless
+// and returns an exit status. Nothing steered callers there, so this guard does.
+// Sits beside the epic and focus-scope guards: AFTER the dry-preview returns (a
+// preview is never blocked) and BEFORE any worktree/lease/status side effect.
+// trace:BUG-1701 | ai:claude
+fn drain_mode_agent_new_guard(
+    project_root: &std::path::Path,
+    spec: &str,
+    force: bool,
+    holds_caller: bool,
+) -> Result<()> {
+    if force {
+        return Ok(());
+    }
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Ok(());
+    };
+    let Ok(backend) = advance_backend(&store_path) else {
+        return Ok(());
+    };
+    // Fail OPEN on a lookup failure as well as a miss. `?` here would abort the
+    // launch when the store is unreadable, which is the opposite of this guard's
+    // contract: it exists to REDIRECT a drain-groomed spec, never to become a new
+    // way for every launch in the fleet to fail. An independent review of PR #2249
+    // caught the `?`. trace:BUG-1701 | ai:claude
+    let Ok(Some(target)) = backend.get_requirement_by_spec_id(spec) else {
+        return Ok(());
+    };
+    match drain_mode_agent_new_refusal(target.execution_mode, &target.display_id(), holds_caller) {
+        Some(message) => anyhow::bail!("{message}"),
+        None => Ok(()),
+    }
+}
+
+/// Pure decision half of [`drain_mode_agent_new_guard`]: the refusal message for a
+/// spec groomed `execution_mode = drain`, or `None` for every other mode (and for
+/// an ungroomed spec, which must keep working -- the fail-open default).
+///
+/// Only `drain` is refused. The other modes legitimately want a human-attended
+/// seat, which is exactly what this lane provides; refusing them would take away
+/// the only lane they have.
+///
+/// `holds_caller` distinguishes the foreground launch (which blocks the caller on
+/// the child TUI -- the BUG-1701 stall) from `--bg` (which detaches, so the lane
+/// is still wrong but for the pipeline reason alone). Stating only what is true of
+/// the lane actually being refused keeps the message trustworthy.
+// trace:BUG-1701 | ai:claude
+fn drain_mode_agent_new_refusal(
+    mode: Option<aida_core::ExecutionMode>,
+    display_id: &str,
+    holds_caller: bool,
+) -> Option<String> {
+    if mode != Some(aida_core::ExecutionMode::Drain) {
+        return None;
+    }
+    // The first line must stand alone: in agent mode only the first line becomes
+    // the `error:` summary. And `aida do` must be the FIRST backtick-quoted
+    // `aida ...` command in the whole message, because that is what agent mode
+    // lifts into `help:` -- an unbackticked recommendation silently loses to a
+    // backticked one further down. trace:BUG-1701 | ai:claude
+    let lane = if holds_caller {
+        "which spawns an interactive seat and holds your caller until that seat's TUI exits -- \
+         and a TUI does not exit when its turn ends"
+    } else {
+        "which runs neither CI, the reviewer phase, nor the merge for you"
+    };
+    Some(format!(
+        "{display_id} is groomed `execution_mode = drain` -- use `aida do {display_id}`, not this \
+         lane, {lane}.\n  \
+         `aida do` routes by the groomed mode; for drain it runs \
+         `aida queue work {display_id} --auto-complete`, which is headless, runs to completion, \
+         and returns an exit status.\n  \
+         To sit in this spec interactively anyway (to debug it by hand), pass --force."
+    ))
+}
+
 /// STORY-564: read `[zen] auto_exit` from `.aida/config.toml`. Returns the
 /// operator's persistent preference for whether a clean standalone-`--zen`
 /// finish auto-exits (`true`, the default) or always pauses (`false`).
@@ -17992,6 +18122,10 @@ fn maybe_auto_archive_sweep(
     let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
     let statuses = ["Completed", "Rejected"];
     let mut to_archive: Vec<aida_core::Requirement> = Vec::new();
+    // cache-tolerant-read: selection only — each candidate's YAML object is
+    // re-read and its eligibility re-decided inside the store write lock
+    // (`bulk_update_atomically`) before anything is written.
+    // trace:BUG-1671 | ai:claude
     for s in &statuses {
         let filter = aida_core::ListFilter {
             status: Some((*s).to_string()),
@@ -18023,15 +18157,24 @@ fn maybe_auto_archive_sweep(
         return;
     }
     let now = chrono::Utc::now();
-    let mut count = 0usize;
-    for mut req in to_archive {
-        req.archived = true;
-        req.archived_at = Some(now);
-        req.modified_at = now;
-        if backend.update_requirement(&req).is_ok() {
-            count += 1;
-        }
-    }
+    crate::sweep_test_hook::fire(backend.path());
+    // BUG-1671: re-decide each candidate on the object read INSIDE the store
+    // write lock, so a spec reopened between the pass above and this write is
+    // skipped instead of being reverted by the whole-object write. Collapses
+    // the old commit-per-spec loop into one commit as well.
+    // trace:BUG-1671 | ai:claude
+    let count = backend
+        .bulk_update_atomically(&to_archive, "chore(archive)", |req| {
+            if !archive_cmd::archive_sweep_still_eligible(req, &statuses, cutoff) {
+                return false;
+            }
+            req.archived = true;
+            req.archived_at = Some(now);
+            req.modified_at = now;
+            true
+        })
+        .map(|report| report.written.len())
+        .unwrap_or(0);
     if !quiet && count > 0 {
         println!(
             "  {} {count} spec(s) older than {days}d (auto-sweep, opt out via AIDA_AUTO_ARCHIVE=0)",
@@ -23616,6 +23759,27 @@ fn detect_store_tracked_runtime(project_root: &std::path::Path) -> Vec<String> {
     hits
 }
 
+/// TASK-1547: detect an attached git-canonical store whose tracked `.gitignore`
+/// lacks any atomic-write staging pattern. This check is independent of the
+/// tracked-runtime scan: healed stores still need the newer staging rules.
+// trace:TASK-1547 | ai:codex
+pub(crate) fn detect_store_missing_staging_ignores(project_root: &std::path::Path) -> Vec<String> {
+    if distributed_mode_declared_from(project_root).is_none() {
+        return Vec::new();
+    }
+    let store_worktree = project_root.join(".aida-store");
+    if !store_worktree.join("objects").is_dir() {
+        return Vec::new();
+    }
+    let existing = std::fs::read_to_string(store_worktree.join(".gitignore")).unwrap_or_default();
+    let lines: std::collections::HashSet<&str> = existing.lines().map(str::trim).collect();
+    aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS
+        .iter()
+        .filter(|pattern| !lines.contains(**pattern))
+        .map(|pattern| (*pattern).to_string())
+        .collect()
+}
+
 /// Whether a store-worktree-relative path is a per-clone runtime file that must
 /// never be tracked on the orphan `aida-store` branch: `.aida/node.toml`,
 /// `.aida/dispenser.toml`, any `.aida/*.lock`, or any `.aida/cache.db*`
@@ -24279,6 +24443,19 @@ fn collect_doctor_findings(
         });
     }
 
+    // TASK-1547: staged atomic-write files are protected in the store's
+    // tracked .gitignore even after all BUG-563 runtime files are untracked.
+    // trace:TASK-1547 | ai:codex
+    if !detect_store_missing_staging_ignores(project_root).is_empty() {
+        push(DoctorFinding {
+            category: "store-staging-ignore".to_string(),
+            id: ".gitignore".to_string(),
+            summary: "store .gitignore is missing the staging-ignore patterns".to_string(),
+            action: "append missing atomic-write staging patterns to the store .gitignore and commit on the orphan branch".to_string(),
+            safe_heal: true,
+        });
+    }
+
     // STORY-1463: a registered `[schedule]` job only ever runs when
     // something invokes `aida schedule tick`; nothing does that by default.
     // Gated on the category filter (like the network-touching `ci` check
@@ -24621,6 +24798,22 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "free-space",
         ],
         "disk-headroom",
+    ),
+    // BUG-1700: the folder-trust gate on a freshly created worktree. Claude
+    // Code stops an INTERACTIVE launch in a directory it has never seen behind
+    // a "Quick safety check" modal, so a fresh per-spec worktree strands
+    // `aida agent new claude --spec <ID>` in a PTY nobody is watching. Trust
+    // inherits from a parent directory, so `[worktree_pool] worktree_parent`
+    // plus one operator grant retires the whole class. Read-only: AIDA never
+    // writes ~/.claude.json. trace:BUG-1700 | ai:claude
+    (
+        &[
+            "agent-launch",
+            "agent-trust",
+            "folder-trust",
+            "worktree-trust",
+        ],
+        "agent-launch",
     ),
     // STORY-1462: runaway-seat watchdog — per-session wake-rate, token-rate,
     // repeated-injected-prompt, idle-ratio, context-ceiling, compaction and
@@ -25164,16 +25357,19 @@ fn worktree_is_active(wt: &std::path::Path, active: &HashSet<std::path::PathBuf>
         .any(|a| *a == wt_canon || a.starts_with(&wt_canon))
 }
 
-/// BUG-614: is this worktree locked? Parses `git worktree list --porcelain` and
-/// reports whether the record for `wt` carries a bare `locked` line (git emits
-/// `locked` with an optional reason after it). Read-only; false on any git
-/// failure so a probe error never makes us treat a worktree as removable.
-/// trace:BUG-614 | ai:claude
-fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path::Path) -> bool {
+/// Is this worktree locked? Parses `git worktree list --porcelain -z`
+/// and reports whether the record for `wt` carries a `locked` field (git emits
+/// `locked` with an optional reason after it). `-z` terminates each attribute
+/// with NUL and each entry with an extra NUL, correctly handling worktree paths
+/// containing newlines. Read-only; false on any git failure so a probe error
+/// never makes us treat a worktree as removable.
+// trace:BUG-614 trace:TASK-1543 | ai:antigravity
+pub(crate) fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path::Path) -> bool {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["worktree", "list", "--porcelain"])
+        .args(["worktree", "list", "--porcelain", "-z"])
+        .stderr(std::process::Stdio::null())
         .output();
     let Ok(out) = out else { return false };
     if !out.status.success() {
@@ -25181,17 +25377,42 @@ fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path::Path) -> b
     }
     let wt_canon = wt.canonicalize().unwrap_or_else(|_| wt.to_path_buf());
     let text = String::from_utf8_lossy(&out.stdout);
-    let mut cur_match = false;
-    for line in text.lines() {
-        if let Some(p) = line.strip_prefix("worktree ") {
-            let rec = std::path::PathBuf::from(p);
-            let rec_canon = rec.canonicalize().unwrap_or(rec);
-            cur_match = rec_canon == wt_canon;
-        } else if cur_match && (line == "locked" || line.starts_with("locked ")) {
-            return true;
+    parse_worktree_lock_states_z(&text)
+        .into_iter()
+        .any(|(rec, locked)| {
+            locked && {
+                let rec_canon = rec.canonicalize().unwrap_or(rec);
+                rec_canon == wt_canon
+            }
+        })
+}
+
+/// Pure parser for `git worktree list --porcelain -z`: one `(path, locked)` pair
+/// per registered worktree, in git's own order. `-z` terminates every attribute
+/// with NUL and every record with an extra NUL, so a worktree path containing
+/// newlines stays a single field — which is exactly the case a line-oriented
+/// parser gets wrong. Split out from [`worktree_is_locked`] so the NUL framing
+/// is testable on every platform, including ones whose filesystem cannot hold a
+/// newline in a path at all (Windows).
+// trace:TASK-1543 | ai:claude
+pub(crate) fn parse_worktree_lock_states_z(text: &str) -> Vec<(std::path::PathBuf, bool)> {
+    let mut out: Vec<(std::path::PathBuf, bool)> = Vec::new();
+    // Index of the record the fields currently belong to; cleared by the empty
+    // field that terminates each record.
+    let mut cur: Option<usize> = None;
+    for field in text.split('\0') {
+        if let Some(p) = field.strip_prefix("worktree ") {
+            out.push((std::path::PathBuf::from(p), false));
+            cur = Some(out.len() - 1);
+        } else if field.is_empty() {
+            cur = None;
+        } else if field == "locked" || field.starts_with("locked ") {
+            if let Some(i) = cur {
+                out[i].1 = true;
+            }
         }
     }
-    false
+    out
 }
 
 /// BUG-614: `aida session gc` — the explicit operator GC of stale agent
@@ -26470,6 +26691,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_prompt: false,
             verbose: false,
             prompt: None,
+            prompt_file: None,
             no_prompt: false,
             no_resume: false,
             resume: None,
@@ -26495,6 +26717,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_prompt: false,
             verbose: false,
             prompt: None,
+            prompt_file: None,
             no_prompt: false,
             no_resume: false,
             resume: None,
@@ -26518,6 +26741,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_prompt: false,
             verbose: false,
             prompt: None,
+            prompt_file: None,
             no_prompt: false,
             no_resume: false,
             resume: None,
@@ -26607,6 +26831,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_prompt,
             verbose,
             prompt,
+            prompt_file,
             no_prompt,
             no_resume,
             resume,
@@ -26629,7 +26854,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *noexec,
             *show_prompt,
             *verbose,
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentPromptOptions::new(
+                resolve_launch_prompt(prompt.clone(), prompt_file.as_deref(), *no_prompt)?,
+                *no_prompt,
+            ),
             AgentResumeOptions::new(
                 !*no_resume,
                 resume.clone(),
@@ -26655,6 +26883,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_prompt,
             verbose,
             prompt,
+            prompt_file,
             no_prompt,
             no_resume,
             resume,
@@ -26675,7 +26904,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *noexec,
             *show_prompt,
             *verbose,
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentPromptOptions::new(
+                resolve_launch_prompt(prompt.clone(), prompt_file.as_deref(), *no_prompt)?,
+                *no_prompt,
+            ),
             AgentResumeOptions::new(
                 !*no_resume,
                 resume.clone(),
@@ -26699,6 +26931,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_prompt,
             verbose,
             prompt,
+            prompt_file,
             no_prompt,
             no_resume,
             resume,
@@ -26719,7 +26952,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *noexec,
             *show_prompt,
             *verbose,
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentPromptOptions::new(
+                resolve_launch_prompt(prompt.clone(), prompt_file.as_deref(), *no_prompt)?,
+                *no_prompt,
+            ),
             AgentResumeOptions::new(
                 !*no_resume,
                 resume.clone(),
@@ -27017,6 +27253,53 @@ struct AgentPromptOptions {
     auto_prompt: bool,
 }
 
+/// BUG-1696: resolve a launch prompt from `--prompt` or `--prompt-file`.
+///
+/// Orchestrator seats build dispatches as `--prompt "$(cat brief.txt)"` inside a nested
+/// `bash -lc`. When that quoting collapses the launcher receives an empty string, spawns an
+/// interactive agent that sits at an idle prompt, and blocks the caller on it — once for
+/// 3h04m, reporting exit 0. `--prompt-file` takes the shell out of the path, and the
+/// emptiness check makes the remaining failure loud instead of silent.
+// trace:BUG-1696 | ai:claude
+fn resolve_launch_prompt(
+    prompt: Option<String>,
+    prompt_file: Option<&std::path::Path>,
+    no_prompt: bool,
+) -> Result<Option<String>> {
+    if no_prompt {
+        return Ok(None);
+    }
+    let resolved = match prompt_file {
+        Some(path) => Some(
+            std::fs::read_to_string(path)
+                .with_context(|| format!("failed to read --prompt-file `{}`", path.display()))?,
+        ),
+        None => prompt,
+    };
+    let Some(text) = resolved else {
+        return Ok(None);
+    };
+    if text.trim().is_empty() {
+        let (source, fix) = match prompt_file {
+            Some(path) => (
+                format!("--prompt-file `{}` is empty", path.display()),
+                "Write the brief into that file",
+            ),
+            None => (
+                "--prompt resolved to an empty string (nested shell quoting does this)".to_string(),
+                "Pass the brief with `--prompt-file <PATH>` instead of interpolating it into the \
+                 command line",
+            ),
+        };
+        anyhow::bail!(
+            "{source}; refusing to launch an agent with no initial message — it would sit idle \
+             at a prompt while the caller blocks on it. {fix}, or use `--no-prompt` for a \
+             deliberately unprompted seat."
+        );
+    }
+    Ok(Some(text))
+}
+
 impl AgentPromptOptions {
     fn new(explicit_prompt: Option<String>, no_prompt: bool) -> Self {
         Self {
@@ -27061,6 +27344,59 @@ fn tool_bypass_flags(agent_type: &str) -> Vec<String> {
         "antigravity" => vec!["--dangerously-skip-permissions".to_string()],
         _ => Vec::new(),
     }
+}
+
+/// BUG-1699: split per-tool `default_flags` into (kept, dropped-as-conflicting) for a launch
+/// whose posture the launcher already set explicitly. A posture flag and its value are dropped
+/// together, in both the `--flag value` and `--flag=value` spellings, so the emitted argv
+/// carries exactly one posture rather than two that the vendor CLI silently arbitrates.
+/// Pure and total, so the partition is unit-tested without spawning.
+// trace:BUG-1699 | ai:claude
+fn split_posture_flags(agent_type: &str, flags: Vec<String>) -> (Vec<String>, Vec<String>) {
+    // Flags that select an approval/sandbox posture. `true` = consumes a following value.
+    let posture: &[(&str, bool)] = match agent_type {
+        "claude" => &[
+            ("--permission-mode", true),
+            ("--settings", true),
+            ("--setting-sources", true),
+            ("--dangerously-skip-permissions", false),
+        ],
+        "codex" => &[
+            ("--sandbox", true),
+            ("--ask-for-approval", true),
+            ("--dangerously-bypass-approvals-and-sandbox", false),
+            ("--full-auto", false),
+        ],
+        "antigravity" => &[("--dangerously-skip-permissions", false)],
+        _ => &[],
+    };
+    let mut kept = Vec::new();
+    let mut dropped = Vec::new();
+    let mut idx = 0;
+    while idx < flags.len() {
+        let arg = &flags[idx];
+        let matched = posture.iter().find(|(name, takes_value)| {
+            arg == name || (*takes_value && arg.starts_with(&format!("{name}=")))
+        });
+        match matched {
+            Some((name, takes_value)) => {
+                dropped.push(arg.clone());
+                // `--flag value` spends the next token too; `--flag=value` does not.
+                if *takes_value && arg == name {
+                    if let Some(value) = flags.get(idx + 1) {
+                        dropped.push(value.clone());
+                        idx += 1;
+                    }
+                }
+                idx += 1;
+            }
+            None => {
+                kept.push(arg.clone());
+                idx += 1;
+            }
+        }
+    }
+    (kept, dropped)
 }
 
 // trace:BUG-1178 | ai:codex
@@ -27911,6 +28247,9 @@ fn agent_new_with_config(
         // BUG-653: an epic isn't directly implementable — give the
         // epic-appropriate message before the readiness gate dead-ends.
         epic_agent_new_guard(&project_root, spec_id)?;
+        // BUG-1701: a drain-groomed spec belongs in the one-shot lane, not here.
+        // trace:BUG-1701 | ai:claude
+        drain_mode_agent_new_guard(&project_root, spec_id, force, true)?;
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
@@ -27930,7 +28269,8 @@ fn agent_new_with_config(
         spec.as_deref(),
         &project_root,
     );
-    if early_role_instance == RoleInstanceKind::Driver {
+    // trace:BUG-1697 | ai:claude
+    if resume.duplicate_check && early_role_instance == RoleInstanceKind::Driver {
         enforce_agent_singleton_preflight(
             &project_root,
             role.as_deref(),
@@ -27943,7 +28283,7 @@ fn agent_new_with_config(
         config.agent_type,
         plan.native_session_id.as_deref(),
     ));
-    enforce_agent_singleton(&project_root, &plan)?;
+    enforce_agent_singleton(&project_root, &plan, resume.duplicate_check)?;
     let description = resolve_agent_description(plan.role.as_deref(), description)?;
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
@@ -28132,6 +28472,9 @@ fn agent_new_bg_dispatch(
     if let Some(spec_id) = spec.as_deref() {
         // BUG-653: epic-aware dead-end guard, same as the foreground path.
         epic_agent_new_guard(&project_root, spec_id)?;
+        // BUG-1701: same routing guard; `--bg` detaches, so the message drops the
+        // "holds your caller" clause. trace:BUG-1701 | ai:claude
+        drain_mode_agent_new_guard(&project_root, spec_id, force, false)?;
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
@@ -28145,18 +28488,21 @@ fn agent_new_bg_dispatch(
         return Ok(());
     }
 
-    enforce_agent_singleton_preflight(
-        &project_root,
-        role.as_deref(),
-        spec.as_deref(),
-        &project_root,
-    )?;
+    // trace:BUG-1697 | ai:claude
+    if resume.duplicate_check {
+        enforce_agent_singleton_preflight(
+            &project_root,
+            role.as_deref(),
+            spec.as_deref(),
+            &project_root,
+        )?;
+    }
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
     ));
-    enforce_agent_singleton(&project_root, &plan)?;
+    enforce_agent_singleton(&project_root, &plan, resume.duplicate_check)?;
     let _description = resolve_agent_description(plan.role.as_deref(), description)?;
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
@@ -28420,7 +28766,41 @@ fn apply_agent_default_flags(
                     .extend(tool_bypass_flags(config.agent_type));
             }
         }
+        // BUG-1699: per-tool `default_flags` used to be appended AFTER an explicit posture
+        // the launcher had already set, producing one command line carrying both — e.g.
+        // `codex --dangerously-bypass-approvals-and-sandbox --sandbox workspace-write
+        // --ask-for-approval never` — and leaving the real posture to an undocumented
+        // precedence inside the vendor CLI while the preview asserted the opposite. When the
+        // launcher set the posture, the conflicting per-tool flags lose and we say so.
+        // trace:BUG-1699 | ai:claude
+        let per_tool = if explicit_permission {
+            let (kept, dropped) = split_posture_flags(config.agent_type, per_tool);
+            if !dropped.is_empty() {
+                eprintln!(
+                    "  {} explicit launch posture wins — dropped from agents.toml: {}",
+                    "note:".yellow(),
+                    dropped.join(" ")
+                );
+            }
+            kept
+        } else {
+            per_tool
+        };
         config.default_args.extend(per_tool);
+
+        // BUG-1698 / TASK-1558: give a claude seat the configured AIDA surface. The default
+        // (`off`) loads no MCP servers at all — SPIKE-73 measured MCP at ~1.8-2x the CLI's cost
+        // for identical or worse success — and it also closes the project-MCP trust modal that
+        // used to block every claude launch. Inside `use_config_defaults` so
+        // `--no-default-flags` remains the escape hatch to the untouched native launch.
+        // trace:BUG-1698 | ai:claude
+        // trace:TASK-1558 | ai:claude
+        if config.agent_type == "claude" {
+            let surface = load_agents_mcp(project_root)?;
+            config
+                .default_args
+                .extend(session::claude_mcp_flags(surface));
+        }
     }
     let resolved_model = flag_options
         .model_override
@@ -28512,6 +28892,65 @@ fn load_agents_bypass(project_root: &std::path::Path) -> Result<bool> {
         bypass = v;
     }
     Ok(bypass)
+}
+
+/// TASK-1558: resolve `[agents] mcp` with the same user-base-then-project precedence as
+/// `bypass` / `contained`. Absent everywhere means the default surface (`off`).
+// trace:TASK-1558 | ai:claude
+fn load_agents_mcp(project_root: &std::path::Path) -> Result<session::AgentMcpSurface> {
+    let mut surface = session::AgentMcpSurface::default();
+    if let Some(home) = aida_home_dir() {
+        if let Some(raw) = read_agents_string_from_file(&home.join(".aida/agents.toml"), "mcp")? {
+            surface = session::AgentMcpSurface::parse(&raw)?;
+        }
+    }
+    if let Some(raw) = read_agents_string_from_file(&project_root.join(".aida/agents.toml"), "mcp")?
+    {
+        surface = session::AgentMcpSurface::parse(&raw)?;
+    }
+    Ok(surface)
+}
+
+/// Read `[agents] <key>` as a string.
+///
+/// A key that is PRESENT but not a string is an error, not a miss. `as_str()`
+/// alone returns `None` for `mcp = true` exactly as it does for an absent key,
+/// so the caller would silently fall back to its default -- which for
+/// `[agents] mcp` means a seat launches on `off` while the operator believes
+/// they configured `aida` or `native`. TASK-1558's documented contract is that
+/// an unrecognised value FAILS the launch rather than falling back; that has to
+/// cover a wrong TYPE too, or the guard fails open on the most likely typo.
+// trace:TASK-1558 | ai:claude
+fn read_agents_string_from_file(path: &std::path::Path, key: &str) -> Result<Option<String>> {
+    let Some(value) = parse_agents_toml(path)? else {
+        return Ok(None);
+    };
+    let Some(found) = value.get("agents").and_then(|agents| agents.get(key)) else {
+        return Ok(None);
+    };
+    match found.as_str() {
+        Some(s) => Ok(Some(s.to_string())),
+        None => anyhow::bail!(
+            "`[agents] {key}` in {} must be a quoted string, but is {} — \
+             fix the value (or remove the key to take the default) and retry",
+            path.display(),
+            agents_toml_type_name(found)
+        ),
+    }
+}
+
+/// TOML type name for an `[agents]` value, for the wrong-type refusal above.
+// trace:TASK-1558 | ai:claude
+fn agents_toml_type_name(value: &toml::Value) -> &'static str {
+    match value {
+        toml::Value::String(_) => "a string",
+        toml::Value::Integer(_) => "an integer",
+        toml::Value::Float(_) => "a float",
+        toml::Value::Boolean(_) => "a boolean",
+        toml::Value::Datetime(_) => "a datetime",
+        toml::Value::Array(_) => "an array",
+        toml::Value::Table(_) => "a table",
+    }
 }
 
 // trace:STORY-567 | ai:codex
@@ -29631,7 +30070,18 @@ fn resolve_role_instance_for_launch(
 }
 
 // trace:STORY-791 | ai:codex
-fn enforce_agent_singleton(project_root: &std::path::Path, plan: &AgentLaunchPlan) -> Result<()> {
+fn enforce_agent_singleton(
+    project_root: &std::path::Path,
+    plan: &AgentLaunchPlan,
+    duplicate_check: bool,
+) -> Result<()> {
+    // BUG-1697: `--no-duplicate-check` is documented to skip the same-vendor/same-role
+    // check entirely. It used to stop at the resume path, so the new-launch singleton had
+    // no escape hatch and a hung holder could block every later seat on the scope.
+    // trace:BUG-1697 | ai:claude
+    if !duplicate_check {
+        return Ok(());
+    }
     if plan.role_instance == RoleInstanceKind::Companion {
         return Ok(());
     }
@@ -30521,6 +30971,14 @@ fn render_agent_launch_noexec(
         "  resolved: {}\n",
         resolved_agent_permission_summary(config.agent_type, &exec_args)
     ));
+    if config.agent_type == "claude" {
+        // TASK-1558 AC4: never make the operator guess which AIDA surface the seat got.
+        // trace:TASK-1558 | ai:claude
+        let surface = load_agents_mcp(&plan.project_root)
+            .map(|s| s.as_str())
+            .unwrap_or("(invalid — see [agents] mcp)");
+        out.push_str(&format!("  aida surface (agents.toml mcp): {surface}\n"));
+    }
     if config.agent_type == "codex" {
         out.push_str(&format!(
             "  codex sandbox: {}\n",
@@ -30675,7 +31133,7 @@ fn prompt_source_label(prompt: &AgentPromptOptions, prompt_args: &[String]) -> &
         .filter(|p| !p.is_empty())
         .is_some();
     match (explicit, prompt_args.is_empty()) {
-        (true, _) => "explicit (--prompt)",
+        (true, _) => "explicit (--prompt/--prompt-file)",
         // trace:STORY-1471 | ai:claude
         (false, false) => "generated (role launch prompt)",
         (false, true) => "none (--no-prompt)",
@@ -31028,8 +31486,8 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
     }
 
     println!(
-        "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} WORKTREE",
-        "NAME/ID", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "DESC"
+        "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<24} WORKTREE",
+        "NAME/ID", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "CPU", "DESC"
     );
     let now = chrono::Utc::now();
     for agent in agents {
@@ -31088,8 +31546,19 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
                     .unwrap_or_default()
             );
         } else {
+            // BUG-1701 AC5: CPU consumed is what separates a seat still working from one that
+            // finished its turn and is idling at a prompt — 3-46 SECONDS across hours, for seats
+            // the status column called `busy`. Process-backed rows only; a lease has no pid.
+            // trace:BUG-1701 | ai:claude
+            let cpu = if agent.source == "lease" {
+                "-".to_string()
+            } else {
+                agent_registry::process_cpu_secs(agent.pid)
+                    .map(|secs| agent_registry::humanize_elapsed(secs))
+                    .unwrap_or_else(|| "?".to_string())
+            };
             println!(
-                "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} {}{}",
+                "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<24} {}{}",
                 identity,
                 pid_str,
                 terminal,
@@ -31099,6 +31568,7 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
                 scope,
                 agent.status.as_str(),
                 format!("({elapsed})"),
+                cpu,
                 desc,
                 agent.worktree_path.display(),
                 paused_note
@@ -31171,31 +31641,101 @@ fn agent_stop(name: &str) -> Result<()> {
     let agent_ctx = build_agent_classify_context(&project_root, &leases);
     let registry_agents = agent_registry::list_agent_views(&project_root, &agent_ctx);
 
-    let found = registry_agents.into_iter().find(|agent| {
-        if let Some(ref active_name) = agent.name {
-            active_name.eq_ignore_ascii_case(name_trimmed)
-        } else {
-            let fallback_id = format!("{}#{}", agent.agent_type, agent.pid);
-            let fallback_id_alt = format!("{}-{}", agent.agent_type, agent.pid);
-            fallback_id.eq_ignore_ascii_case(name_trimmed)
-                || fallback_id_alt.eq_ignore_ascii_case(name_trimmed)
-        }
-    });
+    // BUG-1703: the registry is PID-keyed, so relaunching a name leaves SEVERAL entries under it.
+    // Taking only the first match signalled a stale pid, reaped that entry, and printed success
+    // while the real seat kept running and kept its caller blocked — observed on 3 of 8 stops.
+    // trace:BUG-1703 | ai:claude
+    let matches: Vec<_> = registry_agents
+        .into_iter()
+        .filter(|agent| {
+            if let Some(ref active_name) = agent.name {
+                active_name.eq_ignore_ascii_case(name_trimmed)
+            } else {
+                let fallback_id = format!("{}#{}", agent.agent_type, agent.pid);
+                let fallback_id_alt = format!("{}-{}", agent.agent_type, agent.pid);
+                fallback_id.eq_ignore_ascii_case(name_trimmed)
+                    || fallback_id_alt.eq_ignore_ascii_case(name_trimmed)
+            }
+        })
+        .collect();
 
-    let agent = match found {
-        Some(agent) => agent,
-        None => {
-            anyhow::bail!("no active agent found with name '{}'", name_trimmed);
-        }
-    };
+    if matches.is_empty() {
+        anyhow::bail!("no active agent found with name '{}'", name_trimmed);
+    }
 
-    println!("Stopping agent '{}' (PID {})...", name_trimmed, agent.pid);
-    terminate_pids_with_grace(&[agent.pid], 5);
-    let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    let all_pids: Vec<u32> = matches.iter().map(|a| a.pid).collect();
+    let alive = live_pids(&all_pids);
+
+    // AC4: an entry whose process is genuinely gone is reaped and reported as already gone —
+    // which is NOT the same as having stopped something.
+    for agent in matches.iter().filter(|a| !alive.contains(&a.pid)) {
+        println!(
+            "  pid {} was already gone — reaping its stale registry entry",
+            agent.pid
+        );
+        let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    }
+
+    if alive.is_empty() {
+        println!(
+            "{} Agent '{}' was already stopped; {} stale registry entr{} reaped.",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            name_trimmed,
+            matches.len(),
+            if matches.len() == 1 { "y" } else { "ies" }
+        );
+        return Ok(());
+    }
+
     println!(
-        "{} Agent '{}' stopped.",
+        "Stopping agent '{}' (PID{} {})...",
+        name_trimmed,
+        if alive.len() == 1 { "" } else { "s" },
+        alive
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let survivors = terminate_pids_with_grace(&alive, 5);
+
+    for agent in matches
+        .iter()
+        .filter(|a| alive.contains(&a.pid) && !survivors.contains(&a.pid))
+    {
+        let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    }
+
+    // AC1: never claim a stop that did not happen.
+    if !survivors.is_empty() {
+        anyhow::bail!(
+            "agent `{}` is STILL ALIVE after SIGTERM and SIGKILL: pid(s) {}. Its registry entries \
+             were left in place. Check for a process that re-parents or respawns, and inspect the \
+             tree with `ps -o pid,ppid,time,args -p {}`.",
+            name_trimmed,
+            survivors
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+            survivors
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+    }
+
+    println!(
+        "{} Agent '{}' stopped (pid{} {}).",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
-        name_trimmed
+        name_trimmed,
+        if alive.len() == 1 { "" } else { "s" },
+        alive
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     Ok(())
 }
@@ -31746,6 +32286,21 @@ pub(crate) struct SessionLease {
     // trace:BUG-778 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     manual_enter_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// TASK-1518: stamped by the drain's SIGTERM handler on every lease the
+    /// stopped wave created (`creator_pid` match) as it releases the drain
+    /// lock — an INTERRUPTED session, not an abandoned one. `aida ps` reads
+    /// it: a stamped lease with no live process and a clean tree classifies
+    /// `stopped` (worktree intact, resume as normal) instead of a dead agent.
+    /// Written as a generic TOML key by `drain_signal`, so a lease this
+    /// binary does not otherwise model keeps its other keys.
+    // trace:TASK-1518 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    interrupted_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// TASK-1518: why the lease was interrupted (`sigterm`). Informational;
+    /// the classifier keys on `interrupted_at`.
+    // trace:TASK-1518 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    interrupted_reason: Option<String>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -31854,6 +32409,8 @@ fn session_harness_worktree_register(
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -31867,6 +32424,17 @@ fn session_harness_worktree_register(
         "registered harness worktree lease {} scope:{} branch:{}",
         id, lease.scope, lease.branch
     );
+    // BUG-1656: a subagent dispatched INTO a worktree an existing spec lease
+    // owns adopts that lease — its harness pid becomes the spec lease's live
+    // worker, so `aida ps` / `aida awaiting` stop calling the spec dead.
+    // trace:BUG-1656 | ai:claude
+    if let Some(adopted) =
+        adopt_spec_lease_for_subagent(&project_root, &lease.worktree_path, active_pid)
+    {
+        println!(
+            "adopted spec lease {adopted} for this subagent (its worktree is this subagent's cwd)"
+        );
+    }
     // BUG-754: a spec-scoped harness lease means a fanned-out implementer is
     // now working that spec — flip Approved → In Progress at lease-take (the
     // same coherence bump `aida session start` performs per BUG-379) so
@@ -31880,6 +32448,115 @@ fn session_harness_worktree_register(
         );
     }
     Ok(())
+}
+
+/// BUG-1656 (2): is `lease_scope`/`lease_worktree` a spec-scoped lease whose
+/// worktree is exactly the subagent's `cwd`? Pure so the adoption rule is
+/// unit-testable without a lease dir. Generic harness leases and non-spec
+/// scopes are never adopted; neither is a lease for a different worktree.
+// trace:BUG-1656 | ai:claude
+fn subagent_adopts_lease(
+    lease_scope: &str,
+    lease_worktree: &std::path::Path,
+    cwd: &std::path::Path,
+) -> bool {
+    if lease_scope.eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE) {
+        return false;
+    }
+    if worktree_lease::spec_id_from_branch(lease_scope).is_none() {
+        return false;
+    }
+    let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    !lease_worktree.as_os_str().is_empty() && canon(lease_worktree) == canon(cwd)
+}
+
+/// BUG-1656 (2): give an Agent-tool subagent the spec lease of the worktree it
+/// was dispatched into. Walks `.aida/sessions/`, finds the spec-scoped lease
+/// whose `worktree_path` is `cwd`, and — unless that lease already records a
+/// LIVE `active_pid` — stamps `harness_pid` as its `active_pid` (plus the
+/// kernel start identity and an `adopted_by_subagent_at` marker). Patched as
+/// generic TOML key inserts (the `manual_enter_at` pattern) so keys this
+/// binary does not model survive. Returns the adopted lease id. Best-effort:
+/// unreadable leases are skipped, never rewritten.
+// trace:BUG-1656 | ai:claude
+fn adopt_spec_lease_for_subagent(
+    project_root: &std::path::Path,
+    cwd: &std::path::Path,
+    harness_pid: Option<u32>,
+) -> Option<String> {
+    let pid = harness_pid?;
+    let entries = std::fs::read_dir(leases_dir(project_root)).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+            continue;
+        }
+        let Ok(body) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(mut value) = toml::from_str::<toml::Value>(&body) else {
+            continue;
+        };
+        let Some(table) = value.as_table_mut() else {
+            continue;
+        };
+        let scope = table
+            .get("scope")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let worktree = table
+            .get("worktree_path")
+            .and_then(|v| v.as_str())
+            .map(std::path::PathBuf::from)
+            .unwrap_or_default();
+        if !subagent_adopts_lease(&scope, &worktree, cwd) {
+            continue;
+        }
+        let already_live = table
+            .get("active_pid")
+            .and_then(|v| v.as_integer())
+            .and_then(|v| u32::try_from(v).ok())
+            .is_some_and(process_probe::pid_is_alive);
+        if already_live {
+            continue;
+        }
+        table.insert(
+            "active_pid".to_string(),
+            toml::Value::Integer(i64::from(pid)),
+        );
+        match process_probe::process_start_identity(pid) {
+            Some(start) => {
+                table.insert(
+                    "active_pid_start_time".to_string(),
+                    toml::Value::String(start),
+                );
+            }
+            None => {
+                table.remove("active_pid_start_time");
+            }
+        }
+        table.insert(
+            "adopted_by_subagent_at".to_string(),
+            toml::Value::String(chrono::Utc::now().to_rfc3339()),
+        );
+        let id = table
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                path.file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            });
+        let Ok(content) = toml::to_string_pretty(&value) else {
+            continue;
+        };
+        if write_atomic(&path, &content).is_ok() {
+            return Some(id);
+        }
+    }
+    None
 }
 
 // BUG-754: does this harness-lease scope name a spec (vs the generic
@@ -34806,7 +35483,7 @@ fn find_main_worktree_root() -> Result<std::path::PathBuf> {
 ///    `git rev-parse --verify` succeeds against
 ///    Returns None if no reasonable default is detectable (e.g. no remotes,
 ///    no main/master locally).
-fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
+pub(crate) fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
     let try_cmd = |args: &[&str]| -> Option<String> {
         let o = std::process::Command::new("git")
             .arg("-C")
@@ -36064,6 +36741,7 @@ fn acquire_session_pool_worktree(
         lease_ttl_secs: Some(worktree_pool_config_lease_ttl_secs(project_root)),
         post_create_hooks: worktree_pool_global_hooks("post_create"),
         init_submodules: worktree_config_init_submodules(project_root),
+        parent_dir: worktree_pool_config_worktree_parent(project_root),
     };
     let acquired = aida_core::worktree_pool::acquire(project_root, &opts)?;
 
@@ -37102,6 +37780,8 @@ fn session_start(
         review_verb: is_review_session,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
     let lease_file = lease_path(&project_root, &id);
     // STORY-1429: atomic, so a reader never sees a half-written lease.
@@ -39614,7 +40294,32 @@ fn print_status_working_tree_section(root: &std::path::Path) {
 
 /// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
 /// are still alive. trace:BUG-61 | ai:claude
-fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
+/// Which of `pids` are running right now.
+///
+/// A ZOMBIE does not count. A terminated child stays in the process table until its parent
+/// reaps it, and sysinfo still lists it — so treating "present" as "alive" would make
+/// `agent stop` report that it had failed to kill something it had just killed.
+// trace:BUG-1703 | ai:claude
+fn live_pids(pids: &[u32]) -> Vec<u32> {
+    use sysinfo::{ProcessRefreshKind, ProcessStatus, RefreshKind, System};
+    let mut sys =
+        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    pids.iter()
+        .copied()
+        .filter(|&pid| {
+            sys.process(sysinfo::Pid::from_u32(pid))
+                .is_some_and(|p| !matches!(p.status(), ProcessStatus::Zombie | ProcessStatus::Dead))
+        })
+        .collect()
+}
+
+/// SIGTERM, wait, SIGKILL the survivors, then report who is STILL alive.
+///
+/// BUG-1703: this used to return `()`, and `agent stop` printed success regardless. Callers must
+/// be able to tell a real stop from a signal that landed on nothing.
+// trace:BUG-1703 | ai:claude
+fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) -> Vec<u32> {
     use sysinfo::{ProcessRefreshKind, RefreshKind, Signal, System};
     let mut sys =
         System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
@@ -39635,6 +40340,9 @@ fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
             let _ = p.kill_with(Signal::Kill);
         }
     }
+    // SIGKILL is not instantaneous; give the kernel a moment before judging.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    live_pids(pids)
 }
 
 /// STORY-73: resolution chain for `aida session end` (no arg). Tries in
@@ -41575,7 +42283,7 @@ fn session_end(
             "→".dimmed(),
             leaked.len()
         );
-        terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
+        let _ = terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
     }
 
     // STORY-73: human output to stderr, eval-friendly `unset` to stdout
@@ -42448,9 +43156,26 @@ fn kill_process_group(pid: u32) {
 // trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link's bounded
 // `git`/`gh` calls reuse this instead of a second timeout implementation.
 pub(crate) fn command_output_with_timeout(
-    mut cmd: std::process::Command,
+    cmd: std::process::Command,
     timeout: std::time::Duration,
 ) -> Option<std::process::Output> {
+    match command_output_with_timeout_detail(cmd, timeout) {
+        BoundedCommandOutput::Completed(output) => Some(output),
+        BoundedCommandOutput::SpawnFailed | BoundedCommandOutput::TimedOut => None,
+    }
+}
+
+// trace:TASK-1535 | ai:codex
+pub(crate) enum BoundedCommandOutput {
+    Completed(std::process::Output),
+    SpawnFailed,
+    TimedOut,
+}
+
+pub(crate) fn command_output_with_timeout_detail(
+    mut cmd: std::process::Command,
+    timeout: std::time::Duration,
+) -> BoundedCommandOutput {
     use std::io::Read;
 
     #[cfg(unix)]
@@ -42459,17 +43184,20 @@ pub(crate) fn command_output_with_timeout(
         cmd.process_group(0);
     }
 
-    let mut child = cmd
+    let mut child = match cmd
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .ok()?;
+    {
+        Ok(child) => child,
+        Err(_) => return BoundedCommandOutput::SpawnFailed,
+    };
     // Only used to target `killpg` below; on non-unix targets nothing reads
     // it, so it is cfg-gated too rather than left as a dead binding.
     #[cfg(unix)]
     let pid = child.id();
-    let mut stdout_pipe = child.stdout.take()?;
-    let mut stderr_pipe = child.stderr.take()?;
+    let mut stdout_pipe = child.stdout.take().expect("stdout was piped");
+    let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
     let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
     let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -42525,11 +43253,14 @@ pub(crate) fn command_output_with_timeout(
     };
     let stdout = stdout_rx.recv_timeout(read_wait).unwrap_or_default();
     let stderr = stderr_rx.recv_timeout(read_wait).unwrap_or_default();
-    status.map(|status| std::process::Output {
-        status,
-        stdout,
-        stderr,
-    })
+    match status {
+        Some(status) => BoundedCommandOutput::Completed(std::process::Output {
+            status,
+            stdout,
+            stderr,
+        }),
+        None => BoundedCommandOutput::TimedOut,
+    }
 }
 
 /// BUG-1594: the message a forge lookup carries when the scoped
@@ -47418,6 +48149,16 @@ mod task_1454_pending_approval_tests;
 #[path = "tests/bug_1523_orphaned_in_progress_mapping_tests.rs"]
 mod bug_1523_orphaned_in_progress_mapping_tests;
 
+// trace:BUG-1656 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1656_subagent_liveness_tests.rs"]
+mod bug_1656_subagent_liveness_tests;
+
+// trace:BUG-1680 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/bug_1680_salvage_main_tests.rs"]
+mod bug_1680_salvage_main_tests;
+
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_358_escalation_cleanup_tests.rs"]
@@ -49295,12 +50036,15 @@ fn aida_home_dir() -> Option<std::path::PathBuf> {
     crate::home_dir()
 }
 
-/// BUG-1642: the one home-directory lookup for this crate. Production is
-/// `dirs::home_dir()`. Under `cfg(test)` it resolves the temp `HOME` the lib
-/// test binary installs before `main` and panics rather than return the
-/// operator's real home, so no lib test can read or write the real `~/.aida`.
-/// Call this instead of the `dirs` crate (a source-scan test enforces it).
+/// BUG-1642: the one home-directory lookup for this crate. Production defers
+/// to [`aida_core::home::home_dir`], which honours `$HOME` / `$USERPROFILE`
+/// before the platform lookup so the answer is overridable on Windows too.
+/// Under `cfg(test)` it resolves the temp `HOME` the lib test binary installs
+/// before `main` and panics rather than return the operator's real home, so no
+/// lib test can read or write the real `~/.aida`. Call this instead of the
+/// `dirs` crate (a source-scan test enforces it).
 // trace:BUG-1642 | ai:claude
+// trace:TASK-1513 | ai:claude
 pub(crate) fn home_dir() -> Option<std::path::PathBuf> {
     #[cfg(test)]
     {
@@ -49308,7 +50052,7 @@ pub(crate) fn home_dir() -> Option<std::path::PathBuf> {
     }
     #[cfg(not(test))]
     {
-        dirs::home_dir() // allow-direct-home-dir
+        aida_core::home::home_dir()
     }
 }
 
@@ -58623,6 +59367,181 @@ fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bo
     )
 }
 
+/// BUG-1672: the verdict a review COMMENT on the spec carries, when the
+/// comment is one. Reviewers that only post prose (a fresh reviewer subagent,
+/// a human at the keyboard) write no verdict file at all, so the comment is
+/// the only record of the decision.
+///
+/// Only a comment that is plainly a review counts: its first line starts with
+/// `VERDICT:`, or its head (the text before the first `:`) is `Review` or
+/// begins `Review ` / `Review(` — `Review:`, `Review (fresh Opus reviewer):`,
+/// `Review round 4 (...):`. Anything else (a proxy decision quoting a review,
+/// an orchestrator note, the `REVIEW FINDINGS TO ADDRESS (` rework block) is
+/// not a review. The verdict is read from the first line only: a
+/// request-changes / reject word blocks regardless of anything else on the
+/// line; `PARTIAL` counts as request-changes (as `VerdictKind::parse` does);
+/// an approval word approves unless the line qualifies it (`WITHHELD`,
+/// `PENDING`, `NOT APPROVED`), in which case it is `Unknown`, which never
+/// approves. `APPROVE WITH NITS` is an approval — the wording the review
+/// skill's accepted-with-nits path posts.
+///
+/// Returns `None` for a comment that is not a review at all.
+// trace:BUG-1672 | ai:claude
+fn review_comment_verdict(content: &str) -> Option<review_verdict::VerdictKind> {
+    if review_verdict::is_findings_block(content) {
+        return None;
+    }
+    let first = content.lines().find(|l| !l.trim().is_empty())?.trim();
+    let lower = first.to_ascii_lowercase();
+    let head = lower.split(':').next().unwrap_or(&lower).trim();
+    let is_review = lower.starts_with("verdict:")
+        || head == "review"
+        || head.starts_with("review ")
+        || head.starts_with("review(");
+    if !is_review {
+        return None;
+    }
+    // Word-level scan of the upper-cased first line: verdict words are written
+    // in capitals by every writer, and the whole-word match keeps a prose
+    // "reviewer" or "approved-by" from counting.
+    let upper = first.to_ascii_uppercase();
+    let words: Vec<&str> = upper
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .map(|w| w.trim_matches('_'))
+        .filter(|w| !w.is_empty())
+        .collect();
+    let has = |w: &str| words.contains(&w);
+    let has_seq = |a: &str, b: &str| words.windows(2).any(|p| p[0] == a && p[1] == b);
+    let request_changes = has("REQUEST_CHANGES")
+        || has("REQUESTCHANGES")
+        || has_seq("REQUEST", "CHANGES")
+        || has_seq("CHANGES", "REQUESTED")
+        || has_seq("NEEDS", "CHANGES");
+    if request_changes || has("PARTIAL") {
+        return Some(review_verdict::VerdictKind::RequestChanges);
+    }
+    if has("REJECT") || has("REJECTED") {
+        return Some(review_verdict::VerdictKind::Rejected);
+    }
+    if has("APPROVE") || has("APPROVED") || has("LGTM") {
+        let qualified = has("WITHHELD")
+            || has("PENDING")
+            || has_seq("NOT", "APPROVED")
+            || has_seq("NOT", "APPROVE");
+        return Some(if qualified {
+            review_verdict::VerdictKind::Unknown
+        } else {
+            review_verdict::VerdictKind::Approved
+        });
+    }
+    Some(review_verdict::VerdictKind::Unknown)
+}
+
+/// BUG-1672: the LATEST review comment on the spec and the verdict it
+/// carries. Top-level comments only, newest by `created_at`; the newest
+/// comment that is a review decides, so a round-4 APPROVE after a round-3
+/// REQUEST_CHANGES approves and a REQUEST_CHANGES after an earlier APPROVE
+/// blocks.
+///
+/// Every review comment counts, whoever posted it: the author field is the
+/// operator's name on reviewer and implementer comments alike, and the
+/// session that moved the spec to done is not recorded in its history, so
+/// there is no reliable way to tell the implementer's own "looks good" apart.
+/// The strict first-line shape `review_comment_verdict` requires is the
+/// guard instead.
+// trace:BUG-1672 | ai:claude
+fn latest_review_comment_verdict(
+    comments: &[aida_core::Comment],
+) -> Option<(review_verdict::VerdictKind, chrono::DateTime<chrono::Utc>)> {
+    comments
+        .iter()
+        .filter_map(|c| review_comment_verdict(&c.content).map(|k| (k, c.created_at)))
+        // trace:BUG-1672 | ai:codex — equal timestamps cannot clear a blocker.
+        .max_by_key(|(kind, at)| (*at, !kind.approves()))
+}
+
+/// BUG-1672: when a verdict file was last written, as UTC. `None` when the
+/// file is missing or the filesystem gives no modification time.
+// trace:BUG-1672 | ai:claude
+fn verdict_file_written_at(path: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    Some(chrono::DateTime::<chrono::Utc>::from(modified))
+}
+
+/// BUG-1672: has an open PR for `req` already been approved by an independent
+/// review? The one predicate `reviews_awaiting_human` uses to split
+/// awaiting-review from awaiting-merge. Three records can approve:
+///  1. the drain's PR-keyed verdict file (`PR-<n>.json`, the original signal);
+///  2. the spec-keyed verdict file `aida review <SPEC>` records (not one a
+///     merge has already closed out);
+///  3. the latest review comment on the spec (the fresh-reviewer flow posts
+///     only a comment).
+///
+/// The newest review wins across all eligible sources. An approval must be
+/// strictly newer than every blocking candidate; ties or missing timestamps
+/// cannot clear a blocker. File times remain filesystem mtimes (BUG-1681 owns
+/// switching to recorded_at).
+// trace:BUG-1672 | ai:codex
+fn spec_review_approved(
+    project_root: &std::path::Path,
+    req: &aida_core::Requirement,
+    spec_id: &str,
+    pr_number: u64,
+) -> bool {
+    let mut candidates = Vec::new();
+    if let Some((kind, at)) = latest_review_comment_verdict(&req.comments) {
+        candidates.push((kind.approves(), Some(at)));
+    }
+
+    let pr_path = review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"));
+    if pr_path.is_file() {
+        // Preserve the drain reader's conflict/escalation checks. An unknown
+        // or unreadable verdict is blocking evidence, never an approval.
+        candidates.push((
+            pr_has_approved_verdict(project_root, pr_number),
+            verdict_file_written_at(&pr_path),
+        ));
+    }
+
+    let ids = [
+        Some(spec_id),
+        req.agreed_id.as_deref(),
+        req.spec_id.as_deref(),
+    ];
+    for path in ids
+        .into_iter()
+        .flatten()
+        .filter(|id| !id.trim().is_empty() && *id != "???")
+        .map(|id| review_verdict::verdict_path(project_root, id))
+        .filter(|p| p.is_file())
+    {
+        let record = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|body| review_verdict::parse_recorded_verdict(&body));
+        if record.as_ref().is_some_and(|v| v.is_closed()) {
+            continue;
+        }
+        candidates.push((
+            record.is_some_and(|v| v.kind.approves()),
+            verdict_file_written_at(&path),
+        ));
+    }
+    review_candidates_approved(&candidates)
+}
+
+// trace:BUG-1672 | ai:codex
+fn review_candidates_approved(
+    candidates: &[(bool, Option<chrono::DateTime<chrono::Utc>>)],
+) -> bool {
+    candidates.iter().any(|(approves, at)| {
+        *approves
+            && candidates.iter().all(|(other_approves, other_at)| {
+                *other_approves
+                    || matches!((at, other_at), (Some(at), Some(other_at)) if at > other_at)
+            })
+    })
+}
+
 /// BUG-1291: any valid local reviewer decision means this PR has already
 /// been reviewed. The orphan sweep must not turn RequestChanges or Rejected
 /// back into fresh reviewer work merely because GitHub has no decision.
@@ -58897,7 +59816,12 @@ fn reviews_awaiting_human(
         match surface {
             ReviewSurface::OpenChange { number, .. } => {
                 let forge = crate::forge::resolve_forge_kind(project_root);
-                let reviewed = pr_has_approved_verdict(project_root, number);
+                // BUG-1672: the PR-keyed file is only the drain's record; a
+                // keyboard `aida review` writes the spec-keyed file and a
+                // fresh-reviewer subagent posts only a comment. Read all three
+                // so an already-approved spec lands under awaiting-merge, not
+                // back on the operator's review seat. trace:BUG-1672 | ai:claude
+                let reviewed = spec_review_approved(project_root, req, &spec_id, number);
                 out.push(ReviewAwaiting {
                     spec_id,
                     surface: format!("{}-{}", forge.change_noun(), number),
@@ -62745,6 +63669,8 @@ fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         review_verb: false,
         claim_verb: true,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -63318,6 +64244,52 @@ fn worktree_pool_config_max_trees(project_root: &std::path::Path) -> Option<usiz
         .map(|n| n.max(1) as usize)
 }
 
+/// Read `[worktree_pool] worktree_parent` from `.aida/config.toml`: the opt-in
+/// single parent directory that AIDA-created worktrees are nested under, so one
+/// editor/agent folder-trust grant on that directory covers every worktree AIDA
+/// mints (folder trust inherits from a parent — BUG-1700). Unset (the default)
+/// keeps the historical sibling layout, so nothing moves under a live fleet. A
+/// blank value is treated as unset. `~` is expanded; a relative path is left
+/// relative and resolved against the project root by the pool.
+// trace:BUG-1700 | ai:claude
+pub(crate) fn worktree_pool_config_worktree_parent(
+    project_root: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    let body = std::fs::read_to_string(project_root.join(".aida").join("config.toml")).ok()?;
+    let value: toml::Value = toml::from_str(&body).ok()?;
+    let raw = value
+        .get("worktree_pool")?
+        .get("worktree_parent")?
+        .as_str()?
+        .trim();
+    if raw.is_empty() {
+        return None;
+    }
+    Some(expand_worktree_parent_tilde(raw))
+}
+
+/// Expand a leading `~` / `~/` in a configured worktree parent against `$HOME`.
+// trace:BUG-1700 | ai:claude
+fn expand_worktree_parent_tilde(raw: &str) -> std::path::PathBuf {
+    // `home_dir()`, not a direct HOME read: it is the crate's single home
+    // resolver and carries the cfg(test) redirect to a temp home, which the
+    // `no_direct_home_resolution_in_crate` guard enforces (TASK-1513).
+    expand_tilde_against(raw, home_dir())
+}
+
+/// Pure core of [`expand_worktree_parent_tilde`], with `$HOME` injected so it is
+/// testable without mutating process environment. A path is left EXACTLY as
+/// written when home is unknown, so the caller sees the literal configured value
+/// rather than a silently wrong one.
+// trace:BUG-1700 | ai:claude
+fn expand_tilde_against(raw: &str, home: Option<std::path::PathBuf>) -> std::path::PathBuf {
+    match (raw, home) {
+        ("~", Some(h)) => h,
+        (r, Some(h)) if r.starts_with("~/") => h.join(&r[2..]),
+        _ => std::path::PathBuf::from(raw),
+    }
+}
+
 /// Read `[worktree_pool] lease_ttl_secs` (seconds) from `.aida/config.toml`,
 /// falling back to the core default when unset/invalid. Drives the
 /// reservation-leak backstop: a lease older than this with no live owner is
@@ -63562,6 +64534,18 @@ pub(crate) fn repo_review_optin_present(project_root: &std::path::Path) -> bool 
 #[path = "tests/story_1476_acceptance_trust_tests.rs"]
 mod story_1476_acceptance_trust_tests;
 
+#[cfg(test)]
+#[path = "tests/task_1558_agents_mcp_type_tests.rs"]
+mod task_1558_agents_mcp_type_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1700_worktree_parent_tests.rs"]
+mod bug_1700_worktree_parent_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1701_drain_routing_tests.rs"]
+mod bug_1701_drain_routing_tests;
+
 fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
     let project_root = find_project_root()?;
     match cmd {
@@ -63573,6 +64557,7 @@ fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
                 lease_ttl_secs: Some(worktree_pool_config_lease_ttl_secs(&project_root)),
                 post_create_hooks: worktree_pool_global_hooks("post_create"),
                 init_submodules: worktree_config_init_submodules(&project_root),
+                parent_dir: worktree_pool_config_worktree_parent(&project_root),
             };
             let path = aida_core::worktree_pool::acquire(&project_root, &opts)?;
             if *json {
@@ -64719,6 +65704,7 @@ struct PsDispatch {
     hint: Option<String>,
     dirty: bool,
     ahead_of_main: u32,
+    untracked_only: bool,
 }
 
 /// TASK-1451: whether a live seat's resolved mail identity is a stable seat
@@ -65078,6 +66064,7 @@ fn proc_is_stopped(_pid: u32) -> bool {
 /// flag-only / orphaned case. Surfaced by `aida ps` alongside the live table so
 /// a crashed or never-started session can't hide behind a status flag.
 // trace:STORY-696 | ai:claude
+#[derive(Debug)]
 struct PsOrphan {
     spec: String,
     title: String,
@@ -65093,6 +66080,14 @@ struct PsOrphan {
     /// lease — that is a genuine orphan.
     // trace:TASK-1064 | ai:claude
     likely_fanout: bool,
+    /// BUG-1656: `true` when this spec-scoped lease is STALE (its recorded pid
+    /// is dead) but a LIVE generic `harness-worktree` lease exists in this repo
+    /// — the shape an Agent-tool subagent dispatched into the spec's leased
+    /// worktree leaves behind. The spec may well be being worked right now;
+    /// the surface says "possibly worked by a subagent" instead of a flat
+    /// "abandoned".
+    // trace:BUG-1656 | ai:claude
+    possibly_subagent: bool,
 }
 
 /// The flag-only / orphaned verdict for one In-Progress spec, given the
@@ -65118,6 +66113,23 @@ fn ps_orphan_verdict(lease_state: Option<LeaseState>, awaiting_agent: bool) -> O
         Some(_) => Some(true),
         None => Some(false),
     }
+}
+
+/// BUG-1656: [`ps_orphan_verdict`] plus the dirty-movement liveness signal. A
+/// spec-scoped lease whose worktree's dirty files are still being written is
+/// NOT orphaned — something is editing there — however dead its recorded pid
+/// looks (an Agent-tool subagent runs inside the parent claude process and
+/// is invisible to the pid/cwd probes). Pure so the matrix stays testable.
+// trace:BUG-1656 | ai:claude
+fn ps_orphan_verdict_with_movement(
+    lease_state: Option<LeaseState>,
+    awaiting_agent: bool,
+    dirty_movement_fresh: bool,
+) -> Option<bool> {
+    if lease_state.is_some() && dirty_movement_fresh {
+        return None;
+    }
+    ps_orphan_verdict(lease_state, awaiting_agent)
 }
 
 /// TASK-1064: is an advisor Agent-tool fan-out currently running? Detected as a
@@ -66221,6 +67233,8 @@ fn orphaned_in_progress_items(
             spec_id: o.spec,
             title: o.title,
             abandoned: o.stale_lease,
+            // trace:BUG-1656 | ai:claude
+            possibly_subagent: o.possibly_subagent,
         })
         .collect()
 }
@@ -66398,7 +67412,14 @@ fn build_running_work(
                 // orchestrator-spawned lease — those DO expect an agent, so
                 // their crash detection is untouched. trace:BUG-778 | ai:claude
                 let manual_enter_secs = ps_manual_enter_secs(l, now);
-                let ds = dispatch_health_ps::dispatch_state(
+                // BUG-1656: a dirty tree still being written is liveness in
+                // its own right — never offer the salvage-commit while the
+                // files are changing under someone. trace:BUG-1656 | ai:claude
+                let dirty_movement_fresh = dispatch_health_ps::dirty_movement_is_fresh(
+                    probe.dirty_newest_mtime_age_secs,
+                    dispatch_health_ps::DEFAULT_DIRTY_MOVEMENT_FRESH_SECS,
+                );
+                let ds = dispatch_health_ps::dispatch_state_with_movement(
                     pid_alive,
                     probe.dirty,
                     probe.ahead_of_main,
@@ -66406,20 +67427,32 @@ fn build_running_work(
                     dispatch_health_ps::DEFAULT_STALLED_THRESHOLD_SECS,
                     manual_enter_secs,
                     dispatch_health_ps::DEFAULT_AWAITING_AGENT_GRACE_SECS,
+                    dirty_movement_fresh,
                 );
-                let hint = dispatch_health_ps::next_command_hint(
+                // TASK-1518: a lease the drain's SIGTERM handler stamped on
+                // its way out is a stopped wave, not a crashed agent — the
+                // dead-process/clean-tree arm reads `stopped`.
+                // trace:TASK-1518 | ai:claude
+                let ds = dispatch_health_ps::apply_interruption(
+                    ds,
+                    pid_alive,
+                    l.interrupted_at.is_some(),
+                );
+                let hint = dispatch_health_ps::next_command_hint_with_untracked(
                     ds,
                     &l.worktree_path,
                     &l.branch,
                     probe.last_commit_subject.as_deref(),
                     spec.as_deref(),
                     manual_enter_secs.is_some(),
+                    probe.untracked_only,
                 );
                 Some(PsDispatch {
                     state: ds,
                     hint,
                     dirty: probe.dirty,
                     ahead_of_main: probe.ahead_of_main,
+                    untracked_only: probe.untracked_only,
                 })
             };
             // TASK-1143: the worktree lock owner (if any) for this row, read
@@ -66482,19 +67515,142 @@ fn build_running_work(
         let lease_state = lease.map(|l| lease_state_for(l, live, now));
         // trace:BUG-778 | ai:claude
         let awaiting_agent = lease.is_some_and(|l| ps_row_awaiting_agent(&rows, &l.id));
-        if let Some(stale_lease) = ps_orphan_verdict(lease_state, awaiting_agent) {
+        // BUG-1656: a non-live spec lease whose worktree is still being
+        // written (fresh dirty mtimes) is being worked — by an Agent-tool
+        // subagent the pid probe cannot see — not orphaned. Only probed for
+        // the few non-live spec leases, never for every row.
+        // trace:BUG-1656 | ai:claude
+        let dirty_movement_fresh = lease
+            .filter(|_| !matches!(lease_state, Some(LeaseState::Live)))
+            .filter(|l| !l.review_verb && !l.claim_verb)
+            .map(|l| dispatch_probe(&l.worktree_path))
+            .is_some_and(|p| {
+                p.dirty
+                    && dispatch_health_ps::dirty_movement_is_fresh(
+                        p.dirty_newest_mtime_age_secs,
+                        dispatch_health_ps::DEFAULT_DIRTY_MOVEMENT_FRESH_SECS,
+                    )
+            });
+        if let Some(stale_lease) =
+            ps_orphan_verdict_with_movement(lease_state, awaiting_agent, dirty_movement_fresh)
+        {
             orphans.push(PsOrphan {
                 spec: s.disp.clone(),
                 title: s.title.clone(),
                 stale_lease,
                 // trace:TASK-1064 | ai:claude
                 likely_fanout: ps_orphan_likely_fanout(stale_lease, fanout_active),
+                // trace:BUG-1656 | ai:claude
+                possibly_subagent: stale_lease && fanout_active,
             });
         }
     }
     orphans.sort_by(|a, b| a.spec.cmp(&b.spec));
 
     (rows, orphans)
+}
+
+/// BUG-1680: Group salvageable rows by worktree path to collapse duplicates.
+/// Rows for the same worktree path are shown once with a count, preserving all spec IDs.
+// trace:BUG-1680 | ai:antigravity
+pub(crate) struct CollapsedSalvageRow<'a> {
+    pub(crate) row: &'a PsRow,
+    pub(crate) count: usize,
+    pub(crate) spec_ids: Vec<String>,
+    pub(crate) untracked_only: bool,
+}
+
+impl<'a> CollapsedSalvageRow<'a> {
+    pub(crate) fn display_spec(&self) -> String {
+        if !self.spec_ids.is_empty() {
+            self.spec_ids.join(", ")
+        } else {
+            self.row
+                .spec
+                .clone()
+                .unwrap_or_else(|| self.row.lease.scope.clone())
+        }
+    }
+
+    pub(crate) fn display_spec_with_count(&self) -> String {
+        let spec = self.display_spec();
+        if self.count > 1 {
+            format!("{spec} ({} sessions)", self.count)
+        } else {
+            spec
+        }
+    }
+}
+
+// trace:BUG-1680 | ai:antigravity
+pub(crate) fn collapse_salvageable_by_worktree<'a>(
+    rows: &[&'a PsRow],
+) -> Vec<CollapsedSalvageRow<'a>> {
+    let mut collapsed: Vec<CollapsedSalvageRow<'a>> = Vec::new();
+    for row in rows {
+        let wt = &row.lease.worktree_path;
+        if wt.as_os_str().is_empty() {
+            let mut spec_ids = Vec::new();
+            if let Some(ref s) = row.spec {
+                spec_ids.push(s.clone());
+            }
+            let untracked_only = row
+                .dispatch
+                .as_ref()
+                .map(|d| d.untracked_only)
+                .unwrap_or(false);
+            collapsed.push(CollapsedSalvageRow {
+                row,
+                count: 1,
+                spec_ids,
+                untracked_only,
+            });
+            continue;
+        }
+
+        if let Some(pos) = collapsed
+            .iter()
+            .position(|c| &c.row.lease.worktree_path == wt)
+        {
+            collapsed[pos].count += 1;
+            if matches!(row.state, LeaseState::Live)
+                && !matches!(collapsed[pos].row.state, LeaseState::Live)
+            {
+                collapsed[pos].row = row;
+            } else if collapsed[pos].row.dispatch.is_none() && row.dispatch.is_some() {
+                collapsed[pos].row = row;
+            }
+            if let Some(ref s) = row.spec {
+                if !collapsed[pos].spec_ids.contains(s) {
+                    collapsed[pos].spec_ids.push(s.clone());
+                }
+            }
+            if let Some(d) = &row.dispatch {
+                if collapsed[pos].row.dispatch.is_none() {
+                    collapsed[pos].untracked_only = d.untracked_only;
+                } else if !d.untracked_only {
+                    collapsed[pos].untracked_only = false;
+                }
+            }
+        } else {
+            let mut spec_ids = Vec::new();
+            if let Some(ref s) = row.spec {
+                spec_ids.push(s.clone());
+            }
+            let untracked_only = row
+                .dispatch
+                .as_ref()
+                .map(|d| d.untracked_only)
+                .unwrap_or(false);
+            collapsed.push(CollapsedSalvageRow {
+                row,
+                count: 1,
+                spec_ids,
+                untracked_only,
+            });
+        }
+    }
+    collapsed
 }
 
 fn handle_ps(json: bool, all: bool) -> Result<()> {
@@ -66523,13 +67679,24 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             }),
             None => serde_json::Value::Null,
         };
-        let sessions: Vec<serde_json::Value> = rows
+        let row_refs: Vec<&PsRow> = rows.iter().collect();
+        let collapsed_rows = collapse_salvageable_by_worktree(&row_refs);
+        let sessions: Vec<serde_json::Value> = collapsed_rows
             .iter()
-            .map(|row| {
+            .map(|item| {
+                let row = item.row;
+                let spec_val = if item.spec_ids.is_empty() {
+                    row.spec.clone()
+                } else {
+                    Some(item.spec_ids.join(", "))
+                };
                 serde_json::json!({
                     "session_id": row.lease.id,
                     "scope": row.lease.scope,
-                    "spec": row.spec,
+                    "spec": spec_val,
+                    "specs": item.spec_ids,
+                    "count": item.count,
+                    "untracked_only": item.untracked_only,
                     "role": row.role,
                     "lease_role": row.lease_role,
                     "worktree": row.lease.worktree_path.display().to_string(),
@@ -66586,6 +67753,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // TASK-1064: a flag-only spec while a fan-out is live is most
                     // likely being built by it, not genuinely orphaned.
                     "likely_fanout": o.likely_fanout,
+                    // trace:BUG-1656 | ai:claude
+                    "possibly_subagent": o.possibly_subagent,
                     "live": false,
                     // BUG-1553: an orphan has no lease/worktree to probe a
                     // process against at all, so whether it's blocked or
@@ -66684,12 +67853,14 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 println!("operator_presence: unknown");
             }
         }
-        let run: Vec<Vec<String>> = shown
+        let collapsed_shown = collapse_salvageable_by_worktree(&shown);
+        let run: Vec<Vec<String>> = collapsed_shown
             .iter()
-            .map(|r| {
+            .map(|item| {
+                let r = item.row;
                 vec![
                     r.lease.id.clone(),
-                    r.spec.clone().unwrap_or_else(|| "-".to_string()),
+                    item.display_spec_with_count(),
                     r.role.clone().unwrap_or_else(|| "-".to_string()),
                     r.pid
                         .map(|p| p.to_string())
@@ -66770,12 +67941,16 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         );
         // TASK-1090: always-shown (not gated by --all) — dead process +
         // uncommitted work hidden behind the stale-session footer.
-        let salv: Vec<Vec<String>> = salvageable_hidden
+        // BUG-1680: collapse duplicate rows for the same worktree path with a count.
+        // trace:BUG-1680 | ai:antigravity
+        let collapsed = collapse_salvageable_by_worktree(&salvageable_hidden);
+        let salv: Vec<Vec<String>> = collapsed
             .iter()
-            .map(|r| {
+            .map(|item| {
+                let r = item.row;
                 vec![
                     r.lease.id.clone(),
-                    r.spec.clone().unwrap_or_else(|| "-".to_string()),
+                    item.display_spec_with_count(),
                     r.lease.worktree_path.display().to_string(),
                     r.dispatch
                         .as_ref()
@@ -66848,13 +68023,14 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         // instead of pre-truncating every cell to a fixed ~13 visible chars —
         // `harness-worktree` / `general-purpose` are short, bounded identifiers
         // and must render whole. trace:TASK-1168 | ai:claude
-        let spec_cells: Vec<String> = shown
+        let collapsed_shown = collapse_salvageable_by_worktree(&shown);
+        let spec_cells: Vec<String> = collapsed_shown
             .iter()
-            .map(|r| r.spec.clone().unwrap_or_else(|| r.lease.scope.clone()))
+            .map(|item| item.display_spec_with_count())
             .collect();
-        let role_cells: Vec<String> = shown
+        let role_cells: Vec<String> = collapsed_shown
             .iter()
-            .map(|r| r.role.clone().unwrap_or_else(|| "-".to_string()))
+            .map(|item| item.row.role.clone().unwrap_or_else(|| "-".to_string()))
             .collect();
         let spec_w = ps_column_width(&spec_cells, PS_SPEC_MIN_WIDTH, PS_SPEC_MAX_WIDTH);
         let role_w = ps_column_width(&role_cells, PS_ROLE_MIN_WIDTH, PS_ROLE_MAX_WIDTH);
@@ -66877,10 +68053,11 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             rolew = role_w,
         );
         println!("{}", header.dimmed());
-        for row in &shown {
+        for item in &collapsed_shown {
+            let row = item.row;
             let l = &row.lease;
             let prefix_len = unique_prefix_len(&l.id, &all_ids, 8);
-            let spec_col = row.spec.clone().unwrap_or_else(|| l.scope.clone());
+            let spec_col = item.display_spec_with_count();
             let pid_col = row.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into());
             // BUG-763: time-of-day for today's leases, "Jun-26 11:55" for
             // anything older — a June birth must never read as this morning
@@ -66973,6 +68150,14 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         // informational nudge (start one), never an alarm.
                         // trace:BUG-778 | ai:claude
                         dispatch_health_ps::DispatchState::AwaitingAgent => (
+                            crate::glyph(crate::glyphs::Glyph::Info),
+                            d.state.label().cyan(),
+                        ),
+                        // TASK-1518: the wave was stopped and the lease marked
+                        // on the way out — informational (resume as normal),
+                        // not the dead-agent alarm.
+                        // trace:TASK-1518 | ai:claude
+                        dispatch_health_ps::DispatchState::Stopped => (
                             crate::glyph(crate::glyphs::Glyph::Info),
                             d.state.label().cyan(),
                         ),
@@ -67095,15 +68280,26 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
     if !salvageable_hidden.is_empty() {
         let warn = crate::glyph(crate::glyphs::Glyph::Warning);
         println!();
+        // BUG-1680: collapse duplicate rows for the same worktree path with a count.
+        // trace:BUG-1680 | ai:antigravity
+        let collapsed = collapse_salvageable_by_worktree(&salvageable_hidden);
+        let work_desc = if collapsed.iter().all(|c| c.untracked_only) {
+            "untracked files only"
+        } else {
+            "uncommitted work"
+        };
         println!(
             "{}",
-            "Salvageable (dead process, uncommitted work — hidden behind the stale-session count above)"
-                .bold()
-                .red()
+            format!(
+                "Salvageable (dead process, {work_desc} — hidden behind the stale-session count above)"
+            )
+            .bold()
+            .red()
         );
-        for row in &salvageable_hidden {
-            let spec_col = row.spec.clone().unwrap_or_else(|| row.lease.scope.clone());
-            println!("  {} {}", warn.red(), spec_col.red().bold());
+        for item in &collapsed {
+            let row = item.row;
+            let header = item.display_spec_with_count();
+            println!("  {} {}", warn.red(), header.red().bold());
             println!(
                 "      {}",
                 row.lease.worktree_path.display().to_string().dimmed()
@@ -67162,7 +68358,11 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             // blocked or exited is genuinely undeterminable from here, so
             // say that plainly instead of a bare "flag-only" that reads as
             // "nothing has started". trace:BUG-1553 | ai:claude
-            let why = if o.stale_lease {
+            let why = if o.possibly_subagent {
+                // trace:BUG-1656 | ai:claude
+                "stale lease — recorded pid dead, but a live harness lease is in this repo: \
+                 possibly worked by a subagent; verify before any cleanup"
+            } else if o.stale_lease {
                 "stale lease — process dead"
             } else {
                 "flag-only — cannot determine whether this seat is blocked or exited"
@@ -70930,6 +72130,19 @@ fn handle_pull_command(
                 e,
             );
         }
+    }
+
+    // BUG-1676: the mirror hubs follow ORIGIN, not this machine's pushes. The
+    // default branch advances by forge-side merges that only a pull ever
+    // sees, and the store is pushed to origin by targeted writes that never
+    // fan out, so this is the one place both hubs are brought level on every
+    // regular cadence (drain phase 5, `aida pr ship`, an operator catch-up).
+    // Best-effort and silent on success: a hub failure is printed and never
+    // changes the pull's exit code (the BUG-254 contract below stays bound to
+    // the two legs).
+    // trace:BUG-1676 | ai:claude
+    if code_failed.is_none() && store_failed.is_none() {
+        remote_create::mirror_sync_after_pull(&project_root);
     }
 
     // BUG-254: any leg failure → non-zero exit, so the orchestrator's
@@ -75276,6 +76489,11 @@ mod queue_work_tests;
 #[path = "tests/bug_1607_reviewer_vendor_tests.rs"]
 mod bug_1607_reviewer_vendor_tests;
 
+// trace:BUG-1686 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1686_agy_headless_argv_tests.rs"]
+mod bug_1686_agy_headless_argv_tests;
+
 #[cfg(test)]
 #[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]
 mod bug_1609_gitlab_reviewer_preflight_tests;
@@ -75318,6 +76536,19 @@ mod bug_1651_promote_queue_cas_tests;
 #[cfg(test)]
 #[path = "tests/bug_1664_stale_sweep_tests.rs"]
 mod bug_1664_stale_sweep_tests;
+
+// BUG-1671: the sweeps re-check each candidate INSIDE the store write lock, so
+// a reopen landing between the re-check and the write is not overwritten.
+// trace:BUG-1671 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1671_sweep_lock_window_tests.rs"]
+mod bug_1671_sweep_lock_window_tests;
+
+// BUG-1672: `aida human` reviews-awaiting must not list already-approved
+// specs. trace:BUG-1672 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1672_reviews_awaiting_approved_tests.rs"]
+mod bug_1672_reviews_awaiting_approved_tests;
 
 // BUG-1633: pull/push follow-ups to BUG-1625 and BUG-1626. trace:BUG-1633 | ai:claude
 #[cfg(test)]
@@ -79005,6 +80236,8 @@ mod story_1043_unshipped_work_tests {
             review_verb: false,
             claim_verb: false,
             manual_enter_at: None,
+            interrupted_at: None,
+            interrupted_reason: None,
         };
         std::fs::create_dir_all(leases_dir(root)).unwrap();
         std::fs::write(
@@ -81952,6 +83185,11 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
         "",
         "your personal queue: `aida queue list`".dimmed()
     );
+    if let Some(line) = crate::intent_capture::status_intent_capture_line(
+        &std::env::current_dir().unwrap_or_default(),
+    ) {
+        println!("{line}");
+    }
     println!();
 
     println!("{}", "─── Requirements (cache) ───".bold());
@@ -82196,10 +83434,9 @@ fn status_spec_is_exact_draft(raw: &str) -> bool {
 }
 
 fn is_machine_filed_draft(r: &aida_core::RequirementSummary) -> bool {
-    r.tags.iter().any(|tag| tag == "auto-drafted")
-        || r.description
-            .trim_start()
-            .starts_with("Auto-drafted by `aida queue work")
+    // One definition shared with the capture-coverage report.
+    // trace:STORY-1487 | ai:claude
+    criteria_coverage::is_auto_drafted(&r.tags, &r.description)
 }
 
 /// Partition a draft grooming query by provenance. Returns the number hidden
@@ -88898,6 +90135,8 @@ fn acquire_review_lease_with_mode(
         review_verb: true,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
     std::fs::create_dir_all(leases_dir(project_root))?;
     let path = lease_path(project_root, &id);
@@ -92058,6 +93297,7 @@ fn git_log_messages(project_root: &std::path::Path, base: &str, head: &str) -> R
 /// Symlinks are skipped — the in-repo dogfood `.claude/` is per-file symlinks
 /// into the master templates and must never be pruned. trace:BUG-298 | ai:claude
 fn detect_obe_aida_scaffold_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    // trace:TASK-1519 | ai:codex
     use std::collections::{HashMap, HashSet};
     const DIRS: [&str; 3] = ["skills", "commands", "hooks"];
 
@@ -92080,34 +93320,72 @@ fn detect_obe_aida_scaffold_files(root: &std::path::Path) -> Vec<std::path::Path
 
     let mut obe = Vec::new();
     for dir in DIRS {
-        let d = root.join(".claude").join(dir);
-        let Ok(entries) = std::fs::read_dir(&d) else {
-            continue;
-        };
-        let exp = &expected[dir];
-        for entry in entries.flatten() {
-            let path = entry.path();
-            // Never touch symlinks (the dogfood per-file symlink layout).
-            if path
-                .symlink_metadata()
-                .map(|m| m.file_type().is_symlink())
-                .unwrap_or(false)
+        for parent in if dir == "skills" {
+            vec![".claude", ".agents"]
+        } else {
+            vec![".claude"]
+        } {
+            let d = root.join(parent).join(dir);
+            if parent == ".agents"
+                && (!root
+                    .join(".agents")
+                    .symlink_metadata()
+                    .is_ok_and(|m| m.file_type().is_dir())
+                    || !d.symlink_metadata().is_ok_and(|m| m.file_type().is_dir()))
             {
                 continue;
             }
-            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            let Ok(entries) = std::fs::read_dir(&d) else {
                 continue;
             };
-            if !name.starts_with("aida-") {
-                continue;
-            }
-            let base = std::path::Path::new(name)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or(name)
-                .to_string();
-            if !exp.contains(&base) {
-                obe.push(path);
+            let exp = &expected[dir];
+            for entry in entries.flatten() {
+                let path = entry.path();
+                // Never touch symlinks (the dogfood per-file symlink layout).
+                if path
+                    .symlink_metadata()
+                    .map(|m| m.file_type().is_symlink())
+                    .unwrap_or(false)
+                {
+                    continue;
+                }
+                let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                    continue;
+                };
+                if !name.starts_with("aida-") {
+                    continue;
+                }
+                let base = std::path::Path::new(name)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(name)
+                    .to_string();
+                if !exp.contains(&base) {
+                    // Shared portable skills belong to the operator unless we can
+                    // prove AIDA generated this exact, unedited regular file.
+                    if parent == ".agents" {
+                        if !path.is_dir() {
+                            continue;
+                        }
+                        let skill = path.join("SKILL.md");
+                        if skill.symlink_metadata().is_err()
+                            || skill
+                                .symlink_metadata()
+                                .is_ok_and(|m| !m.file_type().is_file())
+                        {
+                            continue;
+                        }
+                        let Ok(content) = std::fs::read_to_string(&skill) else {
+                            continue;
+                        };
+                        if aida_core::scaffolding::refresh::refresh_disposition(&content)
+                            != aida_core::scaffolding::refresh::RefreshDisposition::Pristine
+                        {
+                            continue;
+                        }
+                    }
+                    obe.push(path);
+                }
             }
         }
     }
@@ -93112,69 +94390,94 @@ fn handle_worker_command(cmd: &WorkerCommand) -> Result<()> {
             let project_root = find_main_worktree_root()
                 .or_else(|_| std::env::current_dir())
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
-            let path = worker::worker_cmd_path(&project_root);
-            let body = std::fs::read_to_string(&path).unwrap_or_default();
-            if worker::parse_directives_from_str(&body).is_empty() {
-                println!("No pending directives.");
-                return Ok(());
-            }
-            let store_path = detect_distributed_store_from(&project_root).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "no requirement store found — cannot resolve directive target specs"
-                )
-            })?;
-            let backend = advance_backend(&store_path)?;
-            // Both view axes wide open: an archived (or deferred) target must
-            // still resolve so its directive is classified correctly.
-            let summaries = backend.list_summaries(&aida_core::ListFilter {
-                archive: aida_core::ArchiveFilter::Both,
-                defer: aida_core::DeferFilter::Both,
-                ..Default::default()
-            })?;
-            // Dead = the spec still exists AND is archived or terminal
-            // (Completed / Rejected) — same predicate as the queue's GC. A
-            // directive targeting an unknown spec is LEFT alone (fail-safe:
-            // no store row means no evidence the work shipped).
-            let mut dead_ids = std::collections::HashSet::new();
-            for s in &summaries {
-                if s.archived || is_terminal_status_str(&s.status) {
-                    for id in [s.spec_id.as_deref(), s.agreed_id.as_deref()]
-                        .into_iter()
-                        .flatten()
-                    {
-                        dead_ids.insert(id.to_ascii_uppercase());
-                    }
-                }
-            }
-            let is_dead = |spec: &str| dead_ids.contains(&spec.to_ascii_uppercase());
-            let outcome = worker::gc_directives_body(&body, &is_dead);
-            if outcome.pruned.is_empty() {
-                println!("No stale directives to prune.");
-                return Ok(());
-            }
-            println!(
-                "{} stale directive{} (target spec archived / Completed / Rejected):",
-                outcome.pruned.len(),
-                if outcome.pruned.len() == 1 { "" } else { "s" }
-            );
-            for d in &outcome.pruned {
-                println!("  - {}", d.raw);
-            }
-            if *dry_run {
-                println!("Dry run — file unchanged.");
-                return Ok(());
-            }
-            std::fs::write(&path, &outcome.kept_body)?;
-            let remaining = worker::parse_directives_from_str(&outcome.kept_body).len();
-            println!(
-                "Pruned {} directive{}; {} remain{}.",
-                outcome.pruned.len(),
-                if outcome.pruned.len() == 1 { "" } else { "s" },
-                remaining,
-                if remaining == 1 { "s" } else { "" }
-            );
-            Ok(())
+            run_worker_gc(&project_root, *dry_run)
         }
+    }
+}
+
+/// `aida worker gc`: prune `drain <SPEC-ID>` directives whose target spec is
+/// archived or terminal (Completed / Rejected) from `.aida/worker.cmd`.
+// trace:BUG-723 trace:BUG-1670 | ai:claude
+fn run_worker_gc(project_root: &std::path::Path, dry_run: bool) -> Result<()> {
+    let path = worker::worker_cmd_path(project_root);
+    let body = std::fs::read_to_string(&path).unwrap_or_default();
+    if worker::parse_directives_from_str(&body).is_empty() {
+        println!("No pending directives.");
+        return Ok(());
+    }
+    let store_path = detect_distributed_store_from(project_root).ok_or_else(|| {
+        anyhow::anyhow!("no requirement store found — cannot resolve directive target specs")
+    })?;
+    let backend = advance_backend(&store_path)?;
+    // Both view axes wide open: an archived (or deferred) target must
+    // still resolve so its directive is classified correctly. Strict: the
+    // tolerant read serves an old snapshot while another process writes the
+    // cache, and this pass deletes directives. trace:BUG-1670 | ai:claude
+    let summaries = backend.list_summaries_strict(&aida_core::ListFilter {
+        archive: aida_core::ArchiveFilter::Both,
+        defer: aida_core::DeferFilter::Both,
+        ..Default::default()
+    })?;
+    // Dead = the spec still exists AND is archived or terminal
+    // (Completed / Rejected) — same predicate as the queue's GC. A
+    // directive targeting an unknown spec is LEFT alone (fail-safe:
+    // no store row means no evidence the work shipped).
+    let mut dead_ids = std::collections::HashSet::new();
+    for s in &summaries {
+        if s.archived || is_terminal_status_str(&s.status) {
+            for id in [s.spec_id.as_deref(), s.agreed_id.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                dead_ids.insert(id.to_ascii_uppercase());
+            }
+        }
+    }
+    // Every prune candidate is re-read from its stored object before its
+    // directive is dropped; a read error or a missing object keeps it.
+    // trace:BUG-1670 | ai:claude
+    let is_dead = |spec: &str| {
+        dead_ids.contains(&spec.to_ascii_uppercase()) && worker_gc_target_still_dead(&backend, spec)
+    };
+    let outcome = worker::gc_directives_body(&body, &is_dead);
+    if outcome.pruned.is_empty() {
+        println!("No stale directives to prune.");
+        return Ok(());
+    }
+    println!(
+        "{} stale directive{} (target spec archived / Completed / Rejected):",
+        outcome.pruned.len(),
+        if outcome.pruned.len() == 1 { "" } else { "s" }
+    );
+    for d in &outcome.pruned {
+        println!("  - {}", d.raw);
+    }
+    if dry_run {
+        println!("Dry run — file unchanged.");
+        return Ok(());
+    }
+    std::fs::write(&path, &outcome.kept_body)?;
+    let remaining = worker::parse_directives_from_str(&outcome.kept_body).len();
+    println!(
+        "Pruned {} directive{}; {} remain{}.",
+        outcome.pruned.len(),
+        if outcome.pruned.len() == 1 { "" } else { "s" },
+        remaining,
+        if remaining == 1 { "s" } else { "" }
+    );
+    Ok(())
+}
+
+/// Whether the stored object for a worker directive's target is still
+/// archived or terminal. `get_requirement_by_spec_id` reads the spec's YAML,
+/// not the cache row, so a spec reopened since any cache snapshot reads as
+/// live. An unreadable or missing object is not proof the work shipped.
+// trace:BUG-1670 | ai:claude
+fn worker_gc_target_still_dead(backend: &aida_core::CachedGitBackend, spec: &str) -> bool {
+    use aida_core::db::DatabaseBackend;
+    match backend.get_requirement_by_spec_id(spec) {
+        Ok(Some(req)) => req.archived || is_terminal_status_str(&format!("{:?}", req.status)),
+        _ => false,
     }
 }
 
@@ -110258,3 +111561,9 @@ mod bug_1627_session_env_hardening_tests;
 #[cfg(test)]
 #[path = "tests/bug_1650_store_resolver_tests.rs"]
 mod bug_1650_store_resolver_tests;
+
+// Mutating callers re-validate against the current store, not a stale cache.
+// trace:BUG-1670 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1670_stale_cache_callers_tests.rs"]
+mod bug_1670_stale_cache_callers_tests;

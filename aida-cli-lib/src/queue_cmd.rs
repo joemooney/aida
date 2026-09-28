@@ -1185,6 +1185,10 @@ pub(crate) fn opportunistic_queue_gc(
     let Ok(backend) = advance_backend(store_path) else {
         return 0;
     };
+    // cache-tolerant-read: selection only — each candidate's target spec YAML
+    // object is re-read inside the store write lock, right before the removal
+    // (`queue_remove_many_if`).
+    // trace:BUG-1671 | ai:claude
     let summaries = match backend.list_summaries(&queue_dead_target_summary_filter()) {
         Ok(s) => s,
         Err(_) => return 0,
@@ -1198,8 +1202,12 @@ pub(crate) fn opportunistic_queue_gc(
     if dead.is_empty() {
         return 0;
     }
+    crate::sweep_test_hook::fire(store_path);
+    // BUG-1671: the pass above runs outside the store lock, so a reopen could
+    // land between it and the queue write. Re-check each candidate under the
+    // lock the reopen itself needs. trace:BUG-1671 | ai:claude
     storage
-        .queue_remove_many(user_id, &dead)
+        .queue_remove_many_if(user_id, &dead, &|id| queue_target_still_dead(&backend, id))
         .map(|removed| removed.len())
         .unwrap_or(0)
 }
@@ -3458,7 +3466,8 @@ pub(crate) fn handle_queue_command(
                 let project_root = project_root.canonicalize().unwrap_or(project_root);
                 let project_name = global_queue::project_name_for(&project_root);
                 let position = if *top {
-                    let existing = global_queue::load(&role).unwrap_or_default();
+                    // trace:BUG-1682 | ai:codex
+                    let existing = global_queue::load(&role)?;
                     existing.first().map(|e| e.position - 1000).unwrap_or(1000)
                 } else {
                     i64::MAX
@@ -3466,7 +3475,8 @@ pub(crate) fn handle_queue_command(
                 // Resolve i64::MAX to actual max+1000 inline (the local queue
                 // path delegates this to the backend; we do it here ourselves).
                 let position = if position == i64::MAX {
-                    let existing = global_queue::load(&role).unwrap_or_default();
+                    // trace:BUG-1682 | ai:codex
+                    let existing = global_queue::load(&role)?;
                     existing.iter().map(|e| e.position).max().unwrap_or(0) + 1000
                 } else {
                     position
@@ -3644,7 +3654,8 @@ pub(crate) fn handle_queue_command(
                 // only, so `aida queue remove --global FR-1` would miss an
                 // entry cached under the legacy spec_id form `FR-1-042`.
                 // trace:BUG-83 | ai:claude
-                let entries = global_queue::load(&role).unwrap_or_default();
+                // trace:BUG-1682 | ai:codex
+                let entries = global_queue::load(&role)?;
                 let target = entries.iter().find(|e| {
                     e.spec_id
                         .as_deref()
@@ -4225,6 +4236,10 @@ pub(crate) fn handle_queue_command(
             let user_id = get_user(user);
             let entries = storage.queue_list(&user_id, /* include_completed */ true)?;
             let gc_backend = advance_backend(store_path)?;
+            // cache-tolerant-read: selection only — each candidate's YAML
+            // object is re-read inside the store write lock, right before the
+            // removal.
+            // trace:BUG-1671 | ai:claude
             let summaries = gc_backend.list_summaries(&queue_dead_target_summary_filter())?;
             // BUG-1664: the summaries may be a stale snapshot; keep only the
             // candidates whose authoritative spec is still dead.
@@ -4352,18 +4367,34 @@ pub(crate) fn handle_queue_command(
                         .copied()
                         .chain(merged_dead.iter().copied())
                         .collect();
+                    // BUG-1671: the revalidation above ran outside the store
+                    // lock, so re-take the decision under it, right before the
+                    // removal. Only the target-spec rule's candidates are
+                    // re-read: a BUG-1512 review row is dead because its PR
+                    // merged, which no store write can revive.
+                    // trace:BUG-1671 | ai:claude
+                    let still_dead = |id: &Uuid| {
+                        !dead_ids.contains(id) || queue_target_still_dead(&gc_backend, id)
+                    };
+                    crate::sweep_test_hook::fire(store_path);
                     let removed = if r#for.is_none() {
                         let ids: Vec<Uuid> = all_dead.iter().map(|e| e.requirement_id).collect();
-                        storage.queue_remove_many(&user_id, &ids)?.len()
+                        storage
+                            .queue_remove_many_if(&user_id, &ids, &still_dead)?
+                            .len()
                     } else {
+                        let mut removed = 0usize;
                         for e in &all_dead {
-                            storage.queue_remove_for_role(
+                            if storage.queue_remove_for_role_if(
                                 &user_id,
                                 &e.requirement_id,
                                 r#for.as_deref(),
-                            )?;
+                                &still_dead,
+                            )? {
+                                removed += 1;
+                            }
                         }
-                        all_dead.len()
+                        removed
                     };
                     println!(
                         "{} Removed {} dead queue entr{}",
@@ -6148,6 +6179,38 @@ pub(crate) fn handle_queue_command(
                         &drain_lock_command,
                     )?)
                 };
+                // TASK-1518: a stopped wave (systemd RuntimeMaxSec / OOMPolicy=stop,
+                // `aida drain stop --now`, a manual kill) must not leave the lock
+                // and its leases for the next tick to reap. The guard moves into a
+                // shared slot so the SIGTERM handler can release it properly
+                // (heartbeat, shared claim, pid-checked file) and stamp the
+                // in-flight leases before the bounded exit. The handler holds only
+                // a Weak handle, so without a signal the slot behaves exactly like
+                // the plain guard did: dropped at the end of this arm, or left to
+                // the atexit hook on `process::exit`. Advisory install: a failure
+                // to register the handler only means today's kill-then-reap
+                // recovery. trace:TASK-1518 | ai:claude
+                let _drain_guard: crate::drain_signal::GuardSlot =
+                    std::sync::Arc::new(std::sync::Mutex::new(_drain_guard));
+                if !*resume_dry_run {
+                    if let Ok(root) = find_main_worktree_root() {
+                        if let Err(e) =
+                            crate::drain_signal::install(crate::drain_signal::DrainTermContext {
+                                project_root: root,
+                                drain_pid: std::process::id(),
+                                guard: std::sync::Arc::downgrade(&_drain_guard),
+                                grace: crate::drain_signal::grace_from_env(),
+                                term_flag: crate::drain_signal::process_term_flag(),
+                                borrowed: drain_lock::borrow_requested(),
+                            })
+                        {
+                            eprintln!(
+                                "  {} could not install the drain SIGTERM handler ({e:#}); a stopped wave falls back to next-tick reap",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                            );
+                        }
+                    }
+                }
                 // BUG-660: prevent the host from sleeping for the duration of an
                 // unattended drive — a lidded/idle laptop must not suspend
                 // mid-drain. Best-effort (a missing caffeinate / systemd-inhibit
@@ -13978,8 +14041,10 @@ pub(crate) fn handle_queue_integrate(
     let _drain_guard = if dry_run {
         None
     } else {
+        // Linked worktrees share the main checkout's merge authority.
+        // trace:BUG-1683 | ai:codex
         Some(drain_lock::acquire_drain_lock(
-            &project_root,
+            &find_main_worktree_root()?,
             "queue integrate",
         )?)
     };

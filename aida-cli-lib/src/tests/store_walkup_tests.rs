@@ -300,26 +300,19 @@ fn aida_store_override_reports_reason_for_unusable() {
 // can mute the informational store fall-through. trace:BUG-567 | ai:claude
 #[test]
 fn aida_quiet_honors_only_real_optin_values() {
-    // This mutates process env, so keep it self-contained and restore.
-    let prev = std::env::var("AIDA_QUIET").ok();
-    let restore = |prev: &Option<String>| match prev {
-        Some(v) => std::env::set_var("AIDA_QUIET", v),
-        None => std::env::remove_var("AIDA_QUIET"),
-    };
-
-    std::env::remove_var("AIDA_QUIET");
+    // This mutates process env: hold the shared env lock for the whole test;
+    // the guard restores the ambient value on drop. trace:BUG-1666 | ai:claude
+    let mut env = crate::test_env::EnvVarGuard::unset("AIDA_QUIET");
     assert!(!aida_quiet(), "unset → not quiet");
 
     for off in ["", "0", "false", "FALSE"] {
-        std::env::set_var("AIDA_QUIET", off);
+        env.reset(off);
         assert!(!aida_quiet(), "{off:?} → not quiet");
     }
     for on in ["1", "true", "yes", "anything"] {
-        std::env::set_var("AIDA_QUIET", on);
+        env.reset(on);
         assert!(aida_quiet(), "{on:?} → quiet");
     }
-
-    restore(&prev);
 }
 
 /// BUG-331: from a sibling git worktree, detection resolves the canonical

@@ -154,11 +154,30 @@ impl CachedGitBackend {
         })
     }
 
+    /// [`Self::id_candidates`] for a caller that acts on the answer: the cache
+    /// is always brought to the store's HEAD first, even while another process
+    /// holds the cache write lock, so a spec committed by another writer since
+    /// the last refresh is among the candidates.
+    // trace:BUG-1670 | ai:claude
+    pub fn id_candidates_strict(&self, id: &str) -> Result<Vec<crate::id_collisions::IdCandidate>> {
+        self.with_cache_schema_retry("resolve id candidates", || {
+            self.ensure_cache_fresh()?;
+            let rows = self.cache.id_rows_for(id)?;
+            Ok(crate::id_collisions::candidates_for_id(rows.iter(), id))
+        })
+    }
+
     /// Resolve `id` for a WRITE — or any caller that must not act on a guess.
     /// A UUID resolves directly. A spec/agreed id naming more than one
     /// requirement returns an [`AmbiguousIdError`] (downcastable from the
     /// `anyhow::Error`) listing each candidate's unambiguous handle; exactly
     /// one candidate resolves as `get_requirement_by_spec_id` would.
+    ///
+    /// The candidate scan always refreshes a stale cache first (never serves
+    /// the last snapshot because another process is writing the cache): a
+    /// snapshot that misses a colliding spec another writer committed would
+    /// report one candidate and let the write pick it silently. Read-only
+    /// callers use [`Self::get_requirement_unambiguous_for_read`].
     ///
     /// If the cache cannot answer, the check falls back to the authoritative
     /// full scan rather than skipping it: an unchecked write is the bug.
@@ -166,10 +185,30 @@ impl CachedGitBackend {
     /// [`AmbiguousIdError`]: crate::id_collisions::AmbiguousIdError
     // trace:BUG-1535 | ai:claude
     pub fn get_requirement_unambiguous(&self, id: &str) -> Result<Option<Requirement>> {
+        // trace:BUG-1670 | ai:claude
+        self.resolve_unambiguous(id, true)
+    }
+
+    /// [`Self::get_requirement_unambiguous`] for a READ-ONLY caller (`aida
+    /// show` and friends): the candidate scan may serve the last committed
+    /// snapshot while another process holds the cache write lock, so the read
+    /// stays as cheap as the lookup it guards. Never use it before a write.
+    // trace:BUG-1670 | ai:claude
+    pub fn get_requirement_unambiguous_for_read(&self, id: &str) -> Result<Option<Requirement>> {
+        self.resolve_unambiguous(id, false)
+    }
+
+    // trace:BUG-1535 trace:BUG-1670 | ai:claude
+    fn resolve_unambiguous(&self, id: &str, strict: bool) -> Result<Option<Requirement>> {
         if let Ok(uuid) = Uuid::parse_str(id.trim()) {
             return self.get_requirement(&uuid);
         }
-        let candidates = match self.id_candidates(id) {
+        let scanned = if strict {
+            self.id_candidates_strict(id)
+        } else {
+            self.id_candidates(id)
+        };
+        let candidates = match scanned {
             Ok(c) => c,
             Err(_) => {
                 let store = self.inner.load()?;
@@ -244,27 +283,52 @@ impl CachedGitBackend {
         crate::git_ops::head_sha(self.inner.path()).unwrap_or_default()
     }
 
-    /// Resolve a UUID to its `Requirement` WITHOUT the O(n) `find_by_uuid` scan
-    /// over every object file. The cache holds the stable uuid→spec_id mapping,
-    /// so we resolve the spec_id from the cache then read the ONE matching YAML
-    /// object (the read is authoritative — the cache only tells us which file).
-    /// On any cache miss, a spec_id/uuid mismatch (defends against a torn cache
-    /// row), or an unreadable cache, we fall back to the inner full scan so
-    /// correctness never depends on cache freshness. The uuid→spec_id mapping is
-    /// invariant (spec_ids are stable and never reused), so even a stale cache
-    /// row resolves to the right file.
+    /// Resolve one UUID using the cache as a locator and canonical YAML as truth.
     // trace:BUG-634 | ai:claude
+    // trace:BUG-1678 | ai:codex
     fn get_requirement_targeted(&self, id: &Uuid) -> Result<Option<Requirement>> {
-        if let Ok(Some(spec_id)) = self.cache.spec_id_for_uuid(id) {
-            if let Ok(Some(req)) = self.inner.get_requirement_by_spec_id(&spec_id) {
-                if req.id == *id {
-                    return Ok(Some(req));
+        self.requirement_reader()(id)
+    }
+
+    /// Create a reader for one read operation (for example, rendering a spec's
+    /// relationships and blockers). Cache misses share a lazy UUID-to-path index,
+    /// so even an empty or unreadable cache costs at most one full-store parse.
+    /// Each result is read from canonical YAML and its UUID checked. Create a new
+    /// reader after writes: the fallback file inventory is scoped to this reader.
+    // trace:BUG-1678 | ai:codex
+    pub fn requirement_reader(&self) -> impl Fn(&Uuid) -> Result<Option<Requirement>> + '_ {
+        use std::collections::HashMap;
+        use std::sync::OnceLock;
+
+        let paths: OnceLock<Result<HashMap<Uuid, PathBuf>>> = OnceLock::new();
+        let objects_root = self.inner.path().join("objects");
+        move |id| {
+            if let Ok(Some(spec_id)) = self.cache.spec_id_for_uuid(id) {
+                // A missing filename must not trigger the agreed-id full scan.
+                if let Ok(req) = crate::object_store::read_object(&objects_root, &spec_id) {
+                    if req.id == *id {
+                        return Ok(Some(req));
+                    }
                 }
             }
+            let indexed = paths.get_or_init(|| {
+                let mut indexed = HashMap::new();
+                for (_, path) in crate::object_store::list_objects(&objects_root)? {
+                    // Match find_by_uuid's tolerance for unreadable objects and
+                    // its deterministic first-match behavior for duplicate UUIDs.
+                    if let Ok(req) = crate::object_store::read_object_from_path(&path) {
+                        indexed.entry(req.id).or_insert(path);
+                    }
+                }
+                Ok(indexed)
+            });
+            let indexed = indexed.as_ref().map_err(|e| anyhow::anyhow!("{e:#}"))?;
+            Ok(indexed.get(id).and_then(|path| {
+                crate::object_store::read_object_from_path(path)
+                    .ok()
+                    .filter(|req| req.id == *id)
+            }))
         }
-        // Cache miss / mismatch / unreadable — fall back to the authoritative
-        // (but O(n)) scan rather than risk a wrong not-found.
-        self.inner.get_requirement(id)
     }
 
     /// The STORED status of `id`, from one targeted object read: the cache maps
@@ -626,6 +690,19 @@ impl CachedGitBackend {
         })
     }
 
+    /// [`Self::list_summaries`] for a caller that deletes, prunes, files or
+    /// gates on the rows: a stale cache is always brought to the store's HEAD
+    /// first. The tolerant read serves the last committed snapshot whenever
+    /// another process holds the cache write lock, and that snapshot can be
+    /// arbitrarily old while other processes keep writing.
+    // trace:BUG-1670 | ai:claude
+    pub fn list_summaries_strict(&self, filter: &ListFilter) -> Result<Vec<RequirementSummary>> {
+        self.with_cache_schema_retry("list cached summaries", || {
+            self.ensure_cache_fresh()?;
+            self.cache.list_summaries(filter)
+        })
+    }
+
     /// TASK-1065: count non-archived specs with a still-pending DecisionRequest,
     /// read from the `has_pending_decision` cache column. Cache-backed so the
     /// `aida status --full` decision-inbox count no longer needs a full
@@ -671,6 +748,17 @@ impl CachedGitBackend {
     pub fn descendant_ids(&self, root: &Uuid) -> Result<std::collections::HashSet<Uuid>> {
         self.with_cache_schema_retry("read cached descendants", || {
             self.ensure_cache_fresh_for_read()?;
+            self.cache.descendant_ids(root)
+        })
+    }
+
+    /// [`Self::descendant_ids`] for a write-path gate: a stale cache is always
+    /// brought to the store's HEAD first, so a child added (or re-parented) by
+    /// another writer since the last refresh is classified correctly.
+    // trace:BUG-1670 | ai:claude
+    pub fn descendant_ids_strict(&self, root: &Uuid) -> Result<std::collections::HashSet<Uuid>> {
+        self.with_cache_schema_retry("read cached descendants", || {
+            self.ensure_cache_fresh()?;
             self.cache.descendant_ids(root)
         })
     }
@@ -873,6 +961,52 @@ impl CachedGitBackend {
         Ok(n)
     }
 
+    /// Write-through batched compare-and-swap (see
+    /// [`GitBackend::bulk_update_atomically`]): every eligibility decision is
+    /// taken on the object read inside the store write lock, then the specs
+    /// actually written are upserted into the cache and the HEAD-SHA re-stamped
+    /// once.
+    ///
+    /// The cache upserts run AFTER the store lock is released, exactly as
+    /// `bulk_update` does: the lock closes the re-check/write window and
+    /// nothing else, so other readers do not also wait out the cache writes.
+    // trace:BUG-1671 | ai:claude
+    pub fn bulk_update_atomically<F>(
+        &self,
+        targets: &[Requirement],
+        commit_subject: &str,
+        keep: F,
+    ) -> Result<super::git_backend::BulkAtomicReport>
+    where
+        F: FnMut(&mut Requirement) -> bool,
+    {
+        // Capture HEAD BEFORE the write so restamp_head can tell our own commit
+        // apart from an external pull that moved HEAD underneath us.
+        let pre_write_head = self.current_head_sha();
+        let report = self
+            .inner
+            .bulk_update_atomically(targets, commit_subject, keep)?;
+        let mut cache_ok = true;
+        for req in &report.written {
+            if let Err(e) = self.upsert_requirement_with_schema_retry(req) {
+                eprintln!(
+                    "warning: cache upsert failed during bulk_update_atomically, \
+                     cache marked stale: {}",
+                    e
+                );
+                cache_ok = false;
+                break;
+            }
+        }
+        if cache_ok {
+            let reqs: Vec<&Requirement> = report.written.iter().collect();
+            self.refresh_epics_then_restamp(&reqs, &pre_write_head);
+        } else {
+            let _ = self.cache.set_source_head_sha("");
+        }
+        Ok(report)
+    }
+
     /// Per-spec compare-and-swap with an optional commit subject (see
     /// [`GitBackend::update_spec_atomically_with_subject`]), then that one
     /// cache row. Holds the store write lock across both; never scans the
@@ -1021,6 +1155,11 @@ impl DatabaseBackend for CachedGitBackend {
         CachedGitBackend::get_requirement_unambiguous(self, id)
     }
 
+    // trace:BUG-1670 | ai:claude
+    fn get_requirement_unambiguous_for_read(&self, id: &str) -> Result<Option<Requirement>> {
+        CachedGitBackend::get_requirement_unambiguous_for_read(self, id)
+    }
+
     fn list_requirements(&self, include_archived: bool) -> Result<Vec<Requirement>> {
         self.ensure_cache_fresh_with_schema_retry()?;
         self.inner.list_requirements(include_archived)
@@ -1152,6 +1291,28 @@ impl DatabaseBackend for CachedGitBackend {
     fn queue_remove_many(&self, user_id: &str, ids: &[Uuid]) -> Result<Vec<QueueEntry>> {
         self.inner.queue_remove_many(user_id, ids)
     }
+
+    // trace:BUG-1671 | ai:claude
+    fn queue_remove_many_if(
+        &self,
+        user_id: &str,
+        ids: &[Uuid],
+        still_dead: &dyn Fn(&Uuid) -> bool,
+    ) -> Result<Vec<QueueEntry>> {
+        self.inner.queue_remove_many_if(user_id, ids, still_dead)
+    }
+
+    // trace:BUG-1671 | ai:claude
+    fn queue_remove_for_role_if(
+        &self,
+        user_id: &str,
+        requirement_id: &Uuid,
+        role: Option<&str>,
+        still_dead: &dyn Fn(&Uuid) -> bool,
+    ) -> Result<bool> {
+        self.inner
+            .queue_remove_for_role_if(user_id, requirement_id, role, still_dead)
+    }
 }
 
 #[cfg(test)]
@@ -1201,6 +1362,95 @@ mod tests {
             fake_temp_root.path().join(".aida").join("cache.db"),
             "fixture must be adoptable when nothing is guarded, or this test proves nothing"
         );
+    }
+
+    // trace:BUG-1678 | ai:codex
+    #[test]
+    fn targeted_reader_shares_one_scan_for_stale_cache_targets() {
+        use crate::object_store::{self, OBJECT_LIST_COUNT};
+
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &dir.path().join("cache.db")).unwrap();
+        let objects = store_root.join("objects");
+        let targets: Vec<_> = (1..=8)
+            .map(|n| sample_req(&format!("TASK-{n}"), &format!("Target {n}")))
+            .collect();
+        for target in &targets {
+            object_store::write_object(&objects, target).unwrap();
+        }
+        // One good cache hit; one row points to a missing file; another points
+        // to a different UUID. The remaining targets are absent from the cache.
+        backend.cache.upsert_requirement(&targets[0]).unwrap();
+        let mut missing_file = targets[1].clone();
+        missing_file.spec_id = Some("TASK-99".into());
+        backend.cache.upsert_requirement(&missing_file).unwrap();
+        let mut wrong_uuid = targets[2].clone();
+        // Use a distinct existing file to avoid the cache's spec-id uniqueness.
+        let other = sample_req("TASK-98", "Different UUID");
+        object_store::write_object(&objects, &other).unwrap();
+        wrong_uuid.spec_id = other.spec_id;
+        backend.cache.upsert_requirement(&wrong_uuid).unwrap();
+
+        OBJECT_LIST_COUNT.with(|c| c.set(0));
+        let read = backend.requirement_reader();
+        assert_eq!(
+            read(&targets[0].id).unwrap().unwrap().title,
+            targets[0].title
+        );
+        assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 0);
+        // Render relationships, then blockers (including duplicate/missing IDs).
+        for _ in 0..2 {
+            for target in &targets {
+                let found = read(&target.id).unwrap().unwrap();
+                assert_eq!(found.id, target.id);
+                assert_eq!(found.title, target.title);
+            }
+            assert!(read(&Uuid::now_v7()).unwrap().is_none());
+        }
+        assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 1);
+
+        // The index only locates files; it does not freeze record contents.
+        let mut updated = targets[7].clone();
+        updated.title = "Updated canonical title".into();
+        object_store::write_object(&objects, &updated).unwrap();
+        assert_eq!(read(&updated.id).unwrap().unwrap().title, updated.title);
+        assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 1);
+        // A new operation can discover files added since the previous scan.
+        let added = sample_req("TASK-100", "New target");
+        object_store::write_object(&objects, &added).unwrap();
+        assert_eq!(
+            backend.get_requirement(&added.id).unwrap().unwrap().id,
+            added.id
+        );
+    }
+
+    // trace:BUG-1678 | ai:codex
+    #[test]
+    fn targeted_reader_shares_one_scan_when_cache_is_unreadable() {
+        use crate::object_store::{self, OBJECT_LIST_COUNT};
+
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let targets = [sample_req("TASK-1", "One"), sample_req("TASK-2", "Two")];
+        for target in &targets {
+            object_store::write_object(&store_root.join("objects"), target).unwrap();
+        }
+        rusqlite::Connection::open(&cache_path)
+            .unwrap()
+            .execute_batch("DROP TABLE requirements_cache")
+            .unwrap();
+        OBJECT_LIST_COUNT.with(|c| c.set(0));
+        let read = backend.requirement_reader();
+        for target in &targets {
+            assert_eq!(read(&target.id).unwrap().unwrap().title, target.title);
+        }
+        assert!(read(&Uuid::now_v7()).unwrap().is_none());
+        assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 1);
     }
 
     #[test]

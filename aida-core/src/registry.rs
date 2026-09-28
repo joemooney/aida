@@ -138,7 +138,7 @@ pub fn get_registry_path() -> Result<PathBuf> {
         return Ok(PathBuf::from(path));
     }
 
-    let home_dir = dirs::home_dir().context("Failed to determine home directory")?;
+    let home_dir = crate::home::home_dir().context("Failed to determine home directory")?;
 
     // Check for new config file first, fall back to legacy if it exists
     let new_config = home_dir.join(".aida.config");
@@ -157,7 +157,7 @@ pub fn get_registry_path() -> Result<PathBuf> {
 
 /// Gets the path to the AIDA config directory (~/.config/aida/)
 pub fn get_config_dir() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir()
+    let config_dir = crate::home::config_dir()
         .context("Failed to determine config directory")?
         .join("aida");
     Ok(config_dir)

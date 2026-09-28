@@ -9,6 +9,16 @@ allowed-tools:
 
 # AIDA Review Skill
 
+## Seat status contract
+
+Report one explicit state: **actively working**, **actively watching**,
+**delegated** (name lanes and recipients), **paused**, or **turn ended**. Cite
+current `aida ps` or `aida integrate` output for any ongoing-work claim; if
+there is no evidence, say it cannot be verified. After this turn ends, never
+say “still working,” “continuing,” or equivalent about yourself. Delegated
+work is not your own active work. See `.aida/discipline/advisor-role.md`.
+<!-- trace:TASK-1557 | ai:codex -->
+
 ## Purpose
 
 Codify the reviewer's flow that stabilized across PR-3 through PR-7 so the prompt structure isn't re-derived from scratch each cycle. Pairs with `/aida-pr` on the implementer side and `/aida-code-review` for the orthogonal "exhaustive code-quality audit" surface (which this skill does NOT subsume — `/aida-review` is the PR-merge workflow, `/aida-code-review` is the audit).

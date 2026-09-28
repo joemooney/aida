@@ -68,6 +68,27 @@ After a successful `origin` push, `aida db sync --push` pushes `aida-store` to e
 reconcile hint) and is skipped — it never fails the sync, because a mirror may be
 intentionally behind (e.g. mid-reconcile). `aida init` scaffolds this as a commented stub.
 
+Only `aida db sync --push` and `aida push` fan out this way. The targeted writes behind
+`aida edit`, `aida comment add`, queue moves and the coordination ledgers push the store to
+`origin` only, so between full syncs a mirror's `aida-store` falls behind. `aida pull`
+closes that gap: after both of its legs succeed it runs the origin-following sync below,
+which pushes origin's `aida-store` tip to every mirror.
+
+### 2b. Origin-following sync — `aida remote mirror-sync`
+
+The two fan-outs above mirror what **this machine pushes**. Two things advance a hub
+without a local push: a merge performed on the forge (a squash-merge moves `origin/main`,
+and the only local action is a pull), and a store push from another clone. Neither fires
+a pre-push hook, so the mirror drifts until someone pushes the branch by hand.
+
+`aida remote mirror-sync` pushes origin's tips of the default branch and of `aida-store`
+to every mirror in `[store.sync] mirror_remotes`, by sha, and reports one line per hub and
+branch (pushed / already up to date / failed). It never force-pushes: a diverged hub is
+reported and the command exits non-zero, leaving `aida remote reconcile` (store) or a
+manual reconcile (code) to the operator. `aida pull` runs the same sync best-effort after a
+successful pull (silent unless a hub fails, and never failing the pull), so every drain phase 5, `aida pr ship` and operator catch-up levels the
+hubs; the hub-drift guard's finding points at it.
+
 ### 3. Code fan-out
 
 The code leg is pushed by plain `git`, which AIDA doesn't wrap, so pick one:
@@ -80,8 +101,13 @@ The code leg is pushed by plain `git`, which AIDA doesn't wrap, so pick one:
   `aida db sync`. Enable native multi-pushurl only once both hubs' `aida-store` are
   reconciled. Until then, use `mirror_remotes` (leg 2, best-effort) for the store and
   re-sync code manually or via a code-only pre-push hook (tracked follow-up).
-- **Manual, until reconciled:** `git push origin/main:main` to each mirror after a code push,
-  or `aida remote status` in a pre-push hook to at least *catch* drift before it lands.
+- **Pre-push hook** (`aida remote mirror <name>`): mirrors every code ref this machine
+  pushes to `origin`; `aida remote mirror-push` is its plumbing and says what it mirrored or
+  why it skipped. It cannot see a forge-side merge — that is what `aida remote mirror-sync`
+  (2b) and the sync inside `aida pull` are for.
+- **Manual, until reconciled:** `aida remote mirror-sync` after a merge, or
+  `git push <mirror> origin/main:main`; `aida remote status` in a pre-push hook at least
+  *catches* drift before it lands.
 
 ## Recommended setup
 

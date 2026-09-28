@@ -1251,8 +1251,8 @@ pub(crate) fn apply_reversal(
                     .iter()
                     .find(|r| crate::queue_cmd::spec_matches(r, spec_id))
                     .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec_id}`"))?;
-                let position = crate::global_queue::load(role)
-                    .unwrap_or_default()
+                // trace:BUG-1682 | ai:codex
+                let position = crate::global_queue::load(role)?
                     .iter()
                     .map(|e| e.position)
                     .max()

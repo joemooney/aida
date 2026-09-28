@@ -1,5 +1,10 @@
 # The integrator role
 
+Progress reports use the shared seat status contract in
+`advisor-role.md`: name one closed-vocabulary state, cite current `aida ps` or
+`aida integrate` evidence for ongoing work, and never claim “still working” or
+“continuing” after the turn ends. <!-- trace:TASK-1557 | ai:codex -->
+
 AIDA sessions wear a *role* (`aida role enter <name>`). The **integrator** seat
 owns the **merge cascade**: it takes work that an implementer has finished and a
 reviewer has blessed, and it lands that work on the default branch cleanly. It is

@@ -1113,6 +1113,13 @@ fn current_snapshot(store_path: &Path, spec_id: &str) -> (Option<String>, String
     }
 }
 
+/// [`current_snapshot`] for callers outside this module — the timeline view
+/// shows the same header facts as the status-progression view.
+// trace:STORY-1478 | ai:claude
+pub(crate) fn current_snapshot_for(store_path: &Path, spec_id: &str) -> (Option<String>, String) {
+    current_snapshot(store_path, spec_id)
+}
+
 /// Collect structured event records using the same filters as
 /// `aida history events`. Intended for MCP and other non-TTY consumers.
 /// Returns the records, `window_exhausted` (see [`collect_filtered_events`];
@@ -1142,6 +1149,25 @@ pub fn collect_event_records(store_path: &Path, opts: &HistoryOpts) -> Result<Ev
         window_exhausted,
         source,
     })
+}
+
+// trace:STORY-1477 | ai:codex
+pub(crate) fn render_template_alias(
+    store_path: &Path,
+    opts: &HistoryOpts,
+    oneline: bool,
+) -> Result<String> {
+    let (resolved, _, _) = resolve_history_window(opts, chrono::Utc::now(), &chrono::Local)?;
+    let (events, _, _, _) = collect_filtered_events_sourced(store_path, &resolved)?;
+    Ok(render_events_feed(
+        &events,
+        opts,
+        if oneline {
+            HistoryOutput::Oneline
+        } else {
+            HistoryOutput::Human
+        },
+    ))
 }
 
 /// Returns `(events, archived_hidden_count, window_exhausted)`.
@@ -1329,11 +1355,51 @@ fn collect_filtered_events_unresolved(
     ))
 }
 
+/// Parse an RFC3339 string, unix timestamp, or ISO datetime into a unix epoch
+/// timestamp in seconds. Used so git log --since/--until commands receive
+/// unambiguous numeric timestamps, avoiding Git approxidate parser bugs
+/// where years >= 2100 are misinterpreted as times of day (HHMM).
+// trace:SPEC-441 | ai:antigravity
+pub(crate) fn parse_history_timestamp_bound(raw: &str) -> Option<i64> {
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(raw) {
+        return Some(dt.timestamp());
+    }
+    if let Some(stripped) = raw.strip_prefix('@') {
+        if let Ok(ts) = stripped.parse::<i64>() {
+            return Some(ts);
+        }
+    }
+    if let Ok(ts) = raw.parse::<i64>() {
+        return Some(ts);
+    }
+    if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(raw, "%Y-%m-%dT%H:%M:%S") {
+        return Some(dt.and_utc().timestamp());
+    }
+    if let Ok(d) = chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
+        return d.and_hms_opt(0, 0, 0).map(|dt| dt.and_utc().timestamp());
+    }
+    None
+}
+
+/// Convert a time bound string for `git log --since=` or `--until=` into an
+/// unambiguous numeric timestamp if parseable, or retain the raw string.
+/// Passing a numeric timestamp avoids Git's approxidate parser bug where
+/// 4-digit years >= 2100 are misinterpreted as time-of-day (HHMM).
+// trace:SPEC-441 | ai:antigravity
+pub(crate) fn format_git_log_bound(raw: &str) -> String {
+    if let Some(ts) = parse_history_timestamp_bound(raw) {
+        ts.to_string()
+    } else {
+        raw.to_string()
+    }
+}
+
 /// The git-walk implementation of [`collect_filtered_events`]: the
 /// canonical answer, used whenever the history index cannot serve a query,
 /// and the oracle the index's parity tests compare against.
 // trace:BUG-1617 | ai:claude
 // trace:TASK-1507 | ai:claude
+// trace:SPEC-441 | ai:antigravity
 pub(crate) fn collect_filtered_events_git(
     store_path: &Path,
     opts: &HistoryOpts,
@@ -1353,10 +1419,10 @@ pub(crate) fn collect_filtered_events_git(
         format!("-n{}", opts.max_commits.saturating_add(1)),
     ];
     if let Some(s) = &opts.since {
-        log_args.push(format!("--since={}", s));
+        log_args.push(format!("--since={}", format_git_log_bound(s)));
     }
     if let Some(u) = &opts.until {
-        log_args.push(format!("--until={}", u));
+        log_args.push(format!("--until={}", format_git_log_bound(u)));
     }
 
     // Path-scope the log walk to the one spec when `--id` is set. Without
@@ -1723,11 +1789,12 @@ fn build_digest_rows(
         "--pretty=format:%H%x09%aI%x09%ae%x09%s".into(),
         format!("-n{}", opts.max_commits),
     ];
+    // trace:SPEC-441 | ai:antigravity
     if let Some(s) = &opts.since {
-        log_args.push(format!("--since={}", s));
+        log_args.push(format!("--since={}", format_git_log_bound(s)));
     }
     if let Some(u) = &opts.until {
-        log_args.push(format!("--until={}", u));
+        log_args.push(format!("--until={}", format_git_log_bound(u)));
     }
 
     let log_output = run_git(store_path, &log_args)?;
@@ -2047,7 +2114,8 @@ fn colorize_status(status: &str) -> String {
     crate::status_display::paint_status(status, status).to_string()
 }
 
-fn parse_log_line(line: &str) -> Option<CommitMeta> {
+// trace:STORY-1478 | ai:claude — the timeline collector reuses this walk.
+pub(crate) fn parse_log_line(line: &str) -> Option<CommitMeta> {
     let mut parts = line.split('\t');
     let sha = parts.next()?.to_string();
     let iso_timestamp = parts.next()?.to_string();
@@ -2059,7 +2127,8 @@ fn parse_log_line(line: &str) -> Option<CommitMeta> {
     })
 }
 
-fn run_git(cwd: &Path, args: &[String]) -> Result<String> {
+// trace:STORY-1478 | ai:claude
+pub(crate) fn run_git(cwd: &Path, args: &[String]) -> Result<String> {
     let out = ProcessCommand::new("git")
         .arg("-C")
         .arg(cwd)
@@ -2076,7 +2145,8 @@ fn run_git(cwd: &Path, args: &[String]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
-fn git_show_blob(cwd: &Path, rev: &str, path: &str) -> Result<String> {
+// trace:STORY-1478 | ai:claude
+pub(crate) fn git_show_blob(cwd: &Path, rev: &str, path: &str) -> Result<String> {
     run_git(cwd, &["show".into(), format!("{}:{}", rev, path)])
 }
 

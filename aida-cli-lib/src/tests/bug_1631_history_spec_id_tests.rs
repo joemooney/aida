@@ -256,15 +256,21 @@ fn bug_1631_single_spec_view_keeps_the_id_implicit() {
 
 #[test]
 fn bug_1631_history_json_flag_parses_on_both_sides_of_events() {
-    use crate::cli::{Cli, Command};
+    use crate::cli::{Cli, Command, HistoryCommand};
     use clap::Parser;
     for argv in [
         vec!["aida", "history", "--full", "--json"],
         vec!["aida", "history", "events", "--json"],
+        vec!["aida", "history", "--json", "events"],
     ] {
         let cli = Cli::try_parse_from(&argv).unwrap();
+        // trace:STORY-1477 | ai:codex — each JSON view owns its flag;
+        // template management must not inherit JSON capability.
+        let Command::History { json, cmd, .. } = cli.command else {
+            panic!("expected history: {argv:?}");
+        };
         assert!(
-            matches!(cli.command, Command::History { json: true, .. }),
+            json || matches!(cmd, Some(HistoryCommand::Events { json: true })),
             "{argv:?}"
         );
     }

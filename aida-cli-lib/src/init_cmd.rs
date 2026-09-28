@@ -68,11 +68,9 @@ pub(crate) fn detect_init_forge(preferred: Option<&str>, remote_url: &str) -> St
     }
 }
 
+// trace:TASK-1513 | ai:claude
 fn user_home_dir() -> Result<std::path::PathBuf> {
-    std::env::var_os("HOME")
-        .map(std::path::PathBuf::from)
-        .filter(|p| !p.as_os_str().is_empty())
-        .ok_or_else(|| anyhow::anyhow!("HOME is unset"))
+    crate::home_dir().ok_or_else(|| anyhow::anyhow!("HOME is unset"))
 }
 
 #[cfg(unix)]
@@ -1052,6 +1050,31 @@ fn memory_lane_project_name(store: &RequirementsStore) -> &str {
     }
 }
 
+/// The heading that marks an AIDA-AUTOGEN block as the memory-lane block
+/// (as opposed to the full conventions block).
+// trace:BUG-1662 | ai:claude
+const MEMORY_LANE_BLOCK_HEADING: &str = "# AIDA Memory Lane";
+
+/// The current memory-lane block for a file whose AIDA-AUTOGEN block is a
+/// memory-lane block, keeping the storage line it was written with. `None`
+/// when the file has no complete AIDA block, or its block is not the
+/// memory-lane block (refresh then leaves it alone rather than guess).
+// trace:BUG-1662 | ai:claude
+pub(crate) fn current_memory_lane_block(existing: &str) -> Option<String> {
+    let block = aida_core::scaffolding::extract_aida_block(existing)?;
+    if !block
+        .lines()
+        .any(|l| l.trim_end() == MEMORY_LANE_BLOCK_HEADING)
+    {
+        return None;
+    }
+    let label = block
+        .lines()
+        .find_map(|l| l.strip_prefix("Storage: "))?
+        .trim_end();
+    Some(memory_lane_guidance_block(label))
+}
+
 // trace:STORY-1093 | ai:codex
 fn memory_lane_guidance_block(storage_label: &str) -> String {
     format!(
@@ -1160,14 +1183,21 @@ fn write_memory_lane_artifact(
     Ok(true)
 }
 
-/// The skill packs the memory-lane footprint writes its two skills into:
-/// `.claude/skills`, the portable `.agents/skills`, and a legacy
-/// `.codex/skills` only when it already exists as a real directory.
-// trace:BUG-1639 | ai:claude
-fn memory_lane_skill_packs(root: &std::path::Path) -> Vec<&'static str> {
+/// The skill packs the memory-lane footprint writes its two skills into,
+/// based on the project's selected agent profiles.
+// trace:TASK-1528 | ai:codex
+fn memory_lane_skill_packs(
+    root: &std::path::Path,
+    include_portable: bool,
+    include_legacy_codex: bool,
+) -> Vec<&'static str> {
     use aida_core::scaffolding::inventory::{LEGACY_CODEX_PACK, PORTABLE_PACK};
-    let mut packs = vec![".claude/skills", PORTABLE_PACK];
-    let legacy_is_real_dir = aida_core::scaffolding::symlink_target(&root.join(".codex")).is_none()
+    let mut packs = vec![".claude/skills"];
+    if include_portable {
+        packs.push(PORTABLE_PACK);
+    }
+    let legacy_is_real_dir = include_legacy_codex
+        && aida_core::scaffolding::symlink_target(&root.join(".codex")).is_none()
         && std::fs::symlink_metadata(root.join(LEGACY_CODEX_PACK))
             .is_ok_and(|m| m.file_type().is_dir());
     if legacy_is_real_dir {
@@ -1205,10 +1235,12 @@ pub(crate) fn write_memory_lane_scaffolding(
         // trace:TASK-1503 | ai:claude
         let names: std::collections::BTreeSet<String> =
             MEMORY_LANE_SKILLS.iter().map(|n| n.to_string()).collect();
-        // `.agents/skills` is the pack Codex and Antigravity read; a legacy
-        // `.codex/skills` pack is kept level only when it already exists.
-        // trace:BUG-1639 | ai:claude
-        for pack in memory_lane_skill_packs(root) {
+        // `.agents/skills` is used only by Codex and Antigravity; legacy
+        // `.codex/skills` is kept only for selected Codex projects.
+        // trace:TASK-1528 | ai:codex
+        let selection = read_enabled_agent_selection(root).unwrap_or_else(AgentSelection::all);
+        let include_portable = selection.codex || selection.antigravity;
+        for pack in memory_lane_skill_packs(root, include_portable, selection.codex) {
             let mut plan = aida_core::scaffolding::refresh::plan_skill_pack(
                 root,
                 std::path::Path::new(pack),
@@ -2493,7 +2525,10 @@ enabled = true
 # The routing job keys on CronJobFailed, which the tick emits when a SUBSTRATE
 # job exits non-zero. That is the chain end to end: --fail-on-findings makes
 # the check exit non-zero, the non-zero exit emits CronJobFailed, and the seat
-# job turns that event into a due item in `aida awaiting`. The substrate run is
+# job turns that event into a due item in `aida awaiting`. The route binds to
+# its own guard with `on = ["CronJobFailed:<guard-job>"]`: a bare
+# "CronJobFailed" matches EVERY substrate job's failure, so one guard's trip
+# would wake every route with that one guard's evidence. The substrate run is
 # ledgered at schedule/<job>.yaml independently, so a trip is BOTH durable and
 # noticed — either alone reproduces some version of the defect this closes.
 #
@@ -2509,7 +2544,7 @@ enabled = true
 # [[schedule.jobs]]
 # name = "performance-guard-route"
 # seats = ["advisor"]
-# on = ["CronJobFailed"]
+# on = ["CronJobFailed:performance-guard"]
 # prompt = "A performance budget was breached. Use the routed trip evidence and its matching entry at .aida-store/schedule/performance-guard.yaml to confirm the budget in force, then decide: real regression, or a budget that needs changing deliberately."
 # enabled = false
 
@@ -2582,7 +2617,7 @@ enabled = true
 # [[schedule.jobs]]
 # name = "hub-drift-guard-route"
 # seats = ["advisor"]
-# on = ["CronJobFailed"]
+# on = ["CronJobFailed:hub-drift-guard"]
 # prompt = "A tracked branch (main or aida-store) differs across hubs. Use the routed trip evidence and `aida remote status` to reconcile — never force-push a shared branch."
 # enabled = false
 #
@@ -2595,7 +2630,7 @@ enabled = true
 # [[schedule.jobs]]
 # name = "stranded-branches-guard-route"
 # seats = ["advisor"]
-# on = ["CronJobFailed"]
+# on = ["CronJobFailed:stranded-branches-guard"]
 # prompt = "One or more remote branches carry commits with no open PR. Review each: open a PR, or delete by hand — never auto-delete a Keep-flagged branch."
 # enabled = false
 #
@@ -2611,7 +2646,7 @@ enabled = true
 # [[schedule.jobs]]
 # name = "disk-headroom-guard-route"
 # seats = ["advisor"]
-# on = ["CronJobFailed"]
+# on = ["CronJobFailed:disk-headroom-guard"]
 # prompt = "Free disk space dropped below the configured floor. Reclaim space (stale worktrees via `aida session reap`, `cargo clean`) or raise [doctor.disk_headroom] min_free_gib deliberately."
 # enabled = false
 #
@@ -2639,7 +2674,7 @@ enabled = true
 # [[schedule.jobs]]
 # name = "watchdog-route"
 # seats = ["advisor"]
-# on = ["CronJobFailed"]
+# on = ["CronJobFailed:watchdog"]
 # prompt = "A seat tripped the runaway-seat watchdog. Use the routed trip evidence (session, rule, measured value, threshold) to stop the tick or loop that is waking it, or hand off and restart a seat past its context ceiling. Never answer by adding another poll."
 # enabled = false
 #
@@ -3725,9 +3760,11 @@ mod task_631_init_self_commit_tests {
         std::fs::write(root.join(".claude/skills/foo.md"), "x").unwrap();
 
         // Force the auto-commit branch (env override beats the TTY heuristic).
-        std::env::set_var("AIDA_INIT_COMMIT_SCAFFOLD", "1");
+        // The guard holds the shared env lock and restores the prior value.
+        // trace:BUG-1666 | ai:claude
+        let env = crate::test_env::EnvVarGuard::set("AIDA_INIT_COMMIT_SCAFFOLD", "1");
         let committed = commit_init_scaffolding(root, crate::cli::InitFootprint::Full).unwrap();
-        std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
+        drop(env);
 
         // The remainder was committed → onboarding task is de-stranded.
         assert!(
@@ -3891,8 +3928,9 @@ mod task_631_init_self_commit_tests {
     #[test]
     fn bootstrap_clone_init_no_tty_does_not_autocommit() {
         // Belt-and-suspenders: even if some env tried to force auto-commit, the
-        // bootstrap-clone suppression must win.
-        std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
+        // bootstrap-clone suppression must win. Held for the whole test.
+        // trace:BUG-1666 | ai:claude
+        let _env = crate::test_env::EnvVarGuard::unset("AIDA_INIT_COMMIT_SCAFFOLD");
         let tmp = TempDir::new().unwrap();
         let (root, head_before) = setup_clone_like_repo(&tmp);
 
@@ -3910,7 +3948,8 @@ mod task_631_init_self_commit_tests {
     // trace:BUG-570 | ai:claude
     #[test]
     fn genuinely_new_init_still_commits_scaffolding() {
-        std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
+        // trace:BUG-1666 | ai:claude
+        let _env = crate::test_env::EnvVarGuard::unset("AIDA_INIT_COMMIT_SCAFFOLD");
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         git_in(root, &["init", "-q", "-b", "main"]);
@@ -4549,6 +4588,8 @@ pub(crate) fn handle_init_distributed_worktree(
     let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
+    // TASK-1522: commented [capture] intent-capture floor stub.
+    let config_content = config_content + init_capture_config_section();
     // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
     // commit, so the end-of-init refresh leaves the tracked config clean.
     // trace:STORY-1467 | ai:claude
@@ -4827,6 +4868,8 @@ fn handle_init_post_clone(
     let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
+    // TASK-1522: commented [capture] intent-capture floor stub.
+    let config_content = config_content + init_capture_config_section();
     // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
     // commit, so the end-of-init refresh leaves the tracked config clean.
     // trace:STORY-1467 | ai:claude
@@ -5288,9 +5331,19 @@ pub(crate) fn handle_init_distributed_sibling(
         std::fs::write(store_dir.join("objects/.gitkeep"), "")?;
         git_ops::add(&store_dir, &["objects/.gitkeep"])?;
 
-        // Create .gitignore for node-local files
-        let gitignore_content = "# Node-local state (not shared)\n.aida/\n*.lock\n";
-        std::fs::write(store_dir.join(".gitignore"), gitignore_content)?;
+        // Create .gitignore for node-local files.
+        // The staging-file ignores come from `fs_atomic`, which owns the
+        // staging name, so a lock-free `git add -A .` (db sync, auto-push) can
+        // never stage one. They live in the STORE's tracked `.gitignore`, never
+        // the project's `info/exclude`: a store attached as a linked worktree
+        // shares the project's exclude file, so an ignore written there would
+        // hide the user's own files too. Existing stores are TASK-1547.
+        // trace:BUG-1677 | ai:claude
+        let gitignore_content = format!(
+            "# Node-local state (not shared)\n.aida/\n*.lock\n{}",
+            aida_core::fs_atomic::store_staging_ignore_block()
+        );
+        std::fs::write(store_dir.join(".gitignore"), &gitignore_content)?;
         git_ops::add(&store_dir, &[".gitignore"])?;
 
         git_ops::commit(&store_dir, "chore: initialize AIDA distributed store")?;
@@ -5398,6 +5451,8 @@ pub(crate) fn handle_init_distributed_sibling(
     let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
+    // TASK-1522: commented [capture] intent-capture floor stub.
+    let config_content = config_content + init_capture_config_section();
     // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
     // commit, so the end-of-init refresh leaves the tracked config clean.
     // trace:STORY-1467 | ai:claude
@@ -5480,6 +5535,26 @@ mod task_1503_memory_lane_manifest_tests {
         );
         let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
         scaffolder.apply(&preview).unwrap();
+    }
+
+    // trace:TASK-1528 | ai:codex
+    #[test]
+    fn claude_only_memory_lane_does_not_write_portable_skills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = aida_core::RequirementsStore::default();
+        super::write_enabled_agent_selection(
+            root,
+            super::AgentSelection {
+                claude: true,
+                codex: false,
+                antigravity: false,
+            },
+        )
+        .unwrap();
+        write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+        assert!(!root.join(".agents/skills").exists());
+        assert!(root.join(".claude/skills/aida-capture/SKILL.md").is_file());
     }
 
     /// BUG-1645 L4: memory-lane init's scaffold commit includes the per-pack

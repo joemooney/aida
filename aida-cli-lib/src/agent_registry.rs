@@ -1604,6 +1604,48 @@ fn classify_status(
     AgentStatus::Idle
 }
 
+/// Accumulated CPU seconds for `pid`, via `ps -o time=`.
+///
+/// BUG-1701 AC5: a dispatched seat that has FINISHED its turn looks identical to one still
+/// working — same pid, same registry row, and `classify_status` calls it `busy` whenever a live
+/// lease covers its worktree, which for the main worktree is always. On 2026-09-27 three seats
+/// reported `busy` after 48-88 minutes idle. The tell was CPU consumed: 3-46 SECONDS across
+/// hours. Reporting that number lets a caller judge without attaching to the PTY.
+///
+/// Deliberately NOT used to reclassify: cumulative CPU cannot distinguish "finished" from
+/// "blocked on a long build", and flipping the latter to `idle` would invite an orchestrator to
+/// stop a working seat. A classification fix needs a CPU DELTA between two samples.
+// trace:BUG-1701 | ai:claude
+pub(crate) fn process_cpu_secs(pid: u32) -> Option<i64> {
+    let out = std::process::Command::new("ps")
+        .args(["-o", "time=", "-p", &pid.to_string()])
+        .output()
+        .ok()?;
+    parse_ps_cpu_time(String::from_utf8_lossy(&out.stdout).trim())
+}
+
+/// Parse `ps -o time=`: `MM:SS`, `HH:MM:SS`, or `DD-HH:MM:SS`. Pure, so the shapes are tested
+/// without spawning `ps`.
+// trace:BUG-1701 | ai:claude
+fn parse_ps_cpu_time(raw: &str) -> Option<i64> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let (days, clock) = match raw.split_once('-') {
+        Some((d, rest)) => (d.trim().parse::<i64>().ok()?, rest),
+        None => (0, raw),
+    };
+    let mut parts = clock.split(':').rev();
+    let secs: i64 = parts.next()?.trim().parse().ok()?;
+    let mins: i64 = parts.next().unwrap_or("0").trim().parse().ok()?;
+    let hours: i64 = parts.next().unwrap_or("0").trim().parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(days * 86_400 + hours * 3_600 + mins * 60 + secs)
+}
+
 pub(crate) fn elapsed_secs_clamped(now: DateTime<Utc>, at: DateTime<Utc>) -> i64 {
     now.signed_duration_since(at).num_seconds().max(0)
 }
@@ -2424,6 +2466,24 @@ mod tests {
     }
 
     // STORY-435: fresh activity (within threshold) → Busy.
+    /// BUG-1701 AC5: the CPU figure that distinguishes a finished seat from a working one.
+    // trace:BUG-1701 | ai:claude
+    #[test]
+    fn parse_ps_cpu_time_covers_every_ps_shape() {
+        assert_eq!(parse_ps_cpu_time("00:00"), Some(0));
+        // The observed stranded seats: 12s and 46s of CPU across hours.
+        assert_eq!(parse_ps_cpu_time("00:12"), Some(12));
+        assert_eq!(parse_ps_cpu_time("00:00:46"), Some(46));
+        assert_eq!(parse_ps_cpu_time("01:02:03"), Some(3723));
+        assert_eq!(parse_ps_cpu_time(" 2-03:04:05 "), Some(183_845));
+        // Unavailable or unparseable stays None rather than guessing zero, which would read as
+        // "definitely idle".
+        assert_eq!(parse_ps_cpu_time(""), None);
+        assert_eq!(parse_ps_cpu_time("   "), None);
+        assert_eq!(parse_ps_cpu_time("not-a-time"), None);
+        assert_eq!(parse_ps_cpu_time("1:2:3:4"), None);
+    }
+
     #[test]
     fn classify_status_fresh_activity_is_busy() {
         let now = Utc::now();

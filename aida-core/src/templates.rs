@@ -172,7 +172,7 @@ pub struct TemplateLoader {
 impl TemplateLoader {
     /// Create a new template loader
     pub fn new() -> Self {
-        let config_dir = dirs::config_dir();
+        let config_dir = crate::home::config_dir();
         let user_templates = config_dir.as_ref().map(|p| p.join("aida/templates"));
         let org_templates = config_dir.as_ref().map(|p| p.join("aida/org-templates"));
 
@@ -187,7 +187,7 @@ impl TemplateLoader {
     /// Create a template loader with a project root for local templates
     pub fn with_project_root(project_root: &Path) -> Self {
         let project_templates = Some(project_root.join(".aida/templates"));
-        let config_dir = dirs::config_dir();
+        let config_dir = crate::home::config_dir();
         let user_templates = config_dir.as_ref().map(|p| p.join("aida/templates"));
         let org_templates = config_dir.as_ref().map(|p| p.join("aida/org-templates"));
 

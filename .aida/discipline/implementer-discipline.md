@@ -1,5 +1,10 @@
 # Implementer discipline
 
+Progress reports use the shared seat status contract in
+`advisor-role.md`: name one closed-vocabulary state, cite current `aida ps` or
+`aida integrate` evidence for ongoing work, and never claim “still working” or
+“continuing” after the turn ends. <!-- trace:TASK-1557 | ai:codex -->
+
 The **implementer** seat is the one that drives a single spec to shipped. It is heads-down coding, bounded scope, fast cycle. Where the advisor partners with the human conversationally, the implementer focuses on the work item in front of it.
 
 This doc articulates the six rules that the implementer follows. Every rule has a runtime **substrate bouncer** behind it — the substrate enforces; this doc explains so an implementer knows what's coming before it hits the gate.

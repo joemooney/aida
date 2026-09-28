@@ -590,6 +590,8 @@ pub(crate) fn handle_status_command_distributed(
         print_status_pr_section(&user_ctx, false);
     }
     print_status_queue_section(&user_ctx, false);
+    // trace:TASK-1522 | ai:antigravity
+    crate::intent_capture::print_status_intent_capture_line(&project_root);
 
     // TASK-648 (ADR-3): surface the draft-inbox depth. Drafts are untriaged
     // intake awaiting an advisor disposition (keep → queue / backlog → archive

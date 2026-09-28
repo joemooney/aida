@@ -219,6 +219,9 @@ fn no_role_means_no_fallback() {
 /// plan resolves to that entry instead of erroring.
 #[test]
 fn queue_work_resolves_a_peer_routed_entry() {
+    // Held for the whole test (fixture writes through the resolve), not just
+    // the read, so no sibling env swap can interleave. trace:BUG-1666 | ai:claude
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let spec = seed_spec(&root, "TASK-7746");
@@ -232,7 +235,6 @@ fn queue_work_resolves_a_peer_routed_entry() {
         ))
         .unwrap();
 
-    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
     let plan = crate::queue_cmd::resolve_queue_work_plan(
         &storage,
         "joe",
@@ -294,6 +296,9 @@ fn remove_visible_queue_entry_dequeues_peer_routed_work() {
 /// doesn't surface it and we fall through to the diagnostic.
 #[test]
 fn not_in_your_queue_diagnostic_names_the_holder_instead_of_a_lost_lease() {
+    // Held for the whole test (fixture writes through the resolve), not just
+    // the read, so no sibling env swap can interleave. trace:BUG-1666 | ai:claude
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let spec = seed_spec(&root, "TASK-7747");
@@ -317,7 +322,6 @@ fn not_in_your_queue_diagnostic_names_the_holder_instead_of_a_lost_lease() {
     );
 
     // The caller is wearing `advisor`, so the entry isn't routed to them.
-    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
     let err = crate::queue_cmd::resolve_queue_work_plan(
         &storage,
         "joe",

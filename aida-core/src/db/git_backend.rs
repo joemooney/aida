@@ -59,6 +59,35 @@ pub(crate) struct SaveReport {
     pub(crate) stale_untouched: Vec<String>,
 }
 
+/// What a [`GitBackend::bulk_update_atomically`] batch wrote and what it left
+/// alone. Every count is a candidate the caller offered that the in-lock
+/// re-read rejected, so a sweep can report why it wrote fewer specs than it
+/// selected.
+// trace:BUG-1671 | ai:claude
+#[derive(Debug, Default, Clone)]
+pub struct BulkAtomicReport {
+    /// The specs the batch kept, as written (the fresh object with the
+    /// caller's mutation applied). A caller with a write-through cache upserts
+    /// exactly these.
+    pub written: Vec<Requirement>,
+    /// Candidates whose stored object no longer qualified: the caller's
+    /// predicate said no, or the spec_id now names a different uuid.
+    pub skipped_changed: usize,
+    /// Candidates whose stored object is gone (deleted since selection).
+    pub skipped_missing: usize,
+    /// Candidates whose stored object could not be read or parsed. Counted,
+    /// never fatal: one corrupt object must not abort a whole sweep.
+    pub skipped_unreadable: usize,
+}
+
+impl BulkAtomicReport {
+    /// How many candidates the batch declined to write, for any reason.
+    // trace:BUG-1671 | ai:claude
+    pub fn skipped(&self) -> usize {
+        self.skipped_changed + self.skipped_missing + self.skipped_unreadable
+    }
+}
+
 /// A whole-store save refused because specs it would write (or delete), or
 /// store-level `metadata.yaml` fields it changed, changed on disk after the
 /// store was loaded. Nothing was written.
@@ -616,11 +645,21 @@ impl GitBackend {
     /// left intact for inspection. A genuinely absent file is still the empty
     /// queue (returns `Ok(vec![])`). trace:TASK-712
     fn read_queue_file(path: &Path) -> Result<Vec<QueueEntry>> {
-        if !path.exists() {
-            return Ok(Vec::new());
-        }
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read queue file {}", path.display()))?;
+        // No `exists()` pre-check: a lock-free reader (`queue_list`) can race a
+        // writer's temp+rename of this file, and on Windows the open itself
+        // can transiently fail (`NotFound` / `PermissionDenied`) while the
+        // rename is in flight. `read_atomic` retries those there (and returns
+        // immediately on Unix, where they are never transient); a `NotFound`
+        // that survives the retry is a genuinely absent file, i.e. the empty
+        // queue. trace:BUG-1677 | ai:claude
+        let content = match crate::fs_atomic::read_atomic(path) {
+            Ok(content) => content,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => {
+                return Err(e)
+                    .with_context(|| format!("Failed to read queue file {}", path.display()))
+            }
+        };
         if content.trim().is_empty() {
             return Ok(Vec::new());
         }
@@ -977,11 +1016,156 @@ impl GitBackend {
         Ok(n)
     }
 
+    /// [`Self::bulk_update`]'s compare-and-swap sibling: apply a decision to
+    /// many specs in ONE commit, with every eligibility decision taken on the
+    /// object read INSIDE the store write lock.
+    ///
+    /// A sweep picks its candidates from a cache projection and (at best)
+    /// re-reads each object to confirm them — but that read happens before the
+    /// write path takes the lock, so a concurrent writer can land between the
+    /// re-check and `bulk_update`'s write, and the whole-object write reverts
+    /// it. Here the lock is taken first and each `target`'s object is re-read
+    /// under it; `keep` sees that fresh copy and returns whether it still
+    /// qualifies. Only what `keep` accepted is mutated and written, so a spec
+    /// changed after candidate selection is skipped instead of overwritten.
+    ///
+    /// Per target: the stored object is read (absent -> `skipped_missing`,
+    /// unreadable/unparsable -> `skipped_unreadable`), its uuid must still
+    /// match `target.id` (else `skipped_changed`), then `keep(&mut fresh)`
+    /// decides. `false` -> `skipped_changed`. Nothing aborts the batch: a
+    /// sweep is best-effort over many specs, so one unreadable object is
+    /// counted, not fatal.
+    ///
+    /// This is `update_spec_atomically` N times under one lock and one commit,
+    /// which is what keeps a large sweep a single store commit (BUG-425).
+    // trace:BUG-1671 | ai:claude
+    pub fn bulk_update_atomically<F>(
+        &self,
+        targets: &[Requirement],
+        commit_subject: &str,
+        mut keep: F,
+    ) -> Result<BulkAtomicReport>
+    where
+        F: FnMut(&mut Requirement) -> bool,
+    {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // trace:BUG-1671 | ai:claude — one lock spans every re-check and every
+        // write, so no lock-respecting writer can slip between them.
+        let _lock = self.lock_store()?;
+        let mut report = BulkAtomicReport::default();
+        let mut changed: Vec<String> = Vec::new();
+        for target in targets {
+            let Some(spec_id) = target.spec_id.as_deref() else {
+                // Nothing to read the stored object by.
+                report.skipped_unreadable += 1;
+                continue;
+            };
+            let spec_id = object_store::canonical_spec_id(spec_id);
+            let path = match object_store::object_path(&self.objects_root, &spec_id) {
+                Ok(p) => p,
+                Err(_) => {
+                    report.skipped_unreadable += 1;
+                    continue;
+                }
+            };
+            // One read serves both the re-check and the compare-and-swap
+            // baseline, so the lock is held for N reads, not 2N.
+            let before = match std::fs::read(&path) {
+                Ok(bytes) => bytes,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    report.skipped_missing += 1;
+                    continue;
+                }
+                Err(_) => {
+                    report.skipped_unreadable += 1;
+                    continue;
+                }
+            };
+            let fresh: Requirement = match serde_yaml::from_slice(&before) {
+                Ok(req) => req,
+                Err(_) => {
+                    report.skipped_unreadable += 1;
+                    continue;
+                }
+            };
+            if fresh.id != target.id {
+                // The spec_id now names a different requirement.
+                report.skipped_changed += 1;
+                continue;
+            }
+            let mut next = fresh.clone();
+            if !keep(&mut next) {
+                report.skipped_changed += 1;
+                continue;
+            }
+            if next.id != fresh.id || next.spec_id != fresh.spec_id {
+                anyhow::bail!(
+                    "update of {spec_id} tried to change its id or spec_id; nothing was written"
+                );
+            }
+            if serde_yaml::to_string(&next)? == serde_yaml::to_string(&fresh)? {
+                report.written.push(next);
+                continue;
+            }
+            self.ensure_object_unchanged(&spec_id, &path, &before)?;
+            if let Some(written) = self.stage_requirement_update(&next)? {
+                changed.push(written.to_string());
+            }
+            report.written.push(next);
+        }
+        if !changed.is_empty() {
+            let paths: Vec<String> = changed
+                .iter()
+                .filter_map(|sid| object_store::relative_object_path(sid).ok())
+                .collect();
+            let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+            let n = changed.len();
+            let message = format!(
+                "{}: update {} requirement{}",
+                commit_subject,
+                n,
+                if n == 1 { "" } else { "s" }
+            );
+            self.auto_commit_paths(&message, &path_refs);
+        }
+        Ok(report)
+    }
+
     /// Acquire the store write lock (re-entrant per thread). Every write path
     /// holds it across its read-modify-write window.
     // trace:BUG-1612 | ai:claude
     pub(crate) fn lock_store(&self) -> Result<super::store_lock::StoreWriteGuard> {
         super::store_lock::acquire(&self.root)
+    }
+
+    // Serialize a queue-file read-modify-write (registry/queues/<user>.yaml)
+    // with every other store writer. Every queue-file writer (`queue_add`,
+    // `queue_remove_for_role`, `queue_reorder`, `queue_clear`,
+    // `queue_remove_many`) holds the returned guard from before the queue file
+    // is read until after its auto-commit, so no lock-respecting writer
+    // (another queue command, a spec save, a bulk import) can land between the
+    // read and the write-back and have its entries dropped. The write-back
+    // itself is temp+rename (`fs_atomic::write_atomic`), so a lock-free reader
+    // (`queue_list`) sees either the old file or the new one, never a torn one.
+    // On Linux/macOS the rename is atomic for the open too; on Windows the
+    // reader's open can transiently fail while the rename is in flight, which
+    // `read_queue_file` absorbs by reading through `fs_atomic::read_atomic`.
+    //
+    // Lock order: the store write lock is the ONLY lock a queue writer takes.
+    // Nothing else is acquired inside it: `read_queue_file`, `get_requirement`
+    // (used by `queue_clear --completed`) and `auto_commit_paths` are lock-free,
+    // and the queue writers never touch the SQLite cache or its lock. The lock
+    // is re-entrant per thread, so a caller that already holds it (for example
+    // `CachedGitBackend` write paths, which take it before delegating to the
+    // inner backend) can call a queue writer without deadlocking; a different
+    // thread or process blocks until the holder releases. As of this writing
+    // no `lock_store()` holder calls a queue writer, so there is no nested
+    // order to maintain; if one appears, it must take the store lock FIRST
+    // and the cache lock (if any) second, matching `CachedGitBackend`.
+    // trace:BUG-1677 | ai:claude
+    fn lock_queue_write(&self) -> Result<super::store_lock::StoreWriteGuard> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        self.lock_store()
     }
 
     /// Whole-store save (the `DatabaseBackend::save` body), under the store
@@ -1759,7 +1943,9 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // Held across the read-modify-write AND the commit below.
+        // trace:BUG-1677 | ai:claude
+        let _lock = self.lock_queue_write()?;
         let dir = self.root.join("registry/queues");
         std::fs::create_dir_all(&dir)?;
         // trace:TASK-951 — resolve the FILENAME case-insensitively (so `Joe`
@@ -1794,7 +1980,9 @@ impl DatabaseBackend for GitBackend {
         entries.push(entry);
         entries.sort_by_key(|e| e.position);
         let yaml = serde_yaml::to_string(&entries)?;
-        std::fs::write(&path, yaml)?;
+        // Temp+rename so a lock-free reader never sees a torn file.
+        // trace:BUG-1677 | ai:claude
+        crate::fs_atomic::write_atomic(&path, yaml)?;
         self.auto_commit_paths(
             "update queue",
             &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
@@ -1817,7 +2005,9 @@ impl DatabaseBackend for GitBackend {
         requirement_id: &uuid::Uuid,
         role: Option<&str>,
     ) -> Result<()> {
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // Held across the read-modify-write AND the commit below.
+        // trace:BUG-1677 | ai:claude
+        let _lock = self.lock_queue_write()?;
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
         let path = queue_file_path(&self.root, &user_id);
@@ -1842,7 +2032,9 @@ impl DatabaseBackend for GitBackend {
             }
         });
         let yaml = serde_yaml::to_string(&entries)?;
-        std::fs::write(&path, yaml)?;
+        // Temp+rename so a lock-free reader never sees a torn file.
+        // trace:BUG-1677 | ai:claude
+        crate::fs_atomic::write_atomic(&path, yaml)?;
         self.auto_commit_paths(
             "update queue",
             &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
@@ -1851,7 +2043,9 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn queue_reorder(&self, user_id: &str, items: &[(uuid::Uuid, i64)]) -> Result<()> {
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // Held across the read-modify-write AND the commit below.
+        // trace:BUG-1677 | ai:claude
+        let _lock = self.lock_queue_write()?;
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
         let path = queue_file_path(&self.root, &user_id);
@@ -1867,7 +2061,9 @@ impl DatabaseBackend for GitBackend {
         }
         entries.sort_by_key(|e| e.position);
         let yaml = serde_yaml::to_string(&entries)?;
-        std::fs::write(&path, yaml)?;
+        // Temp+rename so a lock-free reader never sees a torn file.
+        // trace:BUG-1677 | ai:claude
+        crate::fs_atomic::write_atomic(&path, yaml)?;
         self.auto_commit_paths(
             "reorder queue",
             &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
@@ -1885,7 +2081,9 @@ impl DatabaseBackend for GitBackend {
     // look up a requirement (transient I/O error) errs on the safe
     // side: keep the entry. trace:TASK-1-109 | ai:claude
     fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // Held across the read-modify-write AND the commit below.
+        // trace:BUG-1677 | ai:claude
+        let _lock = self.lock_queue_write()?;
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
         let path = queue_file_path(&self.root, &user_id);
@@ -1930,7 +2128,9 @@ impl DatabaseBackend for GitBackend {
             std::fs::remove_file(&path)?;
         } else {
             let yaml = serde_yaml::to_string(&kept)?;
-            std::fs::write(&path, yaml)?;
+            // Temp+rename so a lock-free reader never sees a torn file.
+            // trace:BUG-1677 | ai:claude
+            crate::fs_atomic::write_atomic(&path, yaml)?;
         }
 
         self.auto_commit_paths(
@@ -1946,7 +2146,9 @@ impl DatabaseBackend for GitBackend {
     // spec archived/Completed/Rejected) from the cache, so this stays a dumb
     // set-membership prune. trace:TASK-1052 | ai:claude
     fn queue_remove_many(&self, user_id: &str, ids: &[uuid::Uuid]) -> Result<Vec<QueueEntry>> {
-        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // Held across the read-modify-write AND the commit below.
+        // trace:BUG-1677 | ai:claude
+        let _lock = self.lock_queue_write()?;
         if ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -1975,13 +2177,55 @@ impl DatabaseBackend for GitBackend {
             std::fs::remove_file(&path)?;
         } else {
             let yaml = serde_yaml::to_string(&kept)?;
-            std::fs::write(&path, yaml)?;
+            // Temp+rename so a lock-free reader never sees a torn file.
+            // trace:BUG-1677 | ai:claude
+            crate::fs_atomic::write_atomic(&path, yaml)?;
         }
         self.auto_commit_paths(
             "gc dead queue entries",
             &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
         );
         Ok(removed)
+    }
+
+    /// The store lock spans `still_dead` and the queue write, so a spec
+    /// reopened after the sweep selected its entry cannot be missed: the
+    /// reopen's own write needs this lock. See the trait doc.
+    // trace:BUG-1671 | ai:claude
+    fn queue_remove_many_if(
+        &self,
+        user_id: &str,
+        ids: &[uuid::Uuid],
+        still_dead: &dyn Fn(&uuid::Uuid) -> bool,
+    ) -> Result<Vec<QueueEntry>> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        // trace:BUG-1671 | ai:claude — re-check and remove under one hold.
+        let _lock = self.lock_store()?;
+        let live: Vec<uuid::Uuid> = ids.iter().copied().filter(|id| still_dead(id)).collect();
+        self.queue_remove_many(user_id, &live)
+    }
+
+    /// The role-scoped counterpart of [`Self::queue_remove_many_if`]: the store
+    /// lock spans `still_dead` and the queue write.
+    // trace:BUG-1671 | ai:claude
+    fn queue_remove_for_role_if(
+        &self,
+        user_id: &str,
+        requirement_id: &uuid::Uuid,
+        role: Option<&str>,
+        still_dead: &dyn Fn(&uuid::Uuid) -> bool,
+    ) -> Result<bool> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        // trace:BUG-1671 | ai:claude — re-check and remove under one hold.
+        let _lock = self.lock_store()?;
+        if !still_dead(requirement_id) {
+            return Ok(false);
+        }
+        self.queue_remove_for_role(user_id, requirement_id, role)?;
+        Ok(true)
     }
 }
 
@@ -2880,6 +3124,147 @@ mod tests {
             count_commits(),
             before + 1,
             "no-op bulk_update must not add an empty commit"
+        );
+    }
+
+    /// BUG-1671: the batched compare-and-swap decides on the object read under
+    /// the store lock — a spec changed after the caller picked it is skipped,
+    /// not overwritten — and still lands in ONE commit (BUG-425).
+    // trace:BUG-1671 | ai:claude
+    #[test]
+    fn bulk_update_atomically_decides_on_the_stored_object_in_one_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .unwrap();
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "test@example.com"]);
+        git(&["config", "user.name", "Test"]);
+
+        let mut reqs = Vec::new();
+        for i in 1..=3 {
+            let r = Requirement::new(format!("Atomic bulk {i}"), format!("desc {i}"));
+            reqs.push(backend.add_requirement(r).unwrap());
+        }
+        // The caller's copy of #2 is stale: on disk it has already been
+        // reopened. Its spec_id is also reused by a different uuid for #3.
+        let mut reopened = reqs[1].clone();
+        reopened.status = crate::models::RequirementStatus::InProgress;
+        backend.update_requirement(&reopened).unwrap();
+        let mut impostor = reqs[2].clone();
+        impostor.id = uuid::Uuid::new_v4();
+
+        let targets = vec![reqs[0].clone(), reqs[1].clone(), impostor];
+        let count_commits = || -> usize {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(["rev-list", "--count", "HEAD"])
+                .output()
+                .unwrap();
+            String::from_utf8(out.stdout)
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap()
+        };
+        let before = count_commits();
+
+        let report = backend
+            .bulk_update_atomically(&targets, "chore(archive)", |req| {
+                // Only a spec that is still Draft on disk qualifies.
+                if req.status != crate::models::RequirementStatus::Draft {
+                    return false;
+                }
+                req.archived = true;
+                true
+            })
+            .unwrap();
+
+        assert_eq!(report.written.len(), 1, "only the untouched spec qualifies");
+        assert_eq!(
+            report.written[0].id, reqs[0].id,
+            "the written spec is the one still eligible on disk"
+        );
+        assert_eq!(
+            report.skipped_changed, 2,
+            "the reopened spec and the uuid mismatch are both skipped: {report:?}"
+        );
+        assert_eq!(report.skipped_missing, 0);
+        assert_eq!(report.skipped_unreadable, 0);
+        assert_eq!(report.skipped(), 2);
+        assert_eq!(
+            count_commits(),
+            before + 1,
+            "one commit for the whole batch, as bulk_update gives"
+        );
+
+        let loaded = backend.load().unwrap();
+        let archived: Vec<&str> = loaded
+            .requirements
+            .iter()
+            .filter(|r| r.archived)
+            .filter_map(|r| r.spec_id.as_deref())
+            .collect();
+        assert_eq!(archived, vec![reqs[0].spec_id.as_deref().unwrap()]);
+        let on_disk = backend
+            .get_requirement_by_spec_id(reqs[1].spec_id.as_deref().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            on_disk.status,
+            crate::models::RequirementStatus::InProgress,
+            "the reopen survived the batch"
+        );
+    }
+
+    /// BUG-1671: a candidate whose object is gone or unparsable is counted and
+    /// skipped — one damaged spec must not abort a sweep over hundreds.
+    // trace:BUG-1671 | ai:claude
+    #[test]
+    fn bulk_update_atomically_counts_missing_and_unreadable_candidates() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+
+        let mut reqs = Vec::new();
+        for i in 1..=3 {
+            let r = Requirement::new(format!("Damaged bulk {i}"), format!("desc {i}"));
+            reqs.push(backend.add_requirement(r).unwrap());
+        }
+        // #2's object is unparsable, #3's is deleted.
+        let objects = root.join("objects");
+        let corrupt =
+            object_store::object_path(&objects, reqs[1].spec_id.as_deref().unwrap()).unwrap();
+        std::fs::write(&corrupt, ": not yaml at all\n\t- [").unwrap();
+        let gone =
+            object_store::object_path(&objects, reqs[2].spec_id.as_deref().unwrap()).unwrap();
+        std::fs::remove_file(&gone).unwrap();
+
+        let report = backend
+            .bulk_update_atomically(&reqs, "chore(archive)", |req| {
+                req.archived = true;
+                true
+            })
+            .expect("one damaged object must not fail the batch");
+
+        assert_eq!(report.written.len(), 1);
+        assert_eq!(report.skipped_unreadable, 1, "{report:?}");
+        assert_eq!(report.skipped_missing, 1, "{report:?}");
+        assert_eq!(report.skipped_changed, 0, "{report:?}");
+        assert_eq!(
+            std::fs::read_to_string(&corrupt).unwrap(),
+            ": not yaml at all\n\t- [",
+            "an unreadable object is left exactly as it was, not rewritten"
         );
     }
 
@@ -4632,5 +5017,374 @@ mod tests {
         assert!(git(&["status", "--porcelain", "metadata.yaml"])
             .stdout
             .is_empty());
+    }
+
+    // trace:BUG-1677 | ai:claude — every queue writer is a read-modify-write
+    // on one file; without the store lock two of them interleave (both read
+    // the same entries, the later write drops the earlier writer's change),
+    // and without an atomic write-back a lock-free reader sees a torn file.
+    // The tests below use the git backend on a plain directory, where each
+    // writer opens its own lock descriptor, so threads contend exactly as
+    // processes do under flock(2).
+
+    fn bug1677_backend(root: &Path) -> GitBackend {
+        GitBackend::new(root).unwrap()
+    }
+
+    fn bug1677_seed(backend: &GitBackend, user: &str, n: usize, base: i64) -> Vec<uuid::Uuid> {
+        (0..n)
+            .map(|i| {
+                let e = sample_queue_entry(user, base + (i as i64 + 1) * 1000);
+                let id = e.requirement_id;
+                backend.queue_add(e).unwrap();
+                id
+            })
+            .collect()
+    }
+
+    // queue_clear is covered for lock blocking and re-entrancy above, but is
+    // deliberately excluded from this lost-update mix: racing a clear against
+    // adds/removes has no single expected final queue, so the assertion below
+    // could not distinguish a correct serialized outcome from a lost update.
+    // Writer mix: queue_add (new entries), queue_remove_for_role and
+    // queue_remove_many (each draining its own seeded set), queue_reorder
+    // (each thread repositions its own stable subset), plus lock-free readers
+    // that must always parse the file and always see every stable entry.
+    #[test]
+    fn bug_1677_concurrent_queue_writers_lose_nothing_and_readers_see_no_torn_file() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::{Arc, Barrier};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = bug1677_backend(&root);
+        let user = "carol";
+
+        const REMOVERS: usize = 3;
+        const REMOVES_EACH: usize = 10;
+        const MANY_REMOVERS: usize = 2;
+        const MANY_CALLS_EACH: usize = 4;
+        const MANY_IDS_PER_CALL: usize = 3;
+        const REORDERERS: usize = 3;
+        const REORDER_IDS_EACH: usize = 5;
+        const REORDER_ROUNDS: usize = 8;
+        const ADDERS: usize = 3;
+        const ADDS_EACH: usize = 25;
+        const READERS: usize = 2;
+
+        let to_remove = bug1677_seed(&backend, user, REMOVERS * REMOVES_EACH, 0);
+        let to_remove_many = bug1677_seed(
+            &backend,
+            user,
+            MANY_REMOVERS * MANY_CALLS_EACH * MANY_IDS_PER_CALL,
+            100_000,
+        );
+        let stable = bug1677_seed(&backend, user, REORDERERS * REORDER_IDS_EACH, 200_000);
+        let seeded_total = to_remove.len() + to_remove_many.len() + stable.len();
+        assert_eq!(backend.queue_list(user, false).unwrap().len(), seeded_total);
+
+        let writers = ADDERS + REMOVERS + MANY_REMOVERS + REORDERERS;
+        let barrier = Arc::new(Barrier::new(writers + READERS));
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut handles: Vec<std::thread::JoinHandle<Result<()>>> = Vec::new();
+        let mut expected_added: Vec<uuid::Uuid> = Vec::new();
+        for _ in 0..ADDERS {
+            let entries: Vec<QueueEntry> = (0..ADDS_EACH)
+                .map(|_| sample_queue_entry(user, i64::MAX))
+                .collect();
+            expected_added.extend(entries.iter().map(|e| e.requirement_id));
+            let (root, barrier) = (root.clone(), Arc::clone(&barrier));
+            handles.push(std::thread::spawn(move || {
+                let backend = bug1677_backend(&root);
+                barrier.wait();
+                for e in entries {
+                    backend.queue_add(e)?;
+                }
+                Ok(())
+            }));
+        }
+        for chunk in to_remove.chunks(REMOVES_EACH) {
+            let ids: Vec<uuid::Uuid> = chunk.to_vec();
+            let (root, barrier) = (root.clone(), Arc::clone(&barrier));
+            handles.push(std::thread::spawn(move || {
+                let backend = bug1677_backend(&root);
+                barrier.wait();
+                for id in &ids {
+                    backend.queue_remove_for_role("carol", id, None)?;
+                }
+                Ok(())
+            }));
+        }
+        for chunk in to_remove_many.chunks(MANY_CALLS_EACH * MANY_IDS_PER_CALL) {
+            let ids: Vec<uuid::Uuid> = chunk.to_vec();
+            let (root, barrier) = (root.clone(), Arc::clone(&barrier));
+            handles.push(std::thread::spawn(move || {
+                let backend = bug1677_backend(&root);
+                barrier.wait();
+                for call in ids.chunks(MANY_IDS_PER_CALL) {
+                    let removed = backend.queue_remove_many("carol", call)?;
+                    anyhow::ensure!(
+                        removed.len() == call.len(),
+                        "queue_remove_many removed {} of {}",
+                        removed.len(),
+                        call.len()
+                    );
+                }
+                Ok(())
+            }));
+        }
+        // Each reorderer owns a distinct subset of the stable ids and moves it
+        // REORDER_ROUNDS times; the LAST round's positions must be on disk.
+        let mut expected_positions: Vec<(uuid::Uuid, i64)> = Vec::new();
+        for (t, chunk) in stable.chunks(REORDER_IDS_EACH).enumerate() {
+            let ids: Vec<uuid::Uuid> = chunk.to_vec();
+            let final_round = (REORDER_ROUNDS - 1) as i64;
+            for (i, id) in ids.iter().enumerate() {
+                expected_positions.push((
+                    *id,
+                    1_000_000 + (t as i64) * 100_000 + final_round * 1_000 + i as i64,
+                ));
+            }
+            let (root, barrier) = (root.clone(), Arc::clone(&barrier));
+            handles.push(std::thread::spawn(move || {
+                let backend = bug1677_backend(&root);
+                barrier.wait();
+                for round in 0..REORDER_ROUNDS as i64 {
+                    let items: Vec<(uuid::Uuid, i64)> = ids
+                        .iter()
+                        .enumerate()
+                        .map(|(i, id)| {
+                            (
+                                *id,
+                                1_000_000 + (t as i64) * 100_000 + round * 1_000 + i as i64,
+                            )
+                        })
+                        .collect();
+                    backend.queue_reorder("carol", &items)?;
+                }
+                Ok(())
+            }));
+        }
+        let mut readers = Vec::new();
+        for _ in 0..READERS {
+            let (root, barrier, stop) = (root.clone(), Arc::clone(&barrier), Arc::clone(&stop));
+            let stable = stable.clone();
+            readers.push(std::thread::spawn(move || -> Result<usize> {
+                let backend = bug1677_backend(&root);
+                barrier.wait();
+                let mut reads = 0usize;
+                while !stop.load(Ordering::Relaxed) {
+                    let seen = backend
+                        .queue_list("carol", false)
+                        .map_err(|e| anyhow::anyhow!("reader hit a torn queue file: {e}"))?;
+                    let missing = stable
+                        .iter()
+                        .filter(|id| !seen.iter().any(|e| e.requirement_id == **id))
+                        .count();
+                    anyhow::ensure!(
+                        missing == 0,
+                        "reader saw a torn queue file: {missing} stable entries missing \
+                         (read {} entries)",
+                        seen.len()
+                    );
+                    reads += 1;
+                }
+                Ok(reads)
+            }));
+        }
+
+        let mut errors = Vec::new();
+        for h in handles {
+            if let Err(e) = h.join().expect("queue writer thread panicked") {
+                errors.push(e.to_string());
+            }
+        }
+        stop.store(true, Ordering::Relaxed);
+        let mut total_reads = 0;
+        for r in readers {
+            match r.join().expect("reader thread panicked") {
+                Ok(n) => total_reads += n,
+                Err(e) => errors.push(e.to_string()),
+            }
+        }
+        assert!(
+            errors.is_empty(),
+            "queue writers/readers failed: {errors:?}"
+        );
+        assert!(total_reads > 0, "readers never ran");
+
+        let final_entries = backend.queue_list(user, false).unwrap();
+        let mut remaining: Vec<uuid::Uuid> =
+            final_entries.iter().map(|e| e.requirement_id).collect();
+        remaining.sort();
+        let mut expected: Vec<uuid::Uuid> = expected_added
+            .iter()
+            .chain(stable.iter())
+            .copied()
+            .collect();
+        expected.sort();
+        let lost_added = expected_added
+            .iter()
+            .filter(|id| !remaining.contains(id))
+            .count();
+        let lost_stable = stable.iter().filter(|id| !remaining.contains(id)).count();
+        let unremoved = to_remove
+            .iter()
+            .chain(to_remove_many.iter())
+            .filter(|id| remaining.contains(id))
+            .count();
+        assert_eq!(
+            (lost_added, lost_stable, unremoved),
+            (0, 0, 0),
+            "lost {lost_added} added and {lost_stable} stable entries, {unremoved} removals \
+             undone; {} entries remain",
+            remaining.len()
+        );
+        assert_eq!(remaining, expected);
+        let stale_reorders: Vec<_> = expected_positions
+            .iter()
+            .filter(|(id, pos)| {
+                final_entries
+                    .iter()
+                    .find(|e| e.requirement_id == *id)
+                    .is_none_or(|e| e.position != *pos)
+            })
+            .collect();
+        assert!(
+            stale_reorders.is_empty(),
+            "{} reorders were overwritten by a concurrent writer: {stale_reorders:?}",
+            stale_reorders.len()
+        );
+        assert!(
+            final_entries.iter().all(|e| e.position != i64::MAX),
+            "the append sentinel must be resolved under the lock"
+        );
+        assert!(
+            std::fs::read_dir(root.join("registry/queues"))
+                .unwrap()
+                .flatten()
+                .all(|d| d.path().extension().and_then(|x| x.to_str()) == Some("yaml")),
+            "atomic-write staging files must not be left behind"
+        );
+    }
+
+    // An absent queue file is the empty queue (the writer may not have
+    // created it yet), and a missing parent directory is too: the read no
+    // longer depends on an `exists()` pre-check that a concurrent rename can
+    // invalidate.
+    #[test]
+    fn bug_1677_absent_queue_file_reads_as_empty_queue() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = bug1677_backend(&root);
+        assert!(backend.queue_list("nobody", false).unwrap().is_empty());
+        let missing = root.join("registry/queues/nobody.yaml");
+        assert!(GitBackend::read_queue_file(&missing).unwrap().is_empty());
+        std::fs::create_dir_all(root.join("registry/queues")).unwrap();
+        assert!(GitBackend::read_queue_file(&missing).unwrap().is_empty());
+        let unreadable = root.join("registry/queues");
+        assert!(
+            GitBackend::read_queue_file(&unreadable).is_err(),
+            "a real read error (a directory) must still surface"
+        );
+    }
+
+    // Each of the five writers blocks while ANOTHER thread holds the store
+    // lock and proceeds once it is released: the lock is really taken.
+    #[test]
+    fn bug_1677_queue_writers_block_while_another_thread_holds_the_store_lock() {
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = bug1677_backend(&root);
+        let seeded = bug1677_seed(&backend, "dan", 3, 0);
+        let (id_a, id_b, id_c) = (seeded[0], seeded[1], seeded[2]);
+
+        type Writer = Box<dyn FnOnce(&GitBackend) -> Result<()> + Send>;
+        let writers: Vec<(&str, Writer)> = vec![
+            (
+                "queue_add",
+                Box::new(|b: &GitBackend| b.queue_add(sample_queue_entry("dan", i64::MAX))),
+            ),
+            (
+                "queue_reorder",
+                Box::new(move |b: &GitBackend| b.queue_reorder("dan", &[(id_c, 5)])),
+            ),
+            (
+                "queue_remove_for_role",
+                Box::new(move |b: &GitBackend| b.queue_remove_for_role("dan", &id_a, None)),
+            ),
+            (
+                "queue_remove_many",
+                Box::new(move |b: &GitBackend| b.queue_remove_many("dan", &[id_b]).map(|_| ())),
+            ),
+            (
+                "queue_clear",
+                Box::new(|b: &GitBackend| b.queue_clear("dan", false)),
+            ),
+        ];
+        for (name, writer) in writers {
+            let guard = backend.lock_store().unwrap();
+            let (tx, rx) = mpsc::channel();
+            let r2 = root.clone();
+            let handle = std::thread::spawn(move || {
+                let b = bug1677_backend(&r2);
+                let result = writer(&b);
+                tx.send((Instant::now(), result)).unwrap();
+            });
+            std::thread::sleep(Duration::from_millis(200));
+            assert!(
+                rx.try_recv().is_err(),
+                "{name} must block while another thread holds the store lock"
+            );
+            let released = Instant::now();
+            drop(guard);
+            let (finished, result) = rx
+                .recv_timeout(Duration::from_secs(30))
+                .unwrap_or_else(|_| panic!("{name} never completed after the lock was released"));
+            handle.join().unwrap();
+            result.unwrap_or_else(|e| panic!("{name} failed: {e}"));
+            assert!(finished >= released, "{name} finished before the release");
+        }
+    }
+
+    // A caller that already holds the store lock on ITS OWN thread (as the
+    // cached backend's write paths do) can call every queue writer without
+    // deadlocking: the lock is re-entrant per thread. The channel timeout is
+    // the guard; the default lock wait is 120s, so a regression shows up here
+    // as a 30s failure rather than a hung test.
+    #[test]
+    fn bug_1677_queue_writers_reenter_a_store_lock_held_by_the_caller() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let (tx, rx) = mpsc::channel();
+        let handle = std::thread::spawn(move || {
+            let b = bug1677_backend(&root);
+            let run = || -> Result<usize> {
+                let _outer = b.lock_store()?;
+                let ids = bug1677_seed(&b, "erin", 3, 0);
+                b.queue_add(sample_queue_entry("erin", i64::MAX))?;
+                b.queue_reorder("erin", &[(ids[2], 5)])?;
+                b.queue_remove_for_role("erin", &ids[0], None)?;
+                let removed = b.queue_remove_many("erin", &[ids[1]])?;
+                anyhow::ensure!(removed.len() == 1);
+                let after_remove = b.queue_list("erin", false)?.len();
+                b.queue_clear("erin", false)?;
+                assert!(b.queue_list("erin", false)?.is_empty());
+                assert!(
+                    super::super::store_lock::held_by_this_thread(&root),
+                    "the caller's outer hold must survive the inner releases"
+                );
+                Ok(after_remove)
+            };
+            tx.send(run()).unwrap();
+        });
+        let result = rx
+            .recv_timeout(Duration::from_secs(30))
+            .expect("queue writers deadlocked against the caller's own store lock");
+        handle.join().unwrap();
+        assert_eq!(result.unwrap(), 2);
     }
 }

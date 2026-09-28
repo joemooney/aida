@@ -49,7 +49,24 @@ AIDA's MCP server exposes **58 tools** in six clusters:
 - `send_message({body, to?, broadcast?, thread?, in_reply_to?, from?})` → send an inter-agent peer message, equivalent to `aida mailbox send`. Address one agent via `to` or set `broadcast: true`. Distinct from briefs (operator→agent work) and directives (top-down control): agent↔agent conversation.
 - `read_inbox({agent?})` → an agent's inbox (messages to it + broadcasts, excluding own-sent, oldest-first), equivalent to `aida mailbox inbox`. Returns JSON `{agent, count, messages}`.
 - `list_features()` → list project features
-- `history({spec_id?, events?, type?, author?, since?, until?, limit?, shipped?, to?, from?, opened?, status_changes?, comments?, oneline?})` → structured event ledger, equivalent to `aida history events`. Mirrors the CLI filter surface (type/author/since/until/limit/shipped/to/from/opened/status-changes/comments); `to`/`from` take a status name and select transitions by target/source status, `opened` selects spec-creation events; `spec_id` accepts a raw UUID (resolved to its SPEC-ID). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all`.
+- `history({spec_id?, events?, type?, author?, since?, until?, limit?, shipped?, to?, from?, opened?, status_changes?, comments?, oneline?, template?, fields?})` → structured event ledger, equivalent to `aida history events`. Mirrors the CLI filter surface (type/author/since/until/limit/shipped/to/from/opened/status-changes/comments); `to`/`from` take a status name and select transitions by target/source status, `opened` selects spec-creation events; `spec_id` accepts a raw UUID (resolved to its SPEC-ID). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all`.
+
+`history` also accepts `template` (inline/named/qualified) for opt-in human text
+inside the existing MCP text envelope, or `fields` (ordered CSV) for ordered
+JSON event keys with the existing envelope. With neither parameter, the default JSON stays
+unchanged. These parameters are mutually exclusive and reject `oneline:true`;
+`template` rejects explicitly supplied `events:true` (omit it; the ledger is
+already the full feed). Bad values/combinations are `invalid_arg`. There are no
+MCP save/remove operations. Title is Added/Deleted/TitleChange's new value;
+priority is Added/PriorityChange's new value; comment is a CommentsAdded
+summary/count, never a body. Otherwise those fields are empty/null, without
+current-state backfill. Fields: commit,date,author,id,type,priority,title,kind,
+event,from,to,comment; dates in templates accept `:strftime`. See
+[history layouts](../cli/08-reporting.md#history-layouts-and-columns).
+For CLI parity use matching filters and explicit limits: MCP defaults to 100
+rows and at least 500 commits, and includes archived/deferred/META rows; CLI
+parity calls need `--all --include-meta --limit N --max-commits M`.
+<!-- trace:STORY-1477 | ai:codex -->
 
 These mirror the `aida list / show / add / edit / search / comment / history` CLI verbs. **Use them for any spec-graph interaction.** Don't shell out to `aida` for these. *(STORY-82 and EPIC-27 will modernize the older spec-graph tools to match the coordination tools' vocabulary and capability — until then, expect a thinner surface than the coordination cluster.)*
 

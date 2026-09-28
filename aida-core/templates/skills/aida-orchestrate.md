@@ -17,6 +17,16 @@ allowed-tools:
 
 # AIDA Orchestrate Skill
 
+## Seat status contract
+
+Report one explicit state: **actively working**, **actively watching**,
+**delegated** (name lanes and recipients), **paused**, or **turn ended**. Cite
+current `aida ps` or `aida integrate` output for any ongoing-work claim; if
+there is no evidence, say it cannot be verified. After this turn ends, never
+say “still working,” “continuing,” or equivalent about yourself. Delegated
+work is not your own active work. See `.aida/discipline/advisor-role.md`.
+<!-- trace:TASK-1557 | ai:codex -->
+
 ## Purpose
 
 Run the **orchestrator seat as the operator's proxy**, from start to finish.
@@ -314,12 +324,26 @@ state, PR/run ids); AWAITING OPERATOR; DEFERRED (+trigger); CLOSURE-PENDING
 EOF
 ```
 
-**Rotating out** (context ceiling or restart): dispatch nothing new; stop or let
+**The context ceiling is a soft limit.** Do not stop the loop because the
+conversation is getting long. The harness compacts the conversation
+automatically; the handoff you refresh after every batch is what survives that
+compaction, so a full context costs nothing the substrate does not already
+hold. After a compaction, re-read the handoff
+(`aida session handoff --seat orchestrator --show`), the open list and
+`aida ps`, then carry on with the next batch. If nobody is around, the open
+list keeps growing; a session that parks itself at an advisory ceiling stops
+all work until a human notices.
+
+**Rotating out** is reserved for two cases: the operator asks for it, or the
+session is genuinely broken (tools failing repeatedly, state you cannot
+reconcile with the substrate, a harness that will not compact). It hands off to
+a successor rather than stopping the loop: dispatch nothing new; stop or let
 finish every subagent, background shell and waiter until none is running; run
 `/goal clear` if a goal is set; write the handoff **last**; then tell the
-operator to exit with **Exit and stop tasks**, never "Move to background". A
-backgrounded session keeps driving the loop. If a session was backgrounded
-anyway, find it with `claude agents` and stop it with `claude stop <id>`.
+operator to start the successor and to exit this session with **Exit and stop
+tasks**, never "Move to background". A backgrounded session keeps driving the
+loop. If a session was backgrounded anyway, find it with `claude agents` and
+stop it with `claude stop <id>`.
 
 **Taking over:** before acting on the handoff, check for a live predecessor
 (`claude agents`, `ListAgents`, `aida ps`). If one is still running, message it

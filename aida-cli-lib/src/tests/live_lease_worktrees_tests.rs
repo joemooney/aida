@@ -28,6 +28,8 @@ fn lease_at(id: &str, worktree: &std::path::Path) -> SessionLease {
         review_verb: false,
         claim_verb: true,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 

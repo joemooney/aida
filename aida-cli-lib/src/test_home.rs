@@ -30,9 +30,14 @@
 //!    meant to exercise (the recorder would stop recording in tests only),
 //!    while a panic names the leaking call site in the failing test.
 //!
-//! A source-scan test (`no_direct_dirs_home_dir_in_crate`) keeps new code
-//! from calling `dirs::home_dir()` directly and bypassing layer 2.
+//! A source-scan test (`no_direct_home_resolution_in_crate`) keeps new code
+//! from calling `dirs::home_dir()` / `dirs::config_dir()`, or reading
+//! `HOME` / `USERPROFILE` / `APPDATA` directly, and bypassing layer 2. The
+//! production resolvers live in `aida_core::home`, which consults the
+//! environment before the platform lookup so the redirect also wins on
+//! Windows, where `dirs` ignores it. (TASK-1513)
 // trace:BUG-1642 | ai:claude
+// trace:TASK-1513 | ai:claude
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -40,7 +45,8 @@ use std::sync::OnceLock;
 struct Redirect {
     /// Home locations the operator's environment named at startup: the
     /// `dirs::home_dir()` answer, `$HOME`, `$USERPROFILE`, `$AIDA_HOME`,
-    /// `$AIDA_TEST_HOME`. None of them may be resolved as a home by a test.
+    /// `$AIDA_TEST_HOME`, and the password-database home. None of them may be
+    /// resolved as a home by a test.
     real_homes: Vec<PathBuf>,
     /// The per-process temp home every test inherits.
     test_home: PathBuf,
@@ -86,14 +92,126 @@ const CLEARED_PREFIX: &str = "AIDA_SESSION_";
         target_os = "illumos",
         target_os = "solaris"
     ),
-    link_section = ".init_array"
+    unsafe(link_section = ".init_array")
 )]
-#[cfg_attr(target_vendor = "apple", link_section = "__DATA,__mod_init_func")]
-#[cfg_attr(windows, link_section = ".CRT$XCU")]
+#[cfg_attr(
+    target_vendor = "apple",
+    unsafe(link_section = "__DATA,__mod_init_func")
+)]
+#[cfg_attr(windows, unsafe(link_section = ".CRT$XCU"))]
 static REDIRECT_HOME_BEFORE_MAIN: extern "C" fn() = redirect_home_before_main;
 
-extern "C" {
+// The `unsafe extern` block and the `unsafe(link_section = ..)` attributes
+// above are the forms edition 2024 requires; both are accepted on edition 2021
+// since Rust 1.82, so moving this workspace to 2024 needs no change here.
+// trace:TASK-1513 | ai:claude
+unsafe extern "C" {
     fn atexit(cb: extern "C" fn()) -> std::ffi::c_int;
+}
+
+/// Name prefix of the per-process temp homes [`create_test_home`] makes.
+const TEST_HOME_PREFIX: &str = "aida-lib-test-home-";
+
+/// The home recorded in the password database. `$HOME` cannot change it, so it
+/// fences the operator's real home even when the environment lies.
+// trace:TASK-1513 | ai:claude
+#[cfg(unix)]
+fn passwd_home() -> Option<PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+
+    // SAFETY: after the redirect, `$HOME` is always set and `dirs::home_dir()`
+    // returns it, so no other code in this process calls `getpw*` concurrently.
+    // The pointer stays valid until the next `getpw*` call on this thread.
+    let dir = unsafe {
+        let pw = libc::getpwuid(libc::getuid());
+        if pw.is_null() {
+            return None;
+        }
+        (*pw).pw_dir
+    };
+    if dir.is_null() {
+        return None;
+    }
+    // SAFETY: `pw_dir` is a NUL-terminated C string owned by libc.
+    let bytes = unsafe { std::ffi::CStr::from_ptr(dir) }.to_bytes();
+    (!bytes.is_empty()).then(|| PathBuf::from(std::ffi::OsStr::from_bytes(bytes)))
+}
+
+/// No password database to consult off unix.
+// trace:TASK-1513 | ai:claude
+#[cfg(not(unix))]
+fn passwd_home() -> Option<PathBuf> {
+    None
+}
+
+/// Is `pid` still running? "Unknown" counts as alive, so
+/// [`sweep_stale_test_homes`] only removes a directory whose owner is
+/// definitely gone.
+// trace:TASK-1513 | ai:claude
+fn pid_is_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        let Ok(pid) = libc::pid_t::try_from(pid) else {
+            return true;
+        };
+        // Never probe 0 or a negative pid: those address process *groups*.
+        if pid <= 0 {
+            return true;
+        }
+        // SAFETY: signal 0 performs the permission check only; nothing is
+        // delivered to the target process.
+        if unsafe { libc::kill(pid, 0) } == 0 {
+            return true;
+        }
+        // `EPERM` means alive but not ours; only `ESRCH` means gone.
+        std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        true
+    }
+}
+
+/// A test binary killed by a signal never runs its `atexit` hook, so its temp
+/// home survives in the temp dir. Remove the leftovers whose owning process is
+/// gone before this run makes its own. Best-effort throughout: a live pid's
+/// directory, a symlink, a directory owned by another user, and any I/O error
+/// are all left alone, and `install` never fails because of the sweep.
+// trace:TASK-1513 | ai:claude
+fn sweep_stale_test_homes(root: &Path, own_pid: u32, is_alive: &dyn Fn(u32) -> bool) -> usize {
+    // Enough to clear a backlog without stalling startup on a busy temp dir.
+    const MAX_SWEEP: usize = 64;
+
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return 0;
+    };
+    let mut swept = 0;
+    for entry in entries.flatten() {
+        if swept >= MAX_SWEEP {
+            break;
+        }
+        // `file_type` does not follow symlinks, so a symlinked directory is
+        // skipped rather than followed out of the temp dir.
+        if !entry.file_type().is_ok_and(|t| t.is_dir()) {
+            continue;
+        }
+        let name = entry.file_name();
+        let Some(pid) = name
+            .to_str()
+            .and_then(|n| n.strip_prefix(TEST_HOME_PREFIX))
+            .and_then(|p| p.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        if pid == own_pid || is_alive(pid) {
+            continue;
+        }
+        if std::fs::remove_dir_all(entry.path()).is_ok() {
+            swept += 1;
+        }
+    }
+    swept
 }
 
 fn non_empty_env(key: &str) -> Option<PathBuf> {
@@ -127,6 +245,8 @@ fn install() -> std::io::Result<()> {
         non_empty_env("USERPROFILE"),
         non_empty_env("AIDA_HOME"),
         non_empty_env("AIDA_TEST_HOME"),
+        // trace:TASK-1513 | ai:claude
+        passwd_home(),
     ]
     .into_iter()
     .flatten()
@@ -136,6 +256,8 @@ fn install() -> std::io::Result<()> {
         }
     }
 
+    // trace:TASK-1513 | ai:claude
+    sweep_stale_test_homes(&std::env::temp_dir(), std::process::id(), &pid_is_alive);
     let test_home = create_test_home()?;
 
     // Toolchains resolve from `$HOME` too; pin them to the real locations so
@@ -176,10 +298,26 @@ fn install() -> std::io::Result<()> {
     Ok(())
 }
 
+/// The real homes a nested test binary fences. `AIDA_LIB_TEST_REAL_HOMES` is a
+/// hint, not a guarantee: a test that spawns this binary can set it to anything
+/// (or to something useless), and trusting it alone would disable the fence.
+/// The password-database home cannot be forged from the environment, so it is
+/// fenced whatever the inherited list says.
+// trace:TASK-1513 | ai:claude
+fn nested_real_homes(mut inherited: Vec<PathBuf>) -> Vec<PathBuf> {
+    if let Some(pw) = passwd_home() {
+        if !inherited.contains(&pw) {
+            inherited.push(pw);
+        }
+    }
+    inherited
+}
+
 /// Constructor body for a test binary spawned by a test. Whatever home the
 /// spawning test chose is kept unless it names a real home; only a real home
 /// is replaced or cleared.
 fn install_nested(real_homes: Vec<PathBuf>) -> std::io::Result<()> {
+    let real_homes = nested_real_homes(real_homes);
     let is_real = |p: &Path| real_homes.iter().any(|r| r == p);
     let inherited = non_empty_env("HOME").filter(|h| !is_real(h));
     let (test_home, owned) = match inherited {
@@ -201,7 +339,7 @@ fn install_nested(real_homes: Vec<PathBuf>) -> std::io::Result<()> {
 }
 
 fn create_test_home() -> std::io::Result<PathBuf> {
-    let test_home = std::env::temp_dir().join(format!("aida-lib-test-home-{}", std::process::id()));
+    let test_home = std::env::temp_dir().join(format!("{TEST_HOME_PREFIX}{}", std::process::id()));
     // A leftover from a crashed run with a recycled pid is stale; start clean.
     let _ = std::fs::remove_dir_all(&test_home);
     std::fs::create_dir_all(test_home.join(".aida"))?;
@@ -222,7 +360,14 @@ unsafe fn set_home_vars(test_home: &Path) {
     unsafe {
         std::env::set_var("HOME", test_home);
         #[cfg(windows)]
-        std::env::set_var("USERPROFILE", test_home);
+        {
+            std::env::set_var("USERPROFILE", test_home);
+            // `aida_core::home::config_dir()` reads `%APPDATA%` before the
+            // platform lookup on Windows; point it inside the test home so the
+            // config dir is fenced there too.
+            // trace:TASK-1513 | ai:claude
+            std::env::set_var("APPDATA", test_home.join("AppData").join("Roaming"));
+        }
     }
 }
 
@@ -359,36 +504,222 @@ mod tests {
         assert!(clock.starts_with(test_home()), "{}", clock.display());
     }
 
-    /// No code in this crate may call `dirs::home_dir()` directly: it would
-    /// bypass [`crate::home_dir`]'s `cfg(test)` guard.
+    /// No code in this crate may resolve a home or config directory itself.
+    /// `dirs::home_dir()` bypasses [`crate::home_dir`]'s `cfg(test)` guard;
+    /// `dirs::config_dir()` and a direct `HOME` / `USERPROFILE` / `APPDATA`
+    /// read bypass [`aida_core::home`], which is what makes the redirect
+    /// effective on Windows. A deliberate exception carries an
+    /// `allow-direct-home-dir` marker on the line.
+    // trace:TASK-1513 | ai:claude
     #[test]
-    fn no_direct_dirs_home_dir_in_crate() {
-        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let needle = ["dirs", "::", "home_dir"].concat();
-        let mut offenders = Vec::new();
-        let mut stack = vec![src];
-        while let Some(dir) = stack.pop() {
-            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-                let p = entry.path();
-                if p.is_dir() {
-                    stack.push(p);
-                } else if p.extension().is_some_and(|e| e == "rs") {
-                    let text = std::fs::read_to_string(&p).unwrap();
-                    for (i, line) in text.lines().enumerate() {
-                        let allowed = p.ends_with("test_home.rs")
-                            || line.trim_start().starts_with("//")
-                            || line.contains("allow-direct-home-dir");
-                        if line.contains(&needle) && !allowed {
-                            offenders.push(format!("{}:{}", p.display(), i + 1));
-                        }
-                    }
-                }
-            }
-        }
+    fn no_direct_home_resolution_in_crate() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let offenders = raw_home_lookup_offenders(root);
         assert!(
             offenders.is_empty(),
-            "use crate::home_dir() instead of calling the dirs crate directly:\n{}",
+            "use shared home/config resolvers instead of resolving a home directory directly:\n{}",
             offenders.join("\n")
         );
+    }
+
+    #[test]
+    fn raw_home_lookup_scan_catches_std_home_multiline_and_decoy_exemptions() {
+        let temp = tempfile::tempdir().unwrap();
+        let src = temp.path().join("aida-core/src");
+        std::fs::create_dir_all(src.join("foo")).unwrap();
+        std::fs::write(src.join("home.rs"), "fn f() { std::env::home_dir(); }\n").unwrap();
+        std::fs::write(
+            src.join("foo/home.rs"),
+            "fn f() { std::env::home_dir(); }\n",
+        )
+        .unwrap();
+        std::fs::write(src.join("other.rs"), "std::env::var_os(\n \"HOME\"\n);\n").unwrap();
+        let found = raw_home_lookup_offenders(temp.path());
+        assert_eq!(found.len(), 2, "{found:#?}");
+        assert!(found.iter().any(|p| p.ends_with("foo/home.rs:1")));
+        assert!(found.iter().any(|p| p.ends_with("other.rs:1")));
+    }
+
+    /// The shared `aida-core` resolvers follow the redirected home too, so a
+    /// lib test that reaches a `~/.config/aida` writer through `aida-core`
+    /// stays inside the temp home. On unix `dirs::config_dir()` is
+    /// `$XDG_CONFIG_HOME` or `$HOME/.config` and the constructor cleared the
+    /// former; on Windows the constructor redirects `%APPDATA%`.
+    // trace:TASK-1513 | ai:claude
+    #[test]
+    fn core_resolvers_follow_the_redirected_home() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("XDG_CONFIG_HOME", None)]);
+        assert_eq!(
+            aida_core::home::home_dir().as_deref(),
+            Some(test_home()),
+            "aida-core must resolve the temp home"
+        );
+        let config = aida_core::home::config_dir().expect("config dir");
+        assert!(config.starts_with(test_home()), "{}", config.display());
+    }
+
+    /// A bogus (or empty) inherited `AIDA_LIB_TEST_REAL_HOMES` must not
+    /// disable the fence: the password-database home is added regardless.
+    // trace:TASK-1513 | ai:claude
+    #[test]
+    fn nested_real_homes_fences_the_passwd_home_whatever_was_inherited() {
+        let bogus = vec![PathBuf::from("/nonexistent/forged-home")];
+        let homes = nested_real_homes(bogus.clone());
+        assert!(homes.starts_with(&bogus), "the inherited list is kept");
+
+        match passwd_home() {
+            Some(pw) => {
+                assert!(
+                    homes.contains(&pw),
+                    "the password-database home {} must be fenced",
+                    pw.display()
+                );
+                assert!(!bogus.contains(&pw), "the bogus list did not name it");
+                // Added once, not on every call.
+                assert_eq!(nested_real_homes(homes.clone()), homes);
+            }
+            // No password database on this platform: the inherited list is all
+            // there is, and the fence is unchanged.
+            None => assert_eq!(homes, bogus),
+        }
+    }
+
+    /// Only a directory whose owning process is gone is swept: a live pid's
+    /// directory, this process's own, an unrelated name and a regular file all
+    /// survive.
+    // trace:TASK-1513 | ai:claude
+    #[test]
+    fn stale_test_home_dirs_are_swept_only_for_dead_pids() {
+        let root = test_home().join("sweep-fixture");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let dead = root.join(format!("{TEST_HOME_PREFIX}1001"));
+        let live = root.join(format!("{TEST_HOME_PREFIX}1002"));
+        let own = root.join(format!("{TEST_HOME_PREFIX}{}", std::process::id()));
+        let unrelated = root.join("not-a-test-home");
+        for dir in [&dead, &live, &own, &unrelated] {
+            // A non-empty directory, so a shallow `remove_dir` would not do.
+            std::fs::create_dir_all(dir.join(".aida")).unwrap();
+        }
+        let file = root.join(format!("{TEST_HOME_PREFIX}1003"));
+        std::fs::write(&file, b"not a directory").unwrap();
+
+        let swept = sweep_stale_test_homes(&root, std::process::id(), &|pid| pid == 1002);
+
+        assert_eq!(swept, 1, "only the dead pid's directory is removed");
+        assert!(!dead.exists(), "the dead pid's temp home is gone");
+        assert!(live.is_dir(), "a live pid's temp home is untouched");
+        assert!(own.is_dir(), "this process's own temp home is untouched");
+        assert!(unrelated.is_dir(), "an unrelated directory is untouched");
+        assert!(file.is_file(), "a regular file is never removed");
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// The liveness probe errs towards "alive": a pid outside `pid_t`, and the
+    /// process-group pid 0, are never treated as sweepable.
+    // trace:TASK-1513 | ai:claude
+    #[test]
+    fn pid_is_alive_errs_towards_alive() {
+        assert!(pid_is_alive(std::process::id()), "this process is alive");
+        assert!(
+            pid_is_alive(0),
+            "pid 0 addresses a process group; never sweep"
+        );
+        assert!(pid_is_alive(u32::MAX), "outside pid_t: unknown, so alive");
+        #[cfg(unix)]
+        {
+            // Far above every platform's `pid_max`, so it cannot exist.
+            let impossible = i32::MAX as u32 - 1;
+            assert!(!pid_is_alive(impossible), "an impossible pid is gone");
+        }
+    }
+}
+
+// trace:TASK-1553 | ai:codex
+fn raw_home_lookup_offenders(workspace: &Path) -> Vec<String> {
+    let needles = [
+        "dirs::home_dir",
+        "dirs::config_dir",
+        "std::env::home_dir",
+        "var(\"HOME\")",
+        "var_os(\"HOME\")",
+        "var(\"USERPROFILE\")",
+        "var_os(\"USERPROFILE\")",
+        "var(\"APPDATA\")",
+        "var_os(\"APPDATA\")",
+    ];
+    let allowed = [
+        workspace.join("aida-core/src/home.rs"),
+        workspace.join("aida-cli-lib/src/test_home.rs"),
+    ];
+    let mut files = Vec::new();
+    for member in [
+        "aida-core",
+        "aida-cli-lib",
+        "aida-server",
+        "aida-tui",
+        "aida-cli",
+        "aida-crate",
+        "aida-generate-types",
+    ] {
+        let base = workspace.join(member);
+        for rel in ["src", "tests"] {
+            let dir = base.join(rel);
+            if dir.is_dir() {
+                collect_rust_files(&dir, &mut files);
+            }
+        }
+        let build = base.join("build.rs");
+        if build.is_file() {
+            files.push(build);
+        }
+    }
+    let mut offenders = Vec::new();
+    for path in files {
+        if allowed.iter().any(|p| *p == path) {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let mut normalized = String::new();
+        let mut lines = Vec::new();
+        for (index, line) in text.lines().enumerate() {
+            if line.trim_start().starts_with("//") || line.contains("allow-direct-home-dir") {
+                continue;
+            }
+            for ch in line.chars().filter(|c| !c.is_whitespace()) {
+                normalized.push(ch);
+                lines.push(index + 1);
+            }
+        }
+        for needle in needles {
+            let needle: String = needle.chars().filter(|c| !c.is_whitespace()).collect();
+            let mut start = 0;
+            while let Some(offset) = normalized[start..].find(&needle) {
+                let pos = start + offset;
+                offenders.push(format!("{}:{}", path.display(), lines[pos]));
+                start = pos + needle.len();
+            }
+        }
+    }
+    offenders.sort();
+    offenders.dedup();
+    offenders
+}
+
+fn collect_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rust_files(&path, out);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            out.push(path);
+        }
     }
 }

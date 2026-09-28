@@ -601,11 +601,9 @@ pub(crate) fn handle_reconstitute_command(
     Ok(())
 }
 
+// trace:TASK-1513 | ai:claude
 fn dirs_home() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
-        .unwrap_or_else(std::env::temp_dir)
+    crate::home_dir().unwrap_or_else(std::env::temp_dir)
 }
 
 /// Remove expired scratch runs, then retain at most `keep` of the newest

@@ -3469,15 +3469,32 @@ pub enum RemoteCommand {
 
     /// (plumbing) Fan the refs of an in-flight `git push` out to every mirror
     /// hub. The pre-push hook shim calls this with the pushed remote's name,
-    /// piping through the ref lines git feeds the hook on stdin. No-op unless
-    /// the push targets `origin`; skips the store branch (the store leg fans
-    /// out separately); always exits 0 so a mirror failure never blocks the
-    /// push.
-    // trace:TASK-1097 | ai:claude
+    /// piping through the ref lines git feeds the hook on stdin. Says why it
+    /// skipped when the push does not target `origin` or carries only the
+    /// store branch; exits non-zero when a mirror push fails (the hook shim
+    /// tolerates that, so the origin push is never blocked).
+    // trace:TASK-1097 trace:BUG-1676 | ai:claude
     #[clap(hide = true)]
     MirrorPush {
         /// The remote the triggering push targets (hook argument $1).
         pushed_remote: String,
+        /// Preview mirror updates without changing any mirror remote.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
+    /// Push origin's tips of the default branch and the spec store to every
+    /// mirror hub, by sha. The pre-push hook only mirrors what this machine
+    /// pushes; a merge performed on the forge and a store push from another
+    /// clone never fire it, so mirrors drift. `aida pull` runs this after a
+    /// successful pull; run it by hand when `aida remote status` shows a hub
+    /// behind. Never force-pushes: a diverged hub is reported and exits
+    /// non-zero.
+    // trace:BUG-1676 | ai:claude
+    MirrorSync {
+        /// Emit machine-readable JSON instead of the report.
+        #[clap(long)]
+        json: bool,
     },
 
     /// Reconcile a diverged spec store across every configured hub: fetch each
@@ -8094,7 +8111,25 @@ pub enum UpgradeCommand {
 pub enum HistoryCommand {
     /// Switch to per-event chronological mode.
     // trace:STORY-1028 | ai:codex
-    Events,
+    Events {
+        /// Output structured event JSON.
+        // trace:STORY-1477 | ai:codex — JSON belongs to event views, not management.
+        #[clap(long, conflicts_with = "template")]
+        json: bool,
+    },
+    /// List scoped templates and shadowing; builtins full/oneline are legacy mode aliases.
+    // trace:STORY-1477 | ai:codex
+    Templates {
+        #[clap(subcommand)]
+        cmd: Option<HistoryTemplatesCommand>,
+    },
+}
+
+// trace:STORY-1477 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum HistoryTemplatesCommand {
+    /// Remove exactly user:NAME or project:NAME (explicit scope required).
+    Rm { name: String },
 }
 
 // trace:STORY-248 | ai:claude
@@ -8163,9 +8198,18 @@ pub enum BriefCommand {
 pub enum AgentCommand {
     /// Launch a new agent process.
     ///
-    /// This lane spawns a one-shot agent that does its work, ships a PR, and
-    /// exits. It is NOT the orchestrated pipeline — it does not run CI, the
-    /// reviewer phase, or the merge for you. For a supervised end-to-end drain
+    /// This lane spawns an INTERACTIVE agent in the foreground and BLOCKS until that
+    /// agent's session exits. A vendor TUI does not exit when its turn ends — it returns
+    /// to its prompt — so a seat that has finished its work still holds this command.
+    /// Budget for that: run it where you can leave it, or stop the seat with
+    /// `aida agent stop <name>` once it reports. To tell a finished seat from a working
+    /// one without attaching, read the CPU column in `aida agent status`: seconds of CPU
+    /// across hours of age means the seat is idle at its prompt. Do NOT rely on the
+    /// `status` column for that — it reports `busy` for a seat whose worktree any live
+    /// lease covers, which for the main checkout is effectively always.
+    ///
+    /// It is also NOT the orchestrated pipeline — it does not run CI, the reviewer
+    /// phase, or the merge for you. For a supervised end-to-end drain
     /// (implementer → CI → reviewer → merge → pull), use
     /// `aida queue work <SPEC> --auto-complete` instead.
     // trace:TASK-626 | ai:claude — plain `//` keeps the marker out of `--help`.
@@ -8411,8 +8455,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Claude session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]
@@ -8548,8 +8599,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Codex session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]
@@ -8669,8 +8727,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Antigravity session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]
@@ -9545,14 +9610,24 @@ pub enum Command {
         cmd: Option<GraphCommand>,
     },
 
-    /// Report acceptance criteria traced by Rust, pytest, JS/TS, and Go tests.
+    /// Report acceptance criteria traced by Rust, pytest, JS/TS, and Go tests,
+    /// or — with `coverage` (alias `gap`) in place of a spec — the project's
+    /// capture-coverage figures: trailer share, criteria share, and the
+    /// criterion-to-test share, each as count/total.
     Criteria {
-        /// Requirement ID (UUID or SPEC-ID) whose acceptance criteria to inspect.
+        /// Requirement ID (UUID or SPEC-ID) whose acceptance criteria to
+        /// inspect, or `coverage` / `gap` for the project-wide report.
         spec: String,
 
         /// Emit JSON instead of a human report.
         #[clap(long)]
         json: bool,
+
+        /// Lookback window in days for the project-wide report (the all-time
+        /// figures are always shown alongside). Ignored for a single spec.
+        // trace:STORY-1487 | ai:claude
+        #[clap(long, default_value_t = crate::criteria_coverage::DEFAULT_WINDOW_DAYS, value_name = "DAYS")]
+        window_days: u64,
     },
 
     /// Harvest what a diff established into the spec: a headless agent proposes
@@ -12844,6 +12919,30 @@ pub enum Command {
         #[clap(value_name = "SPEC_ID", conflicts_with = "id")]
         spec: Option<String>,
 
+        /// Human event layout: a name (user > project > builtin), or inline when it
+        /// contains `{`. Fields: commit,date[:strftime],author,id,type,priority,title,
+        /// kind,event,from,to,comment. Escape {{/}}. Title is Added/Deleted/TitleChange;
+        /// priority is Added/PriorityChange; otherwise empty. Comment is a count/summary,
+        /// never a body. No literal newlines; max 4096 bytes, rendered line 16384 bytes.
+        // trace:STORY-1477 | ai:codex
+        #[clap(long, global = true, conflicts_with_all = ["fields", "oneline", "full", "events", "kind"])]
+        template: Option<String>,
+
+        /// Ordered event columns: commit,date,author,id,type,priority,title,kind,event,
+        /// from,to,comment. Selects the full feed in human/TOON/JSON. Missing values
+        /// are empty cells or JSON null; title/priority/comment are event-local.
+        #[clap(long, global = true, conflicts_with_all = ["oneline", "kind"])]
+        fields: Option<String>,
+
+        /// Save the inline template as [user:|project:]NAME; user is the default.
+        /// Names: [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing.
+        #[clap(long, global = true, requires = "template")]
+        save_as_template: Option<String>,
+
+        /// Overwrite a template in the selected scope (only with --save-as-template).
+        #[clap(long, global = true, requires = "save_as_template")]
+        force: bool,
+
         /// Number of items to show. In digest mode (default) this caps
         /// the number of distinct requirements; in events mode it
         /// caps the number of decoded events.
@@ -12867,7 +12966,7 @@ pub enum Command {
         /// commit; useful for inspecting one requirement closely with
         /// --id, less useful as a general overview. `--full` is the more
         /// discoverable spelling of the same mode.
-        #[clap(long, hide = true)]
+        #[clap(long, hide = true, global = true)]
         events: bool,
 
         /// The complete edit/event trail — every status change, comment,
@@ -13022,7 +13121,7 @@ pub enum Command {
         /// `--format json` is the same.
         // trace:BUG-1631 | ai:claude
         // trace:BUG-1635 | ai:claude
-        #[clap(long, global = true)]
+        #[clap(long, conflicts_with = "template")]
         json: bool,
 
         /// Include archived AND deferred requirements (everything-escape-hatch).
@@ -13053,6 +13152,27 @@ pub enum Command {
         // trace:STORY-737 | ai:claude
         #[clap(long, global = true)]
         include_meta: bool,
+
+        /// Where one spec's elapsed time actually went: a chronological list
+        /// of spans, each labelled `work`, `wait` or `unknown`, rebuilt from
+        /// the store's status transitions, the local drain feed, and the
+        /// pull-request and CI timestamps when a forge CLI is available.
+        /// Requires one SPEC-ID. Time that no source accounts for is shown as
+        /// its own `unknown` span and counted separately — it is never folded
+        /// into the span beside it, so the totals cannot overstate how much of
+        /// the window was really measured. Renders human, TOON and JSON; the
+        /// windowing and event-selector flags are refused rather than
+        /// silently producing partial totals that read as complete.
+        // trace:STORY-1478 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(
+            long,
+            conflicts_with_all = [
+                "full", "events", "status_changes", "comments", "oneline",
+                "shipped", "opened", "to", "from", "kind", "since", "until",
+                "max_commits", "type", "author", "all", "archived", "deferred",
+            ]
+        )]
+        timeline: bool,
 
         /// History view. `events` switches to the full chronological feed
         /// (same as `--full`); most day-to-day use never needs it — the
@@ -14245,8 +14365,9 @@ mod tests {
         let cli = Cli::try_parse_from(["aida", "remote", "mirror-push", "origin"]).unwrap();
         assert!(matches!(
             cli.command,
-            Command::Remote(RemoteCommand::MirrorPush { pushed_remote })
+            Command::Remote(RemoteCommand::MirrorPush { pushed_remote, dry_run })
                 if pushed_remote == "origin"
+                    && !dry_run
         ));
     }
 
@@ -15355,7 +15476,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 ..
             }
         ));
@@ -15376,7 +15497,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 id: Some(ref id),
                 ..
             } if id == "BUG-1474"
@@ -15387,7 +15508,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 id: Some(ref id),
                 ..
             } if id == "BUG-1474"
@@ -15407,7 +15528,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 id: Some(ref id),
                 status_changes: true,
                 ..
@@ -15461,7 +15582,7 @@ mod tests {
             cli.command,
             Command::History {
                 spec: None,
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 ..
             }
         ));
