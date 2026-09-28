@@ -22,12 +22,12 @@ description: |
   4. State plainly whether the retry masks a real product defect or is only a test-harness concern, since production already retries.
 
   Out of scope: the Windows shebang variant (BUG-1453, rejected) and any macOS/Windows-only fixture work, per ADR-62.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:20:05.111602861Z
-modified_at: 2026-09-28T16:17:09.730822153Z
+modified_at: 2026-09-28T18:30:59.434596585Z
 req_type: Bug
 tags:
 - flaky ci test-infra etxtbsy linux
@@ -191,6 +191,22 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a0e948-d460-7f80-8ab5-e0e237c890e6
+  author: aida-auto-bump
+  timestamp: 2026-09-28T18:30:59.424278639Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e948-d46a-7871-9fc3-67f41740ea89
+  timestamp: 2026-09-28T18:30:59.434582811Z
+  agent: aida
+  commit_sha: b04601845909f555a23c71fa3548fc5c967d8659
+  summary: 'CI green at 5eb65ffa21 (rerun of 36456353704: success, 0 failed steps). Codex implemented under advisor brief; advisor reviewed the diff independently. Routes 3 bare gh spawns through process_retry::command_output_retrying_etxtbsy (fetch_pr_info_via_gh_bin, finish_ceremony_pr_base, fetch_pr_ship_metadata_via_gh). Verified by hand: current_dir(project_root) preserved where it was set, NotFound and generic spawn-error mappings preserved verbatim, and the previously-failing test preflight_detects_real_stale_overlap_before_reviewer_launch now passes. Note the earlier trace-gate failure (''refusing to merge unrelated histories'' at git -C .aida-store merge --ff-only) was TRANSIENT — it cleared on rerun with no code change; it is not caused by this branch.'
+  punted:
+  - 'punted: REQUEST CHANGES (advisor, exact head). PR #2256''s test-infra refactor (centralize executable fixtures) BREAKS a test that passes on main: pr_cmd::task_471_stale_base_preflight_tests::preflight_detects_real_stale_overlap_before_reviewer_launch, panicking at task_471_stale_base_preflight_tests.rs:131:80. I verified this is NOT a pre-existing flake and NOT CI infrastructure - the same test passes locally on current main - so the regression belongs to this branch. Required Build is therefore legitimately failing and the merge-hold is correct. Most likely the centralized fixture no longer produces the executable bit or the path shape that preflight test depends on. Fix and re-review at the new head.'
+  review_verdict: approved
 execution_mode: drive
 implementation_info:
   implemented: true
@@ -201,4 +217,6 @@ implementation_info:
     cargo test -p aida-cli-lib task_1424_gitlab_mirror_link_tests
   implemented_at: 2026-09-28T12:20:57.138708481Z
   implemented_by: joe
+  completed_at: 2026-09-28T18:30:59.424239127Z
+  completion_sha: b04601845909f555a23c71fa3548fc5c967d8659
 interface_changes: {}
