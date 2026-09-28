@@ -201,10 +201,51 @@ fn normalize_volatile(mut value: serde_json::Value) -> serde_json::Value {
     // Separate process invocations can cross a one-second boundary while
     // reporting the same session. The contract is the field/schema and all
     // stable values, not equality of a live elapsed-time sample.
+    // trace:BUG-1692 | ai:codex
+    // History can switch from a git walk to its warmed cache between these
+    // invocations; source and index_tip describe that provenance, not the
+    // history answer, so keep comparing count and every event field below.
     if let Some(object) = value.as_object_mut() {
         object.remove("idle_secs");
+        object.remove("source");
+        object.remove("index_tip");
     }
     value
+}
+
+#[test]
+fn history_json_comparison_ignores_cache_provenance_only() {
+    let walked = serde_json::json!({
+        "source": "git-walk",
+        "index_tip": null,
+        "count": 1,
+        "events": [{"id": "event-1", "kind": "spec.created"}],
+    });
+    let cached = serde_json::json!({
+        "source": "history-cache",
+        "index_tip": "abc123",
+        "count": 1,
+        "events": [{"id": "event-1", "kind": "spec.created"}],
+    });
+
+    assert_eq!(
+        normalize_volatile(walked.clone()),
+        normalize_volatile(cached.clone())
+    );
+
+    let mut different_count = cached.clone();
+    different_count["count"] = serde_json::json!(2);
+    assert_ne!(
+        normalize_volatile(walked.clone()),
+        normalize_volatile(different_count)
+    );
+
+    let mut different_event = cached;
+    different_event["events"][0]["kind"] = serde_json::json!("spec.updated");
+    assert_ne!(
+        normalize_volatile(walked),
+        normalize_volatile(different_event)
+    );
 }
 
 #[test]
