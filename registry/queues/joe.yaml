@@ -1,4 +1,11 @@
 - user_id: joe
+  requirement_id: 01a0de72-a5c3-7492-a40a-661419255153
+  position: -1000
+  added_by: joe
+  note: Re-drive after launch failed because Codex used read-only /home/joe/.codex; retry with clone-local writable CODEX_HOME.
+  added_at: 2026-09-28T09:53:18.330608386Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 01a0e001-439c-7d92-8bdf-202d939603d9
   position: 0
   added_by: joe
@@ -130,12 +137,5 @@
   position: 50000
   added_by: joe
   added_at: 2026-09-28T09:28:57.783892957Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0de72-a5c3-7492-a40a-661419255153
-  position: 51000
-  added_by: joe
-  added_at: 2026-09-28T09:51:23.986772909Z
   for_role: implementer
   added_by_machine: imac
