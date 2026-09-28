@@ -53,7 +53,8 @@ fn no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup() {
     for path in files {
         let source = std::fs::read_to_string(&path).unwrap();
         let count = source.matches(needle).count();
-        let allowed = usize::from(path == src_dir.join("lib.rs"));
+        let allowed =
+            usize::from(path == src_dir.join("lib.rs") || path == src_dir.join("aida_bin.rs"));
         assert_eq!(
             count,
             allowed,

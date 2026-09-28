@@ -264,6 +264,19 @@ mod tests {
         let b = tempfile::tempdir().unwrap();
         let over = binary(a.path(), "release");
         let override_debug = binary(a.path(), "debug");
+        let release_time =
+            std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000);
+        let release_file = std::fs::File::open(&over).unwrap();
+        release_file
+            .set_times(std::fs::FileTimes::new().set_modified(release_time))
+            .unwrap();
+        let debug_file = std::fs::File::open(&override_debug).unwrap();
+        debug_file
+            .set_times(
+                std::fs::FileTimes::new()
+                    .set_modified(release_time + std::time::Duration::from_secs(10)),
+            )
+            .unwrap();
         let running = binary(b.path(), "debug");
         let pathdir = tempfile::tempdir().unwrap();
         std::fs::write(pathdir.path().join("aida"), "#!/bin/sh\n").unwrap();
