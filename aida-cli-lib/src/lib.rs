@@ -28738,16 +28738,46 @@ fn load_agents_mcp(project_root: &std::path::Path) -> Result<session::AgentMcpSu
     Ok(surface)
 }
 
+/// Read `[agents] <key>` as a string.
+///
+/// A key that is PRESENT but not a string is an error, not a miss. `as_str()`
+/// alone returns `None` for `mcp = true` exactly as it does for an absent key,
+/// so the caller would silently fall back to its default -- which for
+/// `[agents] mcp` means a seat launches on `off` while the operator believes
+/// they configured `aida` or `native`. TASK-1558's documented contract is that
+/// an unrecognised value FAILS the launch rather than falling back; that has to
+/// cover a wrong TYPE too, or the guard fails open on the most likely typo.
 // trace:TASK-1558 | ai:claude
 fn read_agents_string_from_file(path: &std::path::Path, key: &str) -> Result<Option<String>> {
     let Some(value) = parse_agents_toml(path)? else {
         return Ok(None);
     };
-    Ok(value
-        .get("agents")
-        .and_then(|agents| agents.get(key))
-        .and_then(|v| v.as_str())
-        .map(str::to_string))
+    let Some(found) = value.get("agents").and_then(|agents| agents.get(key)) else {
+        return Ok(None);
+    };
+    match found.as_str() {
+        Some(s) => Ok(Some(s.to_string())),
+        None => anyhow::bail!(
+            "`[agents] {key}` in {} must be a quoted string, but is {} — \
+             fix the value (or remove the key to take the default) and retry",
+            path.display(),
+            agents_toml_type_name(found)
+        ),
+    }
+}
+
+/// TOML type name for an `[agents]` value, for the wrong-type refusal above.
+// trace:TASK-1558 | ai:claude
+fn agents_toml_type_name(value: &toml::Value) -> &'static str {
+    match value {
+        toml::Value::String(_) => "a string",
+        toml::Value::Integer(_) => "an integer",
+        toml::Value::Float(_) => "a float",
+        toml::Value::Boolean(_) => "a boolean",
+        toml::Value::Datetime(_) => "a datetime",
+        toml::Value::Array(_) => "an array",
+        toml::Value::Table(_) => "a table",
+    }
 }
 
 // trace:STORY-567 | ai:codex
@@ -64127,6 +64157,10 @@ fn worktree_pool_hooks_from_config(value: &toml::Value, key: &str) -> Vec<String
 #[cfg(test)]
 #[path = "tests/task_1010_prewarm_tests.rs"]
 mod task_1010_prewarm_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1558_agents_mcp_type_tests.rs"]
+mod task_1558_agents_mcp_type_tests;
 
 fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
     let project_root = find_project_root()?;
