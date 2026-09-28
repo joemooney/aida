@@ -2956,9 +2956,8 @@ pub(crate) fn pr_ship_handler(
             );
         }
         eprintln!("  step 6: pruning verified merged agent worktrees");
-        if let Err(e) = doctor_cmd::run_merged_agent_worktree_gc(
-            /* yes */ true, /* force */ true, /* json */ false,
-        ) {
+        // trace:BUG-1718 | ai:codex
+        if let Err(e) = doctor_cmd::run_merged_agent_worktree_gc_quiet() {
             eprintln!(
                 "  {} post-merge worktree gc failed or was partially applied: {e:#}",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow()

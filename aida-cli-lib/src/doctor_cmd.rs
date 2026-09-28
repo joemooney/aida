@@ -42,6 +42,7 @@ pub(crate) fn handle_doctor_command(
             all,
             since: since.map(str::to_string),
             fail_on_findings: false,
+            quiet_output: false,
         });
     };
     match cmd {
@@ -111,6 +112,7 @@ pub(crate) fn handle_doctor_command(
                 all: all || *sub_all,
                 since: since.map(str::to_string),
                 fail_on_findings: *fail_on_findings,
+                quiet_output: false,
             })
         }
         cli::DoctorCommand::Heal {
@@ -128,6 +130,7 @@ pub(crate) fn handle_doctor_command(
             all: all || *sub_all,
             since: since.map(str::to_string),
             fail_on_findings: false,
+            quiet_output: false,
         }),
         cli::DoctorCommand::MigrateCounterScope {
             to,
@@ -309,6 +312,22 @@ pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -
         all: false,
         since: None,
         fail_on_findings: false,
+        quiet_output: false,
+    })
+}
+
+// trace:BUG-1718 | ai:codex
+pub(crate) fn run_merged_agent_worktree_gc_quiet() -> Result<()> {
+    doctor_multi_agent(DoctorRunOptions {
+        heal: true,
+        yes: true,
+        category: Some("merged-agent-worktrees".to_string()),
+        json: false,
+        force: true,
+        all: false,
+        since: None,
+        fail_on_findings: false,
+        quiet_output: true,
     })
 }
 
@@ -333,6 +352,8 @@ struct DoctorRunOptions {
     /// rather than a contract change to a shared surface.
     // trace:STORY-1422 | ai:claude
     fail_on_findings: bool,
+    // trace:BUG-1718 | ai:codex
+    quiet_output: bool,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -631,7 +652,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
     }
 
-    if opts.json {
+    if opts.quiet_output {
+        let reclaimed = report
+            .findings
+            .iter()
+            .filter(|finding| finding.summary.contains("is mergeable-and-gone"))
+            .count();
+        eprintln!("  ✓ merged-agent-worktrees cleanup checked ({reclaimed} reclaimable); details: `aida doctor --category merged-agent-worktrees`");
+    } else if opts.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         render_doctor_report(&report, opts.heal)?;
@@ -648,6 +676,11 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         if opts.category.is_none() {
             print_doctor_status_diagnostics(&project_root, &store);
         }
+    }
+
+    // trace:BUG-1718 | ai:codex
+    if opts.quiet_output {
+        return Ok(());
     }
 
     // STORY-1127: permission posture is intended as a check/gate category: a
@@ -4365,6 +4398,14 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
                 facts.unique_unmerged_commits
             ));
         }
+        if facts.spec_trailer_on_main {
+            // trace:BUG-1718 | ai:codex
+            return AgentWorktreeVerdict::Keep(format!(
+                "{merged_reason}; {} unique unmerged commit(s) are a squash-ancestry artifact from a \
+                 batched integration merge, and content is undecidable — no action required",
+                facts.unique_unmerged_commits
+            ));
+        }
         return AgentWorktreeVerdict::Keep(format!(
             "{merged_reason}, but {} unique unmerged commit(s) — keep, operator decision",
             facts.unique_unmerged_commits
@@ -4765,6 +4806,11 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
 
     let mut findings = Vec::new();
     for wt in list_worktrees(project_root) {
+        // Missing registrations are stale bookkeeping, not actionable findings.
+        // trace:BUG-1718 | ai:codex
+        if !wt.path.exists() {
+            continue;
+        }
         let wt_canon = wt.path.canonicalize().unwrap_or_else(|_| wt.path.clone());
         // Never touch the main worktree or the store worktree.
         if wt_canon == project_canon || wt.branch.as_deref() == Some("aida-store") {
@@ -4887,19 +4933,15 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
         // on the default branch names it in a trailer instead. Local and cheap, so
         // it runs before (and can spare) the forge lookup.
         // trace:TASK-1534 | ai:antigravity
-        let spec_trailer_on_main = if !ancestor_of_main && !dirty {
-            candidate_specs.iter().any(|spec| {
-                crate::session_reap::spec_trailer_landed_on(
-                    project_root,
-                    &default_ref,
-                    branch,
-                    spec,
-                )
+        // trace:BUG-1718 | ai:codex
+        let landing_commit = if !ancestor_of_main && !dirty {
+            candidate_specs.iter().find_map(|spec| {
+                crate::session_reap::spec_landing_commit(project_root, &default_ref, branch, spec)
             })
         } else {
-            false
+            None
         };
-
+        let spec_trailer_on_main = landing_commit.is_some();
         // Only consult the forge when the cheap ancestry/trailer probes were
         // inconclusive (covers the single-PR squash-merge case) and the worktree
         // is clean — a dirty worktree is kept regardless, so skip the network call.
@@ -4957,6 +4999,12 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
                 });
             }
             AgentWorktreeVerdict::Keep(reason) => {
+                // trace:BUG-1718 | ai:codex
+                let action = if reason.contains("no action required") {
+                    "no action required — kept because batched content is undecidable".to_string()
+                } else {
+                    "operator decision: review and keep, open a PR, or remove by hand".to_string()
+                };
                 findings.push(DoctorFinding {
                     category: "merged-agent-worktrees".to_string(),
                     id: wt.path.display().to_string(),
@@ -4964,7 +5012,7 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
                         "agent worktree {} on `{branch}` flagged: {reason}",
                         wt.path.display()
                     ),
-                    action: "operator decision: review and keep, or remove by hand".to_string(),
+                    action,
                     // Never auto-removed — flag-only.
                     safe_heal: false,
                 });
@@ -8226,6 +8274,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9541,6 +9590,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9613,6 +9663,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9651,6 +9702,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9708,6 +9760,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9970,6 +10023,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -10016,6 +10070,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -10118,6 +10173,7 @@ hostname = "localhost"
             all: false,
             since: None,
             fail_on_findings: false,
+            quiet_output: false,
         };
         let result = heal_doctor_finding(project_root, &finding, &opts).unwrap();
         assert_eq!(result.status, "healed");
