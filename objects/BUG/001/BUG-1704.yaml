@@ -89,13 +89,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T04:56:26.956029730Z
-modified_at: 2026-09-28T06:42:35.791289089Z
+modified_at: 2026-09-28T13:37:13.201757827Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a0e603-481b-7670-a653-89bc492df94c
   created_at: 2026-09-28T04:56:29.466947434Z
-- rel_type: !Custom carved-from
+- rel_type:
+    custom: carved-from
   target_id: 01a0e603-481b-7670-a653-89bc492df94c
   created_at: 2026-09-28T06:42:35.791285755Z
   created_by: joe
@@ -133,6 +134,19 @@ comments:
   created_at: 2026-09-28T05:40:22.078618154Z
   modified_at: 2026-09-28T05:40:22.078618154Z
   session_id: fc2bef36-971e-4674-a858-0de8a84a1006
+- id: 01a0e83b-dff1-78e3-a571-7cdf71fac279
+  author: joe
+  content: |-
+    Evidence carried in from TASK-201 (rejected as a duplicate of this spec, finding from PR-2249 review).
+
+    Live confirmation on the dev host, 2026-09-28 06:2x: `codex#1907632` is `STAT Zs` — a defunct zombie, elapsed 2-11:18:58 — and `aida agent status` still reports it `busy`. This is the STATUS-path half of the defect; BUG-1703 fixed the STOP path only. The prior advisor handoff independently flagged the same seat and recommended folding it here.
+
+    Note this zombie case is NOT covered by the two candidate signals in DIRECTION as written: a defunct process has no subtree to sum (rule b) and accrues no CPU between samples (rule a), but it also fails the `pid not alive` test in rule 1 only if `classify_status` treats a zombie as dead. A `Zs` process still exists in the process table, so a naive liveness probe reads it as alive. Worth an explicit acceptance criterion: a zombie/defunct PID must classify as Stale, never Busy.
+
+    Added by the advisor seat under the operator's 2026-09-28 emergency burndown authorization.
+  created_at: 2026-09-28T13:37:13.201757827Z
+  modified_at: 2026-09-28T13:37:13.201757827Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
 history:
 - id: 01a0e65f-4718-7fd1-9586-f0a804429302
   author: joe
