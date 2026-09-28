@@ -87,23 +87,9 @@
   for_role: advisor
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a0e3e1-5cfd-7262-9371-174948cbdb1f
-  position: 57000
-  added_by: joe
-  added_at: 2026-09-28T12:38:25.854652779Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0d6da-bde3-7191-9401-e376f6d5d1ba
   position: 59000
   added_by: joe
   added_at: 2026-09-28T12:46:57.762781758Z
   for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0e81d-9347-7d11-a0f0-8389ec41a79e
-  position: 60000
-  added_by: joe
-  added_at: 2026-09-28T13:05:30.650280982Z
-  for_role: integrator
   added_by_machine: imac
