@@ -22,11 +22,24 @@ description: |
       agent == w || agent.starts_with(w)
 
   So a seat whose registry row points at the MAIN checkout is classified Busy for as long as any
-  live lease also points at the main checkout — independent of that seat's own activity. Because
-  leases accumulate (123 live and 99 stale on the dev host on 2026-09-27), the main checkout
-  effectively always has a covering live lease, so a seat there reads `busy` forever. Sibling
-  worktrees are not affected by a main-checkout lease (`/home/joe/ai/aida-bug-1693` does not start
-  with `/home/joe/ai/aida`), which is why this shows up specifically for seats working in main.
+  LIVE lease also covers the main checkout — independent of that seat's own activity.
+
+  The input to rule 3 is narrower than "leases accumulate", and this was checked in source rather
+  than assumed. `live_lease_worktrees` (aida-cli-lib/src/lib.rs:76342) keeps ONLY leases classified
+  `LeaseState::Live`, and `classify_lease_state` (aida-core/src/liveness.rs:638) is:
+
+      worktree missing            -> Stale
+      live claude in the worktree -> Live
+      age >= 24h                  -> Stale
+      otherwise                   -> Dormant
+
+  `Live` therefore requires a live session whose cwd is at or under the lease's worktree. On a host
+  where the orchestrator/advisor seat itself works in the main checkout, that condition is
+  continuously true, so every seat whose row points at main reads `busy` forever. Sibling worktrees
+  are unaffected (`/home/joe/ai/aida-bug-1693` does not start with `/home/joe/ai/aida`), which is why
+  this shows up specifically for seats working in main.
+
+  The fix must therefore distinguish per-AGENT activity, not per-worktree occupancy.
 
   Measured 2026-09-27: three dispatched seats reported `busy` after 48-88 minutes idle. The tell was
   cumulative CPU: 3-46 SECONDS across hours.
@@ -66,15 +79,17 @@ description: |
        asserted by unit tests without spawning an agent or a build.
   AC5. Whatever signal is chosen is cheap enough for `aida agent status` to remain a routine poll
        (no per-call multi-second sampling delay).
-  AC6. Stale-lease accumulation is addressed or explicitly ruled out of scope: if the 99 stale leases
-       are what make rule 3 fire universally, a sweep may be the smaller fix and should be compared
-       against changing the classifier.
+  AC6. (ALREADY ANSWERED — do not spend a seat re-deriving this.) A stale-lease sweep is NOT an
+       alternative fix and must not be proposed as one. Stale and Dormant leases are already
+       excluded from rule 3's input by `classify_lease_state`, so the 107 stale leases measured on
+       the dev host on 2026-09-27 contribute nothing to the false `busy`. Sweeping them is
+       worthwhile hygiene on its own terms and is out of scope here.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T04:56:26.956029730Z
-modified_at: 2026-09-28T05:40:22.078618154Z
+modified_at: 2026-09-28T05:40:43.846005600Z
 req_type: Bug
 relationships:
 - rel_type: Child
