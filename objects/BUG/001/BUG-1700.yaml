@@ -1,0 +1,65 @@
+id: 01a0e5e8-349e-7810-bff6-1aa486a811ab
+spec_id: BUG-1700
+agreed_id: BUG-1700
+title: Claude Code folder-trust modal blocks every aida agent new claude --spec launch, because AIDA creates a worktree path Claude has never seen and no launch flag dismisses the gate
+description: |
+  Claude Code gates a directory it has not seen before behind an interactive folder-trust modal:
+
+      Accessing workspace: <path>
+      Quick safety check: Is this a project you created or one you trust? ...
+        > No, exit
+          Yes, I trust this folder
+      Enter to confirm · Esc to cancel
+
+  AIDA creates a NEW sibling worktree per spec (`/home/joe/ai/aida-bug-1693`, `/home/joe/ai/wt-story-1480`,
+  ...). Each is a path Claude Code has never been launched in, so `aida agent new claude --spec <ID>`
+  lands on this modal, in a PTY nobody is watching, and the caller blocks until it is killed.
+
+  Measured 2026-09-27 on this host: of 149 project entries in `~/.claude.json`, only 9 are AIDA
+  worktree paths, and the live spec worktrees (aida-bug-1693, aida-task-1557, wt-story-1480, ...) have
+  no entry at all. So the gate is armed for effectively every fresh spec worktree.
+
+  Probed with an isolated HOME (claude v2.1.283, interactive under a PTY). The modal fires and NO
+  launch flag dismisses it:
+
+      baseline                          -> FOLDER-TRUST modal
+      --permission-mode bypassPermissions -> FOLDER-TRUST modal
+      --dangerously-skip-permissions      -> FOLDER-TRUST modal
+
+  Writing `hasTrustDialogAccepted: false` for the path does not satisfy it either; only `true` does.
+  So this cannot be fixed with launch flags — it needs the trust record to exist for the worktree
+  path before the seat starts.
+
+  This is distinct from BUG-1698 (the project-MCP trust modal), fires EARLIER, and is the reason a
+  `--spec` claude dispatch cannot work at all today. AIDA is the component that creates the worktree,
+  and the operator has already trusted the parent repository it is derived from, so AIDA marking the
+  worktree trusted at creation carries no new authority.
+
+  ACCEPTANCE
+
+  AC1. `aida agent new claude --spec <ID>`, into a worktree AIDA just created, reaches the agent's
+       prompt with no folder-trust modal, on a path Claude Code has never seen.
+  AC2. The trust record is written only for worktrees AIDA itself creates, and only when the parent
+       repository is already trusted. AIDA never marks an arbitrary or operator-supplied directory
+       trusted, and never downgrades an existing record.
+  AC3. The write is idempotent and does not clobber unrelated keys in `~/.claude.json` (it is a
+       large shared file — 149 project entries on the dev host).
+  AC4. If the trust record cannot be written, the launch says so plainly rather than spawning a seat
+       that will hang on a modal.
+  AC5. Covered by a test that asserts the record AIDA would write for a created worktree, without
+       spawning claude.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T02:46:35.422630850Z
+modified_at: 2026-09-28T02:46:35.422630850Z
+req_type: Bug
+filed_at:
+  code_sha: bb445e1236ce2ea95f8427abca110ec4dd250960
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 3f4cda41c9
+  vendor: antigravity
+  session: 79f15ecb-4580-4277-9778-648c50ac17b4
