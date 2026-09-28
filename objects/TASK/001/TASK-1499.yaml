@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-28T14:21:47.034665889Z
+modified_at: 2026-09-28T14:24:41.977642135Z
 req_type: Task
 tags:
 - agent-launch
@@ -119,6 +119,11 @@ comments:
   content: 'Implementation in progress: added AIDA executable resolution (AIDA_BIN > running binary > PATH), checkout profile selection with AIDA_BUILD_PROFILE override, executable validation, launch preview diagnostics, and portability/test coverage. Focused resolver tests pass; agent-launch preview test passes.'
   created_at: 2026-09-28T14:21:42.961303028Z
   modified_at: 2026-09-28T14:21:42.961303028Z
+- id: 01a0e867-57f9-7240-8430-5d30d2461c70
+  author: joe
+  content: 'Implemented and pushed as 8021605585; PR #2261 is open: https://github.com/joemooney/aida/pull/2261. Resolver/portable scaffold tests (3) and launch preview diagnostics test passed; fmt check passed. Left the requirement InProgress pending PR review/merge.'
+  created_at: 2026-09-28T14:24:41.977642135Z
+  modified_at: 2026-09-28T14:24:41.977642135Z
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
   author: joe
