@@ -1,0 +1,19 @@
+{
+  "id": "d65da4e0-3c33-4542-81f1-823944941e7f",
+  "thread_id": "d65da4e0-3c33-4542-81f1-823944941e7f",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-1"
+  },
+  "timestamp": 1790557200909,
+  "body": "Please resume BUG-1688. The worktree still has uncommitted implementation and test files. Finish the AC3 audit (report other routes without widening the fix), run targeted tests with a nonzero passed count, and report the exact result and remaining steps.\n",
+  "subject": "Resume BUG-1688 with AC3 audit",
+  "urgent": true,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

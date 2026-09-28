@@ -1,0 +1,18 @@
+{
+  "id": "d704f4fb-0783-4395-ad14-19652ef2f04b",
+  "thread_id": "d704f4fb-0783-4395-ad14-19652ef2f04b",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-1693"
+  },
+  "timestamp": 1790544504908,
+  "body": "URGENT test evidence check: your cargo test command used --lib. That can exit successfully with 0 passed tests. Do not count it as verification. Rerun through the correct integration-test target (without --lib/in-file-only), confirm the exact named test ran with a nonzero passed count, and report that evidence. Stop any conclusion from the --lib result until then.",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "e749a152-21ae-48a6-9cd7-b204f2f3131d",
+  "thread_id": "e749a152-21ae-48a6-9cd7-b204f2f3131d",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790557919650,
+  "body": "Please independently disposition the fresh exact-head review for PR #2243. AIDA recorded TASK-1547 and TASK-1556 as REQUEST_CHANGES at c167341425da1f96723835d8e49a6dc8a5099ba4. The concrete blocker is in `.aida/review-verdicts/TASK-1547.json`: `is_intended_store_worktree` only verifies git top-level equality with `.aida-store`; it accepts a standalone repo rooted there or an attached worktree on a non-aida-store branch, then can commit `.gitignore` to the wrong repo/current branch. Reviewer requested canonical store + attached worktree/branch validation and fail-closed tests for standalone repo and wrong branch. Product has created a notified Codex pickup brief, pending under `.aida/agent-briefs/codex/TASK-1547-2026-09-28T005354Z.md`; lease `01a0e491` remains intact. Please read the actual verdict, own the rework brief/disposition, and tell product if the existing brief should be amended. No merge-hold action requested.\n",
+  "subject": "Disposition needed: TASK-1547 exact-head reviewer blocker",
+  "urgent": true,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

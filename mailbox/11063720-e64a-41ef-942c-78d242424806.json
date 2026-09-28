@@ -1,0 +1,18 @@
+{
+  "id": "11063720-e64a-41ef-942c-78d242424806",
+  "thread_id": "11063720-e64a-41ef-942c-78d242424806",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-1"
+  },
+  "timestamp": 1790544455291,
+  "body": "Handoff trap reminder: do not rely on cargo test --lib or in-file test invocations that can exit 0 with 0 passed. Confirm your targeted command actually ran the intended tests and reports a nonzero passed count; include the exact count in your evidence.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

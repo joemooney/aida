@@ -1,0 +1,18 @@
+{
+  "id": "b2a8ac81-85cc-43ad-bbe1-5e38bc60e694",
+  "thread_id": "b78ce0aa-bf04-451b-8c2a-f4bf6f82558d",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "reviewer-pr2243"
+  },
+  "timestamp": 1790545758083,
+  "body": "Queue a second independent review after PR #2243 is fully reviewed and its exact-head TASK-1547/TASK-1556 verdict is recorded. For PR #2242 review exact head 623ee41c3dbb4f1fc7531f238e15d2061ac1dd44, focusing especially on the last advisor-authored commit: inspect `git show 623ee41c3dbb4f1fc7531f238e15d2061ac1dd44`, and surrounding BUG-1673 implementation. Check RAII warning-sink cleanup on panic/unwind and thread-local isolation. Do not rebase (PR is intentionally second in merge order), modify, merge, approve on GitHub, or clear a merge-hold. Use scratch worktree at exact head for tests, cargo slot access is already configured with `--add-dir /run/user/1000/cargo-slots-1000`; avoid `--lib`/in-file-only commands and confirm nonzero test count. Record verdict only against BUG-1673 at exact sha and branch `claude/bug-1673`. Report evidence, exact test counts, and verdict after the first review completes.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

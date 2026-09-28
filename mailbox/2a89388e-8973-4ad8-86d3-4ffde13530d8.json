@@ -1,0 +1,18 @@
+{
+  "id": "2a89388e-8973-4ad8-86d3-4ffde13530d8",
+  "thread_id": "236573f6-479a-4045-82f1-6a54192cbbae",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "reviewer-pr2242"
+  },
+  "timestamp": 1790556850596,
+  "body": "Please begin the exact-head BUG-1673 confirm review in your launch prompt now. Do not merge or rebase.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

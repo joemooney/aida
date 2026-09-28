@@ -1,0 +1,18 @@
+{
+  "id": "8dd9f7fa-a32d-4d17-8f0d-17da892e1624",
+  "thread_id": "8dd9f7fa-a32d-4d17-8f0d-17da892e1624",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-2"
+  },
+  "timestamp": 1790544574323,
+  "body": "Urgent scope check: the TASK-1557 worktree currently shows 543 changed paths and 131,022 deletions, including hundreds of existing commands, templates, and tests. Do not commit or clean this state. Please identify why those tracked files are deleted, restore unrelated files, and report the intended diff before proceeding.",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

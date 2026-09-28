@@ -1,0 +1,19 @@
+{
+  "id": "b4c7882d-05b0-4ab3-8b72-a75e6c0cdf73",
+  "thread_id": "b4c7882d-05b0-4ab3-8b72-a75e6c0cdf73",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "reviewer-pr2243"
+  },
+  "timestamp": 1790545775351,
+  "body": "You are an independent AIDA reviewer seat, launched by the product seat for Joe. Review PR #2242 at exact head 623ee41c3dbb4f1fc7531f238e15d2061ac1dd44, focusing on its last advisor-written commit `623ee41c3dbb4f1fc7531f238e15d2061ac1dd44` (the RAII guard fix). Do not merge, approve on GitHub, change merge-holds, or change code. The advisor/integrator owns disposition and merge.\n\nRead BUG-1673. The requested confirm review is the last commit atop branch `claude/bug-1673`; also inspect surrounding implementation as needed to establish the commit is safe. Use `git show --stat --oneline 623ee41c3dbb4f1fc7531f238e15d2061ac1dd44` and `git show --format=fuller 623ee41c3dbb4f1fc7531f238e15d2061ac1dd44`, and compare the complete PR branch with origin/main where useful. Probe that the warning sink cleanup is safe on panic/unwind, thread-local isolation remains sound, and the review's assertions cover the actual behavior. The PR is behind main; don't rebase it. Review exact requested head.\n\nUse an isolated scratch worktree at that exact SHA for any build/tests. You have `--add-dir /run/user/1000/cargo-slots-1000` for cargo commands; use it. Do not use `--lib` or in-file-only invocation. Verify test output reports nonzero tests passed. No code changes. Report concise evidence, runnable commands and exact test counts. End with `VERDICT: APPROVE` or `VERDICT: REQUEST_CHANGES`; if a correctness/integrity issue exists, name file/line and concrete reproduction. Record the AIDA verdict against BUG-1673 with the exact SHA and branch `claude/bug-1673`, then report the result. Do not record approved if you have any blocker. Do not merge.\n",
+  "subject": "Second review queued after PR 2243",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

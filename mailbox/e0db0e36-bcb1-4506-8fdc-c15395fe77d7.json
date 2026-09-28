@@ -1,0 +1,19 @@
+{
+  "id": "e0db0e36-bcb1-4506-8fdc-c15395fe77d7",
+  "thread_id": "e0db0e36-bcb1-4506-8fdc-c15395fe77d7",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-1693"
+  },
+  "timestamp": 1790557200826,
+  "body": "Please resume BUG-1693. Read the urgent cargo-test warning already in your mailbox. The worktree has staged changes but no commit yet. Report build and targeted tests with nonzero passed counts before claiming completion or opening a PR. Keep the full acceptance scope, including AC2's check against recorded clearance.\n",
+  "subject": "Resume BUG-1693 with verified tests",
+  "urgent": true,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
