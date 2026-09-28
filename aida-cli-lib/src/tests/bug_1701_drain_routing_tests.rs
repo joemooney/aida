@@ -152,3 +152,57 @@ fn force_bypasses_the_guard_entirely() {
     let dir = tempfile::tempdir().unwrap();
     assert!(super::drain_mode_agent_new_guard(dir.path(), "TASK-1", true, true).is_ok());
 }
+
+// AC4 coverage, added because an independent review of PR #2249 asked for
+// "an assertion against the actual help output". AC4 is satisfied by PROSE, and
+// before this nothing pinned it — so an innocent reword could silently drop the
+// disclosure and AC4 would regress with every gate still green. That risk is not
+// hypothetical: this very session edited that paragraph.
+// trace:BUG-1701 | ai:claude
+fn agent_new_long_help() -> String {
+    use clap::CommandFactory;
+    let mut cli = crate::cli::Cli::command();
+    let agent = cli
+        .get_subcommands_mut()
+        .find(|c| c.get_name() == "agent")
+        .expect("agent subcommand exists");
+    let new = agent
+        .get_subcommands_mut()
+        .find(|c| c.get_name() == "new")
+        .expect("agent new subcommand exists");
+    new.render_long_help().to_string()
+}
+
+// trace:BUG-1701 | ai:claude
+#[test]
+fn agent_new_help_discloses_that_the_lane_blocks_until_the_tui_exits() {
+    let help = agent_new_long_help();
+    assert!(
+        help.contains("BLOCKS"),
+        "AC4: the help must say the lane blocks:\n{help}"
+    );
+    assert!(
+        help.contains("does not exit when its turn ends"),
+        "AC4: the help must say WHY it keeps blocking — a TUI does not exit when its \
+         turn ends. Without the reason the operator reads the block as a hang:\n{help}"
+    );
+}
+
+// The help must not send the operator to the `status` column for the
+// finished-vs-working question: `classify_status` reports `busy` whenever any live
+// lease covers the worktree (BUG-1704), so that advice actively misleads. It used
+// to say exactly that. Pin the correction.
+// trace:BUG-1701 | ai:claude
+#[test]
+fn agent_new_help_points_at_cpu_not_status_for_finished_vs_working() {
+    let help = agent_new_long_help();
+    assert!(
+        help.contains("CPU column"),
+        "the help must name the signal that actually answers it:\n{help}"
+    );
+    assert!(
+        !help.contains("shows `idle` for a seat"),
+        "the help must NOT claim `aida agent status` reports idle for a waiting seat \
+         — BUG-1704 shows it reports busy:\n{help}"
+    );
+}
