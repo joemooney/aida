@@ -1,0 +1,26 @@
+id: 01a0e735-09af-7a42-915d-5e2fc3498cf0
+spec_id: STORY-1494
+agreed_id: STORY-1494
+title: 'Review PR-2251: [AI:codex] test(history): ignore cache provenance in JSON parity (BUG-1692)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0e729`) for branch `bug-1692-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2251>
+  - Branch: `bug-1692-2` → `main`
+
+  ## Covers
+
+  - BUG-1692
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2251` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T08:50:07.919713651Z
+modified_at: 2026-09-28T08:50:07.919713651Z
+req_type: Story
