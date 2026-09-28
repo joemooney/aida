@@ -4347,9 +4347,6 @@ pub(crate) struct AgentWorktreeFacts {
     /// `unique_unmerged_commits` still needs `content_fully_landed` to clear.
     // trace:BUG-1657 | ai:claude
     pub(crate) spec_trailer_on_main: bool,
-    /// No commit on this branch has a committer date later than the spec's landing commit.
-    // trace:BUG-1718 | ai:codex
-    pub(crate) no_commits_after_landing: bool,
 }
 
 /// Pure squash-aware classification of one agent-managed worktree. No git/forge
@@ -4401,12 +4398,11 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
                 facts.unique_unmerged_commits
             ));
         }
-        // trace:BUG-1718 | ai:codex
-        if facts.spec_trailer_on_main && facts.no_commits_after_landing {
-            return AgentWorktreeVerdict::Removable(format!(
-                "its spec landed on origin/main through a batched integration merge and no commit \
-                 on this branch postdates that landing commit ({} commit(s) are a squash-ancestry \
-                 artifact a batched merge makes content-undecidable)",
+        if facts.spec_trailer_on_main {
+            // trace:BUG-1718 | ai:codex
+            return AgentWorktreeVerdict::Keep(format!(
+                "{merged_reason}; {} unique unmerged commit(s) are a squash-ancestry artifact from a \
+                 batched integration merge, and content is undecidable — no action required",
                 facts.unique_unmerged_commits
             ));
         }
@@ -4946,39 +4942,6 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
             None
         };
         let spec_trailer_on_main = landing_commit.is_some();
-        let no_commits_after_landing = landing_commit
-            .as_deref()
-            .and_then(|sha| {
-                let landing = PCmd::new("git")
-                    .arg("-C")
-                    .arg(project_root)
-                    .args(["log", "-1", "--format=%ct", sha])
-                    .output()
-                    .ok()?;
-                if !landing.status.success() {
-                    return None;
-                }
-                let landing_date = String::from_utf8_lossy(&landing.stdout)
-                    .trim()
-                    .parse::<i64>()
-                    .ok()?;
-                let branch_dates = PCmd::new("git")
-                    .arg("-C")
-                    .arg(project_root)
-                    .args(["log", "--format=%ct", &format!("{default_ref}..{branch}")])
-                    .output()
-                    .ok()?;
-                if !branch_dates.status.success() {
-                    return None;
-                }
-                Some(
-                    String::from_utf8_lossy(&branch_dates.stdout)
-                        .lines()
-                        .all(|date| date.trim().parse::<i64>().is_ok_and(|d| d <= landing_date)),
-                )
-            })
-            .unwrap_or(false);
-
         // Only consult the forge when the cheap ancestry/trailer probes were
         // inconclusive (covers the single-PR squash-merge case) and the worktree
         // is clean — a dirty worktree is kept regardless, so skip the network call.
@@ -5014,7 +4977,6 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
             unique_unmerged_commits,
             content_fully_landed,
             spec_trailer_on_main,
-            no_commits_after_landing,
         };
 
         match classify_agent_worktree(&facts) {
@@ -5037,6 +4999,12 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
                 });
             }
             AgentWorktreeVerdict::Keep(reason) => {
+                // trace:BUG-1718 | ai:codex
+                let action = if reason.contains("no action required") {
+                    "no action required — kept because batched content is undecidable".to_string()
+                } else {
+                    "operator decision: review and keep, open a PR, or remove by hand".to_string()
+                };
                 findings.push(DoctorFinding {
                     category: "merged-agent-worktrees".to_string(),
                     id: wt.path.display().to_string(),
@@ -5044,7 +5012,7 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
                         "agent worktree {} on `{branch}` flagged: {reason}",
                         wt.path.display()
                     ),
-                    action: "operator decision: review and keep, or remove by hand".to_string(),
+                    action,
                     // Never auto-removed — flag-only.
                     safe_heal: false,
                 });
@@ -7599,7 +7567,6 @@ mod story_462_doctor_tests {
             unique_unmerged_commits: 0,
             content_fully_landed: false,
             spec_trailer_on_main: false,
-            no_commits_after_landing: false,
         }
     }
 

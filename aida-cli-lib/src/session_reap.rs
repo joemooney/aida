@@ -713,39 +713,6 @@ pub(crate) fn gather_merge_facts_pinned(
     let landing_commit = probe
         .and_then(|(default_ref, tip)| spec_landing_commit(project_root, default_ref, tip, spec));
     let spec_trailer_on_main = landing_commit.is_some();
-    let no_commits_after_landing = landing_commit
-        .as_deref()
-        .and_then(|sha| {
-            let output = std::process::Command::new("git")
-                .arg("-C")
-                .arg(project_root)
-                .args(["log", "-1", "--format=%ct", sha])
-                .stderr(std::process::Stdio::null())
-                .output()
-                .ok()
-                .filter(|o| o.status.success())?;
-            let landing_date = String::from_utf8_lossy(&output.stdout)
-                .trim()
-                .parse::<i64>()
-                .ok()?;
-            let (Some(default_ref), Some(tip)) = (default_ref, tip.as_deref()) else {
-                return None;
-            };
-            let output = std::process::Command::new("git")
-                .arg("-C")
-                .arg(project_root)
-                .args(["log", "--format=%ct", &format!("{default_ref}..{tip}")])
-                .stderr(std::process::Stdio::null())
-                .output()
-                .ok()
-                .filter(|o| o.status.success())?;
-            Some(
-                String::from_utf8_lossy(&output.stdout)
-                    .lines()
-                    .all(|date| date.trim().parse::<i64>().is_ok_and(|d| d <= landing_date)),
-            )
-        })
-        .unwrap_or(false);
     // Only pay for the forge lookup when the cheap probes were inconclusive
     // (the squash-merge case) AND everything else already points at a reap.
     // The forge is asked by branch NAME; the content proof below still runs
@@ -773,7 +740,6 @@ pub(crate) fn gather_merge_facts_pinned(
             unique_unmerged_commits,
             content_fully_landed,
             spec_trailer_on_main,
-            no_commits_after_landing,
         },
         tip,
     )

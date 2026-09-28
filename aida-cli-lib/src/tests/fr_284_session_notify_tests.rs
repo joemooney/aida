@@ -32,7 +32,6 @@ fn finished_but_live_facts() -> ReapFacts {
             unique_unmerged_commits: 0,
             content_fully_landed: false,
             spec_trailer_on_main: false,
-            no_commits_after_landing: false,
         },
     }
 }
