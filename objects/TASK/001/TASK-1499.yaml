@@ -14,12 +14,12 @@ description: |
   4. When both target/debug and target/release exist, the documented precedence and stale-build rule decide which runs, and a test covers the stale case.
   5. No generated project file contains a machine-specific absolute AIDA checkout path (test greps the scaffold output).
   6. No change to agent permission settings, seat Git policy, or approval-prompt behavior (out of scope; separate spec).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-28T15:16:06.619651763Z
+modified_at: 2026-09-28T17:04:15.420871399Z
 req_type: Task
 tags:
 - agent-launch
@@ -36,7 +36,8 @@ relationships:
   target_id: 01a0de93-4e04-7ef1-97e7-1f88d8b11102
   created_at: 2026-09-26T18:31:19.804841085Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0e896-50e4-7a83-ba78-7b7a54283675
   created_at: 2026-09-28T15:16:06.619643966Z
   created_by: joe
@@ -162,7 +163,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e8f9-6c3c-75b0-8279-fb33983a1a64
+  author: aida-orchestrator
+  timestamp: 2026-09-28T17:04:15.420903435Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'PR #2261 Build (ubuntu) red on two of the branch''s OWN new guard tests. Both diagnosed; neither is CI infrastructure.'
+  recovery_hint: address the review findings, move TASK-1499 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-09-28T17:04:15.420871399Z
 decision_request:
   question: TASK-1499 scaffolds a launch profile that sets writable roots and permission metadata. Approve that permission-shaping part?
   choices:
