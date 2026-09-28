@@ -1,0 +1,15 @@
+{
+  "id": "02d55e4a-610b-4608-8087-ad58db0f34fa",
+  "thread_id": "02d55e4a-610b-4608-8087-ad58db0f34fa",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "backlog-integrator"
+  },
+  "timestamp": 1790560684214,
+  "body": "Before aida pull, note the main worktree has pre-existing M docs/plans/2026-09-22-seat-wake-cross-harness.md plus untracked .codegraph/ and docs/research/2026-09-27-spike-92-{decision.json,research.md}. Do not clean/stash/reset them. Try the normal pull; if it refuses, stop and report without disturbing these files.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

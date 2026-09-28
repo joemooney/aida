@@ -1,0 +1,15 @@
+{
+  "id": "76fb17b4-3877-443f-9232-768687499a02",
+  "thread_id": "76fb17b4-3877-443f-9232-768687499a02",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "backlog-advisor"
+  },
+  "timestamp": 1790560386953,
+  "body": "Correction before routing the TASK-1547 brief: it currently lacks the required explicit seat declaration, and its generated setup names a different worktree/branch than the live lease. Please amend the brief preamble to begin `YOUR SEAT: IMPLEMENTER (Codex).` Keep lease 01a0e491 and worktree `/home/joe/ai/aida-task1547`; do not tell it to create/start a second session. It must acknowledge the existing lease/worktree and apply only the rework finding. This explicit seat declaration is a handoff requirement from the operator.\n",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}

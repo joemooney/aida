@@ -1,12 +1,4 @@
 - user_id: joe
-  requirement_id: 01a0e3e1-7d16-7a22-9a54-36f457c60014
-  position: 2000
-  added_by: joe
-  note: Proxy-approved bounded docs task; independent of current store-integrity rework.
-  added_at: 2026-09-28T01:08:01.915483943Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0d690-9e8a-72f1-a753-ee587125c211
   position: 3000
   added_by: joe
@@ -71,4 +63,29 @@
   note: auto-queued by `session end` (01a0e590); covers 1 spec
   added_at: 2026-09-28T01:29:27.760913385Z
   for_role: reviewer
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e035-fb49-7152-81dd-a9e1bff1eab4
+  position: 42000
+  added_by: joe
+  note: 'Rework from exact-head REQUEST-CHANGES on PR #2243; see targeted brief.'
+  added_at: 2026-09-28T01:51:39.642291874Z
+  for_role: implementer
+  for_session: 01a0e491
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e4ab-0c16-74f2-aa06-a500bdcbd065
+  position: 43000
+  added_by: joe
+  note: 'Advisor disposition: PR #2244 exact-head ready; see integrator brief. Independent of #2243/#2242.'
+  added_at: 2026-09-28T01:51:41.313789754Z
+  for_role: integrator
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0e3e1-7d16-7a22-9a54-36f457c60014
+  position: 44000
+  added_by: joe
+  note: 'Advisor disposition: PR #2245 exact-head ready; see integrator brief. Complete STORY-1491 only after merge.'
+  added_at: 2026-09-28T01:51:42.977054534Z
+  for_role: integrator
   added_by_machine: imac
