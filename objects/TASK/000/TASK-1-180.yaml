@@ -7,12 +7,12 @@ description: |-
 
   P2 history_layout.rs:398-405: with valid TOML history = { keep = 1 }, --template {id} --save-as-template test exits 0 but leaves config unchanged; list/render/remove cannot find the saved template. Create a serializable nested table and cover user/project reload round trips.
   Reviewed sha: 5bab54d1762971c3986502c3fd05b29fa7b52d0b
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-27T16:50:53.256984236Z
-modified_at: 2026-09-28T01:47:10.856530161Z
+modified_at: 2026-09-28T01:47:28.064331186Z
 req_type: Task
 tags:
 - carried-from:STORY-1477
@@ -48,3 +48,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a0e5b2-13c0-7411-aacd-dea73e4397c9
+  author: aida-session-start
+  timestamp: 2026-09-28T01:47:28.064329488Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
