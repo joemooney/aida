@@ -1,0 +1,30 @@
+id: 01a0e817-eb95-7f83-9a82-d8931a208cde
+spec_id: TASK-1-181
+title: 'AC4 is still unmet: this diff adds a refusal only after a drain-mode spec is pa…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1701, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  AC4 is still unmet: this diff adds a refusal only after a drain-mode spec is passed to agent_new; it does not update the `aida agent new --help` description to disclose the interactive lane blocks until the TUI exits. A refusal at invocation is useful but is not the specified help text. Add an assertion against the actual help output or revise AC4 explicitly.
+
+  PR: #2249
+  Reviewed sha: 5632229e663b9d782e1f2c427a3176792f8447ae
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T12:57:56.885045802Z
+modified_at: 2026-09-28T12:57:56.885045802Z
+req_type: Task
+tags:
+- carried-from:BUG-1701
+- finding-hash:6acf4dac
+- from-review:PR-2249
+- kind:carried-forward
+filed_at:
+  code_sha: 5ed030a3cd22458aaf9984399b09fb4c0c9e1874
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: '5632229e66'
+  vendor: antigravity
+  session: fc2bef36-971e-4674-a858-0de8a84a1006
