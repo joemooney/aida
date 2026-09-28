@@ -44,12 +44,12 @@ description: |
        today.
   AC4. A regression test asserts the resolved claude argv/settings carry the trust for AIDA's server,
        without spawning claude.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T02:37:16.747515813Z
-modified_at: 2026-09-28T02:46:43.015528892Z
+modified_at: 2026-09-28T05:50:10.587823843Z
 req_type: Bug
 history:
 - id: 01a0e5e8-5247-7d02-809e-c1cef1187498
@@ -59,3 +59,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e690-47d5-7c70-90b5-5ec87bb760ed
+  author: aida-auto-bump
+  timestamp: 2026-09-28T05:50:10.389619369Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e690-489b-76e0-9e36-c93a620a0c42
+  timestamp: 2026-09-28T05:50:10.587806078Z
+  agent: aida
+  commit_sha: 7324a5b437c2cd60d7fe73d4ab01cbee6c5e33ec
+  summary: 'Request changes on PR #2247 at exact head; blocker recorded on BUG-1703.'
+  review_verdict: request-changes
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T05:50:10.389607407Z
+  completion_sha: 7324a5b437c2cd60d7fe73d4ab01cbee6c5e33ec
