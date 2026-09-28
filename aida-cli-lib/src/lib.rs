@@ -68528,6 +68528,8 @@ fn resolve_burndown_sets(
             req_type: &req_type,
             has_unsatisfied_blocker,
             has_pending_decision,
+            // trace:BUG-1717 | ai:claude
+            execution_mode: req.execution_mode,
         };
         match burndown::classify_spec(&input) {
             burndown::SpecDisposition::Skip => {}
