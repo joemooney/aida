@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T03:16:37.130372260Z
-modified_at: 2026-09-28T14:49:24.535397815Z
+modified_at: 2026-09-28T14:50:47.162203364Z
 req_type: Spike
 tags:
 - batch:groom-2026-09-25
@@ -85,4 +85,6 @@ decision_request:
     resolution: default:shimmer
   recommended: 0
   rationale: Default-off is the most reversible policy while launch output and the existing inquire picker have separate input ownership. It preserves current behavior and permits opt-in trials of both presentation modes. Non-TTY and machine-readable launches should remain silent regardless of the default.
+  answered: 0
   asked_at: 2026-09-28T14:49:24.535397815Z
+  answered_at: 2026-09-28T14:50:47.162201915Z
