@@ -1,5 +1,6 @@
 id: 01a0e823-1e46-7d32-a1b6-fdd1cd594a6e
 spec_id: TASK-1-183
+agreed_id: TASK-202
 title: 'TASK-1547: is_intended_store_worktree verifies canonical .aida-store path, a .g…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1547, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

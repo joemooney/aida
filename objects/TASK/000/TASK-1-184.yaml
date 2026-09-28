@@ -1,5 +1,6 @@
 id: 01a0e823-22d5-72d3-a91d-89a5fe0fb10b
 spec_id: TASK-1-184
+agreed_id: TASK-203
 title: 'PR blocker shared with TASK-1547 at aida-cli-lib/src/doctor_cmd.rs:5865-5881: s…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1556, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
