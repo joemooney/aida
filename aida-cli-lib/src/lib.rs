@@ -17285,6 +17285,13 @@ fn init_worktree_pool_config_section() -> &'static str {
      [worktree_pool]\n\
      enabled = true\n\
      # max_trees = 16   # cap on pooled worktrees (default 16)\n\
+     # worktree_parent = \"../aida-worktrees\"   # nest every AIDA-created worktree\n\
+     #                          # under ONE directory instead of scattering them as\n\
+     #                          # siblings of the repo. An editor/agent folder-trust\n\
+     #                          # grant inherits to children, so you trust this one\n\
+     #                          # directory once and no future worktree prompts\n\
+     #                          # again. Relative paths resolve against the repo\n\
+     #                          # root; unset keeps the sibling layout (default)\n\
      # lease_ttl_secs = 21600   # a durable lease older than this (with no live\n\
      #                          # owner) is treated as EXPIRED and reclaimed by\n\
      #                          # the next acquire — guards against reservation\n\
@@ -24790,6 +24797,22 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "free-space",
         ],
         "disk-headroom",
+    ),
+    // BUG-1700: the folder-trust gate on a freshly created worktree. Claude
+    // Code stops an INTERACTIVE launch in a directory it has never seen behind
+    // a "Quick safety check" modal, so a fresh per-spec worktree strands
+    // `aida agent new claude --spec <ID>` in a PTY nobody is watching. Trust
+    // inherits from a parent directory, so `[worktree_pool] worktree_parent`
+    // plus one operator grant retires the whole class. Read-only: AIDA never
+    // writes ~/.claude.json. trace:BUG-1700 | ai:claude
+    (
+        &[
+            "agent-launch",
+            "agent-trust",
+            "folder-trust",
+            "worktree-trust",
+        ],
+        "agent-launch",
     ),
     // STORY-1462: runaway-seat watchdog — per-session wake-rate, token-rate,
     // repeated-injected-prompt, idle-ratio, context-ceiling, compaction and
@@ -36717,6 +36740,7 @@ fn acquire_session_pool_worktree(
         lease_ttl_secs: Some(worktree_pool_config_lease_ttl_secs(project_root)),
         post_create_hooks: worktree_pool_global_hooks("post_create"),
         init_submodules: worktree_config_init_submodules(project_root),
+        parent_dir: worktree_pool_config_worktree_parent(project_root),
     };
     let acquired = aida_core::worktree_pool::acquire(project_root, &opts)?;
 
@@ -64219,6 +64243,52 @@ fn worktree_pool_config_max_trees(project_root: &std::path::Path) -> Option<usiz
         .map(|n| n.max(1) as usize)
 }
 
+/// Read `[worktree_pool] worktree_parent` from `.aida/config.toml`: the opt-in
+/// single parent directory that AIDA-created worktrees are nested under, so one
+/// editor/agent folder-trust grant on that directory covers every worktree AIDA
+/// mints (folder trust inherits from a parent — BUG-1700). Unset (the default)
+/// keeps the historical sibling layout, so nothing moves under a live fleet. A
+/// blank value is treated as unset. `~` is expanded; a relative path is left
+/// relative and resolved against the project root by the pool.
+// trace:BUG-1700 | ai:claude
+pub(crate) fn worktree_pool_config_worktree_parent(
+    project_root: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    let body = std::fs::read_to_string(project_root.join(".aida").join("config.toml")).ok()?;
+    let value: toml::Value = toml::from_str(&body).ok()?;
+    let raw = value
+        .get("worktree_pool")?
+        .get("worktree_parent")?
+        .as_str()?
+        .trim();
+    if raw.is_empty() {
+        return None;
+    }
+    Some(expand_worktree_parent_tilde(raw))
+}
+
+/// Expand a leading `~` / `~/` in a configured worktree parent against `$HOME`.
+// trace:BUG-1700 | ai:claude
+fn expand_worktree_parent_tilde(raw: &str) -> std::path::PathBuf {
+    // `home_dir()`, not a direct HOME read: it is the crate's single home
+    // resolver and carries the cfg(test) redirect to a temp home, which the
+    // `no_direct_home_resolution_in_crate` guard enforces (TASK-1513).
+    expand_tilde_against(raw, home_dir())
+}
+
+/// Pure core of [`expand_worktree_parent_tilde`], with `$HOME` injected so it is
+/// testable without mutating process environment. A path is left EXACTLY as
+/// written when home is unknown, so the caller sees the literal configured value
+/// rather than a silently wrong one.
+// trace:BUG-1700 | ai:claude
+fn expand_tilde_against(raw: &str, home: Option<std::path::PathBuf>) -> std::path::PathBuf {
+    match (raw, home) {
+        ("~", Some(h)) => h,
+        (r, Some(h)) if r.starts_with("~/") => h.join(&r[2..]),
+        _ => std::path::PathBuf::from(raw),
+    }
+}
+
 /// Read `[worktree_pool] lease_ttl_secs` (seconds) from `.aida/config.toml`,
 /// falling back to the core default when unset/invalid. Drives the
 /// reservation-leak backstop: a lease older than this with no live owner is
@@ -64312,6 +64382,10 @@ mod task_1010_prewarm_tests;
 mod task_1558_agents_mcp_type_tests;
 
 #[cfg(test)]
+#[path = "tests/bug_1700_worktree_parent_tests.rs"]
+mod bug_1700_worktree_parent_tests;
+
+#[cfg(test)]
 #[path = "tests/bug_1701_drain_routing_tests.rs"]
 mod bug_1701_drain_routing_tests;
 
@@ -64326,6 +64400,7 @@ fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
                 lease_ttl_secs: Some(worktree_pool_config_lease_ttl_secs(&project_root)),
                 post_create_hooks: worktree_pool_global_hooks("post_create"),
                 init_submodules: worktree_config_init_submodules(&project_root),
+                parent_dir: worktree_pool_config_worktree_parent(&project_root),
             };
             let path = aida_core::worktree_pool::acquire(&project_root, &opts)?;
             if *json {

@@ -584,6 +584,17 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // BUG-1700: the folder-trust gate that silently strands an interactive
+    // `aida agent new claude --spec` launch. Read-only (it never writes the
+    // operator's ~/.claude.json) and silent unless the worktree parent really
+    // lacks a covering trust record. Opt-in path for the same reason as
+    // disk-headroom: it reads a file outside the project.
+    // trace:BUG-1700 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "agent-launch")? {
+        findings.extend(scan_agent_worktree_trust(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // STORY-1462: the runaway-seat watchdog. Reads the trailing day of this
     // project's session transcripts (incrementally, via a per-file watermark)
     // and trips on per-session wake/token/repeated-prompt/idle anomalies and
@@ -1404,6 +1415,348 @@ fn cargo_slot_findings(
     }
 
     findings
+}
+
+/// Resolve where interactive agent launches will find their worktree, and warn when that
+/// directory carries no Claude Code folder-trust record.
+///
+/// Claude Code gates a directory it has never been launched in behind an interactive
+/// folder-trust modal ("Quick safety check: Is this a project you created or one you trust?").
+/// A fresh per-spec worktree is exactly such a directory, so `aida agent new claude --spec <ID>`
+/// stops dead on a modal in a PTY nobody is watching. Trust INHERITS from a parent directory
+/// (probed 2026-09-27 with a control), which is what `[worktree_pool] worktree_parent` exists to
+/// exploit: nest every worktree under ONE directory, trust that once, and no future worktree
+/// prompts again.
+///
+/// This check is strictly READ-ONLY. AIDA never writes `~/.claude.json` and never marks a
+/// directory trusted on the operator's behalf — that grant is the operator's to give.
+///
+/// Silent when trust cannot be determined (no readable `~/.claude.json`), so an unreadable
+/// config reads as unknown rather than as a false alarm.
+// trace:BUG-1700 | ai:claude
+fn scan_agent_worktree_trust(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    let configured = crate::worktree_pool_config_worktree_parent(project_root);
+    let resolved = resolve_worktree_parent(project_root, configured.as_deref());
+    worktree_trust_findings(
+        &resolved,
+        configured.is_some(),
+        claude_trusted_paths().as_deref(),
+    )
+}
+
+/// The directory newly created pool worktrees land in — mirrors `worktree_pool::pool_path_for`'s
+/// parent selection: the configured `worktree_parent` (relative resolved against the project
+/// root), else the project root's own parent (the historical sibling layout).
+// trace:BUG-1700 | ai:claude
+fn resolve_worktree_parent(
+    project_root: &std::path::Path,
+    configured: Option<&std::path::Path>,
+) -> std::path::PathBuf {
+    match configured {
+        Some(p) if p.is_absolute() => p.to_path_buf(),
+        Some(p) => project_root.join(p),
+        None => project_root
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| project_root.to_path_buf()),
+    }
+}
+
+/// Resolve `.` and `..` components WITHOUT touching the filesystem.
+///
+/// Deliberately lexical, not `canonicalize`: the comparison this feeds must work
+/// for a configured directory that does not exist yet, and must not follow
+/// symlinks differently on the two sides. A leading `..` that would escape the
+/// root is kept, so a relative path cannot silently become something else.
+// trace:BUG-1700 | ai:claude
+fn normalize_path_lexically(path: &std::path::Path) -> std::path::PathBuf {
+    use std::path::Component;
+    let mut out = std::path::PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => match out.components().next_back() {
+                // A real directory name is popped.
+                Some(Component::Normal(_)) => {
+                    out.pop();
+                }
+                // At the root, `..` is the root itself (`/..` is `/` on POSIX),
+                // so it is dropped rather than kept.
+                Some(Component::RootDir) | Some(Component::Prefix(_)) => {}
+                // A RELATIVE path with nothing to pop must KEEP the `..`;
+                // dropping it would turn one path into a different one.
+                _ => out.push(component.as_os_str()),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+/// Paths with an accepted Claude Code folder-trust record, from `~/.claude.json`. `None` when the
+/// file is absent or unparseable — the caller must then stay silent rather than guess.
+// trace:BUG-1700 | ai:claude
+fn claude_trusted_paths() -> Option<Vec<std::path::PathBuf>> {
+    // `crate::home_dir()`, not a direct HOME read: it is the crate's single home
+    // resolver and carries the cfg(test) redirect to a temp home, enforced by the
+    // `no_direct_home_resolution_in_crate` guard (TASK-1513). That redirect also
+    // keeps this check from reading a developer's REAL ~/.claude.json under test.
+    let home = crate::home_dir()?;
+    let body = std::fs::read_to_string(home.join(".claude.json")).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&body).ok()?;
+    let projects = value.get("projects")?.as_object()?;
+    Some(
+        projects
+            .iter()
+            .filter(|(_, v)| {
+                v.get("hasTrustDialogAccepted")
+                    .and_then(|t| t.as_bool())
+                    .unwrap_or(false)
+            })
+            .map(|(k, _)| std::path::PathBuf::from(k))
+            .collect(),
+    )
+}
+
+/// Pure verdict: does `parent` (or an ancestor of it) carry a trust record?
+///
+/// Pure over its inputs so the inheritance rule is testable without a real `~/.claude.json` or a
+/// spawned agent — which is what makes this assertable at all, since the modal only appears in an
+/// interactive TUI.
+// trace:BUG-1700 | ai:claude
+fn worktree_trust_findings(
+    parent: &std::path::Path,
+    parent_configured: bool,
+    trusted: Option<&[std::path::PathBuf]>,
+) -> Vec<DoctorFinding> {
+    let Some(trusted) = trusted else {
+        return Vec::new();
+    };
+    // `starts_with` is purely LEXICAL, so it must not see unresolved `..`. A
+    // relative `worktree_parent = "../aida-worktrees"` resolves to
+    // `<root>/../aida-worktrees`, which does not lexically start with the
+    // `<parent-of-root>/aida-worktrees` spelling `~/.claude.json` records — so
+    // an already-trusted directory would be reported as untrusted. Normalise
+    // both sides before comparing. trace:BUG-1700 | ai:claude
+    let parent = normalize_path_lexically(parent);
+    if trusted
+        .iter()
+        .any(|t| parent.starts_with(normalize_path_lexically(t)))
+    {
+        return Vec::new();
+    }
+    let parent = parent.as_path();
+    let action = if parent_configured {
+        format!(
+            "launch an interactive agent in {} ONCE and accept the folder-trust prompt; every \
+             worktree nests under it, so trust inherits and no later worktree prompts again",
+            parent.display()
+        )
+    } else {
+        format!(
+            "set `[worktree_pool] worktree_parent` in .aida/config.toml to one directory (e.g. \
+             \"../aida-worktrees\") and accept the folder-trust prompt there ONCE — otherwise \
+             every new spec worktree under {} is a fresh untrusted path with its own modal",
+            parent.display()
+        )
+    };
+    vec![DoctorFinding {
+        category: "agent-launch".to_string(),
+        id: "worktree-folder-trust".to_string(),
+        summary: format!(
+            "worktrees are created under {}, which has no Claude Code folder-trust record — an \
+             interactive `aida agent new claude --spec <ID>` there stops on a folder-trust \
+             modal instead of starting work (headless drains are unaffected)",
+            parent.display()
+        ),
+        action,
+        safe_heal: false,
+    }]
+}
+
+#[cfg(test)]
+mod bug_1700_worktree_trust_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    // The whole point of `worktree_parent`: trust INHERITS, so a grant on the
+    // parent covers every worktree nested under it and doctor stays silent.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn trusted_parent_covers_nested_worktrees() {
+        let trusted = vec![PathBuf::from("/home/op/aida-worktrees")];
+        assert!(worktree_trust_findings(
+            Path::new("/home/op/aida-worktrees"),
+            true,
+            Some(&trusted)
+        )
+        .is_empty());
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn trusted_ancestor_further_up_also_covers() {
+        let trusted = vec![PathBuf::from("/home/op")];
+        assert!(worktree_trust_findings(
+            Path::new("/home/op/aida-worktrees"),
+            true,
+            Some(&trusted)
+        )
+        .is_empty());
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn untrusted_parent_is_reported_once_and_is_not_auto_healable() {
+        let trusted = vec![PathBuf::from("/home/op/other")];
+        let f = worktree_trust_findings(Path::new("/home/op/aida-worktrees"), true, Some(&trusted));
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].category, "agent-launch");
+        assert_eq!(f[0].id, "worktree-folder-trust");
+        assert!(
+            f[0].summary.contains("/home/op/aida-worktrees"),
+            "the finding must name the directory: {}",
+            f[0].summary
+        );
+        assert!(
+            !f[0].safe_heal,
+            "granting folder trust is the operator's call — never auto-healed"
+        );
+    }
+
+    // A sibling of a trusted path is NOT covered: `starts_with` must compare
+    // whole path components, not string prefixes, or `/home/op/aida-worktrees2`
+    // would be wrongly judged trusted by `/home/op/aida-worktrees`.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn string_prefix_sibling_is_not_treated_as_trusted() {
+        let trusted = vec![PathBuf::from("/home/op/aida-worktrees")];
+        assert_eq!(
+            worktree_trust_findings(Path::new("/home/op/aida-worktrees2"), true, Some(&trusted))
+                .len(),
+            1,
+            "a sibling sharing a string prefix must not inherit trust"
+        );
+    }
+
+    // Unknown trust (no readable ~/.claude.json) must read as unknown, not as a
+    // problem — otherwise doctor cries wolf on every host without the file.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn unknown_trust_is_silent() {
+        assert!(worktree_trust_findings(Path::new("/home/op/wt"), true, None).is_empty());
+    }
+
+    // With no worktree_parent configured the advice is to configure one; with
+    // one configured the advice is to trust that directory once. Different
+    // actions, so the operator is never told to do the wrong thing.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn action_differs_on_whether_a_parent_is_configured() {
+        let trusted: Vec<PathBuf> = Vec::new();
+        let configured = worktree_trust_findings(Path::new("/home/op/wt"), true, Some(&trusted));
+        assert!(
+            configured[0].action.contains("ONCE"),
+            "configured: {}",
+            configured[0].action
+        );
+        let unset = worktree_trust_findings(Path::new("/home/op"), false, Some(&trusted));
+        assert!(
+            unset[0].action.contains("worktree_parent"),
+            "unset must point at the setting: {}",
+            unset[0].action
+        );
+    }
+
+    // The regression an independent review caught: `starts_with` is lexical, so a
+    // relative `worktree_parent` resolving to `<root>/../aida-worktrees` did not
+    // match the normalised `/home/joe/ai/aida-worktrees` that ~/.claude.json
+    // records — doctor cried wolf on an ALREADY-trusted directory.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn a_relative_parent_with_dotdot_matches_its_normalised_trusted_form() {
+        let trusted = vec![PathBuf::from("/home/joe/ai/aida-worktrees")];
+        let unnormalised = Path::new("/home/joe/ai/aida/../aida-worktrees");
+        assert!(
+            !unnormalised.starts_with(&trusted[0]),
+            "precondition: the raw path must NOT lexically match, or this test proves nothing"
+        );
+        assert!(
+            worktree_trust_findings(unnormalised, true, Some(&trusted)).is_empty(),
+            "an already-trusted directory reached via `..` must not be reported"
+        );
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn normalisation_does_not_make_a_sibling_match() {
+        let trusted = vec![PathBuf::from("/home/joe/ai/aida-worktrees")];
+        assert_eq!(
+            worktree_trust_findings(
+                Path::new("/home/joe/ai/aida/../aida-worktrees2"),
+                true,
+                Some(&trusted)
+            )
+            .len(),
+            1,
+            "normalising must not loosen the sibling check"
+        );
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn lexical_normalisation_resolves_dot_and_dotdot_without_the_filesystem() {
+        for (input, want) in [
+            ("/a/b/../c", "/a/c"),
+            ("/a/./b", "/a/b"),
+            ("/a/b/../../c", "/c"),
+            ("/a/b/c/../..", "/a"),
+            ("relative/../x", "x"),
+        ] {
+            assert_eq!(
+                normalize_path_lexically(Path::new(input)),
+                PathBuf::from(want),
+                "normalising {input}"
+            );
+        }
+    }
+
+    // A `..` with nothing to pop must be KEPT, not silently dropped — dropping it
+    // would turn one path into a different one.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn normalisation_keeps_a_dotdot_it_cannot_resolve() {
+        assert_eq!(
+            normalize_path_lexically(Path::new("../x")),
+            PathBuf::from("../x")
+        );
+        assert_eq!(
+            normalize_path_lexically(Path::new("/..")),
+            PathBuf::from("/")
+        );
+    }
+
+    // The resolver must mirror `worktree_pool::pool_path_for`'s parent choice,
+    // or doctor would advise trusting a directory the pool never uses.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn resolver_mirrors_the_pool_parent_choice() {
+        let root = Path::new("/work/myrepo");
+        assert_eq!(
+            resolve_worktree_parent(root, None),
+            PathBuf::from("/work"),
+            "unset => the project root's parent (sibling layout)"
+        );
+        assert_eq!(
+            resolve_worktree_parent(root, Some(Path::new("/trusted/wt"))),
+            PathBuf::from("/trusted/wt")
+        );
+        assert_eq!(
+            resolve_worktree_parent(root, Some(Path::new("../wt"))),
+            PathBuf::from("/work/myrepo/../wt"),
+            "relative resolves against the project root, as the pool does"
+        );
+    }
 }
 
 /// STORY-1367: free space on the filesystem holding `project_root`, via
