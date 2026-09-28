@@ -8443,8 +8443,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Claude session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]
@@ -8580,8 +8587,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Codex session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]
@@ -8701,8 +8715,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Antigravity session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]

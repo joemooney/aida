@@ -26524,6 +26524,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_prompt: false,
             verbose: false,
             prompt: None,
+            prompt_file: None,
             no_prompt: false,
             no_resume: false,
             resume: None,
@@ -26549,6 +26550,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_prompt: false,
             verbose: false,
             prompt: None,
+            prompt_file: None,
             no_prompt: false,
             no_resume: false,
             resume: None,
@@ -26572,6 +26574,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_prompt: false,
             verbose: false,
             prompt: None,
+            prompt_file: None,
             no_prompt: false,
             no_resume: false,
             resume: None,
@@ -26661,6 +26664,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_prompt,
             verbose,
             prompt,
+            prompt_file,
             no_prompt,
             no_resume,
             resume,
@@ -26683,7 +26687,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *noexec,
             *show_prompt,
             *verbose,
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentPromptOptions::new(
+                resolve_launch_prompt(prompt.clone(), prompt_file.as_deref(), *no_prompt)?,
+                *no_prompt,
+            ),
             AgentResumeOptions::new(
                 !*no_resume,
                 resume.clone(),
@@ -26709,6 +26716,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_prompt,
             verbose,
             prompt,
+            prompt_file,
             no_prompt,
             no_resume,
             resume,
@@ -26729,7 +26737,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *noexec,
             *show_prompt,
             *verbose,
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentPromptOptions::new(
+                resolve_launch_prompt(prompt.clone(), prompt_file.as_deref(), *no_prompt)?,
+                *no_prompt,
+            ),
             AgentResumeOptions::new(
                 !*no_resume,
                 resume.clone(),
@@ -26753,6 +26764,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_prompt,
             verbose,
             prompt,
+            prompt_file,
             no_prompt,
             no_resume,
             resume,
@@ -26773,7 +26785,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *noexec,
             *show_prompt,
             *verbose,
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentPromptOptions::new(
+                resolve_launch_prompt(prompt.clone(), prompt_file.as_deref(), *no_prompt)?,
+                *no_prompt,
+            ),
             AgentResumeOptions::new(
                 !*no_resume,
                 resume.clone(),
@@ -27071,6 +27086,53 @@ struct AgentPromptOptions {
     auto_prompt: bool,
 }
 
+/// BUG-1696: resolve a launch prompt from `--prompt` or `--prompt-file`.
+///
+/// Orchestrator seats build dispatches as `--prompt "$(cat brief.txt)"` inside a nested
+/// `bash -lc`. When that quoting collapses the launcher receives an empty string, spawns an
+/// interactive agent that sits at an idle prompt, and blocks the caller on it — once for
+/// 3h04m, reporting exit 0. `--prompt-file` takes the shell out of the path, and the
+/// emptiness check makes the remaining failure loud instead of silent.
+// trace:BUG-1696 | ai:claude
+fn resolve_launch_prompt(
+    prompt: Option<String>,
+    prompt_file: Option<&std::path::Path>,
+    no_prompt: bool,
+) -> Result<Option<String>> {
+    if no_prompt {
+        return Ok(None);
+    }
+    let resolved = match prompt_file {
+        Some(path) => Some(
+            std::fs::read_to_string(path)
+                .with_context(|| format!("failed to read --prompt-file `{}`", path.display()))?,
+        ),
+        None => prompt,
+    };
+    let Some(text) = resolved else {
+        return Ok(None);
+    };
+    if text.trim().is_empty() {
+        let (source, fix) = match prompt_file {
+            Some(path) => (
+                format!("--prompt-file `{}` is empty", path.display()),
+                "Write the brief into that file",
+            ),
+            None => (
+                "--prompt resolved to an empty string (nested shell quoting does this)".to_string(),
+                "Pass the brief with `--prompt-file <PATH>` instead of interpolating it into the \
+                 command line",
+            ),
+        };
+        anyhow::bail!(
+            "{source}; refusing to launch an agent with no initial message — it would sit idle \
+             at a prompt while the caller blocks on it. {fix}, or use `--no-prompt` for a \
+             deliberately unprompted seat."
+        );
+    }
+    Ok(Some(text))
+}
+
 impl AgentPromptOptions {
     fn new(explicit_prompt: Option<String>, no_prompt: bool) -> Self {
         Self {
@@ -27115,6 +27177,59 @@ fn tool_bypass_flags(agent_type: &str) -> Vec<String> {
         "antigravity" => vec!["--dangerously-skip-permissions".to_string()],
         _ => Vec::new(),
     }
+}
+
+/// BUG-1699: split per-tool `default_flags` into (kept, dropped-as-conflicting) for a launch
+/// whose posture the launcher already set explicitly. A posture flag and its value are dropped
+/// together, in both the `--flag value` and `--flag=value` spellings, so the emitted argv
+/// carries exactly one posture rather than two that the vendor CLI silently arbitrates.
+/// Pure and total, so the partition is unit-tested without spawning.
+// trace:BUG-1699 | ai:claude
+fn split_posture_flags(agent_type: &str, flags: Vec<String>) -> (Vec<String>, Vec<String>) {
+    // Flags that select an approval/sandbox posture. `true` = consumes a following value.
+    let posture: &[(&str, bool)] = match agent_type {
+        "claude" => &[
+            ("--permission-mode", true),
+            ("--settings", true),
+            ("--setting-sources", true),
+            ("--dangerously-skip-permissions", false),
+        ],
+        "codex" => &[
+            ("--sandbox", true),
+            ("--ask-for-approval", true),
+            ("--dangerously-bypass-approvals-and-sandbox", false),
+            ("--full-auto", false),
+        ],
+        "antigravity" => &[("--dangerously-skip-permissions", false)],
+        _ => &[],
+    };
+    let mut kept = Vec::new();
+    let mut dropped = Vec::new();
+    let mut idx = 0;
+    while idx < flags.len() {
+        let arg = &flags[idx];
+        let matched = posture.iter().find(|(name, takes_value)| {
+            arg == name || (*takes_value && arg.starts_with(&format!("{name}=")))
+        });
+        match matched {
+            Some((name, takes_value)) => {
+                dropped.push(arg.clone());
+                // `--flag value` spends the next token too; `--flag=value` does not.
+                if *takes_value && arg == name {
+                    if let Some(value) = flags.get(idx + 1) {
+                        dropped.push(value.clone());
+                        idx += 1;
+                    }
+                }
+                idx += 1;
+            }
+            None => {
+                kept.push(arg.clone());
+                idx += 1;
+            }
+        }
+    }
+    (kept, dropped)
 }
 
 // trace:BUG-1178 | ai:codex
@@ -27984,7 +28099,8 @@ fn agent_new_with_config(
         spec.as_deref(),
         &project_root,
     );
-    if early_role_instance == RoleInstanceKind::Driver {
+    // trace:BUG-1697 | ai:claude
+    if resume.duplicate_check && early_role_instance == RoleInstanceKind::Driver {
         enforce_agent_singleton_preflight(
             &project_root,
             role.as_deref(),
@@ -27997,7 +28113,7 @@ fn agent_new_with_config(
         config.agent_type,
         plan.native_session_id.as_deref(),
     ));
-    enforce_agent_singleton(&project_root, &plan)?;
+    enforce_agent_singleton(&project_root, &plan, resume.duplicate_check)?;
     let description = resolve_agent_description(plan.role.as_deref(), description)?;
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
@@ -28199,18 +28315,21 @@ fn agent_new_bg_dispatch(
         return Ok(());
     }
 
-    enforce_agent_singleton_preflight(
-        &project_root,
-        role.as_deref(),
-        spec.as_deref(),
-        &project_root,
-    )?;
+    // trace:BUG-1697 | ai:claude
+    if resume.duplicate_check {
+        enforce_agent_singleton_preflight(
+            &project_root,
+            role.as_deref(),
+            spec.as_deref(),
+            &project_root,
+        )?;
+    }
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
     ));
-    enforce_agent_singleton(&project_root, &plan)?;
+    enforce_agent_singleton(&project_root, &plan, resume.duplicate_check)?;
     let _description = resolve_agent_description(plan.role.as_deref(), description)?;
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
@@ -28474,7 +28593,37 @@ fn apply_agent_default_flags(
                     .extend(tool_bypass_flags(config.agent_type));
             }
         }
+        // BUG-1699: per-tool `default_flags` used to be appended AFTER an explicit posture
+        // the launcher had already set, producing one command line carrying both — e.g.
+        // `codex --dangerously-bypass-approvals-and-sandbox --sandbox workspace-write
+        // --ask-for-approval never` — and leaving the real posture to an undocumented
+        // precedence inside the vendor CLI while the preview asserted the opposite. When the
+        // launcher set the posture, the conflicting per-tool flags lose and we say so.
+        // trace:BUG-1699 | ai:claude
+        let per_tool = if explicit_permission {
+            let (kept, dropped) = split_posture_flags(config.agent_type, per_tool);
+            if !dropped.is_empty() {
+                eprintln!(
+                    "  {} explicit launch posture wins — dropped from agents.toml: {}",
+                    "note:".yellow(),
+                    dropped.join(" ")
+                );
+            }
+            kept
+        } else {
+            per_tool
+        };
         config.default_args.extend(per_tool);
+
+        // BUG-1698: hand claude AIDA's own MCP server definition so a supervised seat never
+        // stops on the project-MCP trust modal. Inside `use_config_defaults` so
+        // `--no-default-flags` remains the escape hatch to the untouched native launch.
+        // trace:BUG-1698 | ai:claude
+        if config.agent_type == "claude" {
+            config
+                .default_args
+                .extend(session::claude_mcp_trust_flags(project_root));
+        }
     }
     let resolved_model = flag_options
         .model_override
@@ -29685,7 +29834,18 @@ fn resolve_role_instance_for_launch(
 }
 
 // trace:STORY-791 | ai:codex
-fn enforce_agent_singleton(project_root: &std::path::Path, plan: &AgentLaunchPlan) -> Result<()> {
+fn enforce_agent_singleton(
+    project_root: &std::path::Path,
+    plan: &AgentLaunchPlan,
+    duplicate_check: bool,
+) -> Result<()> {
+    // BUG-1697: `--no-duplicate-check` is documented to skip the same-vendor/same-role
+    // check entirely. It used to stop at the resume path, so the new-launch singleton had
+    // no escape hatch and a hung holder could block every later seat on the scope.
+    // trace:BUG-1697 | ai:claude
+    if !duplicate_check {
+        return Ok(());
+    }
     if plan.role_instance == RoleInstanceKind::Companion {
         return Ok(());
     }
@@ -30729,7 +30889,7 @@ fn prompt_source_label(prompt: &AgentPromptOptions, prompt_args: &[String]) -> &
         .filter(|p| !p.is_empty())
         .is_some();
     match (explicit, prompt_args.is_empty()) {
-        (true, _) => "explicit (--prompt)",
+        (true, _) => "explicit (--prompt/--prompt-file)",
         // trace:STORY-1471 | ai:claude
         (false, false) => "generated (role launch prompt)",
         (false, true) => "none (--no-prompt)",
