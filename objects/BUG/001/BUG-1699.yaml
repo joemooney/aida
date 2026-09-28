@@ -1,0 +1,53 @@
+id: 01a0e5df-e7fc-7441-8145-905c5f372ed2
+spec_id: BUG-1699
+agreed_id: BUG-1699
+title: agent new --no-exec permission_posture claims a resolution that contradicts the conflicting sandbox argv it prints
+description: |
+  `aida agent new codex --no-exec --verbose` reports a permission posture that contradicts the argv
+  it prints in the same output.
+
+  With `~/.aida/agents.toml` carrying `[agents.codex] default_flags = ["--sandbox",
+  "workspace-write", "--ask-for-approval", "never"]`, adding `--bypass-sandbox` produces:
+
+      command: .../codex --dangerously-bypass-approvals-and-sandbox --sandbox workspace-write --ask-for-approval never
+      permission_posture:
+        resolved: codex approvals and sandbox bypassed
+        codex sandbox: workspace-write
+
+  Two conflicting sandbox flags on one command line, and the preview asserts a resolution it did not
+  compute — it reports the flag AIDA intended rather than what codex will do with the pair, and the
+  `codex sandbox:` line beneath it says the opposite. An operator reading `resolved:` cannot tell
+  which posture the child gets.
+
+  Verified separately that codex itself resolves this pair to `sandbox: danger-full-access` (v0.157.1
+  — the bypass flag wins), so the posture is currently what `--bypass-sandbox` intends. The defect is
+  the preview's honesty and the conflicting argv, not the outcome. That also means the correctness
+  here rests on an undocumented precedence in a third-party CLI, which is worth not depending on.
+
+  The `--no-exec` preview is explicitly the "complete resolved launch contract" (TASK-1467), so a
+  posture line that disagrees with its own argv is a correctness bug in the contract.
+
+  ACCEPTANCE
+
+  AC1. When an explicit posture flag and per-tool `default_flags` both carry sandbox/approval flags,
+       the emitted argv contains one coherent posture rather than a conflicting pair.
+  AC2. `permission_posture.resolved` describes the posture the child will actually run under, and no
+       other line in the block contradicts it.
+  AC3. When AIDA drops or overrides a per-tool flag to achieve AC1, the preview names what it dropped
+       and why, so the override is not silent.
+  AC4. Covered by a test over the resolved argv + rendered posture block, no spawn.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T02:37:31.516160683Z
+modified_at: 2026-09-28T02:37:31.516160683Z
+req_type: Bug
+filed_at:
+  code_sha: bb445e1236ce2ea95f8427abca110ec4dd250960
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 3f4cda41c9
+  vendor: antigravity
+  session: 79f15ecb-4580-4277-9778-648c50ac17b4
