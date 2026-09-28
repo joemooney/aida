@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:17:34.541546385Z
-modified_at: 2026-09-28T08:31:28.266260957Z
+modified_at: 2026-09-28T08:36:42.235715173Z
 req_type: Bug
 comments:
 - id: 01a0e456-ab17-70d3-bc37-0cb9ef98bf01
@@ -44,8 +44,8 @@ execution_mode: drive
 failure_reason:
   phase: implementer
   phase_index: 1
-  kind: lease-conflict
-  detail: 'phase 1 retry cannot reclaim predecessor lease 01a0e723 on `BUG-1692` after 3 liveness re-probe(s); worktree: /tmp/aida-pool-aida-nightshift-1'
+  kind: tool-exit
+  detail: the implementer session exited 1 — it was aborted or errored (attempt 3/3)
   recovery_hint: 'Continue the implementer session: `aida queue work BUG-1692 --resume`'
   shelved_by: product
-  shelved_at: 2026-09-28T08:31:28.266260957Z
+  shelved_at: 2026-09-28T08:36:42.235715173Z
