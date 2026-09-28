@@ -95,8 +95,7 @@ relationships:
 - rel_type: Child
   target_id: 01a0e603-481b-7670-a653-89bc492df94c
   created_at: 2026-09-28T04:56:29.466947434Z
-- rel_type:
-    custom: carved-from
+- rel_type: !Custom carved-from
   target_id: 01a0e603-481b-7670-a653-89bc492df94c
   created_at: 2026-09-28T06:42:35.791285755Z
   created_by: joe
