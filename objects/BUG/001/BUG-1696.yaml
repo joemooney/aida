@@ -37,12 +37,12 @@ description: |
   AC5. `--show-prompt` prints the prompt resolved from `--prompt-file` and exits without spawning.
   AC6. `--no-prompt` continues to suppress the initial message, and is a usage error when combined
        with `--prompt-file`.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T02:13:49.306342486Z
-modified_at: 2026-09-28T02:19:22.584960534Z
+modified_at: 2026-09-28T12:57:51.213327355Z
 req_type: Bug
 history:
 - id: 01a0e5cf-4a58-7a93-8cee-4010e93026c8
@@ -52,3 +52,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e817-d4a7-7593-a3e1-802285c1955d
+  author: aida-auto-bump
+  timestamp: 2026-09-28T12:57:51.015487535Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0e817-d56d-7e42-bc6c-bdcb900dc018
+  timestamp: 2026-09-28T12:57:51.213305434Z
+  agent: aida
+  commit_sha: 7324a5b437c2cd60d7fe73d4ab01cbee6c5e33ec
+  summary: 'Request changes on PR #2247 at exact head; blocker recorded on BUG-1703.'
+  review_verdict: request-changes
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T12:57:51.015450168Z
+  completion_sha: 7324a5b437c2cd60d7fe73d4ab01cbee6c5e33ec
