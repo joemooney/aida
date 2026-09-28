@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T19:10:40.554193021Z
-modified_at: 2026-09-28T09:18:01.379527614Z
+modified_at: 2026-09-28T23:12:58.432587466Z
 req_type: Task
 relationships:
 - rel_type: Blocks
@@ -73,6 +73,36 @@ comments:
   content: 'Implementation checkpoint 2026-09-28: commit 23a33c48a7 adds author identity checks and a Forge trait extension. Architecture sketch is posted and requires advisor sign-off before any PR. Cargo test was attempted once with AIDA_CARGO_NO_SLOT=1; that result is discarded. The locked retry failed because /run/user/1000/cargo-slots-1000 is read-only inside this implementer sandbox (flock: bad file descriptor). No Cargo test result is claimed. Commit is on origin/task-1529; work is paused pending advisor sign-off and a writable shared slot.'
   created_at: 2026-09-28T09:18:01.379527614Z
   modified_at: 2026-09-28T09:18:01.379527614Z
+- id: 01a0ea4a-fe40-72c1-abed-fdc8e341b0c3
+  author: joe
+  content: |
+    Advisor session #9 (2026-09-28): salvaged a stranded claim and shipped it.
+
+    `origin/task-1529` already held one unpublished codex commit from 02:14 today
+    with no PR, no lease, and no live session. Reviewed it, rebased it onto main,
+    and published it as PR #2270.
+
+    What the branch actually addressed: acceptance criteria 1, 2 and the fail /
+    already-merged halves of 4 were **already satisfied on main** by
+    `retract_refused_publication` (TASK-1289 / TASK-1421). The open gap was AC3,
+    "never touches a PR the agent did not open" — branch presence alone does not
+    prove the agent published the PR.
+
+    Added on review: the probe originally collapsed "somebody else's PR" and "the
+    ownership probe itself errored" into one soft line. Those are different
+    operator situations — an unverifiable PR may well be ours AND has failing
+    guards, so it now gets the same "check it by hand" urgency as a failed close.
+
+    Verified by executing, not by reading: full `cargo test -p aida-cli-lib --lib`
+    green at 7347/0; non-vacuity proven by shadowing the probe result with
+    `Ours`, which fails exactly the two new tests and leaves the two pre-existing
+    ones passing; zero clippy hits inside the changed line ranges.
+
+    This also satisfies **TASK-1548** in full (ChangeMetadata author, skip-on-
+    mismatch, fake-forge operator-PR test).
+  created_at: 2026-09-28T23:12:58.432587466Z
+  modified_at: 2026-09-28T23:12:58.432587466Z
+  session_id: 71214fd6-ec84-46cf-87bf-fa8de48d6877
 history:
 - id: 01a0df93-519f-7082-8697-0c3ea16f6b85
   author: aida-session-start
