@@ -1,0 +1,62 @@
+id: 01a0e608-f773-76a0-ba74-a4f014cb544f
+spec_id: TASK-1558
+agreed_id: TASK-1558
+title: Add an [agents] mcp surface knob defaulting to off, so supervised seats use the aida CLI rather than paying the measured 1.8-2x MCP multiplier
+description: |
+  `aida agent new` has no way to say which AIDA surface a spawned seat should use, and BUG-1698
+  hardcoded one answer (attach AIDA's own MCP server with `--strict-mcp-config`). The evidence in this
+  repository says the default should be the CLI, with MCP opt-in.
+
+  SPIKE-73 measured a full 72-cell matrix (4 conditions x 6 tasks x 3 runs) on AIDA's own surfaces:
+
+      cli             100%  $0.0358  3.1 turns
+      toon            100%  $0.0360
+      mcp-toolsearch  100%  $0.0636  (~1.8x)  4.8 turns  3.8 tools
+      mcp              89%  $0.0709  (~2x)
+
+  The result is STRUCTURAL, not an upfront-schema tax: the ToolSearch variant (on-demand schema
+  loading) does not rescue MCP — it still costs ~1.8x AND more turns and tools, because the
+  schema-load round-trips eat the input-token savings. The recorded direction from that spike is
+  "token-efficient CLI as the PRIMARY agent surface, MCP as the typed/structural option", and an
+  MCP README re-frame is still an open operator decision.
+
+  Corroborating: no shipped skill or command references the MCP surface (`aida://`, `mcp__aida`) —
+  zero hits across `.claude/skills/` and `.claude/commands/`. So nothing depends on the server being
+  attached, and every generated seat brief already speaks in `aida ...` CLI verbs.
+
+  Cost of attaching it anyway: a server process per seat (nine stale `aida mcp-serve` processes were
+  observed being restarted in one launch), plus the ~1.8-2x token multiplier measured above.
+
+  ACCEPTANCE
+
+  AC1. `[agents] mcp` in `agents.toml` selects the surface for supervised launches, with the same
+       user-base-then-project precedence as `[agents] bypass` / `[agents] contained`:
+         - `"off"` (THE DEFAULT) — no MCP servers are loaded; the `aida` CLI is the surface.
+         - `"aida"` — only AIDA's own server definition is attached (the BUG-1698 behaviour).
+         - `"native"` — AIDA injects nothing and the vendor's own MCP configuration applies.
+  AC2. `"off"` and `"aida"` both launch with no project-MCP trust prompt. `"native"` may prompt; that
+       is the operator's explicit choice and the docs say so.
+  AC3. An unrecognised value fails the launch naming the key, the bad value, and the accepted set —
+       it does not silently fall back to a default.
+  AC4. The `--no-exec` preview reports the resolved surface, so it is never a guess.
+  AC5. `--no-default-flags` bypasses the knob entirely and lands on the untouched native launch,
+       consistent with how it already bypasses `bypass` / `contained`.
+  AC6. Honest scope: only claude exposes launch-time MCP flags. For codex and antigravity, MCP is
+       registered in their own config files, so the knob cannot enforce a surface at launch for them.
+       The doc comment and the CLI docs must say this rather than implying cross-vendor coverage.
+  AC7. Covered by tests over the resolved flags per surface, with no spawn.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T03:22:22.451997688Z
+modified_at: 2026-09-28T03:22:22.451997688Z
+req_type: Task
+filed_at:
+  code_sha: 9099f64c8c97b0e9b00de5d73fe6a347fb96bf26
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 9099f64c8c
+  vendor: antigravity
+  session: 79f15ecb-4580-4277-9778-648c50ac17b4
