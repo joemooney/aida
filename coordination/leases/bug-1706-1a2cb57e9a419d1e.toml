@@ -1,0 +1,12 @@
+scope = "BUG-1706"
+node_id = "1"
+clone_path = "/tmp/aida-nightshift"
+host = "imac"
+pid = 570
+pid_start_time = "2026-09-28T11:00:58+00:00"
+agent = "implementer"
+started_at = "2026-09-28T11:01:20.824331023+00:00"
+heartbeat_at = "2026-09-28T11:01:20.824331023+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
