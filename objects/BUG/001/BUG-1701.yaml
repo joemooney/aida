@@ -47,13 +47,21 @@ description: |
   AC5. A caller can distinguish "still working" from "finished and idle" without attaching to the
        PTY — the 3-46s-CPU-over-6-hours signal should be something the substrate reports.
   AC6. Covered by a test that does not require a real vendor binary.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T03:16:09.883864860Z
-modified_at: 2026-09-28T03:16:09.883864860Z
+modified_at: 2026-09-28T03:16:50.674040916Z
 req_type: Bug
+history:
+- id: 01a0e603-e772-7db1-8f2e-ed88ef0a8747
+  author: joe
+  timestamp: 2026-09-28T03:16:50.674038718Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 9099f64c8c97b0e9b00de5d73fe6a347fb96bf26
   branch: main
