@@ -1462,6 +1462,37 @@ fn resolve_worktree_parent(
     }
 }
 
+/// Resolve `.` and `..` components WITHOUT touching the filesystem.
+///
+/// Deliberately lexical, not `canonicalize`: the comparison this feeds must work
+/// for a configured directory that does not exist yet, and must not follow
+/// symlinks differently on the two sides. A leading `..` that would escape the
+/// root is kept, so a relative path cannot silently become something else.
+// trace:BUG-1700 | ai:claude
+fn normalize_path_lexically(path: &std::path::Path) -> std::path::PathBuf {
+    use std::path::Component;
+    let mut out = std::path::PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => match out.components().next_back() {
+                // A real directory name is popped.
+                Some(Component::Normal(_)) => {
+                    out.pop();
+                }
+                // At the root, `..` is the root itself (`/..` is `/` on POSIX),
+                // so it is dropped rather than kept.
+                Some(Component::RootDir) | Some(Component::Prefix(_)) => {}
+                // A RELATIVE path with nothing to pop must KEEP the `..`;
+                // dropping it would turn one path into a different one.
+                _ => out.push(component.as_os_str()),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
 /// Paths with an accepted Claude Code folder-trust record, from `~/.claude.json`. `None` when the
 /// file is absent or unparseable — the caller must then stay silent rather than guess.
 // trace:BUG-1700 | ai:claude
@@ -1497,9 +1528,20 @@ fn worktree_trust_findings(
     let Some(trusted) = trusted else {
         return Vec::new();
     };
-    if trusted.iter().any(|t| parent.starts_with(t)) {
+    // `starts_with` is purely LEXICAL, so it must not see unresolved `..`. A
+    // relative `worktree_parent = "../aida-worktrees"` resolves to
+    // `<root>/../aida-worktrees`, which does not lexically start with the
+    // `<parent-of-root>/aida-worktrees` spelling `~/.claude.json` records — so
+    // an already-trusted directory would be reported as untrusted. Normalise
+    // both sides before comparing. trace:BUG-1700 | ai:claude
+    let parent = normalize_path_lexically(parent);
+    if trusted
+        .iter()
+        .any(|t| parent.starts_with(normalize_path_lexically(t)))
+    {
         return Vec::new();
     }
+    let parent = parent.as_path();
     let action = if parent_configured {
         format!(
             "launch an interactive agent in {} ONCE and accept the folder-trust prompt; every \
@@ -1619,6 +1661,74 @@ mod bug_1700_worktree_trust_tests {
             unset[0].action.contains("worktree_parent"),
             "unset must point at the setting: {}",
             unset[0].action
+        );
+    }
+
+    // The regression an independent review caught: `starts_with` is lexical, so a
+    // relative `worktree_parent` resolving to `<root>/../aida-worktrees` did not
+    // match the normalised `/home/joe/ai/aida-worktrees` that ~/.claude.json
+    // records — doctor cried wolf on an ALREADY-trusted directory.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn a_relative_parent_with_dotdot_matches_its_normalised_trusted_form() {
+        let trusted = vec![PathBuf::from("/home/joe/ai/aida-worktrees")];
+        let unnormalised = Path::new("/home/joe/ai/aida/../aida-worktrees");
+        assert!(
+            !unnormalised.starts_with(&trusted[0]),
+            "precondition: the raw path must NOT lexically match, or this test proves nothing"
+        );
+        assert!(
+            worktree_trust_findings(unnormalised, true, Some(&trusted)).is_empty(),
+            "an already-trusted directory reached via `..` must not be reported"
+        );
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn normalisation_does_not_make_a_sibling_match() {
+        let trusted = vec![PathBuf::from("/home/joe/ai/aida-worktrees")];
+        assert_eq!(
+            worktree_trust_findings(
+                Path::new("/home/joe/ai/aida/../aida-worktrees2"),
+                true,
+                Some(&trusted)
+            )
+            .len(),
+            1,
+            "normalising must not loosen the sibling check"
+        );
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn lexical_normalisation_resolves_dot_and_dotdot_without_the_filesystem() {
+        for (input, want) in [
+            ("/a/b/../c", "/a/c"),
+            ("/a/./b", "/a/b"),
+            ("/a/b/../../c", "/c"),
+            ("/a/b/c/../..", "/a"),
+            ("relative/../x", "x"),
+        ] {
+            assert_eq!(
+                normalize_path_lexically(Path::new(input)),
+                PathBuf::from(want),
+                "normalising {input}"
+            );
+        }
+    }
+
+    // A `..` with nothing to pop must be KEPT, not silently dropped — dropping it
+    // would turn one path into a different one.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn normalisation_keeps_a_dotdot_it_cannot_resolve() {
+        assert_eq!(
+            normalize_path_lexically(Path::new("../x")),
+            PathBuf::from("../x")
+        );
+        assert_eq!(
+            normalize_path_lexically(Path::new("/..")),
+            PathBuf::from("/")
         );
     }
 
