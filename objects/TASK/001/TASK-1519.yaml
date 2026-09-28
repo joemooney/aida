@@ -8,14 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:00:50.627945754Z
-modified_at: 2026-09-28T10:57:41.123436360Z
+modified_at: 2026-09-28T12:42:39.021753244Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0dc0a-5c93-75b1-8704-cdacd85b64ce
   created_at: 2026-09-26T16:01:20.459390387Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0e781-8273-76b1-af6f-ad44101b543a
   created_at: 2026-09-28T10:13:45.107896017Z
   created_by: joe
@@ -55,6 +56,26 @@ comments:
   content: 'Independent exact-head review of PR #2254 at 0500c7adccb99b6b3d6e84a9c38421d7a55d7d23: REQUEST CHANGES. Verified full diff against TASK-1519 and BUG-1639 advisor signoff plus later TASK-1521 vendor findings. Evidence: scaffold_refresh.rs still includes and refreshes .codex/skills although TASK-1521 confirms Codex 0.157.1 reads both roots and displays duplicate names; scaffold_cmd.rs says legacy packs are merely maintained rather than flagging Codex duplicates as harmful; doctor_cmd.rs checks symlinked SKILL.md only in .agents/skills although the TASK-1521 cross-reference requires covering surviving .codex/skills too. Prune path checks appear fail-closed for .agents aida-* dirs (AIDA pristine header/checksum required; symlinks excluded), and manifest merge uses physical presence or any delivered record before considering unanimous opted-out state. Tests: attempted XDG_RUNTIME_DIR=/run/user/1000 cargo test -p aida-cli-lib portable_manifest_seeding --lib; Cargo did not start because the required /run/user/1000/cargo-slots-1000 lock files were read-only in this execution environment. No Cargo slot-lock bypass used. git diff --check main...pr-2254 passed.'
   created_at: 2026-09-28T10:57:41.123436360Z
   modified_at: 2026-09-28T10:57:41.123436360Z
+- id: 01a0e809-ea2d-76b2-9083-f9d62eae74b7
+  author: joe
+  content: |-
+    NON-BLOCKING review finding (advisor, at merged head 0500c7ad) — worth a follow-up, not a revert.
+
+    The Pristine proof validates SKILL.md ONLY, but the prune caller removes the whole directory with
+    remove_dir_all. So an operator file added ALONGSIDE a pristine SKILL.md — e.g.
+    .agents/skills/aida-foo/notes.md — is deleted with it, unproven.
+
+    Narrow: it needs an aida-prefixed directory outside the expected set, holding a pristine SKILL.md,
+    plus operator-added siblings. But the guard's own stated intent is that 'shared portable skills
+    belong to the operator unless we can prove AIDA generated this exact, unedited regular file', and a
+    sibling file is precisely something AIDA did not generate. The proof and the blast radius are
+    mismatched: one file is proven, a whole tree is removed.
+
+    Fix shape: either prune by FILE (remove the proven SKILL.md, leave the directory), or extend the
+    pristine proof to every file in the directory and skip the directory if any file is unproven.
+  created_at: 2026-09-28T12:42:39.021753244Z
+  modified_at: 2026-09-28T12:42:39.021753244Z
+  session_id: fc2bef36-971e-4674-a858-0de8a84a1006
 history:
 - id: 01a0de73-10f7-7d10-b025-301a4cfa0d0a
   author: joe
