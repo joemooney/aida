@@ -142,7 +142,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:33:47.079434853Z
-modified_at: 2026-09-24T05:28:39.507312567Z
+modified_at: 2026-09-28T15:07:22.212451481Z
 req_type: Bug
 tags:
 - closure:pending
@@ -165,6 +165,11 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit 32fb93f), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-1534 --description ...` / `aida edit BUG-1534 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-1534 --since 32fb93f^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-1534 --status completed`. (merge sha: 32fb93f70af6eabad5cbaa1d34e6002d385f33f2)'
   created_at: 2026-09-24T05:28:41.317686621Z
   modified_at: 2026-09-24T05:28:41.317686621Z
+- id: 01a0e88e-68e4-7f91-93ff-acc9616e60e2
+  author: joe
+  content: 'Merge reconciliation: GitHub PR #2148 is MERGED, and merge commit 32fb93f70af6eabad5cbaa1d34e6002d385f33f2 is an ancestor of origin/main at 1e594926d8c8a7246caa07afc93ac003e83f0f0b. This spec was Done; the legacy batch subject lacked the required trailing (SPEC-ID) trailer, so aida pull did not auto-complete it. Marking Completed based on the verified integration.'
+  created_at: 2026-09-28T15:07:22.212451481Z
+  modified_at: 2026-09-28T15:07:22.212451481Z
 history:
 - id: 01a0d1e3-2c65-7412-b73b-530727b05960
   author: aida-auto-bump
