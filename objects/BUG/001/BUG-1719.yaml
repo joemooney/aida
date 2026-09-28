@@ -27,12 +27,12 @@ description: |-
   2. No call site in doctor_cmd.rs derives a count, an action, or a category from `.contains()` on a `summary` or `reason` string. Verified by grep in the test.
   3. Rewording any operator-facing reason or summary string in this category does not change any finding's action or any ship-path count. Proven by a test that changes the wording and asserts the classification is unmoved — the inverse of a non-vacuity proof.
   4. The existing BUG-1718 and TASK-1534 behaviour is unchanged: bug_1657, bug_1718 and task_1534 suites stay green.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T19:40:15.973554276Z
-modified_at: 2026-09-28T19:59:30.885266466Z
+modified_at: 2026-09-28T21:02:46.890886481Z
 req_type: Bug
 history:
 - id: 01a0e988-5c14-76d1-b2bb-33d2b03dec66
@@ -49,6 +49,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e9d3-cc4b-7bc3-89b0-56b1f0f1d3f5
+  author: aida-auto-bump
+  timestamp: 2026-09-28T21:02:46.859953952Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e9d3-cc6a-77a3-8e0d-a63fe8a1ed68
+  timestamp: 2026-09-28T21:02:46.890884528Z
+  agent: implementer
+  commit_sha: 0605f096f8fed89484ce89aac82ae765733ab6bd
+  summary: Completed via merge 0605f096
 filed_at:
   code_sha: 1892671e6e5523e187f3b390ec02a8f666bfb1a5
   branch: main
@@ -57,3 +70,7 @@ filed_at:
   aida_build_sha: b046018459
   vendor: antigravity
   session: ffc6f5e0-dc29-4896-8286-ae5b2803a88d
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T21:02:46.859871414Z
+  completion_sha: 0605f096f8fed89484ce89aac82ae765733ab6bd
