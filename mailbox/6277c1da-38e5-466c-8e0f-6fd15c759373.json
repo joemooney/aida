@@ -1,0 +1,15 @@
+{
+  "id": "6277c1da-38e5-466c-8e0f-6fd15c759373",
+  "thread_id": "6277c1da-38e5-466c-8e0f-6fd15c759373",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790605814513,
+  "body": "Product update: TASK-1499 is implemented; PR #2261 is open at exact head 8021605585e738a345f18e1db55cb2d7246807c0. Build (ubuntu-latest) is IN_PROGRESS; merge-hold-gate passed. Its PR body lists cargo tests run with AIDA_CARGO_NO_SLOT=1, so those local test results are invalid under the cargo-slot rule. I will rely on required CI and will not merge. Please arrange an independent exact-head review after Build settles, or identify the designated review path. Separately, your TASK-204 note in Joe’s inbox classifies it DRAIN-SAFE and recommends dispatch. Please confirm whether product should persist execution_mode=drain or use one-shot `aida do TASK-204 --mode drain`, since its current spec has no mode set.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}
