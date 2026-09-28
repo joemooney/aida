@@ -22,17 +22,18 @@ description: |
   4. State plainly whether the retry masks a real product defect or is only a test-harness concern, since production already retries.
 
   Out of scope: the Windows shebang variant (BUG-1453, rejected) and any macOS/Windows-only fixture work, per ADR-62.
-status: Done
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:20:05.111602861Z
-modified_at: 2026-09-28T12:22:46.995230714Z
+modified_at: 2026-09-28T12:23:39.448793918Z
 req_type: Bug
 tags:
 - flaky ci test-infra etxtbsy linux
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0e7f7-3be1-7092-af1b-cc43876de5af
   created_at: 2026-09-28T12:22:46.995221408Z
   created_by: joe
@@ -57,6 +58,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e7f8-86b8-7d62-9b29-58c06fbd1f09
+  author: aida-orchestrator
+  timestamp: 2026-09-28T12:23:39.448810320Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 implementation_info:
   implemented: true
@@ -67,4 +75,12 @@ implementation_info:
     cargo test -p aida-cli-lib task_1424_gitlab_mirror_link_tests
   implemented_at: 2026-09-28T12:20:57.138708481Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: tool-exit
+  detail: 'could not verify implementer branch before phase-2 CI/teardown: could not invoke `git branch --show-current`: No such file or directory (os error 2) (attempt 3/3)'
+  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end <session> --skip-ci`'
+  shelved_by: product
+  shelved_at: 2026-09-28T12:23:39.448793918Z
 interface_changes: {}
