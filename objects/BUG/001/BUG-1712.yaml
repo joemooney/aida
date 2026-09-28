@@ -1,0 +1,57 @@
+id: 01a0e7cd-9bc1-7480-8499-2443c7eb5572
+spec_id: BUG-1712
+agreed_id: BUG-1712
+title: 'auto-complete failure: phase 1 (implementer) on BUG-1706'
+description: |
+  Auto-drafted by `aida queue work BUG-1706 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  phase 1 child session 01a0e7cd exited with code 1 after 4813ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: [agents] bypass and contained mode are mutually exclusive launch postures. The single clean replacement launch already ran and was refused; no session lease was left behind and BUG-1706 was not advanced
+
+  Failure kind: `launch-refused`
+
+  ## Recovery hint shown to the user
+
+  The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work BUG-1706`.
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-28T11:36:35.076715667+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 10545 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"BUG-1706","started_at":"2026-09-28T11:36:15.038423134+00:00","completed_at":"2026-09-28T11:36:35.076715667+00:00","outcome":"failed","variant":"through-ci","failed_phase":1,"failure_kind":"launch-refused","failure_message":"phase 1 child session 01a0e7cd exited with code 1 after 4813ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: [agents] bypass and contained mode are mutually exclusive launch postures. The single clean replacement launch already ran and was refused; no session lease was left behind and BUG-1706 was not advanced","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":10545}],"total_ms":18960,"binary_sha":"abc0255259"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T11:36:46.785255114Z
+modified_at: 2026-09-28T11:36:46.785255114Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-1
+- failure-kind:launch-refused
+- implementer
+filed_at:
+  code_sha: a68f10aed890589c0233d153eca99583e867c4aa
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: abc0255259
+  vendor: codex
