@@ -27,10 +27,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:20:05.111602861Z
-modified_at: 2026-09-28T11:51:52.467915726Z
+modified_at: 2026-09-28T12:15:07.070032102Z
 req_type: Bug
 tags:
 - flaky ci test-infra etxtbsy linux
+comments:
+- id: 01a0e7f0-b53e-7501-8a95-9722aa0e4e20
+  author: joe
+  content: 'Implemented one shared executable fixture writer/spawn helper with fsync/close-before-chmod and ETXTBSY retries; migrated fake_gh and other test executables to it. Added a Linux open-writer race test and CI ratchet preventing local fake_gh writer copies or direct executable permission changes. This is a test-harness issue: production''s installed gh spawn path already retries ETXTBSY, and no product defect is indicated.'
+  created_at: 2026-09-28T12:15:07.070032102Z
+  modified_at: 2026-09-28T12:15:07.070032102Z
 history:
 - id: 01a0e374-039d-7352-9d0d-65f5b82445f7
   author: joe
