@@ -21,12 +21,12 @@ description: |
   2. A worktree registration whose directory no longer exists is pruned without emitting a finding.
   3. `aida pr ship` step 6 does not print per-finding detail for this category on the success path; a one-line summary pointing at `aida doctor --category merged-agent-worktrees` is enough. The ship result must not be buried.
   4. A branch with GENUINELY unmerged work still surfaces, proven by a test that asserts the real case is not swallowed by the fix for (1).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T18:17:29.160704399Z
-modified_at: 2026-09-28T18:35:34.796904895Z
+modified_at: 2026-09-28T18:36:15.319974095Z
 req_type: Bug
 comments:
 - id: 01a0e94d-080c-75c1-99ce-22b0b207afb5
@@ -122,6 +122,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e94d-a657-7f40-94f3-cf73387b75b1
+  author: aida-session-start
+  timestamp: 2026-09-28T18:36:15.319973604Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: b04601845909f555a23c71fa3548fc5c967d8659
