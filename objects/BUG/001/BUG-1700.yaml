@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T02:46:35.422630850Z
-modified_at: 2026-09-28T04:54:15.233215658Z
+modified_at: 2026-09-28T04:54:16.129000494Z
 req_type: Bug
 comments:
 - id: 01a0e5f3-ff30-7b32-844e-2156b8c85154
@@ -111,6 +111,23 @@ comments:
   content: Commit 6c7683ec7c references this requirement
   created_at: 2026-09-28T04:53:25.250989986Z
   modified_at: 2026-09-28T04:53:25.250989986Z
+  session_id: fc2bef36-971e-4674-a858-0de8a84a1006
+- id: 01a0e65d-1941-7c03-aa34-7b266796d1ac
+  author: joe
+  content: |-
+    Implemented on claude/bug-1700-worktree-trust-parent, PR #2248 (stacked on #2247 so the review diff is BUG-1700 alone).
+
+    Design landed as the rewritten AC, NOT the originally-filed one: AIDA writes nothing to
+    ~/.claude.json. [worktree_pool] worktree_parent (opt-in, unset by default) nests created worktrees
+    under one directory the operator trusts once; the single derivation site was pool_path_for in
+    aida-core/src/worktree_pool.rs. Plus a read-only 'aida doctor --category agent-launch' check that
+    names the directory to trust and stays silent when a covering grant already exists.
+
+    Verified on the real binary in all three states (untrusted configured parent / unset with no
+    covering grant / correctly silent on this host, where /home/joe/ai is already trusted). 22 new
+    tests; doctor suite 194/0; fmt clean.
+  created_at: 2026-09-28T04:54:16.129000494Z
+  modified_at: 2026-09-28T04:54:16.129000494Z
   session_id: fc2bef36-971e-4674-a858-0de8a84a1006
 history:
 - id: 01a0e641-0537-78b3-bfb0-d2f92b1660d9
