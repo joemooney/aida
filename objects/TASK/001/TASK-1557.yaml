@@ -17,16 +17,15 @@ description: |-
   5. Applies to every seat role, not only advisor.
 
   Out of scope: 'aida seat wait', the Stop-hook adapters, the OpenCode plugin, the resume fallback, and the interactive hold policy — all held on BUG-1693 under CR-7. This spec adds no wake mechanism and no autonomy.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T21:00:10.134435787Z
-modified_at: 2026-09-27T21:21:57.337721218Z
+modified_at: 2026-09-28T02:00:59.753199010Z
 req_type: Task
 relationships:
-- rel_type:
-    custom: child-of
+- rel_type: !Custom child-of
   target_id: 01a0cc94-cd72-7353-8ff8-c4db03f0cbd0
   created_at: 2026-09-27T21:00:41.984616141Z
   created_by: joe
@@ -38,3 +37,22 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0e5be-7668-7ca1-96c6-cdf569389057
+  author: aida-auto-bump
+  timestamp: 2026-09-28T02:00:59.752237248Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e5be-7669-7491-98ea-33abc555453d
+  timestamp: 2026-09-28T02:00:59.753198034Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/advisor/TASK-1557-2026-09-28T015843Z.md
+  commit_sha: fc869d66c9e7cfcbda983d2362a3c0b7915e2ed1
+  summary: 'All five acceptance criteria pass: explicit states/evidence, end-of-turn prohibition, active and delegated examples, all seats; held wake/stop-hook scope untouched.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T02:00:59.752111309Z
+  completion_sha: fc869d66c9e7cfcbda983d2362a3c0b7915e2ed1
