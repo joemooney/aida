@@ -6673,6 +6673,139 @@ mod story_462_doctor_tests {
         (dir, store)
     }
 
+    fn task_202_git(cwd: &std::path::Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn task_202_project(root: &std::path::Path) {
+        std::fs::create_dir_all(root).unwrap();
+        task_202_git(root, &["-c", "init.defaultBranch=main", "init", "-q"]);
+        task_202_git(root, &["config", "user.name", "AIDA Fixture"]);
+        task_202_git(
+            root,
+            &["config", "user.email", "aida-fixture@example.invalid"],
+        );
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        task_202_git(root, &["add", ".aida/config.toml"]);
+        task_202_git(root, &["commit", "-qm", "fixture project"]);
+    }
+
+    // trace:TASK-202 | ai:codex
+    #[test]
+    fn is_intended_store_accepts_linked_aida_store_worktree() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        task_202_project(&project);
+        let store = project.join(".aida-store");
+        task_202_git(&project, &["checkout", "--orphan", "aida-store"]);
+        task_202_git(
+            &project,
+            &["commit", "--allow-empty", "-qm", "fixture store branch"],
+        );
+        task_202_git(&project, &["checkout", "main"]);
+        task_202_git(
+            &project,
+            &["worktree", "add", store.to_str().unwrap(), "aida-store"],
+        );
+        assert!(is_intended_store_worktree(&project, &store));
+    }
+
+    // trace:TASK-202 | ai:codex
+    #[test]
+    fn is_intended_store_rejects_foreign_linked_worktree() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        task_202_project(&project);
+        let foreign = tmp.path().join("foreign");
+        task_202_project(&foreign);
+        let store = project.join(".aida-store");
+        task_202_git(
+            &foreign,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "aida-store",
+                store.to_str().unwrap(),
+            ],
+        );
+
+        // Establish that checks 1–4 hold, so only common-dir ownership rejects it.
+        assert_eq!(
+            aida_core::store_locate::detect_distributed_store_from(&project)
+                .unwrap()
+                .canonicalize()
+                .unwrap(),
+            store.canonicalize().unwrap()
+        );
+        let git_value = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git {args:?} failed");
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        };
+        assert_eq!(
+            std::fs::canonicalize(git_value(&["rev-parse", "--show-toplevel"])).unwrap(),
+            store.canonicalize().unwrap()
+        );
+        assert!(std::fs::symlink_metadata(store.join(".git"))
+            .unwrap()
+            .file_type()
+            .is_file());
+        assert_ne!(
+            git_value(&["rev-parse", "--git-dir"]),
+            git_value(&["rev-parse", "--git-common-dir"])
+        );
+        assert_eq!(
+            git_value(&["symbolic-ref", "--quiet", "--short", "HEAD"]),
+            "aida-store"
+        );
+        assert!(!is_intended_store_worktree(&project, &store));
+    }
+
+    // trace:TASK-202 | ai:codex
+    #[test]
+    fn is_intended_store_rejects_standalone_repository() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        task_202_project(&project);
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        task_202_git(
+            &store,
+            &["-c", "init.defaultBranch=aida-store", "init", "-q"],
+        );
+        task_202_git(&store, &["config", "user.name", "AIDA Fixture"]);
+        task_202_git(
+            &store,
+            &["config", "user.email", "aida-fixture@example.invalid"],
+        );
+        std::fs::write(store.join("seed"), "fixture").unwrap();
+        task_202_git(&store, &["add", "seed"]);
+        task_202_git(&store, &["commit", "-qm", "fixture store"]);
+        assert!(store.join(".git").is_dir());
+        assert!(!is_intended_store_worktree(&project, &store));
+    }
+
     #[test]
     fn bug_1677_appends_staging_ignores_to_bug_563_guarded_store() {
         let runtime_patterns = bug_563_runtime_patterns();
