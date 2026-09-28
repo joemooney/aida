@@ -26,8 +26,94 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T18:17:29.160704399Z
-modified_at: 2026-09-28T18:17:40.856426936Z
+modified_at: 2026-09-28T18:35:34.796904895Z
 req_type: Bug
+comments:
+- id: 01a0e94d-080c-75c1-99ce-22b0b207afb5
+  author: joe
+  content: |-
+    ## Advisor sketch (2026-09-28, claude-advisor) — with DISPROOFS, read before implementing
+
+    Acceptance #1 says "decide it by the signal the finding already has, or by content
+    equivalence". I tested both content-equivalence routes on the real branches. **Both are
+    structurally impossible here — do not spend time on them.**
+
+    ### Disproof 1 — `branch_paths_match_default` (BUG-1657, doctor_cmd.rs:4579) cannot fire
+    It is already wired in (doctor_cmd.rs:4924-4926), so the check is NOT missing a call. It
+    returns false by its own correct contract. For `claude/bug-1514`: branch commits touched 6
+    paths; `git diff --raw origin/main claude/bug-1514` differs on 612 paths; the intersection is
+    5 of the 6. Main edited those files again after the branch landed, so `touched.is_disjoint(&differs)`
+    is false. Its own doc says so: "A change that landed and was later edited again on the default
+    branch also stays KEPT."
+
+    ### Disproof 2 — comparing against the LANDING commit instead of main's tip does not help
+    Tried it: `git diff --raw 48dac64a77 claude/bug-1514 -- <touched>` still differs on 4 paths.
+    A batched integration commit folds **7 specs** into the same files (48dac64a77 = "batch 1 -
+    BUG-1510 TASK-1307 TASK-1303 TASK-1304 BUG-1528 BUG-1508 BUG-1514"), so `lib.rs` at the
+    landing commit holds all seven specs' edits while the branch holds one. Whole-file equality
+    can never hold across a batch. Per-hunk containment is the only content route and it is not
+    worth building.
+
+    ### Disproof 3 — `git merge-tree` no-op does not help (and was already ruled out on safety)
+    `git merge-tree --write-tree origin/main claude/bug-1514` exits 1 with CONTENT CONFLICTS in
+    `awaiting_you.rs` and `lib.rs`. These branches are weeks stale; merging them conflicts. Also
+    note BUG-1657 deliberately rejected merge-tree because `.gitattributes` merge drivers can mask
+    a dropped edit (this repo currently declares no `merge=` attribute, but the guard was intentional).
+
+    ### Therefore: decide it by the signal the finding already has, plus a decidable recency guard
+
+    Add to `AgentWorktreeFacts` a fourth field alongside `spec_trailer_on_main`:
+
+        /// True when NO commit on the branch is newer (committer date) than the
+        /// commit on the default branch whose trailer names this spec. With
+        /// `spec_trailer_on_main` this proves the batch landed the branch as it
+        /// stands and nothing was pushed to it afterwards — the decidable
+        /// replacement for content equivalence, which a batched squash makes
+        /// impossible (see BUG-1718 disproofs 1-3).
+        pub(crate) no_commits_after_landing: bool,
+
+    In `classify_agent_worktree`, inside the existing `unique_unmerged_commits > 0 &&
+    !ancestor_of_main` arm, after the `content_fully_landed` check:
+
+        if facts.spec_trailer_on_main && facts.no_commits_after_landing {
+            return AgentWorktreeVerdict::Removable(format!(
+                "its spec landed on origin/main through a batched integration merge and no commit \
+                 on this branch postdates that landing commit ({} commit(s) are a squash-ancestry \
+                 artifact a batched merge makes content-undecidable)",
+                facts.unique_unmerged_commits
+            ));
+        }
+
+    Populate it in the scanner next to `spec_trailer_on_main` (doctor_cmd.rs:4890): the
+    trailer probe must return the landing commit sha, not just a bool. Then
+    `git log -1 --format=%ct <landing>` vs `git log --format=%ct <merge_base>..<branch>` —
+    true iff every branch-side committer date is `<=` the landing date. Conservative on any
+    doubt: a failed git call or an unresolvable landing sha leaves it **false** (stay KEPT).
+
+    **Evidence the guard discriminates**, all five branches BUG-1718 names, branch-tip committer
+    date vs landing-commit committer date: bug-1514 1790136533 < 1790147695; bug-1527 1790182125 <
+    1790189111; task-1312 1790156830 < 1790159314; task-1444 1790138033 < 1790149897; bug-1521
+    1790160950 < 1790163523. All five clear. A commit pushed after the landing commit fails it —
+    that is the acceptance-#4 test: build the batch-landed fixture, assert Removable, then add ONE
+    commit to the branch dated after the landing commit and assert it is Keep again. Prove the test
+    fails without the fix (revert the classify arm, rerun).
+
+    ### Acceptance #2 and #3 are independent of the above and should land in the same PR
+    - **#2**: the three "mergeable-and-gone" entries (agent-a942df7439695a8aa,
+      agent-ab76dad2f2712ef43, agent-ada058a96e1aba25f) are findings for directories that do not
+      exist, healed as "already gone" (doctor_cmd.rs:5008). Prune a registration whose directory is
+      missing WITHOUT emitting a finding — it is not information, it is bookkeeping.
+    - **#3**: `aida pr ship` step 6 must not print per-finding detail for this category on the
+      success path. One summary line plus `aida doctor --category merged-agent-worktrees` for
+      detail. Do not bury the ship result — today ~80 lines follow "✓ merged PR-NNNN".
+
+    ### Do NOT
+    Do not widen `safe_heal` for this category, and do not make heal delete these worktrees
+    unattended in this PR. #1 changes the VERDICT (stops asking an unanswerable question); the
+    destructive-heal gate is a separate decision.
+  created_at: 2026-09-28T18:35:34.796904895Z
+  modified_at: 2026-09-28T18:35:34.796904895Z
+  session_id: c001ab16-8bb6-4302-867d-17d2f0880c82
 history:
 - id: 01a0e93c-a0a1-7810-b4e2-ac74ccca876e
   author: joe
