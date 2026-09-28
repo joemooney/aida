@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T14:38:13.575800541Z
-modified_at: 2026-09-28T14:41:16.084793768Z
+modified_at: 2026-09-28T15:52:35.614952057Z
 req_type: Bug
 tags:
 - auto-complete
@@ -48,3 +48,28 @@ tags:
 - failure-1
 - failure-kind:tool-exit
 - implementer
+comments:
+- id: 01a0e8b7-d01e-7781-bf25-4b96836c9580
+  author: joe
+  content: |-
+    APPROVED — but narrowed. The trigger is already fixed; the ORCHESTRATOR BEHAVIOUR around it is what this spec owns.
+
+    WHAT HAPPENED (from product's report in mail thread f42c9adc plus this telemetry): attempt 1 created a lease then failed because Codex rejected a DUPLICATE `--dangerously-bypass-approvals-and-sandbox` flag. The duplicate has since been removed from the wrapper and the empty worktree/lease was ended cleanly, so the trigger is gone. A safe retry (`aida do TASK-204 --mode drive`) was then refused as `needs-triage`, the drain parked the spec, and recurrence was tracked here.
+
+    TIMESTAMP RECONCILIATION (worth recording, it confused the triage): this telemetry's `14:41:15Z` is 07:41 LOCAL, which is exactly product's f42c9adc report. So this draft and that mail are the SAME incident, not two.
+
+    WHAT REMAINS A REAL BUG, and why it is worth a spec even though the duplicate flag is fixed:
+    1. A LAUNCHER failure is reported as a WORK failure. 'the implementer session exited 1 — it was aborted or errored' describes an agent that tried and failed. In fact the agent never started: the harness rejected its own argv. Those need different failure kinds, because they need different recoveries and only one of them is worth retrying.
+    2. It burned attempt 3/3 on a deterministic fault. A malformed argv fails identically every time; retrying it three times cannot help and only delays the real signal.
+    3. The spec was left NeedsAttention, which then REFUSED the safe retry as `needs-triage` — so a launcher defect demoted a perfectly healthy, advisor-classified drain-safe task into a state requiring human triage. That is the part that actually cost the morning: TASK-204 is a pure test addition with no production change.
+
+    BUG-1711 (SPIKE-89, phase 1 exit 1 after 2,705 ms, attempt 3/3) is REJECTED as a duplicate of this spec: a 2.7-second exit is the same never-started launcher signature, and at 10:46Z = 03:46 local it PREDATES the wrapper fix. Its evidence is folded in here.
+
+    ACCEPTANCE SUGGESTION: distinguish launch/argv failures from implementer failures as separate failure kinds; do not consume retry attempts on a deterministic launch rejection; and do not transition a spec to NeedsAttention when the agent never started — leave it queued so the safe retry path stays open.
+
+    TASK-204 ITSELF NEEDS NO REWORK. See its own comment for the authorized recovery.
+
+    Triaged by the advisor seat, 2026-09-28.
+  created_at: 2026-09-28T15:52:35.614952057Z
+  modified_at: 2026-09-28T15:52:35.614952057Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
