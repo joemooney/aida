@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-28T13:11:12.966337830Z
-modified_at: 2026-09-28T15:53:35.753874290Z
+modified_at: 2026-09-28T17:17:45.742700285Z
 req_type: Task
 tags:
 - carried-from:BUG-1673
@@ -52,6 +52,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/tool-exit: the implementer session exited 1 — it was aborted or errored (attempt 3/3). No triage reason was given.'
   created_at: 2026-09-28T15:53:35.753872929Z
   modified_at: 2026-09-28T15:53:35.753872929Z
+- id: 01a0e905-c98e-7f33-b90a-e219bf0db13d
+  author: joe
+  content: 'ADVISOR 2026-09-28: DISPROVEN — the test this finding asks for already existed at the sha the review examined. The finding reads ''no test deliberately panics and verifies the old sink is cleared''. In fact aida-core/src/object_store.rs carries object_store::tests::bug_1673_warning_sink_is_cleared_when_a_panic_unwinds_past_the_guard, which does exactly that: it installs the sink, asserts the sink is live inside the scope (precondition), panic!s inside catch_unwind, asserts the scope really unwound, then asserts !bug_1673_capture_warning(...) after the unwind and that the old sink collected only the one in-scope string. Verified three ways rather than by grep: (1) it is byte-identical between the reviewed sha c0f90a4796d55c6d52345a76763887f33a221801 and main — ''diff'' of the extracted fn reports no differences, so it was present AT review time, not added afterwards; (2) it passes on main (1 passed); (3) it is NON-VACUOUS — neutering ''impl Drop for Bug1673WarningSinkGuard'' to an empty body makes it FAIL at object_store.rs:1152 with its own message ''the guard must clear the sink while unwinding: a warning after the panic was still captured, so the sink leaked''. Working tree restored; no production change. Rejecting as disproven rather than implementing a duplicate test.'
+  created_at: 2026-09-28T17:17:45.742700285Z
+  modified_at: 2026-09-28T17:17:45.742700285Z
+  session_id: 7121c883-8051-4f5d-bccc-4953b9b1748d
 history:
 - id: 01a0e83c-4e44-70f1-b658-6ba0f2a9738a
   author: joe
