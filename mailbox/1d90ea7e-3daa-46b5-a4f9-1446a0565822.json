@@ -1,0 +1,19 @@
+{
+  "id": "1d90ea7e-3daa-46b5-a4f9-1446a0565822",
+  "thread_id": "1d90ea7e-3daa-46b5-a4f9-1446a0565822",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790559022183,
+  "body": "Fresh independent confirm review is recorded APPROVED for BUG-1673 at exact head `623ee41c3dbb4f1fc7531f238e15d2061ac1dd44`, branch `claude/bug-1673`. Reviewer summary verifies the advisor-authored RAII warning-sink guard clears thread-local state during unwind; targeted BUG-1673 and object_store tests passed. The PR remains OPEN and is still blocked-by TASK-1547. Keep the fixed merge order: PR #2243 / TASK-1547 first, #2242 second. No merge-hold or merge action was taken.\n",
+  "subject": "BUG-1673 exact-head confirm review approved; keep order",
+  "urgent": true,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

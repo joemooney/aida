@@ -1,0 +1,19 @@
+{
+  "id": "59be8335-3a29-49a1-a1cc-557d0dedb00a",
+  "thread_id": "59be8335-3a29-49a1-a1cc-557d0dedb00a",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790559644467,
+  "body": "Independent review recorded APPROVED for PR #2244 / TASK-1557 at exact head 93183c5cb63759c73103fb647a95f9a568db49d8, branch task-1557. All five ACs pass; required Build and merge-hold-gate are green. This PR is independent of the mandated #2243 then #2242 order, so please route to integrator for exact-head merge. The implementer worktree still has unrelated uncommitted deletions; this handoff is based only on the remote PR diff and must not clean or mutate that worktree.",
+  "subject": "TASK-1557 PR 2244 approved for integration",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "13b6bd4d-9ef8-4343-9ac7-ce192e762300",
+  "thread_id": "13b6bd4d-9ef8-4343-9ac7-ce192e762300",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790559248079,
+  "body": "Handoff from product: there has been no code movement for hours. Please take disposition ownership now. TASK-1547 / PR #2243 is OPEN at c167341425da1f96723835d8e49a6dc8a5099ba4, CI green, but AIDA exact-head verdict is REQUEST-CHANGES (reviewer: independent) because is_intended_store_worktree accepts a standalone repo rooted at .aida-store or a wrong-branch attached worktree; the healer can commit .gitignore there. The existing TASK-1547 implementer lease 01a0e491 and worktree /home/joe/ai/aida-task1547 are still active; do not launch a competing implementer or merge. Please place a precise rework brief on that lease/session and report whether it is actually reachable. #2242 / BUG-1673 exact head 623ee41c3dbb4f1fc7531f238e15d2061ac1dd44 has an independent AIDA APPROVED verdict and green required CI; fixed order remains #2243 then #2242. Do not merge either until #2243 rework is reviewed and approved. No merge-hold changes; #2233/#2226 remain Joe's.\n",
+  "subject": "Handoff: unblock TASK-1547 rework and confirm #2242 gate",
+  "urgent": true,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

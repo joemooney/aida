@@ -1,0 +1,19 @@
+{
+  "id": "41610c20-8292-42a6-8116-b132eec0ca72",
+  "thread_id": "41610c20-8292-42a6-8116-b132eec0ca72",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790559848918,
+  "body": "Independent confirm review at exact head df029249e8e0bb9f90e542360067197c5eb47e61 is REQUEST-CHANGES. Prior finding 1 (raw control characters checked before trimming) appears fixed in production code. Remaining concrete test gap: aida-cli-lib/src/tests/story_1476_acceptance_trust_tests.rs:550-559 cases `*\\\\r` and `*\\\\n` produce literal backslash-r/backslash-n, which the separate backslash rejection catches; they do not prove actual trailing CR/LF are rejected pre-trim. Add TOML fixtures that parse to real trailing CR/LF bytes and assert rejection. Second prior finding (refused criterion still creates manual-verification obligation when another permitted check fails) appears fixed. CI green, but do not integrate until the regression-test finding is fixed and independently re-reviewed.",
+  "subject": "Request changes: PR 2217 STORY-1476 exact-head confirm",
+  "urgent": true,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
