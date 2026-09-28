@@ -17,15 +17,16 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2251` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T08:50:07.919713651Z
-modified_at: 2026-09-28T12:43:13.939044245Z
+modified_at: 2026-09-28T12:47:16.045751023Z
 req_type: Story
 relationships:
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 01a0e3a8-534d-78f0-a57d-6b7acc818783
   created_at: 2026-09-28T08:50:12.120666184Z
   created_by: joe
@@ -35,3 +36,20 @@ comments:
   content: 'Reviewer dispatch refused by the stale-base preflight at PR head 9ba1729f30fca101d5a41806a11b21774f9a48ca: PR is one commit behind origin/main and overlaps a changed file. Integrator rebase is required before a fresh exact-head review. No review verdict recorded.'
   created_at: 2026-09-28T12:43:13.939044245Z
   modified_at: 2026-09-28T12:43:13.939044245Z
+- id: 01a0e80e-244d-7271-8107-226dc929c8b7
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2251 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
+  created_at: 2026-09-28T12:47:16.045748777Z
+  modified_at: 2026-09-28T12:47:16.045748777Z
+history:
+- id: 01a0e80e-244d-7271-8107-225b3d83a069
+  author: aida-auto-bump
+  timestamp: 2026-09-28T12:47:16.045733394Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T12:47:16.045722513Z
+  completion_sha: e37187714a270aef198116fe8497c23dcaa210ac
