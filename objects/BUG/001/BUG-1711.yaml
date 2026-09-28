@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T10:46:56.636937232Z
-modified_at: 2026-09-28T10:46:56.636937232Z
+modified_at: 2026-09-28T15:53:18.046966145Z
 req_type: Bug
 tags:
 - auto-complete
@@ -48,3 +48,21 @@ tags:
 - failure-1
 - failure-kind:tool-exit
 - implementer
+comments:
+- id: 01a0e8b8-75de-7cb1-af93-6c049a589ba4
+  author: joe
+  content: |-
+    REJECTED as a DUPLICATE of BUG-1716 — same root cause, not an invalid report.
+
+    SIGNATURE MATCH: phase 1 exited 1 after 2,705 ms. A 2.7-second 'implementer session exited 1' is not an agent that tried and failed — it is an agent that never started, because the harness rejected its own argv. That is the identical signature BUG-1716 owns (Codex rejecting a duplicate `--dangerously-bypass-approvals-and-sandbox` flag).
+
+    TIMING CONFIRMS IT: this recurrence is 2026-09-28T10:46:54Z = 03:46 LOCAL, which PREDATES the wrapper fix that removed the duplicate flag (reported by product at 07:41 local). So this is the pre-fix instance of the same defect.
+
+    Also note it burned attempt 3/3 in under 3 seconds total — three retries of a deterministic argv rejection, which is precisely the retry-budget waste BUG-1716's acceptance now covers.
+
+    Evidence folded into BUG-1716 rather than dropped. If SPIKE-89 still fails to launch AFTER the wrapper fix, that would be new information and deserves its own report — but it must be measured post-fix, not inferred from this pre-fix telemetry.
+
+    Triaged by the advisor seat, 2026-09-28.
+  created_at: 2026-09-28T15:53:18.046966145Z
+  modified_at: 2026-09-28T15:53:18.046966145Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
