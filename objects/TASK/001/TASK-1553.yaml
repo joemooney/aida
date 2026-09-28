@@ -17,15 +17,16 @@ description: |
   6. Layer 2 (`assert_hermetic`) covers `config_dir`, not just `home_dir`. `aida_core::home::config_dir()` at `scaffold_cmd.rs:400` and `remote_create.rs:879` never passes through `assert_hermetic`. Layer 1's env redirect covers it so there is no leak today, but the "refuse at the source" property should not be home-only.
 
   Out of scope: changing the resolver's precedence, and the Windows/MSYS2 behavior change (separate follow-up).
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T17:19:52.573674807Z
-modified_at: 2026-09-28T13:04:13.088718636Z
+modified_at: 2026-09-28T13:21:17.735188400Z
 req_type: Task
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0e81d-9347-7d11-a0f0-8389ec41a79e
   created_at: 2026-09-28T13:04:13.088710402Z
   created_by: joe
@@ -37,4 +38,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0e82d-4b90-74d2-8a6c-f2b5e3b24c81
+  author: aida-auto-bump
+  timestamp: 2026-09-28T13:21:17.712681484Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0e82d-4ba7-7291-92eb-4956de9ab199
+  timestamp: 2026-09-28T13:21:17.735177950Z
+  agent: aida
+  commit_sha: 6dd405d4a5f0b2a49de050c0a6e9f57ecab452ba
+  summary: Completed via merge 6dd405d4
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T13:21:17.712581174Z
+  completion_sha: 6dd405d4a5f0b2a49de050c0a6e9f57ecab452ba
