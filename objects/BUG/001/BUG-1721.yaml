@@ -1,0 +1,53 @@
+id: 01a0ea57-a922-77f3-9b0e-80605e648cbc
+spec_id: BUG-1721
+agreed_id: BUG-1721
+title: 'aida pull completion reconcile is single-pass: a spec unblocked within the same merge stays Done until the next pull'
+description: |
+  `aida pull`'s merge-time completion reconcile runs a single pass over the
+  specs credited by a merge commit. When that one commit completes BOTH a
+  blocker and the spec it blocks, the blocked spec is evaluated while the
+  blocker is still In Progress, so it is held at Done with:
+
+    ↷ TASK-1548 stays Done — merged, but blocked by TASK-1529 (InProgress)
+       (completion waits for the blocker)
+
+  and the SAME commit then bumps TASK-1529 → Completed later in the pass.
+  Nothing re-evaluates TASK-1548, so it sits at Done indefinitely. Running
+  `aida pull` a second time (which finds "no new commits") bumps it correctly.
+
+  Observed 2026-09-28 on merge commit 59e859b, specs TASK-1529 / TASK-1548.
+
+  This is silent: the operator is told the spec "waits for the blocker", the
+  blocker completes seconds later in the same output, and no further prompt
+  says the wait is over. A drain that pulls once per merge leaves the blocked
+  spec permanently un-credited.
+
+  ## Acceptance
+
+  1. A single `aida pull` over a merge commit that credits both a blocker and
+     its blocked spec completes BOTH, in one invocation.
+  2. The fix is order-independent: it holds whether the blocker or the blocked
+     spec is reconciled first (iterate to a fixed point, or topologically order
+     the pass by blocker depth).
+  3. A cycle in the blocks graph terminates rather than looping forever, and
+     reports the cycle.
+  4. A blocked spec whose blocker is genuinely NOT completed by this commit
+     still stays Done and still prints the "waits for the blocker" line — the
+     existing hold is not weakened.
+  5. A regression test constructs a two-spec blocker chain credited by one
+     commit and asserts both reach Completed after a single reconcile.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T23:26:48.610851151Z
+modified_at: 2026-09-28T23:26:48.610851151Z
+req_type: Bug
+filed_at:
+  code_sha: 59e859b49f784a8633a049ad39cf243345289ea9
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 1fe3f6bdc9
+  vendor: antigravity
+  session: 71214fd6-ec84-46cf-87bf-fa8de48d6877
