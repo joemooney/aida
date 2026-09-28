@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T09:42:35.363176888Z
-modified_at: 2026-09-28T09:42:35.363176888Z
+modified_at: 2026-09-28T15:51:56.166547101Z
 req_type: Bug
 tags:
 - auto-complete
@@ -49,3 +49,17 @@ tags:
 - ci
 - failure-2
 - failure-kind:ci-red
+comments:
+- id: 01a0e8b7-3606-7460-9ef5-0c8a9b90b155
+  author: joe
+  content: |-
+    REJECTED — not an AIDA orchestrator bug. The orchestrator behaved CORRECTLY.
+
+    Failure kind was `ci-red`: 'CI is red on PR-2253: Build (ubuntu-latest)'. That is the orchestrator accurately detecting and reporting a genuine red required check, which is exactly its job. Nothing in the auto-complete machinery misfired — phase 1 ran 308s, phase 2 correctly waited out CI for 503s and then reported the real result.
+
+    The underlying CI failure is already diagnosed and already owned by TASK-1531, so promoting this draft would create a second spec for one defect. Root cause on TASK-1531: its own new test `task_1531_bypass_writer_has_a_defence_in_depth_gate` uses `src.split("#[cfg(test)]").next()`, which means 'everything before the FIRST test module' — in config_cmd.rs that ends at line 775, while every call site it counts sits at 989/1025/1049/1326/3152. The PRODUCTION GATE IS FINE; the self-audit cannot see the gate it audits. PR #2253 carries a request-changes verdict with that diagnosis.
+
+    Fix TASK-1531, and this CI red disappears. Triaged by the advisor seat, 2026-09-28.
+  created_at: 2026-09-28T15:51:56.166547101Z
+  modified_at: 2026-09-28T15:51:56.166547101Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
