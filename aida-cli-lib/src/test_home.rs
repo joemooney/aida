@@ -513,46 +513,31 @@ mod tests {
     // trace:TASK-1513 | ai:claude
     #[test]
     fn no_direct_home_resolution_in_crate() {
-        let mut needles = vec![
-            ["dirs", "::", "home_dir"].concat(),
-            ["dirs", "::", "config_dir"].concat(),
-        ];
-        for key in ["HOME", "USERPROFILE", "APPDATA"] {
-            needles.push(format!("var(\"{key}\")"));
-            needles.push(format!("var_os(\"{key}\")"));
-        }
-
-        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let mut offenders = Vec::new();
-        let mut stack = vec![src];
-        while let Some(dir) = stack.pop() {
-            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-                let p = entry.path();
-                if p.is_dir() {
-                    stack.push(p);
-                    continue;
-                }
-                if p.extension().is_none_or(|e| e != "rs") || p.ends_with("test_home.rs") {
-                    continue;
-                }
-                let text = std::fs::read_to_string(&p).unwrap();
-                for (i, line) in text.lines().enumerate() {
-                    if line.trim_start().starts_with("//") || line.contains("allow-direct-home-dir")
-                    {
-                        continue;
-                    }
-                    if needles.iter().any(|n| line.contains(n)) {
-                        offenders.push(format!("{}:{}", p.display(), i + 1));
-                    }
-                }
-            }
-        }
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let offenders = raw_home_lookup_offenders(root);
         assert!(
             offenders.is_empty(),
-            "use crate::home_dir() / aida_core::home::config_dir() instead of resolving \
-             a home directory directly:\n{}",
+            "use shared home/config resolvers instead of resolving a home directory directly:\n{}",
             offenders.join("\n")
         );
+    }
+
+    #[test]
+    fn raw_home_lookup_scan_catches_std_home_multiline_and_decoy_exemptions() {
+        let temp = tempfile::tempdir().unwrap();
+        let src = temp.path().join("aida-core/src");
+        std::fs::create_dir_all(src.join("foo")).unwrap();
+        std::fs::write(src.join("home.rs"), "fn f() { std::env::home_dir(); }\n").unwrap();
+        std::fs::write(
+            src.join("foo/home.rs"),
+            "fn f() { std::env::home_dir(); }\n",
+        )
+        .unwrap();
+        std::fs::write(src.join("other.rs"), "std::env::var_os(\n \"HOME\"\n);\n").unwrap();
+        let found = raw_home_lookup_offenders(temp.path());
+        assert_eq!(found.len(), 2, "{found:#?}");
+        assert!(found.iter().any(|p| p.ends_with("foo/home.rs:1")));
+        assert!(found.iter().any(|p| p.ends_with("other.rs:1")));
     }
 
     /// The shared `aida-core` resolvers follow the redirected home too, so a
@@ -648,6 +633,93 @@ mod tests {
             // Far above every platform's `pid_max`, so it cannot exist.
             let impossible = i32::MAX as u32 - 1;
             assert!(!pid_is_alive(impossible), "an impossible pid is gone");
+        }
+    }
+}
+
+// trace:TASK-1553 | ai:codex
+fn raw_home_lookup_offenders(workspace: &Path) -> Vec<String> {
+    let needles = [
+        "dirs::home_dir",
+        "dirs::config_dir",
+        "std::env::home_dir",
+        "var(\"HOME\")",
+        "var_os(\"HOME\")",
+        "var(\"USERPROFILE\")",
+        "var_os(\"USERPROFILE\")",
+        "var(\"APPDATA\")",
+        "var_os(\"APPDATA\")",
+    ];
+    let allowed = [
+        workspace.join("aida-core/src/home.rs"),
+        workspace.join("aida-cli-lib/src/test_home.rs"),
+    ];
+    let mut files = Vec::new();
+    for member in [
+        "aida-core",
+        "aida-cli-lib",
+        "aida-server",
+        "aida-tui",
+        "aida-cli",
+        "aida-crate",
+        "aida-generate-types",
+    ] {
+        let base = workspace.join(member);
+        for rel in ["src", "tests"] {
+            let dir = base.join(rel);
+            if dir.is_dir() {
+                collect_rust_files(&dir, &mut files);
+            }
+        }
+        let build = base.join("build.rs");
+        if build.is_file() {
+            files.push(build);
+        }
+    }
+    let mut offenders = Vec::new();
+    for path in files {
+        if allowed.iter().any(|p| *p == path) {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let mut normalized = String::new();
+        let mut lines = Vec::new();
+        for (index, line) in text.lines().enumerate() {
+            if line.trim_start().starts_with("//") || line.contains("allow-direct-home-dir") {
+                continue;
+            }
+            for ch in line.chars().filter(|c| !c.is_whitespace()) {
+                normalized.push(ch);
+                lines.push(index + 1);
+            }
+        }
+        for needle in needles {
+            let needle: String = needle.chars().filter(|c| !c.is_whitespace()).collect();
+            let mut start = 0;
+            while let Some(offset) = normalized[start..].find(&needle) {
+                let pos = start + offset;
+                offenders.push(format!("{}:{}", path.display(), lines[pos]));
+                start = pos + needle.len();
+            }
+        }
+    }
+    offenders.sort();
+    offenders.dedup();
+    offenders
+}
+
+fn collect_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rust_files(&path, out);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            out.push(path);
         }
     }
 }
