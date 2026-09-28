@@ -299,7 +299,8 @@ async fn main() -> Result<()> {
                 if std::path::Path::new("/data").exists() {
                     std::path::PathBuf::from("/data")
                 } else {
-                    dirs::home_dir()
+                    // trace:TASK-1553 | ai:codex
+                    aida_core::home::home_dir()
                         .unwrap_or_else(|| std::path::PathBuf::from("."))
                         .join(".aida")
                 }

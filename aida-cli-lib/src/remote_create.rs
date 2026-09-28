@@ -877,7 +877,12 @@ fn gitlab_host_from_api_url(api_url: &str) -> Option<String> {
 
 fn glab_config_path() -> Option<PathBuf> {
     // trace:TASK-1513 | ai:claude
-    aida_core::home::config_dir().map(|dir| dir.join("glab-cli").join("config.yml"))
+    // trace:TASK-1553 | ai:codex
+    aida_core::home::config_dir().map(|dir| {
+        #[cfg(test)]
+        crate::test_home::assert_hermetic(&dir);
+        dir.join("glab-cli").join("config.yml")
+    })
 }
 
 fn gitlab_release_token_from_glab_config_for_host(host: &str) -> Option<String> {

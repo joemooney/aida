@@ -415,7 +415,13 @@ pub(crate) fn handle_scaffold_command(
 
             let dest = output.clone().unwrap_or_else(|| {
                 // trace:TASK-1513 | ai:claude
+                // trace:TASK-1553 | ai:codex
                 aida_core::home::config_dir()
+                    .map(|p| {
+                        #[cfg(test)]
+                        crate::test_home::assert_hermetic(&p);
+                        p
+                    })
                     .map(|p| p.join("aida/templates"))
                     .unwrap_or_else(|| std::path::PathBuf::from("templates"))
             });
