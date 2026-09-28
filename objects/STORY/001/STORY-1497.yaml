@@ -1,0 +1,26 @@
+id: 01a0e7e3-029a-7823-b76f-5e06a8d75f31
+spec_id: STORY-1497
+agreed_id: STORY-1497
+title: 'Review PR-2255: [AI:codex] fix(git): honor dry-run in mirror pre-push hook (BUG-1706)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0e7ce`) for branch `bug-1706-3`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2255>
+  - Branch: `bug-1706-3` → `main`
+
+  ## Covers
+
+  - BUG-1706
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2255` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-28T12:00:09.370745876Z
+modified_at: 2026-09-28T12:00:09.370745876Z
+req_type: Story
