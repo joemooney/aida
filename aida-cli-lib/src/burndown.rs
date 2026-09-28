@@ -701,10 +701,20 @@ pub(crate) const WHY_OPEN_PREFIX: &str = "why-open:";
 /// the prefix; returns the trimmed reason text. trace:TASK-723 | ai:claude
 pub(crate) fn parse_why_open_comment(content: &str) -> Option<String> {
     let trimmed = content.trim_start();
-    if trimmed.len() < WHY_OPEN_PREFIX.len() {
+    // `get(..n)` instead of `split_at(n)`: the prefix length is a BYTE count, and
+    // a comment whose 9th byte falls INSIDE a multi-byte character made
+    // `split_at` panic — "byte index 9 is not a char boundary". A real comment
+    // did it: `SKETCH — awaiting independent advisor signoff` is 7 ASCII bytes
+    // then an em-dash spanning bytes 7..10. That took down `aida human` and the
+    // burndown's open-facts collection for the whole project, because one spec
+    // carried one em-dash in one comment. `get` returns None on a non-boundary,
+    // which is also the correct answer: a string that cannot be split there
+    // cannot start with an ASCII prefix.
+    // trace:BUG-1715 | ai:claude
+    let Some(head) = trimmed.get(..WHY_OPEN_PREFIX.len()) else {
         return None;
-    }
-    let (head, rest) = trimmed.split_at(WHY_OPEN_PREFIX.len());
+    };
+    let rest = &trimmed[WHY_OPEN_PREFIX.len()..];
     if head.eq_ignore_ascii_case(WHY_OPEN_PREFIX) {
         let reason = rest.trim();
         if reason.is_empty() {
@@ -3960,6 +3970,57 @@ mod tests {
     }
 
     // TASK-723: multi-reason — derived + finding-link + residual note.
+    #[test]
+    // BUG-1715: a comment whose 9th BYTE falls inside a multi-byte character used
+    // to panic `split_at` — "byte index 9 is not a char boundary" — which took
+    // down `aida human` and the burndown's open-facts collection for the entire
+    // project. One em-dash in one comment on one spec was enough. This is the
+    // exact string that did it, in production.
+    // trace:BUG-1715 | ai:claude
+    #[test]
+    fn multibyte_char_at_the_prefix_boundary_does_not_panic() {
+        assert_eq!(
+            parse_why_open_comment("SKETCH — awaiting independent advisor signoff"),
+            None,
+            "not a why-open comment, and must not panic deciding that"
+        );
+    }
+
+    // Every byte offset around the 9-byte prefix, so no boundary is left untested.
+    // trace:BUG-1715 | ai:claude
+    #[test]
+    fn a_multibyte_char_at_any_offset_near_the_boundary_is_safe() {
+        for pad in 0..12 {
+            let s = format!("{}—tail", "x".repeat(pad));
+            assert_eq!(
+                parse_why_open_comment(&s),
+                None,
+                "pad={pad} must be rejected without panicking: {s:?}"
+            );
+        }
+    }
+
+    // A short non-ASCII string must not panic either: the old length guard
+    // compared BYTE lengths, so a 3-byte char could pass it and still not be a
+    // valid split point.
+    // trace:BUG-1715 | ai:claude
+    #[test]
+    fn short_multibyte_input_is_safe() {
+        for s in ["—", "——", "é", "🙂🙂"] {
+            assert_eq!(parse_why_open_comment(s), None, "{s:?} must not panic");
+        }
+    }
+
+    // The fix must not break the thing the function is FOR.
+    // trace:BUG-1715 | ai:claude
+    #[test]
+    fn a_real_why_open_comment_with_an_em_dash_in_the_reason_still_parses() {
+        assert_eq!(
+            parse_why_open_comment("why-open: blocked — upstream API is down"),
+            Some("blocked — upstream API is down".to_string())
+        );
+    }
+
     #[test]
     fn parse_why_open_comment_extracts_reason_case_insensitively() {
         assert_eq!(
