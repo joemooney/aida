@@ -22,12 +22,12 @@ description: |
   4. State plainly whether the retry masks a real product defect or is only a test-harness concern, since production already retries.
 
   Out of scope: the Windows shebang variant (BUG-1453, rejected) and any macOS/Windows-only fixture work, per ADR-62.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:20:05.111602861Z
-modified_at: 2026-09-28T16:15:08.459760159Z
+modified_at: 2026-09-28T16:15:49.889387774Z
 req_type: Bug
 tags:
 - flaky ci test-infra etxtbsy linux
@@ -117,6 +117,11 @@ comments:
   created_at: 2026-09-28T16:15:08.459760159Z
   modified_at: 2026-09-28T16:15:08.459760159Z
   session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+- id: 01a0e8cd-1681-7181-aeff-7e0428d8aa19
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES (advisor, exact head). PR #2256''s test-infra refactor (centralize executable fixtures) BREAKS a test that passes on main: pr_cmd::task_471_stale_base_preflight_tests::preflight_detects_real_stale_overlap_before_reviewer_launch, panicking at task_471_stale_base_preflight_tests.rs:131:80. I verified this is NOT a pre-existing flake and NOT CI infrastructure - the same test passes locally on current main - so the regression belongs to this branch. Required Build is therefore legitimately failing and the merge-hold is correct. Most likely the centralized fixture no longer produces the executable bit or the path shape that preflight test depends on. Fix and re-review at the new head.. No triage reason was given.'
+  created_at: 2026-09-28T16:15:49.889386184Z
+  modified_at: 2026-09-28T16:15:49.889386184Z
 history:
 - id: 01a0e374-039d-7352-9d0d-65f5b82445f7
   author: joe
@@ -139,6 +144,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a0e8cd-1681-7181-aeff-7dffe2af9cb5
+  author: joe
+  timestamp: 2026-09-28T16:15:49.889377954Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 implementation_info:
   implemented: true
@@ -149,12 +161,4 @@ implementation_info:
     cargo test -p aida-cli-lib task_1424_gitlab_mirror_link_tests
   implemented_at: 2026-09-28T12:20:57.138708481Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'REQUEST CHANGES (advisor, exact head). PR #2256''s test-infra refactor (centralize executable fixtures) BREAKS a test that passes on main: pr_cmd::task_471_stale_base_preflight_tests::preflight_detects_real_stale_overlap_before_reviewer_launch, panicking at task_471_stale_base_preflight_tests.rs:131:80. I verified this is NOT a pre-existing flake and NOT CI infrastructure - the same test passes locally on current main - so the regression belongs to this branch. Required Build is therefore legitimately failing and the merge-hold is correct. Most likely the centralized fixture no longer produces the executable bit or the path shape that preflight test depends on. Fix and re-review at the new head.'
-  recovery_hint: address the review findings, move BUG-1689 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-09-28T12:45:34.887906355Z
 interface_changes: {}
