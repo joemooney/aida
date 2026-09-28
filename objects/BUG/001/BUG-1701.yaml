@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T03:16:09.883864860Z
-modified_at: 2026-09-28T04:13:33.807499906Z
+modified_at: 2026-09-28T05:19:47.643484475Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -71,6 +71,33 @@ comments:
   created_at: 2026-09-28T04:13:33.807499906Z
   modified_at: 2026-09-28T04:13:33.807499906Z
   session_id: 79f15ecb-4580-4277-9778-648c50ac17b4
+- id: 01a0e674-77bb-7b53-b848-4f35da2eaaa6
+  author: joe
+  content: |-
+    Routing slice implemented: PR #2249 (branch claude/bug-1701-drain-routing, stacked on #2247).
+
+    `aida agent new --spec <ID>` now REFUSES a drain-groomed spec and points at `aida do <SPEC>`,
+    at both the foreground and --bg launch sites. Sits after the dry-preview returns (previews are
+    never blocked) and before any worktree/lease/status side effect. Fails open: only drain is
+    refused; ungroomed specs, an unreadable store, and every supervised mode pass through. --force
+    is the escape hatch.
+
+    Two things only real-binary verification surfaced:
+      1. Agent mode renders the refusal as a TOON block keeping ONLY the first line as 'error:' and
+         lifting the first BACKTICK-quoted 'aida ...' command as 'help:'. My first draft had 'aida do'
+         unbackticked, so help: advertised 'aida queue work --auto-complete' instead and the primary
+         recommendation was dropped. Both halves now pinned by tests.
+      2. --bg detaches and does NOT hold the caller, so the message is parameterised on the lane
+         rather than claiming something untrue of it.
+
+    Verified against TASK-1499 (the only drain-groomed spec in the store): exit 1, 'help: aida do
+    TASK-1499', nothing spawned. STORY-1486 (non-drain) passes the guard and is refused later by an
+    unrelated gate -> fail-open confirmed.
+
+    The classifier false-busy slice is NOT in this PR; filed as BUG-1704 (child of this spec).
+  created_at: 2026-09-28T05:19:47.643484475Z
+  modified_at: 2026-09-28T05:19:47.643484475Z
+  session_id: fc2bef36-971e-4674-a858-0de8a84a1006
 history:
 - id: 01a0e603-e772-7db1-8f2e-ed88ef0a8747
   author: joe
