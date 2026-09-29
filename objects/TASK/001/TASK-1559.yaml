@@ -1,0 +1,102 @@
+id: 01a0edfa-ca38-7e51-b727-b8dfd2827d68
+spec_id: TASK-1559
+agreed_id: TASK-1559
+title: Make test env-lock reentrance a loud panic, not a deadlock
+description: |
+  ## Problem
+
+  TASK-1532's env-guard migration shipped an unconditional self-deadlock.
+  `publish_fixture_receipt` in `aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs`
+  already held `test_env::env_lock()` on its first line; the migration inserted an
+  `EnvVarGuard::set` — which acquires that same non-reentrant lock — inside it. Both
+  callers hung forever, and because the hung thread never released `ENV_LOCK`, every
+  other env-guarded test in the crate blocked behind it. A 25-minute suite run was
+  consumed producing no result at all.
+
+  The migration lint (`no_raw_env_writes_in_test_code`) cannot catch this class. It
+  scans for *raw* env writes and is satisfied by a guard; it has no idea whether the
+  enclosing scope already holds the lock. The author knew the rule — `test_env.rs`'s
+  own doc comment warns "two `EnvVarGuard::set` calls deadlock" and
+  `queue_rework_tests.rs:480` carries a "no outer `env_lock()` here" note — and still
+  missed one site. A rule that lives only in prose gets missed.
+
+  ## Why this is worth doing
+
+  The failure mode is maximally expensive: silent, unconditional, and it poisons
+  every unrelated env-guarded test in the same binary, so the symptom (a whole suite
+  hanging) is far away from the cause (one line in one helper). Diagnosis required
+  noticing low CPU against high wall time with no child processes. A deadlock that
+  announces itself costs one panic message; this one cost a full suite run plus the
+  triage.
+
+  ## Proposed approach
+
+  Make reentrance a loud, immediate panic rather than a hang, in the test-only
+  `env_lock()` of **both** `aida-cli-lib/src/test_env.rs` and
+  `aida-core/src/test_env.rs`.
+
+  Preferred: track the owning thread. Keep a `Mutex<Option<ThreadId>>` (or an
+  `AtomicU64` of the thread id) alongside the lock, set on acquire and cleared on
+  release. If `env_lock()` is entered by a thread that already owns the lock, panic
+  immediately with a message naming the rule and the remedy. This is exact — no
+  false positives from ordinary cross-thread contention, and no timeout to tune.
+
+  Fallback only if thread-ownership tracking proves impractical: `try_lock` in a
+  loop with a generous ceiling (>=60s, comfortably above the slowest legitimate
+  critical section) and panic on expiry. Note this is strictly worse: it can fire
+  spuriously on a genuinely slow holder, and it still burns the timeout before
+  reporting.
+
+  Note the guards themselves (`EnvVarGuard`/`EnvVarsGuard`) acquire the lock, so
+  the same detection covers both "nested `env_lock()`" and "guard constructed
+  inside an `env_lock()` scope" — the shape that actually shipped.
+
+  ## Acceptance criteria
+
+  1. Calling `test_env::env_lock()` on a thread that already holds the lock panics
+     immediately (no hang) with a message that names the invariant and points at the
+     fix, e.g. "ENV_LOCK already held by this thread — do not nest env_lock()/
+     EnvVarGuard; scope the guard to the window that needs it". Implemented in both
+     `aida-cli-lib/src/test_env.rs` and `aida-core/src/test_env.rs`.
+  2. Constructing an `EnvVarGuard`/`EnvVarsGuard` while the current thread already
+     holds `env_lock()` panics the same way — proven by a test per crate, since this
+     is the shape that caused the TASK-1532 defect.
+  3. Ordinary cross-thread contention still blocks and succeeds: a test acquires the
+     lock on one thread while another thread waits and then proceeds, with no panic.
+     Guards nested across *different* threads must not be misreported.
+  4. Sequential (non-nested) acquire/release in the same thread still works, and
+     releasing on one thread then acquiring on another does not leave stale
+     ownership behind.
+  5. Poison tolerance is preserved: a thread that panics while holding the lock does
+     not wedge later acquirers, and ownership is cleared on unwind rather than left
+     pointing at the dead thread. `core_env_guard_restores_and_survives_poison`
+     continues to pass.
+  6. Mutation-proved: re-introducing the removed `env_lock()` line in
+     `publish_fixture_receipt` makes the affected tests fail fast with the new panic
+     instead of hanging. Record the before (timeout) and after (panic) observation.
+  7. `cargo test -p aida-cli-lib --lib` and `cargo test -p aida-core --lib` stay
+     green, and no new compiler warnings appear.
+
+  ## Out of scope
+
+  - Extending the source-scanning lint to reason about lock scope statically. A
+    runtime tripwire is cheaper and catches the real shape; a static scope analysis
+    is a much larger job with worse precision.
+  - Making the lock reentrant. Reentrance would silently permit nested guards whose
+    restore-on-drop order is ambiguous — the goal is to forbid nesting loudly, not
+    to allow it.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-29T16:23:51.096694327Z
+modified_at: 2026-09-29T16:23:51.096694327Z
+req_type: Task
+filed_at:
+  code_sha: 7d85a8057d6ab4aaf62b3426db351c94ecd93a34
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: 4c4c542f-a855-4b9f-91c7-9e339ae88796
