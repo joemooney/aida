@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:29:13.952391653Z
-modified_at: 2026-09-27T08:25:40.612211650Z
+modified_at: 2026-09-29T16:14:38.896997261Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -60,3 +60,93 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): TASK-1532 is an approved, bounded test-hygiene follow-up with explicit acceptance and appears in the approved burndown ready set. Queue for independent implementation to reduce backlog; preserve all acceptance criteria and require a fresh independent review. Keep required Ubuntu and merge-hold gates; optional macOS/Windows checks are not dispatch blockers.'
   created_at: 2026-09-27T08:25:04.329641568Z
   modified_at: 2026-09-27T08:25:04.329641568Z
+- id: 01a0edf2-5d31-7d83-b10d-91b809eb3c06
+  author: joe
+  content: |
+    SALVAGE AUDIT of branch `task-1532` (was: commit ac886e3595 "wip: salvage task-1532", authored
+    2026-09-27, no PR, no worktree, build state unestablished). Session #3 of the relay, 2026-09-29.
+
+    VERDICT: the WIP is substantially correct and now builds, but it shipped ONE unconditional
+    self-deadlock that hung the aida-cli-lib suite forever. Fixed. Details below.
+
+    WHAT THE WIP ALREADY DELIVERS (verified, not assumed)
+    - Rebases onto main 7d85a8057d with NO conflicts.
+    - `make build-fast` (release) succeeds; `cargo test --no-run -p aida-core -p aida-cli-lib --lib`
+      compiles with zero errors. The test code, which is where all 1006 insertions live, compiles.
+    - AC2 is DONE in BOTH crates: `no_raw_env_writes_in_test_code` (aida-cli-lib) and
+      `core_no_raw_env_writes_in_test_code` (aida-core), backed by `scan_raw_env_writes_in_dir`.
+    - AC1 is satisfied as measured BY that lint: both lints pass, i.e. no raw set_var/remove_var
+      remains in test code in either crate outside the named helpers.
+    - AC3 is addressed at least for the spec's own example: `story_465_awaiting_report_tests.rs` gains
+      `awaiting_clean_env()`, clearing AIDA_USER/AIDA_SESSION_ROLE/AIDA_AGENT_TYPE/AIDA_SESSION_ID.
+    - The "real race BUG-1666 missed" is fixed: `locking_gate.rs`'s module-local `EnvGuard` took no
+      lock and REMOVED the var on drop instead of restoring it; it is now the shared, lock-taking
+      `EnvVarGuard::set`.
+    - `aida-core/src/test_env.rs` is a correct new primitive: acquires TEST_ENV_LOCK, snapshots with
+      `var_os`, and on drop sets-if-Some / removes-if-None. Poison-tolerant via `into_inner`.
+
+    THE LINTS ARE MUTATION-PROVED, both scanner modes
+    A lint that never fires is worthless, so I probed it rather than trusting a green run. Inserting a
+    raw `std::env::set_var` in three places produced exactly three reports and nothing else:
+    - `aida-core/src/db/cache.rs:6545` -> reported by the core lint.
+    - `aida-cli-lib/src/glyphs.rs:1029` (a `#[cfg(test)] mod` inside a PRODUCTION file) -> reported.
+    - `aida-cli-lib/src/tests/statusline_tests.rs:5970` (a file under `src/tests/`) -> reported.
+    Both of the scanner's two modes therefore work. All three probes reverted; tree clean.
+
+    THE DEFECT: an unconditional self-deadlock in publish_fixture_receipt
+
+    `aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs`, helper `publish_fixture_receipt`:
+    the migration replaced a raw set_var/restore pair with `EnvVarGuard::set`, which ACQUIRES the
+    non-reentrant ENV_LOCK -- inside a function that already held that same lock on its first line
+    (`let _guard = crate::test_env::env_lock();`). `std::sync::Mutex` is not reentrant, so every call
+    deadlocks. Both callers (`discover_lease_recovers_start_position_after_live_lease_disappears` and
+    `discover_lease_recovers_post_push_position_after_live_lease_disappears`) hang, and because the
+    hung thread holds ENV_LOCK forever, every other env-guarded test in the crate blocks behind it.
+
+    How it was diagnosed, for the record: the suite stopped emitting output with three tests reported
+    "running for over 60 seconds". The test binary had 11m18s wall against 59s CPU and NO child
+    processes -- so it was blocked on a lock, not waiting on a subprocess. That distinction is what
+    pointed at the lock rather than at a slow fixture.
+
+    THE FIX, and why it is the right one rather than a marker exemption
+    Deleted the outer `env_lock()`. Nothing above the guard touches PROCESS env:
+    `prepare_orchestrated_lease_receipt` only writes the tempdir and sets env on the child `Command`,
+    and `child.get_envs()` reads that Command, not the process. The lock is genuinely needed only for
+    the window where `publish_orchestrated_lease_receipt_from_env` reads process env, which is exactly
+    what the remaining `EnvVarGuard` covers. So the critical section is now TIGHTER than on main, which
+    held the lock across filesystem work. A `// allow-raw-env-write:` marker would also have compiled,
+    but it would have kept the lock held across unrelated I/O for no reason.
+
+    MUTATION-PROVED IN BOTH DIRECTIONS
+    - With the fix: both caller tests pass in 0.07s.
+    - Re-adding the one `env_lock()` line: `timeout 150` returns exit 124. The deadlock reproduces on
+      demand, so the fix is load-bearing rather than incidental.
+
+    THE CLASS, SWEPT -- this is the one thing the lint CANNOT catch
+    The lint finds raw writes. It cannot find a LOCK-TAKING GUARD placed where the lock is already
+    held, which is precisely how this defect arrived. I swept both crates per-function (not per-file)
+    for any function containing both `env_lock()` and a guard constructor. Three candidates, triaged:
+    1. `locking_gate.rs:545` -- FALSE POSITIVE: the match is the function NAME
+       `locking_gate_token_test_holds_env_lock`, not a lock acquisition.
+    2. `real_phase_driver_wiring_tests.rs:119` -- the real defect, fixed.
+    3. `aida-core/src/test_env.rs:377` `core_env_guard_restores_and_survives_poison` -- CORRECT: it
+       `drop(outer)` before taking `env_lock()`, and that lock lives inside a `catch_unwind` closure
+       that panics, deliberately poisoning it; the following `EnvVarGuard::set` recovers via
+       `into_inner`. It passes in the green core run.
+    So exactly one real instance existed, and it is closed. Note `test_env.rs`'s own doc comment
+    already warns that "two `EnvVarGuard::set` calls deadlock", and
+    `queue_rework_tests.rs:480` carries an explicit "no outer `env_lock()` here" note -- the author knew
+    the rule and missed this one site. A follow-on worth filing: make the rule mechanical rather than
+    remembered, e.g. a `try_lock`-with-timeout in the test-only `env_lock()` that panics with "ENV_LOCK
+    already held by this thread -- do not nest guards" instead of hanging. A deadlock that announces
+    itself is worth far more than one that burns a 25-minute suite run.
+
+    TEST STATUS AT TIME OF WRITING
+    - `cargo test -p aida-core --lib`: ok, 1247 passed / 0 failed / 2 ignored, `0 filtered out`.
+    - `cargo fmt --all -- --check`: clean.
+    - `cargo test -p aida-cli-lib --lib`: full run in flight; the pre-fix run never completed because
+      of the deadlock above, so there is NO prior green baseline for this branch. Read the result line
+      bearing `0 filtered out`; a nested `test result:` line in this crate is not the suite's.
+  created_at: 2026-09-29T16:14:38.896997261Z
+  modified_at: 2026-09-29T16:14:38.896997261Z
+  session_id: bbb293b3-f4f2-43f8-8826-e8243d458597
