@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T09:21:52.752917164Z
-modified_at: 2026-09-29T10:47:06.225100740Z
+modified_at: 2026-09-29T11:28:03.935863518Z
 req_type: Bug
 comments:
 - id: 01a0ecc6-7cf1-7c03-b487-8cc0e910c6c6
@@ -109,6 +109,61 @@ comments:
   created_at: 2026-09-29T10:47:06.225100740Z
   modified_at: 2026-09-29T10:47:06.225100740Z
   session_id: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
+- id: 01a0eceb-fd5f-7f82-92a0-6d2695aea15d
+  author: joe
+  content: |
+    **Advisor disposition (session #9, 2026-09-29): ACCEPT AND DOCUMENT — disposition (a). Approving with the scope below.**
+
+    ## The blocking question is settled, and I re-verified it independently rather than inheriting it
+
+    The previous comment's central claim is the pivot for this whole spec, so I re-read the two functions myself before dispositioning:
+
+    - `agent_stop` (`aida-cli-lib/src/lib.rs:31808`) calls `terminate_pids_with_grace(&alive, 5)` at `lib.rs:31875`, and calls nothing else that signals.
+    - `terminate_pids_with_grace` (`lib.rs:40498-40522`) iterates the explicit `pids` slice and calls `p.kill_with(Signal::Term)` per matched process, sleeps the grace window, then `Signal::Kill` over the **same** explicit list.
+
+    No negative pgid, no `sweep_process_group`, no descendant walk on this path. **A detached build survives `aida agent stop`.** Confirmed, so this is a documentation fix and not a code fix.
+
+    ## Severity, corrected
+
+    The description's "HOW MUCH THIS MATTERS" section should be read with this correction: the cost of a false `Idle` is **a stranded build and a stranded result**, never destroyed work. That is materially cheaper than the filing implies. It is not free — on this 2-slot host an ownerless build holds a cargo slot with no seat left to read its result — but nothing is lost, only misattributed.
+
+    Priority stays medium; the work is small and the consequence is bounded.
+
+    ## Scope of the change
+
+    Most of the source-side obligation is **already met on the `bug-1704` branch** (PR #2276), which carries:
+
+    - `aida-cli-lib/src/agent_registry.rs:1667` — "A later heartbeat can exclude it; that is BUG-1726."
+    - `aida-cli-lib/src/agent_registry.rs:2660` — a test pinning the shape deliberately.
+
+    What is missing is (i) the *consequence* at the source note, and (ii) any user-facing statement at all. I checked `docs/cli/06-roles-sessions.md`: it documents `agent new`, briefs, and the reap pass, but **never documents what `idle` and `busy` mean in `aida agent status`**. An operator reading `idle` today has no way to know a detached build may still be running under that seat.
+
+    ## ACCEPTANCE
+
+    AC1. The source note at `agent_registry.rs:1667` states the *consequence*, not just the bug id: a seat that launched a detached build and then kept making tool calls can read `Idle` while that build runs; the build is stranded, not killed.
+
+    AC2. `docs/cli/06-roles-sessions.md` documents what `aida agent status` reports — at minimum that `busy` means this seat has work in flight, `idle` means it does not, and that a **detached** build started before the seat's last heartbeat is not counted, so `idle` does not guarantee no build is running under that seat.
+
+    AC3. The documentation states that stopping a seat does **not** stop its descendants: `aida agent stop` signals only the registered seat pids, so a build it started survives and completes ownerless. This is the operator-visible fact that makes a false `idle` benign, and it is currently written down nowhere.
+
+    AC4. The AC2 overclaim recorded in this spec's description is corrected where it was made: BUG-1704's acceptance disposition should read that AC2 is satisfied for a seat **blocked** on a build (running or queued alike), not for a detached build the seat has stopped attending.
+
+    AC5. No change to the classification rule. `age < secs_since_heartbeat` stays exactly as merged.
+
+    ## OUT OF SCOPE — unchanged and restated so no implementer reopens them
+
+    - **No CPU-delta or CPU-threshold rule.** BUG-1704's spec forbids it: a build queued behind this host's 2-slot cargo flock consumes no CPU, so a CPU rule reports a working seat finished.
+    - **No identity-tracking of descendants** (option b) and **no widening of clause 2** (option c). Both are design changes needing a sketch and signoff, not a docs fix. If either is ever wanted, file it fresh.
+    - **Not the `agent stop` leak.** The observation that stopping a seat leaks its children is recorded in the previous comment and deliberately not filed; it needs a decision about what `agent stop` is *for*. Do not bundle it here.
+
+    ## ORDERING
+
+    AC1 and AC4 touch lines that live on the `bug-1704` branch. **Land PR #2276 first**, then implement this against the merged tree. AC2 and AC3 are independent of that branch and could be done at any time, but there is no reason to split the spec.
+
+    Provenance: advisor seat, session #9 of the relay, 2026-09-29. Re-read `lib.rs:31808`, `lib.rs:31875`, `lib.rs:40498-40522`, `agent_registry.rs:1667`, `agent_registry.rs:2660`, `docs/cli/06-roles-sessions.md`.
+  created_at: 2026-09-29T11:28:03.935863518Z
+  modified_at: 2026-09-29T11:28:03.935863518Z
+  session_id: e30cbbbf-d93e-417b-965f-acd9cc04b4d2
 filed_at:
   code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
   branch: main
