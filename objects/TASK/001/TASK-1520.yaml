@@ -64,7 +64,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:00:59.566482093Z
-modified_at: 2026-09-29T02:54:00.565868678Z
+modified_at: 2026-09-29T03:31:23.816238324Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -147,6 +147,12 @@ comments:
     planted non-aida directory is byte-identical across a sync (AC 5).
   created_at: 2026-09-29T02:54:00.565868678Z
   modified_at: 2026-09-29T02:54:00.565868678Z
+  session_id: 597cd82b-74e5-462d-801c-dc9f77a75cbd
+- id: 01a0eb37-9628-74a1-946d-b4f9bd2fe975
+  author: joe
+  content: Commit 8c899184c0 references this requirement
+  created_at: 2026-09-29T03:31:23.816238324Z
+  modified_at: 2026-09-29T03:31:23.816238324Z
   session_id: 597cd82b-74e5-462d-801c-dc9f77a75cbd
 history:
 - id: 01a0de73-27d8-7eb3-8893-a2373e0a1866
