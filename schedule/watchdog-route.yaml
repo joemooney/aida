@@ -1,9 +1,8 @@
 job: watchdog-route
-last_run: 2026-09-29T09:43:42.489679317Z
+last_run: 2026-09-29T10:34:42.690245603Z
 last_by:
   seat: advisor
-  session: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
+  session: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
   vendor: antigravity
 result: done
-due_since: 2026-09-29T09:44:30.593656397Z
-due_reason: on CronJobFailed
+note: 'Re-ran ''aida doctor check runaway-seats'': verdict ok, 21 sessions, 1 file with new bytes, 0 with unknown timing. No seat is being woken by a runaway tick or loop. Standing coverage gap unchanged and restated in the check''s own evidence block: ~/.codex/sessions is not project-scoped so Codex seats are invisible to this check, and 73 worktrees have no transcript directory.'
