@@ -106,8 +106,77 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T21:54:47.813040039Z
-modified_at: 2026-09-29T22:27:38.942465714Z
+modified_at: 2026-09-29T23:50:24.524774587Z
 req_type: Bug
+comments:
+- id: 01a0ef93-a00c-7120-a667-e5db96df9dbd
+  author: joe
+  content: |
+    ## The same failure mode now reproduces locally — in aida-cli-lib, not aida-core
+
+    A full `cargo test -p aida-core -p aida-cli-lib --lib` on a loaded host
+    (2416s) produced this, which is the **same signature as the PR #2283 CI
+    blocker** — `RefreshLock::try_acquire` returning `Ok(None)` where nothing
+    should hold the lock:
+
+    ```
+    ---- bug_1670_stale_cache_callers_tests::rules_sync_keeps_rule_for_spec_approved_after_snapshot stdout ----
+    thread '<unnamed>' panicked at aida-cli-lib/src/tests/stale_cache_fixture.rs:52:14:
+    fixture: the refresh flock must be free before the holder takes it
+    thread 'bug_1670_...' panicked at aida-cli-lib/src/tests/stale_cache_fixture.rs:59:10:
+    fixture: the refresh holder thread must report ready: RecvError
+    ```
+
+    `hold_foreign_refresh` (`stale_cache_fixture.rs:45`) spawns a thread and
+    `.expect()`s that `try_acquire` returns `Some`. It got `None`. That is the CI
+    blocker's exact mechanism — a spurious `Ok(None)` — in a **different test, a
+    different crate, and reproducible on this host under load**. The aida-core unit
+    test is not special; the primitive itself returns `Ok(None)` spuriously under
+    contention.
+
+    **This is the most tractable entry point for a fix.** It re-runs green in
+    isolation (`--exact ...rules_sync_keeps_rule_for_spec_approved_after_snapshot`
+    -> ok, 9.55s), so the trigger is concurrent in-process tests plus load, matching
+    the earlier finding that the out-of-process probe failed only with concurrent
+    in-process tests (0/60 in isolation under load).
+
+    ### Why this raises the stakes beyond test hygiene
+
+    `hold_foreign_refresh`'s doc comment says the holder must be a different thread
+    because "`RefreshLock` shares its descriptor with same-thread nested callers by
+    design". If `try_acquire` can spuriously return `Ok(None)` for a **foreign**
+    caller, the single-flight guarantee is soft: a reader would classify a free lock
+    as `WorkerRunning`/contended and serve stale rows, or two callers could disagree
+    about who owns the refresh. That is production behavior, not just a flaky test.
+
+    Conversely the probe observed the inverse (lock seen FREE while held), which
+    would let two processes refresh at once. Both directions point at the same
+    suspect: the interaction between the `HELD` registry and the `flock` under
+    concurrency.
+
+    ### Concrete next step
+
+    Instrument `try_acquire` to record, on every `Ok(None)`, which branch fired
+    (foreign registry entry vs contended `flock`) and the raw errno, then run:
+
+    ```bash
+    cargo test -p aida-cli-lib --lib -- bug_1670_stale_cache_callers_tests
+    ```
+
+    under load until `stale_cache_fixture.rs:52` trips. `RefreshLock::diagnose_unavailable`
+    (shipped on TASK-1526, `cache_refresh.rs`) already formats exactly that; it just
+    needs to be reachable from the fixture's `.expect()`, e.g. by replacing the
+    `.expect()` with an `unwrap_or_else` that calls it.
+
+    ### Separately, NOT this bug
+
+    `exit_signal::tests::sigkill_fires_when_sigterm_is_ignored` and
+    `runaway_seats::tests::the_watchdog_is_bounded_and_spawns_nothing` fail in
+    isolation on a quiet host, and were **verified to fail identically on `main`**
+    (`8bd9fbb3d6`). Pre-existing, unrelated to cache refresh, tracked separately.
+  created_at: 2026-09-29T23:50:24.524774587Z
+  modified_at: 2026-09-29T23:50:24.524774587Z
+  session_id: b2195326-c6b7-41c7-afb5-aa27b60756e2
 history:
 - id: 01a0ef47-db3e-75d0-99b2-b700bb884205
   author: joe
