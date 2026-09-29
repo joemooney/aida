@@ -287,7 +287,14 @@ def main():
                             mcp = content_text(dates_client.tool("history", {"since": "2h", "limit": 2, "template": layout, **filt}))
                             assert mcp == wanted, (zone, mode, layout, mcp, wanted)
                     plain = json.loads(content_text(dates_client.tool("history", {"limit":100})))
-                    assert plain == selected_dates
+                    # TASK-1526 labels a stale-allowed read on both surfaces, but
+                    # by different carriers: the CLI writes `cache` into the JSON
+                    # document it prints, while MCP puts it on the envelope
+                    # (`structuredContent.cache`) plus a trailing note, leaving the
+                    # inner document untouched. Compare the documents themselves.
+                    # trace:TASK-1526 | ai:claude
+                    assert plain == {k: v for k, v in selected_dates.items() if k != "cache"}
+                    assert selected_dates["cache"] == {"stale": False}
                 finally:
                     dates_client.close()
                 for alias in ["full", "oneline"]:
