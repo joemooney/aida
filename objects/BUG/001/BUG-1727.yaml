@@ -126,13 +126,68 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T11:40:16.011406979Z
-modified_at: 2026-09-29T11:41:39.636005048Z
+modified_at: 2026-09-29T12:00:35.841190679Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0e65f-184c-73d2-9509-83f0d6ff6a6f
   created_at: 2026-09-29T11:41:39.635999408Z
   created_by: joe
+comments:
+- id: 01a0ed09-c601-7133-bef8-58fb69881ede
+  author: joe
+  content: |
+    ## AC4 and AC5 landed early on PR #2276 (session #10, 2026-09-29)
+
+    Commit `f381a658cd` on `bug-1704`, trailer `(BUG-1704)` — deliberately NOT `(BUG-1727)`, so this
+    spec does NOT auto-complete when #2276 merges. **AC1, AC2 and AC3 remain open.**
+
+    Landed there rather than here because GAP 3 was the one surviving actionable complaint from round 4
+    of #2276's review, and every line it cites lives on that branch.
+
+    ### GAP 3's premise, corrected
+
+    The finding said "production always passes `Some`". Literally that is false — five non-test call
+    sites build the context with `AgentClassifyContext::new(..)` and never call `with_work_probe`:
+    `supervise_cmd.rs:284`, `terminal_cmd.rs:260`, `agent_registry.rs:1465`, `lib.rs:22118`,
+    `session.rs:3405`.
+
+    But all five pass `Vec::new()` for the lease list, and `covers` (`agent_registry.rs:1723-1730`)
+    returns false for an empty list, so none of them reaches the `proc_tree` match at all. The single
+    caller that supplies a non-empty lease list (`lib.rs:76984`) also attaches the probe. **The
+    `None => Busy` arm is therefore unreachable in the CLI today, and the finding's conclusion stands
+    even though its stated reason does not.**
+
+    ### What changed
+
+    `classify_status_live_lease_is_busy_despite_stale_activity` now builds its context with
+    `.with_work_probe(bug1704_tree(120), 10)`, asserting STORY-435's intent on the live path.
+
+    **Proven to have teeth, not assumed:** substituting a quiet subtree (`bug1704_tree(3600)`) makes the
+    same test fail `left: Idle, right: Busy`. The `proc_tree: None` version passed regardless of the
+    subtree, so it could not have caught a regression in the rule it is named for.
+
+    `classify_status_live_lease_with_working_subtree_is_busy` was then an exact duplicate and was
+    removed; `classify_status_live_lease_without_proc_tree_is_busy` keeps the `None` arm covered. Test
+    count reconciles exactly: 7337 passed + 2 ignored = 7339 = session #9's 7340 minus the one duplicate.
+
+    AC4's sentence is at `ages_show_work`, beside the grace bound it describes.
+
+    ### Verification
+
+    `cargo test -p aida-cli-lib --lib` **7337 passed, 0 failed, 2 ignored, 0 filtered out** (431s, exit 0)
+    · `cargo fmt --all -- --check` exit 0, no output · `scripts/check-portability.sh` exit 0 · `cargo
+    clippy -p aida-cli-lib --lib --tests` exit 0 with zero hits in `agent_registry.rs`.
+
+    The change also REMOVES a `/tmp/aida-story` literal (the lease path now derives from the entry), the
+    sanctioned direction for the content-keyed portability allowlist. Two other occurrences of that exact
+    line remain, so allowlist row 9 is still used.
+
+    Authored by the advisor seat. #2276 is awaiting a human signature regardless, so that signature
+    covers this commit — it was not self-approved.
+  created_at: 2026-09-29T12:00:35.841190679Z
+  modified_at: 2026-09-29T12:00:35.841190679Z
+  session_id: 16e65c39-d6d0-43e4-b0bd-98850c441c3e
 history:
 - id: 01a0ecf7-4a08-7281-aa60-a98d90a5121d
   author: joe
