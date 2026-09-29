@@ -220,7 +220,8 @@ def unix_guarded_regions(masked: str, source: str) -> list[tuple[int, int]]:
     """
     length = len(masked)
     regions: list[tuple[int, int]] = []
-    stack: list[int | None] = []
+    # Each frame is [opening brace offset, offset the guard starts at or None].
+    stack: list[list[int | None]] = []
     pending_start: int | None = None
     paren_depth = 0
     index = 0
@@ -248,10 +249,16 @@ def unix_guarded_regions(masked: str, source: str) -> list[tuple[int, int]]:
                 cfg = _CFG_ATTRIBUTE.match(content.strip())
                 if cfg and evaluate_cfg_on_windows(cfg.group("predicate")) is False:
                     if inner:
-                        # `#![cfg(unix)]` guards everything from here to the end
-                        # of the enclosing scope, which for a module file is the
-                        # whole file.
-                        regions.append((index, length))
+                        # `#![cfg(unix)]` guards the enclosing scope, which is the
+                        # whole file for a module file -- the common shape here --
+                        # but only the braces of a `mod m { #![cfg(unix)] .. }`.
+                        # Scoping the nested form to EOF would hide every later
+                        # violation in the file.
+                        if stack:
+                            if stack[-1][1] is None:
+                                stack[-1][1] = stack[-1][0]
+                        else:
+                            regions.append((index, length))
                     elif pending_start is None:
                         pending_start = index
                 index = end
@@ -261,19 +268,23 @@ def unix_guarded_regions(masked: str, source: str) -> list[tuple[int, int]]:
         elif char == ")":
             paren_depth = max(0, paren_depth - 1)
         elif char == "{":
-            stack.append(pending_start)
+            stack.append([index, pending_start])
             pending_start = None
         elif char == "}":
-            opened = stack.pop() if stack else None
-            if opened is not None:
-                regions.append((opened, index + 1))
-            pending_start = None
-        elif char == ";":
             if pending_start is not None:
-                # An attribute on a brace-less item, e.g. a guarded `use`.
-                regions.append((pending_start, index + 1))
+                # A brace-less item closing out its block, e.g. a guarded final
+                # struct field with no trailing comma.
+                regions.append((pending_start, index))
+            frame = stack.pop() if stack else None
+            if frame is not None and frame[1] is not None:
+                regions.append((frame[1], index + 1))
             pending_start = None
-        elif char == "," and paren_depth == 0:
+        elif char == ";" or (char == "," and paren_depth == 0):
+            if pending_start is not None:
+                # An attribute on a brace-less item: a guarded `use`, or a
+                # guarded struct field or enum variant, which is removed on
+                # Windows just as a guarded item is.
+                regions.append((pending_start, index + 1))
             pending_start = None
         index += 1
     return regions
@@ -455,6 +466,47 @@ class ExecutableFixtureRatchetTests(unittest.TestCase):
         self.assertEqual([], direct_executable_mode_changes("permissions.set_mode(0o555);"))
         self.assertEqual([], direct_executable_mode_changes("permissions.set_mode(0o644);"))
         self.assertTrue(unix_only_api_violations("permissions.set_mode(0o644);"))
+
+    def test_checker_scopes_a_nested_inner_attribute_to_its_module(self):
+        # `#![cfg(unix)]` inside a nested module guards that module only.
+        # Scoping it to end-of-file would hide every later violation.
+        source = (
+            "mod unix_only {\n"
+            "    #![cfg(unix)]\n"
+            "    use std::os::unix::fs::PermissionsExt;\n"
+            "}\n"
+            "fn windows_bad() {\n"
+            "    use std::os::unix::fs::MetadataExt;\n"
+            "}\n"
+        )
+        self.assertEqual(
+            [6],
+            [int(entry.split()[1].rstrip(":")) for entry in unix_only_api_violations(source)],
+        )
+
+    def test_checker_honours_a_file_level_inner_attribute(self):
+        # Several test files in this tree open with a bare `#![cfg(unix)]`.
+        source = "#![cfg(unix)]\nuse std::os::unix::fs::PermissionsExt;\nfn f() { p.set_mode(0o755); }\n"
+        self.assertEqual([], unix_only_api_violations(source))
+
+    def test_checker_accepts_a_guarded_field_or_variant(self):
+        # An attribute on a brace-less, comma-terminated item still removes it
+        # from a Windows build.
+        shapes = {
+            "field": "struct S {\n#[cfg(unix)]\nf: std::os::unix::fs::MetadataExt,\nportable: (),\n}\n",
+            "final field, no trailing comma": "struct S {\nportable: (),\n#[cfg(unix)]\nf: std::os::unix::fs::MetadataExt\n}\n",
+            "enum variant": "enum E {\n#[cfg(unix)]\nV(std::os::unix::fs::MetadataExt),\nOther,\n}\n",
+        }
+        for shape, source in shapes.items():
+            with self.subTest(shape=shape):
+                self.assertEqual([], unix_only_api_violations(source), shape)
+
+    def test_checker_does_not_let_a_comma_guard_a_later_sibling(self):
+        source = "struct S {\n#[cfg(unix)]\nf: std::os::unix::fs::MetadataExt,\ng: std::os::unix::fs::PermissionsExt,\n}\n"
+        self.assertEqual(
+            [4],
+            [int(entry.split()[1].rstrip(":")) for entry in unix_only_api_violations(source)],
+        )
 
     def test_checker_rejects_a_future_local_fake_gh_copy(self):
         bad = """fn fake_gh(path: &Path, body: &str) {\n std::fs::write(path, body).unwrap();\n chmod(path, 0o755);\n }"""
