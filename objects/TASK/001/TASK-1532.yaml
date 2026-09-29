@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:29:13.952391653Z
-modified_at: 2026-09-29T16:14:38.896997261Z
+modified_at: 2026-09-29T16:30:57.528912401Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -150,3 +150,79 @@ comments:
   created_at: 2026-09-29T16:14:38.896997261Z
   modified_at: 2026-09-29T16:14:38.896997261Z
   session_id: bbb293b3-f4f2-43f8-8826-e8243d458597
+- id: 01a0ee01-4bf8-7192-ab17-cc86d067e81f
+  author: joe
+  content: |
+    ## Relay session #4 — salvage verified, PR #2281 opened
+
+    Session #3 found and fixed the deadlock but its full-suite run was truncated when the
+    session exited (3319 of 7350 tests, 0 failures at the cut). Re-ran it to completion.
+
+    ### The gate
+
+    `cargo test -p aida-cli-lib --lib`:
+    `test result: ok. 7348 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 448.56s`
+
+    The `0 filtered out` is the load-bearing part -- this crate emits ~50 nested
+    `test result:` lines from sub-harness runs inside tests, and every one of those reads
+    `7349 filtered out`. The suite's own line is the one with `0 filtered out`.
+
+    **Count reconciliation:** main is 7346 passed + 2 ignored = 7348 total. This branch
+    adds exactly 2 cli-lib tests (`no_raw_env_writes_in_test_code`,
+    `locking_gate_token_test_holds_env_lock`) for 7350, and reports 7348 passed + 2
+    ignored = 7350. It reconciles exactly, so nothing was silently removed or skipped.
+    aida-core likewise: 1245 -> 1247, +2 (`core_no_raw_env_writes_in_test_code`,
+    `core_env_guard_restores_and_survives_poison`).
+
+    ### Independent verification added this session
+
+    - **The fix's core claim, checked against source rather than taken on trust.** Removing
+      the outer `env_lock()` is safe only if nothing above the guard touches process env.
+      Confirmed: `prepare_orchestrated_lease_receipt` writes only the tempdir and the child
+      `Command`'s env map (`cmd.env`, not `std::env::set_var`); `child.get_envs()` reads that
+      same map; and both `orchestrated_lease_receipt_path` and
+      `orchestrated_child_refusal_path` are pure path arithmetic with no env reads. The only
+      process-env access in the whole helper is the `std::env::var` inside
+      `publish_orchestrated_lease_receipt_from_env`, which sits within the guard's scope.
+      So this is a genuine narrowing of the critical section, not a race traded for a hang.
+    - **Nested-lock sweep, both shapes, zero real hits.** Same-function: 2 candidates, both
+      benign -- `locking_gate_token_test_holds_env_lock` is a false positive (its *name* ends
+      in `env_lock`), and `core_env_guard_restores_and_survives_poison` takes the lock only
+      inside a `catch_unwind` closure after the outer guard is dropped, which is the
+      poison-tolerance test itself. Cross-function (caller holds lock, callee takes a guard):
+      2 candidates, both `drop()`, a false positive because `EnvVarGuard`'s own `Drop` impl
+      puts `drop` in the guard-taking set. Also confirmed `bug670`'s deliberate lock hold
+      calls no guard-taking helper.
+    - **Zero lint escapes are actually used.** All four `allow-raw-env-write` occurrences in
+      the tree are the lints' own implementations of the marker. The migration carries no
+      opt-outs -- worth stating, because an escape hatch is exactly where an incomplete
+      migration hides.
+    - `cargo fmt --all -- --check`, `scripts/check-portability.sh`, `make check-templates`:
+      clean. `cargo check -p aida-core`: zero warnings.
+    - BUG-1725's ratchet holds -- no `std::os::unix` / `set_mode` / `from_mode` /
+      `PermissionsExt` added.
+
+    ### Reviewed and deliberately NOT changed
+
+    `aida-core`'s `TEST_ENV_LOCK` sits ungated in `lib.rs:170` while `aida-cli-lib` keeps its
+    `ENV_LOCK` inside the `#[cfg(test)]` module (`test_env.rs:36`). Inconsistent placement,
+    but both `mod test_env` declarations *are* `#[cfg(test)]`-gated, a const-initialized
+    `Mutex<()>` static is zero-cost, and `cargo check -p aida-core` is warning-free -- so it
+    is cosmetic, not a defect. Moving it would touch `aida-core/src/lib.rs` and invalidate
+    the build cache for the whole dependency tree for no behavioural gain. Left as optional
+    cleanup.
+
+    ### Branch hygiene
+
+    Committed as ONE commit (`dbdaa6ca53`) on a NEW branch `task-1532-env-guards` cut
+    directly off `7d85a8057d`, via `git reset --soft main`. Joe's original `task-1532` branch
+    is untouched and was never force-pushed. Diff vs main verified identical before and after
+    the reset: 25 files, +1013/-521.
+
+    Follow-on **TASK-1559** filed and approved: make same-thread reentrance in `env_lock()`
+    panic instead of hang. The lints structurally cannot catch that class -- they are
+    satisfied by a guard and cannot see whether the enclosing scope already holds the lock,
+    which is precisely how this defect shipped.
+  created_at: 2026-09-29T16:30:57.528912401Z
+  modified_at: 2026-09-29T16:30:57.528912401Z
+  session_id: 4c4c542f-a855-4b9f-91c7-9e339ae88796
