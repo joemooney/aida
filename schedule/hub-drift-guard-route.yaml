@@ -1,9 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-09-29T09:43:37.621755505Z
+last_run: 2026-09-29T10:34:37.853854085Z
 last_by:
   seat: advisor
-  session: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
+  session: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
   vendor: antigravity
 result: done
-due_since: 2026-09-29T09:44:30.593656397Z
-due_reason: on CronJobFailed
+note: 'gitlab aida-store was BEHIND origin, fast-forwarded with the tool''s own printed command (git push gitlab origin/aida-store:aida-store, 0fd55f5409..3bf56dcc08). Not a force-push. ''aida remote status'' now reports: all remotes agree on every shared branch and release tag.'
