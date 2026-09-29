@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T08:29:23.135646002Z
-modified_at: 2026-09-29T14:07:26.441417375Z
+modified_at: 2026-09-29T14:09:37.967292379Z
 req_type: Bug
 comments:
 - id: 01a0ecaa-5146-7421-bb5e-ff1cef22564c
@@ -242,6 +242,105 @@ comments:
   created_at: 2026-09-29T13:51:38.166816732Z
   modified_at: 2026-09-29T13:51:38.166816732Z
   session_id: 0ef5b5ae-9150-427a-a95e-107f233be261
+- id: 01a0ed7f-e8af-7061-aef4-dad18f60c639
+  author: joe
+  content: |
+    ## AC2' satisfied — and the checker's report is an exact match to `rustc`'s own enumeration
+
+    Implemented on branch `bug-1725`, PR #2280. The measurement below was taken on `87408e2c1e`
+    **before** any Rust site was touched, per AC2's "prove it on a tree known to be broken".
+
+    ```
+    aida-cli-lib/src/aida_bin.rs:330        std::os::unix is reachable from a Windows compile
+    aida-cli-lib/src/aida_bin.rs:336        from_mode is reachable from a Windows compile
+    aida-cli-lib/src/aida_bin.rs:429        from_mode is reachable from a Windows compile
+    aida-cli-lib/src/aida_bin.rs:479        from_mode is reachable from a Windows compile
+    aida-cli-lib/src/remote_create.rs:3040  std::os::unix is reachable from a Windows compile
+    aida-cli-lib/src/remote_create.rs:3055  from_mode is reachable from a Windows compile
+    aida-cli-lib/src/remote_create.rs:3062  from_mode is reachable from a Windows compile
+    aida-cli-lib/src/remote_create.rs:3065  from_mode is reachable from a Windows compile
+    TOTAL 8
+    ```
+
+    **Eight sites in two files — the same eight the Windows compiler reported** in run 36540603371, and
+    nothing else, across ~100 `std::os::unix` references and 21 mode calls in five crates. Zero false
+    positives. After the fixes the same scan reports `TOTAL 0`.
+
+    Session #11's count was **7**, not 8, because it reused `direct_executable_mode_changes`, whose
+    `mode & 0o111` filter exempts `aida_bin.rs:479`'s `from_mode(0o644)`. See correction 3 below.
+
+    ## Three corrections to the corrections
+
+    **CORRECTION 3 (new) — the new check must NOT inherit the `0o555`/non-executable mode filter.**
+    AC1' says keep that exemption unchanged, and this PR does — in `direct_executable_mode_changes`,
+    which is untouched. But the exemption answers a *fixture-policy* question ("is this a process
+    fixture that should use `test_exec`?"). Windows reachability is a *different* question, and
+    `Permissions::from_mode(0o644)` is exactly as unix-only as `from_mode(0o755)`: it is a `PermissionsExt`
+    method that does not exist on Windows. The spec's own evidence says so — `aida_bin.rs:476 (now 479)
+    error[E0599] Permissions::from_mode(0o644)` is one of the eight errors it lists. Inheriting the filter
+    would have left one of the eight uncaught.
+
+    **CORRECTION 4 (new) — "mentions `unix` as a token" is still not the right rule.** Correction 1 was
+    right that the literal `cfg(unix)` matcher false-positives on `#[cfg(all(test, unix))]`, but the token
+    rule has its own false positive: `test_exec.rs:40` is `use std::os::unix::fs::OpenOptionsExt;` inside
+    `#[cfg(target_os = "linux")]`, which mentions no `unix` token yet is unreachable from Windows. I hit
+    this in measurement, not in theory — the token matcher reported it as an 8th unguarded site.
+
+    The invariant that is actually correct is the one the compiler uses: **the predicate cannot be true on
+    Windows.** `evaluate_cfg_on_windows` evaluates the predicate tri-state with `unix=false`,
+    `windows=true`, `target_os`/`target_family` compared against `"windows"`, and everything it does not
+    model (`test`, features, arch) as unknown; only a definite `false` counts as a guard. `#[cfg(unix)]`,
+    `#[cfg(all(test, unix))]`, `#[cfg(target_os = "linux")]` and `#[cfg(not(windows))]` are all honoured
+    as guards; `#[cfg(any(unix, windows))]` and bare `#[cfg(test)]` correctly are not. This subsumes
+    Correction 1 rather than contradicting it.
+
+    **CORRECTION 5 (method, for whoever re-runs this) — take attribute text from the ORIGINAL source, not
+    the masked copy.** Comments and string literals must be blanked before brace tracking, or a `{` in a
+    doc comment corrupts the scope stack. But blanking turns `cfg(target_os = "linux")` into
+    `cfg(target_os =        )`, and the guard silently stops being recognised. Bracket *depth* is counted
+    on the masked text; the predicate is read from the original. This cost one measurement round.
+
+    ## AC4' — the cheaper module-attribute lever was checked and rejected, for both files
+
+    Session #11 asked that the implementer first establish whether every test in `aida_bin.rs`'s
+    `#[cfg(test)] mod tests` is unix-only before flipping it to `#[cfg(all(test, unix))]`. **It is not.**
+    `override_decision_honors_only_with_aida_ancestor`, the profile/staleness resolution tests and the
+    scaffolding-path test are all portable logic. Flipping the attribute would trade a compile error for
+    silently dropped Windows coverage — exactly the trade session #11 warned against. Same verdict for
+    `remote_create.rs`, as predicted. Both files are fixed per-site.
+
+    `aida_bin.rs:479` is handled as AC4' requires for a non-executable mode: it sets `0o644` to assert
+    `resolve` rejects a non-executable binary, and Windows has no execute bit, so the assertion has no
+    meaning there. That half of the test is wrapped in `#[cfg(unix)]`; the rest of the test still runs on
+    Windows.
+
+    ## AC6' — both halves asserted, and all three mutations proved
+
+    The ratchet goes from 6 tests to 14. Self-tests cover the rejecting half (an unguarded violation in an
+    inline `#[cfg(test)] mod tests` in a production-path file) and the accepting half (the same module
+    guarded), plus one fixture per guard shape this tree actually uses, plus three shapes that only *look*
+    like guards and must still be reported.
+
+    Mutation-proved, all three:
+
+    | Mutation | Result |
+    |---|---|
+    | Revert both Rust files | **only** `test_unix_only_apis_are_guarded_across_every_crate_source` fails (1 of 14) |
+    | Accept only the literal `cfg(unix)` | 5 fail, including the real-tree scan — reproduces Correction 1's predicted ubuntu breakage empirically |
+    | Drop the `std::os::unix` path rule | 4 fail, including the AC6' rejecting-half self-test — confirms AC3' is load-bearing |
+
+    ## Scope held
+
+    Per the spec's SCOPE paragraph, this does not claim the nightly goes green. One follow-on observed
+    and deliberately not fixed: `remote_create.rs`'s `mirror_hook_*` tests shell out to `/bin/sh`, so they
+    will now compile on Windows and fail at runtime. That is strictly better than a compile error, which
+    aborts the entire test binary before any test runs, but it is a separate item. Re-measure the nightly
+    before claiming more.
+
+    Provenance: advisor seat, session #12 of the relay, 2026-09-29, at main `87408e2c1e`.
+  created_at: 2026-09-29T14:09:37.967292379Z
+  modified_at: 2026-09-29T14:09:37.967292379Z
+  session_id: 38580cc1-4f12-4ef7-94ca-4ec4ff0d81de
 history:
 - id: 01a0ec48-95fc-7221-958e-c7471acc90a4
   author: joe
