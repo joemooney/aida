@@ -35068,6 +35068,7 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 release_condition,
                 spec: None,
                 placed_by: Some(merge_hold::placing_seat()),
+                absorbed: Vec::new(),
             };
             // STORY-1416 criterion 1a: before the marker lands, show what is
             // already on record for this PR (marker + verdicts, with seat and

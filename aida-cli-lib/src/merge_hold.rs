@@ -32,6 +32,18 @@ pub(crate) enum HoldReasonKind {
 }
 
 impl HoldReasonKind {
+    /// BUG-1691: stricter gates remain primary when different kinds compose.
+    // trace:BUG-1691 | ai:codex
+    pub(crate) fn strictness(self) -> u8 {
+        match self {
+            Self::Recusal => 4,
+            Self::Decision => 3,
+            Self::Rework => 2,
+            Self::Supervision => 1,
+            Self::Unknown => 0,
+        }
+    }
+
     pub(crate) fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "supervision" => Some(Self::Supervision),
@@ -224,6 +236,10 @@ pub(crate) struct MergeHoldRecord {
     // trace:STORY-1416 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placed_by: Option<String>,
+    /// Displaced holds retained for audit; primary reason_kind is strictest.
+    // trace:BUG-1691 | ai:codex
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub absorbed: Vec<AbsorbedHold>,
 }
 
 /// BUG-1532 criterion 10: the identity of a recorded review verdict — the
@@ -241,6 +257,39 @@ pub(crate) struct VerdictRef {
     pub reviewed_sha: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recorded_by: Option<String>,
+}
+
+/// Flat shadow of a hold displaced by a stricter kind.
+// trace:BUG-1691 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct AbsorbedHold {
+    pub reason_kind: HoldReasonKind,
+    pub detail: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recused_principals: Vec<PrincipalIdentity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_head_sha: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spec: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placed_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verdict_ref: Option<VerdictRef>,
+}
+
+impl AbsorbedHold {
+    // trace:BUG-1691 | ai:codex
+    fn from_record(record: &MergeHoldRecord) -> Self {
+        Self {
+            reason_kind: record.reason_kind,
+            detail: record.detail.clone(),
+            recused_principals: record.recused_principals.clone(),
+            target_head_sha: record.target_head_sha.clone(),
+            spec: record.spec.clone(),
+            placed_by: record.placed_by.clone(),
+            verdict_ref: record.verdict_ref.clone(),
+        }
+    }
 }
 
 impl VerdictRef {
@@ -344,6 +393,7 @@ impl MergeHoldRecord {
             release_condition: None,
             spec: None,
             placed_by: None,
+            absorbed: Vec::new(),
         }
     }
 }
@@ -377,12 +427,32 @@ pub(crate) fn write_hold(project_root: &Path, pr: u64, reason: &str) -> std::io:
     std::fs::write(hold_path(project_root, pr), body)
 }
 
-/// Write a v2 typed marker. JSON is intentionally self-contained so all
-/// offline surfaces can route it without parsing operator prose.
-// trace:STORY-1397 | ai:codex
+/// Write a v2 typed marker, preserving stricter existing gates.
+// trace:STORY-1397 trace:BUG-1691 | ai:codex
 pub(crate) fn write_typed_hold(
     project_root: &Path,
     record: &MergeHoldRecord,
+) -> std::io::Result<()> {
+    match compose_with_existing(project_root, record) {
+        Composed::Placed(r) => write_marker(project_root, &r, true),
+        Composed::Preserved(r) => write_marker(project_root, &r, false),
+    }
+}
+
+/// Replace the marker; reserved for the explicit operator escape hatch.
+// trace:STORY-1397 trace:BUG-1691 | ai:codex
+fn write_typed_hold_replacing(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+) -> std::io::Result<()> {
+    write_marker(project_root, record, true)
+}
+
+// trace:BUG-1691 | ai:codex
+fn write_marker(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    reconcile_route: bool,
 ) -> std::io::Result<()> {
     let dir = holds_dir(project_root);
     std::fs::create_dir_all(&dir)?;
@@ -402,7 +472,7 @@ pub(crate) fn write_typed_hold(
     let mut normalized = record.clone();
     normalized.schema_version = 2;
     normalized.legacy = false;
-    if normalized.reason_kind == HoldReasonKind::Recusal {
+    if reconcile_route && normalized.reason_kind == HoldReasonKind::Recusal {
         reconcile_recusal_route(project_root, &mut normalized)?;
     }
     let body = serde_json::to_vec_pretty(&normalized)
@@ -439,7 +509,63 @@ pub(crate) fn place_hand_hold(
             }
         ));
     }
-    write_typed_hold(project_root, record).map_err(|e| e.to_string())
+    write_typed_hold_replacing(project_root, record).map_err(|e| e.to_string())
+}
+
+/// Compose an incoming hold with the marker already present on the PR.
+// trace:BUG-1691 | ai:codex
+// trace:BUG-1691 | ai:codex
+enum Composed {
+    Placed(MergeHoldRecord),
+    Preserved(MergeHoldRecord),
+}
+
+// trace:BUG-1691 | ai:codex
+fn compose_with_existing(project_root: &Path, incoming: &MergeHoldRecord) -> Composed {
+    let Some(existing) = read_hold_record(project_root, incoming.pr) else {
+        return Composed::Placed(incoming.clone());
+    };
+    compose_holds(&existing, incoming)
+}
+
+/// Pure precedence policy for two hold records.
+// trace:BUG-1691 | ai:codex
+fn compose_holds(existing: &MergeHoldRecord, incoming: &MergeHoldRecord) -> Composed {
+    if existing.reason_kind == incoming.reason_kind {
+        let mut out = incoming.clone();
+        merge_absorbed(&mut out.absorbed, &existing.absorbed);
+        return Composed::Placed(out);
+    }
+    let (mut primary, loser, preserved) =
+        if incoming.reason_kind.strictness() > existing.reason_kind.strictness() {
+            (incoming.clone(), existing, false)
+        } else {
+            (existing.clone(), incoming, true)
+        };
+    let mut carried = loser.absorbed.clone();
+    carried.push(AbsorbedHold::from_record(loser));
+    merge_absorbed(&mut primary.absorbed, &carried);
+    primary
+        .absorbed
+        .retain(|a| a.reason_kind != primary.reason_kind);
+    if preserved {
+        Composed::Preserved(primary)
+    } else {
+        Composed::Placed(primary)
+    }
+}
+
+/// Union absorbed shadows by kind, with the newest entry taking precedence.
+// trace:BUG-1691 | ai:codex
+fn merge_absorbed(into: &mut Vec<AbsorbedHold>, extra: &[AbsorbedHold]) {
+    for e in extra {
+        if let Some(slot) = into.iter_mut().find(|a| a.reason_kind == e.reason_kind) {
+            *slot = e.clone();
+        } else {
+            into.push(e.clone());
+        }
+    }
+    into.sort_by_key(|a| std::cmp::Reverse(a.reason_kind.strictness()));
 }
 
 /// Refresh a recusal hold from live evidence: adopt a moved PR head (which
@@ -635,6 +761,7 @@ pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHold
                     release_condition: None,
                     spec: None,
                     placed_by: None,
+                    absorbed: Vec::new(),
                 }),
             }
         }
@@ -655,6 +782,7 @@ pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHold
             release_condition: None,
             spec: None,
             placed_by: None,
+            absorbed: Vec::new(),
         }),
     }
 }
@@ -709,6 +837,7 @@ pub(crate) fn typed_hold(
         release_condition: None,
         spec: None,
         placed_by: Some(placing_seat()),
+        absorbed: Vec::new(),
     }
 }
 
@@ -2777,6 +2906,7 @@ mod tests {
             release_condition: None,
             spec: None,
             placed_by: None,
+            absorbed: Vec::new(),
         };
         write_typed_hold(dir.path(), &record).unwrap();
         record_label_state(dir.path(), 2023, &LabelState::Synced).unwrap();
@@ -2818,6 +2948,7 @@ mod tests {
             release_condition: None,
             spec: None,
             placed_by: None,
+            absorbed: Vec::new(),
         };
         assert!(write_typed_hold(dir.path(), &record).is_err());
         std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
@@ -2835,6 +2966,20 @@ mod tests {
         assert!(held.legacy);
         assert_eq!(held.reason_kind, HoldReasonKind::Supervision);
         assert!(held.recused_principals.is_empty());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn legacy_detail_is_preserved_when_absorbed_by_rework() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy_detail = "I wrote this; another reader is needed";
+        write_hold(dir.path(), 8, legacy_detail).unwrap();
+        let rework = typed_hold(8, HoldReasonKind::Rework, "changes requested", None);
+        write_typed_hold(dir.path(), &rework).unwrap();
+        let got = read_hold_record(dir.path(), 8).unwrap();
+        assert_eq!(got.reason_kind, HoldReasonKind::Rework);
+        assert_eq!(got.absorbed[0].reason_kind, HoldReasonKind::Supervision);
+        assert_eq!(got.absorbed[0].detail, legacy_detail);
     }
 
     fn recused_record() -> MergeHoldRecord {
@@ -3067,5 +3212,178 @@ mod tests {
             .path()
             .join(".aida/agent-briefs/codex/PR-44-def.md")
             .exists());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn a_rework_hold_never_displaces_a_recusal_hold() {
+        let dir = tempfile::tempdir().unwrap();
+        let recusal = recused_record();
+        write_typed_hold(dir.path(), &recusal).unwrap();
+        let mut rework = typed_hold(
+            42,
+            HoldReasonKind::Rework,
+            "CHANGES REQUESTED for BUG-1 at abc1234",
+            Some("abc1234-full".into()),
+        );
+        rework.spec = Some("BUG-1".into());
+        write_typed_hold(dir.path(), &rework).unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert_eq!(got.reason_kind, HoldReasonKind::Recusal);
+        assert_eq!(got.recused_principals, recusal.recused_principals);
+        assert_eq!(got.target_head_sha.as_deref(), Some("head-a"));
+        assert_eq!(got.absorbed.len(), 1);
+        assert_eq!(got.absorbed[0].reason_kind, HoldReasonKind::Rework);
+        assert_eq!(got.absorbed[0].detail, rework.detail);
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn recusal_written_after_rework_is_primary_and_absorbs_rework() {
+        let dir = tempfile::tempdir().unwrap();
+        write_typed_hold(
+            dir.path(),
+            &typed_hold(
+                42,
+                HoldReasonKind::Rework,
+                "changes",
+                Some("new-head".into()),
+            ),
+        )
+        .unwrap();
+        let recusal = recused_record();
+        write_typed_hold(dir.path(), &recusal).unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert_eq!(got.reason_kind, HoldReasonKind::Recusal);
+        assert_eq!(got.recused_principals, recusal.recused_principals);
+        assert_eq!(got.target_head_sha.as_deref(), Some("head-a"));
+        assert_eq!(
+            got.absorbed
+                .iter()
+                .map(|a| a.reason_kind)
+                .collect::<Vec<_>>(),
+            vec![HoldReasonKind::Rework]
+        );
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn same_kind_refresh_unions_existing_absorbed_holds() {
+        let dir = tempfile::tempdir().unwrap();
+        let recusal = recused_record();
+        write_typed_hold(dir.path(), &recusal).unwrap();
+        write_typed_hold(
+            dir.path(),
+            &typed_hold(42, HoldReasonKind::Rework, "changes", None),
+        )
+        .unwrap();
+        let mut refreshed = recused_record();
+        refreshed.label_state = Some("synced".into());
+        write_typed_hold(dir.path(), &refreshed).unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert_eq!(got.reason_kind, HoldReasonKind::Recusal);
+        assert_eq!(got.label_state.as_deref(), Some("synced"));
+        assert_eq!(got.absorbed.len(), 1);
+        assert_eq!(got.absorbed[0].reason_kind, HoldReasonKind::Rework);
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn composition_is_flat_bounded_and_unique_by_kind() {
+        let mut record = typed_hold(42, HoldReasonKind::Supervision, "supervision", None);
+        for (kind, detail) in [
+            (HoldReasonKind::Rework, "rework"),
+            (HoldReasonKind::Decision, "decision"),
+            (HoldReasonKind::Rework, "rework refreshed"),
+        ] {
+            record = match compose_holds(&record, &typed_hold(42, kind, detail, None)) {
+                Composed::Placed(r) | Composed::Preserved(r) => r,
+            };
+        }
+        assert_eq!(record.reason_kind, HoldReasonKind::Decision);
+        assert!(record.absorbed.len() <= 3);
+        let mut kinds = record
+            .absorbed
+            .iter()
+            .map(|a| a.reason_kind)
+            .collect::<Vec<_>>();
+        kinds.sort_by_key(|k| k.strictness());
+        kinds.dedup();
+        assert_eq!(kinds.len(), record.absorbed.len());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn composition_rejects_invalid_recusal_and_accepts_valid_existing_recusal() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut invalid = recused_record();
+        invalid.recused_principals.clear();
+        assert!(write_typed_hold(dir.path(), &invalid).is_err());
+        write_typed_hold(dir.path(), &recused_record()).unwrap();
+        assert!(write_typed_hold(
+            dir.path(),
+            &typed_hold(42, HoldReasonKind::Rework, "changes", None)
+        )
+        .is_ok());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn hand_replace_discards_recusal_but_default_hand_add_refuses() {
+        let dir = tempfile::tempdir().unwrap();
+        write_typed_hold(dir.path(), &recused_record()).unwrap();
+        let rework = typed_hold(42, HoldReasonKind::Rework, "manual rework", None);
+        assert!(place_hand_hold(dir.path(), &rework, false).is_err());
+        place_hand_hold(dir.path(), &rework, true).unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert_eq!(got.reason_kind, HoldReasonKind::Rework);
+        assert!(got.absorbed.is_empty());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn old_typed_markers_without_absorbed_still_parse() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = typed_hold(42, HoldReasonKind::Supervision, "old marker", None);
+        let mut json = serde_json::to_value(record).unwrap();
+        json.as_object_mut().unwrap().remove("absorbed");
+        std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
+        std::fs::write(
+            hold_path(dir.path(), 42),
+            serde_json::to_vec(&json).unwrap(),
+        )
+        .unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert!(got.absorbed.is_empty());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn preserving_rework_write_does_not_reconcile_existing_recusal_route() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut recusal = recused_record();
+        recusal.routed_to = vec![PrincipalIdentity::parse("agent:cold-reader")];
+        recusal.routing_state = HoldRoutingState::Routed;
+        write_marker(dir.path(), &recusal, false).unwrap();
+        let expected_route = recusal.routed_to.clone();
+        write_typed_hold(
+            dir.path(),
+            &typed_hold(42, HoldReasonKind::Rework, "changes requested", None),
+        )
+        .unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert_eq!(got.routed_to, expected_route);
+        assert_eq!(got.routing_state, HoldRoutingState::Routed);
+        assert_ne!(got.routing_state, HoldRoutingState::NoIndependentReader);
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn preserving_path_still_rejects_invalid_recusal_refresh() {
+        let dir = tempfile::tempdir().unwrap();
+        write_marker(dir.path(), &recused_record(), false).unwrap();
+        let mut invalid = recused_record();
+        invalid.recused_principals.clear();
+        assert!(write_typed_hold(dir.path(), &invalid).is_err());
     }
 }
