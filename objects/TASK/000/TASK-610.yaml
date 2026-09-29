@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-29T22:06:13.107326458Z
+modified_at: 2026-09-29T23:03:33.586241187Z
 req_type: Task
 tags:
 - docs
@@ -28,5 +28,10 @@ comments:
   content: Added the supplied aida_arch_logo.png as docs/images/aida-arch-logo.png, center-cropped it to 327x327, and placed it beside the existing AIDA logo on slide 16. Regenerated the 17-slide PPTX and notes, rendered slide 16 through LibreOffice at 1920x1080, and verified PPTX integrity plus 17/17 embedded notes.
   created_at: 2026-09-29T22:06:13.107319122Z
   modified_at: 2026-09-29T22:06:13.107319122Z
+- id: 01a0ef68-bbd2-76d0-bf6c-8ec5a71ef996
+  author: mcp
+  content: 'Extended the upper-management deck to 19 slides with two seven-day GitHub Actions evidence slides after the Sep 11-15 baseline. Local-MST windows: Sep 16-22 = 1,536 runs, 756 unique SHAs, 1,182 success/354 failure (77.0%), 756 CI/664 merge-hold/116 cross-platform, 6.9m mean; Sep 23-29 = 774 runs, 413 unique SHAs, 648 success/122 failure/4 cancelled (83.7%), 405 CI/265 merge-hold/104 cross-platform, 12.1m mean, Sep 29 partial. Renumbered all later slides/notes, updated evidence date to Sep 29, regenerated both PPTX copies, and visually verified the 19-slide contact sheet plus new slides at 1600x900.'
+  created_at: 2026-09-29T23:03:33.586235548Z
+  modified_at: 2026-09-29T23:03:33.586235548Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
