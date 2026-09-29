@@ -13,12 +13,12 @@ description: |
   1. Placing a hold never discards a hold of a different kind. Either holds compose, or a conflicting write refuses and reports, but a Recusal hold must survive.
   2. A fixture test proves a Recusal hold is still in force after a Rework hold is attempted on the same PR.
   3. The hold record carries the spec in its spec field rather than only inside the detail text.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:27:03.498247507Z
-modified_at: 2026-09-29T04:41:34.640461930Z
+modified_at: 2026-09-29T05:45:25.533430009Z
 req_type: Bug
 tags:
 - merge-hold safety from-review:TASK-1529
@@ -37,3 +37,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0ebb2-4b00-74b3-913a-777e66278dd8
+  author: aida-auto-bump
+  timestamp: 2026-09-29T05:45:25.504956002Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0ebb2-4b1d-7f02-b4b9-b16f4a478fb9
+  timestamp: 2026-09-29T05:45:25.533428678Z
+  agent: aida
+  commit_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
+  summary: Completed via merge 0c3ef5cb
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-29T05:45:25.504931095Z
+  completion_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
