@@ -65,6 +65,99 @@ pub struct LiveSession {
     pub stale_cwd: bool,
 }
 
+/// Process-tree snapshot with integer ages sampled once at probe time.
+#[derive(Debug, Clone)]
+pub struct ProcTree {
+    nodes: Vec<ProcNode>,
+}
+
+/// One process leader and its parent, with age in whole seconds.
+#[derive(Debug, Clone)]
+pub struct ProcNode {
+    pub pid: u32,
+    pub ppid: Option<u32>,
+    pub age_secs: Option<i64>,
+}
+
+impl ProcTree {
+    // trace:BUG-1704 | ai:codex
+    pub fn from_nodes(nodes: Vec<ProcNode>) -> Self {
+        Self { nodes }
+    }
+
+    /// Descendant ages, excluding the root; `None` means the root was not sampled.
+    // trace:BUG-1704 | ai:codex
+    pub fn descendant_ages(&self, root: u32) -> Option<Vec<i64>> {
+        if !self.nodes.iter().any(|node| node.pid == root) {
+            return None;
+        }
+        let mut ages = Vec::new();
+        for node in &self.nodes {
+            if node.pid == root {
+                continue;
+            }
+            let mut current = node.ppid;
+            let mut seen = std::collections::HashSet::new();
+            while let Some(pid) = current {
+                if pid == root {
+                    if let Some(age_secs) = node.age_secs {
+                        ages.push(age_secs);
+                    }
+                    break;
+                }
+                if !seen.insert(pid) {
+                    break;
+                }
+                current = self
+                    .nodes
+                    .iter()
+                    .find(|candidate| candidate.pid == pid)
+                    .and_then(|parent| parent.ppid);
+            }
+        }
+        Some(ages)
+    }
+}
+
+/// Return a memoized process tree snapshot for short-lived CLI runs only.
+///
+/// The snapshot is memoized for the process lifetime. A long-lived caller,
+/// such as an MCP server or watch loop, must use
+/// [`probe_process_tree_uncached`] because a stale tree omits recently-started
+/// children and therefore fails toward Idle.
+// trace:BUG-1704 | ai:codex
+pub fn probe_process_tree() -> ProcTree {
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<ProcTree> = OnceLock::new();
+    CACHE.get_or_init(probe_process_tree_uncached).clone()
+}
+
+// trace:BUG-1704 | ai:codex
+pub fn probe_process_tree_uncached() -> ProcTree {
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let sys =
+        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
+    let nodes = sys
+        .processes()
+        .values()
+        .filter_map(|proc| {
+            if proc.thread_kind().is_some() {
+                return None;
+            }
+            let start = proc.start_time();
+            Some(ProcNode {
+                pid: proc.pid().as_u32(),
+                ppid: proc.parent().map(|parent| parent.as_u32()),
+                age_secs: (start != 0).then(|| (now - start as i64).max(0)),
+            })
+        })
+        .collect();
+    ProcTree::from_nodes(nodes)
+}
+
 /// Window for "this jsonl was just written" — short enough that a quiescent
 /// session won't be classified as live, long enough to absorb a normal
 /// inter-tool-call gap.
@@ -1703,5 +1796,162 @@ started_at = "2026-01-01T00:00:00Z"
     fn lease_without_pid_signal_is_undetermined_not_reclaimable() {
         let v = classify_stale_lease_recovery(LeaseState::Dormant, None, true, 0);
         assert_eq!(v, StaleLeaseRecovery::UnknownLiveness);
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn descendant_ages_terminates_on_a_parent_cycle() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: Some(2),
+                age_secs: Some(20),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: Some(10),
+            },
+        ]);
+        assert_eq!(tree.descendant_ages(1), Some(vec![10]));
+    }
+
+    #[test]
+    fn descendant_ages_traverses_through_a_node_with_unknown_age() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(2),
+                age_secs: Some(120),
+            },
+        ]);
+        assert_eq!(tree.descendant_ages(1), Some(vec![120]));
+    }
+
+    #[test]
+    fn descendant_ages_omits_an_unknown_age_descendant() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: None,
+            },
+        ]);
+        assert_eq!(tree.descendant_ages(1), Some(vec![]));
+    }
+
+    #[test]
+    fn descendant_ages_still_returns_none_for_an_absent_root() {
+        let tree = ProcTree::from_nodes(vec![ProcNode {
+            pid: 2,
+            ppid: Some(1),
+            age_secs: Some(120),
+        }]);
+        assert_eq!(tree.descendant_ages(1), None);
+    }
+
+    #[test]
+    fn descendant_ages_traverses_two_stacked_unknown_age_intermediates() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(2),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 4,
+                ppid: Some(3),
+                age_secs: Some(120),
+            },
+        ]);
+        assert_eq!(tree.descendant_ages(1), Some(vec![120]));
+    }
+
+    #[test]
+    fn descendant_ages_finds_an_unknown_age_root() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: Some(120),
+            },
+        ]);
+        assert_eq!(tree.descendant_ages(1), Some(vec![120]));
+    }
+
+    #[test]
+    fn descendant_ages_terminates_with_an_unknown_age_node_in_a_cycle() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(3),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(2),
+                age_secs: Some(120),
+            },
+        ]);
+        assert_eq!(tree.descendant_ages(1), Some(vec![]));
+    }
+
+    #[test]
+    fn descendant_ages_omits_an_unknown_age_leaf_but_keeps_a_known_sibling() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(1),
+                age_secs: Some(120),
+            },
+        ]);
+        let ages = tree.descendant_ages(1).unwrap();
+        assert_eq!(ages.len(), 1);
+        assert!(ages.contains(&120));
     }
 }
