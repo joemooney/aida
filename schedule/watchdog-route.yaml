@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Re-ran ''aida doctor check runaway-seats'': verdict ok, 21 sessions, 1 file with new bytes, 0 with unknown timing. No seat is being woken by a runaway tick or loop. Standing coverage gap unchanged and restated in the check''s own evidence block: ~/.codex/sessions is not project-scoped so Codex seats are invisible to this check, and 73 worktrees have no transcript directory.'
+due_since: 2026-09-29T15:35:23.152276905Z
+due_reason: on CronJobFailed

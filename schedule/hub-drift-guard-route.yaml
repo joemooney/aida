@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'gitlab aida-store was BEHIND origin, fast-forwarded with the tool''s own printed command (git push gitlab origin/aida-store:aida-store, 0fd55f5409..3bf56dcc08). Not a force-push. ''aida remote status'' now reports: all remotes agree on every shared branch and release tag.'
+due_since: 2026-09-29T15:35:23.152276905Z
+due_reason: on CronJobFailed

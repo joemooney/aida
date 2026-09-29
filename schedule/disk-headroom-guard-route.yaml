@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Re-measured: 158G free on / against min_free_gib = 60, and /run/user/1000 at 24M of 7.1G. The trip was transient during this relay''s cargo builds; no reclamation needed and the floor is not being raised. Prior session reclaimed 251G from non-main worktree target/ dirs; that headroom is holding.'
+due_since: 2026-09-29T15:35:23.152276905Z
+due_reason: on CronJobFailed
