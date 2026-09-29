@@ -328,6 +328,14 @@ fn is_claude_process(name: &str, cmd: &[String]) -> bool {
         .unwrap_or(false)
 }
 
+// trace:TASK-1499 | ai:codex
+fn is_aida_process(name: &str, cmd: &[String]) -> bool {
+    let matches = |s: &str| {
+        basename(s).eq_ignore_ascii_case("aida") || basename(s).eq_ignore_ascii_case("aida.exe")
+    };
+    matches(name) || cmd.first().is_some_and(|first| matches(first))
+}
+
 fn basename(arg: &str) -> &str {
     Path::new(arg)
         .file_name()
@@ -491,6 +499,51 @@ pub fn nearest_claude_in_chain<'a>(
     chain
         .into_iter()
         .find(|(_, name, cmd)| is_claude_process(name, cmd))
+        .map(|(pid, _, _)| pid)
+}
+
+/// Return the nearest AIDA process in `start`'s inclusive ancestor chain.
+/// Each PID is refreshed as it is visited, so this is not a consistent
+/// process-table snapshot. If an ancestor exits between refreshes, the walk
+/// can end early and spuriously decline the `AIDA_BIN` override; callers then
+/// fall back to the running executable and PATH in `aida_bin::resolve`;
+/// that resolver emits no separate decline diagnostic. Traversal stops on
+/// missing parents, PID 1, or a repeated PID.
+// trace:TASK-1499 | ai:codex
+pub fn nearest_aida_ancestor_pid(start: u32) -> Option<u32> {
+    let mut sys = System::new();
+    let mut chain = Vec::new();
+    let mut cur = sysinfo::Pid::from_u32(start);
+    let mut seen = std::collections::HashSet::new();
+    while seen.insert(cur) {
+        sys.refresh_process_specifics(
+            cur,
+            ProcessRefreshKind::new().with_cmd(sysinfo::UpdateKind::Always),
+        );
+        let Some(proc) = sys.process(cur) else { break };
+        chain.push((cur.as_u32(), proc.name().to_string(), proc.cmd().to_vec()));
+        let Some(parent) = proc.parent() else { break };
+        if parent == sysinfo::Pid::from_u32(1) || parent == cur {
+            break;
+        }
+        cur = parent;
+    }
+    nearest_aida_in_chain(
+        chain
+            .iter()
+            .map(|(pid, name, cmd)| (*pid, name.as_str(), cmd.as_slice())),
+    )
+}
+
+/// Select the nearest AIDA process from an already-walked chain, nearest first.
+/// Kept pure so process identification can be tested without a live tree.
+// trace:TASK-1499 | ai:codex
+pub fn nearest_aida_in_chain<'a>(
+    chain: impl IntoIterator<Item = (u32, &'a str, &'a [String])>,
+) -> Option<u32> {
+    chain
+        .into_iter()
+        .find(|(_, name, cmd)| is_aida_process(name, cmd))
         .map(|(pid, _, _)| pid)
 }
 
@@ -1210,6 +1263,24 @@ mod tests {
             (1_u32, "systemd", empty.as_slice()),
         ];
         assert_eq!(nearest_claude_in_chain(chain), None);
+    }
+
+    #[test]
+    fn nearest_aida_in_chain_selects_nearest_and_none_without_aida() {
+        let chain = vec![
+            (10, "worker", vec!["worker".to_string()]),
+            (11, "aida", vec!["aida".to_string()]),
+            (12, "aida", vec!["aida".to_string()]),
+        ];
+        assert_eq!(
+            nearest_aida_in_chain(chain.iter().map(|(p, n, c)| (*p, *n, c.as_slice()))),
+            Some(11)
+        );
+        let chain = vec![(10, "shell", vec!["bash".to_string()])];
+        assert_eq!(
+            nearest_aida_in_chain(chain.iter().map(|(p, n, c)| (*p, *n, c.as_slice()))),
+            None
+        );
     }
 
     // trace:BUG-752 | ai:claude

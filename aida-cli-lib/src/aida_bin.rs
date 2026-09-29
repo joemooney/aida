@@ -1,6 +1,16 @@
 //! Portable resolution of the AIDA executable used by child launches.
 //!
-//! Precedence is `AIDA_BIN` (file or checkout), running executable, then PATH.
+//! AIDA_BIN is honored only when a live AIDA process is in this process's
+//! ancestor chain; otherwise resolution uses the running executable, then PATH.
+//! BUG-766 still works because AIDA children inherit AIDA_BIN and AIDA's PATH
+//! prepend: nested AIDA resolves to its own executable, while non-AIDA seats
+//! find the coordinating build on PATH. An older AIDA invoked by absolute
+//! path inside a managed tree has a live AIDA ancestor, so its children still
+//! honor the coordinating AIDA_BIN instead of its older current_exe. This is
+//! an accident boundary, not a security boundary: same-uid code can forge the
+//! environment or launch any binary, and PID reuse could alias an ancestor;
+//! the check prevents stale shell-profile or unrelated-tool values redirecting
+//! the coordinating binary.
 //! A checkout directory selects release by default; if both profiles exist and
 //! debug is newer it selects debug. `AIDA_BUILD_PROFILE=debug|release` pins a
 //! profile and errors if it is missing. A file under target/{debug,release}
@@ -30,6 +40,41 @@ pub(crate) struct Resolved {
     pub source: &'static str,
     pub profile: Option<Profile>,
     pub stale: bool,
+}
+
+// trace:TASK-1499 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum OverrideDecision {
+    Honored(PathBuf),
+    DeclinedAmbient(PathBuf),
+    Absent,
+}
+
+// trace:TASK-1499 | ai:codex
+pub(crate) fn decide_override(
+    aida_bin: Option<&Path>,
+    aida_ancestor: Option<u32>,
+) -> OverrideDecision {
+    match aida_bin {
+        Some(path) if aida_ancestor.is_some() => OverrideDecision::Honored(path.to_path_buf()),
+        Some(path) => OverrideDecision::DeclinedAmbient(path.to_path_buf()),
+        None => OverrideDecision::Absent,
+    }
+}
+
+// trace:TASK-1499 | ai:codex
+fn resolve_with_attribution(
+    aida_bin: Option<&Path>,
+    aida_ancestor: impl FnOnce() -> Option<u32>,
+    requested: Option<Profile>,
+    current: Option<&Path>,
+    path_env: Option<&std::ffi::OsStr>,
+) -> Result<Resolved> {
+    let override_path = match aida_bin.map(|path| decide_override(Some(path), aida_ancestor())) {
+        Some(OverrideDecision::Honored(path)) => Some(path),
+        Some(OverrideDecision::DeclinedAmbient(_)) | Some(OverrideDecision::Absent) | None => None,
+    };
+    resolve(override_path.as_deref(), requested, current, path_env)
 }
 
 fn executable(path: &Path) -> bool {
@@ -227,7 +272,7 @@ fn requested_other_name(profile: Profile) -> &'static str {
 }
 
 pub(crate) fn process() -> Result<Resolved> {
-    let override_path = std::env::var_os("AIDA_BIN").map(PathBuf::from);
+    let env_override = std::env::var_os("AIDA_BIN").map(PathBuf::from);
     let requested = std::env::var("AIDA_BUILD_PROFILE")
         .ok()
         .map(|s| match s.as_str() {
@@ -236,13 +281,44 @@ pub(crate) fn process() -> Result<Resolved> {
             _ => bail!("AIDA_BUILD_PROFILE must be debug or release"),
         })
         .transpose()?;
-    let current = std::env::current_exe().ok();
-    resolve(
-        override_path.as_deref(),
+    let current = current_executable_path();
+    resolve_with_attribution(
+        env_override.as_deref(),
+        cached_aida_ancestor,
         requested,
         current.as_deref(),
         std::env::var_os("PATH").as_deref(),
     )
+}
+
+// trace:TASK-1499 | ai:codex
+pub(crate) fn running_executable_fallback() -> PathBuf {
+    current_executable_path()
+        .map(|p| {
+            let lossy = p.to_string_lossy();
+            lossy
+                .strip_suffix(" (deleted)")
+                .map(PathBuf::from)
+                .unwrap_or(p)
+        })
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| PathBuf::from("aida"))
+}
+
+// trace:TASK-1499 | ai:codex
+fn current_executable_path() -> Option<PathBuf> {
+    std::env::current_exe().ok()
+}
+
+// trace:TASK-1499 | ai:codex
+pub(crate) fn has_aida_ancestor() -> bool {
+    cached_aida_ancestor().is_some()
+}
+
+// trace:TASK-1499 | ai:codex
+fn cached_aida_ancestor() -> Option<u32> {
+    static ANCESTOR: std::sync::OnceLock<Option<u32>> = std::sync::OnceLock::new();
+    *ANCESTOR.get_or_init(|| crate::process_probe::nearest_aida_ancestor_pid(std::process::id()))
 }
 
 #[cfg(test)]
@@ -256,6 +332,71 @@ mod tests {
         std::fs::write(&p, "#!/bin/sh\nexit 0\n").unwrap();
         std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
         p
+    }
+
+    #[test]
+    fn override_decision_honors_only_with_aida_ancestor() {
+        let path = Path::new("/coordinator/aida");
+        assert_eq!(
+            decide_override(Some(path), Some(42)),
+            OverrideDecision::Honored(path.to_path_buf())
+        );
+        assert_eq!(
+            decide_override(Some(path), None),
+            OverrideDecision::DeclinedAmbient(path.to_path_buf())
+        );
+        assert_eq!(decide_override(None, None), OverrideDecision::Absent);
+    }
+
+    #[test]
+    fn declined_override_resolves_to_running_executable_before_path() {
+        let d = tempfile::tempdir().unwrap();
+        let running = binary(d.path(), "debug");
+        let override_path = Path::new("/ambient/aida");
+        let result = resolve_with_attribution(
+            Some(override_path),
+            || None,
+            None,
+            Some(&running),
+            Some(std::ffi::OsStr::new("/ambient")),
+        )
+        .unwrap();
+        assert_eq!(result.path, running);
+        assert_ne!(result.path, override_path);
+        assert_eq!(result.source, "running-exe");
+    }
+
+    #[test]
+    fn ancestor_lookup_is_lazy_when_override_is_absent() {
+        use std::cell::Cell;
+        let calls = Cell::new(0);
+        let d = tempfile::tempdir().unwrap();
+        let running = binary(d.path(), "debug");
+        resolve_with_attribution(
+            None,
+            || {
+                calls.set(calls.get() + 1);
+                Some(42)
+            },
+            None,
+            Some(&running),
+            Some(std::ffi::OsStr::new("/ambient")),
+        )
+        .unwrap();
+        assert_eq!(calls.get(), 0);
+
+        resolve_with_attribution(
+            Some(Path::new("/ambient/aida")),
+            || {
+                calls.set(calls.get() + 1);
+                None
+            },
+            None,
+            Some(&running),
+            Some(std::ffi::OsStr::new("/ambient")),
+        )
+        .unwrap();
+        assert_eq!(calls.get(), 1);
     }
 
     #[test]

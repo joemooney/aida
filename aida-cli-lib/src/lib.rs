@@ -103189,10 +103189,32 @@ fn resolve_aida_exe() -> std::path::PathBuf {
 fn export_coordinating_bin_env() {
     // Keep an invalid operator override intact so the launch path can report
     // it clearly; silently replacing it with current_exe would hide the error.
-    if std::env::var_os("AIDA_BIN").is_some() && aida_bin::process().is_err() {
+    // trace:TASK-1499 | ai:codex
+    let ambient_override = std::env::var_os("AIDA_BIN").map(std::path::PathBuf::from);
+    let has_aida_parent = ambient_override
+        .as_ref()
+        .is_some_and(|_| aida_bin::has_aida_ancestor());
+    let resolution = aida_bin::process();
+    if let Some(ambient_override) = ambient_override.as_ref() {
+        if !has_aida_parent {
+            match &resolution {
+                Ok(resolved) => eprintln!(
+                    "AIDA_BIN={} is set but was not honored because no AIDA parent was found; using {} ({})",
+                    ambient_override.display(), resolved.path.display(), resolved.source
+                ),
+                Err(error) => eprintln!(
+                    "AIDA_BIN={} is set but was not honored because no AIDA parent was found; binary resolution failed: {error:#}",
+                    ambient_override.display()
+                ),
+            }
+        }
+    }
+    if ambient_override.is_some() && has_aida_parent && resolution.is_err() {
         return;
     }
-    let exe = resolve_aida_exe();
+    let exe = resolution
+        .map(|resolved| resolved.path)
+        .unwrap_or_else(|_| aida_bin::running_executable_fallback());
     if !exe.is_absolute() || !exe.exists() {
         return;
     }
