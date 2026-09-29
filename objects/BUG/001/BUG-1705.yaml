@@ -58,8 +58,119 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T05:44:15.964379833Z
-modified_at: 2026-09-28T05:44:24.160300461Z
+modified_at: 2026-09-29T04:44:05.937753488Z
 req_type: Bug
+comments:
+- id: 01a0eb7a-25b1-7122-834d-e8307ab35a07
+  author: joe
+  content: |
+    ADVISOR ROOT-CAUSE ANALYSIS (2026-09-28, advisor seat, from reading the code — not from the
+    reported symptom). The premise in this spec's description is FACTUALLY WRONG in a way that
+    would send an implementer to the wrong file. Correcting it before anyone picks this up.
+
+    ## What the description says, and why it is wrong
+
+    "the merge gate reads the `aida:merge-hold` label, not the verdict."
+
+    Three parts of that are not true of the current tree:
+
+    1. `handle_review_record_at` (aida-cli-lib/src/lib.rs, the `if kind.blocks_done()` block)
+       ALREADY arms the hold when a refusing verdict is recorded. It writes a typed `Rework`
+       `MergeHoldRecord` via `merge_hold::write_typed_hold`, sets `verdict_ref`, `spec`, and a
+       `release_condition` reading "a fresh APPROVED verdict for <SPEC> recorded at PR #<n>'s
+       current head; then a human ships it", and then calls `merge_hold::sync_label` to mirror the
+       label. That predates the observation (it arrived with BUG-1532/BUG-1562 in 968e41932a).
+       So AC1 and AC4-as-written are already implemented ON THAT PATH.
+    2. The local enforcement point is the MARKER FILE `.aida/merge-holds/PR-<n>`, not the label.
+       `held_prs` in `aida awaiting` is built from `hold_records` (local marker reads); the label
+       is the mirror for the server-side required check and for raw `gh pr merge`.
+    3. A verdict-reading merge gate already exists: `local_verdict_blocks_merge`
+       (aida-cli-lib/src/lib.rs). It reads the verdict corpus and blocks unless the CURRENT head
+       is cleanly approved.
+
+    ## The actual leak
+
+    `handle_review_record_at` is only ONE of the ways a verdict file comes into being, and it is
+    the only one that arms a hold. The others write or adopt the verdict file directly and arm
+    nothing:
+
+    * `aida-cli-lib/src/lib.rs`, `handle_review_spec` — the reviewer SKILL writes
+      `.aida/review-verdicts/<SPEC>.json` itself; AIDA then calls
+      `review_verdict::adopt_direct_write(&verdict_path)` and afterwards
+      `let _ = review_verdict::record_verdict(...)` to stamp the sha. No hold, no label, and the
+      error is discarded with `let _ =`.
+    * `aida-cli-lib/src/queue_cmd.rs` — a second `adopt_direct_write` site.
+    * two further `adopt_direct_write` sites in `aida-cli-lib/src/lib.rs`.
+    * `stamp_pr_review_verdict` (`aida-cli-lib/src/lib.rs`) — the drain reviewer path, via
+      `review_verdict::record_verdict` on key `PR-<n>`. No hold.
+    * a hand-written or hand-edited verdict file, which `adopt_direct_write` exists precisely to
+      accommodate.
+
+    That is the mechanism behind the 2026-09-27 observation on #2242: a verdict recorded outside
+    `aida review record` cannot arm the hold, because arming lives in that one CLI handler. Note
+    the corollary — `aida review record --verdict request-changes` WITHOUT `--pr` does not silently
+    skip the hold, it hard-errors ("a refusing verdict must name `--pr <N>`") and writes no verdict
+    at all, because the bail precedes the verdict write. So the leak is not a missing `--pr`; it is
+    the four-plus writers that never reach this handler.
+
+    ## Consequence for the fix, and for AC4
+
+    Adding a fifth place that stamps a hold repeats the failure mode that produced this bug. The
+    enforcement state must be DERIVED from the verdict corpus at every read and at the gate, not
+    stamped once at one writer. AC4 should therefore be resolved as: **the verdict corpus is the
+    source of truth; the marker file and the label are derived mirrors, refreshed whenever the
+    corpus is read.** The label must stay a mirror regardless, because the server-side required
+    status check is a GitHub check that can only read a label — it cannot read the verdict corpus,
+    so "the verdict becomes the source of truth and the gate reads the verdict" is architecturally
+    impossible for the server half of ADR-37.
+
+    ## AC3 already has a correct predicate — reuse it, do not write a new one
+
+    AC3's three cases are exactly `local_verdict_blocks_merge`'s behaviour, which wraps
+    `review_verdict::reconcile_artifacts_for_sha(bodies, current_sha)` and blocks unless the result
+    is `Ok(Some(VerdictKind::Approved))` for the CURRENT head:
+
+    * blocking verdict at the head → not approved-at-head → held. (AC1)
+    * head moved past the rejected sha, no new verdict → no approval at the new head → still held.
+      (AC3's "moving the head alone must NOT lift it")
+    * `approved` recorded at the OLD rejected sha → no approval at the current head → still held.
+      (AC3's second prohibition)
+    * `approved` recorded at the NEW head → released. (AC3's lift condition)
+    * no verdict file at all → not held. (AC5)
+
+    Whoever implements this should wire that existing predicate into the two surfaces that lack it
+    — `held_prs` and the general `forge::merge_change` chokepoint plus its label sync — rather than
+    inventing a second policy. `local_verdict_blocks_merge` is currently reachable only from the
+    burndown wave path (`merge_wave_pr` and `wave_pr_action`).
+
+    Do NOT reuse `review_verdict::review_actionability` for this. It returns `NeedsReview` as soon
+    as the head moves, which would release the hold on a head move alone — precisely what AC3
+    forbids. It is the right predicate for "does the reviewer owe a review", and the wrong one for
+    "is this PR held".
+
+    ## Two risks the implementer must handle, not discover
+
+    1. OVER-HOLDING. `local_verdict_blocks_merge` returns true whenever a verdict file exists and
+       the current head is not cleanly approved, and also when `current_sha` is `None` (fail
+       closed). Wiring it into `held_prs` naively will surface every open PR that has any stale
+       verdict. AC3 wants that for a live rejection, but a verdict closed out by a merge must not
+       hold: `RecordedVerdict::is_closed()` exists for exactly that (BUG-1529) and
+       `reconcile_artifacts_for_sha` must be checked to confirm it honours it.
+    2. BUG-1691 IS A PREREQUISITE, not a sibling. Any new programmatic writer of a Rework hold
+       can displace a Recusal hold, because `merge_hold::write_typed_hold` overwrites
+       unconditionally. Land BUG-1691 first. (In progress this session.)
+
+    ## Sizing
+
+    This is not a bug-sized change. It touches the hold source of truth, `awaiting_you`'s
+    `held_prs`, the merge chokepoint, the label mirror, and a pure-policy surface with at least the
+    five AC3 cases plus the closed-verdict case. It reads as a STORY. Recommend re-sizing it, or
+    decomposing it into (a) derive `held_prs` from the verdict corpus, (b) arm the chokepoint +
+    label mirror from the same predicate. BUG-1690 (nothing un-drafts a PR) is independent of both
+    and can be taken separately.
+  created_at: 2026-09-29T04:44:05.937753488Z
+  modified_at: 2026-09-29T04:44:05.937753488Z
+  session_id: 90913ac5-fbfb-4527-a436-ca91b9307726
 history:
 - id: 01a0e68a-ff60-7c32-86db-4e7f26ec371b
   author: joe
