@@ -327,13 +327,12 @@ fn cached_aida_ancestor() -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
 
+    // trace:BUG-1725 | ai:claude
     fn binary(root: &Path, profile: &str) -> PathBuf {
         let p = root.join("target").join(profile).join("aida");
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-        std::fs::write(&p, "#!/bin/sh\nexit 0\n").unwrap();
-        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_exec::write_executable(&p, "#!/bin/sh\nexit 0\n");
         p
     }
 
@@ -423,12 +422,7 @@ mod tests {
             .unwrap();
         let running = binary(b.path(), "debug");
         let pathdir = tempfile::tempdir().unwrap();
-        std::fs::write(pathdir.path().join("aida"), "#!/bin/sh\n").unwrap();
-        std::fs::set_permissions(
-            pathdir.path().join("aida"),
-            std::fs::Permissions::from_mode(0o755),
-        )
-        .unwrap();
+        crate::test_exec::write_executable(&pathdir.path().join("aida"), "#!/bin/sh\n");
         let path = std::env::join_paths([pathdir.path()]).unwrap();
         assert_eq!(
             resolve(Some(&over), None, Some(&running), Some(&path))
@@ -476,11 +470,18 @@ mod tests {
         let selected = resolve(Some(d.path()), Some(Profile::Release), None, None).unwrap();
         assert_eq!(selected.profile, Some(Profile::Release));
         assert!(selected.stale);
-        std::fs::set_permissions(&rel, std::fs::Permissions::from_mode(0o644)).unwrap();
-        assert!(resolve(Some(&rel), None, None, None)
-            .unwrap_err()
-            .to_string()
-            .contains("not executable"));
+        // Windows has no execute bit, so neither the chmod nor the error it sets
+        // up exists there; this half of the test is unix-only by nature rather
+        // than by fixture. trace:BUG-1725 | ai:claude
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&rel, std::fs::Permissions::from_mode(0o644)).unwrap();
+            assert!(resolve(Some(&rel), None, None, None)
+                .unwrap_err()
+                .to_string()
+                .contains("not executable"));
+        }
     }
 
     #[test]

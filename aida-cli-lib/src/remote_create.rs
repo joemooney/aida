@@ -3037,32 +3037,26 @@ host = \"should.not.count\"
 
     #[test]
     fn mirror_hook_forwards_dry_run_spellings_as_preview_only() {
-        use std::os::unix::fs::PermissionsExt;
-
         let tmp = tempfile::tempdir().unwrap();
         let bin = tmp.path().join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         let log = tmp.path().join("calls");
         let fake_aida = bin.join("aida");
-        std::fs::write(
+        // trace:BUG-1725 | ai:claude
+        crate::test_exec::write_executable(
             &fake_aida,
             format!(
                 "#!/bin/sh\nif [ \"$3\" = --help ]; then exit 0; fi\nprintf '%s\\n' \"$*\" >> '{}'\n",
                 log.display()
             ),
-        )
-        .unwrap();
-        std::fs::set_permissions(&fake_aida, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         let fake_ps = bin.join("ps");
-        std::fs::write(
+        crate::test_exec::write_executable(
             &fake_ps,
             "#!/bin/sh\nprintf '%s\\n' \"$AIDA_TEST_PARENT_ARGS\"\n",
-        )
-        .unwrap();
-        std::fs::set_permissions(&fake_ps, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         let hook = tmp.path().join("pre-push");
-        std::fs::write(&hook, mirror_pre_push_hook_script()).unwrap();
-        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_exec::write_executable(&hook, mirror_pre_push_hook_script());
 
         for args in ["git push --dry-run origin main", "git push origin main -n"] {
             let status = Command::new("/bin/sh")
