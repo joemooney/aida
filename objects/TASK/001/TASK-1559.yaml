@@ -85,12 +85,12 @@ description: |
   - Making the lock reentrant. Reentrance would silently permit nested guards whose
     restore-on-drop order is ambiguous — the goal is to forbid nesting loudly, not
     to allow it.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T16:23:51.096694327Z
-modified_at: 2026-09-29T16:24:53.570814300Z
+modified_at: 2026-09-29T16:36:38.616301502Z
 req_type: Task
 comments:
 - id: 01a0edfb-be42-7d43-a3a4-7f64e90c6355
@@ -134,6 +134,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0ee06-8058-7093-8050-c6d0cc1eaf47
+  author: aida-session-start
+  timestamp: 2026-09-29T16:36:38.616301130Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7d85a8057d6ab4aaf62b3426db351c94ecd93a34
   branch: main
