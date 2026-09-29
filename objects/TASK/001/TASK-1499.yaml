@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-29T08:05:39.960601287Z
+modified_at: 2026-09-29T08:06:22.137908766Z
 req_type: Task
 tags:
 - agent-launch
@@ -607,6 +607,64 @@ comments:
   content: Commit 0c3ef5cb6b references this requirement
   created_at: 2026-09-29T08:05:39.960601287Z
   modified_at: 2026-09-29T08:05:39.960601287Z
+  session_id: d3b4d739-0433-404d-b8de-30f658d731a8
+- id: 01a0ec33-54b9-7d53-abd0-51dd2a50225a
+  author: joe
+  content: |
+    INDEPENDENT REVIEW + ADVISOR DISPOSITION 2026-09-29 (Session #6)
+
+    I did not self-approve this. I wrote the implementation brief, so approving my own brief's output and
+    merging it would be exactly what the two-seat protocol exists to prevent. A separate codex reviewer
+    seat was dispatched against commit 28b356a864 with eight named claims to try to break (R1 trust-rule
+    soundness, R2 the error fallback, R3 laziness/caching measured, R4 walk termination and matching,
+    R5 the race, R6 BUG-766 regression, R7 the diagnostic, R8 comment honesty).
+
+    VERDICT: REQUEST CHANGES — one P2. UPHELD. Fixed in b5e45b66b4.
+
+    THE FINDING, AND IT WAS AGAINST MY TEXT, NOT THE IMPLEMENTER'S
+    The module doc said an older AIDA invoked by absolute path inside a managed tree "has a live AIDA
+    ancestor, so its children still honor the coordinating AIDA_BIN". That sentence came from the
+    Session #15 brief, I repeated it in my own rework brief, and it is FALSE as stated. A worktree is
+    not a process ancestor. A shell can hold the coordinating AIDA_BIN while the aida that exported it
+    has already exited; an older binary invoked from that shell finds no live aida ancestor, gets its
+    override declined, resolves to itself and prepends its own directory to PATH — which is BUG-766's
+    race, reopened in the narrow case.
+
+    The rule is still right and the operator decision stands: the guarantee holds for anything launched
+    beneath a still-live aida, which is the normal fleet case because AIDA supervises the seats it
+    spawns. What was wrong was claiming the check covered a case it does not. b5e45b66b4 rewrites the
+    comment to state what actually survives and to name the rest as an ACCEPTED, KNOWN narrowing of
+    BUG-766's guarantee. Comment text only — I verified the diff contains zero non-comment added or
+    removed lines before committing it.
+
+    The residual gap is filed as BUG-1724 (draft, for triage) with three candidate dispositions, rather
+    than being buried in a code comment or silently accepted. It is not a defect in TASK-1499; it is
+    what the 2026-09-28 decision leaves behind, and it deserves its own disposition.
+
+    WHAT THE REVIEWER CLEARED, which is most of the value of having run it
+    - R1: no unguarded runtime AIDA_BIN path survives. `process()` gates the override; `.mcp.json`
+      generation goes through `resolve_aida_exe()`; `trusted_session_env` substitutes the running
+      executable for any file-supplied value.
+    - R2: the `aida_exe_path()` error fallback resolves only from `current_exe` then PATH and CANNOT
+      honor AIDA_BIN. This was the specific bypass I was most worried about and it is clean.
+    - R3: independently measured 0 `/proc/*/cmdline` opens unset and 3 set, confirming lazy + cached.
+      A third independent measurement agreeing with mine.
+    - R4: the walk has a repeated-PID guard and stops on missing parent, PID 1 and self-parent;
+      matching reads only process name and argv[0] basename.
+    - R5: the documented race does fall through to running-exe then PATH, and a non-AIDA child still
+      reaches the coordinating binary through the PATH prepend — i.e. it does fail safe.
+    - R7: the decline diagnostic is emitted once per process by the startup export path.
+    - R8: the remaining caveats are accurate.
+    - `cargo fmt --all -- --check` clean; clippy exit 0 with no warning inside the changed hunks.
+
+    PROCESS NOTE WORTH KEEPING
+    Three seats measured the same performance acceptance and produced 4, 489, 8 and 3 across rounds.
+    The only reason the real regression was caught is that the number was re-measured in the advisor
+    seat instead of being read out of a report — and the first wrong number was caused by a defective
+    recipe in my own brief, not by the implementer. When a brief makes a NUMBER the acceptance, the
+    brief must show the exact command line and the advisor must re-run it.
+  created_at: 2026-09-29T08:06:22.137908766Z
+  modified_at: 2026-09-29T08:06:22.137908766Z
   session_id: d3b4d739-0433-404d-b8de-30f658d731a8
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
