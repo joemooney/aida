@@ -1,0 +1,28 @@
+id: 01a0ed24-86e5-7b33-8b7c-6ba519d8772f
+spec_id: TASK-1-188
+title: aida_bin.rs:292 override_running_and_path_precedence_and_layouts asserts profil…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1499, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  aida_bin.rs:292 override_running_and_path_precedence_and_layouts asserts profile==Debug but got Release. NOT a production defect: resolve_candidate picks debug-over-release only when 'dm > rm' (strictly newer mtime, aida_bin.rs ~line 95). The test writes release then debug back-to-back, so on a filesystem whose mtime granularity is coarser than the gap the two stamps are EQUAL, dm > rm is false, and it correctly falls through to Release per the documented default. The test depends on filesystem timestamp resolution. Fix the TEST, not resolve(): set the debug binary's mtime explicitly to a clearly-later instant (e.g. filetime::set_file_mtime, or write debug first then re-stamp it) so 'debug is newer' is asserted deterministically. Do not weaken 'dm > rm' to 'dm >= rm' -- that would silently flip the documented release-by-default contract whenever both stamps tie.
+  Reviewed sha: b5e45b66b408c0fbeb48ce516e09588c45e64530
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-29T12:29:49.157984115Z
+modified_at: 2026-09-29T12:29:49.157984115Z
+req_type: Task
+tags:
+- carried-from:TASK-1499
+- finding-hash:6f406f14
+- from-review:TASK-1499
+- kind:carried-forward
+filed_at:
+  code_sha: 7b47d816d85b0323101fe1c7f320d4a0c989a94f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dcb6c5d24
+  vendor: antigravity
+  session: 16e65c39-d6d0-43e4-b0bd-98850c441c3e
