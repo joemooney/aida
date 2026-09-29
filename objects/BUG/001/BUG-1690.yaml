@@ -18,10 +18,78 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:26:58.024538426Z
-modified_at: 2026-09-27T15:27:37.732885458Z
+modified_at: 2026-09-29T05:52:00.573853065Z
 req_type: Bug
 tags:
 - preflight forge from-review:TASK-1529
+comments:
+- id: 01a0ebb8-523d-7ad2-98cd-e00bc8213e3c
+  author: joe
+  content: |
+    ADVISOR DISPOSITION (2026-09-28, advisor seat). **Do not implement this as written — its
+    premise does not hold in the current tree.** Moving it back to draft for re-triage rather than
+    letting it be picked up off the approved queue.
+
+    ## Every symbol this spec cites is absent
+
+    * `preflight_retraction.rs` — **no such file** anywhere in the workspace.
+    * `draft_notice` — **zero hits** across all `*.rs`.
+    * `pr_rebase.rs:224` `is_draft` — this one IS real. It is parsed there and, as the spec says,
+      no merge or review path acts on it.
+    * "`gh pr ready` without `--undo` appears NOWHERE in the tree" — **true, and still true.** The
+      only `pr ready` invocation is `pr_cmd.rs:2057`, which passes `--undo`.
+
+    ## The consequence chain is not reachable, because retraction does not draft
+
+    The spec's chain depends on "draft-first was an operator-approved change" replacing "the
+    previous close-only behaviour". In the tree at 0c3ef5cb6b, retraction is **close-only**:
+
+    `retract_refused_publication` (aida-cli-lib/src/lib.rs:104665) calls
+    `forge.close_change(&change, &note)` and prints "closed PR-N — it was opened before the
+    publication guard refused". The word "draft" does not appear anywhere in that function.
+    TASK-1529's own merge commit (59e859b49f) describes it as "retraction now **closes** an open
+    change only when its author matches the agent's forge identity", and touched only `ci_gate.rs`,
+    `forge.rs` and `lib.rs` — no retraction module, no drafting.
+
+    So the close-only behaviour the spec describes as "previous" is the CURRENT behaviour, and it
+    is the behaviour the spec itself says "did not have this trap." Acceptance 1, 2 and 3 all
+    describe repairing a draft-retraction path that does not exist.
+
+    Most likely explanation: the reviewer wrote this against a branch where draft-first retraction
+    was implemented, and that branch did not land (or landed and was superseded). It should not be
+    implemented from this description either way.
+
+    ## What IS real, and is a much smaller question
+
+    One path drafts a PR: the STORY-529 draft-for-review gate at `pr_cmd.rs:2051-2057`. A spec
+    tagged `review:draft-only` makes `aida pr ship` convert the PR back to a draft and stop before
+    CI-watch and merge, so a human reviews and merges it. Nothing in AIDA ever un-drafts it.
+
+    That is almost certainly CORRECT rather than a gap — the whole point of the tag is that a human
+    takes over, and a human un-drafts in the forge UI. A re-run of `aida pr ship` re-drafts and
+    bails again, which is the intended refusal, not a stall. The residual question worth asking is
+    narrow: **is there any flow in which a `review:draft-only` PR must return to AIDA's control
+    without a human touching the forge?** If no, there is nothing to fix and this should be
+    rejected. If yes, that is a small, well-formed spec about the draft-only tag — not about
+    retraction.
+
+    ## Recommendation
+
+    Re-triage. Either reject it, or rewrite it as the narrow draft-only question above with
+    acceptance criteria that name symbols that exist. Whoever re-triages should re-read
+    `pr_cmd.rs:2051-2057` and `pr_rebase.rs:224` and nothing else; the rest of the description is
+    about code that is not here.
+
+    ## Process note
+
+    This is the third spec in a row (with BUG-1691 and BUG-1705) whose description cites line
+    numbers or symbols that have since moved or never existed, and the second where following the
+    description literally would have produced wrong work. A from-review finding filed against an
+    unmerged branch needs its premise re-verified before it reaches `approved`, not after an
+    implementer has been dispatched against it.
+  created_at: 2026-09-29T05:52:00.573853065Z
+  modified_at: 2026-09-29T05:52:00.573853065Z
+  session_id: 90913ac5-fbfb-4527-a436-ca91b9307726
 history:
 - id: 01a0e37a-9904-77c0-a710-ba44bf6762bd
   author: joe
