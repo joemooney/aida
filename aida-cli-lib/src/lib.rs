@@ -76840,6 +76840,12 @@ mod bug_1647_findings_atomic_tests;
 #[path = "tests/bug_1651_promote_queue_cas_tests.rs"]
 mod bug_1651_promote_queue_cas_tests;
 
+// Shared stale-cache fixture for the BUG-1664 / BUG-1670 / BUG-1606 suites.
+// trace:TASK-1526 | ai:claude
+#[cfg(test)]
+#[path = "tests/stale_cache_fixture.rs"]
+mod stale_cache_fixture;
+
 // trace:BUG-1664 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_1664_stale_sweep_tests.rs"]

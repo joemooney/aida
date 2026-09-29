@@ -513,6 +513,8 @@ pub fn foreign_writer_holds_lock(cache_path: &Path) -> bool {
 /// [`foreign_writer_holds_lock`] addressed by an already-resolved sidecar path
 /// (a `Cache` resolves it once at open).
 // trace:BUG-1644 | ai:claude
+// trace:TASK-1526 | ai:claude
+#[cfg(test)]
 pub fn foreign_writer_holds_lock_at(lock_info_path: &Path) -> bool {
     match read_lock_info_file(lock_info_path) {
         Ok(Some(info)) => matches!(

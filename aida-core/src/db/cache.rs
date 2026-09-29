@@ -5072,8 +5072,12 @@ mod tests {
         holder.execute_batch("ROLLBACK").unwrap();
     }
 
-    // BUG-664: read paths consult `foreign_writer_holds_lock` to decide whether
-    // to serve the last-good snapshot instead of contending for the write lock.
+    // BUG-664 originally had read paths consult `foreign_writer_holds_lock` to
+    // serve the last-good snapshot instead of contending for the write lock.
+    // TASK-1526 deleted that sidecar-based stale shortcut: the sidecar is a
+    // diagnostic and never authorizes stale serving, so the helper survives only
+    // as a test oracle for owner classification. No production read path calls it.
+    // trace:TASK-1526 | ai:claude
     #[test]
     fn foreign_writer_holds_lock_only_for_live_foreign_pid() {
         let dir = tempdir().unwrap();
