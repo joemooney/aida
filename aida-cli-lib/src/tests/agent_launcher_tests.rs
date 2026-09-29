@@ -351,6 +351,11 @@ fn noexec_preview_renders_command_and_codex_permission_posture() {
     .unwrap();
 
     assert!(preview.contains("# AIDA agent launch preview"), "{preview}");
+    assert!(preview.contains("aida_executable: "), "{preview}");
+    assert!(
+        preview.contains("(source: ") && preview.contains("profile: "),
+        "{preview}"
+    );
     assert!(preview.contains("command: /usr/bin/codex --sandbox workspace-write --ask-for-approval=never 'work TASK-1232'"), "{preview}");
     assert!(preview.contains("agents.toml bypass: false"), "{preview}");
     assert!(

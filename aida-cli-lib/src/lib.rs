@@ -8,6 +8,7 @@ mod advisor_code_gate;
 mod advisor_watch;
 mod agent_launch_prompt;
 mod agent_registry;
+mod aida_bin;
 mod alias;
 mod archive_cmd;
 mod assign_cmd;
@@ -28287,6 +28288,12 @@ fn agent_new_with_config(
         );
     }
 
+    // Validate before any real agent launch even when --verbose is absent;
+    // preview mode validates in its renderer above. Resolve the binary BEFORE
+    // the consent gate so an unresolvable build fails fast rather than after a
+    // human has already answered the bypass prompt. trace:TASK-1499 | ai:codex
+    let _resolved_aida = aida_bin::process()?;
+
     gate_agent_bypass(
         &project_root,
         config.agent_type,
@@ -28524,6 +28531,10 @@ fn agent_new_bg_dispatch(
             context.enabled,
         );
     }
+
+    // Validate before the detached/background launch too, and before the
+    // consent gate for the same fail-fast reason. trace:TASK-1499 | ai:codex
+    let _resolved_aida = aida_bin::process()?;
 
     gate_agent_bypass(
         &project_root,
@@ -31122,6 +31133,19 @@ fn render_agent_launch_noexec(
     }
     out.push_str(&format!("cwd: {}\n", plan.launch_cwd.display()));
     out.push_str(&format!("command: {}\n", shell_join_display(&argv)));
+    // Resolve independently at preview time so operators can see the exact
+    // coordinating executable and profile the child environment will inherit.
+    // trace:TASK-1499 | ai:codex
+    let aida = aida_bin::process()?;
+    out.push_str(&format!(
+        "aida_executable: {} (source: {}, profile: {})\n",
+        aida.path.display(),
+        aida.source,
+        aida.profile.map(|p| p.name()).unwrap_or("n/a")
+    ));
+    if aida.stale {
+        out.push_str("aida_build_stale: alternate build is newer than selected build\n");
+    }
     out.push_str("permission_posture:\n");
     let confirm = bypass_confirm::load(&plan.project_root);
     out.push_str(&format!(
@@ -103180,7 +103204,11 @@ fn reconcile_orchestrated_branch(
 pub(crate) fn aida_exe_path() -> std::path::PathBuf {
     static AIDA_EXE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     AIDA_EXE
-        .get_or_init(|| resolve_aida_exe_from(std::env::current_exe().ok()))
+        .get_or_init(|| {
+            aida_bin::process()
+                .map(|r| r.path)
+                .unwrap_or_else(|_| resolve_aida_exe_from(std::env::current_exe().ok()))
+        })
         .clone()
 }
 
@@ -103218,7 +103246,34 @@ fn resolve_aida_exe() -> std::path::PathBuf {
 /// the binary can't be resolved to an absolute existing path.
 // trace:BUG-766 | ai:claude
 fn export_coordinating_bin_env() {
-    let exe = resolve_aida_exe();
+    // Keep an invalid operator override intact so the launch path can report
+    // it clearly; silently replacing it with current_exe would hide the error.
+    // trace:TASK-1499 | ai:codex
+    let ambient_override = std::env::var_os("AIDA_BIN").map(std::path::PathBuf::from);
+    let has_aida_parent = ambient_override
+        .as_ref()
+        .is_some_and(|_| aida_bin::has_aida_ancestor());
+    let resolution = aida_bin::process();
+    if let Some(ambient_override) = ambient_override.as_ref() {
+        if !has_aida_parent {
+            match &resolution {
+                Ok(resolved) => eprintln!(
+                    "AIDA_BIN={} is set but was not honored because no AIDA parent was found; using {} ({})",
+                    ambient_override.display(), resolved.path.display(), resolved.source
+                ),
+                Err(error) => eprintln!(
+                    "AIDA_BIN={} is set but was not honored because no AIDA parent was found; binary resolution failed: {error:#}",
+                    ambient_override.display()
+                ),
+            }
+        }
+    }
+    if ambient_override.is_some() && has_aida_parent && resolution.is_err() {
+        return;
+    }
+    let exe = resolution
+        .map(|resolved| resolved.path)
+        .unwrap_or_else(|_| aida_bin::running_executable_fallback());
     if !exe.is_absolute() || !exe.exists() {
         return;
     }
