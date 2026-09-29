@@ -84,12 +84,12 @@ description: |
        excluded from rule 3's input by `classify_lease_state`, so the 107 stale leases measured on
        the dev host on 2026-09-27 contribute nothing to the false `busy`. Sweeping them is
        worthwhile hygiene on its own terms and is out of scope here.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T04:56:26.956029730Z
-modified_at: 2026-09-29T11:41:40.190812880Z
+modified_at: 2026-09-29T12:29:10.208672629Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -306,3 +306,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0ed23-eeb9-7f51-8a98-30eaf968cae0
+  author: aida-auto-bump
+  timestamp: 2026-09-29T12:29:10.201250544Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0ed23-eec0-70a0-86c2-358e150ca7b3
+  timestamp: 2026-09-29T12:29:10.208671329Z
+  agent: advisor
+  commit_sha: 7b47d816d85b0323101fe1c7f320d4a0c989a94f
+  summary: Completed via merge 7b47d816
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-29T12:29:10.201223745Z
+  completion_sha: 7b47d816d85b0323101fe1c7f320d4a0c989a94f
