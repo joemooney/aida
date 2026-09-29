@@ -1,0 +1,40 @@
+id: 01a0eb4e-a29e-7ba2-a176-5a6a3a2c5254
+spec_id: BUG-1722
+agreed_id: BUG-1722
+title: check_portable_pack errors instead of reporting drift when an aida-* pack entry shadows an inventory skill name as a plain file
+description: |
+  Disclosed residual from TASK-1520's review, not fixed there because it is low-plausibility.
+
+  `scaffolding::agent_pack::check_portable_pack` returns `Err` instead of drift when an entry under
+  `.agents/skills/` whose name IS an inventory skill name exists as a plain FILE rather than a
+  directory — e.g. a file literally named `.agents/skills/aida-capture`. The per-file loop then
+  stats `.agents/skills/aida-capture/SKILL.md`, the OS answers `ENOTDIR` (os error 20), which is not
+  `ErrorKind::NotFound`, so the `Err(e) => return Err(e)` arm propagates it. `make check-templates`
+  reports an IO error rather than naming the drift, and `sync_portable_pack` fails the same way at
+  `create_dir_all`.
+
+  `find_orphans` cannot catch it either: the name is in the inventory, so the `!skills.contains`
+  branch is skipped, and `entry.file_type()?.is_dir()` is false, so the orphan walk is skipped too.
+
+  Not fixed in TASK-1520 because no AIDA code path creates such a file — the retired flat form was
+  `<name>.md`, not a bare `<name>` — so it takes a hand-made file to reach. It is still a case where
+  the check's own error handling hides the finding it exists to report, and the fix is small:
+  classify a non-directory `aida-*` entry that shadows an inventory skill name as
+  `PackDrift::Orphan` in `find_orphans`, and have `sync_portable_pack` remove it before writing.
+
+  A test would plant that file and assert the drift kind rather than an `Err`.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-29T03:56:34.334450305Z
+modified_at: 2026-09-29T03:56:34.334450305Z
+req_type: Bug
+filed_at:
+  code_sha: 42e58794d8a6696c0f81e358ea5702c490903c29
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 42e58794d8
+  vendor: antigravity
+  session: 597cd82b-74e5-462d-801c-dc9f77a75cbd
