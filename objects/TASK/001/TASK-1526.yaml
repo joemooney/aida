@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-09-29T19:51:21.698273213Z
+modified_at: 2026-09-29T20:31:25.195534350Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -447,6 +447,102 @@ comments:
   created_at: 2026-09-29T19:51:21.698273213Z
   modified_at: 2026-09-29T19:51:21.698273213Z
   session_id: 0928828c-bb45-4e70-83ac-bcff6b4f7d68
+- id: 01a0eedd-720b-7bb2-a88e-749d33cba36f
+  author: joe
+  content: |
+    ## Independent review round 1 — BLOCK, resolved by `54c6f1248d`
+
+    Cross-vendor reviewer (codex) on `1f4c570b0c`. The spec is `guided` and its plan doc says
+    "No self-review or merge", so this is the gating review, not a second opinion.
+
+    ### CI on `1f4c570b0c`: green
+
+    Run `36622604224` completed **success**. The migration-wait flake fixed last session is
+    confirmed gone on the runner, not just locally. That closes the flake thread.
+
+    ### What the reviewer confirmed
+
+    **The reworked flake test is a real regression guard, not a silencer.** The reviewer
+    reproduced the failure independently: reusing the original `CacheReadScope` for the final
+    read of `migration_pending_reader_never_serves_old_schema` makes it fail with
+    `called Result::unwrap() on an Err value: the cache is being upgraded; re-run shortly`,
+    and giving it a new scope makes it pass (1 passed / 0 failed vs 0 passed / 1 failed).
+    It also judged the `#[cfg(test)]` `set_migration_wait_limit()` seam safe against
+    cross-test leakage: the test resets the override, a panic stays confined to that thread,
+    and production builds exclude both the cell and the setter.
+
+    ### What the reviewer blocked on — and why it was right
+
+    The carrier split. The CLI wrote `"cache": {...}` **inside** the JSON document it prints;
+    MCP left the inner document untouched and put the label only on the transport envelope
+    (`structuredContent.cache`) plus a trailing note. A pre-existing CLI/MCP parity assertion
+    in `tests/test_history_templates.py` had been **relaxed** to tolerate that difference.
+
+    Two readings were live. Reading A: the envelope satisfies plan item 5, because MCP has no
+    stderr for the note. Reading B: the MCP history document is itself an object output, so
+    item 5's "object outputs always carry cache metadata" applies in-band, and relaxing the
+    test hides an implementation gap.
+
+    The reviewer picked **B**. Reading the code makes B stronger than the plan text alone does.
+    `history::records_json`'s own doc comment says it is *"shared by the CLI (`--json`) and the
+    MCP history tool so the two cannot drift"* (BUG-1631). The CLI call sites in `history.rs`
+    were converted from `serde_json::to_string_pretty` to `cache_output::json_pretty`; the MCP
+    call site was not. That is precisely the drift that contract exists to prevent — an
+    oversight at one of two call sites, not a design decision.
+
+    ### The fix — `54c6f1248d`
+
+    The reviewer suggested changing `cache_labelled_tool_result`. That was **declined**: that
+    wrapper is generic across every MCP tool, including `read_inbox`, `read_punt` and the three
+    schema surfaces, whose CLI counterparts were deliberately *not* converted to `json_pretty`.
+    Changing it there would over-apply item 5 to documents that never touch the cache.
+
+    Instead the two MCP tools that render an object document **with a converted CLI
+    counterpart** now use the same serializer the CLI uses:
+
+    | MCP | CLI counterpart |
+    |---|---|
+    | `tool_history` (`mcp.rs:2689`) | `history.rs:683`, `history.rs:910` |
+    | `tool_query_graph` (`mcp.rs:2480`) | `graph_cmd.rs:178` |
+
+    `tool_query_graph` had the identical defect and was not in the reviewer's blocker — it
+    emits the same document shape as `aida graph --json`, which had been converted. Auditing
+    the other five raw `to_string_pretty` sites in `mcp.rs` found no further drift: inbox, punt
+    and the schema surfaces are not cache-backed reads.
+
+    The envelope label and the trailing note are **kept**. MCP has no stderr, so they remain
+    the equivalent of the CLI's stderr note — additive, not a substitute carrier.
+
+    ### The decisive check
+
+    `tests/test_history_templates.py`'s original assertion is restored **unmodified**:
+
+    ```python
+    assert plain == selected_dates
+    ```
+
+    If reading B is correct this must pass with no relaxation, and it does. Reverting only the
+    history serializer change makes it fail at line 297 on that exact assertion, so the
+    restored assertion is load-bearing rather than incidentally satisfied.
+
+    ### Verification on `54c6f1248d`
+
+    | Check | Result |
+    |---|---|
+    | `tests/test_history_templates.py` | pass |
+    | same, with the history fix reverted | **fails at line 297** on `assert plain == selected_dates` |
+    | `cargo test -p aida-core -p aida-cli-lib --lib` | exit 0; aida-core **1283** pass / 0 fail, aida-cli-lib **7357** pass / 0 fail (both unchanged) |
+    | `cargo clippy --workspace -- -W clippy::all -D clippy::correctness` (CI's invocation) | exit 0, 0 errors |
+    | `cargo fmt --all -- --check` | clean |
+    | `scripts/check-portability.sh` | clean |
+    | `tests/test_mcp_stdio.sh --skip-agent-contract` | pass |
+    | `tests/test_cache_refresh_outputs.py` | pass, incl. "graph/tree: retained shape and cache contract" and "history: retained shape and cache contract" |
+
+    A round-2 confirmation review is dispatched to the same independent reviewer, scoped to
+    whether the blocker is cleared.
+  created_at: 2026-09-29T20:31:25.195534350Z
+  modified_at: 2026-09-29T20:31:25.195534350Z
+  session_id: d4e8bbc4-1b41-4770-9f54-8111cb1b7383
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
