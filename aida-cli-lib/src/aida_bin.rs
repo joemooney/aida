@@ -4,10 +4,13 @@
 //! ancestor chain; otherwise resolution uses the running executable, then PATH.
 //! BUG-766 still works because AIDA children inherit AIDA_BIN and AIDA's PATH
 //! prepend: nested AIDA resolves to its own executable, while non-AIDA seats
-//! find the coordinating build on PATH. An older AIDA invoked by absolute
-//! path inside a managed tree has a live AIDA ancestor, so its children still
-//! honor the coordinating AIDA_BIN instead of its older current_exe. This is
-//! an accident boundary, not a security boundary: same-uid code can forge the
+//! find the coordinating build on PATH. This guarantee applies when a process
+//! is launched beneath a still-live AIDA process, the normal fleet case since
+//! AIDA supervises its seats. If the exporting AIDA has exited, inherited
+//! AIDA_BIN is declined; an older binary invoked from that shell resolves to
+//! itself and prepends its directory to PATH. This is an accepted, known
+//! narrowing of BUG-766's guarantee. This is an accident boundary, not a
+//! security boundary: same-uid code can forge the
 //! environment or launch any binary, and PID reuse could alias an ancestor;
 //! the check prevents stale shell-profile or unrelated-tool values redirecting
 //! the coordinating binary.
