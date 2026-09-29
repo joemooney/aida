@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-29T06:10:15.153407284Z
+modified_at: 2026-09-29T06:12:02.195357726Z
 req_type: Task
 tags:
 - agent-launch
@@ -408,6 +408,26 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-29T06:06:17.482390390Z
   modified_at: 2026-09-29T06:06:17.482390390Z
+- id: 01a0ebca-a813-7962-aa5f-14c1175689ee
+  author: joe
+  content: |
+    ADVISOR NOTE 2026-09-28 (Session #6) — AMENDMENT TO THE REWORK BRIEF: #2261 now stands ALONE.
+
+    The "ADVISOR REWORK BRIEF" comment above covers both #2261 and #2226. That framing is WITHDRAWN for
+    #2226 only; everything the brief says about #2261 stands unchanged and is being implemented.
+
+    Reason, recorded in full on BUG-1679: on this branch every caller already reaches the binary through
+    `aida_bin::process()`, so `resolve_aida_exe_from` (lib.rs:103157) is reachable ONLY as the error
+    fallback in `aida_exe_path` (lib.rs:103145). #2226's diff inserts unconditional `AIDA_BIN` honoring
+    (executability check only, no provenance) into exactly that fallback — which would enforce the trust
+    rule in `process()` and then bypass it whenever `process()` errored. #2226 is therefore superseded by
+    #2261, not reworked alongside it, and should be closed without merging once #2261 lands.
+
+    Consequence for the implementer: NOTHING. The brief's scope, tests and DO-NOT list are unaffected.
+    Consequence for the integrator: #2261 is approved and merged on its own merits. Do not wait on #2226.
+  created_at: 2026-09-29T06:12:02.195357726Z
+  modified_at: 2026-09-29T06:12:02.195357726Z
+  session_id: d3b4d739-0433-404d-b8de-30f658d731a8
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
   author: joe
