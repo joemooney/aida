@@ -287,13 +287,14 @@ def main():
                             mcp = content_text(dates_client.tool("history", {"since": "2h", "limit": 2, "template": layout, **filt}))
                             assert mcp == wanted, (zone, mode, layout, mcp, wanted)
                     plain = json.loads(content_text(dates_client.tool("history", {"limit":100})))
-                    # TASK-1526 labels a stale-allowed read on both surfaces, but
-                    # by different carriers: the CLI writes `cache` into the JSON
-                    # document it prints, while MCP puts it on the envelope
-                    # (`structuredContent.cache`) plus a trailing note, leaving the
-                    # inner document untouched. Compare the documents themselves.
+                    # TASK-1526 labels a stale-allowed read on BOTH surfaces with
+                    # the same in-band carrier, so this pre-existing CLI/MCP parity
+                    # assertion still holds unmodified. MCP additionally repeats the
+                    # label on its envelope (`structuredContent.cache`) plus a
+                    # trailing note, because it has no stderr for the note; that is
+                    # additive and must not replace the in-band `cache` key.
                     # trace:TASK-1526 | ai:claude
-                    assert plain == {k: v for k, v in selected_dates.items() if k != "cache"}
+                    assert plain == selected_dates
                     assert selected_dates["cache"] == {"stale": False}
                 finally:
                     dates_client.close()

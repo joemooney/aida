@@ -2474,7 +2474,10 @@ impl<'a> McpServer<'a> {
             })
             .collect();
         let rollup = status_rollup(&store, &result.nodes);
-        serde_json::to_string_pretty(&json!({
+        // TASK-1526: same carrier as `aida graph --json` (graph_cmd.rs), which
+        // serializes this identical document through `json_pretty`.
+        // trace:TASK-1526 | ai:claude
+        crate::cache_output::json_pretty(&json!({
             "root": root_label,
             "mode": canonical_mode,
             "count": result.nodes.len(),
@@ -2678,7 +2681,12 @@ impl<'a> McpServer<'a> {
         // trace:TASK-1508 | ai:claude
         // BUG-1631: one JSON builder for MCP and `aida history --json`.
         // trace:BUG-1631 | ai:claude
-        serde_json::to_string_pretty(&history::records_json(
+        // TASK-1526: and one serializer, so the shared builder's "cannot drift"
+        // contract survives the cache label. An object output always carries
+        // `cache` in-band on BOTH surfaces; the envelope label and the trailing
+        // note are additive for MCP, not a substitute carrier.
+        // trace:TASK-1526 | ai:claude
+        crate::cache_output::json_pretty(&history::records_json(
             &records.events,
             records.window_exhausted,
             &records.source,
