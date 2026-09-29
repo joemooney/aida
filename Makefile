@@ -7,7 +7,7 @@
         db-info db-migrate-sqlite db-migrate-yaml db-export \
         docs docs-build book book-glossary book-serve proto fmt lint check \
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
-        sync-templates check-templates \
+        sync-templates check-templates sync-agent-skills check-agent-skills \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -410,8 +410,20 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 		ln -sf "../../aida-core/templates/commands/$$name" ".claude/commands/$$name"; \
 		echo "  Linked: .claude/commands/$$name -> aida-core/templates/commands/$$name"; \
 	done
+	@$(MAKE) --no-print-directory sync-agent-skills
 	@echo "Template sync complete!"
 
+# trace:TASK-1520 | ai:codex
+sync-agent-skills: ## Sync .agents/skills/aida-* from aida-core/templates (regular files, TASK-1520)
+	@echo "Syncing .agents/skills/aida-* (portable pack)..."
+	@cargo run -q -p aida-core --example agent_skill_pack -- sync
+
+# trace:TASK-1520 | ai:codex
+check-agent-skills: ## Check .agents/skills/aida-* for byte drift (TASK-1520)
+	@echo "Checking .agents/skills/aida-* for drift..."
+	@cargo run -q -p aida-core --example agent_skill_pack -- check
+
+# trace:TASK-1520 | ai:codex (check-agent-skills is included in this aggregate target)
 check-templates: ## Check if .claude/ templates are properly linked
 	@echo "Checking template symlinks..."
 	@errors=0; \
@@ -485,6 +497,9 @@ check-templates: ## Check if .claude/ templates are properly linked
 		fi; \
 	else \
 		echo "  MISSING: $$target (run: ln -sf ../../aida-core/templates/plan-template.md docs/plans/_TEMPLATE.md)"; \
+		errors=1; \
+	fi; \
+	if ! $(MAKE) --no-print-directory check-agent-skills; then \
 		errors=1; \
 	fi; \
 	if [ $$errors -eq 1 ]; then \
