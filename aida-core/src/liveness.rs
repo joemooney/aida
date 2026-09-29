@@ -65,6 +65,96 @@ pub struct LiveSession {
     pub stale_cwd: bool,
 }
 
+/// Process-tree snapshot with integer ages sampled once at probe time.
+#[derive(Debug, Clone)]
+pub struct ProcTree {
+    nodes: Vec<ProcNode>,
+}
+
+/// One process leader and its parent, with age in whole seconds.
+#[derive(Debug, Clone)]
+pub struct ProcNode {
+    pub pid: u32,
+    pub ppid: Option<u32>,
+    pub age_secs: i64,
+}
+
+impl ProcTree {
+    // trace:BUG-1704 | ai:codex
+    pub fn from_nodes(nodes: Vec<ProcNode>) -> Self {
+        Self { nodes }
+    }
+
+    /// Descendant ages, excluding the root; `None` means the root was not sampled.
+    // trace:BUG-1704 | ai:codex
+    pub fn descendant_ages(&self, root: u32) -> Option<Vec<i64>> {
+        if !self.nodes.iter().any(|node| node.pid == root) {
+            return None;
+        }
+        let mut ages = Vec::new();
+        for node in &self.nodes {
+            if node.pid == root {
+                continue;
+            }
+            let mut current = node.ppid;
+            let mut seen = std::collections::HashSet::new();
+            while let Some(pid) = current {
+                if pid == root {
+                    ages.push(node.age_secs);
+                    break;
+                }
+                if !seen.insert(pid) {
+                    break;
+                }
+                current = self
+                    .nodes
+                    .iter()
+                    .find(|candidate| candidate.pid == pid)
+                    .and_then(|parent| parent.ppid);
+            }
+        }
+        Some(ages)
+    }
+}
+
+/// Memoized process-leader tree snapshot, intentionally without cwd or command refreshes.
+// trace:BUG-1704 | ai:codex
+pub fn probe_process_tree() -> ProcTree {
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<ProcTree> = OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            let now = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
+            let sys = System::new_with_specifics(
+                RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+            );
+            let nodes = sys
+                .processes()
+                .values()
+                .filter_map(|proc| {
+                    if proc.thread_kind().is_some() {
+                        return None;
+                    }
+                    let start = proc.start_time();
+                    // Unknown start times cannot meaningfully satisfy the age window.
+                    if start == 0 {
+                        return None;
+                    }
+                    Some(ProcNode {
+                        pid: proc.pid().as_u32(),
+                        ppid: proc.parent().map(|parent| parent.as_u32()),
+                        age_secs: (now - start as i64).max(0),
+                    })
+                })
+                .collect();
+            ProcTree::from_nodes(nodes)
+        })
+        .clone()
+}
+
 /// Window for "this jsonl was just written" — short enough that a quiescent
 /// session won't be classified as live, long enough to absorb a normal
 /// inter-tool-call gap.
@@ -1632,5 +1722,23 @@ started_at = "2026-01-01T00:00:00Z"
     fn lease_without_pid_signal_is_undetermined_not_reclaimable() {
         let v = classify_stale_lease_recovery(LeaseState::Dormant, None, true, 0);
         assert_eq!(v, StaleLeaseRecovery::UnknownLiveness);
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn descendant_ages_terminates_on_a_parent_cycle() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: Some(2),
+                age_secs: 20,
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: 10,
+            },
+        ]);
+        assert_eq!(tree.descendant_ages(1), Some(vec![10]));
     }
 }

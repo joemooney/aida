@@ -76982,6 +76982,10 @@ fn build_agent_classify_context(
     let live_sessions = process_probe::probe_live_claude_sessions();
     let live_lease_worktrees = live_lease_worktrees(now, leases, &live_sessions);
     agent_registry::AgentClassifyContext::new(now, cfg.busy_threshold_secs, live_lease_worktrees)
+        .with_work_probe(
+            aida_core::liveness::probe_process_tree(),
+            cfg.work_grace_secs,
+        )
 }
 
 /// TASK-1061: compute the set of live-lease worktree paths from a SINGLE shared

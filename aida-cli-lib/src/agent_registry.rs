@@ -10,11 +10,12 @@
 //! bumps `last_active_at`, and `classify_status` flips Busy → Idle once that
 //! timestamp is older than the configurable `[agent_registry]
 //! busy_threshold_secs` (default 30s). An active Live session lease covering
-//! the agent's worktree pins the entry to Busy regardless of recency, so a
-//! parked-but-running agent attached to scope still reads as occupied.
+//! the agent's worktree uses `work_grace_secs` (default 10s) to distinguish
+//! recent descendant work from a finished seat.
 
 use std::path::{Path, PathBuf};
 
+use aida_core::liveness::ProcTree;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -263,6 +264,8 @@ pub(crate) struct AgentClassifyContext {
     pub(crate) now: DateTime<Utc>,
     pub(crate) threshold_secs: u64,
     pub(crate) live_lease_worktrees: Vec<PathBuf>,
+    pub(crate) proc_tree: Option<ProcTree>,
+    pub(crate) work_grace_secs: u64,
 }
 
 impl AgentClassifyContext {
@@ -275,7 +278,16 @@ impl AgentClassifyContext {
             now,
             threshold_secs,
             live_lease_worktrees,
+            proc_tree: None,
+            work_grace_secs: 10,
         }
+    }
+
+    // trace:BUG-1704 | ai:codex
+    pub(crate) fn with_work_probe(mut self, tree: ProcTree, grace_secs: u64) -> Self {
+        self.proc_tree = Some(tree);
+        self.work_grace_secs = grace_secs;
+        self
     }
 }
 
@@ -287,6 +299,7 @@ impl AgentClassifyContext {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Config {
     pub(crate) busy_threshold_secs: u64,
+    pub(crate) work_grace_secs: u64,
     pub(crate) singleton_roles: Vec<String>,
 }
 
@@ -294,6 +307,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             busy_threshold_secs: 30,
+            work_grace_secs: 10,
             singleton_roles: vec![
                 "advisor".to_string(),
                 "product".to_string(),
@@ -323,6 +337,10 @@ impl Config {
                 }
             } else if key == "singleton_roles" {
                 cfg.singleton_roles = parse_csv_words(&val);
+            } else if key == "work_grace_secs" {
+                if let Ok(n) = val.parse::<u64>() {
+                    cfg.work_grace_secs = n;
+                }
             }
         }
         cfg
@@ -1579,10 +1597,9 @@ pub(crate) fn view_kind(agent: &AgentRegistryView) -> &'static str {
     }
 }
 
-// STORY-435 busy/idle: freshness signal from the MCP heartbeat. The lease-
-// correlation branch deliberately keeps a parked-but-running agent attached
-// to a Live lease as Busy — an idle process still "occupies" active scope
-// from an operator's POV. trace:STORY-435 | ai:claude
+// STORY-435 heartbeat freshness plus BUG-1704 live-lease work evidence.
+// A covered process stays Busy when its subtree shows recent sustained work;
+// missing evidence preserves the Busy result. trace:STORY-435 | ai:claude
 fn classify_status(
     entry: &AgentRegistryEntry,
     pid_alive: bool,
@@ -1599,9 +1616,38 @@ fn classify_status(
         return AgentStatus::Busy;
     }
     if covers(&ctx.live_lease_worktrees, &entry.worktree_path) {
-        return AgentStatus::Busy;
+        match ctx.proc_tree.as_ref() {
+            None => return AgentStatus::Busy,
+            Some(tree) if seat_has_own_work(tree, entry.pid, elapsed, ctx.work_grace_secs) => {
+                return AgentStatus::Busy
+            }
+            Some(_) => {}
+        }
     }
     AgentStatus::Idle
+}
+
+// trace:BUG-1704 | ai:codex
+fn seat_has_own_work(tree: &ProcTree, seat_pid: u32, idle_secs: i64, grace_secs: u64) -> bool {
+    // If a heartbeat lands during a long build, the heartbeat can move past build start and
+    // clause 2 can exclude that build. Tool calls are sequential, so this is accepted in practice.
+    let Some(ages) = tree.descendant_ages(seat_pid) else {
+        return true;
+    };
+    if idle_secs <= grace_secs.min(i64::MAX as u64) as i64 {
+        return true;
+    }
+    ages_show_work(&ages, idle_secs, grace_secs.min(i64::MAX as u64) as i64)
+}
+
+// trace:BUG-1704 | ai:codex
+fn ages_show_work(descendant_ages: &[i64], idle_secs: i64, grace_secs: i64) -> bool {
+    if idle_secs <= grace_secs {
+        return false;
+    }
+    descendant_ages
+        .iter()
+        .any(|age| *age >= grace_secs && *age < idle_secs)
 }
 
 /// Accumulated CPU seconds for `pid`, via `ps -o time=`.
@@ -1614,7 +1660,7 @@ fn classify_status(
 ///
 /// Deliberately NOT used to reclassify: cumulative CPU cannot distinguish "finished" from
 /// "blocked on a long build", and flipping the latter to `idle` would invite an orchestrator to
-/// stop a working seat. A classification fix needs a CPU DELTA between two samples.
+/// stop a working seat. A classification fix needs a CPU DELTA between two samples. BUG-1704 instead uses an age-window descendant rule.
 // trace:BUG-1701 | ai:claude
 pub(crate) fn process_cpu_secs(pid: u32) -> Option<i64> {
     let out = std::process::Command::new("ps")
@@ -2556,6 +2602,92 @@ mod tests {
         assert_eq!(classify_status(&e, true, &c), AgentStatus::Busy);
     }
 
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn ages_show_work_counts_a_descendant_inside_the_window() {
+        assert!(ages_show_work(&[120], 600, 10));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn ages_show_work_ignores_session_long_service_children() {
+        assert!(!ages_show_work(&[3600], 600, 10));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn ages_show_work_ignores_momentary_hook_children() {
+        assert!(!ages_show_work(&[2], 600, 10));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn ages_show_work_is_false_when_grace_window_is_empty() {
+        assert!(!ages_show_work(&[7], 10, 10));
+        assert!(!ages_show_work(&[7], 5, 10));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn seat_has_own_work_is_true_when_seat_pid_is_absent_from_snapshot() {
+        assert!(seat_has_own_work(
+            &ProcTree::from_nodes(vec![]),
+            42,
+            600,
+            10
+        ));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    fn bug1704_tree(child_age: i64) -> ProcTree {
+        ProcTree::from_nodes(vec![
+            aida_core::liveness::ProcNode {
+                pid: 42,
+                ppid: None,
+                age_secs: 700,
+            },
+            aida_core::liveness::ProcNode {
+                pid: 50,
+                ppid: Some(42),
+                age_secs: 700,
+            },
+            aida_core::liveness::ProcNode {
+                pid: 51,
+                ppid: Some(50),
+                age_secs: child_age,
+            },
+        ])
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn classify_status_live_lease_without_proc_tree_is_busy() {
+        let now = Utc::now();
+        let entry = entry_with(42, now - Duration::minutes(5));
+        let ctx = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+        assert_eq!(classify_status(&entry, true, &ctx), AgentStatus::Busy);
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn classify_status_live_lease_with_quiet_subtree_is_idle() {
+        let now = Utc::now();
+        let entry = entry_with(42, now - Duration::minutes(5));
+        let ctx = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")])
+            .with_work_probe(bug1704_tree(3600), 10);
+        assert_eq!(classify_status(&entry, true, &ctx), AgentStatus::Idle);
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn classify_status_live_lease_with_working_subtree_is_busy() {
+        let now = Utc::now();
+        let entry = entry_with(42, now - Duration::minutes(5));
+        let ctx = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")])
+            .with_work_probe(bug1704_tree(120), 10);
+        assert_eq!(classify_status(&entry, true, &ctx), AgentStatus::Busy);
+    }
+
     // STORY-435: lease worktree that's an ancestor of the agent worktree
     // also counts (operator working in a subdir of the lease's root).
     #[test]
@@ -2958,6 +3090,7 @@ mod tests {
         let cfg = Config::from_toml_str("");
         assert_eq!(cfg, Config::default());
         assert_eq!(cfg.busy_threshold_secs, 30);
+        assert_eq!(cfg.work_grace_secs, 10);
 
         let cfg = Config::from_toml_str("[other]\nfoo = 1\n");
         assert_eq!(cfg.busy_threshold_secs, 30);
@@ -2967,6 +3100,14 @@ mod tests {
     fn config_parses_busy_threshold_secs() {
         let cfg = Config::from_toml_str("[agent_registry]\nbusy_threshold_secs = 90\n");
         assert_eq!(cfg.busy_threshold_secs, 90);
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn config_parses_work_grace_secs() {
+        let cfg = Config::from_toml_str("[agent_registry]\nwork_grace_secs = 25\n");
+        assert_eq!(cfg.work_grace_secs, 25);
+        assert_eq!(Config::default().work_grace_secs, 10);
     }
 
     #[test]
