@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-09-29T20:31:25.195534350Z
+modified_at: 2026-09-29T20:33:36.401734265Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -542,6 +542,30 @@ comments:
     whether the blocker is cleared.
   created_at: 2026-09-29T20:31:25.195534350Z
   modified_at: 2026-09-29T20:31:25.195534350Z
+  session_id: d4e8bbc4-1b41-4770-9f54-8111cb1b7383
+- id: 01a0eedf-7291-7111-a7fa-5b35112b5a82
+  author: joe
+  content: |
+    ## Independent review round 2 — APPROVE, blocker cleared
+
+    Same cross-vendor reviewer (codex), on `54c6f1248d`, scoped to one question: is the round-1
+    blocker cleared? It re-ran the checks itself rather than reading the fix and nodding.
+
+    - **Blocker cleared: YES.** `tests/test_history_templates.py` passes — the CLI/MCP parity
+      assertion holds with no relaxation. `tests/test_cache_refresh_outputs.py` passes,
+      including the graph/tree and history cache-contract lines.
+    - **On declining its own suggested fix:** the reviewer agreed. Changing the generic
+      `cache_labelled_tool_result` wrapper "would over-apply Item 5", because it is shared with
+      MCP tools whose CLI counterparts intentionally keep their own serialization.
+    - **On remaining gaps:** none. The other raw pretty-JSON sites — inbox, punt and the three
+      schema surfaces — are not object documents that item 5 reaches.
+
+    **New verdict: APPROVE. Remaining blockers: none.**
+
+    Both review rounds were run by a reviewer that did not write this code, satisfying the plan
+    doc's "No self-review or merge". Merging once CI is green on `54c6f1248d`.
+  created_at: 2026-09-29T20:33:36.401734265Z
+  modified_at: 2026-09-29T20:33:36.401734265Z
   session_id: d4e8bbc4-1b41-4770-9f54-8111cb1b7383
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
