@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-09-29T17:27:34.875981926Z
+modified_at: 2026-09-29T18:32:59.289545055Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -295,6 +295,60 @@ comments:
   created_at: 2026-09-29T17:27:34.875981926Z
   modified_at: 2026-09-29T17:27:34.875981926Z
   session_id: 6cabc620-b750-4bb8-96d3-a473bafa0c00
+- id: 01a0ee71-0499-7171-a17b-3ed3418124ae
+  author: joe
+  content: |
+    Salvage delivered. PR #2283, branch `task-1526-salvage`, head `b56e09f524`, base `8bd9fbb3d6`.
+
+    The stranded WIP was viable and is now green. Merging `origin/task-1526` onto current
+    main was conflict-free; the work was squash-replayed as
+    `e9f76cce84 [AI:codex] feat(cache): single-flight bounded stale reads (TASK-1526)`,
+    replacing the untrailered `wip: salvage task-1526` commit, so the trailer can complete
+    this spec at merge.
+
+    **The breadth run found what the earlier audit had not.** The branch was green on
+    `aida-core` but had never been run against `aida-cli-lib`, where it was red with 11
+    failures: the whole BUG-1664 and BUG-1670 stale-sweep suites plus
+    `report_cmd::tests::bug_1606_notice_marker_not_written_from_a_stale_cache_snapshot`.
+
+    All 11 failed on a `fixture:` precondition, not on behavior — e.g. "the cache must serve
+    the stale pre-reopen status" (left `Approved`, right `Completed`). Root cause is plan item
+    3 working as designed: deleting the sidecar-based stale shortcut removed the mechanism
+    those fixtures used to manufacture a stale snapshot (planting a `.lock-info` record for a
+    live foreign PID). The fixtures are now re-pointed at the mechanism the shipped read path
+    actually loses to — a shared `tests/stale_cache_fixture.rs` holds the refresh flock on
+    another thread — and each suite still asserts the stale value is really served first, so
+    none can pass vacuously.
+
+    Also fixed: three clippy findings the branch introduced
+    (`refresh_wait_refuses_while_store_or_sqlite_write_lock_held` never stopped or joined its
+    refresh holder, and a `comparison_to_empty`), and a `pty.openpty()` in
+    `tests/test_cache_refresh_outputs.py` left unsized, which truncated the title column and
+    failed an assertion on the host's default geometry rather than on the output.
+
+    ## Commands and results, all on this tree
+
+    | Check | Base `8bd9fbb3d6` | Branch `b56e09f524` |
+    |---|---|---|
+    | `cargo test -p aida-core --lib` | 1252 passed, 0 failed, 2 ignored | 1277 passed, 0 failed, 2 ignored |
+    | `cargo test -p aida-core -p aida-cli-lib --lib` | 1256 / 7353 passed, 0 failed | 1281 / 7357 passed, 0 failed |
+    | `cargo clippy --workspace --all-targets -- -D warnings` | 25 findings | the same 25, identical sites |
+    | `cargo fmt --all -- --check` | clean | clean |
+    | `scripts/check-portability.sh` | clean | clean |
+    | `make check-templates` | All templates OK | All templates OK |
+    | `python3 tests/test_cache_refresh_outputs.py --aida target/debug/aida` | n/a (new) | all PASS |
+
+    Count reconciliation: aida-core +25, aida-cli-lib +4 — exactly the 25 and 4 `#[test]`
+    functions the diff adds, none removed, none newly `#[ignore]`d. The 1281-vs-1277 gap is
+    cargo feature unification between the two- and one-package invocations and is identical on
+    both sides. The 25 clippy findings are pre-existing on main under this host's clippy
+    (newer than CI's pinned toolchain); the branch adds none.
+
+    Contract check: slice C machinery is absent, as required. Per the plan doc, no self-review
+    and no merge — PR #2283 is handed to an independent reviewer.
+  created_at: 2026-09-29T18:32:59.289545055Z
+  modified_at: 2026-09-29T18:32:59.289545055Z
+  session_id: 2678b332-6dc9-46b7-a7b1-0ade89cf2036
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
