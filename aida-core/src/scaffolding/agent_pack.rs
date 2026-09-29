@@ -59,9 +59,20 @@ pub fn check_portable_pack(
     // reports a pristine regular file, so the pack would read as clean.
     // trace:TASK-1520 | ai:claude
     let mut linked_dirs: BTreeSet<PathBuf> = BTreeSet::new();
+    // find_orphans owns the shadow-file drift; this set only prevents ENOTDIR
+    // from hiding that finding in the per-file checks.
+    // trace:BUG-1722 | ai:codex
+    let mut shadowed: BTreeSet<PathBuf> = BTreeSet::new();
     for rel in expected.keys() {
-        if let Some(link) = symlinked_ancestor(root, pack, rel)? {
-            linked_dirs.insert(link);
+        if let Some(blocker) = blocked_ancestor(root, pack, rel)? {
+            match blocker {
+                BlockedAncestor::Symlink(path) => {
+                    linked_dirs.insert(path);
+                }
+                BlockedAncestor::File(path) => {
+                    shadowed.insert(path);
+                }
+            }
         }
     }
     for link in &linked_dirs {
@@ -69,7 +80,11 @@ pub fn check_portable_pack(
     }
 
     for (rel, bytes) in &expected {
-        if linked_dirs.iter().any(|link| rel.starts_with(link)) {
+        if linked_dirs
+            .iter()
+            .chain(shadowed.iter())
+            .any(|blocked| rel.starts_with(blocked))
+        {
             continue;
         }
         let full = root.join(rel);
@@ -121,12 +136,15 @@ pub fn sync_portable_pack(
 
     for (rel, bytes) in &expected {
         let full = root.join(rel);
-        // Clear a symlinked skill directory before `create_dir_all`, or every
-        // write below lands in the link's target — plausibly a template master
-        // in this same working tree. trace:TASK-1520 | ai:claude
-        while let Some(link) = symlinked_ancestor(root, pack, rel)? {
-            fs::remove_file(root.join(&link))?;
-            report.removed.push(link);
+        // Clear a symlinked directory or shadowing file before `create_dir_all`,
+        // or writing below may fail or land in a linked target.
+        // trace:TASK-1520 | ai:claude
+        // trace:BUG-1722 | ai:codex
+        while let Some(blocker) = blocked_ancestor(root, pack, rel)? {
+            // Unlink the blocker before creating directories or writing beneath it.
+            let path = blocker.path().clone();
+            fs::remove_file(root.join(&path))?;
+            report.removed.push(path);
         }
         if let Some(parent) = full.parent() {
             fs::create_dir_all(parent)?;
@@ -166,7 +184,17 @@ pub fn sync_portable_pack(
             continue;
         }
         let full = root.join(&rel);
-        let meta = fs::symlink_metadata(&full)?;
+        // The blocker may have been replaced by the expected directory during the write pass.
+        // trace:BUG-1722 | ai:codex
+        if report.removed.contains(&rel) {
+            continue;
+        }
+        let meta = match fs::symlink_metadata(&full) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+            // trace:BUG-1722 | ai:codex
+            Err(e) => return Err(e),
+        };
         if meta.file_type().is_dir() {
             fs::remove_dir_all(full)?;
         } else {
@@ -180,7 +208,25 @@ pub fn sync_portable_pack(
     Ok(report)
 }
 
-/// The nearest directory between `<pack>` and `rel` that is itself a symlink.
+/// An ancestor of `rel` inside the pack that exists but is not a usable directory.
+// trace:BUG-1722 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BlockedAncestor {
+    /// A symlinked directory: the per-file check resolves through it and sees a pristine file.
+    Symlink(PathBuf),
+    /// A plain file shadowing a skill directory name: the per-file stat fails with `ENOTDIR`.
+    File(PathBuf),
+}
+
+impl BlockedAncestor {
+    fn path(&self) -> &PathBuf {
+        match self {
+            BlockedAncestor::Symlink(path) | BlockedAncestor::File(path) => path,
+        }
+    }
+}
+
+/// The nearest unusable directory ancestor between `<pack>` and `rel`.
 ///
 /// This is the case the per-file symlink check cannot see. Codex 0.157.0 does
 /// read a symlinked skill *directory* (BUG-1639's matrix), and the `.claude/`
@@ -188,7 +234,8 @@ pub fn sync_portable_pack(
 /// an operator can reach this state by hand. Left undetected, the pack reads as
 /// clean and the next sync writes through the link into its target.
 // trace:TASK-1520 | ai:claude
-fn symlinked_ancestor(root: &Path, pack: &str, rel: &Path) -> io::Result<Option<PathBuf>> {
+// trace:BUG-1722 | ai:codex
+fn blocked_ancestor(root: &Path, pack: &str, rel: &Path) -> io::Result<Option<BlockedAncestor>> {
     let pack_path = Path::new(pack);
     let Ok(inner) = rel.strip_prefix(pack_path) else {
         return Ok(None);
@@ -200,7 +247,12 @@ fn symlinked_ancestor(root: &Path, pack: &str, rel: &Path) -> io::Result<Option<
     for part in parts {
         probe = probe.join(part);
         match fs::symlink_metadata(root.join(&probe)) {
-            Ok(meta) if meta.file_type().is_symlink() => return Ok(Some(probe)),
+            Ok(meta) if meta.file_type().is_symlink() => {
+                return Ok(Some(BlockedAncestor::Symlink(probe)))
+            }
+            Ok(meta) if !meta.file_type().is_dir() => {
+                return Ok(Some(BlockedAncestor::File(probe)))
+            }
             Ok(_) => {}
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e),
@@ -246,8 +298,15 @@ fn find_orphans(
         let rel = Path::new(pack).join(&name);
         if !skills.contains(&name) {
             orphans.push(PackDrift::Orphan(rel));
-        } else if entry.file_type()?.is_dir() {
-            collect_unexpected_files(root, &rel, expected, &mut orphans)?;
+        } else {
+            let kind = entry.file_type()?;
+            if kind.is_dir() {
+                collect_unexpected_files(root, &rel, expected, &mut orphans)?;
+            } else if !kind.is_symlink() {
+                // A plain file shadowing an inventory skill name; symlinks are reported above.
+                // trace:BUG-1722 | ai:codex
+                orphans.push(PackDrift::Orphan(rel));
+            }
         }
     }
     Ok(orphans)
@@ -421,6 +480,54 @@ mod tests {
         let report = sync_portable_pack(root.path(), inventory::PORTABLE_PACK, &cfg).unwrap();
         assert!(!root.path().join(&rel).exists());
         assert!(report.removed.contains(&rel));
+        assert!(
+            check_portable_pack(root.path(), inventory::PORTABLE_PACK, &cfg)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    // trace:BUG-1722 | ai:codex
+    fn a_file_shadowing_a_skill_directory_is_drift_not_an_error() {
+        let (root, cfg) = setup();
+        sync_portable_pack(root.path(), inventory::PORTABLE_PACK, &cfg).unwrap();
+        let rel = Path::new(inventory::PORTABLE_PACK).join("aida-capture");
+        let full = root.path().join(&rel);
+        fs::remove_dir_all(&full).unwrap();
+        fs::write(&full, "not a directory").unwrap();
+
+        let drift = check_portable_pack(root.path(), inventory::PORTABLE_PACK, &cfg).unwrap();
+        assert!(drift.contains(&PackDrift::Orphan(rel.clone())), "{drift:?}");
+        assert!(!drift
+            .iter()
+            .any(|item| matches!(item, PackDrift::Symlink(_))));
+        assert_eq!(
+            drift.iter().filter(|item| drift_path(item) == &rel).count(),
+            1
+        );
+    }
+
+    #[test]
+    // trace:BUG-1722 | ai:codex
+    fn a_sync_replaces_a_shadowing_file_with_the_real_skill_directory() {
+        let (root, cfg) = setup();
+        sync_portable_pack(root.path(), inventory::PORTABLE_PACK, &cfg).unwrap();
+        let rel = Path::new(inventory::PORTABLE_PACK).join("aida-capture");
+        let full = root.path().join(&rel);
+        fs::remove_dir_all(&full).unwrap();
+        fs::write(&full, "not a directory").unwrap();
+
+        let report = sync_portable_pack(root.path(), inventory::PORTABLE_PACK, &cfg).unwrap();
+        let meta = fs::symlink_metadata(&full).unwrap();
+        assert!(meta.file_type().is_dir());
+        let skill_md = full.join("SKILL.md");
+        let meta = fs::symlink_metadata(&skill_md).unwrap();
+        assert!(meta.file_type().is_file() && !meta.file_type().is_symlink());
+        assert_eq!(
+            report.removed.iter().filter(|path| *path == &rel).count(),
+            1
+        );
         assert!(
             check_portable_pack(root.path(), inventory::PORTABLE_PACK, &cfg)
                 .unwrap()
