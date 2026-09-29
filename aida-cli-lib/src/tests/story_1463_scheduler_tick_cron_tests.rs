@@ -644,11 +644,11 @@ fn write_schedule_config(project_root: &Path, body: &str) {
     std::fs::write(project_root.join(".aida/config.toml"), body).unwrap();
 }
 
+// trace:TASK-1532 | ai:agy
 #[test]
 fn enabled_substrate_job_count_counts_only_enabled_substrate_jobs() {
     let tmp = tempfile::tempdir().unwrap();
-    let _guard = crate::test_env::env_lock();
-    std::env::set_var("AIDA_HOME", tmp.path());
+    let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
     write_schedule_config(
         tmp.path(),
         r#"
@@ -674,25 +674,21 @@ enabled = true
 "#,
     );
     let count = enabled_substrate_job_count(tmp.path()).unwrap();
-    std::env::remove_var("AIDA_HOME");
     assert_eq!(count, 1);
 }
 
 #[test]
 fn enabled_substrate_job_count_is_zero_with_no_registry() {
     let tmp = tempfile::tempdir().unwrap();
-    let _guard = crate::test_env::env_lock();
-    std::env::set_var("AIDA_HOME", tmp.path());
+    let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
     let count = enabled_substrate_job_count(tmp.path()).unwrap();
-    std::env::remove_var("AIDA_HOME");
     assert_eq!(count, 0);
 }
 
 #[test]
 fn overdue_substrate_jobs_flags_only_jobs_past_2x_interval() {
     let tmp = tempfile::tempdir().unwrap();
-    let _guard = crate::test_env::env_lock();
-    std::env::set_var("AIDA_HOME", tmp.path());
+    let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
     write_schedule_config(
         tmp.path(),
         r#"
@@ -732,7 +728,6 @@ enabled = true
     .unwrap();
 
     let overdue = overdue_substrate_jobs(tmp.path()).unwrap();
-    std::env::remove_var("AIDA_HOME");
 
     let names: Vec<&str> = overdue.iter().map(|o| o.name.as_str()).collect();
     assert_eq!(names, vec!["way-overdue"]);

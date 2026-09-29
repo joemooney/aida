@@ -483,14 +483,15 @@ mod tests {
 
     // --- expansion ----------------------------------------------------------
 
+    // BUG-697 / TASK-1532: route through EnvVarsGuard. trace:TASK-1532 | ai:agy
     fn with_test_home<T>(home: &Path, f: impl FnOnce() -> T) -> T {
-        let _g = crate::test_env::env_lock();
-        std::env::remove_var("AIDA_AGENT_TYPE");
-        std::env::remove_var("AIDA_HEADLESS");
-        std::env::set_var("AIDA_TEST_HOME", home);
-        let out = f();
-        std::env::remove_var("AIDA_TEST_HOME");
-        out
+        let home_str = home.to_str().expect("valid utf8 path");
+        let _g = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_TYPE", None),
+            ("AIDA_HEADLESS", None),
+            ("AIDA_TEST_HOME", Some(home_str)),
+        ]);
+        f()
     }
 
     // Use the scope-aware core directly so the resolution + recursion logic is
@@ -532,20 +533,17 @@ mod tests {
             &proj.join(".aida").join("aliases.toml"),
             "[alias]\ndup = \"list --status done\"\n",
         );
-        let _g = crate::test_env::env_lock();
-        std::env::remove_var("AIDA_AGENT_TYPE");
-        std::env::remove_var("AIDA_HEADLESS");
-        std::env::set_var("AIDA_TEST_HOME", home);
-        let prev_cwd = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&proj).unwrap();
+        with_test_home(home, || {
+            let prev_cwd = std::env::current_dir().unwrap();
+            std::env::set_current_dir(&proj).unwrap();
 
-        let rows = effective_user_aliases();
-        let dup = rows.iter().find(|r| r.name == "dup").unwrap();
-        assert_eq!(dup.scope, Scope::Project, "project must win");
-        assert_eq!(dup.expansion, "list --status done");
+            let rows = effective_user_aliases();
+            let dup = rows.iter().find(|r| r.name == "dup").unwrap();
+            assert_eq!(dup.scope, Scope::Project, "project must win");
+            assert_eq!(dup.expansion, "list --status done");
 
-        std::env::set_current_dir(prev_cwd).unwrap();
-        std::env::remove_var("AIDA_TEST_HOME");
+            std::env::set_current_dir(prev_cwd).unwrap();
+        });
     }
 
     #[test]
@@ -605,10 +603,12 @@ mod tests {
             &home.join("home").join(".aida").join("aliases.toml"),
             "[alias]\napproved = \"list --status approved\"\n",
         );
-        let _g = crate::test_env::env_lock();
-        std::env::set_var("AIDA_TEST_HOME", home);
-        std::env::set_var("AIDA_AGENT_TYPE", "codex");
-        std::env::remove_var("AIDA_HEADLESS");
+        let home_str = home.to_str().expect("valid utf8 path");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_TEST_HOME", Some(home_str)),
+            ("AIDA_AGENT_TYPE", Some("codex")),
+            ("AIDA_HEADLESS", None),
+        ]);
 
         // The public `expand` short-circuits for a non-human caller: argv is
         // returned UNCHANGED (canonical-only).
@@ -629,9 +629,6 @@ mod tests {
             rows.iter().any(|r| r.name == "approved"),
             "list still surfaces the alias"
         );
-
-        std::env::remove_var("AIDA_AGENT_TYPE");
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
@@ -642,16 +639,15 @@ mod tests {
             &home.join("home").join(".aida").join("aliases.toml"),
             "[alias]\napproved = \"list --status approved\"\n",
         );
-        let _g = crate::test_env::env_lock();
-        std::env::set_var("AIDA_TEST_HOME", home);
-        std::env::remove_var("AIDA_AGENT_TYPE");
-        std::env::set_var("AIDA_HEADLESS", "1");
+        let home_str = home.to_str().expect("valid utf8 path");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_TEST_HOME", Some(home_str)),
+            ("AIDA_AGENT_TYPE", None),
+            ("AIDA_HEADLESS", Some("1")),
+        ]);
 
         assert!(!is_interactive_human_caller());
         let out = expand(&s(&["aida", "approved"]));
         assert_eq!(out, s(&["aida", "approved"]));
-
-        std::env::remove_var("AIDA_HEADLESS");
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 }

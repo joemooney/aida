@@ -79,23 +79,11 @@ fn performance_real_probe_reads_fixture_config_and_home() {
         "[performance.budgets]\nshow = 100\n",
     )
     .unwrap();
-    // The production report reads telemetry through AIDA_HOME. Serialize this
-    // environment override so the test cannot touch the user's live usage log.
-    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _lock = ENV_LOCK.lock().unwrap();
-    let old = std::env::var_os("AIDA_HOME");
-    unsafe {
-        std::env::set_var("AIDA_HOME", root.path());
-    }
+    // The production report reads telemetry through AIDA_HOME. Route through
+    // EnvVarGuard so this override serialises against every other test.
+    // trace:TASK-1532 | ai:agy
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_HOME", root.path());
     let report = performance_light_report(root.path());
-    match old {
-        Some(value) => unsafe {
-            std::env::set_var("AIDA_HOME", value);
-        },
-        None => unsafe {
-            std::env::remove_var("AIDA_HOME");
-        },
-    }
     assert_eq!(
         report.total, 1,
         "configured shape without fixture telemetry is unobserved"

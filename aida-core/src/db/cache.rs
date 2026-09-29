@@ -2749,15 +2749,7 @@ mod tests {
     use crate::models::{
         ImplementationInfo, RequirementPriority, RequirementStatus, RequirementType,
     };
-    use std::sync::Mutex as StdMutex;
     use tempfile::tempdir;
-
-    // Delegates to the crate-wide test env lock so these swaps also serialise
-    // against env-mutating tests in other aida-core modules.
-    // trace:BUG-1666 | ai:claude
-    fn env_lock() -> &'static StdMutex<()> {
-        &crate::TEST_ENV_LOCK
-    }
 
     fn sample_req(spec_id: &str, title: &str) -> Requirement {
         let mut r = Requirement::new(title.into(), "desc".into());
@@ -5011,11 +5003,13 @@ mod tests {
         writer.execute_batch("ROLLBACK").unwrap();
     }
 
+    // trace:TASK-1532 | ai:agy
     #[test]
     fn default_cache_retry_budget_is_patient_enough_for_schema_contention() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CACHE_RETRY_COUNT", None),
+            ("AIDA_CACHE_RETRY_MS", None),
+        ]);
 
         let delays = cache_retry_delays()
             .into_iter()
@@ -5031,13 +5025,12 @@ mod tests {
 
     #[test]
     fn cache_retry_count_zero_keeps_empty_retry_budget() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "0");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CACHE_RETRY_COUNT", Some("0")),
+            ("AIDA_CACHE_RETRY_MS", None),
+        ]);
 
         assert!(cache_retry_delays().is_empty());
-
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
     }
 
     // BUG-681: on the advisory `aida awaiting --notice` path, the retry ladder
@@ -5046,9 +5039,10 @@ mod tests {
     // UserPromptSubmit hook timeout. Normal (unarmed) reads keep the full ladder.
     #[test]
     fn fast_fail_cache_mode_uses_short_bounded_ladder() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CACHE_RETRY_COUNT", None),
+            ("AIDA_CACHE_RETRY_MS", None),
+        ]);
 
         // Off by default → the full, patient production ladder.
         assert!(!fast_fail_cache_enabled());
@@ -5069,9 +5063,9 @@ mod tests {
         );
 
         // An explicit AIDA_CACHE_RETRY_COUNT=0 still disables retries entirely.
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "0");
+        env.set_key("AIDA_CACHE_RETRY_COUNT", "0");
         assert!(cache_retry_delays().is_empty());
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+        env.unset_key("AIDA_CACHE_RETRY_COUNT");
 
         // Restore the thread-local so a reused test thread is unaffected.
         set_fast_fail_cache(prior);
@@ -5086,9 +5080,10 @@ mod tests {
     // it, the notice-path short ladder gives up in a fraction of a second.
     #[test]
     fn fast_fail_cache_retry_bails_fast_on_persistent_lock() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CACHE_RETRY_COUNT", None),
+            ("AIDA_CACHE_RETRY_MS", None),
+        ]);
 
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
@@ -5192,9 +5187,10 @@ mod tests {
 
     #[test]
     fn sqlite_contention_with_dead_owner_metadata_is_reported_then_cleaned() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "1");
-        std::env::set_var("AIDA_CACHE_RETRY_MS", "1");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_CACHE_RETRY_COUNT", "1"),
+            ("AIDA_CACHE_RETRY_MS", "1"),
+        ]);
 
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
@@ -5213,9 +5209,6 @@ mod tests {
 
         cache.truncate().unwrap();
         assert!(!path.exists(), "cleaned after the next successful write");
-
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
     }
 
     #[test]
@@ -5272,9 +5265,10 @@ mod tests {
 
     #[test]
     fn cache_open_retries_sqlite_lock_then_succeeds() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "3");
-        std::env::set_var("AIDA_CACHE_RETRY_MS", "50,200,500");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_CACHE_RETRY_COUNT", "3"),
+            ("AIDA_CACHE_RETRY_MS", "50,200,500"),
+        ]);
 
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
@@ -5295,15 +5289,11 @@ mod tests {
             !cache_lock_info_path(&cache_path).exists(),
             "successful write should remove sidecar"
         );
-
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
     }
 
     #[test]
     fn cache_retry_count_zero_fails_fast_with_lock_holder_hint() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "0");
+        let _env = crate::test_env::EnvVarGuard::set("AIDA_CACHE_RETRY_COUNT", "0");
 
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
@@ -5338,15 +5328,14 @@ mod tests {
         assert!(msg.contains("pid="), "{msg}");
         assert!(msg.contains("aida doctor heal stale-locks"), "{msg}");
         remove_cache_lock_info(&cache_path);
-
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
     }
 
     #[test]
     fn cache_retry_exhaustion_keeps_lock_holder_hint() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "2");
-        std::env::set_var("AIDA_CACHE_RETRY_MS", "1");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_CACHE_RETRY_COUNT", "2"),
+            ("AIDA_CACHE_RETRY_MS", "1"),
+        ]);
 
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
@@ -5383,9 +5372,6 @@ mod tests {
         assert!(msg.contains("aida queue work"), "{msg}");
         assert!(msg.contains("aida doctor heal stale-locks"), "{msg}");
         remove_cache_lock_info(&cache_path);
-
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
     }
 
     // The cache projects an EPIC's status as the read-only rollup of its

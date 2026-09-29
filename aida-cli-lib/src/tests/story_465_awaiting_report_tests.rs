@@ -22,11 +22,25 @@ fn open_backend(project_root: &std::path::Path) -> CachedGitBackend {
     CachedGitBackend::open(&store_root, &cache_path).unwrap()
 }
 
+/// BUG-697 / TASK-1532: hold the process-wide env lock and clear ambient env
+/// vars that could affect collect_awaiting_report (operator identity, session
+/// role, agent type, session id).
+// trace:TASK-1532 | ai:agy
+fn awaiting_clean_env() -> crate::test_env::EnvVarsGuard {
+    crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_USER", Some("operator-under-test")),
+        ("AIDA_SESSION_ROLE", None),
+        ("AIDA_AGENT_TYPE", None),
+        ("AIDA_SESSION_ID", None),
+    ])
+}
+
 // STORY-465 acceptance: with no findings, no escalations, no briefs,
 // and `--no-ci` short-circuiting the gh call, the report comes back
 // empty so the section stays hidden. The quiet-day signal. trace:STORY-465
 #[test]
 fn empty_state_produces_hidden_report() {
+    let _env = awaiting_clean_env();
     let dir = tempdir().unwrap();
     let backend = open_backend(dir.path());
     let ctx = empty_user_ctx(Some("implementer"));
@@ -46,6 +60,7 @@ fn empty_state_produces_hidden_report() {
 // trace:STORY-741
 #[test]
 fn awaiting_report_folds_in_unread_mail_without_a_network_call() {
+    let _env = awaiting_clean_env();
     let dir = tempdir().unwrap();
     let backend = open_backend(dir.path());
 
@@ -202,6 +217,7 @@ fn ctx_role_includes_shared_role_mail_when_env_role_is_absent() {
 // operator without them having to grep `aida list --status`.
 #[test]
 fn needs_attention_spec_surfaces_as_escalation() {
+    let _env = awaiting_clean_env();
     let dir = tempdir().unwrap();
     let backend = open_backend(dir.path());
 
@@ -221,6 +237,7 @@ fn needs_attention_spec_surfaces_as_escalation() {
 
 #[test]
 fn failure_reason_shelf_surfaces_as_rework_not_escalation() {
+    let _env = awaiting_clean_env();
     let dir = tempdir().unwrap();
     let backend = open_backend(dir.path());
 
@@ -266,7 +283,12 @@ fn unacked_briefs_for_running_agent_surface_in_the_report() {
     // dir our fixture wrote to, regardless of the test host's env. The guard
     // holds the shared env lock until the end of the test and restores the
     // prior value on drop. trace:BUG-1666 | ai:claude
-    let _env = crate::test_env::EnvVarGuard::set("AIDA_AGENT_TYPE", "claude");
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_USER", Some("operator-under-test")),
+        ("AIDA_SESSION_ROLE", None),
+        ("AIDA_AGENT_TYPE", Some("claude")),
+        ("AIDA_SESSION_ID", None),
+    ]);
 
     let ctx = empty_user_ctx(Some("implementer"));
     let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
@@ -285,6 +307,7 @@ fn unacked_briefs_for_running_agent_surface_in_the_report() {
 // the Queue section directly below it. trace:STORY-465 | ai:claude
 #[test]
 fn reviewer_queue_items_only_surface_for_reviewer_role() {
+    let _env = awaiting_clean_env();
     let dir = tempdir().unwrap();
     let backend = open_backend(dir.path());
 
@@ -323,6 +346,7 @@ fn reviewer_queue_items_only_surface_for_reviewer_role() {
 // file read, no network. trace:TASK-1146
 #[test]
 fn enqueued_worker_directive_surfaces_in_awaiting_report() {
+    let _env = awaiting_clean_env();
     let dir = tempdir().unwrap();
     let backend = open_backend(dir.path());
 
