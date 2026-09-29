@@ -1,0 +1,70 @@
+id: 01a0ec78-7670-7a20-a077-089a01e3c154
+spec_id: BUG-1726
+agreed_id: BUG-1726
+title: BUG-1704's age window can report a seat Idle while a DETACHED build it started is still running, because the build predates the seat's last heartbeat
+description: |-
+  BUG-1704's signed-off sketch recorded a known limitation and accepted it: if a heartbeat lands
+  DURING a long build, `last_active_at` moves past the build's start, so clause 2 of the work rule
+  (`age_secs < idle_secs`) then excludes that build and a seat with work outstanding can read Idle.
+
+  That acceptance rested on a premise: "the MCP heartbeat is driven by tool calls and an agent's tool
+  loop is sequential, so while a blocking build runs no MCP call can be made, and
+  `last_active_at <= build_start` holds in practice."
+
+  THE PREMISE IS SOUND ONLY FOR A BLOCKING BUILD. It does not cover a build the seat started in the
+  BACKGROUND and then stopped attending to:
+
+    T=0    seat launches a long build detached; it does not block the tool loop
+    T=0..100  seat keeps making tool calls, so heartbeats keep refreshing last_active_at
+    T=100  seat finishes its turn; the build is still running
+    T=700  idle_secs = 600, build age = 700.  clause 2 asks 700 < 600 -> false
+           -> no descendant counts as work -> Idle, while the build runs
+
+  An independent codex reviewer of PR #2276 found this unprompted on 2026-09-29 and rated it P1
+  against AC2. The advisor seat agrees the case is REAL but disagrees it blocks #2276: the PR
+  implements the signed-off design faithfully and documents the limitation in source, and
+  re-litigating a signed-off design mid-PR is not what a review round is for. It is filed here
+  instead so the gap is tracked rather than buried in a code comment.
+
+  WHAT WAS OVERCLAIMED. The sketch's acceptance disposition says "AC2 satisfied, running AND queued
+  alike, because the rule never reads CPU." Too strong. Not reading CPU is what makes the rule handle
+  a QUEUED build (the case the spec's own two candidate signals both failed). It does nothing for a
+  build whose start predates the seat's last heartbeat. AC2 is satisfied for a seat BLOCKED on a
+  build, which is the case AC2's text actually describes; it is not satisfied for a detached build
+  the seat has stopped attending. That distinction should have been in the disposition.
+
+  HOW MUCH THIS MATTERS. Less than P1, more than nothing. A seat that launched a detached build and
+  finished its turn is, by most readings, genuinely finished — Idle is arguably the CORRECT answer,
+  and the orchestrator stopping it is only harmful if stopping the seat also kills the build. Whether
+  it does is the question to settle FIRST; if a detached build survives its launching seat, this is a
+  documentation fix, not a code fix.
+
+  DO NOT START THIS AS A CODE CHANGE. Settle that question first, then pick a disposition:
+    a. Accept and document precisely (likely, if detached builds survive seat stop).
+    b. Track build descendants by identity rather than age, so a known-live child keeps the seat Busy
+       regardless of when it started. Costs a persisted prior sample, which the age rule was
+       specifically chosen to avoid.
+    c. Widen clause 2 to `age_secs < max(idle_secs, seat_age_secs)` or similar. Cheap, but it
+       re-admits the session-long service children clause 2 exists to exclude, so it needs a way to
+       tell an MCP server child from a build. Probably a dead end; record why if it is rejected.
+
+  DO NOT substitute a CPU-delta rule. The spec's AC2 rules it out: a build queued behind this host's
+  2-slot cargo flock consumes no CPU, so a CPU-delta rule reports a working seat finished. That
+  reasoning is unaffected by this bug and must not be reopened.
+
+  Filed by the advisor seat, 2026-09-29, from the independent review of PR #2276 (BUG-1704).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-29T09:21:52.752917164Z
+modified_at: 2026-09-29T09:21:52.752917164Z
+req_type: Bug
+filed_at:
+  code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 0c3ef5cb6b
+  vendor: antigravity
+  session: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
