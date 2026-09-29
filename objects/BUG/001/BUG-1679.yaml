@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-29T05:59:49.083124665Z
+modified_at: 2026-09-29T06:11:51.115160891Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -205,6 +205,70 @@ comments:
   created_at: 2026-09-29T05:59:49.083124665Z
   modified_at: 2026-09-29T05:59:49.083124665Z
   session_id: a1b56cce-0ca3-42c2-8ccf-ff605a280cc4
+- id: 01a0ebca-7ccb-7f52-a157-016edfce8aa9
+  author: joe
+  content: |
+    ADVISOR DECISION 2026-09-28 (Session #6) — #2226 IS SUPERSEDED BY #2261. It must NOT be reworked
+    in parallel from the shared brief. This CORRECTS the Session #15 rework brief on one point.
+
+    The brief said "#2226 / BUG-1679 is reworked from the SAME brief, not independently." I checked what
+    #2226's diff would actually DO once it sits on top of #2261's tree, and the answer inverts the
+    decision it was supposed to implement.
+
+    WHAT I VERIFIED (on worktree /home/joe/ai/aida-task-1499, branch task-1499-2, head 048fc2ac91)
+
+    On that branch the resolver is already ONE chokepoint:
+
+        resolve_aida_exe()            lib.rs:103175  -> aida_exe_path()
+        aida_exe_path()               lib.rs:103145  -> aida_bin::process()
+                                                        .unwrap_or_else(|_| resolve_aida_exe_from(current_exe()))
+
+    Every production caller reaches the binary through `aida_bin::process()`: config_cmd.rs:3274,
+    lib.rs:3120, 41856, 41951, 65699, 100480, 100662, 100845, 101235, plus the three direct
+    `aida_bin::process()` sites at lib.rs:28298, 28540, 31155. `resolve_aida_exe_from` (lib.rs:103157)
+    is now reachable ONLY as the ERROR FALLBACK inside `aida_exe_path`.
+
+    WHY THAT MAKES #2226 HARMFUL, NOT MERELY REDUNDANT
+
+    #2226's whole diff is to insert `resolve_aida_exe_from_with_bin(current, env AIDA_BIN)` into
+    `resolve_aida_exe_from`, honoring `AIDA_BIN` whenever `is_executable(&path)` — an executability
+    check and NOTHING ELSE. No provenance, no ancestor check.
+
+    Rebased onto the post-#2261 tree, that code lands exclusively on the path taken when
+    `aida_bin::process()` has ERRORED. So the net effect would be: the trust rule is enforced in
+    `process()`, and then BYPASSED in the fallback that runs precisely when `process()` failed. An
+    ambient `AIDA_BIN` that the ancestor check declined would still be honored via the fallback.
+
+    That is the exact inconsistency the 2026-09-28 operator decision exists to remove, reintroduced one
+    function lower down. Two resolvers where one ignores provenance is strictly worse than the single
+    unconditional resolver we started with, because it is invisible.
+
+    SECONDARY REASON
+
+    #2226's test uses `std::os::unix::fs::PermissionsExt::from_mode` (resolve_aida_exe_tests.rs). That
+    is the same unix-only-API family that has held the cross-platform nightly red since 2026-09-23.
+    Closing #2226 avoids adding another instance.
+
+    DISPOSITION
+
+    - BUG-1679's INTENT — "a subprocess resolver that honors AIDA_BIN" — is SATISFIED by #2261 under the
+      narrowed, provenance-checked rule. The intent is delivered; only this implementation of it is not.
+    - The codex reviewer's P1 on #2226 is ADDRESSED by #2261's `decide_override`, not overruled.
+    - ACTION: close PR #2226 WITHOUT merging, with a comment pointing at #2261 and at this decision.
+      Mark BUG-1679 superseded-by / completed against #2261 once #2261 merges — NOT before, so the
+      intent cannot be lost if #2261 stalls.
+    - The shared rework brief on TASK-1499 stands UNCHANGED for #2261. Only the "both PRs" framing is
+      withdrawn.
+
+    OPEN ITEM FOR THE NEXT SEAT
+
+    The error fallback itself deserves a look: `aida_exe_path` swallowing a `process()` error and
+    falling back is deliberate (a bad override must not brick every command) and should STAY, but it
+    means a resolution error is silent at most call sites while `export_coordinating_bin_env`
+    (lib.rs:103192) checks for it explicitly. Not in scope for this rework; noted so it is not lost.
+  created_at: 2026-09-29T06:11:51.115160891Z
+  modified_at: 2026-09-29T06:11:51.115160891Z
+  session_id: d3b4d739-0433-404d-b8de-30f658d731a8
 history:
 - id: 01a0e0fd-3532-7760-9c08-3b79df618a20
   author: aida-session-start
