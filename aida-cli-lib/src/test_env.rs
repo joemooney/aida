@@ -25,6 +25,7 @@
 
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 /// Global mutex serialising every env-var swap that routes through
@@ -35,15 +36,70 @@ use std::sync::{Mutex, MutexGuard};
 /// mutations are not hot.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+/// Process-unique token for the calling thread. `ThreadId::as_u64` is
+/// unstable, so [`env_lock`] mints its own monotonic token per thread to
+/// detect same-thread reentrance. Tokens are never reused, so a finished
+/// thread's token can never be mistaken for a live one. 0 means "unowned".
+static NEXT_THREAD_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+thread_local! {
+    static THREAD_TOKEN: u64 = NEXT_THREAD_TOKEN.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Token of the thread currently holding the env lock, or 0 when unheld.
+static ENV_LOCK_OWNER: AtomicU64 = AtomicU64::new(0);
+
+fn thread_token() -> u64 {
+    THREAD_TOKEN.with(|t| *t)
+}
+
+/// TASK-1559: RAII wrapper around the env-lock guard that publishes the
+/// owning thread on acquire and clears it on release. `Drop` for this struct
+/// runs BEFORE its fields drop, so ownership is cleared while the mutex is
+/// still held — a waiter that acquires next can never observe a stale owner.
+/// It also runs on unwind, so a holder that panics does not leave ownership
+/// pointing at a dead thread (which would wedge that thread's later
+/// acquisitions into a spurious panic instead of succeeding).
+pub(crate) struct EnvLockGuard {
+    _inner: MutexGuard<'static, ()>,
+}
+
+impl Drop for EnvLockGuard {
+    fn drop(&mut self) {
+        ENV_LOCK_OWNER.store(0, Ordering::Release);
+    }
+}
+
 /// BUG-697: the ONE process-global env lock. Every test helper that mutates
 /// or reads env-derived state must serialise on this — the module-local
 /// mutexes that used to guard individual keys now delegate here so a swap
 /// under one helper can never overlap a read/swap under another (the
 /// `setenv` realloc race). Poison-tolerant like the guards. Hold the returned
 /// guard for the whole mutate→read→restore window; do NOT nest a second
-/// acquisition (incl. an `EnvVarGuard`) under it — the lock is not reentrant.
-pub(crate) fn env_lock() -> MutexGuard<'static, ()> {
-    ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner())
+/// acquisition (incl. an `EnvVarGuard`) under it — the lock is not reentrant,
+/// and TASK-1559 makes nesting panic immediately rather than hang.
+pub(crate) fn env_lock() -> EnvLockGuard {
+    let me = thread_token();
+    // TASK-1559: nesting is a hang, not an error, because the lock is not
+    // reentrant — so detect it BEFORE blocking and report it instead. A
+    // different thread's token here is ordinary contention: fall through and
+    // block. Only this thread ever writes or clears its own token, so a
+    // match cannot be a false positive.
+    if ENV_LOCK_OWNER.load(Ordering::Acquire) == me {
+        // A plain `panic!` rather than `assert_ne!`: the token values are an
+        // implementation detail, and `assert_ne!` would append a confusing
+        // "left: 1, right: 1" to the one message that has to be legible.
+        panic!(
+            "ENV_LOCK already held by this thread — do not nest env_lock() or \
+             construct an EnvVarGuard/EnvVarsGuard inside an env_lock() scope. \
+             Scope the guard to the window that needs it, or use EnvVarsGuard \
+             to set several keys under a single acquisition. This panic \
+             replaces the self-deadlock that nesting used to cause (TASK-1559)."
+        );
+    }
+    let inner = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    ENV_LOCK_OWNER.store(me, Ordering::Release);
+    EnvLockGuard { _inner: inner }
 }
 
 /// RAII guard that sets (or unsets) an env var for the guard's lifetime
@@ -56,7 +112,7 @@ pub(crate) struct EnvVarGuard {
     // _guard holds ENV_LOCK; field-ordered last so it drops after
     // `prev` is read by `Drop` — Rust drops fields in declaration order,
     // so the lock is the last thing released.
-    _guard: MutexGuard<'static, ()>,
+    _guard: EnvLockGuard,
 }
 
 /// Multi-key variant of [`EnvVarGuard`] for tests that need SEVERAL env
@@ -65,7 +121,7 @@ pub(crate) struct EnvVarGuard {
 /// lock ONCE and sets/restores every key under it. trace:TASK-818
 pub(crate) struct EnvVarsGuard {
     prev: Vec<(&'static str, Option<OsString>)>,
-    _guard: MutexGuard<'static, ()>,
+    _guard: EnvLockGuard,
 }
 
 impl EnvVarsGuard {
@@ -86,7 +142,7 @@ impl EnvVarsGuard {
     /// under test must hold one of these guards too, or it races the setters.
     // trace:TASK-148 | ai:claude
     pub(crate) fn apply(pairs: &[(&'static str, Option<&str>)]) -> Self {
-        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = env_lock();
         let mut prev = Vec::with_capacity(pairs.len());
         for (key, value) in pairs {
             prev.push((*key, std::env::var_os(key)));
@@ -114,7 +170,7 @@ impl EnvVarsGuard {
     /// the test process.
     // trace:BUG-1627 | ai:claude
     pub(crate) fn snapshot(keys: &[&'static str]) -> Self {
-        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = env_lock();
         let prev = keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
         Self {
             prev,
@@ -164,7 +220,7 @@ impl EnvVarGuard {
     /// test doesn't cascade into "every later test panics on lock
     /// acquisition" and mask the real failure.
     pub(crate) fn set(key: &'static str, value: impl AsRef<OsStr>) -> Self {
-        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = env_lock();
         let prev = std::env::var_os(key);
         // SAFETY: serialised by ENV_LOCK; no other test routed through
         // this helper mutates env vars without acquiring the same lock.
@@ -182,7 +238,7 @@ impl EnvVarGuard {
     /// Remove `key` for the guard's lifetime. Same locking + restoration
     /// discipline as [`Self::set`].
     pub(crate) fn unset(key: &'static str) -> Self {
-        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = env_lock();
         let prev = std::env::var_os(key);
         // SAFETY: serialised by ENV_LOCK.
         #[allow(unused_unsafe)]
@@ -222,7 +278,7 @@ impl EnvVarGuard {
     /// existing PATH binaries reachable from concurrent subprocesses.
     // trace:TASK-1532 | ai:agy
     pub(crate) fn prepend_path(dir: impl AsRef<Path>) -> Self {
-        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = env_lock();
         let prev = std::env::var_os("PATH");
         let new = match &prev {
             Some(v) => {
@@ -328,6 +384,90 @@ impl Drop for AmbientGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// TASK-1559 AC1: a second `env_lock()` on a thread that already holds it
+    /// panics immediately instead of self-deadlocking.
+    // trace:TASK-1559 | ai:claude
+    #[test]
+    #[should_panic(expected = "ENV_LOCK already held by this thread")]
+    fn nested_env_lock_panics_instead_of_deadlocking() {
+        let _outer = env_lock();
+        let _inner = env_lock();
+    }
+
+    /// TASK-1559 AC2: constructing an `EnvVarGuard` inside an `env_lock()`
+    /// scope panics. This is the exact shape that shipped in TASK-1532 —
+    /// `publish_fixture_receipt` held the lock and then set a guard under it —
+    /// so it is the case the tripwire exists for.
+    // trace:TASK-1559 | ai:claude
+    #[test]
+    #[should_panic(expected = "ENV_LOCK already held by this thread")]
+    fn env_var_guard_inside_env_lock_scope_panics() {
+        let _outer = env_lock();
+        let _guard = EnvVarGuard::set("AIDA_TEST_GUARD_REENTRANCE", "x");
+    }
+
+    /// TASK-1559 AC2: the multi-key guard is covered too — it acquires the
+    /// same lock, so nesting it is the same defect.
+    // trace:TASK-1559 | ai:claude
+    #[test]
+    #[should_panic(expected = "ENV_LOCK already held by this thread")]
+    fn env_vars_guard_inside_env_lock_scope_panics() {
+        let _outer = env_lock();
+        let _guard = EnvVarsGuard::set(&[("AIDA_TEST_GUARD_REENTRANCE_MULTI", "x")]);
+    }
+
+    /// TASK-1559 AC3 + AC4: the tripwire must not fire on legitimate use.
+    /// Sequential same-thread acquisitions, a hand-off to another thread, and
+    /// genuine cross-thread contention all still succeed.
+    // trace:TASK-1559 | ai:claude
+    #[test]
+    fn sequential_and_cross_thread_acquisition_still_work() {
+        // AC4: acquire/release/acquire on one thread.
+        drop(env_lock());
+        drop(env_lock());
+
+        // AC4: released here, acquired on a different thread — ownership must
+        // not be left behind pointing at this thread.
+        std::thread::spawn(|| drop(env_lock())).join().unwrap();
+        // ...and back again, so the other thread left nothing behind either.
+        drop(env_lock());
+
+        // AC3: cross-thread contention. The waiter signals before it tries to
+        // acquire and this thread only releases afterwards. That ordering does
+        // not *guarantee* the waiter is parked in the mutex when the release
+        // happens, but either interleaving must complete without panicking,
+        // which is the property under test — a stale or cross-thread owner
+        // would trip the assert instead.
+        let held = env_lock();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let waiter = std::thread::spawn(move || {
+            tx.send(()).unwrap();
+            let _g = env_lock();
+            "acquired"
+        });
+        rx.recv().unwrap();
+        drop(held);
+        assert_eq!(waiter.join().unwrap(), "acquired");
+
+        // The lock is free and unowned again.
+        drop(env_lock());
+    }
+
+    /// TASK-1559 AC5: a holder that panics must clear ownership on unwind.
+    /// If it did not, this thread's next acquisition would hit the reentrance
+    /// tripwire instead of succeeding — trading the old deadlock for a new
+    /// spurious panic.
+    // trace:TASK-1559 | ai:claude
+    #[test]
+    fn env_lock_ownership_is_cleared_when_a_holder_panics() {
+        let outcome = std::panic::catch_unwind(|| {
+            let _g = env_lock();
+            panic!("poisoning the env lock intentionally");
+        });
+        assert!(outcome.is_err());
+        drop(env_lock());
+    }
 
     /// Setting then dropping restores the prior value (when one existed).
     #[test]
