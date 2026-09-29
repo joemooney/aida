@@ -23,12 +23,12 @@ description: |
   `PackDrift::Orphan` in `find_orphans`, and have `sync_portable_pack` remove it before writing.
 
   A test would plant that file and assert the drift kind rather than an `Err`.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T03:56:34.334450305Z
-modified_at: 2026-09-29T03:56:43.396208736Z
+modified_at: 2026-09-29T04:00:40.966667218Z
 req_type: Bug
 history:
 - id: 01a0eb4e-c604-75f0-9fe9-968d1ef53e98
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0eb52-6606-7cc0-8e04-8967c188d24f
+  author: aida-session-start
+  timestamp: 2026-09-29T04:00:40.966666809Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 42e58794d8a6696c0f81e358ea5702c490903c29
   branch: main
