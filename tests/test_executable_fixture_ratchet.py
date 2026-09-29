@@ -72,6 +72,10 @@ _IDENT_CHAR = re.compile(r"[A-Za-z0-9_]")
 _CFG_ATTRIBUTE = re.compile(r"\s*cfg\s*\((?P<predicate>.*)\)\s*$", re.DOTALL)
 _UNIX_ONLY_PATH = re.compile(r"\bstd::os::unix\b")
 _UNIX_ONLY_PERMISSIONS = re.compile(r"\b(?:set_mode|from_mode)\b")
+# A `{` opened by one of these begins a comma-separated list, where a `,` ends the
+# item an attribute was attached to. Everywhere else a top-level `,` belongs to a
+# generic parameter list or a `where` clause and must not end anything.
+_COMMA_SEPARATED_BODY = re.compile(r"\b(?:struct|enum|union|match)\b")
 
 
 def _split_top_level(text: str) -> list[str]:
@@ -220,10 +224,11 @@ def unix_guarded_regions(masked: str, source: str) -> list[tuple[int, int]]:
     """
     length = len(masked)
     regions: list[tuple[int, int]] = []
-    # Each frame is [opening brace offset, offset the guard starts at or None].
-    stack: list[list[int | None]] = []
+    # Each frame is [opening brace offset, guard start or None, is a comma list].
+    stack: list[list] = []
     pending_start: int | None = None
     paren_depth = 0
+    last_delimiter = -1
     index = 0
     while index < length:
         char = masked[index]
@@ -268,8 +273,10 @@ def unix_guarded_regions(masked: str, source: str) -> list[tuple[int, int]]:
         elif char == ")":
             paren_depth = max(0, paren_depth - 1)
         elif char == "{":
-            stack.append([index, pending_start])
+            header = masked[last_delimiter + 1 : index]
+            stack.append([index, pending_start, bool(_COMMA_SEPARATED_BODY.search(header))])
             pending_start = None
+            last_delimiter = index
         elif char == "}":
             if pending_start is not None:
                 # A brace-less item closing out its block, e.g. a guarded final
@@ -279,13 +286,21 @@ def unix_guarded_regions(masked: str, source: str) -> list[tuple[int, int]]:
             if frame is not None and frame[1] is not None:
                 regions.append((frame[1], index + 1))
             pending_start = None
-        elif char == ";" or (char == "," and paren_depth == 0):
+            last_delimiter = index
+        elif char == ";" or (
+            char == ","
+            and paren_depth == 0
+            and bool(stack)
+            and stack[-1][2]
+        ):
             if pending_start is not None:
                 # An attribute on a brace-less item: a guarded `use`, or a
                 # guarded struct field or enum variant, which is removed on
                 # Windows just as a guarded item is.
                 regions.append((pending_start, index + 1))
             pending_start = None
+            if char == ";":
+                last_delimiter = index
         index += 1
     return regions
 
@@ -507,6 +522,33 @@ class ExecutableFixtureRatchetTests(unittest.TestCase):
             [4],
             [int(entry.split()[1].rstrip(":")) for entry in unix_only_api_violations(source)],
         )
+
+    def test_checker_keeps_a_guard_across_generic_and_where_commas(self):
+        # A top-level `,` only ends an item inside a comma-separated body. In a
+        # generic parameter list or a `where` clause it means nothing, and
+        # ending the guard there reports correct code -- which would go red in
+        # the gating ubuntu job, the exact failure this guard exists to prevent.
+        body = "    use std::os::unix::fs::MetadataExt;\n"
+        shapes = {
+            "generic fn": "#[cfg(unix)]\nfn only_unix<A, B>() {\n" + body + "}\n",
+            "generic impl": "#[cfg(unix)]\nimpl<A, B> S<A, B> {\nfn f() {\n" + body + "}\n}\n",
+            "where clause": "#[cfg(unix)]\nfn f<A>() where A: Copy, B: Copy, {\n" + body + "}\n",
+            "parameter commas": "#[cfg(unix)]\nfn f(a: u8, b: u8) {\n" + body + "}\n",
+            "nested generics": "#[cfg(unix)]\nfn f<A: Into<Vec<u8>>, B>() {\n" + body + "}\n",
+            "match arm": "fn g() {\nmatch x {\n#[cfg(unix)]\nA => {\n" + body + "}\nB => other(),\n}\n}\n",
+        }
+        for shape, source in shapes.items():
+            with self.subTest(shape=shape):
+                self.assertEqual([], unix_only_api_violations(source), shape)
+
+    def test_a_guarded_item_does_not_guard_what_follows_it(self):
+        shapes = {
+            "after a generic fn": "#[cfg(unix)]\nfn f<A, B>() {}\nfn g() { use std::os::unix::fs::MetadataExt; }\n",
+            "after a field list": "struct S {\n#[cfg(unix)]\nf: std::os::unix::fs::MetadataExt,\n}\nfn g() { use std::os::unix::fs::PermissionsExt; }\n",
+        }
+        for shape, source in shapes.items():
+            with self.subTest(shape=shape):
+                self.assertTrue(unix_only_api_violations(source), shape)
 
     def test_checker_rejects_a_future_local_fake_gh_copy(self):
         bad = """fn fake_gh(path: &Path, body: &str) {\n std::fs::write(path, body).unwrap();\n chmod(path, 0o755);\n }"""
