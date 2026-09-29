@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T08:29:23.135646002Z
-modified_at: 2026-09-29T14:50:07.559774531Z
+modified_at: 2026-09-29T15:33:59.075727192Z
 req_type: Bug
 comments:
 - id: 01a0ecaa-5146-7421-bb5e-ff1cef22564c
@@ -340,6 +340,55 @@ comments:
     Provenance: advisor seat, session #12 of the relay, 2026-09-29, at main `87408e2c1e`.
   created_at: 2026-09-29T14:09:37.967292379Z
   modified_at: 2026-09-29T14:09:37.967292379Z
+  session_id: 38580cc1-4f12-4ef7-94ca-4ec4ff0d81de
+- id: 01a0edcd-22a3-78d0-9706-92fd2aa73b47
+  author: joe
+  content: |
+    ## Merged, and the nightly re-measure the SCOPE paragraph asked for
+
+    PR **#2280** merged 2026-09-29 14:49:54Z, main `7d85a8057d`. Four commits — the checker plus three
+    review-round fixes. `aida pull` auto-completed the spec.
+
+    I triggered `cross-platform.yml` manually on the merge commit rather than leave the re-measure to
+    the next scheduled run (the workflow accepts `workflow_dispatch`). Run **36585692819**, head
+    `7d85a8057d`.
+
+    ### The compile-error family is closed. The evidence is the clock.
+
+    | Run | Head | Windows `Run tests` |
+    |---|---|---|
+    | 36575147707 (before) | `447ea8fd48` | **failure after 3m04s** — 13:38:48Z → 13:41:52Z |
+    | 36585692819 (after) | `7d85a8057d` | started 15:02:21Z, **still running past 31 minutes** |
+
+    A three-minute failure is the test binary refusing to link; the eight `E0433`/`E0599` errors aborted
+    `aida-cli-lib (lib test)` before a single test ran. Thirty-one minutes and counting is the suite
+    actually executing. `Build all packages` and macOS both went green as well.
+
+    **This does not mean the nightly is green**, and per the spec's SCOPE paragraph nobody should claim
+    that yet. It means the family this bug was filed for no longer aborts the binary, so whatever the
+    run reports from here is a *runtime* failure — one test at a time, visible and triageable, instead of
+    everything hidden behind a link error. That is the whole value of closing it. Read run 36585692819's
+    Windows job for the real remaining list; it is the first honest measurement of the nightly since
+    2026-09-23.
+
+    ### Known follow-on, already identified
+
+    `remote_create.rs`'s `mirror_hook_*` tests shell out to `/bin/sh` and were only ever protected by the
+    compile error. They will now compile on Windows and fail at runtime. That is strictly better — a
+    compile error costs you every test in the crate — but it is a separate item and should be sized from
+    the run above rather than guessed at.
+
+    ### Guard delivered
+
+    `unix_only_api_violations` scans every crate `src`, evaluates each `#[cfg(..)]` predicate against a
+    Windows target, and reports a unix-only API only when no enclosing scope excludes it. The ratchet
+    goes from 6 tests to 22. Three independent review rounds; rounds 1 and 2 found three real P2
+    defects, all fixed and mutation-proved, round 3 approved. A fourth hole — a `;` inside a generic
+    default silently losing the `struct` header — I found by probing after the reviewer approved.
+
+    Provenance: advisor seat, session #12 of the relay, 2026-09-29.
+  created_at: 2026-09-29T15:33:59.075727192Z
+  modified_at: 2026-09-29T15:33:59.075727192Z
   session_id: 38580cc1-4f12-4ef7-94ca-4ec4ff0d81de
 history:
 - id: 01a0ec48-95fc-7221-958e-c7471acc90a4
