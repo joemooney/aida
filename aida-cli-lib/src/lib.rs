@@ -74158,6 +74158,11 @@ const CLOSURE_HOLD_MARKER: &str = "[aida:closure-held]";
 struct ClosureHold {
     flip: AutoBumpFlip,
     blockers: Vec<aida_core::pickability::ClosureBlocker>,
+    /// BUG-1721: the subset of `blockers` that are themselves held candidates
+    /// from this same reconcile pass — a dependency cycle among specs one merge
+    /// credited, reported as such instead of as an ordinary blocker wait.
+    // trace:BUG-1721 | ai:claude
+    cycle_members: Vec<String>,
     /// STORY-1430: the spec's own declared closure criteria still unmet (a
     /// `closure:pending` tag, or unchecked items in its Closure section).
     criteria: Vec<String>,
@@ -74171,8 +74176,21 @@ fn closure_holders(
     req: &aida_core::Requirement,
     store: &aida_core::RequirementsStore,
 ) -> (Vec<aida_core::pickability::ClosureBlocker>, Vec<String>) {
+    closure_holders_treating_resolved(req, store, &std::collections::HashSet::new())
+}
+
+/// BUG-1721: [`closure_holders`], treating `resolved` requirement ids as
+/// already closed — the specs the current reconcile pass is itself completing.
+/// A spec's OWN declared closure criteria are never affected by another spec
+/// completing, so they pass straight through.
+// trace:BUG-1721 | ai:claude
+fn closure_holders_treating_resolved(
+    req: &aida_core::Requirement,
+    store: &aida_core::RequirementsStore,
+    resolved: &std::collections::HashSet<uuid::Uuid>,
+) -> (Vec<aida_core::pickability::ClosureBlocker>, Vec<String>) {
     (
-        aida_core::pickability::unresolved_closure_blockers(req, store),
+        aida_core::pickability::unresolved_closure_blockers_treating_resolved(req, store, resolved),
         aida_core::pickability::unmet_declared_closure_criteria(req),
     )
 }
@@ -74187,23 +74205,92 @@ fn split_closure_held_flips(
     store: &aida_core::RequirementsStore,
     flips: &mut Vec<AutoBumpFlip>,
 ) -> Vec<ClosureHold> {
-    let mut held = Vec::new();
-    flips.retain(|flip| {
-        let Some(req) = store.get_requirement_by_spec_id(&flip.spec_id) else {
-            return true;
-        };
-        // trace:STORY-1430 | ai:claude
-        let (blockers, criteria) = closure_holders(req, store);
-        if blockers.is_empty() && criteria.is_empty() {
-            return true;
+    // BUG-1721: ONE merge can credit both a blocker and the spec it blocks. A
+    // single pass evaluated the blocked spec while its blocker was still
+    // InProgress in the store, held it at Done, and then completed the blocker
+    // later in the same pass — leaving the dependent un-credited until some
+    // later `aida pull`. Iterate to a LEAST fixed point instead: a flip is
+    // released once every closure holder is resolved in the store OR is itself
+    // being released by this pass. Growing a resolved-id set (rather than
+    // stamping Completed into a store copy) keeps the STORY-1418 completion
+    // seam the only path into Completed, and costs no store clone.
+    //
+    // Least, not greatest: the set starts EMPTY and only grows, so a BlockedBy
+    // cycle among credited specs never becomes resolvable and every member
+    // stays held. Each iteration must release at least one flip or the loop
+    // breaks, so it terminates in at most `flips.len()` iterations.
+    // trace:BUG-1721 | ai:claude
+    let mut resolved: std::collections::HashSet<uuid::Uuid> = std::collections::HashSet::new();
+    let mut released = vec![false; flips.len()];
+    loop {
+        let mut progress = false;
+        for (index, flip) in flips.iter().enumerate() {
+            if released[index] {
+                continue;
+            }
+            // The pre-fix `retain` KEPT a flip whose spec does not resolve in
+            // the store (there was nothing to hold it on, and the write loop
+            // skips it harmlessly). Release it so this rewrite cannot silently
+            // drop it from `flips`, which `aida pull` also reports from.
+            let Some(req) = store.get_requirement_by_spec_id(&flip.spec_id) else {
+                released[index] = true;
+                progress = true;
+                continue;
+            };
+            let (blockers, criteria) = closure_holders_treating_resolved(req, store, &resolved);
+            if blockers.is_empty() && criteria.is_empty() {
+                resolved.insert(req.id);
+                released[index] = true;
+                progress = true;
+            }
         }
+        if !progress {
+            break;
+        }
+    }
+    // BUG-1721: `ClosureBlocker.id` is the blocker's DISPLAY id (agreed > spec >
+    // internal) while a flip carries whichever form its trailer used, so record
+    // both forms — otherwise a cycle between agreed-id specs reads as an
+    // ordinary blocker wait.
+    let mut held_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (index, flip) in flips.iter().enumerate() {
+        if released[index] {
+            continue;
+        }
+        held_ids.insert(flip.spec_id.clone());
+        if let Some(req) = store.get_requirement_by_spec_id(&flip.spec_id) {
+            held_ids.insert(
+                req.agreed_id
+                    .clone()
+                    .or_else(|| req.spec_id.clone())
+                    .unwrap_or_else(|| req.id.to_string()),
+            );
+        }
+    }
+    let mut held = Vec::new();
+    let mut completed = Vec::new();
+    for (index, flip) in flips.iter().enumerate() {
+        if released[index] {
+            completed.push(flip.clone());
+            continue;
+        }
+        let Some(req) = store.get_requirement_by_spec_id(&flip.spec_id) else {
+            continue;
+        };
+        let (blockers, criteria) = closure_holders(req, store);
+        let cycle_members = blockers
+            .iter()
+            .filter(|b| held_ids.contains(&b.id))
+            .map(|b| b.id.clone())
+            .collect();
         held.push(ClosureHold {
             flip: flip.clone(),
             blockers,
+            cycle_members,
             criteria,
         });
-        false
-    });
+    }
+    *flips = completed;
     held
 }
 
@@ -74219,12 +74306,19 @@ fn closure_hold_comment(hold: &ClosureHold) -> String {
     let id = &hold.flip.spec_id;
     let mut why = Vec::new();
     if !hold.blockers.is_empty() {
-        why.push(format!(
-            "unresolved BlockedBy {}. BlockedBy gates completion as well as pickup; it \
+        if !hold.cycle_members.is_empty() {
+            why.push(format!(
+                "dependency cycle involving {}",
+                hold.cycle_members.join(", ")
+            ));
+        } else {
+            why.push(format!(
+                "unresolved BlockedBy {}. BlockedBy gates completion as well as pickup; it \
              releases once every blocker is Completed, Rejected or Superseded (an epic by \
              its child rollup, an ADR once accepted)",
-            aida_core::pickability::closure_blockers_label(&hold.blockers)
-        ));
+                aida_core::pickability::closure_blockers_label(&hold.blockers)
+            ));
+        }
     }
     // STORY-1430: say WHAT is unmet and WHO resolves it. trace:STORY-1430 | ai:claude
     if !hold.criteria.is_empty() {
@@ -74371,12 +74465,22 @@ fn record_closure_hold_event(project_root: &std::path::Path, hold: &ClosureHold)
 fn report_closure_holds(holds: &[ClosureHold]) {
     for hold in holds {
         if !hold.blockers.is_empty() {
-            eprintln!(
-                "  {} {} stays Done — merged, but blocked by {} (completion waits for the blocker)",
-                "↷".yellow(),
-                hold.flip.spec_id,
-                aida_core::pickability::closure_blockers_label(&hold.blockers)
-            );
+            if !hold.cycle_members.is_empty() {
+                eprintln!(
+                    "  {} {} stays Done — dependency cycle involving {}",
+                    "↷".yellow(),
+                    hold.flip.spec_id,
+                    hold.cycle_members.join(", ")
+                );
+            } else {
+                eprintln!(
+                    "  {} {} stays Done — merged, but blocked by {} (completion waits for \
+                     the blocker)",
+                    "↷".yellow(),
+                    hold.flip.spec_id,
+                    aida_core::pickability::closure_blockers_label(&hold.blockers)
+                );
+            }
         }
         // trace:STORY-1430 | ai:claude
         if !hold.criteria.is_empty() {
@@ -91944,6 +92048,7 @@ mod story_1436_gate_held_tests {
                 RequirementStatus::Done,
             ),
             blockers: vec![],
+            cycle_members: vec![],
             criteria: vec!["docs updated".to_string()],
         };
         let reason = closure_hold_reason(&hold);

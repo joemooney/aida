@@ -236,9 +236,26 @@ pub fn unresolved_closure_blockers(
     req: &Requirement,
     store: &RequirementsStore,
 ) -> Vec<ClosureBlocker> {
+    unresolved_closure_blockers_treating_resolved(req, store, &std::collections::HashSet::new())
+}
+
+/// BUG-1721: [`unresolved_closure_blockers`], with a caller-supplied set of
+/// requirement ids to treat as already resolved. The merge-time auto-bump uses
+/// it to reach a fixed point when ONE commit credits both a blocker and the
+/// spec it blocks: the blocker is being completed in the same pass, so it must
+/// not hold its dependent for a later `aida pull`. Deliberately a set of ids
+/// rather than a mutated store copy — nothing invents a Completed status, so
+/// the STORY-1418 completion seam stays the only path into Completed.
+// trace:BUG-1721 | ai:claude
+pub fn unresolved_closure_blockers_treating_resolved(
+    req: &Requirement,
+    store: &RequirementsStore,
+    resolved: &std::collections::HashSet<uuid::Uuid>,
+) -> Vec<ClosureBlocker> {
     req.relationships
         .iter()
         .filter(|r| matches!(r.rel_type, RelationshipType::BlockedBy))
+        .filter(|rel| !resolved.contains(&rel.target_id))
         .filter_map(
             |rel| match store.requirements.iter().find(|r| r.id == rel.target_id) {
                 Some(target) if closure_blocker_resolved(target, store) => None,
