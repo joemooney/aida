@@ -58,8 +58,57 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T09:21:52.752917164Z
-modified_at: 2026-09-29T09:21:52.752917164Z
+modified_at: 2026-09-29T10:47:06.225100740Z
 req_type: Bug
+comments:
+- id: 01a0ecc6-7cf1-7c03-b487-8cc0e910c6c6
+  author: joe
+  content: |
+    **Advisor: the open question is settled, and the answer is the benign one — but not for the reason anyone assumed.** Read in source, 2026-09-29.
+
+    BUG-1726 was filed with one blocking question: *does a detached build survive its seat being stopped?* If it dies, a false Idle destroys work and this is a code fix; if it survives, it is a docs fix. I traced the actual stop path.
+
+    ## `aida agent stop` signals ONLY the seat pid. It does not touch descendants.
+
+    `AgentCommand::Stop` → `agent_stop` (`aida-cli-lib/src/lib.rs:31808`) → `terminate_pids_with_grace(&alive, 5)` (`lib.rs:40498`):
+
+    ```rust
+    for &pid in pids {
+        if let Some(p) = sys.process(sysinfo::Pid::from_u32(pid)) {
+            let _ = p.kill_with(Signal::Term);
+        }
+    }
+    // 5s grace, then SIGKILL to the same explicit pid list
+    ```
+
+    `pids` is the matched registry rows' own pids and nothing else. There is no negative-pgid signal, no process-group sweep, and no descendant walk on this path. A `cargo`/`rustc` child is therefore never signalled: it is reparented to init and runs to completion, since nothing here sets `PR_SET_PDEATHSIG` and a build does not die of parent death.
+
+    **So a build — detached or not — survives `aida agent stop`.** BUG-1726's blocking question resolves in the benign direction.
+
+    I expected the opposite, and want the disconfirming evidence on the record. `aida-cli-lib/src/exit_signal.rs::sweep_process_group` (`:404`) *does* do exactly the group kill I went looking for — `kill(-pgid, SIGTERM)`, grace window, then `kill(-pgid, SIGKILL)` — and under `own_process_group: true` a seat's pgid equals its pid, so every unmodified descendant is in that group. That mechanism is real, but it is on the **exit-signal / headless child-cleanup** path. `agent_stop` does not call it. Finding that function first is what made me expect a build to die; it does not apply here.
+
+    ## What this changes about BUG-1726's severity
+
+    Downgrade, but do not close. The cost of the false Idle is **a stranded build, not destroyed work**: the build completes, holding one of this host's two cargo slots, with no seat left to read its result or act on it. That is materially cheaper than losing a 30-minute build, and it is not free — on a 2-slot machine an ownerless build is a scheduling loss, and a stranded result is precisely the failure family BUG-1701 was filed about.
+
+    So BUG-1726 is a **documentation fix plus a one-line limitation note**, on the terms its own filing set out, and it should say what the consequence actually is rather than implying lost work.
+
+    ## Secondary observation, NOT part of BUG-1726 — worth its own spec if anyone agrees
+
+    `aida agent stop` leaving descendants unsignalled is a deliberate-looking choice with an undocumented consequence: **stopping a seat leaks its children.** An orphaned cargo build keeps a cargo slot on a 2-slot host with nobody to reap it, and `aida agent stop` prints success. The substrate already owns the mechanism to do better (`sweep_process_group`), and `exit_signal.rs`'s own module docs call the tree-walk reap the fallback for platforms without it — so the asymmetry between the two stop paths reads more like drift than a decision.
+
+    I am not filing this: it is plausibly intentional (killing a user's in-flight build on `agent stop` would be its own defect, and the safe default may well be to leave it). It needs a decision about what `agent stop` is *for*, not a bug report. Recording it here because it was found while settling BUG-1726's question and would otherwise be lost.
+
+    ## Recommendation for triage
+
+    Accept-and-document, with the severity corrected to "stranded build and stranded result", not "killed build". Do **not** substitute a CPU-delta rule — BUG-1704's spec forbids it and the reasoning there still holds. The clean mitigation, if one is ever wanted, is a non-CPU discriminator on the descendant's identity rather than its age; that is a design change needing a sketch, not a bug fix.
+
+    Related: the third independent review round on PR #2276 rediscovered this same window from the other side and concluded a long build "eventually ages out". It does not — the bound is time-invariant and reduces to "did the child start after the last heartbeat". See the disposition comment on #2276 and commit `cb1443e8cd`, which renames the parameter to `secs_since_heartbeat` and pins the invariance, so this window stops being misread as a threshold.
+
+    Provenance: advisor seat, session #8 of the relay, 2026-09-29. Read from `lib.rs:31808`, `lib.rs:40498`, `exit_signal.rs:404`.
+  created_at: 2026-09-29T10:47:06.225100740Z
+  modified_at: 2026-09-29T10:47:06.225100740Z
+  session_id: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
 filed_at:
   code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
   branch: main
