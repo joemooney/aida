@@ -79,19 +79,37 @@ pub struct ProcNode {
     pub age_secs: Option<i64>,
 }
 
+/// A root's descendants, split into the ages that were sampled and a count of
+/// the ones that were not.
+///
+/// BUG-1727: a bare `Vec<i64>` cannot encode "this descendant is live but I
+/// could not age it", so a caller that saw only the ages had no way to tell an
+/// empty subtree apart from an unsampleable one and fell toward Idle on both.
+/// The count travels beside the ages so the caller can fail toward Busy on
+/// incomplete evidence, matching the missing-root fail-safe.
+// trace:BUG-1727 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DescendantAges {
+    /// One age in whole seconds per descendant whose start time was sampled.
+    pub ages: Vec<i64>,
+    /// Descendants reachable from the root whose age could not be sampled.
+    pub unsampled: usize,
+}
+
 impl ProcTree {
     // trace:BUG-1704 | ai:codex
     pub fn from_nodes(nodes: Vec<ProcNode>) -> Self {
         Self { nodes }
     }
 
-    /// Descendant ages, excluding the root; `None` means the root was not sampled.
-    // trace:BUG-1704 | ai:codex
-    pub fn descendant_ages(&self, root: u32) -> Option<Vec<i64>> {
+    /// Descendant ages and unsampled count, excluding the root; `None` means the
+    /// root was not sampled.
+    // trace:BUG-1727 | ai:claude
+    pub fn descendant_age_summary(&self, root: u32) -> Option<DescendantAges> {
         if !self.nodes.iter().any(|node| node.pid == root) {
             return None;
         }
-        let mut ages = Vec::new();
+        let mut summary = DescendantAges::default();
         for node in &self.nodes {
             if node.pid == root {
                 continue;
@@ -100,8 +118,11 @@ impl ProcTree {
             let mut seen = std::collections::HashSet::new();
             while let Some(pid) = current {
                 if pid == root {
-                    if let Some(age_secs) = node.age_secs {
-                        ages.push(age_secs);
+                    match node.age_secs {
+                        Some(age_secs) => summary.ages.push(age_secs),
+                        // Reached the root, so this descendant is real; only its age is
+                        // missing. Report it rather than dropping it. trace:BUG-1727
+                        None => summary.unsampled += 1,
                     }
                     break;
                 }
@@ -115,7 +136,7 @@ impl ProcTree {
                     .and_then(|parent| parent.ppid);
             }
         }
-        Some(ages)
+        Some(summary)
     }
 }
 
@@ -1800,7 +1821,7 @@ started_at = "2026-01-01T00:00:00Z"
 
     // trace:BUG-1704 | ai:codex
     #[test]
-    fn descendant_ages_terminates_on_a_parent_cycle() {
+    fn descendant_age_summary_terminates_on_a_parent_cycle() {
         let tree = ProcTree::from_nodes(vec![
             ProcNode {
                 pid: 1,
@@ -1813,11 +1834,17 @@ started_at = "2026-01-01T00:00:00Z"
                 age_secs: Some(10),
             },
         ]);
-        assert_eq!(tree.descendant_ages(1), Some(vec![10]));
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![10],
+                unsampled: 0,
+            })
+        );
     }
 
     #[test]
-    fn descendant_ages_traverses_through_a_node_with_unknown_age() {
+    fn descendant_age_summary_traverses_through_a_node_with_unknown_age() {
         let tree = ProcTree::from_nodes(vec![
             ProcNode {
                 pid: 1,
@@ -1835,11 +1862,24 @@ started_at = "2026-01-01T00:00:00Z"
                 age_secs: Some(120),
             },
         ]);
-        assert_eq!(tree.descendant_ages(1), Some(vec![120]));
+        // The intermediate is itself a descendant, so it is reported unsampled
+        // as well as traversed. trace:BUG-1727 | ai:claude
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![120],
+                unsampled: 1,
+            })
+        );
     }
 
+    /// BUG-1727 AC1 reverses BUG-1704's behaviour here. This descendant used to be
+    /// dropped, which let a seat with a live-but-unsampleable child read Idle; the
+    /// missing-root case already failed toward Busy. Both are "the probe could not
+    /// see", so both now resolve the same way: the caller is told it exists.
+    // trace:BUG-1727 | ai:claude
     #[test]
-    fn descendant_ages_omits_an_unknown_age_descendant() {
+    fn descendant_age_summary_reports_an_unsampled_descendant_instead_of_dropping_it() {
         let tree = ProcTree::from_nodes(vec![
             ProcNode {
                 pid: 1,
@@ -1852,21 +1892,27 @@ started_at = "2026-01-01T00:00:00Z"
                 age_secs: None,
             },
         ]);
-        assert_eq!(tree.descendant_ages(1), Some(vec![]));
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![],
+                unsampled: 1,
+            })
+        );
     }
 
     #[test]
-    fn descendant_ages_still_returns_none_for_an_absent_root() {
+    fn descendant_age_summary_still_returns_none_for_an_absent_root() {
         let tree = ProcTree::from_nodes(vec![ProcNode {
             pid: 2,
             ppid: Some(1),
             age_secs: Some(120),
         }]);
-        assert_eq!(tree.descendant_ages(1), None);
+        assert_eq!(tree.descendant_age_summary(1), None);
     }
 
     #[test]
-    fn descendant_ages_traverses_two_stacked_unknown_age_intermediates() {
+    fn descendant_age_summary_traverses_two_stacked_unknown_age_intermediates() {
         let tree = ProcTree::from_nodes(vec![
             ProcNode {
                 pid: 1,
@@ -1889,11 +1935,17 @@ started_at = "2026-01-01T00:00:00Z"
                 age_secs: Some(120),
             },
         ]);
-        assert_eq!(tree.descendant_ages(1), Some(vec![120]));
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![120],
+                unsampled: 2,
+            })
+        );
     }
 
     #[test]
-    fn descendant_ages_finds_an_unknown_age_root() {
+    fn descendant_age_summary_finds_an_unknown_age_root() {
         let tree = ProcTree::from_nodes(vec![
             ProcNode {
                 pid: 1,
@@ -1906,11 +1958,19 @@ started_at = "2026-01-01T00:00:00Z"
                 age_secs: Some(120),
             },
         ]);
-        assert_eq!(tree.descendant_ages(1), Some(vec![120]));
+        // The root's own missing age is not a descendant signal: the root is excluded,
+        // and its liveness is established by the pid probe, not by its age.
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![120],
+                unsampled: 0,
+            })
+        );
     }
 
     #[test]
-    fn descendant_ages_terminates_with_an_unknown_age_node_in_a_cycle() {
+    fn descendant_age_summary_terminates_with_an_unknown_age_node_in_a_cycle() {
         let tree = ProcTree::from_nodes(vec![
             ProcNode {
                 pid: 1,
@@ -1928,11 +1988,19 @@ started_at = "2026-01-01T00:00:00Z"
                 age_secs: Some(120),
             },
         ]);
-        assert_eq!(tree.descendant_ages(1), Some(vec![]));
+        // Neither node reaches the root, so neither is a descendant. An unknown age
+        // only counts once the walk has proved the node hangs off the root.
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![],
+                unsampled: 0,
+            })
+        );
     }
 
     #[test]
-    fn descendant_ages_omits_an_unknown_age_leaf_but_keeps_a_known_sibling() {
+    fn descendant_age_summary_counts_an_unsampled_leaf_and_keeps_a_known_sibling() {
         let tree = ProcTree::from_nodes(vec![
             ProcNode {
                 pid: 1,
@@ -1950,8 +2018,8 @@ started_at = "2026-01-01T00:00:00Z"
                 age_secs: Some(120),
             },
         ]);
-        let ages = tree.descendant_ages(1).unwrap();
-        assert_eq!(ages.len(), 1);
-        assert!(ages.contains(&120));
+        let summary = tree.descendant_age_summary(1).unwrap();
+        assert_eq!(summary.ages, vec![120]);
+        assert_eq!(summary.unsampled, 1);
     }
 }

@@ -1636,14 +1636,21 @@ fn seat_has_own_work(
 ) -> bool {
     // If a heartbeat lands during a long build, the heartbeat can move past build start and
     // clause 2 can exclude that build. Tool calls are sequential, so this is accepted in practice.
-    let Some(ages) = tree.descendant_ages(seat_pid) else {
+    let Some(summary) = tree.descendant_age_summary(seat_pid) else {
         return true;
     };
+    // BUG-1727 AC1: an unsampleable descendant is the same class of evidence gap as a
+    // missing root — the probe could not see — so it resolves the same way, toward Busy.
+    // A false Idle gets a working seat stopped; a false Busy only delays a reap.
+    // trace:BUG-1727 | ai:claude
+    if summary.unsampled > 0 {
+        return true;
+    }
     if secs_since_heartbeat <= grace_secs.min(i64::MAX as u64) as i64 {
         return true;
     }
     ages_show_work(
-        &ages,
+        &summary.ages,
         secs_since_heartbeat,
         grace_secs.min(i64::MAX as u64) as i64,
     )
@@ -2683,6 +2690,47 @@ mod tests {
             600,
             10
         ));
+    }
+
+    /// BUG-1727 AC3: the grace floor's cost, pinned rather than assumed. A child younger
+    /// than `grace_secs` is not counted, so the seat reads Idle while that child runs —
+    /// and the window closes on its own. Both halves use the SAME heartbeat staleness and
+    /// the SAME child; only its age advances, which is what makes this a self-heal and not
+    /// two unrelated cases.
+    // trace:BUG-1727 | ai:claude
+    #[test]
+    fn ages_show_work_self_heals_when_a_young_child_reaches_the_grace_floor() {
+        assert!(!ages_show_work(&[5], 31, 10));
+        assert!(ages_show_work(&[10], 31, 10));
+    }
+
+    /// BUG-1727 AC1 + AC2: a live descendant the probe could not age reads Busy, the same
+    /// way a missing root does. Without the unsampled count this tree yields an empty age
+    /// list, indistinguishable from a seat with no children at all, and reads Idle.
+    // trace:BUG-1727 | ai:claude
+    #[test]
+    fn seat_has_own_work_is_true_when_a_descendant_cannot_be_aged() {
+        let tree = ProcTree::from_nodes(vec![
+            aida_core::liveness::ProcNode {
+                pid: 42,
+                ppid: None,
+                age_secs: Some(700),
+            },
+            aida_core::liveness::ProcNode {
+                pid: 50,
+                ppid: Some(42),
+                age_secs: None,
+            },
+        ]);
+        assert!(seat_has_own_work(&tree, 42, 600, 10));
+    }
+
+    /// …and the fail-safe stays narrow: a fully sampled subtree with nothing in the work
+    /// window still reads Idle, so AC1 did not turn every covered seat Busy.
+    // trace:BUG-1727 | ai:claude
+    #[test]
+    fn seat_has_own_work_is_false_when_a_sampled_subtree_shows_no_work() {
+        assert!(!seat_has_own_work(&bug1704_tree(3600), 42, 600, 10));
     }
 
     // trace:BUG-1704 | ai:codex
