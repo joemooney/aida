@@ -90,8 +90,42 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T16:23:51.096694327Z
-modified_at: 2026-09-29T16:24:39.325869931Z
+modified_at: 2026-09-29T16:24:53.570814300Z
 req_type: Task
+comments:
+- id: 01a0edfb-be42-7d43-a3a4-7f64e90c6355
+  author: joe
+  content: |
+    Filed out of the TASK-1532 salvage (advisor relay session #4).
+
+    Provenance: the defect this prevents is concrete, not hypothetical. TASK-1532's WIP
+    inserted a lock-acquiring `EnvVarGuard::set` inside `publish_fixture_receipt`, which
+    already held `env_lock()` on its first line. Both callers hung unconditionally, and
+    the hung thread never released the lock, so every other env-guarded test in
+    `aida-cli-lib` blocked behind it.
+
+    Independent sweep run this session, for whoever implements this:
+    - Same-function nesting (a fn holding `env_lock()` that also constructs a guard):
+      2 hits, both benign. `locking_gate_token_test_holds_env_lock` is a false positive
+      (the fn *name* ends in `env_lock`). `core_env_guard_restores_and_survives_poison`
+      takes the lock only inside a `catch_unwind` closure, after the outer guard is
+      already dropped -- that is the poison-tolerance test itself.
+    - Cross-function nesting (a fn holding `env_lock()` that calls a guard-taking
+      helper): 2 hits, both `drop()`, a false positive because `EnvVarGuard`'s own
+      `Drop` impl puts `drop` in the guard-taking set.
+
+    So after the TASK-1532 fix there are zero remaining nested-lock sites. This task is
+    therefore purely preventive -- it does not clear a known backlog of offenders, it
+    stops the next one from costing a 25-minute suite run. AC6's mutation proof
+    (re-adding the removed `env_lock()` line) is the load-bearing acceptance check,
+    because it is the only one that demonstrates the tripwire fires on the real shape.
+
+    Scope note: both sweeps above were heuristic (regex function segmentation), so they
+    are good evidence that the tree is currently clean but are not a substitute for the
+    runtime tripwire -- which is precisely the argument for this task.
+  created_at: 2026-09-29T16:24:53.570814300Z
+  modified_at: 2026-09-29T16:24:53.570814300Z
+  session_id: 4c4c542f-a855-4b9f-91c7-9e339ae88796
 history:
 - id: 01a0edfb-869d-7ce0-abd4-8c5eec2cb08d
   author: joe
