@@ -192,3 +192,6 @@ __pycache__/
 # their `.agents/skills/aida-*` pack; the scaffolder never ignores it there.
 # trace:BUG-1639 | ai:claude
 /.agents/
+
+# codegraph index (local tooling, not part of the repo)
+.codegraph/
