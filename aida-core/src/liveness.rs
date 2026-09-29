@@ -1793,4 +1793,94 @@ started_at = "2026-01-01T00:00:00Z"
         }]);
         assert_eq!(tree.descendant_ages(1), None);
     }
+
+    #[test]
+    fn descendant_ages_traverses_two_stacked_unknown_age_intermediates() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(2),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 4,
+                ppid: Some(3),
+                age_secs: Some(120),
+            },
+        ]);
+        assert_eq!(tree.descendant_ages(1), Some(vec![120]));
+    }
+
+    #[test]
+    fn descendant_ages_finds_an_unknown_age_root() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: Some(120),
+            },
+        ]);
+        assert_eq!(tree.descendant_ages(1), Some(vec![120]));
+    }
+
+    #[test]
+    fn descendant_ages_terminates_with_an_unknown_age_node_in_a_cycle() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(3),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(2),
+                age_secs: Some(120),
+            },
+        ]);
+        assert_eq!(tree.descendant_ages(1), Some(vec![]));
+    }
+
+    #[test]
+    fn descendant_ages_omits_an_unknown_age_leaf_but_keeps_a_known_sibling() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(1),
+                age_secs: Some(120),
+            },
+        ]);
+        let ages = tree.descendant_ages(1).unwrap();
+        assert_eq!(ages.len(), 1);
+        assert!(ages.contains(&120));
+    }
 }
