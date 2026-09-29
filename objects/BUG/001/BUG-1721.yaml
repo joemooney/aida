@@ -36,12 +36,12 @@ description: |
      existing hold is not weakened.
   5. A regression test constructs a two-spec blocker chain credited by one
      commit and asserts both reach Completed after a single reconcile.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T23:26:48.610851151Z
-modified_at: 2026-09-28T23:34:02.200911598Z
+modified_at: 2026-09-29T00:37:24.608255962Z
 req_type: Bug
 history:
 - id: 01a0ea5e-46d8-7f73-9a2e-2158ff44ad82
@@ -51,6 +51,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0ea98-4be1-7d32-94b2-97ac413dc9be
+  author: aida-auto-bump
+  timestamp: 2026-09-29T00:37:24.578043846Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0ea98-4c00-7f70-8467-b0858d1acbdb
+  timestamp: 2026-09-29T00:37:24.608254092Z
+  agent: implementer
+  commit_sha: e29d004c82f068f77af975fa4bc3ffaafd8bd7b8
+  summary: Completed via merge e29d004c
 filed_at:
   code_sha: 59e859b49f784a8633a049ad39cf243345289ea9
   branch: main
@@ -59,3 +72,7 @@ filed_at:
   aida_build_sha: 1fe3f6bdc9
   vendor: antigravity
   session: 71214fd6-ec84-46cf-87bf-fa8de48d6877
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-29T00:37:24.577969856Z
+  completion_sha: e29d004c82f068f77af975fa4bc3ffaafd8bd7b8
