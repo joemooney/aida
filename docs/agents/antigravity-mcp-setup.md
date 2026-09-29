@@ -207,9 +207,11 @@ As an **Experimental-tier** agent (per STORY-408):
 
 ## Keeping the Antigravity Skill Pack Current
 
-`.antigravity/skills/` is scaffolded by `aida init` and is then skip-existing,
-so a later fix to a skill template never reaches a project that already has the
-file. The delivery path is an **edit-preserving refresh** — the same one that
+`.agents/skills/` is the pack Antigravity actually reads, and it is scaffolded
+by `aida init` and then skip-existing, so a later fix to a skill template never
+reaches a project that already has the file. (`.antigravity/skills/` was never
+an Antigravity discovery surface — the literal does not occur in the 1.2.12
+binary; see the matrix in `docs/agents/seat-parity.md`.) The delivery path is an **edit-preserving refresh** — the same one that
 keeps Claude's skills/commands, `.codex/skills/` and `~/.codex/prompts` level
 with the binary:
 
