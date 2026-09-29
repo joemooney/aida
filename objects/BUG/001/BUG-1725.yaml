@@ -88,7 +88,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T08:29:23.135646002Z
-modified_at: 2026-09-29T10:16:20.038268561Z
+modified_at: 2026-09-29T13:51:38.166816732Z
 req_type: Bug
 comments:
 - id: 01a0ecaa-5146-7421-bb5e-ff1cef22564c
@@ -149,6 +149,99 @@ comments:
   created_at: 2026-09-29T10:16:20.038268561Z
   modified_at: 2026-09-29T10:16:20.038268561Z
   session_id: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
+- id: 01a0ed6f-6eb6-7a53-a939-33db72361db0
+  author: joe
+  content: |
+    ## AC2' measurement re-run on the post-merge tree (main `87408e2c1e`) — and two corrections to AC1'
+
+    Session #8's measurement was taken at `0c3ef5cb6b`, before #2261 / #2276 / #2278 landed. I re-ran it
+    on current main. The diagnosis holds; two details of the prescription need correcting before an
+    implementer builds the matcher.
+
+    ### Corpus now
+
+    | | session #8 (`0c3ef5cb`) | now (`87408e2c`) |
+    |---|---|---|
+    | executable-mode hits across all crate `src` | 19 | **21** |
+    | genuinely unguarded | 4 | **7** |
+    | files containing them | 1 | **2** |
+
+    The unguarded set, each read in source rather than inferred from the matcher:
+
+    | Site | Kind |
+    |---|---|
+    | `aida-cli-lib/src/aida_bin.rs:330` | `use std::os::unix::fs::PermissionsExt;` |
+    | `aida-cli-lib/src/aida_bin.rs:336` | `from_mode(0o755)` |
+    | `aida-cli-lib/src/aida_bin.rs:429` | `from_mode(0o755)` |
+    | `aida-cli-lib/src/remote_create.rs:3040` | `use std::os::unix::fs::PermissionsExt;` |
+    | `aida-cli-lib/src/remote_create.rs:3055` | `from_mode(0o755)` |
+    | `aida-cli-lib/src/remote_create.rs:3062` | `from_mode(0o755)` |
+    | `aida-cli-lib/src/remote_create.rs:3065` | `from_mode(0o755)` |
+
+    Exactly the two files the Windows compiler named in the spec's cited run. `aida-tui/src`,
+    `aida-server/src` and `aida-cli/src` contribute **zero** hits — the widened scan does not need them,
+    but including them costs nothing and keeps the guard honest as those crates grow.
+
+    ### CORRECTION 1 — AC1' says `#[cfg(unix)]`. The corpus also uses `#[cfg(all(test, unix))]`, and a literal matcher false-positives on correct code.
+
+    I first measured with a matcher for the literal `cfg(unix)` and it reported three extra violations.
+    All three are correct code guarded by a compound predicate:
+
+    - `aida-cli-lib/src/pr_cmd.rs:4514` — inside `#[cfg(all(test, unix))] mod pr_ship_environment_tests`
+      opened at `:4448`. Verified still in scope at `:4514` by brace depth (+2).
+    - `aida-cli-lib/src/lib.rs:50547` — inside `#[cfg(all(test, unix))] mod resolve_gh_binary_tests` at `:50544`.
+    - `aida-cli-lib/src/mailbox_cmd.rs:1450` — nearest enclosing attribute is `#[cfg(unix)]` at `:1360`.
+
+    **AC1' must read: unless the site is lexically inside a scope whose `#[cfg(..)]` predicate mentions
+    `unix` as a token** — `#[cfg(unix)]`, `#[cfg(all(test, unix))]`, `#[cfg(any(unix, ...))]` alike —
+    not the literal string `#[cfg(unix)]`. A matcher that only accepts the bare form reports three
+    correct sites and goes red in the gating ubuntu job, which is the exact failure AC1' exists to
+    prevent.
+
+    ### CORRECTION 2 — no proximity window can substitute for scope tracking. Measured.
+
+    I tried a lookback window before writing a scope tracker, to see whether the cheap version would do.
+    It cannot, and the distances say why: `pr_cmd.rs` is **66 lines** from its guarding attribute to the
+    violation, `mailbox_cmd.rs` is **90**. Any window wide enough to cover those is wide enough to
+    absorb an unrelated guarded block above a genuinely unguarded site and miss it. This confirms AC1's
+    "parser-ish, brace/attribute tracking, heft 3-4" sizing against the actual corpus rather than in
+    principle. Do not attempt a regex-with-lookback; it will produce both false positives and false
+    negatives on this tree.
+
+    ### A cheaper shape for AC4' than the per-site fix list — needs one check first
+
+    **Both** unguarded files have the same root cause: their violations sit inside a module declared
+    `#[cfg(test)]`, not `#[cfg(all(test, unix))]`.
+
+    - `aida_bin.rs:327` — `#[cfg(test)] mod tests {`
+    - `remote_create.rs:2472` — `#[cfg(test)] mod ... {`
+
+    For `aida_bin.rs`, changing that one attribute to `#[cfg(all(test, unix))]` fixes **all three** sites
+    at once and is a one-line edit. **Check first whether every test in that module is unix-only** — if
+    any are portable, this trades a Windows compile error for silently dropped Windows coverage, which
+    is worse. I did not verify that; it is the first thing the implementer should establish.
+
+    For `remote_create.rs` the module attribute is almost certainly the **wrong** lever: that module is
+    large and most of its tests are portable. Guard per-test or per-block there.
+
+    ### What is still true from session #8
+
+    - The 15 (now 14) guarded sites must NOT be reported; fixtures per shape are still required, and the
+      shape list must now include `#[cfg(all(test, unix))]` on a `mod`.
+    - AC3' stands and is load-bearing: `aida_bin.rs:330` and `remote_create.rs:3040` are bare `use`
+      lines with no mode literal, so no widening of the mode regex alone reaches them.
+    - `mark_executable` must not be exported across the crate boundary to satisfy the guard.
+    - AC5' stands: Windows verification only via the nightly.
+
+    Method, for anyone re-running it: the measurement imports `direct_executable_mode_changes` from the
+    ratchet unmodified and walks every crate `src`; the guarded/unguarded split was then **verified by
+    reading each site**, because the window heuristic used to triage them is exactly what Correction 2
+    shows to be unusable.
+
+    Provenance: advisor seat, session #11 of the relay, 2026-09-29, at main `87408e2c1e`.
+  created_at: 2026-09-29T13:51:38.166816732Z
+  modified_at: 2026-09-29T13:51:38.166816732Z
+  session_id: 0ef5b5ae-9150-427a-a95e-107f233be261
 history:
 - id: 01a0ec48-95fc-7221-958e-c7471acc90a4
   author: joe
