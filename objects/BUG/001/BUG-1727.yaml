@@ -121,13 +121,21 @@ description: |
   independent review of PR #2276. Reviewer findings R1 and R5 survived verification as GAPs 2 and 1;
   R2's AC3 verdict was overturned and its test-fidelity observation survived as GAP 3. R3, R4 and R6
   confirmed the diff healthy.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T11:40:16.011406979Z
-modified_at: 2026-09-29T11:40:16.011406979Z
+modified_at: 2026-09-29T11:40:24.457008922Z
 req_type: Bug
+history:
+- id: 01a0ecf7-4a08-7281-aa60-a98d90a5121d
+  author: joe
+  timestamp: 2026-09-29T11:40:24.457006745Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
   branch: main
