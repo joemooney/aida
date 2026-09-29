@@ -2644,17 +2644,17 @@ mod tests {
             aida_core::liveness::ProcNode {
                 pid: 42,
                 ppid: None,
-                age_secs: 700,
+                age_secs: Some(700),
             },
             aida_core::liveness::ProcNode {
                 pid: 50,
                 ppid: Some(42),
-                age_secs: 700,
+                age_secs: Some(700),
             },
             aida_core::liveness::ProcNode {
                 pid: 51,
                 ppid: Some(50),
-                age_secs: child_age,
+                age_secs: Some(child_age),
             },
         ])
     }
