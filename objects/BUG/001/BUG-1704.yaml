@@ -89,7 +89,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T04:56:26.956029730Z
-modified_at: 2026-09-28T13:37:13.201757827Z
+modified_at: 2026-09-29T06:00:54.282111264Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -147,6 +147,146 @@ comments:
   created_at: 2026-09-28T13:37:13.201757827Z
   modified_at: 2026-09-28T13:37:13.201757827Z
   session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+- id: 01a0ebc0-770a-7532-b77e-28030ce4d579
+  author: joe
+  content: |
+    ADVISOR SKETCH + SIGNOFF (2026-09-28) — resolves the spec's "DIRECTION (not yet a decision)"
+
+    PREMISE RE-VERIFIED IN SOURCE FIRST (this spec is not a from-review finding, but the same check
+    applies). Every cited symbol exists and the described mechanism is accurate as written:
+    `classify_status` (aida-cli-lib/src/agent_registry.rs:1586) applies the four rules in the stated
+    order; `covers` (agent_registry.rs:1659) matches on equality or prefix and treats an empty path as
+    non-covering; `classify_lease_state` (aida-core/src/liveness.rs:638) is at the exact cited line;
+    `live_lease_worktrees` has DRIFTED from the cited lib.rs:76342 to lib.rs:76995 but is otherwise as
+    described; `process_cpu_secs` (agent_registry.rs:1619) carries the BUG-1701 comment that
+    deliberately declines to reclassify on cumulative CPU. No rewrite of the spec is needed.
+
+    DECISION: NEITHER CANDIDATE SIGNAL AS OFFERED. Take a third, and it needs no CPU at all.
+
+    Why the spec's two candidates both fail AC2 as stated:
+
+      (a) CPU DELTA between samples — a build QUEUED behind the cargo slot flock consumes no CPU, and
+          neither does the seat waiting on it. The delta is 0 for a working seat, so (a) reports it
+          finished. AC2 names this case explicitly as the one that must not regress.
+      (b) DESCENDANT CPU (single sample) — same failure for the same reason: a flock-blocked cargo
+          subtree is quiet. The spec already flags this; the flag is correct and fatal.
+
+    CPU is the wrong axis. The thing that actually separates "finished" from "blocked" — including
+    blocked-and-queued — is not how much CPU the seat burns but WHETHER IT HAS A CHILD DOING WORK ON
+    ITS BEHALF. A finished seat is blocked reading its own PTY with nothing outstanding. A seat blocked
+    on a build has a live `cargo`/`rustc` subtree whether that subtree is running or waiting on a lock.
+
+    THE RULE. A descendant counts as WORK iff both clauses hold, each earning its place by excluding a
+    concrete false positive observed on this host:
+
+        work_descendant(d)  iff  d.age_secs >= work_grace_secs     // clause 1
+                            and  d.age_secs <  idle_secs           // clause 2
+
+      where idle_secs = elapsed_secs_clamped(ctx.now, entry.last_active_at) — already computed in
+      `classify_status` — and work_grace_secs is new config (below).
+
+      Clause 2 ("younger than the seat's own idle period" == "started after the seat's last heartbeat")
+      excludes SESSION-LONG SERVICE CHILDREN. This clause is load-bearing and non-obvious: a live
+      Claude Code seat holds MCP server children for its whole session, so "has any live descendant"
+      alone reports every idle seat busy forever and fixes nothing.
+      Clause 1 excludes MOMENTARY children. Claude Code runs statusline commands and hooks on a timer;
+      each is younger than the heartbeat and would satisfy clause 2, so without clause 1 a finished
+      seat FLAPS between busy and idle across polls depending on sample timing.
+
+    Expressing both clauses as AGE comparisons — not absolute timestamps — is deliberate: the decision
+    function becomes pure integer arithmetic over sampled ages with no wall-clock alignment, which is
+    exactly what AC4 asks for.
+
+    FAIL-SAFE, WHICH IS ALSO THE ANSWER TO AC3. Rule 3 is NARROWED, never deleted:
+
+        if covers(&ctx.live_lease_worktrees, &entry.worktree_path) {
+            match ctx.proc_tree.as_ref() {
+                None => return AgentStatus::Busy,              // no snapshot -> STORY-435 behaviour
+                Some(tree) => if seat_has_own_work(tree, entry.pid, elapsed, ctx.work_grace_secs) {
+                    return AgentStatus::Busy;
+                }
+            }
+        }
+        AgentStatus::Idle
+
+    ABSENCE OF EVIDENCE IS NOT EVIDENCE OF FINISHING. Three distinct cases must fail safe to Busy,
+    preserving today's behaviour exactly: no snapshot available; the seat's own pid absent from the
+    snapshot; and idle_secs <= work_grace_secs, where the window [grace, idle) is empty and the rule
+    can say nothing. A false Busy costs a wasted poll. A false Idle gets a WORKING SEAT STOPPED — that
+    asymmetry sets the direction of every tie-break here, and the implementation must not "simplify"
+    any of the three into a default of Idle.
+
+    AC5 (cheapness) IS ALREADY SOLVED BY THE EXISTING WALK. `walk_live_agent_processes`
+    (aida-core/src/liveness.rs:192) already enumerates EVERY process through `sysinfo` and filters to
+    claude/codex in the FOLD, not in the walk — and `sysinfo` 0.30 is a direct dependency of both
+    aida-core and aida-cli-lib, exposing `proc.parent()` (already used at liveness.rs:438/474) and
+    `proc.start_time()` (already used at liveness.rs:227). So the tree projection is a second fold over
+    a walk this code path already performs, not new probe machinery, and it is cross-platform through
+    sysinfo — no `#[cfg(unix)]` gate and no `ps` shelling.
+
+    Memoize the tree probe on its own `OnceLock`, mirroring `probe_live_claude_sessions`
+    (liveness.rs:90). It must request NEITHER cwd NOR cmd in its `ProcessRefreshKind`: the per-process
+    `/proc/<pid>/cwd` readlink is the expensive part of the agent walk, so the tree refresh is strictly
+    cheaper per process than the walk already being paid for. Filter out `proc.thread_kind().is_some()`
+    exactly as liveness.rs:211 does, or a multi-threaded child is counted 16+ times.
+      A single unified walk feeding both projections would be better still, but it restructures a
+      BUG-613/TASK-1061-guarded single-probe invariant for no behavioural gain. Deliberately OUT OF
+      SCOPE here; worth a follow-on if `aida agent status` latency is ever measured as a problem.
+
+    SHAPE, so the pure core is testable without a process tree (mirroring the `nearest_claude_ancestor_pid`
+    / `nearest_claude_in_chain` split at liveness.rs:465/487, which is the precedent to follow):
+
+      aida-core/src/liveness.rs
+        pub struct ProcNode { pub pid: u32, pub ppid: Option<u32>, pub age_secs: i64 }
+        pub struct ProcTree { nodes: Vec<ProcNode> }          // impure: sampled
+        pub fn probe_process_tree() -> ProcTree                // memoized OnceLock
+        impl ProcTree { pub fn descendant_ages(&self, root: u32) -> Option<Vec<i64>> }
+            // None iff `root` is absent from the snapshot -> caller fails safe to Busy.
+            // Cycle-guard the parent chase with a seen-set, as walk_ancestor_pids (liveness.rs:429) does.
+
+      aida-cli-lib/src/agent_registry.rs
+        fn seat_has_own_work(tree: &ProcTree, seat_pid: u32, idle_secs: i64, grace_secs: i64) -> bool
+        // and the PURE core it delegates to, which is what the AC4 tests drive:
+        fn ages_show_work(descendant_ages: &[i64], idle_secs: i64, grace_secs: i64) -> bool
+
+    CONFIG, per project convention (configurable policy with a default):
+    `work_grace_secs: u64` on `agent_registry::Config` (agent_registry.rs:288), default 10, parsed in
+    `Config::from_toml_str` (agent_registry.rs:317) beside `busy_threshold_secs`.
+
+    THREADING THE CONTEXT WITHOUT A CHURN OF CALL SITES — read this before editing.
+    `AgentClassifyContext` (agent_registry.rs:262) is built through a 3-arg positional
+    `::new(now, threshold_secs, live_lease_worktrees)` at EIGHT sites: supervise_cmd.rs:284,
+    mcp.rs:9267, mcp.rs:9292, terminal_cmd.rs:260, lib.rs:22118, lib.rs:24119, agent_registry.rs:1447,
+    and lib.rs:76984. KEEP `::new` AT ITS CURRENT ARITY, defaulting the two new fields to
+    `proc_tree: None` and `work_grace_secs: <default>`, and add a chained builder
+    `fn with_work_probe(self, tree: ProcTree, grace_secs: u64) -> Self` used ONLY by
+    `build_agent_classify_context` (lib.rs:76972). Then seven of the eight sites need no edit at all
+    AND they inherit the fail-safe None — i.e. every non-`agent status` caller keeps today's behaviour
+    by construction. `serde(default)` would do nothing here; these are struct constructions, not
+    deserializations.
+
+    ACCEPTANCE DISPOSITION
+      AC1 satisfied: a finished seat's only descendants are session-long service children, which fail
+          clause 2 -> Idle.
+      AC2 satisfied, running AND queued alike, because the rule never reads CPU.
+      AC3 satisfied by narrowing rather than deleting rule 3, plus the three fail-safe-to-Busy cases.
+      AC4 satisfied: `ages_show_work` is pure integer arithmetic over a slice.
+      AC5 satisfied: a second fold over an already-performed walk, refreshing strictly less per process.
+      AC6 honoured: no stale-lease sweep is proposed.
+
+    KNOWN LIMITATION, ACCEPTED, AND WHY — record it in the code comment rather than engineering it away.
+    If a heartbeat lands DURING a long build, `last_active_at` moves past the build's start and clause 2
+    then excludes the build, reporting a working seat Idle. This is accepted because the MCP heartbeat is
+    driven by tool calls and an agent's tool loop is sequential: while a blocking build runs, no MCP call
+    can be made, so `last_active_at <= build_start` holds in practice. It is a real edge, it is the one
+    place this design can produce the expensive error, and the next reader deserves to find it named in
+    the source instead of rediscovering it.
+
+    SIGNED OFF for implementation as sketched. Heft 6 is about right; this is one spec, not a story.
+    Do not substitute a CPU-delta rule for the age rule without coming back to this comment first.
+  created_at: 2026-09-29T06:00:54.282111264Z
+  modified_at: 2026-09-29T06:00:54.282111264Z
+  session_id: a1b56cce-0ca3-42c2-8ccf-ff605a280cc4
 history:
 - id: 01a0e65f-4718-7fd1-9586-f0a804429302
   author: joe
