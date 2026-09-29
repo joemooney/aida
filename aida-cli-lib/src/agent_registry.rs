@@ -1673,7 +1673,15 @@ fn ages_show_work(descendant_ages: &[i64], secs_since_heartbeat: i64, grace_secs
         // That asks whether the child started after this seat's last heartbeat.
         // Time passing cannot change that ordering, so a long-running build stays Busy.
         // This holds while it runs provided no heartbeat landed after it started.
-        // A later heartbeat can exclude it; that is BUG-1726.
+        // A later heartbeat can exclude it; that is BUG-1726. Its consequence, stated
+        // rather than left to the bug id: a seat that launched a build DETACHED and then
+        // kept making tool calls moves its heartbeat past the build's start, so the build
+        // stops counting and the seat reads Idle while it still runs. The build is
+        // STRANDED, not killed — `agent_stop` hands `terminate_pids_with_grace` the matched
+        // registry rows' own pids and nothing else; that function signals each pid in the slice
+        // (no negative pgid, no descendant walk), so the child is
+        // reparented to init and completes ownerless, holding a cargo slot with no seat
+        // left to read its result. trace:BUG-1726 | ai:claude
         .any(|age| *age >= grace_secs && *age < secs_since_heartbeat)
 }
 
