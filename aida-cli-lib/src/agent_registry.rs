@@ -1658,6 +1658,8 @@ fn ages_show_work(descendant_ages: &[i64], secs_since_heartbeat: i64, grace_secs
         .iter()
         // The grace bound excludes momentary statusline/hook children.
         // Without it, a finished seat can flap Busy on those short-lived processes.
+        // Its cost: a child younger than the grace window is not counted, so a seat can
+        // read Idle for up to `work_grace_secs` after a delayed spawn. That is BUG-1727.
         // The upper bound is not a threshold on the child's age.
         // `age < secs_since_heartbeat` means `(now - child_start) < (now - heartbeat)`.
         // Cancel `now` on both sides and it becomes `child_start > heartbeat`.
@@ -2612,11 +2614,20 @@ mod tests {
     }
 
     // STORY-435: stale activity but a Live lease covers the worktree → Busy.
+    //
+    // BUG-1727 AC5: pinned in the shape production uses. The only caller that passes a
+    // non-empty lease list also attaches a work probe (`lib.rs` builds the context with
+    // `.with_work_probe(..)`), so a `proc_tree: None` context can never reach the lease arm
+    // in the CLI: every other call site passes `Vec::new()` and `covers` is false for an
+    // empty list. Asserting STORY-435 through `Some(..)` keeps this test on the live path.
+    // The `None` fallback arm is covered by `classify_status_live_lease_without_proc_tree_is_busy`.
+    // trace:STORY-435 | ai:claude
     #[test]
     fn classify_status_live_lease_is_busy_despite_stale_activity() {
         let now = Utc::now();
         let e = entry_with(42, now - Duration::minutes(5));
-        let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+        // The lease path comes from the entry itself, so no tmp-path literal is duplicated.
+        let c = ctx(now, 30, vec![e.worktree_path.clone()]).with_work_probe(bug1704_tree(120), 10);
         assert_eq!(classify_status(&e, true, &c), AgentStatus::Busy);
     }
 
@@ -2715,16 +2726,6 @@ mod tests {
         let ctx =
             ctx(now, 30, vec![entry.worktree_path.clone()]).with_work_probe(bug1704_tree(3600), 10);
         assert_eq!(classify_status(&entry, true, &ctx), AgentStatus::Idle);
-    }
-
-    // trace:BUG-1704 | ai:codex
-    #[test]
-    fn classify_status_live_lease_with_working_subtree_is_busy() {
-        let now = Utc::now();
-        let entry = entry_with(42, now - Duration::minutes(5));
-        let ctx =
-            ctx(now, 30, vec![entry.worktree_path.clone()]).with_work_probe(bug1704_tree(120), 10);
-        assert_eq!(classify_status(&entry, true, &ctx), AgentStatus::Busy);
     }
 
     // STORY-435: lease worktree that's an ancestor of the agent worktree
