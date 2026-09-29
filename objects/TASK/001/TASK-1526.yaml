@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-09-29T20:33:36.401734265Z
+modified_at: 2026-09-29T20:43:31.058252734Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -566,6 +566,73 @@ comments:
     doc's "No self-review or merge". Merging once CI is green on `54c6f1248d`.
   created_at: 2026-09-29T20:33:36.401734265Z
   modified_at: 2026-09-29T20:33:36.401734265Z
+  session_id: d4e8bbc4-1b41-4770-9f54-8111cb1b7383
+- id: 01a0eee8-8572-79e1-b6f8-59cffc0a25e1
+  author: joe
+  content: |
+    ## ⛔ New merge blocker on `54c6f1248d` — `nested_freshen_in_lock_holder_does_not_wait`
+
+    CI run `36626825833` failed. **Not** the migration flake fixed last session — that one is
+    confirmed gone (run `36622604224` was green on `1f4c570b0c`). This is a different test, and
+    it matters more than a flake normally would:
+
+    ```
+    aida-core/src/db/cache_refresh.rs:427:9
+    assertion failed: RefreshLock::try_acquire(&path).unwrap().is_some()
+    aida-core --lib: 1282 passed; 1 failed
+    ```
+
+    ### Why this one blocks rather than gets re-run
+
+    `aida-core/src/db/cache_refresh.rs` **does not exist on `main`** — `RefreshLock` and this test
+    are both introduced by this PR. So this is not a pre-existing flake inherited from the trunk;
+    it is the PR's own new locking primitive failing its own test on a contended runner. An earlier
+    handoff had this test on a do-not-touch list because its CI log was no longer retrievable. It
+    is retrievable now, so that condition is met.
+
+    ### Diagnosis so far — the search space is already narrow
+
+    `try_acquire` returns `Ok(None)` from exactly two places:
+
+    1. **the registry branch** — an entry exists at this key owned by another thread; or
+    2. **the flock branch** — `try_lock_exclusive` returned an error `is_lock_contended` accepts.
+
+    **Source 1 is unreachable in this test.** Every step is sequenced by `join()`; the only entry
+    ever created at this key is owned by the main thread, and `drop(inner)` takes `depth` to 0 and
+    removes it. Had the entry somehow survived, the final `try_acquire` would have matched
+    `existing.owner == owner` and returned `Some` (nested) — the assertion would have **passed**.
+    So the entry was genuinely gone and control reached the flock.
+
+    **Source 2 is not a misclassification.** `is_lock_contended` accepts only `WouldBlock` or an
+    exact raw-OS match with `fs2::lock_contended_error()`. An `EINTR` would have propagated as
+    `Err` and panicked on `.unwrap()` with a different message, not this assertion.
+
+    That leaves: **`flock` reported EWOULDBLOCK on a file whose only ever flocked open-file
+    description had just been closed.** That is either a real defect in the `RefreshLock`
+    registry/descriptor lifecycle under contention, or something holding a second description we
+    have not accounted for — and either way it is a property of new production code, not of the
+    test harness.
+
+    Eliminated already, so nobody repeats them:
+    - **Cross-test key collision:** ruled out. `cache_sidecar_path` -> `shared_cache_path` returns
+      the path unchanged when it is not a symlink, so the sidecar is `<tempdir>/cache.db.refresh.lock`,
+      unique per test. Concurrent cache tests cannot touch this inode.
+    - **Ambient-load reproduction:** ruled out as a strategy. 120 consecutive local runs of the whole
+      `cache_refresh::` module at `--test-threads=8` were clean, 0 failures — the same signature the
+      migration flake had.
+
+    ### Recommended next step
+
+    Do not re-run CI until green and merge. Follow the method that cracked the last one: **inject the
+    contention deliberately** rather than hunting for it — hold a second open description's flock on
+    the sidecar across the final `try_acquire` and see whether the observed panic reproduces
+    byte-identically. If it does, the question becomes why a closed description's lock is still
+    visible, which points at the descriptor lifetime in `HeldLock`.
+
+    The carrier fix and both independent review rounds above stand unaffected; this is a separate
+    defect in the same PR.
+  created_at: 2026-09-29T20:43:31.058252734Z
+  modified_at: 2026-09-29T20:43:31.058252734Z
   session_id: d4e8bbc4-1b41-4770-9f54-8111cb1b7383
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
