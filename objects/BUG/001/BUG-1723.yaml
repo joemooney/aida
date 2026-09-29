@@ -1,0 +1,65 @@
+id: 01a0ebc5-b847-7cf3-abb6-e02e527d2322
+spec_id: BUG-1723
+agreed_id: BUG-1723
+title: 'Decide whether .aida/config.toml is trusted configuration: it is worktree-resident and committable like session-env.sh, which BUG-1624 treats as untrusted'
+description: |
+  Raised by the advisor on 2026-09-28 while writing the TASK-1499 / BUG-1679 rework brief from the
+  operator's AIDA_BIN precedence decision. Deliberately kept OUT of that rework's scope so it gets its
+  own decision rather than riding in on a resolver fix.
+
+  THE INCONSISTENCY
+
+  BUG-1624 / BUG-1627 established a clear doctrine for `.aida/session-env.sh`: the file lives in the
+  worktree, a branch can commit its own copy, therefore its contents are UNTRUSTED. `trusted_session_env`
+  (aida-cli-lib/src/lib.rs:41976) allowlists exactly three names (`SESSION_ENV_NAMES`, lib.rs:41968) and
+  for `AIDA_BIN` specifically it never takes the file's value at all — the pin is replaced by the running
+  executable, or dropped.
+
+  `.aida/config.toml` is in the SAME worktree and is committable by the same branch, but it is read as
+  TRUSTED configuration. `agent_registry::Config::load` (agent_registry.rs:309) reads it directly, and
+  other subsystems do the same.
+
+  Today that asymmetry is mostly harmless because the keys read from config.toml are policy numbers
+  (`busy_threshold_secs`, `singleton_roles`). It stops being harmless the moment config.toml is allowed
+  to name an EXECUTABLE or a PATH. The AIDA_BIN precedence decision of 2026-09-28 lists
+  "on-disk `.aida/config.toml` override" as ranking above the running executable — which, if implemented
+  as written, would hand a committed file exactly the authority BUG-1624 spent a bug denying it.
+
+  THE QUESTION
+
+  Is `.aida/config.toml` trusted configuration, or is it worktree-resident and therefore untrusted in the
+  same sense `session-env.sh` is? If it is trusted, what makes it trusted when a sibling file in the same
+  directory is not — is it that config.toml is expected to be reviewed, or that it is gitignored in
+  practice, or nothing but history?
+
+  WHY IT MATTERS BEYOND AIDA_BIN
+
+  This is the general rule for "may a repository file influence how AIDA launches processes". A decision
+  here covers config.toml, the discipline pack, and any future file-sourced launch policy, instead of
+  being re-litigated per key.
+
+  SUGGESTED DISPOSITION (advisor, not a decision)
+
+  Split the config surface by consequence rather than by file: values that only tune POLICY (timeouts,
+  thresholds, role lists) may come from the worktree file; values that select an EXECUTABLE, a PATH, or a
+  credential may not, and must come from the running binary or from a location outside the worktree. That
+  keeps config.toml useful without making it a launch-authority channel, and it gives a reviewer one
+  question to ask of any new key.
+
+  Verified while filing: no executable-selecting key is read from config.toml today, so this is
+  preventive, not a live breach.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-29T06:06:38.663034493Z
+modified_at: 2026-09-29T06:06:38.663034493Z
+req_type: Bug
+filed_at:
+  code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 0c3ef5cb6b
+  vendor: antigravity
+  session: a1b56cce-0ca3-42c2-8ccf-ff605a280cc4
