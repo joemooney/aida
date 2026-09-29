@@ -1628,26 +1628,44 @@ fn classify_status(
 }
 
 // trace:BUG-1704 | ai:codex
-fn seat_has_own_work(tree: &ProcTree, seat_pid: u32, idle_secs: i64, grace_secs: u64) -> bool {
+fn seat_has_own_work(
+    tree: &ProcTree,
+    seat_pid: u32,
+    secs_since_heartbeat: i64,
+    grace_secs: u64,
+) -> bool {
     // If a heartbeat lands during a long build, the heartbeat can move past build start and
     // clause 2 can exclude that build. Tool calls are sequential, so this is accepted in practice.
     let Some(ages) = tree.descendant_ages(seat_pid) else {
         return true;
     };
-    if idle_secs <= grace_secs.min(i64::MAX as u64) as i64 {
+    if secs_since_heartbeat <= grace_secs.min(i64::MAX as u64) as i64 {
         return true;
     }
-    ages_show_work(&ages, idle_secs, grace_secs.min(i64::MAX as u64) as i64)
+    ages_show_work(
+        &ages,
+        secs_since_heartbeat,
+        grace_secs.min(i64::MAX as u64) as i64,
+    )
 }
 
 // trace:BUG-1704 | ai:codex
-fn ages_show_work(descendant_ages: &[i64], idle_secs: i64, grace_secs: i64) -> bool {
-    if idle_secs <= grace_secs {
+fn ages_show_work(descendant_ages: &[i64], secs_since_heartbeat: i64, grace_secs: i64) -> bool {
+    if secs_since_heartbeat <= grace_secs {
         return false;
     }
     descendant_ages
         .iter()
-        .any(|age| *age >= grace_secs && *age < idle_secs)
+        // The grace bound excludes momentary statusline/hook children.
+        // Without it, a finished seat can flap Busy on those short-lived processes.
+        // The upper bound is not a threshold on the child's age.
+        // `age < secs_since_heartbeat` means `(now - child_start) < (now - heartbeat)`.
+        // Cancel `now` on both sides and it becomes `child_start > heartbeat`.
+        // That asks whether the child started after this seat's last heartbeat.
+        // Time passing cannot change that ordering, so a long-running build stays Busy.
+        // This holds while it runs provided no heartbeat landed after it started.
+        // A later heartbeat can exclude it; that is BUG-1726.
+        .any(|age| *age >= grace_secs && *age < secs_since_heartbeat)
 }
 
 /// Accumulated CPU seconds for `pid`, via `ps -o time=`.
@@ -2625,6 +2643,24 @@ mod tests {
     fn ages_show_work_is_false_when_grace_window_is_empty() {
         assert!(!ages_show_work(&[7], 10, 10));
         assert!(!ages_show_work(&[7], 5, 10));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn ages_show_work_is_time_invariant_for_a_child_started_after_the_heartbeat() {
+        for (secs_since_heartbeat, age) in [
+            (120, 110),
+            (1_200, 1_190),
+            (36_000, 35_990),
+            (360_000, 359_990),
+        ] {
+            assert!(ages_show_work(&[age], secs_since_heartbeat, 10));
+        }
+
+        // This is BUG-1726's shape: heartbeat after child start excludes it, intentionally.
+        for (secs_since_heartbeat, age) in [(600, 601), (36_000, 36_001)] {
+            assert!(!ages_show_work(&[age], secs_since_heartbeat, 10));
+        }
     }
 
     // trace:BUG-1704 | ai:codex
