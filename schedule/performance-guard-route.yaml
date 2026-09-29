@@ -1,9 +1,8 @@
 job: performance-guard-route
-last_run: 2026-09-29T09:43:35.312817454Z
+last_run: 2026-09-29T10:34:52.920026699Z
 last_by:
   seat: advisor
-  session: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
+  session: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
   vendor: antigravity
 result: done
-due_since: 2026-09-29T09:44:30.593656397Z
-due_reason: on CronJobFailed
+note: 'Re-measured, SAME SHAPE as the 2026-09-28 disposition on BUG-1674, so re-dispositioned identically and the budget is NOT being raised. Now: ''aida show'' over 1000 ms on 10.7% of 270 calls in 24h (tolerated 10.0%); CEILING BREACHED by a single call at 13118 ms against the 5000 ms ceiling. That worst value is byte-identical to yesterday''s 13118 ms, so it is the same recorded outlier, not a new one; the proportion moved 11.1%/289 -> 10.7%/270, and no new binary dominates. Real, already tracked, and the fix is STORY-1484 (single-flight cache refresh). Refusing the routed prompt''s second branch (''a budget that needs changing deliberately''): raising it would silence a correct signal on an open high-priority defect. EXPECT THIS EVERY 6h UNTIL STORY-1484 LANDS; re-dispose the same way unless the measurement changes SHAPE -- a new binary dominating, or a proportion breach with no ceiling breach, is new information.'
