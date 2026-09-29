@@ -1,0 +1,71 @@
+id: 01a0ec29-e5e8-71a0-8887-b980e5d9f5e3
+spec_id: BUG-1724
+agreed_id: BUG-1724
+title: AIDA_BIN attribution does not survive the exporting aida's exit, so an older binary can still win BUG-766's race from an outlived shell
+description: |
+  Found by an independent codex review of PR #2261 (TASK-1499) on 2026-09-29 and UPHELD by the
+  advisor. Filed as draft for triage, not as a defect in TASK-1499 — TASK-1499 implements the
+  2026-09-28 operator decision correctly; this is the residual gap that decision leaves behind, and it
+  deserves its own disposition rather than being buried in a code comment.
+
+  BACKGROUND
+  TASK-1499 narrowed `AIDA_BIN`: it is honored only when a live `aida` process is in the current
+  process's ancestor chain, so an ambient value can no longer redirect the coordinating binary. The
+  justification claimed this preserved BUG-766's guarantee in full, because "an older AIDA invoked by
+  absolute path inside a managed tree has a live AIDA ancestor". That claim is too strong.
+
+  THE GAP
+  A worktree is not a process ancestor. A shell can hold the coordinating `AIDA_BIN` in its
+  environment while the `aida` process that exported it has already EXITED — `export_coordinating_bin_env`
+  sets the variable for children, and a child shell outlives its parent. From such a shell:
+
+    1. invoke an OLDER `aida` by absolute path;
+    2. the ancestor walk finds no live `aida`, so the inherited override is DECLINED;
+    3. the older binary resolves to its own `current_exe` and prepends ITS directory to PATH;
+    4. its children now resolve a bare `aida` to the OLD binary.
+
+  That is the harm BUG-766 exists to prevent ("an old installed binary can win over the coordinating
+  build and run pre-guard bulk store saves"). Before TASK-1499 the inherited `AIDA_BIN` covered this
+  case unconditionally; now it is covered only when the exporting AIDA is still alive.
+
+  HOW MUCH THIS MATTERS
+  Probably little in the fleet: AIDA supervises the seats it spawns, so the coordinating process is
+  normally still live for the lifetime of its children, and that is the common path. The exposure is
+  detached or outlived sessions, and hand-run shells that kept the variable. It is a narrowing of a
+  guarantee, not a new failure mode, and nothing observed has hit it.
+
+  WHY IT IS NOT SIMPLY REVERTED
+  The ancestor check is what the 2026-09-28 operator decision asked for, and the alternative — honoring
+  any ambient `AIDA_BIN` — is the bug TASK-1499 fixed. A process-tree fact is unforgeable by a
+  committed file; an environment variable is not. Any fix has to find attribution that survives the
+  parent's exit WITHOUT trusting a worktree-resident file, which is the same constraint that ruled out
+  a companion marker env var (it would have had to join `SESSION_ENV_NAMES`, the allowlist BUG-1624 and
+  BUG-1627 exist to keep narrow).
+
+  POSSIBLE DISPOSITIONS, for triage
+    a. ACCEPT and document. Cheapest; the code comment now states the limitation honestly. Probably
+       right unless someone is actually bitten.
+    b. Strengthen the PATH prepend so the coordinating directory stays ahead of an older binary's own
+       directory even when that binary re-prepends. Attacks step 3 rather than the attribution.
+    c. Find attribution that outlives the parent — e.g. the override carrying the exporting binary's
+       own identity so a receiver can validate it against the file on disk rather than against a live
+       pid. Needs design; must not reintroduce a forgeable token.
+
+  Relates to BUG-1723 (`.aida/config.toml` read as trusted while its sibling `.aida/session-env.sh` is
+  treated as untrusted), which is the other open question about where AIDA is willing to take
+  executable-selecting input from.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-29T07:56:03.944682691Z
+modified_at: 2026-09-29T07:56:03.944682691Z
+req_type: Bug
+filed_at:
+  code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 0c3ef5cb6b
+  vendor: antigravity
+  session: d3b4d739-0433-404d-b8de-30f658d731a8
