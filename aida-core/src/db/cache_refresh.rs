@@ -94,6 +94,37 @@ impl RefreshLock {
             .is_some_and(|held| held.owner == std::thread::current().id())
     }
 
+    /// `try_acquire` returns `Ok(None)` from exactly two places: an existing
+    /// registry entry owned by another thread, or a contended `flock`. A bare
+    /// `assert!(..is_some())` discards which one, so a rare CI-only failure
+    /// arrives with no way to tell a descriptor-lifecycle defect from an
+    /// unrelated holder. Report both, and the errno, at the point of failure.
+    // trace:TASK-1526 | ai:claude
+    #[cfg(test)]
+    pub(super) fn diagnose_unavailable(cache_path: &Path) -> String {
+        let path = super::cache_lock::cache_sidecar_path(cache_path, "refresh.lock");
+        let key = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+        let registry = HELD
+            .get_or_init(Default::default)
+            .lock()
+            .unwrap()
+            .get(&key)
+            .map(|held| format!("owner={:?} depth={}", held.owner, held.depth));
+        // A successful probe releases on close at the end of this statement.
+        let probe = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .and_then(|file| fs2::FileExt::try_lock_exclusive(&file));
+        format!(
+            "sidecar={path:?} current_thread={:?} registry_entry={registry:?} direct_flock={:?}",
+            std::thread::current().id(),
+            probe.as_ref().err().map(|e| (e.kind(), e.raw_os_error())),
+        )
+    }
+
     pub fn is_nested(&self) -> bool {
         self.nested
     }
@@ -424,7 +455,11 @@ mod tests {
                 .unwrap()
         );
         drop(inner);
-        assert!(RefreshLock::try_acquire(&path).unwrap().is_some());
+        assert!(
+            RefreshLock::try_acquire(&path).unwrap().is_some(),
+            "re-acquire after the last guard dropped returned None; {}",
+            RefreshLock::diagnose_unavailable(&path)
+        );
     }
 
     // trace:TASK-1526 | ai:codex
