@@ -228,6 +228,7 @@ def unix_guarded_regions(masked: str, source: str) -> list[tuple[int, int]]:
     stack: list[list] = []
     pending_start: int | None = None
     paren_depth = 0
+    bracket_depth = 0
     last_delimiter = -1
     index = 0
     while index < length:
@@ -272,6 +273,10 @@ def unix_guarded_regions(masked: str, source: str) -> list[tuple[int, int]]:
             paren_depth += 1
         elif char == ")":
             paren_depth = max(0, paren_depth - 1)
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]":
+            bracket_depth = max(0, bracket_depth - 1)
         elif char == "{":
             header = masked[last_delimiter + 1 : index]
             stack.append([index, pending_start, bool(_COMMA_SEPARATED_BODY.search(header))])
@@ -299,7 +304,10 @@ def unix_guarded_regions(masked: str, source: str) -> list[tuple[int, int]]:
                 # Windows just as a guarded item is.
                 regions.append((pending_start, index + 1))
             pending_start = None
-            if char == ";":
+            if char == ";" and bracket_depth == 0:
+                # A `;` inside brackets belongs to an array type such as
+                # `[u8; 4]`, not to an item, so it must not move the window the
+                # header below is read from.
                 last_delimiter = index
         index += 1
     return regions
@@ -549,6 +557,39 @@ class ExecutableFixtureRatchetTests(unittest.TestCase):
         for shape, source in shapes.items():
             with self.subTest(shape=shape):
                 self.assertTrue(unix_only_api_violations(source), shape)
+
+    def test_comma_body_header_survives_a_semicolon_inside_brackets(self):
+        # `[u8; 4]` in a generic default carries a `;` that is not an item
+        # boundary. Treating it as one loses the `struct` header, and with it
+        # the comma rule for every field in the body.
+        source = (
+            "struct S<T = [u8; 4]> {\n"
+            "#[cfg(unix)]\n"
+            "f: std::os::unix::fs::MetadataExt,\n"
+            "g: std::os::unix::fs::PermissionsExt,\n"
+            "}\n"
+        )
+        self.assertEqual(
+            [4],
+            [int(entry.split()[1].rstrip(":")) for entry in unix_only_api_violations(source)],
+        )
+
+    def test_comma_body_header_is_not_fooled_by_nearby_words(self):
+        # The header is matched on whole words over masked text, so an identifier
+        # containing a keyword, and a keyword inside a comment or a string, are
+        # all ignored.
+        body = "    use std::os::unix::fs::MetadataExt;\n"
+        shapes = {
+            "type named MyStruct": "#[cfg(unix)]\nfn f() -> MyStruct {\n" + body + "}\n",
+            "fn named parse_struct": "#[cfg(unix)]\nfn parse_struct<A, B>() {\n" + body + "}\n",
+            "impl Trait for S": "#[cfg(unix)]\nimpl Trait for S {\nfn f<A, B>() {\n" + body + "}\n}\n",
+            "doc comment says struct": "/// a struct, with a comma\n#[cfg(unix)]\nfn f<A, B>() {\n" + body + "}\n",
+            "attribute string says match": '#[serde(rename = "match")]\n#[cfg(unix)]\nfn f<A, B>() {\n' + body + "}\n",
+            "unrelated earlier match": "fn pre() { let y = match x { A => 1, B => 2 }; }\n#[cfg(unix)]\nfn f<A, B>() {\n" + body + "}\n",
+        }
+        for shape, source in shapes.items():
+            with self.subTest(shape=shape):
+                self.assertEqual([], unix_only_api_violations(source), shape)
 
     def test_checker_rejects_a_future_local_fake_gh_copy(self):
         bad = """fn fake_gh(path: &Path, body: &str) {\n std::fs::write(path, body).unwrap();\n chmod(path, 0o755);\n }"""
