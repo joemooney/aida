@@ -90,7 +90,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T16:23:51.096694327Z
-modified_at: 2026-09-29T16:36:38.616301502Z
+modified_at: 2026-09-29T17:17:36.126591070Z
 req_type: Task
 comments:
 - id: 01a0edfb-be42-7d43-a3a4-7f64e90c6355
@@ -126,6 +126,88 @@ comments:
   created_at: 2026-09-29T16:24:53.570814300Z
   modified_at: 2026-09-29T16:24:53.570814300Z
   session_id: 4c4c542f-a855-4b9f-91c7-9e339ae88796
+- id: 01a0ee2b-fffe-7451-86b4-15656e652bf9
+  author: joe
+  content: |
+    ## Implemented — same-thread reentrance is now a panic, not a hang
+
+    Took the **preferred** design from the spec (thread-ownership tracking), not the
+    `try_lock`+timeout fallback. Exact, no timeout to tune, no false positives.
+
+    ### Design
+
+    A process-unique monotonic token per thread (`ThreadId::as_u64` is still unstable, so
+    the module mints its own; tokens are never reused, so a finished thread's token can
+    never be mistaken for a live one) plus an `AtomicU64` holding the current owner, 0 when
+    unheld. `env_lock()` compares before blocking; a *different* token is ordinary
+    contention and falls through to block.
+
+    `env_lock()` now returns a new `EnvLockGuard` newtype instead of a bare
+    `MutexGuard<'static, ()>`. Its `Drop` runs **before** its fields drop, so ownership is
+    cleared while the mutex is still held — a waiter that acquires next can never observe a
+    stale owner. It also runs on unwind, which is what AC5 needs.
+
+    Lock-free, so there is no second mutex to poison.
+
+    ### The part that wasn't in the spec but AC2 required
+
+    `aida-cli-lib`'s guards did **not** go through `env_lock()`. All five constructors
+    (`EnvVarGuard::set`/`unset`, `EnvVarsGuard::apply`/`snapshot`, and `prepend_path`)
+    locked `ENV_LOCK` directly, so a tripwire placed only in `env_lock()` would have missed
+    the exact shape that caused the TASK-1532 defect. Routed all five through `env_lock()`.
+    `aida-core` already delegated, so it needed no such change.
+
+    ### Acceptance
+
+    | AC | Evidence |
+    |---|---|
+    | 1 nested `env_lock()` panics | `nested_env_lock_panics_instead_of_deadlocking` (both crates) |
+    | 2 guard inside a lock scope panics | `env_var_guard_inside_env_lock_scope_panics` + `env_vars_guard_inside_env_lock_scope_panics` (both crates) |
+    | 3 cross-thread contention still works | `sequential_and_cross_thread_acquisition_still_work` |
+    | 4 sequential + cross-thread handoff | same test |
+    | 5 poison / unwind clears ownership | `env_lock_ownership_is_cleared_when_a_holder_panics` (new, both crates) + the pre-existing `core_env_guard_restores_and_survives_poison`, which already exercised this exactly: it `catch_unwind`s a panicking holder and then re-acquires **on the same thread**, so it would fail if unwind left ownership behind |
+    | 6 mutation proof | below |
+    | 7 suites green, no new warnings | below |
+
+    ### AC6 — mutation proof, same method both ways
+
+    Re-introduced the removed `let _env = test_env::env_lock();` in `publish_fixture_receipt`
+    (`real_phase_driver_wiring_tests.rs`), which is the line TASK-1532 removed. Both runs
+    executed the **already-built** test binary directly, so no compile time is folded into
+    the measurement — the earlier `cargo test` attempt at this was ambiguous for exactly
+    that reason.
+
+    - **Before** (tripwire disabled, mutation present): `timeout 90 <bin> discover_lease_recovers`
+      → **exit 124, no output, 90s of pure run time.** It hangs.
+    - **After** (tripwire active, same mutation): same command → **exit 101 in 0.13s**, both
+      `discover_lease_recovers_*` tests failing with the named invariant.
+
+    Mutation reverted afterwards; it is not in the diff.
+
+    ### AC7 — suites and warnings
+
+    - `cargo test -p aida-core --lib` → `1252 passed; 0 failed; 2 ignored; 0 filtered out`
+    - `cargo test -p aida-cli-lib --lib` → `7353 passed; 0 failed; 2 ignored; 0 filtered out` (7348 + the 5 new tests)
+    - Counts reconcile: core was 1247 passed + 2 ignored, now 1252 + 2 — exactly the 5 new
+      tests, nothing removed or `#[ignore]`d. Same for cli-lib.
+    - `cargo clippy -p aida-cli-lib -p aida-core --lib --tests` introduces nothing new. The
+      one lint that points at a touched file, `items after a test module`
+      (`aida-cli-lib/src/test_env.rs`), pre-exists: `scan_raw_env_writes_in_dir` and two
+      brace-matching helpers already sat after `mod tests` on the base commit. My change
+      only shifted its line number.
+    - `cargo fmt --all -- --check` and `scripts/check-portability.sh` clean.
+
+    ### Note on scope
+
+    The sweep on TASK-1532 found **zero** current offenders, so this is purely preventive —
+    it buys nothing today and exists so the next instance of this defect costs one panic
+    message instead of a 25-minute suite run. Out-of-scope items in the spec (static scope
+    analysis in the lint; making the lock reentrant) were not touched.
+
+    **PR:** #2282 (branch `task-1559`, commit `350bd89864`).
+  created_at: 2026-09-29T17:17:36.126591070Z
+  modified_at: 2026-09-29T17:17:36.126591070Z
+  session_id: b5bd2112-9788-4ee2-ab0a-6bec4330385c
 history:
 - id: 01a0edfb-869d-7ce0-abd4-8c5eec2cb08d
   author: joe
