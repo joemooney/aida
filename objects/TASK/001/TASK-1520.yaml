@@ -2,13 +2,69 @@ id: 01a0de72-c8ae-75c3-9dcc-7e3625b62f01
 spec_id: TASK-1520
 agreed_id: TASK-1520
 title: 'Dev repo: make sync-templates/check-templates manage .agents/skills as regular-file copies with a drift check, plus the remaining docs'
-description: Child of BUG-1639 (advisor signoff child B). A new script copies the template skills into .agents/skills as regular files (Codex ignores symlinked SKILL.md) and checks byte drift; wire it into make sync-templates/check-templates; finish the docs listed in the signoff. Commits use only this task's ID.
+description: |
+  Child of BUG-1639 (advisor signoff child B). A new script copies the template skills into .agents/skills as regular files (Codex ignores symlinked SKILL.md) and checks byte drift; wire it into make sync-templates/check-templates; finish the docs listed in the signoff. Commits use only this task's ID.
+
+  ## Acceptance
+
+  1. **`make sync-templates` writes `.agents/skills/aida-<name>/SKILL.md` as REGULAR FILES.**
+     No symlinks and no hard links — Codex silently skips a symlinked `SKILL.md` (BUG-1639's
+     discovery matrix, Codex 0.157.0). Folder-form skills also get their helper files copied under
+     the same directory, at the same sub-paths the scaffolder uses.
+
+  2. **The skill set is DERIVED, not hand-listed.** The set is
+     `aida-core/templates/skills/*.md` (plus folder-form `skills/*/`), restricted to the `aida-`
+     prefix, minus every `name` under `claude_only` and `not_a_skill` in
+     `aida-core/templates/skill-inventory.toml`. `skills-portable/<name>.md` wins over the master
+     when it exists. This mirrors `scaffolding::inventory::portable_skill_inventory`, and the
+     inventory file is TOML precisely so a shell target can read it.
+
+  3. **The bytes equal what the scaffolder writes.** For every synced skill, the file content is
+     byte-identical to `aida_core::scaffolding::rendered_pack_skill(".agents/skills", name)` — the
+     AIDA-Generated header included. That function is the ORACLE; do not transcribe the header
+     format into the Makefile by hand, and do not invent a headerless dev-repo variant. A headerless
+     copy would make `aida scaffold refresh` and `make sync-templates` overwrite each other forever,
+     and would read as drift to `scaffold status` and `aida doctor`.
+
+  4. **`make check-templates` fails on ANY byte drift** in `.agents/skills/aida-*/**`, naming each
+     drifted path and telling the operator to run `make sync-templates`. It also fails on an
+     `aida-*` SKILL.md that is a symlink. It is a NO-OP (not a failure) when `.agents/skills` does
+     not exist at all: `.agents/` is gitignored in this repo, so a fresh clone and CI legitimately
+     have no pack.
+
+  5. **Only `aida-*` entries are managed.** `sync-templates` and `check-templates` never create,
+     modify, delete or report a non-`aida-` directory under `.agents/skills` — third-party skills
+     there are the operator's local choice. Verified by leaving a non-aida skill directory in place
+     across a sync and asserting it is byte-identical afterwards.
+
+  6. **No dependency on an installed `aida` binary.** The targets derive everything from the WORKING
+     TREE under `aida-core/templates/`. Shelling out to `aida` would sync from that binary's
+     EMBEDDED templates — i.e. from whatever was last built — so a template edit would appear to
+     sync while silently writing the previous revision. This is the same reason the `.claude/` side
+     symlinks into the working tree.
+
+  7. **Docs.** `docs/agents/seat-parity.md` and `docs/agents/porting-claude-code-to-codex.md` record
+     the discovery matrix WITH the vendor versions it was measured against (Codex 0.157.0,
+     Antigravity 1.2.11) and state that `.agents/skills/<name>/SKILL.md` is the canonical non-Claude
+     pack and must be a regular file. BUG-1117's claim that the pack lives in `.codex/skills` is
+     corrected wherever it appears.
+
+  8. **A test guards the wiring**, so the two targets cannot drift apart: on a fixture tree, a sync
+     followed by a check passes, and mutating one synced byte makes the check fail.
+
+  ## Out of scope
+
+  - The `aida doctor` symlink warning for `.agents/skills/*/SKILL.md` — that is TASK-1519's, already
+    Completed. AC 4's symlink check here is the dev-repo `make` surface, not doctor.
+  - The "single-location" layout where `.claude/skills/aida-X/SKILL.md` becomes a symlink into
+    `.agents/skills`. BUG-1639 explicitly deferred it; `.claude/skills` is unchanged.
+  - Tracking `.agents/` in git. It stays gitignored in this repo.
 status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:00:59.566482093Z
-modified_at: 2026-09-28T15:51:07.321211368Z
+modified_at: 2026-09-29T02:47:33.932051179Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
