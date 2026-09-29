@@ -37,6 +37,13 @@ const DEFAULT_EXPECTED_SECS: u64 = 120;
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 pub struct CacheLockInfo {
     pub pid: u32,
+    // trace:TASK-1526 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hostname: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boot_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid_ns: Option<String>,
     #[serde(default)]
     pub command: String,
     #[serde(default)]
@@ -99,6 +106,9 @@ impl CacheLockInfo {
         let now_s = now.to_rfc3339();
         Self {
             pid,
+            hostname: std::env::var("HOSTNAME").ok(),
+            boot_id: local_boot_id(),
+            pid_ns: local_pid_ns(),
             command: std::env::args().collect::<Vec<_>>().join(" "),
             started_at: now_s.clone(),
             user: current_user(),
@@ -190,12 +200,54 @@ impl LockOwnerState {
 /// Classify the recorded owner of `info`.
 // trace:TASK-1484 | ai:claude
 pub fn classify_lock_owner(info: &CacheLockInfo) -> LockOwnerState {
+    // Identity must be checked before even probing PID liveness: the PID may
+    // belong to an entirely different machine or namespace. Hostname is display only.
+    // trace:TASK-1526 | ai:codex
+    if identity_differs(info.boot_id.as_deref(), local_boot_id().as_deref())
+        || identity_differs(info.pid_ns.as_deref(), local_pid_ns().as_deref())
+    {
+        return LockOwnerState::Unknown;
+    }
     classify_lock_owner_with(
         info,
         std::process::id(),
         crate::liveness::pid_is_alive,
         live_start_identity,
     )
+}
+
+// trace:TASK-1526 | ai:codex
+fn identity_differs(recorded: Option<&str>, local: Option<&str>) -> bool {
+    recorded.is_some_and(|recorded| Some(recorded) != local)
+}
+
+// trace:TASK-1526 | ai:codex
+fn local_boot_id() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
+            .ok()
+            .map(|s| s.trim().to_string())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+// trace:TASK-1526 | ai:codex
+fn local_pid_ns() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata("/proc/self/ns/pid")
+            .ok()
+            .map(|m| m.ino().to_string())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
 }
 
 /// Pure classifier with injected probes (the fixtures in the tests drive it).
@@ -449,10 +501,9 @@ pub fn observe_lock_info_file(path: &Path) -> Result<Option<CacheLockObservation
 }
 
 /// True when the cache write-lock is held by a DIFFERENT process that is not
-/// provably dead. Read paths consult this so they serve the last-good snapshot
-/// instead of contending through the retry ladder (BUG-664). This process's
-/// own record and a dead owner's record (crashed writer, or a reused PID)
-/// return false, so a stale sidecar never wedges readers.
+/// provably dead, according to the diagnostic sidecar. This is not evidence
+/// that a refresh is running and must never authorize stale serving. This
+/// process's own record and a dead owner's record return false.
 // trace:BUG-664 trace:TASK-1484 | ai:claude
 #[cfg(test)]
 pub fn foreign_writer_holds_lock(cache_path: &Path) -> bool {
@@ -749,6 +800,38 @@ mod tests {
             kind: Some(CACHE_WRITE_LOCK_KIND.to_string()),
             ..Default::default()
         }
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn lock_info_foreign_host_is_unknown_and_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cache.db.lock-info");
+        let info = CacheLockInfo {
+            pid: u32::MAX,
+            boot_id: Some("another-boot".into()),
+            ..Default::default()
+        };
+        std::fs::write(&path, serde_json::to_vec(&info).unwrap()).unwrap();
+        assert_eq!(classify_lock_owner(&info), LockOwnerState::Unknown);
+        clear_dead_owner_lock_info_at(&path);
+        assert!(path.exists());
+    }
+
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn lock_info_foreign_pidns_is_unknown_and_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cache.db.lock-info");
+        let info = CacheLockInfo {
+            pid: u32::MAX,
+            pid_ns: Some("another-namespace".into()),
+            ..Default::default()
+        };
+        std::fs::write(&path, serde_json::to_vec(&info).unwrap()).unwrap();
+        assert_eq!(classify_lock_owner(&info), LockOwnerState::Unknown);
+        clear_dead_owner_lock_info_at(&path);
+        assert!(path.exists());
     }
 
     // Probes: OTHER and 1000 are alive; OTHER's live identity is `ticks:100`.
