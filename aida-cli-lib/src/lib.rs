@@ -57617,11 +57617,15 @@ fn handle_burndown_run(
     // already owns these specs and refuse to fan out. The lock we just acquired
     // already guarantees exclusivity (BUG-538), so a dead-pid drain-state is a
     // pure stale tombstone — clear it before launching. trace:BUG-607 | ai:claude
-    if let crate::drain_state::DrainStatus::Stale(_) = crate::drain_state::probe(&project_root) {
+    if let status @ (crate::drain_state::DrainStatus::Stale(_)
+    | crate::drain_state::DrainStatus::Stopped(_)) = crate::drain_state::probe(&project_root)
+    {
         let _ = crate::drain_state::DrainState::clear(&project_root);
+        let stopped = matches!(status, crate::drain_state::DrainStatus::Stopped(_));
         println!(
-            "  {} cleared a stale drain-state (its orchestrator is no longer running)",
-            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+            "  {} cleared a {} drain-state (its orchestrator is no longer running)",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            if stopped { "stopped" } else { "stale" }
         );
     }
 
@@ -87594,7 +87598,9 @@ fn collect_pr_attribution_disagreements(
 ) -> Vec<awaiting_you::PrAttributionDisagreementItem> {
     let state = match drain_state::probe(project_root) {
         drain_state::DrainStatus::Active(state) => state,
-        drain_state::DrainStatus::None | drain_state::DrainStatus::Stale(_) => return Vec::new(),
+        drain_state::DrainStatus::None
+        | drain_state::DrainStatus::Stale(_)
+        | drain_state::DrainStatus::Stopped(_) => return Vec::new(),
     };
     let Some(default_ref) = resolve_default_branch_ref(project_root) else {
         return Vec::new();

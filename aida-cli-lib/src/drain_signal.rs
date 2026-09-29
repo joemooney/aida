@@ -17,10 +17,25 @@
 //!
 //! 1. writes the cooperative stop request (`aida drain stop` shape, mode
 //!    `sigterm`) so the dispatch loop picks up no further head;
-//! 2. stamps `interrupted_at` / `interrupted_reason = "sigterm"` on every
+//! 2. forwards SIGTERM to every in-flight vendor child this drain launched
+//!    (TASK-1542) — the `active_pid` of each lease it created, and only when
+//!    that pid's recorded kernel start identity still matches, so a pid
+//!    recycled since the lease was written can never be signalled;
+//! 3. stamps `interrupted_at` / `interrupted_reason = "sigterm"` on every
 //!    lease this drain created (`creator_pid` == the drain pid) — an
 //!    *interrupted* lease, not an abandoned one, so `aida ps` and the reaper
-//!    can tell a stopped wave from a crashed one.
+//!    can tell a stopped wave from a crashed one;
+//! 4. records `stopped_at` / `stopped_reason` on `.aida/drain-state.json`
+//!    (TASK-1542), so once this process is gone `aida drain status` reports a
+//!    *stopped* drain rather than the *stale* one a crash would leave. The
+//!    record is re-stamped just before the forced exit, because a phase write
+//!    during the grace window persists a state value read before the first
+//!    stamp and would otherwise drop it.
+//!
+//! The vendor children get the signal and then the SAME grace window the drain
+//! itself gets — there is no second timer, and no SIGKILL escalation: a child
+//! that outlives the window is reparented and reaped by the next tick exactly
+//! as it was before TASK-1542.
 //!
 //! It then waits up to a grace window for the drain to finish on its own
 //! (the in-flight phase may land, and the batch loop then returns through
@@ -36,9 +51,11 @@
 //! the exit, which is why it sits inside the grace budget.
 //!
 //! A drain whose lock is BORROWED (an internal child drive under
-//! `AIDA_DRAIN_BORROW`) still stamps its own leases but writes no stop
-//! request: the request file is shared with the parent wave, and a manual
-//! kill of one child must not stop the whole wave.
+//! `AIDA_DRAIN_BORROW`) still stamps its own leases and still signals its own
+//! children, but writes neither the stop request nor the stopped record: both
+//! files are ONE per project root and belong to the parent wave, and a manual
+//! kill of one child must not stop the whole wave — nor make
+//! `aida drain status` report it as stopped.
 //!
 //! Without a signal nothing here runs: installing the handler only spawns a
 //! parked thread. Unix only; on Windows [`install`] is a documented no-op
@@ -46,6 +63,7 @@
 //! event paths the launcher already owns).
 //!
 //! trace:TASK-1518 | ai:claude
+//! trace:TASK-1542 | ai:claude
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -134,6 +152,124 @@ pub(crate) struct TermReport {
     pub(crate) stop_requested: bool,
     /// Lease ids stamped `interrupted_at`.
     pub(crate) leases_marked: Vec<String>,
+    /// Pids of the in-flight vendor children this drain forwarded SIGTERM to.
+    // trace:TASK-1542 | ai:codex
+    pub(crate) children_signalled: Vec<u32>,
+}
+
+/// One in-flight vendor child launched by this drain. The kernel start
+/// identity travels WITH the pid: every liveness re-check between collection
+/// and the kill must be identity-aware, and a bare `pid` field invites the
+/// `process_identity_is_alive(pid, None)` spelling that silently degrades to a
+/// pid-only check — which is the recycled-pid hazard the collector exists to
+/// avoid. Always `Some` by construction; the collector skips a lease without it.
+// trace:TASK-1542 | ai:codex
+pub(crate) struct VendorChild {
+    pub(crate) lease_id: String,
+    pub(crate) pid: u32,
+    pub(crate) start_time: String,
+}
+
+/// Collect drain-owned children independently of lease interruption stamping.
+// trace:TASK-1542 | ai:codex
+pub(crate) fn in_flight_vendor_children(project_root: &Path, drain_pid: u32) -> Vec<VendorChild> {
+    let dir = project_root.join(".aida").join("sessions");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut children = Vec::new();
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+            continue;
+        }
+        let Ok(body) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+            continue;
+        };
+        let Some(table) = value.as_table() else {
+            continue;
+        };
+        let creator = table
+            .get("creator_pid")
+            .and_then(|v| v.as_integer())
+            .and_then(|v| u32::try_from(v).ok());
+        if creator != Some(drain_pid) {
+            continue;
+        }
+        // Do not skip `interrupted_at`: an earlier partial stop may have stamped this lease while its child remains live.
+        let Some(pid) = table
+            .get("active_pid")
+            .and_then(|v| v.as_integer())
+            .and_then(|v| u32::try_from(v).ok())
+        else {
+            continue;
+        };
+        if pid <= 1 || pid == drain_pid {
+            continue;
+        }
+        // A missing identity must skip: a bare PID check could signal an unrelated process after PID reuse.
+        let Some(start) = table.get("active_pid_start_time").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if !aida_core::liveness::process_identity_is_alive(pid, Some(start)) {
+            continue;
+        }
+        let lease_id = table
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(str::to_owned)
+            .unwrap_or_else(|| {
+                path.file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            });
+        children.push(VendorChild {
+            lease_id,
+            pid,
+            start_time: start.to_string(),
+        });
+    }
+    children.sort_by(|a, b| a.lease_id.cmp(&b.lease_id));
+    children
+}
+
+/// Forward SIGTERM to each collected child. Returns the pids actually signalled.
+// trace:TASK-1542 | ai:codex
+#[cfg(unix)]
+pub(crate) fn forward_term_to_children(children: &[VendorChild]) -> Vec<u32> {
+    children
+        .iter()
+        .filter_map(|child| {
+            debug_assert!(child.pid > 1);
+            // The re-check is IDENTITY-aware, like the collector's: a bare
+            // `None` here would accept a pid recycled between collection and
+            // this line and SIGTERM an unrelated process of the operator's.
+            if child.pid <= 1
+                || !aida_core::liveness::process_identity_is_alive(
+                    child.pid,
+                    Some(&child.start_time),
+                )
+            {
+                return None;
+            }
+            // SAFETY: `pid` is a live, identity-corroborated child collected
+            // from a lease this drain created and re-checked on the line above;
+            // pids 0 and 1 (whole-process-group and init) are excluded, so this
+            // can only reach the intended single process.
+            (unsafe { libc::kill(child.pid as libc::pid_t, libc::SIGTERM) } == 0)
+                .then_some(child.pid)
+        })
+        .collect()
+}
+
+/// Windows has no SIGTERM signal.
+// trace:TASK-1542 | ai:codex
+#[cfg(not(unix))]
+pub(crate) fn forward_term_to_children(_children: &[VendorChild]) -> Vec<u32> {
+    Vec::new()
 }
 
 /// Everything the handler needs; built by the dispatch arm.
@@ -259,10 +395,10 @@ where
     ctx.term_flag.store(true, Ordering::SeqCst);
     let report = on_first_term(&ctx.project_root, ctx.drain_pid, ctx.borrowed);
     eprintln!(
-        "  {} SIGTERM: stop requested; {} lease(s) marked interrupted; drain lock held \
+        "  {} SIGTERM: stop requested; {} vendor child(ren) signalled; {} lease(s) marked interrupted; drain lock held \
          while the in-flight phase finishes; exiting {} within {}s (a second SIGTERM exits now)",
         crate::glyph(crate::glyphs::Glyph::Warning),
-        report.leases_marked.len(),
+        report.children_signalled.len(), report.leases_marked.len(),
         SIGTERM_EXIT_CODE,
         ctx.grace.as_secs()
     );
@@ -292,6 +428,14 @@ where
         if released { "released" } else { "not held" },
         SIGTERM_EXIT_CODE
     );
+    // A phase write during the grace window may have overwritten the first
+    // stop stamp (it persists a state value read BEFORE the stamp landed).
+    // Re-stamp after the lock release and directly before the exit, when the
+    // last of those writes is behind us; idempotence keeps the original time.
+    // Borrowed children skip it — see `on_first_term`.
+    if !ctx.borrowed {
+        crate::drain_state::record_stopped(&ctx.project_root, REASON_SIGTERM);
+    }
     exit(SIGTERM_EXIT_CODE);
 }
 
@@ -305,10 +449,20 @@ pub(crate) fn on_first_term(project_root: &Path, drain_pid: u32, borrowed: bool)
     let stop_requested = !borrowed
         && crate::drain_cmd::write_stop_request(project_root, REASON_SIGTERM, Some(drain_pid))
             .is_ok();
+    let children_signalled =
+        forward_term_to_children(&in_flight_vendor_children(project_root, drain_pid));
     let leases_marked = mark_in_flight_leases_interrupted(project_root, drain_pid);
+    // Skipped for a BORROWED child for the same reason as the stop request
+    // above: `.aida/drain-state.json` is ONE file per project root, owned by
+    // the parent wave, and a manual kill of one internal child drive must not
+    // make `aida drain status` report the whole wave as deliberately stopped.
+    if !borrowed {
+        crate::drain_state::record_stopped(project_root, REASON_SIGTERM);
+    }
     TermReport {
         stop_requested,
         leases_marked,
+        children_signalled,
     }
 }
 
@@ -411,3 +565,7 @@ pub(crate) fn mark_in_flight_leases_interrupted(
 #[cfg(test)]
 #[path = "tests/task_1518_drain_sigterm_tests.rs"]
 mod task_1518_drain_sigterm_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1542_drain_stop_tests.rs"]
+mod task_1542_drain_stop_tests;

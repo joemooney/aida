@@ -506,7 +506,9 @@ pub fn build_index(project_root: &Path, sessions: Vec<SessionRef>) -> TailIndex 
             phase: state.current_phase,
             session_id: state.current_session_id,
         }),
-        crate::drain_state::DrainStatus::None | crate::drain_state::DrainStatus::Stale(_) => None,
+        crate::drain_state::DrainStatus::None
+        | crate::drain_state::DrainStatus::Stale(_)
+        | crate::drain_state::DrainStatus::Stopped(_) => None,
     };
     TailIndex {
         drains: discover_drain_logs(&project_root.join(".aida").join("burndown")),
@@ -666,7 +668,9 @@ fn stream_live_drain(project_root: &Path, opts: &FormatOpts, stream: &StreamOpts
     loop {
         let state = match crate::drain_state::probe(project_root) {
             crate::drain_state::DrainStatus::Active(state) => state,
-            crate::drain_state::DrainStatus::None | crate::drain_state::DrainStatus::Stale(_) => {
+            crate::drain_state::DrainStatus::None
+            | crate::drain_state::DrainStatus::Stale(_)
+            | crate::drain_state::DrainStatus::Stopped(_) => {
                 break;
             }
         };
