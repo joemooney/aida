@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:20:32.787349526Z
-modified_at: 2026-09-29T04:03:58.655843889Z
+modified_at: 2026-09-29T09:43:28.579342108Z
 req_type: Bug
 tags:
 - performance
@@ -253,3 +253,38 @@ comments:
   created_at: 2026-09-29T04:03:58.655843889Z
   modified_at: 2026-09-29T04:03:58.655843889Z
   session_id: 82e35274-2614-44d4-a519-d33e83252c8c
+- id: 01a0ec8c-3c43-7673-8c62-f56ebf906b86
+  author: joe
+  content: |-
+    ADVISOR DISPOSITION of the routed performance-guard trip, 2026-09-29 (advisor seat, relay session #7).
+
+    The 6-hourly performance-guard tripped and routed to advisor. Re-measured this session rather than
+    read out of the routed evidence:
+
+      aida show exceeded its 1000 ms budget on 11.1% of 289 calls in the last 24h (tolerated 10.0%).
+      CEILING BREACHED: a single call ran 13118 ms against the 5000 ms ceiling.
+      Per binary, worst offenders in this HEAD's lineage: 0bd634c 16.9% of 160, 42e58794d8 20.0% of 5,
+      8c899184c0 16.7% of 6. 119 calls from 3 binaries outside the lineage were excluded by the
+      BUG-1572 scoping, as designed.
+
+    VERDICT: real regression, already tracked HERE. Not a new one, and NOT a budget to raise.
+
+    The ceiling limb is what tripped, and a single 13118 ms call is precisely this spec's mechanism —
+    a strict stale-cache refresh waiting unbounded behind a concurrent writer. The 24.5 s originally
+    recorded and today's 13.1 s are the same failure at different queue depths. Nothing in this
+    session's work (BUG-1704, PR #2276) touches the cache path.
+
+    RAISING THE BUDGET IS REFUSED. The routed prompt offers 'real regression, or a budget that needs
+    changing deliberately' as the fork. Taking the second branch here would silence the one signal that
+    is correctly reporting an open, high-priority, already-diagnosed defect. The ceiling exists to
+    catch exactly the one-bad-call case a proportion cannot express, and it caught it.
+
+    The fix is STORY-1484 (single-flight cache refresh: flock-guarded, double-checked, durable refresh
+    request, detached worker, bounded reader wait then a labelled stale read), status approved. This
+    guard will keep tripping every 6h until that lands; that is the guard working, not noise. Expect
+    the routed item to recur and re-disposition it the same way unless the measurement CHANGES shape —
+    a new binary dominating, or a proportion breach without a ceiling breach, would be new information
+    worth a fresh look.
+  created_at: 2026-09-29T09:43:28.579342108Z
+  modified_at: 2026-09-29T09:43:28.579342108Z
+  session_id: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
