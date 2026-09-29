@@ -1,9 +1,8 @@
 job: disk-headroom-guard-route
-last_run: 2026-09-29T09:43:40.087483989Z
+last_run: 2026-09-29T10:34:40.189867308Z
 last_by:
   seat: advisor
-  session: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
+  session: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
   vendor: antigravity
 result: done
-due_since: 2026-09-29T09:44:30.593656397Z
-due_reason: on CronJobFailed
+note: 'Re-measured: 158G free on / against min_free_gib = 60, and /run/user/1000 at 24M of 7.1G. The trip was transient during this relay''s cargo builds; no reclamation needed and the floor is not being raised. Prior session reclaimed 251G from non-main worktree target/ dirs; that headroom is holding.'
