@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-09-29T17:24:06.946649209Z
+modified_at: 2026-09-29T17:27:34.875981926Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -160,6 +160,140 @@ comments:
   content: Commit 7d85a8057d references this requirement
   created_at: 2026-09-29T17:24:06.946649209Z
   modified_at: 2026-09-29T17:24:06.946649209Z
+  session_id: 6cabc620-b750-4bb8-96d3-a473bafa0c00
+- id: 01a0ee35-22db-7b52-a55f-e2701e1d1276
+  author: joe
+  content: |
+    ## Salvage audit ANSWERED: the stranded WIP is viable — do NOT re-scope (2026-09-29, relay session #6)
+
+    The 2026-09-29 05:00 audit comment posed three gating questions before anyone resumes this spec and
+    recommended re-scoping if (1) or (3) failed. I answered all three empirically. **All three pass.**
+
+    ### Q2 (asked first, because it is cheapest): has main moved too far?
+
+    `origin/task-1526` is 1 commit ahead of merge-base `854b7e26f7`; **main is 56 commits ahead** of that
+    base, and it churned the exact hot files the WIP touches:
+
+    | file | WIP adds | main's churn since base |
+    |---|---|---|
+    | `aida-cli-lib/src/lib.rs` | +77 | +2307 |
+    | `aida-cli-lib/src/doctor_cmd.rs` | +33 | +2077 |
+    | `aida-core/src/db/cached_git_backend.rs` | +1070 | +214 |
+    | `aida-core/src/db/cache.rs` | +169 | +78 |
+
+    That table is why the earlier audit expected a painful rebase. **It is wrong — measured, not guessed.**
+    A real test-merge of `origin/task-1526` into `origin/main` produced **zero conflicts**:
+
+    ```
+    git merge --no-commit --no-ff origin/task-1526   # exit 0
+    git diff --name-only --diff-filter=U             # empty
+    ```
+
+    `git` auto-merged `cache.rs`, `cached_git_backend.rs`, `db/mod.rs` and `store_lock.rs` cleanly. The
+    overlap is large but disjoint in placement.
+
+    ### Q1: does it build on current main?
+
+    Yes. On the merged tree (merge commit of `22935f599a` into `origin/main`):
+
+    ```
+    cargo check --workspace --all-targets   -> CARGO_EXIT=0, 0 errors
+    ```
+
+    Zero errors across every target including tests. Warnings only (22 in `aida-cli-lib` lib, 13 in lib
+    test), and those are the workspace's pre-existing warning population, not new hard failures.
+
+    Note the earlier audit asked whether `22935f599a` builds *in isolation*. That is the less useful
+    question — nobody will ship the branch at its old base. I checked the thing that actually matters:
+    does it build **merged onto current main**. It does.
+
+    ### Q3: is it the signed-off design, or a different one?
+
+    It is the signed-off design. `docs/plans/2026-09-26-task-1526-bounded-cache-reads.md` on the branch
+    names the binding contract explicitly — advisor decision `01a0e0fb-8d6b-7790-b04b-f808236dbe2d`,
+    amendments B1-B6 over the STORY-1484 signoff — and its six implementation sections track them:
+    diagnostic identity, sidecar refresh flock with a process-global registry, winner double-check with
+    one incremental SQLite attempt, in-transaction HEAD recheck with pre-resolved epic statuses, per-
+    invocation stale collection, and the no-blocking-refresh-under-write-lock rule.
+
+    The diff carries **29 new `#[test]` functions** that map onto the signoff's named B tests, by name:
+
+    `single_flight_four_readers_one_refresh`, `lock_winner_rechecks_is_stale_and_skips_work`,
+    `refresh_holder_exits_without_refresh_returns_deferred`,
+    `non_tty_full_rebuild_winner_serves_deferred_without_worker`,
+    `tty_full_rebuild_winner_remains_strict_before_c`,
+    `reader_incremental_lock_error_does_not_full_rebuild`,
+    `strict_incremental_lock_error_propagates_without_full_rebuild`,
+    `writer_busy_next_reader_retries_incremental_after_lock_release`,
+    `flock_unsupported_falls_back_to_strict_refresh`,
+    `migration_pending_reader_never_serves_old_schema`,
+    `second_process_skips_refill_after_migration_committed`,
+    `refresh_txn_rechecks_head_inside_txn`, `epic_status_preresolved_before_incremental_txn`,
+    `stale_rows_and_label_metadata_share_snapshot`,
+    `refresh_wait_refuses_while_store_or_sqlite_write_lock_held`,
+    `nested_freshen_in_lock_holder_does_not_wait`,
+    `nested_refresh_through_directory_alias_uses_same_registry_entry`,
+    `loser_budget_is_shared_across_backend_opens`,
+    `stale_object_and_array_shapes_preserve_freshness`, `untouched_output_keeps_its_shape`,
+    `mcp_read_tool_result_carries_cache_object_each_call`, `lock_info_foreign_host_is_unknown_and_kept`,
+    `lock_info_foreign_pidns_is_unknown_and_kept`, `reader_path_never_calls_with_cache_write`,
+    `head_recapture_after_incremental_err_break_stamps_current_head`,
+    `stale_note_wording_matches_refresh_state`,
+    `doctor_reports_unknown_foreign_lock_overrun_without_healing`,
+    `deferred_full_rebuild_repeats_honestly_until_strict_refresh`,
+    `already_open_schema_change_repairs_or_advisory_exits`.
+
+    Plus `tests/test_cache_refresh_outputs.py` (+221). Slice C machinery is absent, as the contract requires.
+
+    ### Q1b: do its tests actually PASS on current main? (not asked before — the one that matters most)
+
+    Yes. On the same merged tree:
+
+    ```
+    cargo test -p aida-core --lib
+    test result: ok. 1272 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 204.13s
+    CARGO_EXIT=0
+    ```
+
+    **Count reconciled against the base, not just read as "0 failed".** Current `origin/main`
+    (`9df13054e7`) measures **1247 passed; 2 ignored** for `aida-core --lib`. The merged tree measures
+    **1272 passed; 2 ignored**. That is **exactly +25**, and the diff adds **exactly 25** new
+    `#[test]`/`#[tokio::test]` functions under `aida-core/` (the other 4 of the 29 are in
+    `aida-cli-lib/`). Nothing was removed, and nothing was `#[ignore]`d to make the suite green.
+
+    So the 25 single-flight / stale-label tests the branch introduces are not merely present — they run
+    and they pass against today's main.
+
+    ### Revised recommendation
+
+    **Salvage, do not rewrite.** The earlier "re-scope rather than salvage" advice was conditioned on
+    (1) or (3) failing; neither does. Re-deriving 2,313 lines and 29 tests from the sketch would be pure
+    waste when the rebase is conflict-free and the tree already compiles.
+
+    What the WIP still lacks is **verification and delivery**, not implementation:
+
+    1. `aida-cli-lib --lib` (the other +4 tests) and the integration/python surfaces have not been run
+       on the merged tree. Only `aida-core --lib` was measured here.
+    2. The commit is `wip: salvage task-1526` — no `[AI:tool] type(scope): summary (TASK-1526)` trailer,
+       so nothing would complete the spec at merge.
+    3. No PR exists.
+    4. `cargo fmt --all -- --check`, clippy, `scripts/check-portability.sh` and `make check-templates`
+       have not been run on the merged tree.
+
+    Also: the earlier audit's note that STORY-1484 still carries a stale `needs-sketch` tag is itself
+    **now stale** — its tags today are `cache closure:pending from:SPIKE-90 locking`. Nothing to drop.
+
+    ### Reproduction
+
+    ```
+    git worktree add --detach <wt> origin/main
+    cd <wt> && git merge --no-commit --no-ff origin/task-1526   # 0 conflicts
+    git commit -m "test-merge"
+    cargo check --workspace --all-targets                       # exit 0
+    cargo test -p aida-core --lib                               # 1272 passed; 0 failed
+    ```
+  created_at: 2026-09-29T17:27:34.875981926Z
+  modified_at: 2026-09-29T17:27:34.875981926Z
   session_id: 6cabc620-b750-4bb8-96d3-a473bafa0c00
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
