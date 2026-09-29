@@ -1,10 +1,7 @@
 job: hub-drift-guard-route
-last_run: 2026-09-29T04:02:54.540201496Z
+last_run: 2026-09-29T09:43:37.621755505Z
 last_by:
   seat: advisor
-  session: 82e35274-2614-44d4-a519-d33e83252c8c
+  session: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
   vendor: antigravity
 result: done
-note: aida-store diverged (gitlab 2638843e48d1 +3, origin a7a69ee66915 +1); local 7e27ac3bb736 already contained both, so reconcile was a fast-forward push to each hub, no union merge and no force-push. aida remote status now clean on main, aida-store and release v0.15.0.
-due_since: 2026-09-29T09:41:20.444734863Z
-due_reason: on CronJobFailed
