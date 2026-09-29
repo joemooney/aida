@@ -1,10 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-09-28T17:08:11.421512797Z
+last_run: 2026-09-29T04:02:54.540201496Z
 last_by:
   seat: advisor
-  session: 7121c883-8051-4f5d-bccc-4953b9b1748d
+  session: 82e35274-2614-44d4-a519-d33e83252c8c
   vendor: antigravity
 result: done
-note: 'Verified and reconciled 2026-09-28 10:09 MST. aida-store differed: gitlab=14ae3c9ef13c origin=a64d87cbddcb. Confirmed NOT a divergence — ''git merge-base --is-ancestor 14ae3c9 a64d87c'' returned true, so gitlab was strictly BEHIND origin and this was the fast-forward case, not the reconcile case. Ran ''aida remote mirror-sync'' (never a force-push); gitlab aida-store 14ae3c9ef13c → a64d87cbddcb, main already at ad76e9e46f42. remote-drift re-check now clean.'
-due_since: 2026-09-28T21:38:32.031613929Z
-due_reason: on CronJobFailed
+note: aida-store diverged (gitlab 2638843e48d1 +3, origin a7a69ee66915 +1); local 7e27ac3bb736 already contained both, so reconcile was a fast-forward push to each hub, no union merge and no force-push. aida remote status now clean on main, aida-store and release v0.15.0.
