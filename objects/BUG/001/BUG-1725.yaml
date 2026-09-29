@@ -88,8 +88,67 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T08:29:23.135646002Z
-modified_at: 2026-09-29T08:29:35.100634684Z
+modified_at: 2026-09-29T10:16:20.038268561Z
 req_type: Bug
+comments:
+- id: 01a0ecaa-5146-7421-bb5e-ff1cef22564c
+  author: joe
+  content: |
+    Advisor re-size before dispatching an implementer. **AC1's "the one-line `source_root` change is the whole fix" is false, and I measured it rather than reasoning about it.** The diagnosis of the blind spot is correct; the prescribed fix is not.
+
+    ## What the widened guard actually reports on today's main (`0c3ef5cb6b`)
+
+    I ran `direct_executable_mode_changes` (imported from the ratchet itself, unmodified) over the widened roots:
+
+    | root | violations |
+    |---|---|
+    | `aida-cli-lib/src` | **12** |
+    | `aida-core/src` | **7** (all in `scaffolding/mod.rs`) |
+    | `aida-tui/src`, `aida-server/src` | 0 |
+
+    So the count is **19**, not the 4 that exist on main out of the spec's 8. AC2 as written ("the ratchet FAILS on today's tree, naming all eight sites above") cannot be satisfied: four of the eight are in `aida_bin.rs`, which does not exist on main — it arrives with PR #2261 — and the widened guard names fifteen sites the spec never mentions.
+
+    ## 15 of those 19 are already portable, and the WINDOWS COMPILER is the proof
+
+    The spec's own measurement is the evidence. The Windows `Run tests` step on run 36540603371 reported **exactly 8 errors**, all in `remote_create.rs` and `aida_bin.rs`. If any of the other fifteen sites were unguarded, `rustc` would have enumerated them in that same log. It did not. They are inside `#[cfg(unix)]` scopes and compile on Windows today.
+
+    Spot-checked nine of them directly to see the shape:
+
+    - **Production code, correctly guarded:** `lib.rs:18228`, `store_cmd.rs:459`, `remote_create.rs:1927`, `aida-core/src/scaffolding/mod.rs:2822` — each a `#[cfg(unix)] { use std::os::unix::fs::PermissionsExt; … set_mode(0o755) }` block.
+    - **Test code, correctly guarded:** `init_cmd.rs:2741` (`#[cfg(unix)] fn make_executable`), `session.rs:4522` (`#[cfg(unix)] #[test] fn …`), `scaffolding/mod.rs:5189`, `:5836`.
+
+    **The only unguarded sites in the entire workspace on main are `remote_create.rs:3040/3055/3062/3065`.** Widening `source_root` therefore converts a guard that is blind into a guard that is noisy: an 15-of-19 false-positive rate, on a check that runs in the gating ubuntu job (`.github/workflows/ci.yml:408`).
+
+    ## Two further reasons the prescription cannot stand as written
+
+    1. **AC3 would require production code to call a test helper.** `mark_executable` is `pub(crate)` in `aida-cli-lib/src/test_exec.rs`. Routing `lib.rs:18228` or `store_cmd.rs:459` — live hook-installation paths — through a fixture writer named `test_exec` is a worse design than the correctly-guarded block they already have. And the seven `aida-core` sites **cannot** do it at all: `pub(crate)` does not cross the crate boundary, and aida-core has no equivalent helper.
+    2. **The regex misses the error that actually fires first.** `direct_executable_mode_changes` matches only `(?:set_mode|from_mode)\s*\(\s*(0o[0-7]+)`. The first Windows error in the spec's own log is `aida_bin.rs:327 error[E0433] cannot find 'unix' in 'os'` — the bare `use std::os::unix::fs::PermissionsExt;` import line. No widening of `source_root` catches that, because there is no mode literal on it. A guard that catches three of a file's four errors still leaves the build red.
+
+    ## The invariant the nightly actually needs
+
+    Not "which directory do we scan" but **"is this unix-only API reachable from a Windows compile"**. The discriminator is the enclosing `#[cfg(unix)]`, not the path. Concretely:
+
+    > Flag a unix-only permission API — `set_mode`/`from_mode` with an executable mode, **and** `use std::os::unix::…` / `std::os::unix::` paths — anywhere under a crate `src`, **unless** it is lexically inside a `#[cfg(unix)]` scope (a `#[cfg(unix)] { … }` block, an item carrying `#[cfg(unix)]`, or an enclosing `#[cfg(unix)] mod`).
+
+    On today's main that rule reports the four `remote_create.rs` sites and nothing else, which is exactly the set `rustc` reports. It stays correct as `#[cfg(unix)]`-guarded code is added, and it catches the `use` line. It is a real parser-ish change (brace/attribute tracking) rather than a one-line edit — call it heft 3-4, not 0 — but it is the only version of this guard that can be turned on in the gating job without immediately going red on correct code.
+
+    ## Ordering against PR #2261
+
+    #2261 is green, approved, and one human keystroke from shipping; its four `aida_bin.rs` sites are unguarded and would be caught by the corrected guard. Landing BUG-1725 first turns a ready PR red. **Land #2261 first, then implement BUG-1725 against the merged tree** — at which point all eight of the spec's sites exist, AC2 is provable exactly as written, and the eight-site fix list is correct. Do not stack this on `task-1499-2`.
+
+    ## Acceptance corrections (AC1-AC5 superseded by the below; AC6 unchanged)
+
+    - **AC1'.** The direct-mode check is `#[cfg(unix)]`-aware per the rule above and scans every crate's `src`, not one directory. Keep the existing `0o555`/non-executable exemption in `direct_executable_mode_changes` unchanged. Correctly-guarded sites must NOT be reported: assert this with a fixture per shape (guarded block, guarded item, guarded `mod`).
+    - **AC2'.** Prove the new checker fails on a tree known to be broken *before* fixing anything, and record the output. On main that is the four `remote_create.rs` sites; on the post-#2261 tree it is all eight. It must report **only** those — a run that also names the fifteen guarded sites has not met this AC.
+    - **AC3'.** The `use std::os::unix::…` import line is covered, since it is the E0433 that fires first.
+    - **AC4'.** Fix the unguarded sites. `mark_executable`/`write_executable` where they are test fixtures in `aida-cli-lib`; a plain `#[cfg(unix)]` block where they are not (production code, or any `aida-core` site) — do **not** export the test helper across the crate boundary to satisfy a guard. `aida_bin.rs:476` is mode 0o644, NOT executable, so it needs the portable non-executable path, not `mark_executable`.
+    - **AC5'.** Windows verification stays as the original AC4 said: via the cross-platform nightly, not `--target x86_64-pc-windows-msvc` on the Linux runner, which dies in `cc-rs: failed to find tool "lib.exe"` before type-checking anything.
+    - **AC6'.** The self-test mirrors `test_checker_rejects_a_future_local_fake_gh_copy`: the checker rejects an *unguarded* violation in an inline `#[cfg(test)] mod tests` in a production-path file, **and accepts a guarded one**. Both halves, or the guard's whole value is unasserted.
+
+    Provenance: advisor seat, 2026-09-29, session #8 of the relay. Measured with the ratchet's own `direct_executable_mode_changes` over widened roots; portability of the fifteen confirmed against the Windows compiler's own error enumeration in the spec's cited run, plus nine direct source reads.
+  created_at: 2026-09-29T10:16:20.038268561Z
+  modified_at: 2026-09-29T10:16:20.038268561Z
+  session_id: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
 history:
 - id: 01a0ec48-95fc-7221-958e-c7471acc90a4
   author: joe
