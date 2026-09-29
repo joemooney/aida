@@ -42,6 +42,7 @@ pub(crate) fn handle_doctor_command(
             all,
             since: since.map(str::to_string),
             fail_on_findings: false,
+            quiet_output: false,
         });
     };
     match cmd {
@@ -111,6 +112,7 @@ pub(crate) fn handle_doctor_command(
                 all: all || *sub_all,
                 since: since.map(str::to_string),
                 fail_on_findings: *fail_on_findings,
+                quiet_output: false,
             })
         }
         cli::DoctorCommand::Heal {
@@ -128,6 +130,7 @@ pub(crate) fn handle_doctor_command(
             all: all || *sub_all,
             since: since.map(str::to_string),
             fail_on_findings: false,
+            quiet_output: false,
         }),
         cli::DoctorCommand::MigrateCounterScope {
             to,
@@ -309,6 +312,22 @@ pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -
         all: false,
         since: None,
         fail_on_findings: false,
+        quiet_output: false,
+    })
+}
+
+// trace:BUG-1718 | ai:codex
+pub(crate) fn run_merged_agent_worktree_gc_quiet() -> Result<()> {
+    doctor_multi_agent(DoctorRunOptions {
+        heal: true,
+        yes: true,
+        category: Some("merged-agent-worktrees".to_string()),
+        json: false,
+        force: true,
+        all: false,
+        since: None,
+        fail_on_findings: false,
+        quiet_output: true,
     })
 }
 
@@ -333,6 +352,8 @@ struct DoctorRunOptions {
     /// rather than a contract change to a shared surface.
     // trace:STORY-1422 | ai:claude
     fail_on_findings: bool,
+    // trace:BUG-1718 | ai:codex
+    quiet_output: bool,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -396,6 +417,8 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
+    // trace:BUG-1719 | ai:codex
+    let mut merged_agent_worktrees_reclaimable = 0;
     let mut hidden_completed_without_commit = 0;
     let mut performance_audits = Vec::new();
 
@@ -445,7 +468,10 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // path and appended here where only `aida doctor` reaches it. Honours the
     // same `--category` filter. trace:TASK-878 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "merged-agent-worktrees")? {
-        findings.extend(scan_merged_agent_worktrees(&project_root));
+        // trace:BUG-1719 | ai:codex
+        let scan = scan_merged_agent_worktrees_with_count(&project_root);
+        merged_agent_worktrees_reclaimable = scan.reclaimable_count;
+        findings.extend(scan.findings);
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -631,7 +657,9 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
     }
 
-    if opts.json {
+    if opts.quiet_output {
+        eprintln!("  ✓ merged-agent-worktrees cleanup checked ({merged_agent_worktrees_reclaimable} reclaimable); details: `aida doctor --category merged-agent-worktrees`");
+    } else if opts.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         render_doctor_report(&report, opts.heal)?;
@@ -648,6 +676,11 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         if opts.category.is_none() {
             print_doctor_status_diagnostics(&project_root, &store);
         }
+    }
+
+    // trace:BUG-1718 | ai:codex
+    if opts.quiet_output {
+        return Ok(());
     }
 
     // STORY-1127: permission posture is intended as a check/gate category: a
@@ -895,6 +928,11 @@ mod bug_1675_disk_headroom_light_tests;
 #[cfg(test)]
 #[path = "tests/task_1534_worktree_gc_batch_landed_tests.rs"]
 mod task_1534_worktree_gc_batch_landed_tests;
+
+// trace:BUG-1719 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_1719_doctor_prose_tests.rs"]
+mod bug_1719_doctor_prose_tests;
 
 /// TASK-1124: which deployed Codex prompts in `dir` (normally `~/.codex/prompts`)
 /// have drifted from the current source templates. A prompt that EXISTS but
@@ -4262,11 +4300,21 @@ fn heal_doctor_stale_remote_branch(
 
 // The classification verdict for one agent-managed worktree. trace:TASK-878
 #[derive(Debug, Clone, PartialEq, Eq)]
+// trace:BUG-1719 | ai:codex
 pub(crate) enum AgentWorktreeVerdict {
     /// Verified merged AND clean AND no unique unmerged commits → safe to GC.
     Removable(String),
     /// Dirty, carrying unmerged work, or no merge signal → keep, flag operator.
-    Keep(String),
+    Keep { reason: String, actionable: bool },
+}
+
+// trace:BUG-1719 | ai:codex
+fn agent_worktree_keep_action(actionable: bool) -> String {
+    if actionable {
+        "operator decision: review and keep, open a PR, or remove by hand".to_string()
+    } else {
+        "no action required — kept because batched content is undecidable".to_string()
+    }
 }
 
 /// Inputs to the pure agent-worktree classifier — every git/forge probe result
@@ -4321,13 +4369,15 @@ pub(crate) struct AgentWorktreeFacts {
 /// model: a dirty worktree is always kept; removal needs a positive merged
 /// signal AND zero unique unmerged commits; otherwise the worktree is kept and
 // flagged. trace:TASK-878 | ai:claude
+// trace:BUG-1719 | ai:codex
 pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktreeVerdict {
     // KEEP first — uncommitted work is unambiguously "has work". Clean != no
     // work, but dirty is definitely work; never delete it.
     if facts.dirty {
-        return AgentWorktreeVerdict::Keep(
-            "uncommitted changes present — never auto-removed".to_string(),
-        );
+        return AgentWorktreeVerdict::Keep {
+            reason: "uncommitted changes present — never auto-removed".to_string(),
+            actionable: true,
+        };
     }
 
     // A positive "this work has shipped" signal — either suffices.
@@ -4344,7 +4394,10 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
 
     let Some(merged_reason) = merged_reason else {
         // No merged signal at all → never remove; flag for the operator.
-        return AgentWorktreeVerdict::Keep("no merge signal — operator decision".to_string());
+        return AgentWorktreeVerdict::Keep {
+            reason: "no merge signal — operator decision".to_string(),
+            actionable: true,
+        };
     };
 
     // Even with a merged signal, a branch carrying genuinely-unique unmerged
@@ -4365,10 +4418,21 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
                 facts.unique_unmerged_commits
             ));
         }
-        return AgentWorktreeVerdict::Keep(format!(
-            "{merged_reason}, but {} unique unmerged commit(s) — keep, operator decision",
-            facts.unique_unmerged_commits
-        ));
+        if facts.spec_trailer_on_main {
+            // trace:BUG-1718 | ai:codex
+            return AgentWorktreeVerdict::Keep { reason: format!(
+                "{merged_reason}; {} unique unmerged commit(s) are a squash-ancestry artifact from a \
+                 batched integration merge, and content is undecidable — no action required",
+                facts.unique_unmerged_commits
+            ), actionable: false };
+        }
+        return AgentWorktreeVerdict::Keep {
+            reason: format!(
+                "{merged_reason}, but {} unique unmerged commit(s) — keep, operator decision",
+                facts.unique_unmerged_commits
+            ),
+            actionable: true,
+        };
     }
 
     AgentWorktreeVerdict::Removable(merged_reason.to_string())
@@ -4732,7 +4796,20 @@ fn patch_id_pairs(project_root: &std::path::Path, log_p_output: &[u8]) -> Option
 /// removal stays gated behind --yes --force + the STORY-666 sign-off) or Keep
 /// (flagged for the operator, never auto-removed). The project's own worktree
 // and the `aida-store` worktree are skipped. trace:TASK-878
+// trace:BUG-1719 | ai:codex
+#[cfg(test)]
 pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    scan_merged_agent_worktrees_with_count(project_root).findings
+}
+
+// trace:BUG-1719 | ai:codex
+struct AgentWorktreeScan {
+    findings: Vec<DoctorFinding>,
+    reclaimable_count: usize,
+}
+
+// trace:BUG-1719 | ai:codex
+fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> AgentWorktreeScan {
     use std::process::Command as PCmd;
 
     let git = |args: &[&str]| -> Option<u32> {
@@ -4754,7 +4831,10 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
     // Without a resolvable default branch we cannot corroborate merges; stay
     // silent rather than risk flagging live worktrees.
     let Some(default_ref) = resolve_default_branch_ref(project_root) else {
-        return Vec::new();
+        return AgentWorktreeScan {
+            findings: Vec::new(),
+            reclaimable_count: 0,
+        };
     };
 
     let project_canon = project_root
@@ -4764,7 +4844,13 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
     let leases = list_leases(project_root);
 
     let mut findings = Vec::new();
+    let mut reclaimable_count = 0;
     for wt in list_worktrees(project_root) {
+        // Missing registrations are stale bookkeeping, not actionable findings.
+        // trace:BUG-1718 | ai:codex
+        if !wt.path.exists() {
+            continue;
+        }
         let wt_canon = wt.path.canonicalize().unwrap_or_else(|_| wt.path.clone());
         // Never touch the main worktree or the store worktree.
         if wt_canon == project_canon || wt.branch.as_deref() == Some("aida-store") {
@@ -4887,19 +4973,15 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
         // on the default branch names it in a trailer instead. Local and cheap, so
         // it runs before (and can spare) the forge lookup.
         // trace:TASK-1534 | ai:antigravity
-        let spec_trailer_on_main = if !ancestor_of_main && !dirty {
-            candidate_specs.iter().any(|spec| {
-                crate::session_reap::spec_trailer_landed_on(
-                    project_root,
-                    &default_ref,
-                    branch,
-                    spec,
-                )
+        // trace:BUG-1718 | ai:codex
+        let landing_commit = if !ancestor_of_main && !dirty {
+            candidate_specs.iter().find_map(|spec| {
+                crate::session_reap::spec_landing_commit(project_root, &default_ref, branch, spec)
             })
         } else {
-            false
+            None
         };
-
+        let spec_trailer_on_main = landing_commit.is_some();
         // Only consult the forge when the cheap ancestry/trailer probes were
         // inconclusive (covers the single-PR squash-merge case) and the worktree
         // is clean — a dirty worktree is kept regardless, so skip the network call.
@@ -4939,6 +5021,7 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
 
         match classify_agent_worktree(&facts) {
             AgentWorktreeVerdict::Removable(reason) => {
+                reclaimable_count += 1;
                 findings.push(DoctorFinding {
                     category: "merged-agent-worktrees".to_string(),
                     id: wt.path.display().to_string(),
@@ -4956,7 +5039,10 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
                     safe_heal: false,
                 });
             }
-            AgentWorktreeVerdict::Keep(reason) => {
+            AgentWorktreeVerdict::Keep { reason, actionable } => {
+                // trace:BUG-1718 | ai:codex
+                // trace:BUG-1719 | ai:codex
+                let action = agent_worktree_keep_action(actionable);
                 findings.push(DoctorFinding {
                     category: "merged-agent-worktrees".to_string(),
                     id: wt.path.display().to_string(),
@@ -4964,7 +5050,7 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
                         "agent worktree {} on `{branch}` flagged: {reason}",
                         wt.path.display()
                     ),
-                    action: "operator decision: review and keep, or remove by hand".to_string(),
+                    action,
                     // Never auto-removed — flag-only.
                     safe_heal: false,
                 });
@@ -4972,7 +5058,10 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
         }
     }
     findings.sort_by(|a, b| a.id.cmp(&b.id));
-    findings
+    AgentWorktreeScan {
+        findings,
+        reclaimable_count,
+    }
 }
 
 /// TASK-878: remove one merged agent worktree + delete its branch. Only
@@ -6673,6 +6762,139 @@ mod story_462_doctor_tests {
         (dir, store)
     }
 
+    fn task_202_git(cwd: &std::path::Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn task_202_project(root: &std::path::Path) {
+        std::fs::create_dir_all(root).unwrap();
+        task_202_git(root, &["-c", "init.defaultBranch=main", "init", "-q"]);
+        task_202_git(root, &["config", "user.name", "AIDA Fixture"]);
+        task_202_git(
+            root,
+            &["config", "user.email", "aida-fixture@example.invalid"],
+        );
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        task_202_git(root, &["add", ".aida/config.toml"]);
+        task_202_git(root, &["commit", "-qm", "fixture project"]);
+    }
+
+    // trace:TASK-202 | ai:codex
+    #[test]
+    fn is_intended_store_accepts_linked_aida_store_worktree() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        task_202_project(&project);
+        let store = project.join(".aida-store");
+        task_202_git(&project, &["checkout", "--orphan", "aida-store"]);
+        task_202_git(
+            &project,
+            &["commit", "--allow-empty", "-qm", "fixture store branch"],
+        );
+        task_202_git(&project, &["checkout", "main"]);
+        task_202_git(
+            &project,
+            &["worktree", "add", store.to_str().unwrap(), "aida-store"],
+        );
+        assert!(is_intended_store_worktree(&project, &store));
+    }
+
+    // trace:TASK-202 | ai:codex
+    #[test]
+    fn is_intended_store_rejects_foreign_linked_worktree() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        task_202_project(&project);
+        let foreign = tmp.path().join("foreign");
+        task_202_project(&foreign);
+        let store = project.join(".aida-store");
+        task_202_git(
+            &foreign,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "aida-store",
+                store.to_str().unwrap(),
+            ],
+        );
+
+        // Establish that checks 1–4 hold, so only common-dir ownership rejects it.
+        assert_eq!(
+            aida_core::store_locate::detect_distributed_store_from(&project)
+                .unwrap()
+                .canonicalize()
+                .unwrap(),
+            store.canonicalize().unwrap()
+        );
+        let git_value = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git {args:?} failed");
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        };
+        assert_eq!(
+            std::fs::canonicalize(git_value(&["rev-parse", "--show-toplevel"])).unwrap(),
+            store.canonicalize().unwrap()
+        );
+        assert!(std::fs::symlink_metadata(store.join(".git"))
+            .unwrap()
+            .file_type()
+            .is_file());
+        assert_ne!(
+            git_value(&["rev-parse", "--git-dir"]),
+            git_value(&["rev-parse", "--git-common-dir"])
+        );
+        assert_eq!(
+            git_value(&["symbolic-ref", "--quiet", "--short", "HEAD"]),
+            "aida-store"
+        );
+        assert!(!is_intended_store_worktree(&project, &store));
+    }
+
+    // trace:TASK-202 | ai:codex
+    #[test]
+    fn is_intended_store_rejects_standalone_repository() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        task_202_project(&project);
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        task_202_git(
+            &store,
+            &["-c", "init.defaultBranch=aida-store", "init", "-q"],
+        );
+        task_202_git(&store, &["config", "user.name", "AIDA Fixture"]);
+        task_202_git(
+            &store,
+            &["config", "user.email", "aida-fixture@example.invalid"],
+        );
+        std::fs::write(store.join("seed"), "fixture").unwrap();
+        task_202_git(&store, &["add", "seed"]);
+        task_202_git(&store, &["commit", "-qm", "fixture store"]);
+        assert!(store.join(".git").is_dir());
+        assert!(!is_intended_store_worktree(&project, &store));
+    }
+
     #[test]
     fn bug_1677_appends_staging_ignores_to_bug_563_guarded_store() {
         let runtime_patterns = bug_563_runtime_patterns();
@@ -7428,7 +7650,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -7467,7 +7689,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -7729,7 +7951,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -7743,7 +7965,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -8093,6 +8315,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9408,6 +9631,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9480,6 +9704,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9518,6 +9743,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9575,6 +9801,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9837,6 +10064,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9883,6 +10111,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -9985,6 +10214,7 @@ hostname = "localhost"
             all: false,
             since: None,
             fail_on_findings: false,
+            quiet_output: false,
         };
         let result = heal_doctor_finding(project_root, &finding, &opts).unwrap();
         assert_eq!(result.status, "healed");

@@ -333,6 +333,8 @@ mod team;
 mod team_cmd;
 #[cfg(test)]
 mod test_env;
+#[cfg(test)]
+mod test_exec;
 // trace:BUG-1642 | ai:claude — lib tests run under a temp HOME, never the real ~/.aida.
 #[cfg(test)]
 mod test_home;
@@ -1554,7 +1556,6 @@ mod task_1244_drain_merge_lease_tests {
 #[cfg(all(test, unix))]
 mod bug_1265_finish_ci_tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
 
     struct Fixture {
         _temp: tempfile::TempDir,
@@ -1703,10 +1704,7 @@ exit 2
                 reads.display(),
                 reads.display()
             );
-            std::fs::write(&gh, script).unwrap();
-            let mut perms = std::fs::metadata(&gh).unwrap().permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&gh, perms).unwrap();
+            crate::test_exec::write_executable(&gh, script);
             merge_hold::write_hold(&root, 1265, "supervised test hold").unwrap();
             Self {
                 _temp: temp,
@@ -1799,8 +1797,7 @@ exit 2
         for args in [&[][..], &["pr"][..]] {
             let mut command = std::process::Command::new(&fixture.gh);
             command.args(args);
-            let output =
-                crate::process_retry::command_output_retrying_etxtbsy(&mut command).unwrap();
+            let output = crate::test_exec::output(&mut command).unwrap();
             assert_eq!(output.status.code(), Some(2));
             let stderr = String::from_utf8_lossy(&output.stderr);
             assert!(stderr.contains("unexpected gh call:"), "stderr: {stderr}");
@@ -28914,14 +28911,7 @@ fn gate_agent_bypass(
     explicit: bool,
 ) -> Result<()> {
     use bypass_confirm::{BypassSource, Decision};
-    let has_bypass = args.iter().any(|a| {
-        matches!(
-            a.as_str(),
-            "bypassPermissions"
-                | "--dangerously-bypass-approvals-and-sandbox"
-                | "--dangerously-skip-permissions"
-        )
-    });
+    let has_bypass = bypass_confirm::args_have_bypass(args);
     let source = if background {
         BypassSource::Background
     } else if explicit {
@@ -30606,14 +30596,8 @@ fn print_dry_launch_context(
          only on a real launch (drop `--show-context`).\n"
     );
     let confirm = bypass_confirm::load(project_root);
-    let has_bypass = config.default_args.iter().any(|arg| {
-        matches!(
-            arg.as_str(),
-            "bypassPermissions"
-                | "--dangerously-bypass-approvals-and-sandbox"
-                | "--dangerously-skip-permissions"
-        )
-    });
+    // trace:BUG-1720 | ai:codex
+    let has_bypass = bypass_confirm::args_have_bypass(&config.default_args);
     let decision = bypass_confirm::decide(
         has_bypass,
         bypass_confirm::BypassSource::Configured,
@@ -31169,14 +31153,8 @@ fn render_agent_launch_noexec(
         if confirm.on { "on" } else { "off" },
         confirm.source
     ));
-    let bypass_in_argv = exec_args.iter().any(|arg| {
-        matches!(
-            arg.as_str(),
-            "bypassPermissions"
-                | "--dangerously-bypass-approvals-and-sandbox"
-                | "--dangerously-skip-permissions"
-        )
-    });
+    // trace:BUG-1720 | ai:codex
+    let bypass_in_argv = bypass_confirm::args_have_bypass(&exec_args);
     let preview_decision = bypass_confirm::decide(
         bypass_in_argv,
         bypass_confirm::BypassSource::Configured,
@@ -35114,6 +35092,7 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 release_condition,
                 spec: None,
                 placed_by: Some(merge_hold::placing_seat()),
+                absorbed: Vec::new(),
             };
             // STORY-1416 criterion 1a: before the marker lands, show what is
             // already on record for this PR (marker + verdicts, with seat and
@@ -43566,15 +43545,7 @@ mod forge_binary_resolution_tests;
 #[cfg(all(test, unix))]
 mod story1163_forge_dispatch_tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
-
-    fn write_executable(path: &std::path::Path, body: &str) {
-        std::fs::write(path, body).unwrap();
-        let mut perms = std::fs::metadata(path).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(path, perms).unwrap();
-    }
 
     fn gitlab_project() -> TempDir {
         let tmp = TempDir::new().unwrap();
@@ -43590,7 +43561,7 @@ mod story1163_forge_dispatch_tests {
         let bin_dir = TempDir::new().unwrap();
         let log = bin_dir.path().join("glab.log");
         let glab = bin_dir.path().join("glab");
-        write_executable(
+        crate::test_exec::write_executable(
             &glab,
             &format!(
                 "#!/bin/sh\n\
@@ -43621,7 +43592,7 @@ mod story1163_forge_dispatch_tests {
         let bin_dir = TempDir::new().unwrap();
         let log = bin_dir.path().join("glab.log");
         let glab = bin_dir.path().join("glab");
-        write_executable(
+        crate::test_exec::write_executable(
             &glab,
             &format!(
                 "#!/bin/sh\n\
@@ -50611,10 +50582,7 @@ mod resolve_gh_binary_tests {
     }
 
     fn make_executable(path: &std::path::Path) {
-        std::fs::write(path, "#!/bin/sh\necho gh fake\n").unwrap();
-        let mut perms = std::fs::metadata(path).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(path, perms).unwrap();
+        crate::test_exec::write_executable(path, "#!/bin/sh\necho gh fake\n");
     }
 
     fn make_non_executable(path: &std::path::Path) {
@@ -50689,14 +50657,10 @@ mod resolve_gh_binary_tests {
         let bad = tmp.path().join("gh");
         // Shebang points at a non-existent interpreter, so spawn errors
         // with ENOENT even though is_executable returns true.
-        std::fs::write(
+        crate::test_exec::write_executable(
             &bad,
             "#!/this/interpreter/does/not/exist\necho should never run\n",
-        )
-        .unwrap();
-        let mut perms = std::fs::metadata(&bad).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&bad, perms).unwrap();
+        );
         assert!(is_executable(&bad));
 
         let _g = scoped_prepend_path(tmp.path());
@@ -50719,10 +50683,7 @@ mod resolve_gh_binary_tests {
         let good_dir = TempDir::new().unwrap();
 
         let broken = broken_dir.path().join("gh");
-        std::fs::write(&broken, "#!/this/does/not/exist\n").unwrap();
-        let mut p = std::fs::metadata(&broken).unwrap().permissions();
-        p.set_mode(0o755);
-        std::fs::set_permissions(&broken, p).unwrap();
+        crate::test_exec::write_executable(&broken, "#!/this/does/not/exist\n");
 
         let good = good_dir.path().join("gh");
         make_executable(&good);
@@ -57681,11 +57642,15 @@ fn handle_burndown_run(
     // already owns these specs and refuse to fan out. The lock we just acquired
     // already guarantees exclusivity (BUG-538), so a dead-pid drain-state is a
     // pure stale tombstone — clear it before launching. trace:BUG-607 | ai:claude
-    if let crate::drain_state::DrainStatus::Stale(_) = crate::drain_state::probe(&project_root) {
+    if let status @ (crate::drain_state::DrainStatus::Stale(_)
+    | crate::drain_state::DrainStatus::Stopped(_)) = crate::drain_state::probe(&project_root)
+    {
         let _ = crate::drain_state::DrainState::clear(&project_root);
+        let stopped = matches!(status, crate::drain_state::DrainStatus::Stopped(_));
         println!(
-            "  {} cleared a stale drain-state (its orchestrator is no longer running)",
-            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+            "  {} cleared a {} drain-state (its orchestrator is no longer running)",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            if stopped { "stopped" } else { "stale" }
         );
     }
 
@@ -74222,6 +74187,11 @@ const CLOSURE_HOLD_MARKER: &str = "[aida:closure-held]";
 struct ClosureHold {
     flip: AutoBumpFlip,
     blockers: Vec<aida_core::pickability::ClosureBlocker>,
+    /// BUG-1721: the subset of `blockers` that are themselves held candidates
+    /// from this same reconcile pass — a dependency cycle among specs one merge
+    /// credited, reported as such instead of as an ordinary blocker wait.
+    // trace:BUG-1721 | ai:claude
+    cycle_members: Vec<String>,
     /// STORY-1430: the spec's own declared closure criteria still unmet (a
     /// `closure:pending` tag, or unchecked items in its Closure section).
     criteria: Vec<String>,
@@ -74235,8 +74205,21 @@ fn closure_holders(
     req: &aida_core::Requirement,
     store: &aida_core::RequirementsStore,
 ) -> (Vec<aida_core::pickability::ClosureBlocker>, Vec<String>) {
+    closure_holders_treating_resolved(req, store, &std::collections::HashSet::new())
+}
+
+/// BUG-1721: [`closure_holders`], treating `resolved` requirement ids as
+/// already closed — the specs the current reconcile pass is itself completing.
+/// A spec's OWN declared closure criteria are never affected by another spec
+/// completing, so they pass straight through.
+// trace:BUG-1721 | ai:claude
+fn closure_holders_treating_resolved(
+    req: &aida_core::Requirement,
+    store: &aida_core::RequirementsStore,
+    resolved: &std::collections::HashSet<uuid::Uuid>,
+) -> (Vec<aida_core::pickability::ClosureBlocker>, Vec<String>) {
     (
-        aida_core::pickability::unresolved_closure_blockers(req, store),
+        aida_core::pickability::unresolved_closure_blockers_treating_resolved(req, store, resolved),
         aida_core::pickability::unmet_declared_closure_criteria(req),
     )
 }
@@ -74251,23 +74234,92 @@ fn split_closure_held_flips(
     store: &aida_core::RequirementsStore,
     flips: &mut Vec<AutoBumpFlip>,
 ) -> Vec<ClosureHold> {
-    let mut held = Vec::new();
-    flips.retain(|flip| {
-        let Some(req) = store.get_requirement_by_spec_id(&flip.spec_id) else {
-            return true;
-        };
-        // trace:STORY-1430 | ai:claude
-        let (blockers, criteria) = closure_holders(req, store);
-        if blockers.is_empty() && criteria.is_empty() {
-            return true;
+    // BUG-1721: ONE merge can credit both a blocker and the spec it blocks. A
+    // single pass evaluated the blocked spec while its blocker was still
+    // InProgress in the store, held it at Done, and then completed the blocker
+    // later in the same pass — leaving the dependent un-credited until some
+    // later `aida pull`. Iterate to a LEAST fixed point instead: a flip is
+    // released once every closure holder is resolved in the store OR is itself
+    // being released by this pass. Growing a resolved-id set (rather than
+    // stamping Completed into a store copy) keeps the STORY-1418 completion
+    // seam the only path into Completed, and costs no store clone.
+    //
+    // Least, not greatest: the set starts EMPTY and only grows, so a BlockedBy
+    // cycle among credited specs never becomes resolvable and every member
+    // stays held. Each iteration must release at least one flip or the loop
+    // breaks, so it terminates in at most `flips.len()` iterations.
+    // trace:BUG-1721 | ai:claude
+    let mut resolved: std::collections::HashSet<uuid::Uuid> = std::collections::HashSet::new();
+    let mut released = vec![false; flips.len()];
+    loop {
+        let mut progress = false;
+        for (index, flip) in flips.iter().enumerate() {
+            if released[index] {
+                continue;
+            }
+            // The pre-fix `retain` KEPT a flip whose spec does not resolve in
+            // the store (there was nothing to hold it on, and the write loop
+            // skips it harmlessly). Release it so this rewrite cannot silently
+            // drop it from `flips`, which `aida pull` also reports from.
+            let Some(req) = store.get_requirement_by_spec_id(&flip.spec_id) else {
+                released[index] = true;
+                progress = true;
+                continue;
+            };
+            let (blockers, criteria) = closure_holders_treating_resolved(req, store, &resolved);
+            if blockers.is_empty() && criteria.is_empty() {
+                resolved.insert(req.id);
+                released[index] = true;
+                progress = true;
+            }
         }
+        if !progress {
+            break;
+        }
+    }
+    // BUG-1721: `ClosureBlocker.id` is the blocker's DISPLAY id (agreed > spec >
+    // internal) while a flip carries whichever form its trailer used, so record
+    // both forms — otherwise a cycle between agreed-id specs reads as an
+    // ordinary blocker wait.
+    let mut held_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (index, flip) in flips.iter().enumerate() {
+        if released[index] {
+            continue;
+        }
+        held_ids.insert(flip.spec_id.clone());
+        if let Some(req) = store.get_requirement_by_spec_id(&flip.spec_id) {
+            held_ids.insert(
+                req.agreed_id
+                    .clone()
+                    .or_else(|| req.spec_id.clone())
+                    .unwrap_or_else(|| req.id.to_string()),
+            );
+        }
+    }
+    let mut held = Vec::new();
+    let mut completed = Vec::new();
+    for (index, flip) in flips.iter().enumerate() {
+        if released[index] {
+            completed.push(flip.clone());
+            continue;
+        }
+        let Some(req) = store.get_requirement_by_spec_id(&flip.spec_id) else {
+            continue;
+        };
+        let (blockers, criteria) = closure_holders(req, store);
+        let cycle_members = blockers
+            .iter()
+            .filter(|b| held_ids.contains(&b.id))
+            .map(|b| b.id.clone())
+            .collect();
         held.push(ClosureHold {
             flip: flip.clone(),
             blockers,
+            cycle_members,
             criteria,
         });
-        false
-    });
+    }
+    *flips = completed;
     held
 }
 
@@ -74283,12 +74335,19 @@ fn closure_hold_comment(hold: &ClosureHold) -> String {
     let id = &hold.flip.spec_id;
     let mut why = Vec::new();
     if !hold.blockers.is_empty() {
-        why.push(format!(
-            "unresolved BlockedBy {}. BlockedBy gates completion as well as pickup; it \
+        if !hold.cycle_members.is_empty() {
+            why.push(format!(
+                "dependency cycle involving {}",
+                hold.cycle_members.join(", ")
+            ));
+        } else {
+            why.push(format!(
+                "unresolved BlockedBy {}. BlockedBy gates completion as well as pickup; it \
              releases once every blocker is Completed, Rejected or Superseded (an epic by \
              its child rollup, an ADR once accepted)",
-            aida_core::pickability::closure_blockers_label(&hold.blockers)
-        ));
+                aida_core::pickability::closure_blockers_label(&hold.blockers)
+            ));
+        }
     }
     // STORY-1430: say WHAT is unmet and WHO resolves it. trace:STORY-1430 | ai:claude
     if !hold.criteria.is_empty() {
@@ -74435,12 +74494,22 @@ fn record_closure_hold_event(project_root: &std::path::Path, hold: &ClosureHold)
 fn report_closure_holds(holds: &[ClosureHold]) {
     for hold in holds {
         if !hold.blockers.is_empty() {
-            eprintln!(
-                "  {} {} stays Done — merged, but blocked by {} (completion waits for the blocker)",
-                "↷".yellow(),
-                hold.flip.spec_id,
-                aida_core::pickability::closure_blockers_label(&hold.blockers)
-            );
+            if !hold.cycle_members.is_empty() {
+                eprintln!(
+                    "  {} {} stays Done — dependency cycle involving {}",
+                    "↷".yellow(),
+                    hold.flip.spec_id,
+                    hold.cycle_members.join(", ")
+                );
+            } else {
+                eprintln!(
+                    "  {} {} stays Done — merged, but blocked by {} (completion waits for \
+                     the blocker)",
+                    "↷".yellow(),
+                    hold.flip.spec_id,
+                    aida_core::pickability::closure_blockers_label(&hold.blockers)
+                );
+            }
         }
         // trace:STORY-1430 | ai:claude
         if !hold.criteria.is_empty() {
@@ -78892,8 +78961,6 @@ mod bug_1291_orphan_sweep_tests {
     #[cfg(unix)]
     #[test]
     fn real_phase_driver_shelve_handoff_makes_story_1354_claimable() {
-        use std::os::unix::fs::PermissionsExt;
-
         let root = tempfile::tempdir().unwrap();
         let fake_aida = root.path().join("aida");
         let script = r#"#!/bin/sh
@@ -78907,10 +78974,7 @@ if [ "$1" = "queue" ] && [ "$2" = "add" ]; then
 fi
 exit 1
 "#;
-        std::fs::write(&fake_aida, script).unwrap();
-        let mut permissions = std::fs::metadata(&fake_aida).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&fake_aida, permissions).unwrap();
+        crate::test_exec::write_executable(&fake_aida, script);
 
         let mut driver = RealPhaseDriver::new(
             root.path().to_path_buf(),
@@ -78950,13 +79014,12 @@ exit 1
     #[cfg(unix)]
     #[test]
     fn queue_add_failure_is_propagated() {
-        use std::os::unix::fs::PermissionsExt;
         let root = tempfile::tempdir().unwrap();
         let fake = root.path().join("failing-aida");
-        std::fs::write(&fake, "#!/bin/sh\necho queue unavailable >&2\nexit 23\n").unwrap();
-        let mut permissions = std::fs::metadata(&fake).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&fake, permissions).unwrap();
+        crate::test_exec::write_executable(
+            &fake,
+            "#!/bin/sh\necho queue unavailable >&2\nexit 23\n",
+        );
         let err = aida_subcmd_queue_add_for_reviewer_using(
             root.path(),
             "STORY-1354",
@@ -80361,14 +80424,7 @@ mod story_1043_unshipped_work_tests {
 
     fn executable_fake_gh(root: &std::path::Path, body: &str) -> std::path::PathBuf {
         let fake_gh = root.join("fake-gh");
-        std::fs::write(&fake_gh, body).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&fake_gh).unwrap().permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&fake_gh, perms).unwrap();
-        }
+        crate::test_exec::write_executable(&fake_gh, body);
         fake_gh
     }
 
@@ -87567,7 +87623,9 @@ fn collect_pr_attribution_disagreements(
 ) -> Vec<awaiting_you::PrAttributionDisagreementItem> {
     let state = match drain_state::probe(project_root) {
         drain_state::DrainStatus::Active(state) => state,
-        drain_state::DrainStatus::None | drain_state::DrainStatus::Stale(_) => return Vec::new(),
+        drain_state::DrainStatus::None
+        | drain_state::DrainStatus::Stale(_)
+        | drain_state::DrainStatus::Stopped(_) => return Vec::new(),
     };
     let Some(default_ref) = resolve_default_branch_ref(project_root) else {
         return Vec::new();
@@ -92021,6 +92079,7 @@ mod story_1436_gate_held_tests {
                 RequirementStatus::Done,
             ),
             blockers: vec![],
+            cycle_members: vec![],
             criteria: vec!["docs updated".to_string()],
         };
         let reason = closure_hold_reason(&hold);
@@ -104501,6 +104560,21 @@ struct ResumeEntry {
     from_pr: bool,
 }
 
+/// What the ownership probe concluded about a same-branch open change before
+/// TASK-1529 retracts it. `Foreign` and `Unverified` both refuse the close, but
+/// they are different operator situations: a change we could not identify may
+/// still be ours and still carries failing guards, so it is reported as loudly
+/// as a failed close, while somebody else's change is left alone quietly.
+// trace:TASK-1529 | ai:claude
+enum RetractionOwnership {
+    /// Open, and its author is this forge identity.
+    Ours,
+    /// Resolved, and not ours to close.
+    Foreign,
+    /// The probe itself failed, or the forge withheld the author.
+    Unverified,
+}
+
 impl RealPhaseDriver {
     /// Set the PR number AND, if the spec is supervised, stamp the merge-hold
     /// marker the MOMENT the PR becomes known (fresh creation or recovery/detect)
@@ -104635,16 +104709,63 @@ impl RealPhaseDriver {
         }
     }
 
-    /// TASK-1289: the publication guards refused, but the implementer may
+    /// TASK-1529: the publication guards refused, but the implementer may
     /// already have opened the PR. Retract an OPEN change through the forge so
     /// "the guards refused" and "nothing is published" are the same state. An
     /// already-merged change is left alone: closing is meaningless there and
     /// the drive's AlreadyMerged handling owns it. Best-effort: a failed
     /// close is reported and the phase still fails. Split out of
     /// `run_implementer` so a test can drive it with an injected forge.
-    // trace:TASK-1289 trace:TASK-1421 | ai:claude
+    // trace:TASK-1529 trace:TASK-1421 | ai:codex
     fn retract_refused_publication(&mut self, branch: &str, detail: &str) {
         if let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(branch) {
+            // A same-branch PR may have been opened by an operator while the
+            // implementer was running. Branch presence alone does not prove
+            // the agent published it. Require both forge identities to resolve
+            // and match before applying this destructive lifecycle action.
+            let forge = self.project_forge();
+            let mut sink = crate::network_retry::NoopSink;
+            let metadata = forge.change_metadata(pr.number, &mut sink);
+            let owner = forge.authenticated_user_login();
+            let ownership = match (metadata, owner) {
+                (Ok(meta), Ok(owner)) if meta.state == crate::forge::ChangeState::Open => {
+                    match meta.author.as_deref() {
+                        Some(author) if author.eq_ignore_ascii_case(&owner) => {
+                            RetractionOwnership::Ours
+                        }
+                        Some(_) => RetractionOwnership::Foreign,
+                        None => RetractionOwnership::Unverified,
+                    }
+                }
+                // A change that is no longer open needs no retraction, and the
+                // AlreadyMerged path owns the merged case.
+                (Ok(_), Ok(_)) => RetractionOwnership::Foreign,
+                _ => RetractionOwnership::Unverified,
+            };
+            match ownership {
+                RetractionOwnership::Ours => {}
+                RetractionOwnership::Foreign => {
+                    if !self.json {
+                        eprintln!(
+                            "  {} left PR-{} open — this forge identity did not open it",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            pr.number,
+                        );
+                    }
+                    return;
+                }
+                RetractionOwnership::Unverified => {
+                    if !self.json {
+                        eprintln!(
+                            "  {} PR-{} is OPEN and its publication guards FAILED, but who \
+                             opened it could not be confirmed — check it by hand",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            pr.number,
+                        );
+                    }
+                    return;
+                }
+            }
             let change = crate::forge::ChangeRef {
                 id: pr.number,
                 url: pr.url.clone(),
@@ -104653,7 +104774,7 @@ impl RealPhaseDriver {
                 title: Some(pr.title.clone()),
             };
             let note = implementer_preflight::retraction_notice(detail);
-            match self.project_forge().close_change(&change, &note) {
+            match forge.close_change(&change, &note) {
                 Ok(()) => {
                     if !self.json {
                         eprintln!(
@@ -106784,6 +106905,38 @@ mod forge_seam_tests {
             forge.closed().is_empty(),
             "a merged change must never be closed: {:?}",
             forge.closed()
+        );
+    }
+
+    #[test]
+    fn refused_preflight_leaves_same_branch_pr_by_another_user_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(43, "claude/task-1421"));
+        forge.author = Some("operator".into());
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+
+        assert!(
+            forge.closed().is_empty(),
+            "same-branch PR by a different forge user must remain untouched"
+        );
+    }
+
+    #[test]
+    fn refused_preflight_fails_closed_when_pr_author_is_unknown() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(44, "claude/task-1421"));
+        forge.author = None;
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+
+        assert!(
+            forge.closed().is_empty(),
+            "unknown ownership must fail closed"
         );
     }
 }

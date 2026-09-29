@@ -250,11 +250,16 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                 _ => None,
             };
             if let (
-                drain_state::DrainStatus::None | drain_state::DrainStatus::Stale(_),
+                drain_state::DrainStatus::None
+                | drain_state::DrainStatus::Stale(_)
+                | drain_state::DrainStatus::Stopped(_),
                 Some(lock),
             ) = (&status, &live_lock)
             {
-                let stale_state = matches!(status, drain_state::DrainStatus::Stale(_));
+                let stale_state = matches!(
+                    status,
+                    drain_state::DrainStatus::Stale(_) | drain_state::DrainStatus::Stopped(_)
+                );
                 if json_output {
                     println!(
                         "{}",
@@ -316,6 +321,12 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                     );
                 }
                 drain_state::DrainStatus::Stale(state) => {
+                    print!(
+                        "{}",
+                        drain_state::render_human_with_context(&state, true, &project_root)
+                    );
+                }
+                drain_state::DrainStatus::Stopped(state) => {
                     print!(
                         "{}",
                         drain_state::render_human_with_context(&state, true, &project_root)
@@ -718,7 +729,7 @@ pub(crate) fn drain_clear(
              orchestrator exits.",
             state.orchestrator_pid
         ),
-        drain_state::DrainStatus::Stale(_) => {
+        drain_state::DrainStatus::Stale(_) | drain_state::DrainStatus::Stopped(_) => {
             drain_state::DrainState::clear(project_root)?;
             if json {
                 println!("{{\"status\":\"cleared\"}}");

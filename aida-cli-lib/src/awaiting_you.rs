@@ -2487,6 +2487,7 @@ mod tests {
             release_condition: None,
             spec: None,
             placed_by: None,
+            absorbed: Vec::new(),
         }
     }
 

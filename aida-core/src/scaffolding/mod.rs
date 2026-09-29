@@ -11,6 +11,9 @@
 //! - .git/hooks/ directory with traceability validation hooks
 //! - Code traceability configuration
 
+/// Render, check, and synchronize the working-tree portable skill pack.
+// trace:TASK-1520 | ai:codex
+pub mod agent_pack;
 mod aida_md;
 mod claude_md;
 pub mod codex_hooks;
@@ -3260,12 +3263,9 @@ Use this skill when:
     // trace:BUG-375 | ai:codex
     // trace:STORY-1475 | ai:claude
     // trace:BUG-1639 | ai:claude
+    // trace:TASK-1520 | ai:codex
     fn generate_portable_skill(&self, file: &inventory::PortableSkillFile) -> String {
-        use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES
-            .get(file.source_key.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("# {}\n\n(template not found)", file.source_key))
+        embedded_template_or_placeholder(&file.source_key)
     }
 }
 
@@ -3280,6 +3280,17 @@ fn portable_skill_raw(skill_name: &str) -> String {
         .and_then(|key| crate::templates::EMBEDDED_TEMPLATES.get(key))
         .map(|s| s.to_string())
         .unwrap_or_else(|| format!("# {}\n\n(template not found)", skill_name))
+}
+
+/// The embedded body for template key `key`, or the placeholder the scaffolder
+/// substitutes when a key is missing. One rule, so the scaffolder's pack writer
+/// and the dev-repo pack sync cannot disagree about a missing template.
+// trace:TASK-1520 | ai:codex
+pub(crate) fn embedded_template_or_placeholder(key: &str) -> String {
+    crate::templates::EMBEDDED_TEMPLATES
+        .get(key)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("# {}\n\n(template not found)", key))
 }
 
 /// The exact bytes the full scaffold writes for skill `name` in skill pack

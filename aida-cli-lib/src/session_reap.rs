@@ -170,7 +170,8 @@ pub(crate) fn classify_session_reap(facts: &ReapFacts) -> ReapVerdict {
         AgentWorktreeVerdict::Removable(reason) => {
             ReapVerdict::Reap(format!("spec finished, process exited, {reason}"))
         }
-        AgentWorktreeVerdict::Keep(reason) => ReapVerdict::Skip(reason),
+        // trace:BUG-1719 | ai:codex
+        AgentWorktreeVerdict::Keep { reason, .. } => ReapVerdict::Skip(reason),
     }
 }
 
@@ -402,9 +403,21 @@ pub(crate) fn spec_trailer_landed_on(
     branch: &str,
     spec: &str,
 ) -> bool {
+    spec_landing_commit(project_root, default_ref, branch, spec).is_some()
+}
+
+/// Return the first commit after `branch` diverged that names `spec` as
+/// delivered. This is the landing point used by recency checks.
+// trace:BUG-1718 | ai:codex
+pub(crate) fn spec_landing_commit(
+    project_root: &std::path::Path,
+    default_ref: &str,
+    branch: &str,
+    spec: &str,
+) -> Option<String> {
     let spec = spec.trim();
     if spec.is_empty() || branch.trim().is_empty() {
-        return false;
+        return None;
     }
     let run = |args: &[&str]| -> Option<String> {
         std::process::Command::new("git")
@@ -423,34 +436,45 @@ pub(crate) fn spec_trailer_landed_on(
         default_ref,
         branch,
     ]) else {
-        return false;
+        return None;
     };
     let merge_base = merge_base.trim();
     if merge_base.is_empty() {
-        return false;
+        return None;
     }
     // `--grep` is a cheap literal pre-filter (it also matches longer ids that
     // share the prefix); the parsers below make the exact decision.
     let Some(log) = run(&[
         "log",
-        "--format=%B%x00",
+        "--format=%H%x00%B%x00",
         "--fixed-strings",
         "--regexp-ignore-case",
         &format!("--grep={spec}"),
         &format!("{merge_base}..{default_ref}"),
     ]) else {
-        return false;
+        return None;
     };
-    log.split('\0')
-        .map(str::trim)
-        .filter(|message| !message.is_empty())
-        .filter(|message| !is_plan_commit_subject(message.lines().next().unwrap_or("")))
-        .any(|message| {
-            extract_spec_ids_from_commit(message)
-                .into_iter()
-                .chain(extract_referenced_spec_ids_from_commit(message))
-                .any(|id| id.eq_ignore_ascii_case(spec))
-        })
+    let mut commits = log.split('\0');
+    let mut matches = Vec::new();
+    while let (Some(sha), Some(message)) = (commits.next(), commits.next()) {
+        let sha = sha.trim();
+        let message = message.trim();
+        if sha.is_empty()
+            || message.is_empty()
+            || is_plan_commit_subject(message.lines().next().unwrap_or(""))
+        {
+            continue;
+        }
+        if extract_spec_ids_from_commit(message)
+            .into_iter()
+            .chain(extract_referenced_spec_ids_from_commit(message))
+            .any(|id| id.eq_ignore_ascii_case(spec))
+        {
+            matches.push(sha.to_string());
+        }
+    }
+    // `git log` is newest-first; the landing is the oldest qualifying commit.
+    matches.pop()
 }
 
 /// Is `worktree`'s HEAD a symbolic ref to `refs/heads/<branch>`? A detached
@@ -687,9 +711,9 @@ pub(crate) fn gather_merge_facts_pinned(
     // of its own branch and no PR of its own; the landing commit on the
     // default branch names it in a trailer instead. Local and cheap, so it
     // runs before (and can spare) the forge lookup.
-    let spec_trailer_on_main = probe.is_some_and(|(default_ref, tip)| {
-        spec_trailer_landed_on(project_root, default_ref, tip, spec)
-    });
+    let landing_commit = probe
+        .and_then(|(default_ref, tip)| spec_landing_commit(project_root, default_ref, tip, spec));
+    let spec_trailer_on_main = landing_commit.is_some();
     // Only pay for the forge lookup when the cheap probes were inconclusive
     // (the squash-merge case) AND everything else already points at a reap.
     // The forge is asked by branch NAME; the content proof below still runs

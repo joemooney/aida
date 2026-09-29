@@ -583,15 +583,26 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
 }
 
 /// The liveness decision core: a [`Stale`](DrainStatus::Stale) drain (recorded
-/// orchestrator PID is dead) yields one `WAKE drain-crashed` line; an active or
-/// absent drain yields nothing. Pure so it is unit-testable without a live
-/// process, the same pattern as `ci_idle_timeout::ci_wait_verdict`.
+/// orchestrator PID is dead, no stop on record) yields one `WAKE drain-crashed`
+/// line and a [`Stopped`](DrainStatus::Stopped) one a `WAKE drain-stopped`
+/// line; an active or absent drain yields nothing. Every terminating line
+/// carries the `WAKE ` prefix — it is what the supervisor reading this stream
+/// keys on, so a new arm that omits it would stop the watch silently.
+/// Pure so it is unit-testable without a live process, the same pattern as
+/// `ci_idle_timeout::ci_wait_verdict`.
 // trace:TASK-990 | ai:claude
+// trace:TASK-1542 | ai:claude
 fn stale_wake_line(status: &DrainStatus) -> Option<String> {
     match status {
         DrainStatus::Stale(state) => Some(format!(
             "WAKE drain-crashed — orchestrator pid {} is no longer running",
             state.orchestrator_pid
+        )),
+        // trace:TASK-1542 | ai:claude
+        DrainStatus::Stopped(state) => Some(format!(
+            "WAKE drain-stopped — orchestrator pid {} exited after a stop request (recorded {})",
+            state.orchestrator_pid,
+            state.stopped_at.as_deref().unwrap_or("unknown time")
         )),
         DrainStatus::Active(_) | DrainStatus::None => None,
     }
@@ -786,6 +797,23 @@ mod tests {
                 .any(|l| !l.starts_with("WAKE") && l.contains("run-started")),
             "benign line is un-prefixed under --all: {s:?}"
         );
+    }
+
+    /// A STOPPED drain wakes the follower too — and with the same `WAKE `
+    /// prefix every other terminating line carries. A stopped wave reported
+    /// as `drain-crashed` misattributes a deliberate stop; one reported with
+    /// no prefix at all stops the watch in a shape the supervisor reading
+    /// this stream does not recognise. Both are regressions this asserts.
+    // trace:TASK-1542 | ai:claude
+    #[test]
+    fn watch_emits_prefixed_drain_stopped_on_stopped_probe() {
+        let mut state = drain_state::DrainState::new_single("STORY-1", "run-1", false);
+        state.stopped_at = Some("2026-09-28T12:00:00Z".to_string());
+        state.stopped_reason = Some("sigterm".to_string());
+        let line = stale_wake_line(&DrainStatus::Stopped(state)).expect("a stopped drain wakes");
+        assert!(line.starts_with("WAKE drain-stopped"), "{line}");
+        assert!(line.contains("2026-09-28T12:00:00Z"), "{line}");
+        assert!(!line.contains("drain-crashed"), "{line}");
     }
 
     #[test]

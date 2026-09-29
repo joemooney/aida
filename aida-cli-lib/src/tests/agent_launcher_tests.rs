@@ -2533,8 +2533,6 @@ fn register_existing_agent_entry_is_status_visible_and_pid_keyed() {
 #[cfg(unix)]
 #[test]
 fn tracked_fake_agent_receives_env_and_registry_is_removed() {
-    use std::os::unix::fs::PermissionsExt;
-
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -2548,18 +2546,14 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
     let fake_agent = fake_bin.join("agent");
     let env_out = tmp.path().join("env.txt");
     let argv_out = tmp.path().join("argv.txt");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &fake_agent,
         format!(
             "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
             env_out.display(),
             argv_out.display()
         ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&fake_agent, perms).unwrap();
+    );
     let config = AgentLaunchConfig {
         agent_type: "codex",
         binary: "codex",
@@ -2640,8 +2634,6 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
 #[cfg(unix)]
 #[test]
 fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
-    use std::os::unix::fs::PermissionsExt;
-
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -2653,18 +2645,14 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
     let fake_agent = tmp.path().join("agy");
     let env_out = tmp.path().join("env.txt");
     let argv_out = tmp.path().join("argv.txt");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &fake_agent,
         format!(
             "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
             env_out.display(),
             argv_out.display()
         ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&fake_agent, perms).unwrap();
+    );
     let config = AgentLaunchConfig {
         agent_type: "antigravity",
         binary: "agy",
@@ -3067,26 +3055,20 @@ fn agent_launch_context_without_spec_preserves_open_ended_hint() {
 #[cfg(unix)]
 #[test]
 fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
-    use std::os::unix::fs::PermissionsExt;
-
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida/agents/context")).unwrap();
     let fake_agent = tmp.path().join("agent");
     let env_out = tmp.path().join("env.txt");
     let context_out = tmp.path().join("context-copy.md");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &fake_agent,
         format!(
             "#!/bin/sh\nenv | sort > '{}'\ncp \"$AIDA_AGENT_CONTEXT_FILE\" '{}'\n",
             env_out.display(),
             context_out.display()
         ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&fake_agent, perms).unwrap();
+    );
     let context_path = project
         .join(".aida/agents/context")
         .join("codex-token.context.md");

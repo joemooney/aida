@@ -259,8 +259,6 @@ fn session_end_unshipped_patch_count_keeps_genuine_unshipped_work() {
 #[cfg(unix)]
 #[test]
 fn session_end_pr_state_uses_pr_scope_when_alias_branch_has_no_branch_pr() {
-    use std::os::unix::fs::PermissionsExt;
-
     let tmp = tempfile::TempDir::new().unwrap();
     let repo = tmp.path();
     std::fs::create_dir_all(repo.join(".aida")).unwrap();
@@ -270,7 +268,7 @@ fn session_end_pr_state_uses_pr_scope_when_alias_branch_has_no_branch_pr() {
     );
 
     let gh = repo.join("fake-gh");
-    write_file(
+    crate::test_exec::write_executable(
         &gh,
         r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
@@ -287,9 +285,6 @@ fi
 exit 1
 "#,
     );
-    let mut perms = std::fs::metadata(&gh).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&gh, perms).unwrap();
 
     let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", gh.to_str().unwrap())]);
 

@@ -333,8 +333,10 @@ Before relying on the wrapper in a new environment, read the five-bug arc that h
 ## Keeping the Codex Skill And Prompt Packs Current
 
 For interactive Codex sessions, AIDA workflows live in the scaffolded
-`.codex/skills/` pack: choose them from `/skills`, invoke them as `$aida-*`
+`.agents/skills/` pack: choose them from `/skills`, invoke them as `$aida-*`
 when the skill is installed, or run the matching `aida ...` CLI verb directly.
+The legacy `.codex/skills/` pack is still read by Codex 0.157.1, but new
+installs no longer create it.
 For example, use `$aida-capture` or `/skills` -> `aida-capture`; do not expect
 `/aida-capture` or `/prompts:aida-capture` to appear in Codex CLI's slash menu.
 
@@ -355,9 +357,9 @@ aida scaffold refresh          # every installed pack, this project + ~/.codex/p
 aida init --refresh            # same refresh, as part of a re-init
 ```
 
-Refresh covers `.claude/skills/`, `.claude/commands/`, `.codex/skills/`,
-`.antigravity/skills/` and `~/.codex/prompts/` in one pass, and it is safe by
-construction:
+Refresh covers `.claude/skills/`, `.claude/commands/`, `.agents/skills/`, any
+legacy `.codex/skills/` or `.antigravity/skills/` pack that already exists, and
+`~/.codex/prompts/` in one pass, and it is safe by construction:
 
 - a pack file whose body still hashes to the scaffold checksum it was written
   with is **overlaid** with the current template;

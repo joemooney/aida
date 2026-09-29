@@ -101,9 +101,8 @@ fn parse_review_snapshot_branch_is_scoped_to_the_exact_shape() {
 
 #[cfg(unix)]
 fn fake_gh_for_pr(dir: &std::path::Path, state: &str, head_oid: &str) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let path = dir.join("gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             "#!/bin/sh\n\
@@ -115,11 +114,7 @@ fn fake_gh_for_pr(dir: &std::path::Path, state: &str, head_oid: &str) -> std::pa
              exit 1\n",
             state, head_oid
         ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&path, perms).unwrap();
+    );
     path
 }
 

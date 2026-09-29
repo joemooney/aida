@@ -15308,6 +15308,18 @@ mod tests {
         );
     }
 
+    // trace:TASK-200 | ai:codex
+    #[test]
+    fn agent_new_help_discloses_foreground_blocking_behavior() {
+        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let help = find_subcommand_help(&mut cmd, &["agent", "new"]);
+        let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("BLOCKS until") && flat.contains("does not exit when its turn ends"),
+            "`aida agent new --help` no longer explains the foreground blocking behavior; got:\n{help}"
+        );
+    }
+
     /// Render the long help for a nested subcommand path (e.g. `queue work`).
     // trace:TASK-185 | ai:claude
     fn find_subcommand_help(cmd: &mut clap::Command, path: &[&str]) -> String {
