@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-09-29T19:21:18.403194260Z
+modified_at: 2026-09-29T19:51:21.698273213Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -389,6 +389,64 @@ comments:
   created_at: 2026-09-29T19:21:18.403194260Z
   modified_at: 2026-09-29T19:21:18.403194260Z
   session_id: 2678b332-6dc9-46b7-a7b1-0ade89cf2036
+- id: 01a0eeb8-c562-73c2-9898-ef9d71391ec6
+  author: joe
+  content: |
+    ## Sketch + evidence: de-flaking `migration_pending_reader_never_serves_old_schema` (PR #2283)
+
+    ### Root cause — reproduced deterministically, not inferred
+
+    CI run 36615144091 (head `d35d4b46e2`) failed at `cached_git_backend.rs:3760:56`:
+
+    ```
+    called `Result::unwrap()` on an `Err` value: the cache is being upgraded; re-run shortly
+    ```
+
+    That is the test's final read — the one asserting that once the refresh-flock holder leaves, a
+    re-run applies the migration. It ran inside the **same `CacheReadScope`** whose `wait_deadline` the
+    preceding 15-second migration wait had already spent.
+
+    `wait_remaining()` is deliberately one deadline per invocation ("One deadline across backends in an
+    invocation", pre-C decision B). So once that deadline is spent, every later read in that scope gets
+    a **zero** wait budget. `freshen_for_read`'s `Ok(None)` branch then takes
+    `remaining.is_zero() -> migration -> bail!("the cache is being upgraded")` on *any* transient
+    contention on the refresh flock, instead of waiting it out. On a contended 4-vCPU runner that window
+    is reachable; on this 6-core host it is not (12 full-suite runs, 40 module runs, all clean).
+
+    Proof rather than theory: with the fix reverted and a 200 ms flock holder injected across that final
+    read, the test fails with the **identical** panic — same line, same column 56, same message. With
+    the fix it passes.
+
+    ### Design
+
+    1. **The final read models a re-run, so it gets a new scope.** "Re-run shortly" is a new CLI
+       invocation, which by the signed-off design has its own budget. The test now drops the spent scope
+       and opens a fresh one before the final read, and **holds the flock for 200 ms across it**, so a
+       spent budget can no longer pass. This is the regression guard, not just a silencer.
+    2. **The 15 s migration window is injectable.** `cache_refresh::MIGRATION_WAIT` (still 15 s) plus
+       `migration_wait_limit()`, with a `#[cfg(test)]` thread-local override set by
+       `set_migration_wait_limit()` — the same seam style as the existing `BEFORE_ACQUIRE` /
+       `UNSUPPORTED` / `INCREMENTAL_ERROR` hooks. The test pins `MIGRATION_WAIT == 15 s` by assertion and
+       then measures a 400 ms injected window, so the assertion tests the state machine instead of the
+       runner's scheduler. The old `>= 15 s && < 17 s` pair had 2 s of headroom and cost 15 wall-clock
+       seconds in **every** suite run; the test now takes ~2.9 s instead of ~15.5 s.
+    3. **Two new unit tests pin the invariant that forced the change**:
+       `wait_remaining_is_zero_once_the_invocation_deadline_is_spent` and
+       `migration_wait_limit_defaults_to_the_shipped_window`.
+
+    No production behaviour changes: the shipped window is still 15 s and the one-deadline-per-invocation
+    rule is untouched. The only non-test edit replaces the literal `Duration::from_secs(15)` with the
+    named constant behind the seam.
+
+    ### Not changed
+
+    `cache_refresh::tests::nested_freshen_in_lock_holder_does_not_wait` was named in the earlier handoff
+    as a second flake. Its log is no longer retrievable (that run had a single attempt and reported a
+    different failure), and it passed in both surviving CI runs and in 12 local full-suite runs at
+    `--test-threads=10`. Changing it blind would be guessing, so it is left alone and recorded here.
+  created_at: 2026-09-29T19:51:21.698273213Z
+  modified_at: 2026-09-29T19:51:21.698273213Z
+  session_id: 0928828c-bb45-4e70-83ac-bcff6b4f7d68
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
