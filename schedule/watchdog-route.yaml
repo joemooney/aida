@@ -1,10 +1,7 @@
 job: watchdog-route
-last_run: 2026-09-29T04:04:21.697777385Z
+last_run: 2026-09-29T09:43:42.489679317Z
 last_by:
   seat: advisor
-  session: 82e35274-2614-44d4-a519-d33e83252c8c
+  session: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
   vendor: antigravity
 result: done
-note: 'Cleared, no action and no new poll added. Re-ran the check this session: ''runaway-seats evidence: verdict ok — 2 files with new bytes, 57095 bytes read, 17 sessions, 0 with unknown timing''. The seat that tripped it ~10h ago is no longer waking; nothing in the current window shows the storm shape (wake rate / one repeated injected prompt / no-op replies). Known coverage gap, unchanged and not caused by this trip: codex sessions under ~/.codex/sessions are not project-scoped and are not read by this check, so a Codex seat storm would not be visible here.'
-due_since: 2026-09-29T09:41:20.444734863Z
-due_reason: on CronJobFailed
