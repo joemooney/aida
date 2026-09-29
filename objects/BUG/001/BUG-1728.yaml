@@ -111,18 +111,26 @@ description: |
   AC6. The baseline in this spec (7146 passed / 7 failed / 12 ignored, run 36585692819) is compared
        against the closing run, and any test that stopped running rather than started passing is
        called out.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T15:38:11.514364962Z
-modified_at: 2026-09-29T15:38:40.420155887Z
+modified_at: 2026-09-29T15:38:49.820288998Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0c074-3ed9-7a81-bf28-bd8ac8614a6c
   created_at: 2026-09-29T15:38:40.420151027Z
   created_by: joe
+history:
+- id: 01a0edd1-925c-7ce1-94fc-91c99890cba1
+  author: joe
+  timestamp: 2026-09-29T15:38:49.820286512Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 7d85a8057d6ab4aaf62b3426db351c94ecd93a34
   branch: main
