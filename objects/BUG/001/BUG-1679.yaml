@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-09-29T06:11:51.115160891Z
+modified_at: 2026-09-29T11:16:30.134347260Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -269,6 +269,43 @@ comments:
   created_at: 2026-09-29T06:11:51.115160891Z
   modified_at: 2026-09-29T06:11:51.115160891Z
   session_id: d3b4d739-0433-404d-b8de-30f658d731a8
+- id: 01a0ece1-6736-7e20-b6d2-96e29e289369
+  author: joe
+  content: |
+    **Advisor note, filed ahead of completion so the mismatch is not silent.** Two things about how this spec closes.
+
+    ## AC1 as written describes the behaviour that was REJECTED
+
+    AC1 reads "prefer `AIDA_BIN` when it names an executable file". That unguarded honoring is what PR **#2226** implements, and it was rejected: an `AIDA_BIN` value is a string any process can assert, so honoring it unconditionally lets an arbitrary parent redirect a child's binary resolution. What is shipping instead, in PR **#2261** (branch `task-1499-2`, head `b5e45b66b408`), is the *guarded* rule: `AIDA_BIN` is honored only when a live AIDA ancestor process is present.
+
+    **So AC1 is superseded by the guarded rule.** Record that when completing this spec rather than marking it met — the shipped behaviour is deliberately narrower than the AC's wording, and a future reader comparing the two will otherwise read a regression where there is a security decision.
+
+    ## This spec will NOT auto-complete when #2261 merges
+
+    Checked, because the commit trailer is what drives merge-time completion:
+
+    ```
+    $ gh pr view 2261 --json commits --jq '.commits[].messageHeadline' | grep -oE '\((BUG|TASK|STORY)-[0-9]+\)' | sort | uniq -c
+          2 (TASK-1499)
+    $ # occurrences of BUG-1679 anywhere in #2261's commit messages:
+          0
+    ```
+
+    Every trailer on #2261 names **TASK-1499**. `BUG-1679` appears nowhere in that PR's commits, so merging it completes TASK-1499 and leaves this spec at `needs-attention`. It has to be completed by hand, against #2261, and **not before** that merge lands.
+
+    ## Sequence, for whoever does it
+
+    1. `aida merge-hold clear 2261 && aida pr ship 2261` — needs a human at an interactive terminal; the advisor seat is refused by design (`merge_hold.rs:98-118`, STORY-1397).
+    2. Close **#2226** unmerged. It is the rejected unguarded implementation, and it still carries its own CHANGES-REQUESTED merge-hold for this spec.
+    3. Complete **BUG-1679** against #2261, recording the AC1 supersession above.
+    4. Rebuild, since the released binary changes behaviour.
+
+    Related: **BUG-1724** was rejected; its premise ("before TASK-1499 the inherited `AIDA_BIN` covered this case unconditionally") is false of main, where `AIDA_BIN` was written and never read. See its own disposition comment.
+
+    Provenance: advisor seat, session #8 of the relay, 2026-09-29.
+  created_at: 2026-09-29T11:16:30.134347260Z
+  modified_at: 2026-09-29T11:16:30.134347260Z
+  session_id: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
 history:
 - id: 01a0e0fd-3532-7760-9c08-3b79df618a20
   author: aida-session-start
