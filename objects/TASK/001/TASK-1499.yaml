@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-29T05:59:47.615816049Z
+modified_at: 2026-09-29T06:06:04.419392942Z
 req_type: Task
 tags:
 - agent-launch
@@ -218,6 +218,177 @@ comments:
     from it.
   created_at: 2026-09-29T05:59:47.615816049Z
   modified_at: 2026-09-29T05:59:47.615816049Z
+  session_id: a1b56cce-0ca3-42c2-8ccf-ff605a280cc4
+- id: 01a0ebc5-3283-7942-ae97-50c682be1406
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF — #2261 / TASK-1499 and #2226 / BUG-1679, from the 2026-09-28 operator decision
+
+    This brief is the advisor hand-off for BOTH PRs. They collide on ONE resolver, so they are reworked
+    together and neither is approved alone. Read the operator-decision comment dated 2026-09-28 first;
+    this brief implements it and CORRECTS one part of it.
+
+    WHAT I ACCEPTED — do not redo any of it
+
+    1. The two `Build (ubuntu)` failures recorded against 8021605585e7 are ALREADY FIXED on the branch
+       head by 0c3ddb0ab4, and I verified this by EXECUTION, not by reading the commit message:
+           cargo test -p aida-cli-lib --lib -- \
+             aida_bin::tests::override_running_and_path_precedence_and_layouts \
+             resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup
+           -> exit 0, "test result: ok. 2 passed; 0 failed"
+       The earlier handoff's claim that #2261 "needs implementer rework on two test defects regardless"
+       is STALE. There is no test rework outstanding. The recorded finding should be cleared on the
+       strength of the head, not re-briefed.
+    2. `resolve()` (aida_bin.rs:52) is already a PURE function taking `override_path`, `requested`,
+       `current` and `path_env`. Its precedence logic, profile selection, staleness detection and
+       `AIDA_BUILD_PROFILE` handling are all fine and are NOT in scope. The entire change lands at the
+       CALLER that decides whether to pass `Some(AIDA_BIN)`.
+    3. 0c3ddb0ab4's mtime fix is right, including its explicit refusal to weaken `dm > rm` to `dm >= rm`.
+       Leave it alone.
+
+    THE ONE BLOCKING FINDING: `process()` honors an ambient `AIDA_BIN` unconditionally
+
+    `aida_bin::process()` (aida_bin.rs:229-230) reads `std::env::var_os("AIDA_BIN")` and hands it to
+    `resolve()` as top-precedence with no check on where it came from. That value is not display-only —
+    it feeds `std::process::Command::new(...)` spawns (lib.rs ~100304, ~100487), the `.mcp.json` command
+    field (config_cmd.rs:3183), `trusted_session_env` (lib.rs ~41751) and drain_lock.rs:458. Under the
+    operator decision, ambient environment alone must no longer redirect the coordinating binary.
+
+    I CORRECT THE DECISION COMMENT ON ONE POINT — DO NOT IMPLEMENT A NEW ENV VAR
+
+    The decision comment proposed a companion provenance marker (`AIDA_BIN_FROM_PID`) checked against
+    the ancestor chain. DO NOT DO THAT. I found the defect in my own proposal by reading the guards:
+
+    `SESSION_ENV_NAMES` (lib.rs:41968) is `[&str; 3] = ["CARGO_TARGET_DIR", "AIDA_AGENT_TYPE",
+    "AIDA_BIN"]` — the allowlist of names taken from `.aida/session-env.sh`, a file that LIVES IN THE
+    WORKTREE AND A BRANCH CAN COMMIT ITS OWN COPY. It is guarded by BUG-1624/BUG-1627 tests that assert
+    the exact name set and the exact array size (bug_1624_shell_and_git_guard_tests.rs:364,
+    bug_1627_session_env_hardening_tests.rs:21). Adding a 4th name to carry the marker would let a
+    committed file supply the very token that authenticates the override — and the parent aida pid is
+    trivially readable from /proc, so the token is guessable even without the file. The marker design
+    would have punched a hole in an existing security guard. Do not widen that allowlist.
+
+    Note also the doctrine those guards already established for this exact question, which this rework
+    extends rather than invents: in `trusted_session_env` (lib.rs:41976) `AIDA_BIN` is NEVER taken from
+    the file — the pin is REPLACED by `running_exe`. The file path already refuses an untrusted
+    `AIDA_BIN`; the process-env path is the remaining inconsistency, and that inconsistency is exactly
+    the P1 the codex reviewer raised on #2226.
+
+    THE CHANGE — derive attribution from process state, which a file cannot forge
+
+    Honor `AIDA_BIN` only when a LIVE AIDA PROCESS IS AN ANCESTOR of this process. No new env var, no
+    allowlist change, nothing a committed file can influence.
+
+      aida-core/src/liveness.rs — new, mirroring `nearest_claude_ancestor_pid` (liveness.rs:465) and its
+      pure core `nearest_claude_in_chain` (liveness.rs:487) EXACTLY; that split is the precedent:
+          pub fn nearest_aida_ancestor_pid(start: u32) -> Option<u32>
+          pub fn nearest_aida_in_chain<'a>(chain: impl IntoIterator<Item = (u32, &'a str, &'a [String])>) -> Option<u32>
+      Walk the chain with the same `seen`-set cycle guard and the same stop-at-pid-1 condition. Add an
+      `is_aida_process(name, cmd)` beside the existing `is_claude_process` / `is_codex_process`.
+      IMPORTANT: the chain from `nearest_claude_ancestor_pid` INCLUDES the start pid (see the
+      `walk_ancestor_pids` doc at liveness.rs:419), so a process that is itself `aida` attributes to
+      itself. That is correct and intended — AIDA's own `export_coordinating_bin_env` is a trusted setter.
+
+      aida-cli-lib/src/aida_bin.rs — the decision, split pure/impure:
+          #[derive(Debug, Clone, PartialEq, Eq)]
+          pub(crate) enum OverrideDecision {
+              Honored(PathBuf),
+              /// `AIDA_BIN` is set, but no live AIDA process is an ancestor: ambient, so ignored.
+              DeclinedAmbient(PathBuf),
+              Absent,
+          }
+          /// PURE: the trust rule, unit-testable with no process tree.
+          pub(crate) fn decide_override(aida_bin: Option<&Path>, aida_ancestor: Option<u32>) -> OverrideDecision
+      `process()` calls `decide_override(...)` and passes `Some(path)` to `resolve()` ONLY for
+      `Honored`. On `DeclinedAmbient` it passes `None` and resolution falls through to the running
+      executable, then PATH.
+
+    WHY THIS KEEPS BUG-766's CONTRACT — state this in the code comment
+    BUG-766 exports `AIDA_BIN` **and** prepends the coordinating binary's directory to PATH. A real
+    AIDA-spawned child still reaches the coordinating build: `aida` children resolve it as their own
+    running executable, and a non-aida child (a `claude` seat) that runs bare `aida` gets it from the
+    PATH prepend. The inheritance contract survives through PATH; only the ambient-env shortcut is
+    withdrawn. `aida dev activate` is UNAFFECTED — I checked: it exports `AIDA_DEV_BIN`,
+    `AIDA_DEV_REPO`, `AIDA_DEV_PROFILE`, `AIDA_DEV_ACTIVE` and a PATH prepend (dev_cmd.rs:750-774), and
+    never sets `AIDA_BIN`.
+
+    THE ONE REAL BEHAVIOURAL REGRESSION RISK — name it in the comment, do not pretend it away
+    An OLDER `aida` binary invoked by absolute path from inside an AIDA-managed tree will now launch its
+    children from its own `current_exe` rather than from the inherited `AIDA_BIN`. That is the harm
+    BUG-766 named ("an old installed binary ... can win over the coordinating build and run pre-guard
+    bulk store saves"). The ancestor check is what preserves that case: such a process DOES have a live
+    aida ancestor, so its inherited `AIDA_BIN` is still honored. This is precisely why attribution is
+    load-bearing and why "just stop reading AIDA_BIN" (option 2) is NOT equivalent — do not simplify it
+    into that.
+
+    HONESTY REQUIREMENT IN THE CODE COMMENT
+    This is an ACCIDENT boundary, not a security boundary. Same-uid code can forge any env var and can
+    invoke any binary directly; pid reuse could in principle alias an ancestor. What it buys is that a
+    stale `AIDA_BIN` in a shell profile, or one inherited from an unrelated tool, no longer redirects
+    the coordinating binary. Do not claim more than that in the doc comment.
+
+    DIAGNOSTICS — do not silently ignore an operator
+    `export_coordinating_bin_env` (lib.rs:103192) currently early-returns when `AIDA_BIN` is set and
+    `process()` errors, to keep an invalid operator override reportable. Preserve that intent under the
+    new rule: when the decision is `DeclinedAmbient`, the launch-preview diagnostics this branch already
+    added must say so — that `AIDA_BIN` is set, that it was not honored because no AIDA parent was
+    found, and which path is being used instead. A silently ignored override is a worse bug than the one
+    being fixed.
+
+    TESTS
+      T1 `decide_override` honors the path when an aida ancestor is present.  (pure)
+      T2 `decide_override` declines it when the ancestor is `None`.           (pure)
+      T3 `decide_override` returns `Absent` when `AIDA_BIN` is unset.         (pure)
+      T4 `nearest_aida_in_chain` picks the nearest aida entry, and returns `None` for a chain of
+         non-aida processes. (pure, mirrors the existing `nearest_claude_in_chain` tests)
+      T5 end-to-end through `resolve()`: a declined override resolves to the running executable, NOT to
+         the override path, and NOT to PATH when a running executable exists.
+      T6 the `SESSION_ENV_NAMES` guard tests still pass UNCHANGED — this rework must not touch
+         lib.rs:41968, bug_1624_shell_and_git_guard_tests.rs or bug_1627_session_env_hardening_tests.rs.
+         If you find yourself editing any of those three, STOP and report instead.
+      T7 the guard at resolve_aida_exe_tests.rs:37 still passes. It currently allows ONE raw
+         `current_exe()` in each of lib.rs and aida_bin.rs. SECONDARY FINDING, fix only if it falls out
+         cleanly: the honest structure is ONE chokepoint — give `process()` a `current: Option<&Path>`
+         parameter supplied by lib.rs (which already makes the sanctioned call at
+         `aida_exe_path()`/lib.rs:103149), drop aida_bin.rs's own `current_exe()` call, and REVERT the
+         allowlist at resolve_aida_exe_tests.rs:57 to `lib.rs` only. That satisfies TASK-1262's guard
+         unmodified instead of widening it. If this cannot be done without churning the five
+         `aida_bin::process()` call sites (lib.rs 28298, 28540, 31155, 103149, 103192), leave the
+         allowlist as it is and SAY SO in your report — do not half-do it.
+
+    NON-VACUITY — required, per test
+    For T1/T2/T5, show the test FAILS with the trust check removed (i.e. with `process()` passing the
+    raw env value through unconditionally, the pre-rework behaviour). A test that passes either way
+    proves nothing. Report which of your tests are guards that pass either way — volunteering that is
+    the right way to report it.
+
+    BUILD / FMT / CLIPPY
+      CARGO_BUILD_JOBS=3 nice -n 10 cargo build -p aida-cli-lib
+      CARGO_BUILD_JOBS=3 nice -n 10 cargo test -p aida-cli-lib --lib
+      cargo fmt --all -- --check
+      cargo clippy -p aida-cli-lib --all-targets
+    This crate carries pre-existing clippy warnings; "exit 0" is not the bar. Grep the clippy log for
+    the files you changed and check the hit line numbers against `git diff -U0` hunk ranges.
+
+    PROVENANCE
+    `// trace:TASK-1499 | ai:codex` beside the new items, plain `//` and never `///` — clap pulls `///`
+    into `--help` and the commit hook rejects it.
+
+    SCOPE / DO NOT
+    - DO NOT introduce any new environment variable.
+    - DO NOT touch `SESSION_ENV_NAMES` or either of its two guard test files.
+    - DO NOT add a `.aida/config.toml` binary override. The decision comment lists it in the precedence
+      order, but `.aida/` is worktree-resident and a branch can commit it, so it carries the SAME trust
+      problem as `session-env.sh` and needs its own decision. OUT OF SCOPE — I am raising it separately.
+    - DO NOT CREATE ANY NEW FILE anywhere, especially not a report file. Your `-o` output IS the report.
+    - You CANNOT commit — the git index is read-only under your sandbox.
+    - Under `--sandbox workspace-write` you cannot run `aida` (it fails to enable WAL on the cache), so
+      the acceptance above is stated inline and you should not try to read it from AIDA.
+
+    WORKTREE: /home/joe/ai/aida-task-1499, branch `task-1499-2`, head 048fc2ac91, clean.
+    SEAT: you are the IMPLEMENTER. This brief is the advisor hand-off.
+  created_at: 2026-09-29T06:06:04.419392942Z
+  modified_at: 2026-09-29T06:06:04.419392942Z
   session_id: a1b56cce-0ca3-42c2-8ccf-ff605a280cc4
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
